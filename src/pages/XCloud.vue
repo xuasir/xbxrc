@@ -13,6 +13,7 @@ import HorizontalListRail from '../components/common/HorizontalListRail.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
+import { devWarn } from '../shared/dev-log'
 
 type XcloudCatalogPayload = Awaited<ReturnType<typeof rpc.data.getXcloudTitles>>
 type XcloudTitle = XcloudCatalogPayload['titles'][number]
@@ -240,7 +241,7 @@ async function loadTitles(forceRefresh = false): Promise<void> {
     applyCatalogPayload(catalogPayload)
   }
   catch (error) {
-    console.warn('[XCloud] load titles failed:', error)
+    devWarn('[XCloud] load titles failed:', error)
     if (titles.value.length === 0) {
       titles.value = []
       cacheState.value = 'miss'

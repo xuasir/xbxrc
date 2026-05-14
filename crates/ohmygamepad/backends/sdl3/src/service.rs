@@ -1089,10 +1089,8 @@ mod tests {
         let (open, _) =
             derive_input_gate_from_hints(&hints, OhMyGamepadSamplingLifecycleDto::Active);
         assert_eq!(open, OhMyGamepadInputGateModeDto::Open);
-        let (warm_closed, _) = derive_input_gate_from_hints(
-            &hints,
-            OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-        );
+        let (warm_closed, _) =
+            derive_input_gate_from_hints(&hints, OhMyGamepadSamplingLifecycleDto::BackgroundWarm);
         assert_eq!(warm_closed, OhMyGamepadInputGateModeDto::Closed);
         let closed_hints = ShellWindowGateHints {
             focused: false,

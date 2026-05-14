@@ -139,7 +139,7 @@ describe('buildStreamRustDiagnosticsViewModel', () => {
       videoDecoderRecoveryState: 'nominal',
       videoDecoderRecoveryEvent: 'reset',
       stallKind: 'none',
-      recoveryDiagnosis: 'ok',
+      diagnosis: 'ok',
       recoveryRfcFaultDomain: 'net',
       recoveryRfcStage: 's0',
       recoveryRfcCeiling: 'c0',

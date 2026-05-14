@@ -4,7 +4,9 @@ use super::{
     build_sample_builder, nack::gap_transport_evidence, now_ms_f64, timeline::ChainState,
     UINT16SIZE_HALF,
 };
-use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
+use crate::media::video::h264::inspection::{
+    H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
+};
 use base64::Engine as _;
 use bytes::Bytes;
 use rtc_rtp::packet::Packet;
@@ -125,6 +127,41 @@ fn prior_output_continuation_allowed(
     first_frame_acquired
         && (clean_anchor_building_phase_active
             || (!is_blocking_non_keyframe_admission && !chain_requires_recovery_anchor))
+}
+
+/// RFC 2026-05-14：在 IDR AU 缺 in-band SPS/PPS 但 decoder 侧已有稳定 committed 参数集时，尝试 prepend 后重检。
+fn try_h264_bootstrap_ps_salvage_au(
+    inspector: &H264AccessUnitInspector,
+    inspection: &H264AccessUnitInspection,
+    payload: &[u8],
+) -> Option<Vec<u8>> {
+    if inspection.bootstrap_ready {
+        return None;
+    }
+    let reject = inspection.bootstrap_reject_reason.as_ref()?;
+    if !matches!(
+        reject,
+        H264BootstrapRejectReason::MissingSps | H264BootstrapRejectReason::MissingPps
+    ) {
+        return None;
+    }
+    if !inspection.is_idr {
+        return None;
+    }
+    if inspection.parameter_sets_changed || inspection.config_changed {
+        return None;
+    }
+    if !inspection.slice_headers_valid {
+        return None;
+    }
+    if !inspection.committed_sps_present() || !inspection.committed_pps_present() {
+        return None;
+    }
+    let mut prefix = inspector.committed_parameter_set_annex_b_prefix()?;
+    let mut out = Vec::with_capacity(prefix.len() + payload.len());
+    out.append(&mut prefix);
+    out.extend_from_slice(payload);
+    Some(out)
 }
 
 fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'static str {
@@ -1363,14 +1400,14 @@ impl RtcVideoFrameSource {
                 self.last_packet_time = std::time::Instant::now();
                 self.assembling_frame_start = None;
                 self.current_assembly_packet_count = 0;
-                let payload = sample.data.to_vec();
+                let mut payload = sample.data.to_vec();
                 self.assembled_frame_count = self.assembled_frame_count.saturating_add(1);
                 self.maybe_request_first_frame_acquisition_keyframe(
                     Some(sample.packet_timestamp),
                     FirstFrameAcquisitionRequestKind::Initial,
                 );
                 self.maybe_seed_h264_bootstrap_from_remote_answer();
-                let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
+                let mut inspection = match self.h264_inspector.inspect_access_unit(&payload) {
                     Ok(inspection) => inspection,
                     Err(error) => {
                         let now_ms = now_ms_f64();
@@ -1404,6 +1441,38 @@ impl RtcVideoFrameSource {
                         continue;
                     }
                 };
+                self.runtime_stats.update(|stats| {
+                    stats.recovery_codec_bootstrap_salvage_applied = None;
+                    stats.recovery_codec_bootstrap_salvage_failed_reason = None;
+                });
+                if let Some(salvaged) =
+                    try_h264_bootstrap_ps_salvage_au(&self.h264_inspector, &inspection, &payload)
+                {
+                    match self.h264_inspector.inspect_access_unit(&salvaged) {
+                        Ok(new_insp) if new_insp.bootstrap_ready => {
+                            inspection = new_insp;
+                            payload = salvaged;
+                            self.runtime_stats.update(|stats| {
+                                stats.recovery_codec_bootstrap_salvage_applied = Some(true);
+                                stats.recovery_codec_bootstrap_salvage_failed_reason = None;
+                            });
+                        }
+                        Ok(_) => {
+                            self.runtime_stats.update(|stats| {
+                                stats.recovery_codec_bootstrap_salvage_applied = Some(false);
+                                stats.recovery_codec_bootstrap_salvage_failed_reason =
+                                    Some("salvageBootstrapStillNotReady".into());
+                            });
+                        }
+                        Err(_) => {
+                            self.runtime_stats.update(|stats| {
+                                stats.recovery_codec_bootstrap_salvage_applied = Some(false);
+                                stats.recovery_codec_bootstrap_salvage_failed_reason =
+                                    Some("salvageReinspectFailed".into());
+                            });
+                        }
+                    }
+                }
                 let inspection_now_ms = now_ms_f64();
                 let first_frame_acquired = self
                     .runtime_stats

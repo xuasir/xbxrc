@@ -19,6 +19,10 @@ use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_pro
 use crate::transport::rtc::recovery::state_coordinator::{
     RecoveryDecision, StateRecoveryCoordinator,
 };
+use crate::transport::rtc::recovery::timing::{
+    advance_recovery_rtt_smoothing, publish_recovery_timing_to_stats,
+    resolve_recovery_dynamic_timing,
+};
 
 /// Owner 信号
 #[derive(Clone, Debug)]
@@ -82,6 +86,30 @@ impl RecoveryCoordinator {
         }
     }
 
+    fn refresh_recovery_timing_snapshot(
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    ) -> Option<crate::transport::rtc::recovery::timing::RecoveryDynamicTiming> {
+        RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+            advance_recovery_rtt_smoothing(stats);
+            let profile = resolve_runtime_recovery_profile(stats);
+            let timing = resolve_recovery_dynamic_timing(stats, profile);
+            publish_recovery_timing_to_stats(stats, &timing);
+        });
+        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            let profile = resolve_runtime_recovery_profile(stats);
+            resolve_recovery_dynamic_timing(stats, profile)
+        })
+    }
+
+    fn apply_recovery_timing_from_stats(
+        &mut self,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    ) {
+        if let Some(timing) = Self::refresh_recovery_timing_snapshot(runtime_stats) {
+            self.coordinator.apply_recovery_dynamic_timing(&timing);
+        }
+    }
+
     /// 从owner signal生成恢复提案
     pub(crate) fn propose_from_owner_signal(
         &mut self,
@@ -91,6 +119,7 @@ impl RecoveryCoordinator {
         let recovery_epoch = self.sync_recovery_epoch(runtime_stats);
         // 在生成proposal前，先检查并更新in-flight状态
         self.update_inflight_status(runtime_stats);
+        self.apply_recovery_timing_from_stats(runtime_stats);
         if let Some(proposal) = self.maybe_resolve_connectivity_local_repair(&signal) {
             return proposal;
         }
@@ -665,6 +694,7 @@ impl RecoveryCoordinator {
         }
 
         let profile = resolve_runtime_recovery_profile(stats);
+        let timing = resolve_recovery_dynamic_timing(stats, profile);
         stats
             .recent_keyframe_request_episodes
             .iter()
@@ -695,7 +725,8 @@ impl RecoveryCoordinator {
             })
             .and_then(|episode| episode.first_keyframe_decoded_at_ms)
             .is_some_and(|decoded_at_ms| {
-                (now_ms - decoded_at_ms).max(0.0) >= profile.decoded_pending_commit_hold_ms
+                (now_ms - decoded_at_ms).max(0.0)
+                    >= timing.clean_anchor_commit_patience_window_ms
             })
     }
 }

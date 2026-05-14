@@ -5,6 +5,7 @@ import type {
 import type { InputRuntimeConfig, VibrationStrengthPreset } from '../../domain/input'
 import { GAMEPAD_SLOT_IDS } from '@shared/gamepad/contract'
 import { rpc } from '../../../services/rpc'
+import { devWarnRateLimited } from '../../../shared/dev-log'
 
 const GAMEPAD_RUMBLE_REPORT_TYPE = 128
 const GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE = 1
@@ -310,7 +311,7 @@ export class RumbleService {
 
       const state = this.targetStates.get(targetKey(target))
       if (state !== undefined && requestSeq === state.requestSeq && !result.accepted) {
-        console.warn('[player][rumble] native rumble unavailable', {
+        devWarnRateLimited('rumble:native-unavailable', '[player][rumble] native rumble unavailable', {
           target,
           effect,
           reason: result.reason,
@@ -321,7 +322,7 @@ export class RumbleService {
     catch (error) {
       const state = this.targetStates.get(targetKey(target))
       if (state !== undefined && requestSeq === state.requestSeq) {
-        console.warn('[player][rumble] native rumble request failed', error)
+        devWarnRateLimited('rumble:native-request-failed', '[player][rumble] native rumble request failed', error)
       }
     }
   }

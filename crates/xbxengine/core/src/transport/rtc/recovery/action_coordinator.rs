@@ -10,6 +10,7 @@ use super::escalation::RecoveryAction;
 use super::observation::{RecoveryObservation, RecoverySeverity};
 use super::policy::RecoveryScenarioProfile;
 use super::state_machine::{RecoveryState, RecoveryStateMachine};
+use super::timing::RecoveryDynamicTiming;
 
 /// 恢复决策结果
 #[derive(Clone, Debug)]
@@ -89,6 +90,10 @@ impl ActionCoordinator {
     /// 获取状态机可变引用
     pub(crate) fn state_machine_mut(&mut self) -> &mut RecoveryStateMachine {
         &mut self.state_machine
+    }
+
+    pub(crate) fn apply_recovery_dynamic_timing(&mut self, timing: &RecoveryDynamicTiming) {
+        self.state_machine.apply_recovery_dynamic_timing(timing);
     }
 
     /// 处理恢复观察，返回决策

@@ -9,6 +9,9 @@
 use std::time::Instant;
 
 use super::policy::RecoveryScenarioProfile;
+use super::timing::{
+    default_rtt_ms_for_kind, resolve_recovery_dynamic_timing_with_rtt, RecoveryDynamicTiming,
+};
 
 /// 恢复状态
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,21 +81,20 @@ pub(crate) struct StateTimeouts {
 }
 
 impl StateTimeouts {
-    /// 从场景化profile创建超时配置
+    /// 从场景化 profile 创建超时配置（使用场景默认 RTT，与动态解析器一致）。
     pub(crate) fn from_profile(profile: RecoveryScenarioProfile) -> Self {
-        // 根据场景调整超时参数
-        let (nack_timeout_ms, idr_refresh_interval_ms, idr_response_timeout_ms) = match profile.kind
-        {
-            crate::transport::rtc::recovery::policy::ScenarioPolicyProfileKind::CloudGaming => {
-                (300.0, 140.0, 900.0)
-            }
-            _ => (180.0, 100.0, 900.0),
-        };
+        let timing = resolve_recovery_dynamic_timing_with_rtt(
+            default_rtt_ms_for_kind(profile.kind),
+            profile,
+        );
+        Self::from_recovery_dynamic_timing(&timing)
+    }
 
+    pub(crate) fn from_recovery_dynamic_timing(timing: &RecoveryDynamicTiming) -> Self {
         Self {
-            nack_timeout_ms,
-            idr_refresh_interval_ms,
-            idr_response_timeout_ms,
+            nack_timeout_ms: timing.nack_timeout_ms,
+            idr_refresh_interval_ms: timing.pli_refresh_interval_ms,
+            idr_response_timeout_ms: 900.0,
             decoder_reset_timeout_ms: 1200.0,
             reconnect_timeout_ms: 5000.0,
         }
@@ -146,6 +148,13 @@ impl RecoveryStateMachine {
             decoder_reset_in_flight: false,
             reconnect_in_flight: false,
         }
+    }
+
+    /// 每拍刷新 LocalRepair / FrameRecovery 相关超时，使 NACK/PLI 间隔随 RTT 变化。
+    pub(crate) fn apply_recovery_dynamic_timing(&mut self, timing: &RecoveryDynamicTiming) {
+        let next = StateTimeouts::from_recovery_dynamic_timing(timing);
+        self.timeouts.nack_timeout_ms = next.nack_timeout_ms;
+        self.timeouts.idr_refresh_interval_ms = next.idr_refresh_interval_ms;
     }
 
     /// 获取当前状态

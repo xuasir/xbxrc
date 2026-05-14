@@ -375,6 +375,23 @@ impl H264AccessUnitInspector {
             .is_some()
     }
 
+    /// 最近已提交 SPS/PPS 的 Annex B 前缀（00 00 00 01 + RBSP），用于 bootstrap salvage。
+    pub(crate) fn committed_parameter_set_annex_b_prefix(&self) -> Option<Vec<u8>> {
+        let state = self.state.lock().ok()?;
+        let sps = state.committed_sps.as_ref()?;
+        let pps = state.committed_pps.as_ref()?;
+        let mut out = Vec::new();
+        if !sps.raw.is_empty() {
+            out.extend_from_slice(&[0, 0, 0, 1]);
+            out.extend_from_slice(&sps.raw);
+        }
+        if !pps.raw.is_empty() {
+            out.extend_from_slice(&[0, 0, 0, 1]);
+            out.extend_from_slice(&pps.raw);
+        }
+        (!out.is_empty()).then_some(out)
+    }
+
     pub fn seed_committed_parameter_sets_if_absent(
         &self,
         sps_bytes: &[u8],

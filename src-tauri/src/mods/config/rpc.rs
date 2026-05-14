@@ -35,7 +35,7 @@ fn apply_runtime_trace_mode_live(app_handle: &tauri::AppHandle, mode: &str) -> A
     crate::mods::runtime_trace::apply_xbxengine_trace_logging(mode);
     let interval = crate::mods::runtime_trace::stats_snapshot_interval(mode);
     state.xbxengine.set_stats_snapshot_interval(interval);
-    log::info!("Runtime trace mode applied live (mode={})", mode);
+    log::debug!("Runtime trace mode applied live (mode={})", mode);
     Ok(())
 }
 

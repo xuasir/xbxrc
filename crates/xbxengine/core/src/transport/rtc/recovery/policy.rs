@@ -46,8 +46,12 @@ pub(crate) struct RecoveryScenarioProfile {
     pub(crate) playback_recovered_track_progress_fresh_ms: f64,
     pub(crate) playback_recovered_decode_progress_fresh_ms: f64,
     pub(crate) decoded_progress_fresh_ms: f64,
+    #[allow(dead_code)]
     pub(crate) decoded_pending_commit_hold_ms: f64,
+    /// 静态 PLI 间隔（保留作文档/回退；运行路径见 `recovery::timing`）。
+    #[allow(dead_code)]
     pub(crate) pli_refresh_interval_ms: f64,
+    #[allow(dead_code)]
     pub(crate) fir_retry_interval_ms: f64,
     #[allow(dead_code)]
     pub(crate) post_anchor_continuation_grace_ms: f64,

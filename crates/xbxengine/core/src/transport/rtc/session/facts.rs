@@ -20,6 +20,7 @@ use crate::transport::rtc::recovery::remote_profile_runtime::persist_runtime_rem
 use crate::transport::rtc::recovery::runtime_state::{
     resolve_recovery_profile, resolve_runtime_recovery_profile,
 };
+use crate::transport::rtc::recovery::timing::resolve_recovery_dynamic_timing;
 use crate::XbxEngineAnchorCandidateLedger;
 use crate::XbxEngineH264InspectionObservation;
 use crate::XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation;
@@ -643,7 +644,8 @@ fn decoded_stage_is_current(
     let now_ms = stats
         .latest_video_decode_ok_time_ms
         .unwrap_or(decoded_at_ms.max(recovery_episode.requested_at_ms));
-    if (now_ms - decoded_at_ms).max(0.0) <= profile.decoded_pending_commit_hold_ms {
+    let timing = resolve_recovery_dynamic_timing(stats, *profile);
+    if (now_ms - decoded_at_ms).max(0.0) <= timing.clean_anchor_commit_patience_window_ms {
         return true;
     }
     stats

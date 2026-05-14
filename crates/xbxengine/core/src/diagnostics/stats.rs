@@ -854,6 +854,26 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.recovery_playback_recovered_phase.clone()),
         recovery_fresh_anchor_recovered_at_ms: runtime_stats
             .and_then(|stats| stats.recovery_fresh_anchor_recovered_at_ms),
+        recovery_effective_rtt_ms: runtime_stats
+            .and_then(|stats| stats.recovery_effective_rtt_ms),
+        recovery_dynamic_nack_timeout_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_nack_timeout_ms),
+        recovery_dynamic_nack_retry_interval_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_nack_retry_interval_ms),
+        recovery_dynamic_pli_refresh_interval_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_pli_refresh_interval_ms),
+        recovery_dynamic_fir_retry_interval_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_fir_retry_interval_ms),
+        recovery_dynamic_decoded_pending_commit_hold_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_decoded_pending_commit_hold_ms),
+        recovery_dynamic_continuation_patience_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_continuation_patience_ms),
+        recovery_dynamic_clean_anchor_patience_ms: runtime_stats
+            .and_then(|stats| stats.recovery_dynamic_clean_anchor_patience_ms),
+        recovery_codec_bootstrap_salvage_applied: runtime_stats
+            .and_then(|stats| stats.recovery_codec_bootstrap_salvage_applied),
+        recovery_codec_bootstrap_salvage_failed_reason: runtime_stats
+            .and_then(|stats| stats.recovery_codec_bootstrap_salvage_failed_reason.clone()),
         direct_gaming_bitrate_band: runtime_stats
             .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
         recovery_owner_state,

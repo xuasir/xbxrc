@@ -1,5 +1,6 @@
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameValue;
+use crate::transport::rtc::recovery::timing::nack_retry_interval_u64_from_rtt_ms;
 use crate::transport::rtc::stream::nack_scheduler::{NackObservePolicy, PacketRecoveryDisposition};
 // 传输层 NACK 预算仍以媒体 `FrameValue` 为输入；与恢复合同 `recovery::contract::FrameValue` 的映射集中在
 // `contract::media_frame_value_from_recovery_semantics` 与 `nack.rs` 的 timeline 融合路径，避免在此处并行定义语义。
@@ -109,9 +110,12 @@ pub(super) fn sample_loss_nack_policy(
         startup_mode,
         cloud_rtt_floor_ms,
     );
-    let retry_interval_ms = (base_retry_interval_ms * (1.25 - repairability * 0.45))
+    let mut retry_interval_ms = (base_retry_interval_ms * (1.25 - repairability * 0.45))
         .round()
         .max(4.0) as u64;
+    if let Some(rtt) = cloud_rtt_floor_ms {
+        retry_interval_ms = retry_interval_ms.max(nack_retry_interval_u64_from_rtt_ms(rtt));
+    }
     let burst_count = (base_burst_count + (repairability * 1.8)).round().max(1.0) as u16;
     let priority = budget_context
         .repair_priority(frame_value_for_importance(frame_importance))
@@ -158,8 +162,12 @@ pub(super) fn rtp_window_nack_policy(
     startup_mode: bool,
     cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
-    let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
+    let (frame_importance, frame_is_keyframe, base_retry_interval_ms, burst_count, priority) =
         transport_policy_tuple(frame_value, budget_context, cloud_mode, startup_mode);
+    let retry_interval_ms = match cloud_rtt_floor_ms {
+        Some(rtt) => nack_retry_interval_u64_from_rtt_ms(rtt).max(base_retry_interval_ms),
+        None => base_retry_interval_ms,
+    };
     NackObservePolicy {
         source: "rtpWindow",
         deadline_at_ms: Some(deadline_at_ms),
@@ -173,7 +181,11 @@ pub(super) fn rtp_window_nack_policy(
             startup_mode,
             cloud_rtt_floor_ms,
         )),
-        retry_interval_ms: Some(retry_interval_ms),
+        retry_interval_ms: Some(if cloud_mode {
+            retry_interval_ms
+        } else {
+            retry_interval_ms.saturating_sub(1).max(4)
+        }),
         burst_count: Some(burst_count),
         max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
             (true, true, "anchor") => 20,
@@ -207,8 +219,12 @@ pub(super) fn rtp_gap_nack_policy(
     startup_mode: bool,
     cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
-    let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
+    let (frame_importance, frame_is_keyframe, base_retry_interval_ms, burst_count, priority) =
         transport_policy_tuple(frame_value, budget_context, cloud_mode, startup_mode);
+    let retry_interval_ms = match cloud_rtt_floor_ms {
+        Some(rtt) => nack_retry_interval_u64_from_rtt_ms(rtt).max(base_retry_interval_ms),
+        None => base_retry_interval_ms,
+    };
     NackObservePolicy {
         source: "rtpGap",
         deadline_at_ms: Some(deadline_at_ms),

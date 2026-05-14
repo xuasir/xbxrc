@@ -87,7 +87,18 @@ pub(super) struct RuntimeTraceObservationState {
     recovery_rfc_fault_domain: Option<String>,
     recovery_rfc_stage: Option<String>,
     recovery_rfc_ceiling: Option<String>,
-    direct_gaming_bitrate_band: Option<String>,
+    recovery_effective_rtt_ms: Option<String>,
+    recovery_timing_signature: Option<(
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )>,
+    recovery_salvage_signature: Option<(Option<bool>, Option<String>)>,
+    remote_profile_bitrate_band: Option<String>,
     runtime_summary: Option<String>,
     primary_issue_chain: Option<String>,
     latest_decision_summary: Option<String>,
@@ -147,7 +158,7 @@ pub(super) fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngine
 }
 
 /// 统一观测快照：把 UI 与离线分析真正关心的状态压成单条 snapshot，避免继续手工拼
-/// `statsSnapshot + directGamingState + hostMailboxState`。
+/// `statsSnapshot + recoveryState + hostMailboxState`。
 pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_json::Value {
     let unified_lifecycle = resolve_unified_lifecycle(stats);
     json!({
@@ -168,6 +179,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "baseline": stats.remote_profile_baseline,
             "dynamic": stats.remote_profile_dynamic,
             "effectiveLabel": stats.remote_profile_effective_label,
+            "bitrateBand": stats.direct_gaming_bitrate_band,
         },
         "transport": {
             "path": stats.transport_path,
@@ -197,6 +209,20 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "playbackRecoveredAtMs": stats.recovery_playback_recovered_at_ms,
             "playbackRecoveredPhase": stats.recovery_playback_recovered_phase,
             "freshAnchorRecoveredAtMs": stats.recovery_fresh_anchor_recovered_at_ms,
+            "effectiveRttMs": stats.recovery_effective_rtt_ms,
+            "timing": {
+                "nackTimeoutMs": stats.recovery_dynamic_nack_timeout_ms,
+                "nackRetryIntervalMs": stats.recovery_dynamic_nack_retry_interval_ms,
+                "pliRefreshIntervalMs": stats.recovery_dynamic_pli_refresh_interval_ms,
+                "firRetryIntervalMs": stats.recovery_dynamic_fir_retry_interval_ms,
+                "decodedPendingCommitHoldMs": stats.recovery_dynamic_decoded_pending_commit_hold_ms,
+                "continuationPatienceMs": stats.recovery_dynamic_continuation_patience_ms,
+                "cleanAnchorCommitPatienceMs": stats.recovery_dynamic_clean_anchor_patience_ms,
+            },
+            "codec": {
+                "bootstrapSalvageApplied": stats.recovery_codec_bootstrap_salvage_applied,
+                "bootstrapSalvageFailedReason": stats.recovery_codec_bootstrap_salvage_failed_reason,
+            },
             "videoHealth": stats.video_health,
             "chainHealth": stats.chain_health,
             "presentationHealth": stats.presentation_health,
@@ -224,9 +250,6 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "decoderBootstrapGate": stats.latest_video_decoder_bootstrap_gate_observation,
             "decodeOutputPath": stats.latest_decode_output_path_observation,
             "remoteFrameCapture": stats.latest_remote_frame_capture_observation,
-        },
-        "directGaming": {
-            "bitrateBand": stats.direct_gaming_bitrate_band,
         },
         "bitrate": {
             "display": stats.br,
@@ -1333,6 +1356,25 @@ pub(super) fn record_runtime_trace_observations(
         stats.video_owner_observed_at_ms,
         DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS,
     );
+    let recovery_effective_rtt_ms = stats
+        .recovery_effective_rtt_ms
+        .map(|value| format!("{value:.1}"));
+    let recovery_timing_signature = (
+        stats.recovery_dynamic_nack_timeout_ms.map(|value| format!("{value:.1}")),
+        stats.recovery_dynamic_nack_retry_interval_ms.map(|value| format!("{value:.1}")),
+        stats.recovery_dynamic_pli_refresh_interval_ms.map(|value| format!("{value:.1}")),
+        stats.recovery_dynamic_fir_retry_interval_ms.map(|value| format!("{value:.1}")),
+        stats.recovery_dynamic_decoded_pending_commit_hold_ms
+            .map(|value| format!("{value:.1}")),
+        stats.recovery_dynamic_continuation_patience_ms
+            .map(|value| format!("{value:.1}")),
+        stats.recovery_dynamic_clean_anchor_patience_ms
+            .map(|value| format!("{value:.1}")),
+    );
+    let recovery_salvage_signature = (
+        stats.recovery_codec_bootstrap_salvage_applied,
+        stats.recovery_codec_bootstrap_salvage_failed_reason.clone(),
+    );
     if observation_state.session_phase != stats.session_phase
         || observation_state.remote_profile_baseline != stats.remote_profile_baseline
         || observation_state.remote_profile_dynamic != stats.remote_profile_dynamic
@@ -1343,7 +1385,11 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.recovery_rfc_fault_domain != stats.recovery_rfc_fault_domain
         || observation_state.recovery_rfc_stage != stats.recovery_rfc_stage
         || observation_state.recovery_rfc_ceiling != stats.recovery_rfc_ceiling
-        || observation_state.direct_gaming_bitrate_band != stats.direct_gaming_bitrate_band
+        || observation_state.recovery_effective_rtt_ms != recovery_effective_rtt_ms
+        || observation_state.recovery_timing_signature.as_ref() != Some(&recovery_timing_signature)
+        || observation_state.recovery_salvage_signature.as_ref()
+            != Some(&recovery_salvage_signature)
+        || observation_state.remote_profile_bitrate_band != stats.direct_gaming_bitrate_band
         || observation_state.runtime_summary != stats.runtime_summary
         || observation_state.primary_issue_chain != stats.primary_issue_chain
         || observation_state.latest_decision_summary != stats.latest_decision_summary
@@ -1369,7 +1415,10 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.recovery_rfc_fault_domain = stats.recovery_rfc_fault_domain.clone();
         observation_state.recovery_rfc_stage = stats.recovery_rfc_stage.clone();
         observation_state.recovery_rfc_ceiling = stats.recovery_rfc_ceiling.clone();
-        observation_state.direct_gaming_bitrate_band = stats.direct_gaming_bitrate_band.clone();
+        observation_state.recovery_effective_rtt_ms = recovery_effective_rtt_ms;
+        observation_state.recovery_timing_signature = Some(recovery_timing_signature);
+        observation_state.recovery_salvage_signature = Some(recovery_salvage_signature);
+        observation_state.remote_profile_bitrate_band = stats.direct_gaming_bitrate_band.clone();
         observation_state.runtime_summary = stats.runtime_summary.clone();
         observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
         observation_state.latest_decision_summary = stats.latest_decision_summary.clone();
@@ -1385,7 +1434,7 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.stall_kind = stats.stall_kind.clone();
         runtime_trace.record_state(
             "xbxengine",
-            "directGamingState",
+            "recoveryState",
             session_id,
             json!({
                 "lifecycle": resolve_unified_lifecycle(stats),
@@ -1394,13 +1443,27 @@ pub(super) fn record_runtime_trace_observations(
                 "remoteProfileBaseline": stats.remote_profile_baseline,
                 "remoteProfileDynamic": stats.remote_profile_dynamic,
                 "remoteProfileEffectiveLabel": stats.remote_profile_effective_label,
+                "remoteProfileBitrateBand": stats.direct_gaming_bitrate_band,
                 "transportStrategyProfile": stats.transport_strategy_profile,
                 "recoveryStrategyProfile": stats.recovery_strategy_profile,
-                "recoveryDiagnosis": stats.recovery_diagnosis,
-                "recoveryRfcFaultDomain": stats.recovery_rfc_fault_domain,
-                "recoveryRfcStage": stats.recovery_rfc_stage,
-                "recoveryRfcCeiling": stats.recovery_rfc_ceiling,
-                "directGamingBitrateBand": stats.direct_gaming_bitrate_band,
+                "diagnosis": stats.recovery_diagnosis,
+                "rfcFaultDomain": stats.recovery_rfc_fault_domain,
+                "rfcStage": stats.recovery_rfc_stage,
+                "rfcCeiling": stats.recovery_rfc_ceiling,
+                "effectiveRttMs": stats.recovery_effective_rtt_ms,
+                "timing": {
+                    "nackTimeoutMs": stats.recovery_dynamic_nack_timeout_ms,
+                    "nackRetryIntervalMs": stats.recovery_dynamic_nack_retry_interval_ms,
+                    "pliRefreshIntervalMs": stats.recovery_dynamic_pli_refresh_interval_ms,
+                    "firRetryIntervalMs": stats.recovery_dynamic_fir_retry_interval_ms,
+                    "decodedPendingCommitHoldMs": stats.recovery_dynamic_decoded_pending_commit_hold_ms,
+                    "continuationPatienceMs": stats.recovery_dynamic_continuation_patience_ms,
+                    "cleanAnchorCommitPatienceMs": stats.recovery_dynamic_clean_anchor_patience_ms,
+                },
+                "codec": {
+                    "bootstrapSalvageApplied": stats.recovery_codec_bootstrap_salvage_applied,
+                    "bootstrapSalvageFailedReason": stats.recovery_codec_bootstrap_salvage_failed_reason,
+                },
                 "runtimeSummary": stats.runtime_summary,
                 "primaryIssueChain": stats.primary_issue_chain,
                 "latestDecisionSummary": stats.latest_decision_summary,

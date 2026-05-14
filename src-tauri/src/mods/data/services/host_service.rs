@@ -89,7 +89,6 @@ fn extract_consoles(raw: &Value) -> Vec<DataHostSummary> {
     }
 
     let consoles = visit(raw, 0, &mut visited).unwrap_or_default();
-    eprintln!("[data][hosts] parsed consoles count={}", consoles.len());
     consoles
 }
 

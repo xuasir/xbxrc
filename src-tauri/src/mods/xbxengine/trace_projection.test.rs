@@ -3134,12 +3134,12 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    let payload = find_event_payload(&entries, "directGamingState");
+    let payload = find_event_payload(&entries, "recoveryState");
 
     assert_eq!(payload["videoHealth"], "displaySupplyStarved");
     assert_eq!(payload["lifecycle"], "steady");
     assert_eq!(payload["streamLifecyclePhase"], "steady");
-    assert_eq!(payload["recoveryDiagnosis"], "adapterIdleTimeout");
+    assert_eq!(payload["diagnosis"], "adapterIdleTimeout");
     assert_eq!(payload["videoOwnerState"], "supplyStarved");
     assert_eq!(payload["videoOwnerReason"], "supplyStarved");
     assert_eq!(payload["videoOwnerSource"], "supply");
@@ -3175,7 +3175,7 @@ fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    let direct_payload = find_event_payload(&entries, "directGamingState");
+    let direct_payload = find_event_payload(&entries, "recoveryState");
     assert_eq!(direct_payload["lifecycle"], "recovering");
     assert_eq!(direct_payload["streamLifecyclePhase"], "recovering");
 
@@ -3192,7 +3192,7 @@ fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
 }
 
 #[test]
-fn direct_gaming_state_emits_transition_when_only_diagnosis_changes() {
+fn recovery_state_emits_transition_when_only_diagnosis_changes() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -3235,15 +3235,15 @@ fn direct_gaming_state_emits_transition_when_only_diagnosis_changes() {
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &changed_diagnosis);
 
     let entries = read_trace_lines(recorder.as_ref());
-    let rows = event_payloads(&entries, "directGamingState");
+    let rows = event_payloads(&entries, "recoveryState");
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0]["recoveryDiagnosis"], "transportAwaitRecoveryAnchor");
-    assert_eq!(rows[1]["recoveryDiagnosis"], "decoderBackendFailure");
+    assert_eq!(rows[0]["diagnosis"], "transportAwaitRecoveryAnchor");
+    assert_eq!(rows[1]["diagnosis"], "decoderBackendFailure");
     assert_eq!(rows[1]["videoOwnerReason"], "transportAwaitRecoveryAnchor");
 }
 
 #[test]
-fn direct_gaming_state_owner_contract_unchanged_does_not_repeat_transition() {
+fn recovery_state_owner_contract_unchanged_does_not_repeat_transition() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -3277,7 +3277,7 @@ fn direct_gaming_state_owner_contract_unchanged_does_not_repeat_transition() {
     assert_eq!(
         entries
             .iter()
-            .filter(|entry| entry["event"] == "directGamingState")
+            .filter(|entry| entry["event"] == "recoveryState")
             .count(),
         1
     );
@@ -3303,9 +3303,9 @@ fn direct_gaming_state_owner_contract_unchanged_does_not_repeat_transition() {
     let entries = read_trace_lines(recorder.as_ref());
     let latest_direct = entries
         .iter()
-        .filter(|entry| entry["event"] == "directGamingState")
+        .filter(|entry| entry["event"] == "recoveryState")
         .last()
-        .expect("directGamingState entry");
+        .expect("recoveryState entry");
     assert_eq!(
         latest_direct["payload"]["videoOwnerState"],
         "rebuildingSupply"

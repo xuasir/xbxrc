@@ -8,6 +8,7 @@ import SpatialNavGlobalHotkeys from './components/navigation/SpatialNavGlobalHot
 import { useGamepadNavigation } from './navigation/core'
 import { events } from './services/events'
 import { rpc } from './services/rpc'
+import { devWarn } from './shared/dev-log'
 
 const route = useRoute()
 let disposeAuthSessionReady: (() => void) | undefined
@@ -51,7 +52,7 @@ function warmupXcloudCatalog(): void {
   xcloudWarmupPromise = rpc.data
     .primeXcloudTitles()
     .catch((error) => {
-      console.warn('[App] warmup xcloud catalog failed:', error)
+      devWarn('[App] warmup xcloud catalog failed:', error)
     })
     .finally(() => {
       xcloudWarmupPromise = undefined
@@ -74,7 +75,7 @@ async function bootstrapAppWarmups(): Promise<void> {
     }
   }
   catch (error) {
-    console.warn('[App] bootstrap warmups failed:', error)
+    devWarn('[App] bootstrap warmups failed:', error)
   }
 }
 

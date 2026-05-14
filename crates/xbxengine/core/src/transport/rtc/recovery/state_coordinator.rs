@@ -12,6 +12,7 @@ use super::observation::RecoveryObservation;
 use super::policy::RecoveryScenarioProfile;
 #[cfg(test)]
 use super::state_machine::RecoveryState;
+use super::timing::RecoveryDynamicTiming;
 
 /// 状态驱动的恢复协调器
 pub(crate) struct StateRecoveryCoordinator {
@@ -26,6 +27,10 @@ impl StateRecoveryCoordinator {
             coordinator: ActionCoordinator::new(profile, recovery_epoch),
             profile,
         }
+    }
+
+    pub(crate) fn apply_recovery_dynamic_timing(&mut self, timing: &RecoveryDynamicTiming) {
+        self.coordinator.apply_recovery_dynamic_timing(timing);
     }
 
     /// 处理恢复观察，返回决策

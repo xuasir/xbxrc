@@ -40,9 +40,12 @@ use crate::transport::rtc::recovery::coordinator::{
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::policy::ScenarioPolicyProfileKind;
 use crate::transport::rtc::recovery::runtime_state::{
-    has_fresh_media_output, resolve_recovery_profile,
+    has_fresh_media_output, resolve_recovery_profile, resolve_runtime_recovery_profile,
 };
 use crate::transport::rtc::recovery::startup::SessionPhase;
+use crate::transport::rtc::recovery::timing::{
+    resolve_recovery_dynamic_timing, transport_await_patience_window_ms,
+};
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use crate::transport::rtc::session::connectivity_reason::{
     map_label_to_escalation_reason, parse_session_phase, resolve_connectivity_fallback_reason,
@@ -239,8 +242,9 @@ fn coalesced_transport_await_should_unlock_for_stall(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     observed_at_ms: f64,
 ) -> bool {
-    let profile = resolve_recovery_profile(runtime_stats);
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let profile = resolve_runtime_recovery_profile(stats);
+        let timing = resolve_recovery_dynamic_timing(stats, profile);
         if has_current_clean_anchor_from_stats(stats) {
             return false;
         }
@@ -248,7 +252,12 @@ fn coalesced_transport_await_should_unlock_for_stall(
             return false;
         };
         let age = (observed_at_ms - episode.requested_at_ms).max(0.0);
-        if age < profile.decoded_pending_commit_hold_ms {
+        let unlock_patience_ms = if episode.status == "decoded" {
+            timing.clean_anchor_commit_patience_window_ms
+        } else {
+            timing.decoded_pending_commit_hold_ms
+        };
+        if age < unlock_patience_ms {
             return false;
         }
         let decode_advanced = stats.latest_video_decode_ok_time_ms.is_some_and(|t| {
@@ -266,7 +275,7 @@ fn coalesced_transport_await_should_unlock_for_stall(
         let packets_recent = stats.latest_video_packet_arrival_time_ms.is_some_and(|t| {
             (observed_at_ms - t).max(0.0) <= TRANSPORT_AWAIT_CONTINUATION_REFRESH_PACKET_AGE_MS
         });
-        !packets_recent || age >= profile.fir_retry_interval_ms
+        !packets_recent || age >= timing.fir_retry_interval_ms
     })
     .unwrap_or(false)
 }
@@ -1848,14 +1857,33 @@ impl RtcSessionPolicy {
         ) {
             return None;
         }
-        let profile = resolve_recovery_profile(self.runtime_stats.as_ref());
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if stats.session_target_type != Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud)
+            {
+                return None;
+            }
             if has_current_clean_anchor_from_stats(stats) {
                 return None;
             }
+            let profile = resolve_runtime_recovery_profile(stats);
+            let timing = resolve_recovery_dynamic_timing(stats, profile);
             let episode = current_transport_await_keyframe_episode(stats)?;
+            let pli_sent_for_transport_await = stats
+                .recent_keyframe_request_episodes
+                .iter()
+                .chain(stats.latest_keyframe_request_episode.iter())
+                .any(|candidate| {
+                    candidate.request_reason.as_deref()
+                        == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
+                        && candidate.request_kind.as_deref() == Some("pli")
+                        && candidate.sent_at_ms.is_some()
+                        && candidate.requested_at_ms >= episode.requested_at_ms
+                });
+            if !pli_sent_for_transport_await {
+                return None;
+            }
             let request_age_ms = (observed_at_ms - episode.requested_at_ms).max(0.0);
-            if request_age_ms < profile.pli_refresh_interval_ms {
+            if request_age_ms < timing.pli_refresh_interval_ms {
                 return None;
             }
             let last_fir_at_ms = stats
@@ -1870,7 +1898,7 @@ impl RtcSessionPolicy {
                 .filter_map(|candidate| candidate.sent_at_ms.or(Some(candidate.requested_at_ms)))
                 .max_by(|left, right| left.total_cmp(right));
             if last_fir_at_ms.is_some_and(|last_fir_at_ms| {
-                (observed_at_ms - last_fir_at_ms).max(0.0) < profile.fir_retry_interval_ms
+                (observed_at_ms - last_fir_at_ms).max(0.0) < timing.fir_retry_interval_ms
             }) {
                 return None;
             }
@@ -1879,7 +1907,7 @@ impl RtcSessionPolicy {
                 .as_ref()
                 .is_some_and(|inspection| {
                     (observed_at_ms - inspection.observed_at_ms).max(0.0)
-                        <= profile.playback_recovered_track_progress_fresh_ms
+                        <= timing.continuation_patience_window_ms
                         && inspection.bound_episode_id == Some(episode.episode_id)
                         && !inspection.bootstrap_ready
                         && inspection.admission_accepted
@@ -1896,6 +1924,8 @@ impl RtcSessionPolicy {
             if continuation_only_sustained {
                 return Some("continuationOnlyAwaitingIdr");
             }
+            let transport_await_patience_ms =
+                transport_await_patience_window_ms(episode.status.as_str(), &timing);
             let awaiting_recovery_anchor_stalled = matches!(
                 episode.status.as_str(),
                 "response-observed" | "packet-seen" | "decoded"
@@ -1903,7 +1933,7 @@ impl RtcSessionPolicy {
                 stats,
                 &episode,
                 observed_at_ms,
-                profile.playback_recovered_track_progress_fresh_ms,
+                transport_await_patience_ms,
             );
             if awaiting_recovery_anchor_stalled {
                 return Some("awaitingRecoveryAnchor");
@@ -1913,7 +1943,7 @@ impl RtcSessionPolicy {
                     .first_keyframe_decoded_at_ms
                     .is_some_and(|decoded_at_ms| {
                         (observed_at_ms - decoded_at_ms).max(0.0)
-                            >= profile.decoded_pending_commit_hold_ms
+                            >= timing.clean_anchor_commit_patience_window_ms
                             && stats.video_anchor_clean_observed_at_ms.is_none()
                     });
             if decoded_pending_commit_expired {
@@ -1945,7 +1975,7 @@ impl RtcSessionPolicy {
                 .first_video_packet_at_ms
                 .or(episode.first_keyframe_packet_at_ms)
                 .is_some_and(|response_at_ms| {
-                    (observed_at_ms - response_at_ms).max(0.0) >= profile.pli_refresh_interval_ms
+                    (observed_at_ms - response_at_ms).max(0.0) >= transport_await_patience_ms
                 });
             response_seen_without_fresh_anchor.then_some("responseSeenNoFreshAnchor")
         })
@@ -2854,7 +2884,6 @@ impl RtcSessionPolicy {
                 stats.recovery_anchor_evidence = ledger.anchor_evidence.clone();
                 stats.recovery_owner_surface_state = ledger.owner_surface_state.clone();
                 stats.recovery_escalation_basis = ledger.escalation_basis.clone();
-                stats.recovery_keyframe_episode_health = ledger.keyframe_episode_health.clone();
             } else {
                 stats.recovery_rfc_authoritative_ceiling = None;
                 stats.recovery_rfc_authoritative_fault_domain = None;
@@ -2862,7 +2891,6 @@ impl RtcSessionPolicy {
                 stats.recovery_active_escalation_reason = None;
                 stats.recovery_owner_surface_state = None;
                 stats.recovery_anchor_evidence = None;
-                stats.recovery_keyframe_episode_health = None;
                 stats.recovery_escalation_basis = None;
             }
             stats.recent_recovery_decision_ledgers.push(ledger.clone());

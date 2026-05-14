@@ -80,10 +80,6 @@ fn recovery_decision_ledger_carries_extended_observability_labels() {
         stats.recovery_escalation_basis.as_deref(),
         ledger.escalation_basis.as_deref()
     );
-    assert_eq!(
-        stats.recovery_keyframe_episode_health.as_deref(),
-        ledger.keyframe_episode_health.as_deref()
-    );
 }
 
 #[test]

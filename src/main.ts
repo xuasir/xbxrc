@@ -6,6 +6,7 @@ import { i18n, setUiLocale } from './i18n'
 import { ensureShellGamepadListening } from './navigation/core'
 import { router } from './router'
 import { rpc } from './services/rpc'
+import { devWarn } from './shared/dev-log'
 import {
   businessInputArbiter,
   toBusinessInputTracePayload,
@@ -65,7 +66,7 @@ async function bootstrap(): Promise<void> {
     }
   }
   catch (error) {
-    console.warn('[renderer] failed to sync config:', error)
+    devWarn('[renderer] failed to sync config:', error)
   }
 }
 

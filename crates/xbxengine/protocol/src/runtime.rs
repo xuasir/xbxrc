@@ -741,6 +741,26 @@ pub struct XbxEngineStatsDto {
     pub recovery_playback_recovered_phase: Option<String>,
     #[serde(default)]
     pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_effective_rtt_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_nack_timeout_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_nack_retry_interval_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_pli_refresh_interval_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_fir_retry_interval_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_decoded_pending_commit_hold_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_continuation_patience_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_dynamic_clean_anchor_patience_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_codec_bootstrap_salvage_applied: Option<bool>,
+    #[serde(default)]
+    pub recovery_codec_bootstrap_salvage_failed_reason: Option<String>,
     pub direct_gaming_bitrate_band: Option<String>,
     pub recovery_owner_state: Option<String>,
     pub recovery_owner_reason: Option<String>,

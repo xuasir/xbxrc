@@ -22,6 +22,7 @@ import {
 } from '../../navigation/spatial-nav.constants'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
+import { devWarn, devWarnRateLimited } from '../../shared/dev-log'
 import GamepadProfileCard from '../navigation/GamepadProfileCard.vue'
 import TopNavBar from '../navigation/TopNavBar.vue'
 import UserProfileMenu from '../navigation/UserProfileMenu.vue'
@@ -107,7 +108,7 @@ async function loadShellUserState(): Promise<void> {
     userProfile.value = nextUserProfile
   }
   catch (error) {
-    console.warn('[AppShell] load user state failed:', error)
+    devWarn('[AppShell] load user state failed:', error)
   }
 }
 
@@ -123,7 +124,7 @@ async function loadGamepadSnapshot(): Promise<void> {
       documentVisibility: document.visibilityState,
       hasFocus: document.hasFocus(),
     })
-    console.warn('[AppShell] load gamepad snapshot failed:', error)
+    devWarnRateLimited('app-shell:load-gamepad-snapshot-failed', '[AppShell] load gamepad snapshot failed:', error)
   }
 }
 

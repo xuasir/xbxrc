@@ -10,6 +10,8 @@ use crate::media::video::ingress::budget::{
     FrameBudgetWindowSource,
 };
 use crate::media::video::types::FrameRecoveryDisposition;
+use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
+use crate::transport::rtc::recovery::timing::resolve_effective_rtt_ms;
 use crate::transport::rtc::stream::nack_scheduler::{
     ExpiredNackBatch, NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack,
     SkippedNackBatch,
@@ -1295,6 +1297,25 @@ impl RtcVideoFrameSource {
         now_ms: f64,
         chain_broken: bool,
     ) {
+        fn should_suppress_low_value_mass_gap_recovery(
+            skipped: &SkippedNackBatch,
+            now_ms: f64,
+        ) -> bool {
+            if !matches!(skipped.frame_importance, "disposable" | "unknown") {
+                return false;
+            }
+            let span_high = skipped.sequences.len() >= 10;
+            let repairability_low = skipped
+                .estimated_recovery_arrival_ms
+                .zip(skipped.frame_playout_deadline_at_ms)
+                .is_some_and(|(a, d)| a > d - 4.0);
+            let deadline_survival_bad = skipped
+                .frame_playout_deadline_at_ms
+                .is_some_and(|d| now_ms >= d - 2.0);
+            let triple = span_high && repairability_low && deadline_survival_bad;
+            !triple
+        }
+
         let trigger = match skipped.nack_disposition {
             PacketRecoveryDisposition::SkippedLowValue
             | PacketRecoveryDisposition::SkippedTooLate => chain_broken,
@@ -1305,6 +1326,9 @@ impl RtcVideoFrameSource {
             PacketRecoveryDisposition::Attempted => return,
         };
         if !trigger {
+            return;
+        }
+        if should_suppress_low_value_mass_gap_recovery(skipped, now_ms) {
             return;
         }
         self.maybe_trigger_reference_chain_recovery(
@@ -1704,7 +1728,13 @@ impl RtcVideoFrameSource {
 
     pub(super) fn cloud_nack_rtt_ms(&self) -> f64 {
         self.runtime_stats
-            .read(|stats| stats.video_rtt_ms.unwrap_or(0.0))
+            .read(|stats| {
+                let kind = ScenarioPolicyResolver::resolve_kind(
+                    stats.session_target_type.as_ref(),
+                    stats.transport_path.as_deref(),
+                );
+                resolve_effective_rtt_ms(stats, kind)
+            })
             .unwrap_or(0.0)
     }
 }
@@ -2849,7 +2879,7 @@ mod tests {
     }
 
     #[test]
-    fn low_value_skip_under_recovery_pressure_reopens_chain_recovery() {
+    fn low_value_skip_under_recovery_pressure_stays_local_without_mass_gap_evidence() {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let (transport_observation_tx, _transport_observation_rx) =
             tokio::sync::mpsc::unbounded_channel();
@@ -2929,7 +2959,7 @@ mod tests {
             true,
         );
 
-        assert!(source.is_blocking_non_keyframe_admission());
+        assert!(!source.is_blocking_non_keyframe_admission());
     }
 
     #[test]

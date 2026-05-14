@@ -1,5 +1,6 @@
 import type { BaseChannel, ChannelContext } from '../../protocol/channels/BaseChannel'
 import type { WebRtcTransport } from './WebRtcTransport'
+import { devWarnRateLimited } from '../../../shared/dev-log'
 
 export class DataChannelHub {
   private readonly handlers = new Map<string, BaseChannel>()
@@ -22,7 +23,7 @@ export class DataChannelHub {
         catch (error) {
           // 某些浏览器在 readyState 仍显示 open 时也会因底层 SCTP 状态异常而直接抛错。
           // 这里统一吞掉瞬时发送异常，避免控制台被周期性 keyframe 请求刷爆。
-          console.warn('[player][data-channel] send failed', {
+          devWarnRateLimited(`data-channel:send-failed:${name}`, '[player][data-channel] send failed', {
             label: name,
             readyState: channel.readyState,
             error: error instanceof Error ? error.message : String(error),

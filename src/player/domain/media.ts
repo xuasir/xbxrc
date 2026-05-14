@@ -55,7 +55,7 @@ export interface StreamStats {
   transportStrategyProfile?: string
   recoveryStrategyProfile?: string
   /** 后端聚合展示；优先看 recoveryOwnerReason、primaryIssueChain 与 RFC 三字段。 */
-  recoveryDiagnosis?: string
+  diagnosis?: string
   recoveryRfcFaultDomain?: string
   recoveryRfcStage?: string
   recoveryRfcCeiling?: string
@@ -63,7 +63,7 @@ export interface StreamStats {
   recoveryOwnerReason?: string
   videoOwnerSource?: string
   videoOwnerObservedAtMs?: number
-  directGamingBitrateBand?: string
+  remoteProfileBitrateBand?: string
   videoHealth?: string
   chainHealth?: string
   presentationHealth?: string

@@ -72,7 +72,7 @@ impl GamepadProvider for GamepadService {
     }
 
     fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        log::info!("tauri_gamepad_activate_sampling source=provider");
+        log::debug!("tauri_gamepad_activate_sampling source=provider");
         let snapshot = self
             .host
             .activate_sampling()
@@ -94,7 +94,7 @@ impl GamepadProvider for GamepadService {
     }
 
     fn resume_shell_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        log::info!("tauri_gamepad_resume_shell_sampling source=provider");
+        log::debug!("tauri_gamepad_resume_shell_sampling source=provider");
         let snapshot = self
             .host
             .resume_shell_sampling()
@@ -166,7 +166,7 @@ impl GamepadProvider for GamepadService {
     }
 
     fn set_suspended(&self, suspended: bool) -> Result<(), String> {
-        log::info!(
+        log::debug!(
             "tauri_gamepad_suspend_transition source=provider suspended={}",
             suspended
         );
@@ -179,7 +179,7 @@ impl GamepadProvider for GamepadService {
         &self,
         lifecycle: OhMyGamepadSamplingLifecycleDto,
     ) -> Result<(), String> {
-        log::info!(
+        log::debug!(
             "tauri_gamepad_sampling_lifecycle source=provider lifecycle={:?}",
             lifecycle
         );
@@ -527,7 +527,7 @@ fn log_runtime_snapshot(
         })
         .collect::<Vec<_>>()
         .join(";");
-    log::info!(
+    log::debug!(
         "tauri_gamepad_runtime_snapshot stage={} devices={} slots={} stream_pad_forwarding={} payload=[{}]",
         stage,
         snapshot.devices.len(),

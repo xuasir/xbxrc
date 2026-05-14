@@ -85,7 +85,7 @@ export interface StreamPerformanceSnapshot {
   /**
    * 后端聚合后的展示文案；权威语义优先看 recoveryOwnerReason、primaryIssueChain 与 RFC 三字段。
    */
-  recoveryDiagnosis?: string
+  diagnosis?: string
   recoveryRfcFaultDomain?: string
   recoveryRfcStage?: string
   recoveryRfcCeiling?: string
@@ -93,7 +93,7 @@ export interface StreamPerformanceSnapshot {
   recoveryOwnerReason?: string
   videoOwnerSource?: string
   videoOwnerObservedAtMs?: number
-  directGamingBitrateBand?: string
+  remoteProfileBitrateBand?: string
   videoHealth?: string
   chainHealth?: string
   presentationHealth?: string
@@ -276,7 +276,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   /**
    * 后端聚合后的展示文案；权威语义优先看 recoveryOwnerReason、primaryIssueChain 与 RFC 三字段。
    */
-  recoveryDiagnosis?: string
+  diagnosis?: string
   recoveryRfcFaultDomain?: string
   recoveryRfcStage?: string
   recoveryRfcCeiling?: string
@@ -285,7 +285,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   videoDecoderRecoveryState?: string
   videoDecoderRecoveryEvent?: string
   videoOwnerSource?: string
-  directGamingBitrateBand?: string
+  remoteProfileBitrateBand?: string
   videoHealth?: string
   primaryIssueChain?: string
   latestDecisionSummary?: string
@@ -430,7 +430,7 @@ export interface StreamRustDiagnosticsViewModel {
   decoderState: string
   decoderEvent?: string
   stallKind: string
-  recoveryDiagnosis: string
+  diagnosis: string
   recoveryRfcFaultDomain: string
   recoveryRfcStage: string
   recoveryRfcCeiling: string

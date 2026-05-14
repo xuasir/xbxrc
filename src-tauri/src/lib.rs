@@ -61,8 +61,7 @@ pub fn run() {
     let mut logger = env_logger::Builder::from_env(
         // 终端默认只保留 warning 及以上，避免第三方 WebRTC crate 持续刷屏；
         // 需要更细粒度调试时，仍可通过 RUST_LOG 显式放开。
-        env_logger::Env::default()
-            .default_filter_or("warn,xbxrc_lib=info,xbxrc_lib::mods::rpc=warn"),
+        env_logger::Env::default().default_filter_or("warn"),
     );
     logger.filter_module("webrtc_srtp::session", log::LevelFilter::Warn);
     logger.init();

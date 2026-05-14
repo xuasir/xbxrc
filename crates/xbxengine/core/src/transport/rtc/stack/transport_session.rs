@@ -16,6 +16,7 @@ use crate::transport::rtc::facts::{
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, VideoEscalationController, VideoEscalationReason,
 };
+use crate::transport::rtc::recovery::timing::resolve_recovery_dynamic_timing;
 use crate::transport::rtc::session::actor::SessionActor;
 use crate::transport::rtc::session::clock::SystemSessionClock;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
@@ -1122,6 +1123,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
         }
         let profile =
             crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile(stats);
+        let timing = resolve_recovery_dynamic_timing(stats, profile);
         let anchor_candidate_stalled = matches!(
             episode.status.as_str(),
             "response-observed" | "packet-seen" | "decoded"
@@ -1149,7 +1151,8 @@ impl<'a> RtcTransportSessionBridge<'a> {
         episode
             .first_keyframe_decoded_at_ms
             .and_then(|decoded_at_ms| {
-                ((now_ms - decoded_at_ms).max(0.0) >= profile.decoded_pending_commit_hold_ms)
+                ((now_ms - decoded_at_ms).max(0.0)
+                    >= timing.clean_anchor_commit_patience_window_ms)
                     .then_some("decodedPendingCommitExpired")
             })
     }

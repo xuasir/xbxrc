@@ -10,6 +10,7 @@ import ConsoleStatusCard from '../components/common/ConsoleStatusCard.vue'
 import HorizontalListRail from '../components/common/HorizontalListRail.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
+import { devWarn } from '../shared/dev-log'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -131,7 +132,7 @@ async function loadHosts(): Promise<void> {
     hosts.value = Array.isArray(result) ? result : []
   }
   catch (error) {
-    console.warn('[Home] load hosts failed:', error)
+    devWarn('[Home] load hosts failed:', error)
     hosts.value = []
   }
   finally {

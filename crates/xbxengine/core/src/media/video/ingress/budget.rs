@@ -287,14 +287,35 @@ impl FrameBudgetContext {
             .min(4)
     }
 
-    pub(crate) fn retry_budget(&self, _value: FrameValue, _default_max_retry_count: u8) -> u8 {
-        match (self.link_value, self.failure_cost, self.rtt_slack) {
-            (_, FrameBudgetFailureCost::ChainBroken, FrameBudgetRttSlack::Exhausted) => 0,
-            // NACK 统一采用单发策略。
-            // deadline/maxAge 负责控制“还等不等它回来”，poll 不再触发二次发送。
-            (FrameBudgetLinkValue::Anchor, _, _) => 0,
-            (FrameBudgetLinkValue::Supply, _, _) => 0,
-            (FrameBudgetLinkValue::Disposable, _, _) => 0,
+    pub(crate) fn retry_budget(&self, _value: FrameValue, default_max_retry_count: u8) -> u8 {
+        if matches!(
+            (self.failure_cost, self.rtt_slack),
+            (
+                FrameBudgetFailureCost::ChainBroken,
+                FrameBudgetRttSlack::Exhausted
+            )
+        ) {
+            return 0;
+        }
+        match self.link_value {
+            FrameBudgetLinkValue::Disposable => 0,
+            FrameBudgetLinkValue::Supply => {
+                if matches!(
+                    self.rtt_slack,
+                    FrameBudgetRttSlack::Ample | FrameBudgetRttSlack::Tight
+                ) {
+                    1.min(default_max_retry_count)
+                } else {
+                    0
+                }
+            }
+            FrameBudgetLinkValue::Anchor => {
+                if matches!(self.rtt_slack, FrameBudgetRttSlack::Ample) {
+                    1.min(default_max_retry_count)
+                } else {
+                    0
+                }
+            }
         }
     }
 
@@ -626,7 +647,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_window_reference_uses_single_shot_budget() {
+    fn recovery_window_reference_allows_one_retry_when_slack_ample_or_tight() {
         let context = FrameBudgetContext::for_transport(
             FrameValue::new(false, true, 48 * 1024),
             false,
@@ -641,12 +662,12 @@ mod tests {
         assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
         assert_eq!(
             context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
-            0
+            1
         );
     }
 
     #[test]
-    fn refresh_boost_supply_still_uses_single_shot_budget() {
+    fn refresh_boost_supply_allows_one_retry_when_slack_ample_or_tight() {
         let context = FrameBudgetContext::for_transport(
             FrameValue::new(false, true, 48 * 1024),
             false,
@@ -661,7 +682,7 @@ mod tests {
         assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
         assert_eq!(
             context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
-            0
+            1
         );
     }
 

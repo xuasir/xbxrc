@@ -310,12 +310,10 @@ impl DataProvider for DataService {
     async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, String> {
         let session = self.session_resolver.ensure_authenticated_session().await?;
         let Some(session) = session else {
-            eprintln!("[data][hosts] skip: no authenticated session");
             return Ok(Vec::new());
         };
 
         let hosts = self.host_service.get_hosts(&session).await?;
-        eprintln!("[data][hosts] service result count={}", hosts.len());
         Ok(hosts)
     }
 
