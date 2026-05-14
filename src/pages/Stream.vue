@@ -766,10 +766,13 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   }
 
   if (handlers[id]) {
-    closeActionSheet()
-    // 先让 overlay 关闭完成，再发即时控制动作，降低菜单态切换竞态。
-    await nextTick()
     await handlers[id]?.()
+
+    if (id === 'display' || id === 'audio' || id === 'sendText') {
+      return
+    }
+
+    closeActionSheet()
   }
 }
 
@@ -798,9 +801,8 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   }
 
   if (handlers[id]) {
-    closeDiagnosticsMenu()
-    await nextTick()
     await handlers[id]?.()
+    closeDiagnosticsMenu()
   }
 }
 </script>
