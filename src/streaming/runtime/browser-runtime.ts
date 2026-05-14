@@ -808,12 +808,13 @@ export function createBrowserRuntime(options: {
         : webgl2Supported
           ? 'auto'
           : 'capabilityFallback'
+    // 显示档位只调画质/管线，不通过 targetFps 压前端绘制节奏（与 Renderers.shouldDraw 的 >=60 全开一致）
     const nextConfig: Record<DisplayDegradeLevel, Partial<RendererRuntimeConfig>> = {
       displayL0: {
         pipelineType,
         processing: 'cas',
         processingMode: adaptive.processingMode,
-        targetFps: Math.max(0, 60 + adaptive.targetFpsBias),
+        targetFps: 60,
         format: adaptive.preferredFormat,
         sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
         shaderPreset: adaptive.shaderPreset,
@@ -826,7 +827,7 @@ export function createBrowserRuntime(options: {
         pipelineType,
         processing: 'usm',
         processingMode: adaptive.processingMode,
-        targetFps: Math.max(0, 45 + adaptive.targetFpsBias),
+        targetFps: 60,
         format: adaptive.preferredFormat,
         sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
         shaderPreset: adaptive.shaderPreset,
@@ -839,7 +840,7 @@ export function createBrowserRuntime(options: {
         pipelineType,
         processing: 'usm',
         processingMode: adaptive.processingMode,
-        targetFps: Math.max(0, 30 + adaptive.targetFpsBias),
+        targetFps: 60,
         format: adaptive.preferredFormat,
         sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
         shaderPreset: adaptive.shaderPreset,
@@ -2058,7 +2059,7 @@ export function createBrowserRuntime(options: {
       void applyDisplayDegradeLevel('displayL1', 'decodeBackpressureOrBackpressure')
     }
     else if (displayWarmupUntilMs > now) {
-      void applyDisplayDegradeLevel('displayL1', 'displayWarmup')
+      void applyDisplayDegradeLevel('displayL0', 'displayWarmup')
     }
     else {
       void applyDisplayDegradeLevel('displayL0', 'renderStable')
