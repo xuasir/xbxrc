@@ -141,6 +141,7 @@ const keyboardBindings = ref<Record<LogicalButtonDto, GamepadKeyboardKeyDto | nu
 const gamepadButtonIndices = ref<Record<LogicalButtonDto, number>>({ ...DEFAULT_GAMEPAD_BUTTON_INDEX })
 const mappingEditorMode = ref<MappingEditorMode>('none')
 const captureTargetButton = ref<LogicalButtonDto | null>(null)
+const captureAwaitingFreshPress = ref(false)
 const mappingMessage = ref('')
 const mappingMessageTone = ref<'success' | 'error'>('success')
 const mappingSheetOpen = ref(false)
@@ -430,17 +431,20 @@ function openMappingEditor(mode: MappingEditorMode): void {
 
 function closeMappingEditor(): void {
   captureTargetButton.value = null
+  captureAwaitingFreshPress.value = false
   mappingEditorMode.value = 'none'
   mappingSheetOpen.value = false
 }
 
 function startCapture(button: LogicalButtonDto): void {
   captureTargetButton.value = button
+  captureAwaitingFreshPress.value = true
   mappingMessage.value = ''
 }
 
 function cancelCapture(): void {
   captureTargetButton.value = null
+  captureAwaitingFreshPress.value = false
 }
 
 function keyboardCodeToDtoKey(code: string): GamepadKeyboardKeyDto | null {
@@ -520,6 +524,27 @@ function detectPressedRawButtonIndex(snapshot: LogicalPadSnapshotDto): number | 
   }
   return maxIndex
 }
+
+function hasPressedLogicalButton(snapshot: LogicalPadSnapshotDto): boolean {
+  return detectPressedLogicalButton(snapshot) !== null
+}
+
+function hasPressedRawButton(snapshot: LogicalPadSnapshotDto): boolean {
+  return detectPressedRawButtonIndex(snapshot) !== null
+}
+
+function isCaptureNeutralSnapshot(snapshot: LogicalPadSnapshotDto): boolean {
+  return !hasPressedLogicalButton(snapshot) && !hasPressedRawButton(snapshot)
+}
+
+const mappingCapturePrompt = computed(() => {
+  if (mappingSheetMode.value === 'keyboard') {
+    return '按 B 可取消监听。'
+  }
+  return captureAwaitingFreshPress.value
+    ? '请先松开当前按键，再按下要映射的新按键。按 B 可取消监听。'
+    : '请按下要映射的新按键。按 B 可取消监听。'
+})
 
 async function handleTestGamepadRumble(): Promise<void> {
   if (isGamepadTestRumbleDisabled.value) {
@@ -616,10 +641,17 @@ onMounted(() => {
       if (targetButton === null) {
         return
       }
+      if (captureAwaitingFreshPress.value) {
+        if (isCaptureNeutralSnapshot(snapshot)) {
+          captureAwaitingFreshPress.value = false
+        }
+        return
+      }
       const rawIndex = detectPressedRawButtonIndex(snapshot)
       if (rawIndex !== null) {
         gamepadButtonIndices.value[targetButton] = rawIndex
         captureTargetButton.value = null
+        captureAwaitingFreshPress.value = false
       }
       else {
         // 兼容旧数据：如果后端还未上报 rawButtons，则退回逻辑按钮推断。
@@ -628,6 +660,7 @@ onMounted(() => {
           // 采集时应复制“当前实际映射索引”，而不是回退到默认索引。
           gamepadButtonIndices.value[targetButton] = gamepadButtonIndices.value[sourceButton]
           captureTargetButton.value = null
+          captureAwaitingFreshPress.value = false
         }
       }
     }
@@ -880,6 +913,7 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
           :keyboard-bindings="keyboardBindings"
           :gamepad-button-indices="gamepadButtonIndices"
           :capture-target-button="captureTargetButton"
+          :capture-prompt="mappingCapturePrompt"
           :message="mappingMessage"
           :message-tone="mappingMessageTone"
           @close="closeMappingEditor"

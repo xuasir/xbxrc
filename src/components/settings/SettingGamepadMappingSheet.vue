@@ -18,6 +18,7 @@ interface Props {
   keyboardBindings: Record<LogicalButtonDto, GamepadKeyboardKeyDto | null>
   gamepadButtonIndices: Record<LogicalButtonDto, number>
   captureTargetButton: LogicalButtonDto | null
+  capturePrompt: string
   message: string
   messageTone: 'success' | 'error'
 }
@@ -127,7 +128,7 @@ function formatGamepadBinding(button: LogicalButtonDto): string {
     <p v-if="props.captureTargetButton !== null" class="setting-gamepad-mapping-sheet__capture">
       正在监听 {{ props.logicalButtonLabel[props.captureTargetButton] }} 的映射输入……
       <br>
-      按 B 可取消监听。
+      {{ props.capturePrompt }}
     </p>
 
     <template #footer>

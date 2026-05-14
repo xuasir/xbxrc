@@ -13,7 +13,7 @@ import type {
   LogicalButtonsStateDto,
   LogicalPadSnapshotDto,
 } from '@shared/gamepad/contract'
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Focusable } from '@/navigation/core/vue'
 import SettingGamepadMappingSheet from '../../components/settings/SettingGamepadMappingSheet.vue'
 import SettingInputDebugSheet from '../../components/settings/SettingInputDebugSheet.vue'
@@ -137,6 +137,7 @@ const isMappingSheetOpen = ref(false)
 const mappingMessage = ref('')
 const mappingMessageTone = ref<'success' | 'error'>('success')
 const captureTargetButton = ref<LogicalButtonDto | null>(null)
+const captureAwaitingFreshPress = ref(false)
 const keyboardBindings = ref<Record<LogicalButtonDto, GamepadKeyboardKeyDto | null>>(
   Object.fromEntries(LOGICAL_BUTTONS.map(button => [button, null])) as Record<LogicalButtonDto, GamepadKeyboardKeyDto | null>,
 )
@@ -151,6 +152,7 @@ function openInputDebugSheet(): void {
 
 function openMappingSheet(): void {
   captureTargetButton.value = null
+  captureAwaitingFreshPress.value = false
   isMappingSheetOpen.value = true
 }
 
@@ -161,15 +163,18 @@ defineExpose({
 
 function closeMappingSheet(): void {
   captureTargetButton.value = null
+  captureAwaitingFreshPress.value = false
   isMappingSheetOpen.value = false
 }
 
 function cancelCapture(): void {
   captureTargetButton.value = null
+  captureAwaitingFreshPress.value = false
 }
 
 function startCapture(button: LogicalButtonDto): void {
   captureTargetButton.value = button
+  captureAwaitingFreshPress.value = true
   mappingMessage.value = ''
 }
 
@@ -304,6 +309,24 @@ function detectPressedRawButtonIndex(snapshot: LogicalPadSnapshotDto): number | 
   }
   return maxIndex
 }
+
+function hasPressedLogicalButton(snapshot: LogicalPadSnapshotDto): boolean {
+  return detectPressedLogicalButton(snapshot) !== null
+}
+
+function hasPressedRawButton(snapshot: LogicalPadSnapshotDto): boolean {
+  return detectPressedRawButtonIndex(snapshot) !== null
+}
+
+function isCaptureNeutralSnapshot(snapshot: LogicalPadSnapshotDto): boolean {
+  return !hasPressedLogicalButton(snapshot) && !hasPressedRawButton(snapshot)
+}
+
+const mappingCapturePrompt = computed(() =>
+  captureAwaitingFreshPress.value
+    ? '请先松开当前按键，再按下要映射的新按键。按 B 可取消监听。'
+    : '请按下要映射的新按键。按 B 可取消监听。',
+)
 
 async function loadRuntimeSnapshot(): Promise<void> {
   try {
@@ -487,16 +510,24 @@ onMounted(() => {
     if (!isMappingSheetOpen.value || captureTargetButton.value === null) {
       return
     }
+    if (captureAwaitingFreshPress.value) {
+      if (isCaptureNeutralSnapshot(snapshot)) {
+        captureAwaitingFreshPress.value = false
+      }
+      return
+    }
     const rawIndex = detectPressedRawButtonIndex(snapshot)
     if (rawIndex !== null) {
       gamepadButtonIndices.value[captureTargetButton.value] = rawIndex
       captureTargetButton.value = null
+      captureAwaitingFreshPress.value = false
       return
     }
     const sourceButton = detectPressedLogicalButton(snapshot)
     if (sourceButton !== null) {
       gamepadButtonIndices.value[captureTargetButton.value] = gamepadButtonIndices.value[sourceButton]
       captureTargetButton.value = null
+      captureAwaitingFreshPress.value = false
     }
   })
 })
@@ -576,6 +607,7 @@ onUnmounted(() => {
     :keyboard-bindings="keyboardBindings"
     :gamepad-button-indices="gamepadButtonIndices"
     :capture-target-button="captureTargetButton"
+    :capture-prompt="mappingCapturePrompt"
     :message="mappingMessage"
     :message-tone="mappingMessageTone"
     @close="closeMappingSheet"
