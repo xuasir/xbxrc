@@ -741,8 +741,15 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                                 "focused": focused,
                             }),
                         );
-                        let _ = gamepad_provider
+                        let promote_result = gamepad_provider
                             .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
+                        if promote_result.is_ok() {
+                            // `WindowEvent::Focused(true)` 在部分 Windows/WebView2 回焦路径上可能缺失；
+                            // 此处已与 `should_auto_promote_background_warm` 共用同一 `is_focused()` 判定，
+                            // 升 Active 成功后必须把门控焦点位对齐，否则 `input_gate` 永久 Closed。
+                            input_gate::record_shell_main_window_focused_from_os_event(true);
+                            input_gate::sync_gamepad_input_gate(&app_handle_gamepad);
+                        }
                     }
                 }
 

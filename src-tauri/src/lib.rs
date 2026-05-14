@@ -103,6 +103,9 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::Focused(focused) => {
+                    mods::gamepad::input_gate::record_shell_main_window_focused_from_os_event(
+                        *focused,
+                    );
                     record_gamepad_shell_trace(
                         window,
                         "windowFocused",
