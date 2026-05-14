@@ -128,9 +128,10 @@ impl VideoEscalationReason {
                 Some(Self::WaitKeyframe)
             }
             "frameAbandoned" | "ingressFrameAbandoned" => Some(Self::LocalSupplySuspect),
-            "transportAwaitRecoveryAnchor" => Some(Self::TransportAwaitRecoveryKeyframe),
-            "transportAwaitRecoverySuspect"
-            | "localSupplySuspect"
+            "transportAwaitRecoveryAnchor" | "transportAwaitRecoverySuspect" => {
+                Some(Self::TransportAwaitRecoveryKeyframe)
+            }
+            "localSupplySuspect"
             | "rebuildingSupplySuspect"
             | "bootstrapMissingSps"
             | "bootstrapMissingPps"

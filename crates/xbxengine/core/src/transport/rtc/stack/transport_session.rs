@@ -1151,8 +1151,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
         episode
             .first_keyframe_decoded_at_ms
             .and_then(|decoded_at_ms| {
-                ((now_ms - decoded_at_ms).max(0.0)
-                    >= timing.clean_anchor_commit_patience_window_ms)
+                ((now_ms - decoded_at_ms).max(0.0) >= timing.clean_anchor_commit_patience_window_ms)
                     .then_some("decodedPendingCommitExpired")
             })
     }

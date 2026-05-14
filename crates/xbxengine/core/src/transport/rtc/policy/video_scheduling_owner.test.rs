@@ -77,6 +77,7 @@ fn input(
         latest_h264_committed_sps_present: None,
         latest_h264_committed_pps_present: None,
         latest_h264_delta_continuation_ready: None,
+        latest_h264_continuation_verdict: None,
         latest_h264_observed_at_ms: None,
         display_supply_thresholds: thresholds(),
         observed_at_ms,
@@ -2249,6 +2250,65 @@ fn sustaining_phase_stops_when_transport_await_reappears_after_clean_anchor() {
         },
         observed_at_ms: 1_640.0,
     });
+
+    let output = owner.evaluate(&pending);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    let intent = output.recovery_intent.expect("transport await intent");
+    assert_eq!(intent.reason_label, "transportAwaitRecoveryAnchor");
+}
+
+#[test]
+fn continuation_only_after_clean_anchor_overrides_recovery_sustaining_label() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryAnchor"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-anchor"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        1_000.0,
+        7,
+    ));
+
+    let mut pending = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryAnchor"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: Some(420.0),
+            decode_age_ms: Some(380.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("gap-repair-in-flight"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        1_280.0,
+        7,
+    );
+    pending.clean_anchor_epoch = Some(7);
+    pending.clean_anchor_observed_at_ms = Some(1_250.0);
+    pending.clean_anchor_source_event = Some("chain-clean-anchor-submitted".to_string());
+    pending.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        recovery_epoch: 7,
+        frame_rtp_timestamp: Some(7_001),
+        state: crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        source_event: "chain-clean-anchor-submitted".to_string(),
+        failure_reason: None,
+        observed_at_ms: 1_255.0,
+    });
+    pending.latest_h264_bootstrap_ready = Some(false);
+    pending.latest_h264_bootstrap_reject_reason = Some("bootstrapMissingIdr".to_string());
+    pending.latest_h264_continuation_verdict =
+        Some("continuationAcceptedWhileAwaitingIdr".to_string());
+    pending.latest_h264_committed_sps_present = Some(true);
+    pending.latest_h264_committed_pps_present = Some(true);
+    pending.latest_h264_delta_continuation_ready = Some(true);
+    pending.latest_h264_observed_at_ms = Some(1_279.0);
 
     let output = owner.evaluate(&pending);
     assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);

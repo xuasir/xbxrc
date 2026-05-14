@@ -20,10 +20,10 @@ pub(crate) fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalat
         "ingressFrameAbandoned" => Some(VideoEscalationReason::LocalSupplySuspect),
         "waitKeyframeEntered" => Some(VideoEscalationReason::WaitKeyframe),
         "frameAbandoned" => Some(VideoEscalationReason::LocalSupplySuspect),
-        "transportAwaitRecoveryAnchor" => {
+        "transportAwaitRecoveryAnchor" | "transportAwaitRecoverySuspect" => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
-        "transportAwaitRecoverySuspect" | "localSupplySuspect" | "rebuildingSupplySuspect" => {
+        "localSupplySuspect" | "rebuildingSupplySuspect" => {
             Some(VideoEscalationReason::LocalSupplySuspect)
         }
         "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader" => {
@@ -41,6 +41,31 @@ pub(crate) fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalat
         "transportRecoveredLate" => Some(VideoEscalationReason::TransportRecoveredLate),
         "transportSampleLoss" => Some(VideoEscalationReason::TransportSampleLoss),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transport_await_suspect_maps_to_transport_await_keyframe() {
+        assert_eq!(
+            map_label_to_escalation_reason("transportAwaitRecoverySuspect"),
+            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        );
+    }
+
+    #[test]
+    fn local_supply_suspect_labels_stay_local_supply() {
+        assert_eq!(
+            map_label_to_escalation_reason("localSupplySuspect"),
+            Some(VideoEscalationReason::LocalSupplySuspect)
+        );
+        assert_eq!(
+            map_label_to_escalation_reason("rebuildingSupplySuspect"),
+            Some(VideoEscalationReason::LocalSupplySuspect)
+        );
     }
 }
 

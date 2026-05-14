@@ -47,18 +47,23 @@ pub(super) fn cloud_startup_head_hole_deadline_at_ms(
     cloud_mode: bool,
     startup_mode: bool,
     cloud_rtt_ms: Option<f64>,
+    // RFC：与 `recovery_dynamic_nack_timeout_ms` 对齐；与 cloud RTT floor 取 max，避免短窗判死。
+    dynamic_nack_timeout_ms: Option<f64>,
 ) -> f64 {
     if !cloud_mode {
         return deadline_at_ms;
     }
     let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);
     let rtt_margin_ms = cloud_nack_rtt_margin_ms(startup_mode, cloud_rtt_ms);
-    let deadline_floor_ms = now_ms
+    let mut deadline_floor_ms = now_ms
         + if startup_mode {
             (rtt_ms + rtt_margin_ms).max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
         } else {
             rtt_ms + rtt_margin_ms
         };
+    if let Some(nack_to) = dynamic_nack_timeout_ms {
+        deadline_floor_ms = deadline_floor_ms.max(now_ms + nack_to.max(0.0));
+    }
     deadline_at_ms.max(deadline_floor_ms)
 }
 
@@ -151,6 +156,9 @@ pub(super) fn sample_loss_nack_policy(
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
         max_retry_count_override: None,
+        first_attempt_survival_window_ms: None,
+        repairability_schedule: None,
+        admission_deadline_floor_at_ms: None,
     }
 }
 
@@ -208,6 +216,9 @@ pub(super) fn rtp_window_nack_policy(
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
         max_retry_count_override: None,
+        first_attempt_survival_window_ms: None,
+        repairability_schedule: None,
+        admission_deadline_floor_at_ms: None,
     }
 }
 
@@ -265,6 +276,9 @@ pub(super) fn rtp_gap_nack_policy(
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
         max_retry_count_override: None,
+        first_attempt_survival_window_ms: None,
+        repairability_schedule: None,
+        admission_deadline_floor_at_ms: None,
     }
 }
 
@@ -321,6 +335,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cloud_startup_head_hole_deadline_respects_dynamic_nack_floor() {
+        let now_ms = 1_000.0;
+        let base_deadline_at_ms = 1_120.0;
+        // RTT 档与 margin 下 floor 为 1170；动态 NACK 超时 240ms 要求至少到 1240。
+        let adjusted = cloud_startup_head_hole_deadline_at_ms(
+            now_ms,
+            base_deadline_at_ms,
+            true,
+            false,
+            Some(90.0),
+            Some(240.0),
+        );
+        assert_eq!(adjusted, 1_240.0);
+    }
+
+    #[test]
     fn cloud_nack_windows_follow_rtt_without_floor() {
         let now_ms = 1_000.0;
         let base_deadline_at_ms = 1_120.0;
@@ -331,6 +361,7 @@ mod tests {
             true,
             false,
             Some(90.0),
+            None,
         );
         let adjusted_max_age = cloud_nack_max_age_ms(100, true, false, Some(90.0));
 
@@ -349,6 +380,7 @@ mod tests {
             false,
             false,
             Some(90.0),
+            None,
         );
         let adjusted_max_age = cloud_nack_max_age_ms(180, false, false, Some(90.0));
 

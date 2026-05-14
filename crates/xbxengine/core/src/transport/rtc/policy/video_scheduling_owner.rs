@@ -104,6 +104,7 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) latest_h264_committed_sps_present: Option<bool>,
     pub(crate) latest_h264_committed_pps_present: Option<bool>,
     pub(crate) latest_h264_delta_continuation_ready: Option<bool>,
+    pub(crate) latest_h264_continuation_verdict: Option<String>,
     pub(crate) latest_h264_observed_at_ms: Option<f64>,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
     pub(crate) observed_at_ms: f64,
@@ -1912,6 +1913,8 @@ impl VideoSchedulingOwner {
                 input.latest_h264_bootstrap_reject_reason.as_deref(),
                 Some("bootstrapMissingIdr" | "NonIdrVcl")
             )
+            && input.latest_h264_continuation_verdict.as_deref()
+                == Some("continuationAcceptedWhileAwaitingIdr")
             && input.latest_h264_committed_sps_present.unwrap_or(false)
             && input.latest_h264_committed_pps_present.unwrap_or(false)
             && input.latest_h264_delta_continuation_ready.unwrap_or(false)
@@ -1931,15 +1934,18 @@ impl VideoSchedulingOwner {
                     Self::rebuilding_supply_strong_anchor_intent(input, completion_evidence);
                 let (reason, label) = if strong_anchor {
                     let reason = OwnerRecoveryReason::TransportAwaitRecoveryKeyframe;
-                    let label =
-                        if Self::recovery_sustaining_phase_active(input, completion_evidence) {
-                            "recoverySustaining".to_string()
-                        } else {
-                            input
-                                .anchor_reason_label
-                                .clone()
-                                .unwrap_or_else(|| reason.as_reason_label().to_string())
-                        };
+                    let continuation_only_anchor_missing =
+                        Self::latest_h264_shows_continuation_awaiting_idr(input);
+                    let label = if continuation_only_anchor_missing {
+                        reason.as_reason_label().to_string()
+                    } else if Self::recovery_sustaining_phase_active(input, completion_evidence) {
+                        "recoverySustaining".to_string()
+                    } else {
+                        input
+                            .anchor_reason_label
+                            .clone()
+                            .unwrap_or_else(|| reason.as_reason_label().to_string())
+                    };
                     (reason, label)
                 } else {
                     let reason = OwnerRecoveryReason::LocalSupplySuspect;
@@ -2052,6 +2058,8 @@ impl VideoSchedulingOwner {
     fn has_recovery_sustaining_progress_signal(input: &VideoSchedulingOwnerInput) -> bool {
         let transient_host_present_gap = input.demand.present_age_ms.is_none()
             && !Self::first_present_feedback_gap_active(input);
+        let continuation_only_anchor_missing =
+            Self::latest_h264_shows_continuation_awaiting_idr(input);
         let decode_serviceable = input
             .demand
             .decode_age_ms
@@ -2079,8 +2087,11 @@ impl VideoSchedulingOwner {
                 input.effective_source_event(),
                 Some("frame-complete-candidate" | "frame-observed")
             );
-        let timeline_counts =
-            timeline_progress_visible && !steady_timeline_without_present_feedback;
+        let local_repair_only_timeline = continuation_only_anchor_missing
+            && matches!(input.effective_source_event(), Some("gap-repair-in-flight"));
+        let timeline_counts = timeline_progress_visible
+            && !steady_timeline_without_present_feedback
+            && !local_repair_only_timeline;
         decode_serviceable && !transient_host_present_gap || present_serviceable || timeline_counts
     }
 

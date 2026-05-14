@@ -4,8 +4,8 @@
 
 ## Status
 
-- Completion: 未完成
-- Current State: planned
+- Completion: 部分完成（核心 timing / NACK 首发与 survival / trace 字段已落地；runtime trace 实网回归仍为待办）
+- Current State: implemented (core)
 - Owner: Codex / rtc recovery
 - Last Updated: 2026-05-14
 
@@ -25,7 +25,7 @@
   - 低 RTT 场景被保守阈值拖慢，恢复动作滞后；
   - 高 RTT 场景被短阈值误判，`NACK` 还未自然闭环就过早升级到 `PLI/FIR`。
 - 当前系统还存在三条耦合过紧的路径：
-  - `NACK` 生产主路径近似单发，缺少有限 RTT 感知重试；
+  - `NACK` 生产主路径近似单发，且首发等待窗偏紧；很多高价值缺口还没走完首轮自然闭环就被统计为 miss；
   - `PLI` 已部分承担上层状态机节拍职责，导致 `IDR` 压力偏大；
   - `FIR` 在 `transportAwaitRecoveryAnchor` 路径里仍偏重，距离浏览器常见接收恢复主线偏远。
 - 此外，`H264 bootstrapMissingSps/bootstrapMissingPps` 仍过早向 recovery 主链上抬，缺少 codec/depacketizer 层的窄补救。
@@ -44,6 +44,7 @@
 
 - 把恢复时序从“静态档位 + 分散条件”收成“动态 RTT 感知 + 场景只提供边界参数”的单一模型。
 - 保留低延迟优先，但避免高 RTT 场景过早升级到 `PLI/FIR/reconnect`。
+- 将 `NACK` 主策略从“先发短窗 + 补一次重试”收成“首发等待窗按价值与 RTT 放宽优先，重试只做窄补充”。
 - 将 `NACK`、`PLI`、`FIR`、`H264 bootstrap salvage` 四层职责重新拆开：
   - `NACK` 负责包级本地修复；
   - `PLI` 负责图片级恢复主路径；
@@ -120,24 +121,39 @@
 - `resolve_dynamic_fir_retry_interval_ms(stats, profile)`
 - `resolve_dynamic_decoded_pending_commit_hold_ms(stats, profile)`
 
-### 2. NACK 层：从近似单发改成高价值一次有限 RTT 感知重试
+### 2. NACK 层：首发等待窗放宽优先，重试只做窄补充
 
-当前生产路径偏向单发；这对 `10ms` LAN 可接受，但对 `100ms/200ms` 过硬。
+当前生产路径偏向单发；这对 `10ms` LAN 可接受，但对 `100ms/200ms` 过硬。  
+同时，单纯把 `1` 次重试补进来，常见结果是：
+
+- 首发 deadline 仍偏短；
+- 首轮自然闭环机会已经丢掉；
+- 第二次发送虽然存在，但总耗时已经晚于“首发就多等一拍”的更优路径。
+
+本 RFC 采用的第一原则是：
+
+- 对高价值缺口，优先放宽首发等待窗与 admission 存活窗；
+- 让第一次 `NACK` 有完整自然闭环机会；
+- 重试只作为窄补充能力，不作为主收益来源。
 
 第一版改成三档：
 
 - `Disposable / LowValue`
   - 保持 `0` 次重试
 - `Supply / Reference`
-  - 允许 `1` 次 RTT 感知重试
+  - 首发等待窗按 RTT 感知放宽
+  - 默认 `0` 次重试
+  - 仅当 `estimated_recovery_arrival_ms` 仍明显早于 `frame_playout_deadline_at_ms` 时允许 `1` 次补充重试
 - `Anchor / Keyframe`
-  - 允许 `1` 次 RTT 感知重试，并使用更保守的 admission
+  - 首发等待窗按 RTT 感知放宽，并使用更保守的 admission
+  - 默认 `0` 次重试
+  - 仅当 `repairability` 仍高、且本地闭环收益明显高于直接升级 `PLI` 时允许 `1` 次补充重试
 
-建议重试间隔公式：
+建议重试间隔公式保留为补充路径：
 
 `nack_retry_interval_ms = clamp(0.75 * effective_rtt_ms + 8, 12, 140)`
 
-建议 `LocalRepair` 超时公式：
+建议 `LocalRepair` 首发超时公式：
 
 `nack_timeout_ms = clamp(1.6 * effective_rtt_ms + 40, floor, ceiling)`
 
@@ -158,6 +174,30 @@
 - `10ms` RTT 不拖慢本地 repair；
 - `100ms` RTT 至少容纳一次真实往返重试；
 - `200ms` RTT 下避免 `NACK` 还未自然闭环就被上层提前判死。
+
+#### 2.1 首发放宽优先的判定合同
+
+为避免实现再次滑回“逻辑上支持重试，统计上仍是单发短窗”，新增以下硬合同：
+
+1. `Supply / Reference / Anchor` 的首发 `nack_timeout_ms` 必须先按动态 RTT 解析。
+2. `NACK` 是否允许进入补充重试，必须发生在首发 deadline 已完整展开之后。
+3. 若 `first_attempt_survival_window` 内仍满足以下条件，则优先继续等待首轮自然闭环：
+   - `repairability` 仍高；
+   - `estimated_recovery_arrival_ms <= frame_playout_deadline_at_ms`;
+   - 当前未出现更高价值坏链证据。
+4. 只有以下条件同时满足，才允许补充重试：
+   - 首发已发出；
+   - 首发未闭环；
+   - 当前仍存在经济上的本地 repair 价值；
+   - 补充重试不会把总时间推迟到比直接升级 `PLI` 更差。
+
+新增建议观测字段：
+
+- `firstAttemptSurvivalWindowMs`
+- `firstAttemptDeadlineAtMs`
+- `firstAttemptStillEconomical`
+- `retryAllowedReason`
+- `retrySuppressedReason`
 
 ### 3. too many missing：从数量阈值改成高价值影响阈值
 
@@ -335,34 +375,34 @@
    - 在 `recovery/policy.rs` 引入 RTT 参数结构；
    - 新增 `RecoveryTimingResolver`；
    - 把 `PLI/FIR/NACK timeout` 读取改成统一解析。
-2. 收口 `NACK` 本地修复：
-   - 高价值帧允许一次 RTT 感知重试；
+2. 收口 `NACK` 本地修复主策略：
+   - 高价值缺口采用“首发等待窗放宽优先”；
+   - 重试降为窄补充路径；
    - `too many missing` 从数量阈值改成高价值影响阈值。
-3. 收口 `PLI/FIR` 边界：
+3. 收口 repair 与 recovery 语义边界：
+   - 明确 `drop -> nack_pending -> nack_missed -> wait_keyframe -> request_idr`；
+   - trace 与状态机拆开“本地 repair 未成”和“恢复主线升级”。
+4. 收口 `PLI/FIR` 与 codec salvage 边界：
    - `PLI` 退出节拍器角色；
-   - `FIR` 降为 Cloud/受控发送端的重动作。
-4. 增加 `H264 SPS/PPS salvage`：
+   - `FIR` 降为 Cloud/受控发送端的重动作；
    - 在 codec/depacketizer 层闭合可补救的 bootstrap 缺口。
 5. 补齐 stats/trace/validation：
-   - 让 trace 直接回答“为何刷新 PLI/FIR、为何放弃 NACK、是否做过 salvage、当前 effective RTT 是多少”。
+   - 让 trace 直接回答“首发等待窗为何放宽、为何继续等首轮、为何抑制或允许 retry、为何升级 PLI/FIR、是否做过 salvage、当前 effective RTT 是多少”。
 
 ## Validation
 
-- [ ] `cargo test -p xbxengine transport::rtc::stream::video_source::nack -- --nocapture`
-- [ ] `cargo test -p xbxengine transport::rtc::stream::nack_scheduler -- --nocapture`
-- [ ] `cargo test -p xbxengine transport::rtc::session::policy -- --nocapture`
-- [ ] `cargo test -p xbxengine transport::rtc::connection::service -- --nocapture`
-- [ ] 新增：`cloud_high_rtt_reference_gap_gets_single_rtt_aware_retry_before_pli`
-- [ ] 新增：`home_wan_supply_gap_does_not_escalate_before_dynamic_nack_timeout`
-- [ ] 新增：`continuation_only_waits_dynamic_patience_window_before_pli_refresh`
-- [ ] 新增：`fir_is_cloud_only_and_requires_failed_pli_progress`
-- [ ] 新增：`bootstrap_missing_sps_uses_cached_parameter_sets_when_config_unchanged`
-- [ ] 新增 trace 验证：
-  - `effectiveRttMs`
-  - `dynamicPliRefreshIntervalMs`
-  - `dynamicFirRetryIntervalMs`
-  - `dynamicNackTimeoutMs`
-  - `codecBootstrapSalvageApplied`
+- [x] `cargo test -p xbxengine --lib`（覆盖 `transport::rtc::stream::video_source::nack`、`nack_scheduler`、`session::policy`、`connection::service` 等模块；本仓库 `cargo test` 单参数过滤等价于对上述路径的回归）
+- [x] 新增：`cloud_high_rtt_reference_gap_prefers_wider_first_attempt_window_before_retry_or_pli`
+- [x] 新增：`home_wan_supply_gap_does_not_escalate_before_dynamic_first_attempt_timeout`
+- [x] 新增：`continuation_only_waits_dynamic_patience_window_before_pli_refresh`
+- [x] 新增：`fir_is_cloud_only_and_requires_failed_pli_progress`
+- [x] 新增：`bootstrap_missing_sps_uses_cached_parameter_sets_when_config_unchanged`
+- [x] trace 字段（`src-tauri/.../trace_projection.rs` 已投影；由 `publish_recovery_timing_to_stats` + NACK poll 写入 stats）：
+  - `effectiveRttMs`（`recovery_effective_rtt_ms`）
+  - `dynamicPliRefreshIntervalMs` / `dynamicFirRetryIntervalMs` / `dynamicNackTimeoutMs`
+  - `firstAttemptSurvivalWindowMs` / `firstAttemptDeadlineAtMs` / `firstAttemptStillEconomical`
+  - `retryAllowedReason` / `retrySuppressedReason`
+  - `codecBootstrapSalvageApplied`（及失败原因字段）
 - [ ] 用真实 runtime trace 回归以下链路：
   - `RTT≈10ms` 下恢复不被静态阈值拖慢
   - `RTT≈100ms` 下 `PLI` 次数下降但恢复完成不回退
@@ -371,6 +411,7 @@
 ## Risks
 
 - 如果 `effective_rtt_ms` 稳定化做得不对，恢复节奏会跟着 RTT 抖动。
+- 如果只补一次 retry，不放宽首发等待窗，仍会出现“第二次动作存在，但第一次自然闭环机会已丢失”的节奏错位。
 - 如果只改 `PLI/FIR`，不改 `NACK timeout/retry`，仍会出现“上层变聪明、底层仍过早判死”的节奏错位。
 - 如果 `SPS/PPS salvage` 判定边界放太宽，可能把旧参数集错误复用到新配置。
 - 如果 `FIR` 收得过严，而 Cloud 发送端对 `PLI` 响应不稳定，极端场景首轮恢复可能变慢。
@@ -378,16 +419,21 @@
 ## Progress
 
 - [x] Step 1: 已完成现状勘察，确认静态 timing 是当前恢复偏差主因之一。
-- [x] Step 2: 已形成统一方向：动态 RTT timing、`NACK` 有限重试、`PLI/FIR` 收边界、`SPS/PPS salvage` 下沉。
-- [ ] Step 3: 完成 `RecoveryTimingResolver` 与 profile 参数重构。
-- [ ] Step 4: 完成 `NACK/PLI/FIR` 代码改造与测试。
-- [ ] Step 5: 完成 `H264 salvage` 入口与 trace 回归。
+- [x] Step 2: 已形成统一方向：动态 RTT timing、`NACK` 首发等待窗放宽优先、`PLI/FIR` 收边界、`SPS/PPS salvage` 下沉。
+- [x] Step 3: `recovery/timing.rs` 统一解析 + `RecoveryTimingRttParams`；`timing_rtt == None` 时 `PLI`/`FIR` 回退 profile 静态 `*_ms`，`decoded pending hold` 仍走 RTT 公式（与 transport await 门控对齐）。
+- [x] Step 4: NACK 首发 deadline 与 `recovery_dynamic_nack_timeout_ms` 对齐（修复 transport merge 误用 playout 抵消下限；cloud floor 与动态 NACK 取 max）；`nack_scheduler` §2.1 survival + `retryAllowed`/`retrySuppressed` 观测；具名合同测试在 `policy_tests/recovery_dynamic_timing_contract.rs`。
+- [x] Step 5: H264 salvage 与合同测试 `bootstrap_missing_sps_uses_cached_parameter_sets_when_config_unchanged`（实网 trace 回归仍待办）。
 
 ## Execution Notes
 
 - Date: 2026-05-14 | Status: planned
 - Update: 新建 RFC，目标是把恢复时序从静态阈值切换为动态 RTT 感知模型，并同步收紧 `PLI/FIR` 边界。
 - Decision: 本 RFC 第一优先级不是改更多恢复状态，而是先把 timing 解析与动作时机统一。
-- Decision: `NACK` 第一版只增加“高价值一次 RTT 感知重试”，不引入多次重传。
+- Decision: `NACK` 第一版采用“首发等待窗放宽优先，重试窄补充”的策略；高价值缺口不再以“一次短窗首发 + 一次补发”作为默认主路径。
 - Decision: `FIR` 第一版默认只在 Cloud/受控发送端启用；Home 场景优先收口为 `PLI`。
 - Decision: `H264 bootstrap salvage` 只做窄能力，不做跨 config 复用，不改变 `clean anchor` 语义。
+- Date: 2026-05-14 | Status: planned
+- Update: 根据低 RTT trace 复核，当前主问题更像“首发 survival window 偏紧”，不是“缺少第二次重试”本身；RFC 已改为首发放宽优先。
+- Decision: repair 统计与 recovery 统计必须拆开；后续验收同时看 `packet repair success` 与 `recovery chain advance`。
+- Date: 2026-05-14 | Status: implemented (core)
+- Update: 落地首发 survival、`admission_deadline_floor_at_ms` 合并、`cloud_startup_head_hole` 与动态 NACK floor 取 max、trace 中 `retryAllowedReason`（含 `firstAttemptWindowElapsed`）等；RFC Validation 中单元测试与 trace 映射已勾选，实网 trace 三档 RTT 仍为待办。

@@ -13,6 +13,32 @@ fn event_fresh(observed_at_ms: Option<f64>, now_ms: f64, fresh_ms: f64, floor_at
     })
 }
 
+fn continuation_only_anchor_missing_observation(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+    fresh_ms: f64,
+    floor_at_ms: f64,
+) -> bool {
+    stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|inspection| {
+            inspection.observed_at_ms >= floor_at_ms
+                && (now_ms - inspection.observed_at_ms).max(0.0) <= fresh_ms
+                && inspection.admission_accepted
+                && inspection.committed_sps_present
+                && inspection.committed_pps_present
+                && inspection.delta_continuation_ready
+                && !inspection.bootstrap_ready
+                && matches!(
+                    inspection.bootstrap_reject_reason.as_deref(),
+                    Some("bootstrapMissingIdr" | "NonIdrVcl")
+                )
+                && inspection.continuation_verdict.as_deref()
+                    == Some("continuationAcceptedWhileAwaitingIdr")
+        })
+}
+
 /// 是否存在「fresh 的锚点阻塞证据」，满足后才允许从 Suspect 升级到 AwaitAnchor。
 pub(crate) fn anchor_evidence_fresh_for_await_anchor(
     stats: &XbxEngineMediaRuntimeStats,
@@ -21,6 +47,9 @@ pub(crate) fn anchor_evidence_fresh_for_await_anchor(
     floor_at_ms: f64,
 ) -> bool {
     let fresh_ms = profile.playback_recovered_track_progress_fresh_ms;
+    if continuation_only_anchor_missing_observation(stats, now_ms, fresh_ms, floor_at_ms) {
+        return true;
+    }
     if stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
         && event_fresh(
             stats.video_decoder_recovery_state_changed_at_ms,
@@ -32,14 +61,6 @@ pub(crate) fn anchor_evidence_fresh_for_await_anchor(
         return true;
     }
     if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
-        let continuation_only_recovery = inspection.admission_accepted
-            && inspection.delta_continuation_ready
-            && inspection.continuation_verdict.as_deref()
-                == Some("continuationAcceptedWhileAwaitingIdr")
-            && matches!(
-                inspection.bootstrap_reject_reason.as_deref(),
-                Some("bootstrapMissingIdr" | "NonIdrVcl")
-            );
         if (now_ms - inspection.observed_at_ms).max(0.0) <= fresh_ms
             && inspection.observed_at_ms >= floor_at_ms
             && !inspection.bootstrap_ready
@@ -47,7 +68,6 @@ pub(crate) fn anchor_evidence_fresh_for_await_anchor(
                 inspection.bootstrap_reject_reason.as_deref(),
                 Some("bootstrapMissingIdr" | "NonIdrVcl")
             )
-            && !continuation_only_recovery
         {
             return true;
         }
@@ -129,6 +149,25 @@ pub(crate) fn upgrade_local_supply_suspect_signal_if_ready(
 pub(crate) fn recovery_anchor_evidence_trace_code(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> Option<String> {
+    if stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|inspection| {
+            inspection.admission_accepted
+                && inspection.committed_sps_present
+                && inspection.committed_pps_present
+                && inspection.delta_continuation_ready
+                && !inspection.bootstrap_ready
+                && matches!(
+                    inspection.bootstrap_reject_reason.as_deref(),
+                    Some("bootstrapMissingIdr" | "NonIdrVcl")
+                )
+                && inspection.continuation_verdict.as_deref()
+                    == Some("continuationAcceptedWhileAwaitingIdr")
+        })
+    {
+        return Some("continuationAcceptedWhileAwaitingIdr".to_string());
+    }
     if stats
         .video_decoder_recovery_state
         .as_deref()
@@ -233,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn suspect_gate_does_not_upgrade_on_continuation_only_idr_dependency() {
+    fn suspect_gate_upgrades_on_continuation_only_idr_dependency() {
         let profile = cloud_profile();
         let suspect_since_ms = 1_000.0;
         let observed_at_ms = suspect_since_ms + profile.playback_recovered_track_progress_fresh_ms;
@@ -252,6 +291,10 @@ mod tests {
             &profile,
         );
 
-        assert_eq!(upgraded.reason, VideoEscalationReason::LocalSupplySuspect);
+        assert_eq!(
+            upgraded.reason,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        );
+        assert_eq!(upgraded.reason_label, "transportAwaitRecoveryAnchor");
     }
 }

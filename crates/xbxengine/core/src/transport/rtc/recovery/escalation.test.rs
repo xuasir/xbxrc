@@ -5,6 +5,14 @@ use super::{
 use std::time::Duration;
 
 #[test]
+fn transport_await_suspect_label_parses_as_transport_await_keyframe() {
+    assert_eq!(
+        VideoEscalationReason::from_recovery_reason_label("transportAwaitRecoverySuspect"),
+        Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+    );
+}
+
+#[test]
 fn wait_keyframe_requests_pli_immediately() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 250,

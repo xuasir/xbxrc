@@ -7,7 +7,7 @@
 - Completion: 已完成（核心路径已落地；线上 cloud trace 复核仍建议按 Validation 清单跑一轮）
 - Current State: implemented
 - Owner: Codex Supervisor
-- Last Updated: 2026-05-13
+- Last Updated: 2026-05-14
 
 ## Background
 
@@ -48,6 +48,24 @@
   - 重做渲染主线
 
 ## Design
+
+### 0. 先收 owner，再谈动作
+
+基于新 trace [`runtime-trace-1778749346018-1.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1778749346018-1.jsonl) 的复核，本 RFC 新增一个更高优先级约束：
+
+- 当前主要问题不是动作种类不够，而是**同一个坏窗被 display pressure / local repair pending / continuation-only / clean-anchor pending 四套半状态同时解释**。
+- 当强事实与弱事实并存时，系统仍允许弱事实长期压住强事实，导致调度解释权分叉：
+  - `continuationAcceptedWhileAwaitingIdr` 已经明确表明“远端在回流，但当前 recovery episode 仍缺 usable IDR”
+  - `gap-repair-in-flight / localRepairPending` 只是较弱的局部执行事实
+  - 当前实现仍允许后者长期维持 owner 与 blocker 解释权
+
+因此，本 RFC 在实现顺序上新增硬原则：
+
+1. 先收主状态与 owner 解释权。
+2. 再收 `PLI/FIR/NACK` 等动作时序。
+3. 禁止继续通过新增局部分支，让弱事实和强事实并列持有调度权。
+
+这意味着：后续若 trace 继续暴露 `continuation-only + localRepairPending + displaySupplyStarved` 并列叙事，优先修改状态语义与 owner 收口，不优先补动作条件。
 
 ### 1. 主状态只保留五个
 
@@ -140,6 +158,32 @@
 - `coalesced:keyframeInFlight` 只保留给 `WaitingResponse`
 - `ContinuationOnly` 与 `Stalled` 必须允许 `Refresh` 或更重本地动作
 
+#### 3.0 `ContinuationOnly` 是主 blocker，不再只是 observation
+
+本 RFC 在这里再收一层解释权：
+
+- `ContinuationOnly` 不是“还有 packet 在回，所以先继续观察”的弱标签。
+- 当它持续出现时，它表达的是更强的恢复主问题：
+  - transport 未死
+  - continuation 正在回流
+  - 但当前 recovery episode 仍缺 usable IDR
+
+因此新增主语义约束：
+
+1. 当 `ContinuationOnly` 在同一 episode 内持续出现并跨过 patience 窗口时，主 blocker 必须解释为 `anchor_missing`，而不是继续解释成 `local_supply`。
+2. 在这个窗口内，`gapSeverity=LowValueGap`、`escalationBasis=local_supply` 只能作为低层输入事实保留，不能继续主导 recovery owner。
+3. `continuationAcceptedWhileAwaitingIdr` 的解释权必须高于：
+   - `displaySupplyStarved`
+   - `localRepairPending`
+   - `LowValueGap`
+4. 一旦 `ContinuationOnly` 成为主 blocker，系统必须切到“等待 usable IDR”叙事，而不是继续同时讲“显示吃紧”和“本地 repair 仍在飞”两套故事。
+
+设计意图：
+
+- `displaySupplyStarved` 只负责把系统推入 `Suspect`
+- `ContinuationOnly` 才负责把系统解释为 `AwaitAnchor`
+- `anchor_missing` 必须成为该窗口的单一主问题
+
 #### 3.1 `ContinuationOnly -> FIR` 与 `Stalled -> release in-flight` 时窗
 
 这两组时窗优先复用现有 profile 参数和历史 trace 结论。
@@ -208,6 +252,32 @@
 
 - RTP bytes、video packets、TWCC、feedback target 仍持续前进时，系统只能停留在 `AwaitAnchor` 或 `LocalRecovery`
 - 只有连接 freshness、feedback availability、transport deadline 证据共同恶化时，才允许进入 `ConnectivityRecovery`
+
+### 4.1 `localRepairPending` 降回局部执行态，不再阻塞主线解释
+
+当前日志显示另一处复杂化来源：`gap-repair-in-flight / localRepairPending` 仍然能长期阻塞 `cleanAnchor` 候选，即使当前看到的已经是 `decoded-but-unusable continuation`。
+
+本 RFC 在这里新增明确降级边界：
+
+1. `localRepairPending` 只允许表达短时局部执行态：
+   - 某个 repair 仍在 survival window 内
+   - 当前 tick 暂不重复发相同 repair
+2. `localRepairPending` 不再允许承担以下职责：
+   - 长期维持 `cleanAnchor` 候选阻塞
+   - 长期维持 `AwaitAnchor` 的主解释
+   - 在 `ContinuationOnly` 已成立时继续压过 `anchor_missing`
+3. 当出现以下组合时，必须释放 `localRepairPending` 对主线的解释权：
+   - 同一 episode 已 `decoded`
+   - `bootstrapRejectReason=bootstrapMissingIdr` 或同类 usable-IDR 缺失证据持续成立
+   - `ContinuationOnly` 已跨过最小 patience
+4. 释放后，`localRepairPending` 可以继续保留为 telemetry，但不能继续作为 `cleanAnchorCompleteCandidateBlocked` 的主原因。
+
+换句话说：
+
+- `local repair` 是执行细节
+- `AwaitUsableIdr` 才是恢复主线
+
+这里不新增新动作；只收 owner 和 blocker 的解释权。
 
 ### 5. 观测层只补轻量标签，不扩顶层 reason 域
 
@@ -383,12 +453,15 @@
 - trace 标签与主状态机脱节，会再次形成“观测说一套、动作做一套”
 - 直接复用现有 profile 时钟会把旧语义一并带入；实现阶段需要用新 trace 再核一次 cloud 窗口
 - 入口收口不完整时，旧的 `WaitKeyframe / transportAwaitRecoveryAnchor` 直映射仍会绕过 `Suspect`
+- 如果继续允许 `displaySupplyStarved / localRepairPending / continuation-only` 并列作为 owner，系统会继续复杂化并产出互相打架的 trace 叙事
+- 如果只是补动作条件、不收解释权，未来仍会重复出现“强事实被弱事实压住”的卡死窗口
 
 ## Progress
 
 - [x] Step 1: 入口状态从 `display pressure -> await-anchor` 收成 `display pressure -> suspect -> await-anchor`
 - [x] Step 2: `keyframe in-flight` 引入三档健康度并重写 refresh / unlock 规则
 - [x] Step 3: trace / diagnostics / tests 对齐新的主状态与辅助标签（stats 四字段写入 `policy` / ledger；`runtime_stats_sink::invalidate_current_transport_clean_anchor` 在 host visibility stall + awaiting-IDR 时落盘；`cargo test -p xbxengine --lib` 全绿）
+- [ ] Step 4: 基于 `runtime-trace-1778749346018-1.jsonl` 收掉 `ContinuationOnly` 与 `localRepairPending` 的并列 owner 语义，确认 display pressure 只保留入口职责
 
 ## Execution Notes
 
@@ -400,3 +473,7 @@
 - Decision: `bootstrap reject`、`frame abandon`、`RebuildingSupply`、`ingress WaitKeyframe`、`transport await observation` 这些高风险入口统一先经 `Suspect`，只有事实门成立时才进入 `AwaitAnchor`。
 - Risk/Blocker: 需要和现有 `2026-05-12-transport-repair-and-recovery-semantic-unification`、`2026-04-29-playback-recovery-single-line-convergence` 两份 RFC 保持术语一致，避免再次引入平行阶段语言。
 - Update: `runtime_port` 在 host visibility stall 下作废 clean anchor 时，要求 `latest_host_present_time_ms` 与 wall `now_ms` 同域（`>= 1e12`），避免脚本时间线单测把 stall 误判为真 stall。
+- Date: 2026-05-14 | Status: planned
+- Update: 基于 `runtime-trace-1778749346018-1.jsonl` 复核，确认当前新的主要问题不是动作不足，而是 owner 解释权仍过度分叉：`displaySupplyStarved / localRepairPending / continuationAcceptedWhileAwaitingIdr` 同时持有恢复叙事。
+- Decision: 后续优先收状态语义，不直接补代码分支；必须先把 `ContinuationOnly` 升格为主 blocker，并把 `localRepairPending` 降回局部执行态。
+- Decision: `displaySupplyStarved` 继续只保留入口职责，不再与 `AwaitAnchor` 主语义长期并列。

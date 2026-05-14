@@ -8,6 +8,144 @@ use crate::{
 
 pub(crate) use xbxengine_protocol::XbxEngineRemoteProfileKindDto as ScenarioPolicyProfileKind;
 
+const HOME_LAN_TIMING_RTT: RecoveryTimingRttParams = RecoveryTimingRttParams {
+    nack_timeout: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.6),
+        bias_ms: Some(40.0),
+        floor_ms: Some(45.0),
+        ceiling_ms: Some(90.0),
+    }),
+    nack_retry: Some(RecoveryTimingRttDimension {
+        multiplier: Some(0.75),
+        bias_ms: Some(8.0),
+        floor_ms: Some(12.0),
+        ceiling_ms: Some(140.0),
+    }),
+    pli_refresh: Some(RecoveryTimingRttDimension {
+        multiplier: Some(0.8),
+        bias_ms: Some(20.0),
+        floor_ms: Some(40.0),
+        ceiling_ms: Some(220.0),
+    }),
+    fir_retry: Some(RecoveryTimingRttDimension {
+        multiplier: Some(2.5),
+        bias_ms: Some(60.0),
+        floor_ms: Some(180.0),
+        ceiling_ms: Some(700.0),
+    }),
+    continuation_patience: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.25),
+        bias_ms: Some(90.0),
+        floor_ms: Some(100.0),
+        ceiling_ms: Some(260.0),
+    }),
+    decoded_pending_commit_hold: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.15),
+        bias_ms: Some(70.0),
+        floor_ms: Some(120.0),
+        ceiling_ms: Some(220.0),
+    }),
+};
+
+const RELAY_TIMING_RTT: RecoveryTimingRttParams = RecoveryTimingRttParams {
+    nack_timeout: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.6),
+        bias_ms: Some(40.0),
+        floor_ms: Some(120.0),
+        ceiling_ms: Some(240.0),
+    }),
+    nack_retry: Some(RecoveryTimingRttDimension {
+        multiplier: Some(0.75),
+        bias_ms: Some(8.0),
+        floor_ms: Some(12.0),
+        ceiling_ms: Some(140.0),
+    }),
+    pli_refresh: Some(RecoveryTimingRttDimension {
+        multiplier: Some(0.8),
+        bias_ms: Some(20.0),
+        floor_ms: Some(40.0),
+        ceiling_ms: Some(220.0),
+    }),
+    fir_retry: Some(RecoveryTimingRttDimension {
+        multiplier: Some(2.5),
+        bias_ms: Some(60.0),
+        floor_ms: Some(180.0),
+        ceiling_ms: Some(700.0),
+    }),
+    continuation_patience: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.25),
+        bias_ms: Some(90.0),
+        floor_ms: Some(140.0),
+        ceiling_ms: Some(380.0),
+    }),
+    decoded_pending_commit_hold: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.15),
+        bias_ms: Some(70.0),
+        floor_ms: Some(160.0),
+        ceiling_ms: Some(300.0),
+    }),
+};
+
+const CLOUD_TIMING_RTT: RecoveryTimingRttParams = RecoveryTimingRttParams {
+    nack_timeout: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.6),
+        bias_ms: Some(40.0),
+        floor_ms: Some(240.0),
+        ceiling_ms: Some(420.0),
+    }),
+    nack_retry: Some(RecoveryTimingRttDimension {
+        multiplier: Some(0.75),
+        bias_ms: Some(8.0),
+        floor_ms: Some(12.0),
+        ceiling_ms: Some(140.0),
+    }),
+    pli_refresh: Some(RecoveryTimingRttDimension {
+        multiplier: Some(0.8),
+        bias_ms: Some(20.0),
+        floor_ms: Some(40.0),
+        ceiling_ms: Some(220.0),
+    }),
+    fir_retry: Some(RecoveryTimingRttDimension {
+        multiplier: Some(2.5),
+        bias_ms: Some(60.0),
+        floor_ms: Some(180.0),
+        ceiling_ms: Some(700.0),
+    }),
+    continuation_patience: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.25),
+        bias_ms: Some(90.0),
+        floor_ms: Some(180.0),
+        ceiling_ms: Some(480.0),
+    }),
+    decoded_pending_commit_hold: Some(RecoveryTimingRttDimension {
+        multiplier: Some(1.15),
+        bias_ms: Some(70.0),
+        floor_ms: Some(220.0),
+        ceiling_ms: Some(420.0),
+    }),
+};
+
+/// RFC：可选 per-dimension RTT 形状；四角齐全时用 `clamp(rtt*m+b)`，否则回退由调用方提供的毫秒。
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RecoveryTimingRttDimension {
+    pub(crate) multiplier: Option<f64>,
+    pub(crate) bias_ms: Option<f64>,
+    pub(crate) floor_ms: Option<f64>,
+    pub(crate) ceiling_ms: Option<f64>,
+}
+
+/// 挂载在 `RecoveryScenarioProfile` 上；`None` 时 NACK/重试/耐心窗仍走内置 RTT 公式，
+/// `PLI` / `FIR` 回退到 profile 静态 `*_ms`；`decoded pending hold` 仍走公式（与 transport await 门控对齐）。
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RecoveryTimingRttParams {
+    pub(crate) nack_timeout: Option<RecoveryTimingRttDimension>,
+    pub(crate) nack_retry: Option<RecoveryTimingRttDimension>,
+    pub(crate) pli_refresh: Option<RecoveryTimingRttDimension>,
+    pub(crate) fir_retry: Option<RecoveryTimingRttDimension>,
+    pub(crate) continuation_patience: Option<RecoveryTimingRttDimension>,
+    pub(crate) decoded_pending_commit_hold: Option<RecoveryTimingRttDimension>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DisplaySupplyThresholds {
     pub(crate) degraded_no_pending_streak: u32,
@@ -56,6 +194,7 @@ pub(crate) struct RecoveryScenarioProfile {
     #[allow(dead_code)]
     pub(crate) post_anchor_continuation_grace_ms: f64,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
+    pub(crate) timing_rtt: Option<RecoveryTimingRttParams>,
 }
 
 impl RecoveryScenarioProfile {
@@ -195,6 +334,7 @@ impl ScenarioPolicyResolver {
                     degraded_renderer_drop_ratio: 0.02,
                     critical_renderer_drop_ratio: 0.06,
                 },
+                timing_rtt: Some(HOME_LAN_TIMING_RTT),
             },
             ScenarioPolicyProfileKind::CloudGaming => RecoveryScenarioProfile {
                 kind: ScenarioPolicyProfileKind::CloudGaming,
@@ -237,6 +377,7 @@ impl ScenarioPolicyResolver {
                     degraded_renderer_drop_ratio: 0.015,
                     critical_renderer_drop_ratio: 0.05,
                 },
+                timing_rtt: Some(CLOUD_TIMING_RTT),
             },
             ScenarioPolicyProfileKind::RelayGaming => RecoveryScenarioProfile {
                 kind: ScenarioPolicyProfileKind::RelayGaming,
@@ -277,6 +418,7 @@ impl ScenarioPolicyResolver {
                     degraded_renderer_drop_ratio: 0.02,
                     critical_renderer_drop_ratio: 0.055,
                 },
+                timing_rtt: Some(RELAY_TIMING_RTT),
             },
         }
     }

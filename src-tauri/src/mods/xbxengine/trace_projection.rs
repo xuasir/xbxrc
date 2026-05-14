@@ -218,10 +218,17 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
                 "decodedPendingCommitHoldMs": stats.recovery_dynamic_decoded_pending_commit_hold_ms,
                 "continuationPatienceMs": stats.recovery_dynamic_continuation_patience_ms,
                 "cleanAnchorCommitPatienceMs": stats.recovery_dynamic_clean_anchor_patience_ms,
+                "firstAttemptSurvivalWindowMs": stats.recovery_nack_first_attempt_survival_window_ms,
+                "firstAttemptDeadlineAtMs": stats.recovery_nack_first_attempt_deadline_at_ms,
+                "firstAttemptStillEconomical": stats.recovery_nack_first_attempt_still_economical,
+                "retryAllowedReason": stats.recovery_nack_retry_allowed_reason,
+                "retrySuppressedReason": stats.recovery_nack_retry_suppressed_reason,
             },
             "codec": {
                 "bootstrapSalvageApplied": stats.recovery_codec_bootstrap_salvage_applied,
                 "bootstrapSalvageFailedReason": stats.recovery_codec_bootstrap_salvage_failed_reason,
+                "codecBootstrapSalvageApplied": stats.recovery_codec_bootstrap_salvage_applied,
+                "codecBootstrapSalvageFailedReason": stats.recovery_codec_bootstrap_salvage_failed_reason,
             },
             "videoHealth": stats.video_health,
             "chainHealth": stats.chain_health,
@@ -1360,15 +1367,26 @@ pub(super) fn record_runtime_trace_observations(
         .recovery_effective_rtt_ms
         .map(|value| format!("{value:.1}"));
     let recovery_timing_signature = (
-        stats.recovery_dynamic_nack_timeout_ms.map(|value| format!("{value:.1}")),
-        stats.recovery_dynamic_nack_retry_interval_ms.map(|value| format!("{value:.1}")),
-        stats.recovery_dynamic_pli_refresh_interval_ms.map(|value| format!("{value:.1}")),
-        stats.recovery_dynamic_fir_retry_interval_ms.map(|value| format!("{value:.1}")),
-        stats.recovery_dynamic_decoded_pending_commit_hold_ms
+        stats
+            .recovery_dynamic_nack_timeout_ms
             .map(|value| format!("{value:.1}")),
-        stats.recovery_dynamic_continuation_patience_ms
+        stats
+            .recovery_dynamic_nack_retry_interval_ms
             .map(|value| format!("{value:.1}")),
-        stats.recovery_dynamic_clean_anchor_patience_ms
+        stats
+            .recovery_dynamic_pli_refresh_interval_ms
+            .map(|value| format!("{value:.1}")),
+        stats
+            .recovery_dynamic_fir_retry_interval_ms
+            .map(|value| format!("{value:.1}")),
+        stats
+            .recovery_dynamic_decoded_pending_commit_hold_ms
+            .map(|value| format!("{value:.1}")),
+        stats
+            .recovery_dynamic_continuation_patience_ms
+            .map(|value| format!("{value:.1}")),
+        stats
+            .recovery_dynamic_clean_anchor_patience_ms
             .map(|value| format!("{value:.1}")),
     );
     let recovery_salvage_signature = (
@@ -1459,10 +1477,17 @@ pub(super) fn record_runtime_trace_observations(
                     "decodedPendingCommitHoldMs": stats.recovery_dynamic_decoded_pending_commit_hold_ms,
                     "continuationPatienceMs": stats.recovery_dynamic_continuation_patience_ms,
                     "cleanAnchorCommitPatienceMs": stats.recovery_dynamic_clean_anchor_patience_ms,
+                    "firstAttemptSurvivalWindowMs": stats.recovery_nack_first_attempt_survival_window_ms,
+                    "firstAttemptDeadlineAtMs": stats.recovery_nack_first_attempt_deadline_at_ms,
+                    "firstAttemptStillEconomical": stats.recovery_nack_first_attempt_still_economical,
+                    "retryAllowedReason": stats.recovery_nack_retry_allowed_reason,
+                    "retrySuppressedReason": stats.recovery_nack_retry_suppressed_reason,
                 },
                 "codec": {
                     "bootstrapSalvageApplied": stats.recovery_codec_bootstrap_salvage_applied,
                     "bootstrapSalvageFailedReason": stats.recovery_codec_bootstrap_salvage_failed_reason,
+                    "codecBootstrapSalvageApplied": stats.recovery_codec_bootstrap_salvage_applied,
+                    "codecBootstrapSalvageFailedReason": stats.recovery_codec_bootstrap_salvage_failed_reason,
                 },
                 "runtimeSummary": stats.runtime_summary,
                 "primaryIssueChain": stats.primary_issue_chain,

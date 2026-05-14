@@ -83,6 +83,63 @@ fn recovery_decision_ledger_carries_extended_observability_labels() {
 }
 
 #[test]
+fn recovery_decision_ledger_prioritizes_continuation_only_as_anchor_evidence() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    RuntimeStatsSink::update_shared(runtime_stats.as_ref(), |stats| {
+        stats.session_phase = Some("steady".to_string());
+        stats.transport_recovery_epoch = 8;
+        stats.transport_recovery_episode_opened_at_ms = Some(0.0);
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        stats.video_decoder_recovery_state_changed_at_ms = Some(0.0);
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 1,
+                frame_rtp_timestamp: Some(100),
+                nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: false,
+                sample_width: None,
+                sample_height: None,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+                admission_accepted: true,
+                continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                observed_at_ms: 319.0,
+                bound_episode_id: Some(8),
+                ..Default::default()
+            });
+    });
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+    let snapshot = build_snapshot(
+        ConnectionLifecycleStateFact::Connected,
+        "transportAwaitRecoveryAnchor",
+        320.0,
+    );
+
+    let _ = transport_commands(policy.on_snapshot(&snapshot));
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let ledger = stats
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .expect("recovery decision ledger");
+    assert_eq!(
+        ledger.anchor_evidence.as_deref(),
+        Some("continuationAcceptedWhileAwaitingIdr")
+    );
+    assert_eq!(ledger.escalation_basis.as_deref(), Some("anchor_missing"));
+}
+
+#[test]
 fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_records_no_signal() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));

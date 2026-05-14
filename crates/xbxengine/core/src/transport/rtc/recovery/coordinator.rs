@@ -725,8 +725,7 @@ impl RecoveryCoordinator {
             })
             .and_then(|episode| episode.first_keyframe_decoded_at_ms)
             .is_some_and(|decoded_at_ms| {
-                (now_ms - decoded_at_ms).max(0.0)
-                    >= timing.clean_anchor_commit_patience_window_ms
+                (now_ms - decoded_at_ms).max(0.0) >= timing.clean_anchor_commit_patience_window_ms
             })
     }
 }

@@ -286,6 +286,28 @@ fn transport_await_anchor_candidate_stalled(
     observed_at_ms: f64,
     freshness_window_ms: f64,
 ) -> bool {
+    let continuation_only_anchor_missing = stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|inspection| {
+            inspection.bound_episode_id == Some(episode.episode_id)
+                && inspection.observed_at_ms >= episode.requested_at_ms
+                && (observed_at_ms - inspection.observed_at_ms).max(0.0) <= freshness_window_ms
+                && inspection.admission_accepted
+                && inspection.committed_sps_present
+                && inspection.committed_pps_present
+                && inspection.delta_continuation_ready
+                && !inspection.bootstrap_ready
+                && matches!(
+                    inspection.bootstrap_reject_reason.as_deref(),
+                    Some("bootstrapMissingIdr" | "NonIdrVcl")
+                )
+                && inspection.continuation_verdict.as_deref()
+                    == Some("continuationAcceptedWhileAwaitingIdr")
+        });
+    if continuation_only_anchor_missing {
+        return false;
+    }
     let Some(candidate) = stats.latest_anchor_candidate_ledger.as_ref() else {
         return false;
     };

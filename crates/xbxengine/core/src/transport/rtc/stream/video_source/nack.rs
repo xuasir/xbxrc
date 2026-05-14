@@ -10,8 +10,11 @@ use crate::media::video::ingress::budget::{
     FrameBudgetWindowSource,
 };
 use crate::media::video::types::FrameRecoveryDisposition;
-use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
-use crate::transport::rtc::recovery::timing::resolve_effective_rtt_ms;
+use crate::transport::rtc::recovery::policy::{ScenarioPolicyProfileKind, ScenarioPolicyResolver};
+use crate::transport::rtc::recovery::timing::{
+    merge_nack_admission_deadline_with_dynamic_timeout, resolve_effective_rtt_ms,
+    resolve_recovery_dynamic_timing, resolve_recovery_dynamic_timing_with_rtt,
+};
 use crate::transport::rtc::stream::nack_scheduler::{
     ExpiredNackBatch, NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack,
     SkippedNackBatch,
@@ -241,6 +244,82 @@ impl RtcVideoFrameSource {
         }
     }
 
+    fn merge_transport_gap_deadline_with_rfc_nack_floor(
+        &self,
+        now_ms: f64,
+        deadline_at_ms: f64,
+        budget: FrameBudgetContext,
+    ) -> f64 {
+        let importance = budget.recovery_value_tier();
+        let nack_to = self.dynamic_nack_timeout_ms_for_admission();
+        // 不得把 `playout` 误传为当前 transport deadline：否则 `min(..., playout)` 会把
+        // `max(deadline, now+nack_timeout)` 的动态下限抵消掉（RFC §2 首发窗对齐）。
+        merge_nack_admission_deadline_with_dynamic_timeout(
+            now_ms,
+            deadline_at_ms,
+            importance,
+            nack_to,
+            None,
+        )
+    }
+
+    fn dynamic_nack_timeout_ms_for_admission(&self) -> f64 {
+        self.runtime_stats
+            .read(|stats| {
+                stats.recovery_dynamic_nack_timeout_ms.unwrap_or_else(|| {
+                    let profile = ScenarioPolicyResolver::resolve_recovery_profile(
+                        stats.session_target_type.as_ref(),
+                        stats.transport_path.as_deref(),
+                    );
+                    resolve_recovery_dynamic_timing(stats, profile).nack_timeout_ms
+                })
+            })
+            .unwrap_or_else(|| {
+                let profile = ScenarioPolicyResolver::resolve_recovery_profile_by_kind(
+                    ScenarioPolicyProfileKind::HomeLanGaming,
+                );
+                resolve_recovery_dynamic_timing_with_rtt(50.0, profile).nack_timeout_ms
+            })
+    }
+
+    fn estimate_nack_recovery_arrival_ms(&self, now_ms: f64, retry_interval_ms: f64) -> f64 {
+        let runtime_rtt_ms = self
+            .runtime_stats
+            .read(|stats| stats.recovery_effective_rtt_ms.or(stats.video_rtt_ms))
+            .unwrap_or(None)
+            .unwrap_or(0.0)
+            .max(0.0);
+        let network_leg_ms = if runtime_rtt_ms > 0.0 {
+            (runtime_rtt_ms * 0.5).max(retry_interval_ms)
+        } else {
+            retry_interval_ms
+        };
+        now_ms + network_leg_ms.max(self.nack_recovery_ewma_ms.max(0.0))
+    }
+
+    fn enrich_nack_observe_policy_rfc21(
+        &self,
+        mut policy: NackObservePolicy,
+        now_ms: f64,
+        nack_timeout_ms: f64,
+        repairability: Option<f64>,
+    ) -> NackObservePolicy {
+        if matches!(
+            policy.frame_importance,
+            "anchor" | "supply" | "continuation" | "reference"
+        ) {
+            if policy.estimated_recovery_arrival_ms.is_none() {
+                let retry_interval_ms = policy.retry_interval_ms.unwrap_or(16) as f64;
+                policy.estimated_recovery_arrival_ms =
+                    Some(self.estimate_nack_recovery_arrival_ms(now_ms, retry_interval_ms));
+            }
+            policy.first_attempt_survival_window_ms = Some(nack_timeout_ms);
+            policy.admission_deadline_floor_at_ms = Some(now_ms + nack_timeout_ms.max(0.0));
+        }
+        policy.repairability_schedule = repairability;
+        policy
+    }
+
     pub(super) async fn maybe_run_nack_maintenance(&mut self) {
         let now_ms = now_ms_f64();
         let now = std::time::Instant::now();
@@ -279,7 +358,8 @@ impl RtcVideoFrameSource {
             startup_mode,
             self.transport_nack_window_source(),
         );
-        let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
+        let nack_to_pre = self.dynamic_nack_timeout_ms_for_admission();
+        let mut deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
             self.transport_deadline_tracker
                 .next_transport_deadline_with_context_at_ms(
@@ -290,6 +370,12 @@ impl RtcVideoFrameSource {
             cloud_mode,
             startup_mode,
             Some(cloud_rtt_ms),
+            Some(nack_to_pre),
+        );
+        deadline_at_ms = self.merge_transport_gap_deadline_with_rfc_nack_floor(
+            now_ms,
+            deadline_at_ms,
+            base_budget_context,
         );
         let policy = rtp_window_nack_policy(
             frame_value,
@@ -315,6 +401,8 @@ impl RtcVideoFrameSource {
             );
         }
         let policy = self.with_cloud_latency_admission_policy(policy, now_ms, None);
+        let nack_to = self.dynamic_nack_timeout_ms_for_admission();
+        let policy = self.enrich_nack_observe_policy_rfc21(policy, now_ms, nack_to, None);
         let (initial_batch, skipped_batch) = self
             .nack_scheduler
             .observe_missing_sequences_with_policy(&missing_sequences, now_ms, policy);
@@ -401,6 +489,24 @@ impl RtcVideoFrameSource {
         self.nack_scheduler.update_network_stats(rtt_ms, loss_rate);
 
         let poll_result = self.nack_scheduler.poll(now_ms);
+        let recovery_telemetry = poll_result.recovery_telemetry.clone();
+        self.runtime_stats.update(|stats| {
+            stats.recovery_nack_first_attempt_survival_window_ms = recovery_telemetry
+                .as_ref()
+                .and_then(|t| t.first_attempt_survival_window_ms);
+            stats.recovery_nack_first_attempt_deadline_at_ms = recovery_telemetry
+                .as_ref()
+                .and_then(|t| t.first_attempt_deadline_at_ms);
+            stats.recovery_nack_first_attempt_still_economical = recovery_telemetry
+                .as_ref()
+                .and_then(|t| t.first_attempt_still_economical);
+            stats.recovery_nack_retry_allowed_reason = recovery_telemetry
+                .as_ref()
+                .and_then(|t| t.retry_allowed_reason.clone());
+            stats.recovery_nack_retry_suppressed_reason = recovery_telemetry
+                .as_ref()
+                .and_then(|t| t.retry_suppressed_reason.clone());
+        });
         for expired_batch in poll_result.expired_batches {
             let chain_broken = self.timeline_state.mark_gap_expired(
                 &expired_batch.sequences,
@@ -505,7 +611,8 @@ impl RtcVideoFrameSource {
             startup_mode,
             self.transport_nack_window_source(),
         );
-        let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
+        let nack_to_pre = self.dynamic_nack_timeout_ms_for_admission();
+        let mut deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
             self.transport_deadline_tracker
                 .next_transport_deadline_with_context_at_ms(
@@ -516,6 +623,12 @@ impl RtcVideoFrameSource {
             cloud_mode,
             startup_mode,
             Some(cloud_rtt_ms),
+            Some(nack_to_pre),
+        );
+        deadline_at_ms = self.merge_transport_gap_deadline_with_rfc_nack_floor(
+            now_ms,
+            deadline_at_ms,
+            base_budget_context,
         );
         let policy = rtp_gap_nack_policy(
             frame_value,
@@ -556,6 +669,8 @@ impl RtcVideoFrameSource {
             );
         }
         let policy = self.with_cloud_latency_admission_policy(policy, now_ms, None);
+        let nack_to = self.dynamic_nack_timeout_ms_for_admission();
+        let policy = self.enrich_nack_observe_policy_rfc21(policy, now_ms, nack_to, None);
         let (initial_batch, skipped_batch) = self
             .nack_scheduler
             .observe_missing_sequences_with_policy(&missing_sequences, now_ms, policy);
@@ -848,23 +963,25 @@ impl RtcVideoFrameSource {
             window_source,
             Some(sample_rtp_timestamp),
         );
+        let budget_for_merge = FrameBudgetContext::for_transport(
+            frame_value,
+            self.is_blocking_non_keyframe_admission(),
+            Some(self.cloud_nack_rtt_ms()),
+            None,
+            None,
+            self.is_cloud_startup_transport_profile(),
+            window_source,
+        );
         let base_deadline_at_ms = self
             .transport_deadline_tracker
-            .next_transport_deadline_with_context_at_ms(
-                now_ms,
-                frame_value,
-                FrameBudgetContext::for_transport(
-                    frame_value,
-                    self.is_blocking_non_keyframe_admission(),
-                    Some(self.cloud_nack_rtt_ms()),
-                    None,
-                    None,
-                    self.is_cloud_startup_transport_profile(),
-                    window_source,
-                ),
-            );
-        let deadline_at_ms =
+            .next_transport_deadline_with_context_at_ms(now_ms, frame_value, budget_for_merge);
+        let mut deadline_at_ms =
             self.dynamic_repair_deadline(now_ms, base_deadline_at_ms, repairability);
+        deadline_at_ms = self.merge_transport_gap_deadline_with_rfc_nack_floor(
+            now_ms,
+            deadline_at_ms,
+            budget_for_merge,
+        );
         let budget_context = FrameBudgetContext::for_transport(
             frame_value,
             self.is_blocking_non_keyframe_admission(),
@@ -915,6 +1032,9 @@ impl RtcVideoFrameSource {
             );
         }
         let policy = self.with_cloud_latency_admission_policy(policy, now_ms, Some(repairability));
+        let nack_to = self.dynamic_nack_timeout_ms_for_admission();
+        let policy =
+            self.enrich_nack_observe_policy_rfc21(policy, now_ms, nack_to, Some(repairability));
         let pending_before = self.nack_scheduler.pending_count();
         let (batch, skipped_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
             &missing_sequences,
@@ -1890,6 +2010,7 @@ mod tests {
             true,
             false,
             Some(90.0),
+            None,
         );
         let adjusted_max_age = cloud_nack_max_age_ms(100, true, false, Some(90.0));
 
@@ -1908,6 +2029,7 @@ mod tests {
             false,
             false,
             Some(90.0),
+            None,
         );
         let adjusted_max_age = cloud_nack_max_age_ms(180, false, false, Some(90.0));
 

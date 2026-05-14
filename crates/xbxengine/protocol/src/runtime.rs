@@ -761,6 +761,16 @@ pub struct XbxEngineStatsDto {
     pub recovery_codec_bootstrap_salvage_applied: Option<bool>,
     #[serde(default)]
     pub recovery_codec_bootstrap_salvage_failed_reason: Option<String>,
+    #[serde(default)]
+    pub recovery_nack_first_attempt_survival_window_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_nack_first_attempt_deadline_at_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_nack_first_attempt_still_economical: Option<bool>,
+    #[serde(default)]
+    pub recovery_nack_retry_allowed_reason: Option<String>,
+    #[serde(default)]
+    pub recovery_nack_retry_suppressed_reason: Option<String>,
     pub direct_gaming_bitrate_band: Option<String>,
     pub recovery_owner_state: Option<String>,
     pub recovery_owner_reason: Option<String>,

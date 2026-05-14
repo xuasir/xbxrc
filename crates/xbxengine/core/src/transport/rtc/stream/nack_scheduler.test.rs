@@ -27,6 +27,9 @@ fn base_policy() -> NackObservePolicy {
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
         max_retry_count_override: None,
+        first_attempt_survival_window_ms: None,
+        repairability_schedule: None,
+        admission_deadline_floor_at_ms: None,
     }
 }
 

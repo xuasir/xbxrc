@@ -256,6 +256,10 @@ pub(crate) fn build_owner_input(
             .latest_h264_inspection_observation
             .as_ref()
             .map(|inspection| inspection.delta_continuation_ready),
+        latest_h264_continuation_verdict: owner_facts
+            .latest_h264_inspection_observation
+            .as_ref()
+            .and_then(|inspection| inspection.continuation_verdict.clone()),
         latest_h264_observed_at_ms: owner_facts
             .latest_h264_inspection_observation
             .as_ref()

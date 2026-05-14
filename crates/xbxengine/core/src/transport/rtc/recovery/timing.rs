@@ -3,7 +3,8 @@
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::transport::rtc::recovery::policy::{
-    RecoveryScenarioProfile, ScenarioPolicyProfileKind, ScenarioPolicyResolver,
+    RecoveryScenarioProfile, RecoveryTimingRttDimension, ScenarioPolicyProfileKind,
+    ScenarioPolicyResolver,
 };
 
 #[inline]
@@ -96,10 +97,12 @@ pub(crate) fn nack_retry_interval_u64_from_rtt_ms(rtt_ms: f64) -> u64 {
         .clamp(4.0, 140.0) as u64
 }
 
+#[allow(dead_code)]
 fn dynamic_pli_refresh_interval_ms(effective_rtt_ms: f64) -> f64 {
     clamp_ms(0.8 * effective_rtt_ms + 20.0, 40.0, 220.0)
 }
 
+#[allow(dead_code)]
 fn dynamic_fir_retry_interval_ms(effective_rtt_ms: f64) -> f64 {
     clamp_ms(2.5 * effective_rtt_ms + 60.0, 180.0, 700.0)
 }
@@ -129,6 +132,20 @@ fn dynamic_clean_anchor_patience_ms(_effective_rtt_ms: f64, hold_ms: f64) -> f64
     clamp_ms(hold_ms * 1.15, hold_ms + 20.0, 520.0)
 }
 
+fn resolve_timing_rtt_dim_ms(
+    effective_rtt_ms: f64,
+    dim: Option<RecoveryTimingRttDimension>,
+    fallback_ms: f64,
+) -> f64 {
+    let Some(dim) = dim else {
+        return fallback_ms;
+    };
+    match (dim.multiplier, dim.bias_ms, dim.floor_ms, dim.ceiling_ms) {
+        (Some(m), Some(b), Some(fl), Some(cl)) => clamp_ms(effective_rtt_ms * m + b, fl, cl),
+        _ => fallback_ms,
+    }
+}
+
 /// 纯函数：给定有效 RTT 与 profile（用于 kind 边界），解析全部动态时序。
 pub(crate) fn resolve_recovery_dynamic_timing_with_rtt(
     effective_rtt_ms: f64,
@@ -136,13 +153,55 @@ pub(crate) fn resolve_recovery_dynamic_timing_with_rtt(
 ) -> RecoveryDynamicTiming {
     let kind = profile.kind;
     let effective_rtt_ms = effective_rtt_ms.clamp(5.0, 800.0);
-    let nack_timeout_ms = dynamic_nack_timeout_ms(effective_rtt_ms, kind);
-    let nack_retry_interval_ms = dynamic_nack_retry_interval_ms(effective_rtt_ms);
-    let pli_refresh_interval_ms = dynamic_pli_refresh_interval_ms(effective_rtt_ms);
-    let fir_retry_interval_ms = dynamic_fir_retry_interval_ms(effective_rtt_ms);
-    let decoded_pending_commit_hold_ms =
-        dynamic_decoded_pending_commit_hold_ms(effective_rtt_ms, kind);
-    let continuation_patience_window_ms = dynamic_continuation_patience_ms(effective_rtt_ms, kind);
+    let formula_nack_timeout = dynamic_nack_timeout_ms(effective_rtt_ms, kind);
+    let nack_timeout_ms = match profile.timing_rtt {
+        None => formula_nack_timeout,
+        Some(ref t) => {
+            resolve_timing_rtt_dim_ms(effective_rtt_ms, t.nack_timeout, formula_nack_timeout)
+        }
+    };
+
+    let formula_nack_retry = dynamic_nack_retry_interval_ms(effective_rtt_ms);
+    let nack_retry_interval_ms = match profile.timing_rtt {
+        None => formula_nack_retry,
+        Some(ref t) => {
+            resolve_timing_rtt_dim_ms(effective_rtt_ms, t.nack_retry, formula_nack_retry)
+        }
+    };
+
+    let pli_refresh_interval_ms = match profile.timing_rtt {
+        None => profile.pli_refresh_interval_ms,
+        Some(ref t) => resolve_timing_rtt_dim_ms(
+            effective_rtt_ms,
+            t.pli_refresh,
+            profile.pli_refresh_interval_ms,
+        ),
+    };
+
+    let fir_retry_interval_ms = match profile.timing_rtt {
+        None => profile.fir_retry_interval_ms,
+        Some(ref t) => {
+            resolve_timing_rtt_dim_ms(effective_rtt_ms, t.fir_retry, profile.fir_retry_interval_ms)
+        }
+    };
+
+    let decoded_pending_commit_hold_ms = match profile.timing_rtt {
+        None => dynamic_decoded_pending_commit_hold_ms(effective_rtt_ms, kind),
+        Some(ref t) => resolve_timing_rtt_dim_ms(
+            effective_rtt_ms,
+            t.decoded_pending_commit_hold,
+            profile.decoded_pending_commit_hold_ms,
+        ),
+    };
+
+    let formula_cont = dynamic_continuation_patience_ms(effective_rtt_ms, kind);
+    let continuation_patience_window_ms = match profile.timing_rtt {
+        None => formula_cont,
+        Some(ref t) => {
+            resolve_timing_rtt_dim_ms(effective_rtt_ms, t.continuation_patience, formula_cont)
+        }
+    };
+
     let clean_anchor_commit_patience_window_ms =
         dynamic_clean_anchor_patience_ms(effective_rtt_ms, decoded_pending_commit_hold_ms);
 
@@ -195,6 +254,27 @@ pub(crate) fn transport_await_patience_window_ms(
     }
 }
 
+/// RFC：高价值首发 admission deadline 至少覆盖一轮动态 NACK 超时；不超过可选 playout 上限。
+pub(crate) fn merge_nack_admission_deadline_with_dynamic_timeout(
+    now_ms: f64,
+    deadline_at_ms: f64,
+    frame_importance: &str,
+    nack_timeout_ms: f64,
+    playout_deadline_at_ms: Option<f64>,
+) -> f64 {
+    if !matches!(
+        frame_importance,
+        "anchor" | "supply" | "continuation" | "reference"
+    ) {
+        return deadline_at_ms;
+    }
+    let mut d = deadline_at_ms.max(now_ms + nack_timeout_ms.max(0.0));
+    if let Some(playout) = playout_deadline_at_ms {
+        d = d.min(playout);
+    }
+    d
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,7 +289,10 @@ mod tests {
         assert!((t.nack_timeout_ms - 56.0).abs() < 0.01);
         assert!(t.nack_timeout_ms >= 45.0 && t.nack_timeout_ms <= 90.0);
         assert!((t.nack_retry_interval_ms - 15.5).abs() < 0.01);
-        assert!((t.pli_refresh_interval_ms - 40.0).abs() < 0.01);
+        assert!(
+            (t.pli_refresh_interval_ms - profile.pli_refresh_interval_ms).abs() < 0.01,
+            "timing_rtt 未挂载时 PLI 回退 profile 静态间隔"
+        );
     }
 
     #[test]
@@ -225,7 +308,13 @@ mod tests {
         );
         let t = resolve_recovery_dynamic_timing_with_rtt(200.0, profile);
         assert!(t.nack_timeout_ms >= 240.0 && t.nack_timeout_ms <= 420.0);
-        assert!(t.pli_refresh_interval_ms > 150.0);
-        assert!(t.fir_retry_interval_ms > 400.0);
+        assert!(
+            (t.pli_refresh_interval_ms - profile.pli_refresh_interval_ms).abs() < 0.01,
+            "timing_rtt 未挂载时 PLI 使用 Cloud profile 静态值"
+        );
+        assert!(
+            (t.fir_retry_interval_ms - profile.fir_retry_interval_ms).abs() < 0.01,
+            "timing_rtt 未挂载时 FIR 使用 Cloud profile 静态值"
+        );
     }
 }

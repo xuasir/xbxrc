@@ -4,6 +4,7 @@ mod bwe_twcc;
 mod display_owner_ledger;
 mod harness;
 mod reconnect_lifecycle;
+mod recovery_dynamic_timing_contract;
 mod recovery_integration;
 mod recovery_observation;
 mod stale_runtime_domain;

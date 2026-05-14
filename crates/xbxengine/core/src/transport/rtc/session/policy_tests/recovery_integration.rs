@@ -6845,7 +6845,7 @@ fn recovery_integration_trace_contract_continuation_heavy_second_refresh_still_r
 }
 
 #[test]
-fn recovery_integration_local_supply_suspect_dwell_clears_on_no_signal_gap() {
+fn recovery_integration_transport_await_suspect_compat_maps_to_immediate_transport_await() {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
 
@@ -6887,14 +6887,17 @@ fn recovery_integration_local_supply_suspect_dwell_clears_on_no_signal_gap() {
                 });
         },
     );
-    assert!(
-        first.is_empty(),
-        "suspect dwell should not emit keyframe immediately: {first:?}"
+    assert_eq!(
+        first,
+        vec![TransportCommand::RequestPli {
+            reason: "transportAwaitRecoverySuspect".to_string(),
+            observation_id: 1,
+        }]
     );
     harness.with_stats(|stats| {
         assert_eq!(
             stats.recovery_active_escalation_reason.as_deref(),
-            Some("localSupplySuspect")
+            Some("transportAwaitRecoveryAnchor")
         );
     });
 
@@ -6948,17 +6951,17 @@ fn recovery_integration_local_supply_suspect_dwell_clears_on_no_signal_gap() {
     );
     assert!(
         third.is_empty(),
-        "suspect re-entry should restart dwell without immediate keyframe request: {third:?}"
+        "transport-await compat should respect in-flight throttle: {third:?}"
     );
-    assert_eq!(harness.policy.local_supply_suspect_since_ms, Some(1_330.0));
+    assert_eq!(harness.policy.local_supply_suspect_since_ms, None);
     harness.with_stats(|stats| {
         assert_eq!(
             stats.recovery_active_escalation_reason.as_deref(),
-            Some("localSupplySuspect")
+            Some("transportAwaitRecoveryAnchor")
         );
         assert_eq!(
             stats.recovery_owner_surface_state.as_deref(),
-            Some("suspect")
+            Some("await-anchor")
         );
     });
 }
@@ -7565,6 +7568,135 @@ fn recovery_integration_transport_await_gap_repair_stalled_upgrades_to_fir() {
             12_180.0,
         ),
         Some("awaitingRecoveryAnchor")
+    );
+}
+
+#[test]
+fn recovery_integration_transport_await_continuation_only_overrides_local_repair_pending() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+    let owner_signal = crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal {
+        reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+        reason_label: "transportAwaitRecoveryAnchor".to_string(),
+        observed_at_ms: 12_180.0,
+        gap_severity: None,
+        repairability: None,
+    };
+    let proposal = crate::transport::rtc::recovery::coordinator::CoordinatorProposal {
+        decision: crate::transport::rtc::recovery::escalation::VideoEscalationDecision {
+            observation_id: 402,
+            action: RecoveryAction::CoalescedKeyframeInFlight,
+        },
+        coalescing_mode: Some(crate::transport::rtc::recovery::contract::CoalescingMode::Merge),
+        unlock_reason: None,
+        preempt_reason: None,
+        budget_before: crate::transport::rtc::recovery::escalation::RecoveryActionBudgetState {
+            recovery_epoch: 45,
+            keyframe_budget_used: 1,
+            keyframe_budget_limit: 2,
+            decoder_reset_budget_used: 0,
+            decoder_reset_budget_limit: 2,
+            reconnect_budget_used: 0,
+            reconnect_budget_limit: 1,
+        },
+        budget_after: crate::transport::rtc::recovery::escalation::RecoveryActionBudgetState {
+            recovery_epoch: 45,
+            keyframe_budget_used: 1,
+            keyframe_budget_limit: 2,
+            decoder_reset_budget_used: 0,
+            decoder_reset_budget_limit: 2,
+            reconnect_budget_used: 0,
+            reconnect_budget_limit: 1,
+        },
+    };
+    RuntimeStatsSink::update_shared(runtime_stats.as_ref(), |stats| {
+        stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+        stats.video_rtt_ms = Some(50.0);
+        stats.session_phase = Some("steady".to_string());
+        stats.transport_recovery_epoch = 45;
+        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+        stats.video_anchor_clean_epoch = None;
+        stats.video_anchor_clean_observed_at_ms = None;
+        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "frame-await-recovery-anchor".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "recovering".to_string(),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 12_178.0,
+            },
+            observed_at_ms: 12_178.0,
+        });
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 45,
+                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "packet-seen".to_string(),
+                status_detail: None,
+                requested_at_ms: 12_000.0,
+                sent_at_ms: Some(12_010.0),
+                deadline_at_ms: Some(12_900.0),
+                transport_detail: None,
+                first_video_packet_at_ms: Some(12_070.0),
+                first_video_packet_rtp_timestamp: Some(0x5566_7788),
+                first_video_packet_is_keyframe: Some(true),
+                first_keyframe_packet_at_ms: Some(12_070.0),
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: Some(0x5566_7788),
+                response_frame_seq: Some(45),
+                response_verdict: Some("pending".to_string()),
+                lifecycle_phase: Some("packetSeen".to_string()),
+                retired_at_ms: None,
+            });
+        stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+            recovery_epoch: 45,
+            frame_rtp_timestamp: None,
+            state: crate::XbxEngineAnchorCandidateState::AwaitingRecovery,
+            source_event: "gap-repair-in-flight".to_string(),
+            failure_reason: Some(crate::XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
+            observed_at_ms: 12_150.0,
+        });
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 7,
+                frame_rtp_timestamp: Some(0x5566_7788),
+                nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: false,
+                sample_width: None,
+                sample_height: None,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+                admission_accepted: true,
+                continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                observed_at_ms: 12_170.0,
+                bound_episode_id: Some(45),
+                ..Default::default()
+            });
+    });
+
+    assert_eq!(
+        policy.should_upgrade_transport_await_refresh_to_fir(
+            VideoSchedulingOwnerState::RebuildingSupply,
+            &proposal,
+            &owner_signal,
+            12_180.0,
+        ),
+        Some("continuationOnlyAwaitingIdr")
     );
 }
 

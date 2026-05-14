@@ -102,9 +102,29 @@ pub struct SkippedNackBatch {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+pub struct NackPollRecoveryTelemetry {
+    pub first_attempt_survival_window_ms: Option<f64>,
+    pub first_attempt_deadline_at_ms: Option<f64>,
+    pub first_attempt_still_economical: Option<bool>,
+    pub retry_allowed_reason: Option<String>,
+    pub retry_suppressed_reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct NackPollResult {
     pub retry_batch: Option<NackBatch>,
     pub expired_batches: Vec<ExpiredNackBatch>,
+    pub recovery_telemetry: Option<NackPollRecoveryTelemetry>,
+}
+
+impl Default for NackPollResult {
+    fn default() -> Self {
+        Self {
+            retry_batch: None,
+            expired_batches: Vec::new(),
+            recovery_telemetry: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -126,6 +146,9 @@ struct PendingNack {
     frame_playout_deadline_at_ms: Option<f64>,
     frame_unrecoverable_reason: Option<&'static str>,
     budget_context: FrameBudgetContext,
+    /// RFC §2.1：首发 survival 窗（毫秒）；`None` 或 `0` 等价于不启用 survival 抑制。
+    first_attempt_survival_window_ms: f64,
+    repairability_schedule: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -151,6 +174,11 @@ pub struct NackObservePolicy {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<&'static str>,
+    /// RFC §2.1：与 `recovery_dynamic_nack_timeout_ms` 对齐的首发 survival（毫秒）。
+    pub first_attempt_survival_window_ms: Option<f64>,
+    pub repairability_schedule: Option<f64>,
+    /// 高价值缺口：pending `deadline_at_ms` 合并后不得低于该绝对时间（通常为 `now + nack_timeout`）。
+    pub admission_deadline_floor_at_ms: Option<f64>,
     /// 覆盖 [`FrameBudgetContext::retry_budget`] 的 poll 重试上限（上限仍受 [`NackSchedulerConfig::max_retry_count`] 约束）。
     /// 生产路径应为 `None`，仅测试或调试需要非单发 poll 语义时设置。
     pub max_retry_count_override: Option<u8>,
@@ -181,7 +209,34 @@ type PendingMeta = (
     Option<f64>,
     Option<&'static str>,
     FrameBudgetContext,
+    f64,
+    Option<f64>,
 );
+
+fn should_suppress_first_attempt_nack_retry(pending: &PendingNack, now_ms: f64) -> bool {
+    if pending.first_attempt_survival_window_ms <= 0.0 {
+        return false;
+    }
+    if pending.retry_count > 0 {
+        return false;
+    }
+    let since_first = (now_ms - pending.first_seen_at_ms).max(0.0);
+    if since_first >= pending.first_attempt_survival_window_ms {
+        return false;
+    }
+    if let Some(r) = pending.repairability_schedule {
+        if r < 0.45 {
+            return false;
+        }
+    }
+    matches!(
+        (
+            pending.estimated_recovery_arrival_ms,
+            pending.frame_playout_deadline_at_ms,
+        ),
+        (Some(est), Some(play)) if est <= play,
+    )
+}
 
 impl NackScheduler {
     pub fn new(config: NackSchedulerConfig) -> Self {
@@ -375,7 +430,8 @@ impl NackScheduler {
                 // 已有 pending 时执行“有界合并”：
                 // 1) deadline/max_age/retry_interval 只朝更严格方向收敛；
                 // 2) retry budget/priority 朝更积极方向提升，避免路径先后顺序影响恢复强度。
-                pending.deadline_at_ms = pending.deadline_at_ms.min(deadline_at_ms);
+                let floor_ms = policy.admission_deadline_floor_at_ms.unwrap_or(0.0);
+                pending.deadline_at_ms = pending.deadline_at_ms.min(deadline_at_ms).max(floor_ms);
                 pending.max_age_ms = pending.max_age_ms.min(max_age_ms);
                 // retry_interval 收紧后，把 last_sent_at_ms 对齐到 now_ms，
                 // 避免旧时间戳导致下次 poll 时用新的更短间隔提前触发额外重试。
@@ -421,6 +477,18 @@ impl NackScheduler {
                     (Some(existing), None) => Some(existing),
                     (None, None) => None,
                 };
+                pending.first_attempt_survival_window_ms = pending
+                    .first_attempt_survival_window_ms
+                    .max(policy.first_attempt_survival_window_ms.unwrap_or(0.0));
+                pending.repairability_schedule = match (
+                    pending.repairability_schedule,
+                    policy.repairability_schedule,
+                ) {
+                    (Some(a), Some(b)) => Some(a.max(b)),
+                    (Some(a), None) => Some(a),
+                    (None, Some(b)) => Some(b),
+                    (None, None) => None,
+                };
                 continue;
             }
             let last_sent_at_ms = if inserted.len() < burst_count && index < burst_count {
@@ -428,13 +496,15 @@ impl NackScheduler {
             } else {
                 now_ms - retry_interval_ms as f64
             };
+            let floor_ms = policy.admission_deadline_floor_at_ms.unwrap_or(0.0);
+            let insert_deadline_at_ms = deadline_at_ms.max(floor_ms);
             self.pending.insert(
                 *sequence,
                 PendingNack {
                     gap_state: GapState::NackCandidate,
                     first_seen_at_ms: now_ms,
                     last_sent_at_ms,
-                    deadline_at_ms,
+                    deadline_at_ms: insert_deadline_at_ms,
                     retry_count: 0,
                     max_retry_count,
                     max_age_ms,
@@ -450,6 +520,10 @@ impl NackScheduler {
                         .or(Some(deadline_at_ms)),
                     frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
                     budget_context: policy.budget_context,
+                    first_attempt_survival_window_ms: policy
+                        .first_attempt_survival_window_ms
+                        .unwrap_or(0.0),
+                    repairability_schedule: policy.repairability_schedule,
                 },
             );
             inserted.push(*sequence);
@@ -499,6 +573,8 @@ impl NackScheduler {
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
                     pending.budget_context,
+                    pending.first_attempt_survival_window_ms,
+                    pending.repairability_schedule,
                 ));
                 return false;
             }
@@ -514,6 +590,8 @@ impl NackScheduler {
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
                     pending.budget_context,
+                    pending.first_attempt_survival_window_ms,
+                    pending.repairability_schedule,
                 ));
                 return false;
             }
@@ -543,6 +621,8 @@ impl NackScheduler {
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
                     pending.budget_context,
+                    pending.first_attempt_survival_window_ms,
+                    pending.repairability_schedule,
                 ));
             }
         }
@@ -585,7 +665,9 @@ impl NackScheduler {
         let mut retry_sequences = Vec::new();
         let mut next_retry_count = 0u8;
         let mut retry_meta = None;
+        let mut retry_allowed_label: Option<String> = None;
         let burst_count = usize::from(self.config.burst_count.max(1));
+        let mut recovery_telemetry = None;
         for (
             sequence,
             _,
@@ -599,9 +681,40 @@ impl NackScheduler {
             frame_playout_deadline_at_ms,
             frame_unrecoverable_reason,
             budget_context,
-        ) in retry_candidates.into_iter().take(burst_count)
+        ) in retry_candidates
         {
+            if retry_sequences.len() >= burst_count {
+                break;
+            }
+            let Some(pending_ref) = self.pending.get(&sequence) else {
+                continue;
+            };
+            if should_suppress_first_attempt_nack_retry(pending_ref, now_ms) {
+                if recovery_telemetry.is_none() {
+                    let survival = pending_ref.first_attempt_survival_window_ms;
+                    recovery_telemetry = Some(NackPollRecoveryTelemetry {
+                        first_attempt_survival_window_ms: Some(survival),
+                        first_attempt_deadline_at_ms: Some(pending_ref.first_seen_at_ms + survival),
+                        first_attempt_still_economical: Some(true),
+                        retry_allowed_reason: None,
+                        retry_suppressed_reason: Some("firstAttemptSurvival".to_string()),
+                    });
+                }
+                continue;
+            }
+            let survival_for_retry = pending_ref.first_attempt_survival_window_ms;
+            let first_seen_for_retry = pending_ref.first_seen_at_ms;
             if let Some(pending) = self.pending.get_mut(&sequence) {
+                if retry_allowed_label.is_none() {
+                    let elapsed = (now_ms - first_seen_for_retry).max(0.0);
+                    retry_allowed_label = Some(
+                        if survival_for_retry > 0.0 && elapsed >= survival_for_retry {
+                            "firstAttemptWindowElapsed".to_string()
+                        } else {
+                            "retryIntervalElapsed".to_string()
+                        },
+                    );
+                }
                 pending.gap_state = GapState::RepairInFlight;
                 pending.retry_count = pending.retry_count.saturating_add(1);
                 pending.last_sent_at_ms = now_ms;
@@ -619,6 +732,17 @@ impl NackScheduler {
                     budget_context,
                 ));
             }
+        }
+        if !retry_sequences.is_empty() {
+            recovery_telemetry = Some(NackPollRecoveryTelemetry {
+                first_attempt_survival_window_ms: None,
+                first_attempt_deadline_at_ms: None,
+                first_attempt_still_economical: Some(true),
+                retry_allowed_reason: Some(
+                    retry_allowed_label.unwrap_or_else(|| "retryIntervalElapsed".to_string()),
+                ),
+                retry_suppressed_reason: None,
+            });
         }
 
         NackPollResult {
@@ -744,6 +868,7 @@ impl NackScheduler {
             .into_iter()
             .filter(|batch| !batch.sequences.is_empty())
             .collect(),
+            recovery_telemetry,
         }
     }
 
@@ -831,6 +956,8 @@ impl NackScheduler {
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
                     pending.budget_context,
+                    pending.first_attempt_survival_window_ms,
+                    pending.repairability_schedule,
                 ));
             }
         }
