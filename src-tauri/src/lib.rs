@@ -51,6 +51,7 @@ fn hint_gamepad_shell_background(window: &tauri::Window, reason: &str) {
             error
         );
     }
+    mods::gamepad::input_gate::sync_gamepad_input_gate(&window.app_handle());
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -95,6 +96,8 @@ pub fn run() {
                 shell::schedule_gamepad_cold_start_sdl_binding_nudge(
                     &webview.window().app_handle(),
                 );
+            } else {
+                mods::gamepad::input_gate::sync_gamepad_input_gate(&webview.window().app_handle());
             }
             let _ = webview.eval(shell::build_external_link_patch_script());
         })
@@ -142,6 +145,7 @@ pub fn run() {
                                 "minimized": true,
                             }),
                         );
+                        mods::gamepad::input_gate::sync_gamepad_input_gate(&window.app_handle());
                     }
                     Err(e) => {
                         log::warn!("Failed to inspect window minimized state: {}", e);
@@ -210,12 +214,7 @@ pub fn run() {
                         error
                     );
                 }
-                if let Err(error) = app_state.gamepad.try_startup_sampling_self_heal() {
-                    log::warn!(
-                        "Failed to try startup gamepad self-heal on app resume error={}",
-                        error
-                    );
-                }
+                mods::gamepad::input_gate::sync_gamepad_input_gate(app_handle);
             }
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                 tauri::async_runtime::block_on(shell::terminate(app_handle));

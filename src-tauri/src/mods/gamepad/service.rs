@@ -8,10 +8,10 @@ use ohmygamepad_core::{
 };
 use ohmygamepad_host::GamepadRuntimeHost;
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRejectionReasonDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
-    OhMyGamepadSamplingLifecycleDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadInputGateModeDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRejectionReasonDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
 use tauri::{AppHandle, Manager};
 
@@ -21,11 +21,8 @@ pub struct GamepadService {
 }
 
 pub fn sanitize_runtime_snapshot_for_external_consumers(
-    mut snapshot: OhMyGamepadRuntimeSnapshotDto,
+    snapshot: OhMyGamepadRuntimeSnapshotDto,
 ) -> OhMyGamepadRuntimeSnapshotDto {
-    if snapshot.sampling_lifecycle == OhMyGamepadSamplingLifecycleDto::BackgroundWarm {
-        snapshot.slots.clear();
-    }
     snapshot
 }
 
@@ -37,11 +34,6 @@ impl GamepadService {
         app_state
             .runtime_trace
             .record_event("gamepad-provider", event, None, payload);
-    }
-
-    /// 与 `prime_and_refresh_runtime_sampling`（SDL reopen）配套：先请求主窗口焦点，再跑宿主侧恢复。
-    fn request_main_focus_before_input_recovery(&self, reason: &'static str) {
-        crate::shell::request_main_window_focus_for_input_stack(&self.app_handle, reason);
     }
 }
 
@@ -57,6 +49,18 @@ impl GamepadProvider for GamepadService {
         self.host.stream_pad_forwarding()
     }
 
+    fn peek_derived_input_gate(
+        &self,
+        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> (OhMyGamepadInputGateModeDto, String) {
+        self.host.peek_derived_input_gate(sampling_lifecycle)
+    }
+
+    fn set_shell_window_gate_hints(&self, focused: bool, visible: bool, minimized: bool) {
+        self.host
+            .set_shell_window_gate_hints(focused, visible, minimized);
+    }
+
     fn set_stream_pad_forwarding(
         &self,
         enabled: bool,
@@ -69,7 +73,6 @@ impl GamepadProvider for GamepadService {
 
     fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         log::info!("tauri_gamepad_activate_sampling source=provider");
-        self.request_main_focus_before_input_recovery("activateSampling");
         let snapshot = self
             .host
             .activate_sampling()
@@ -92,7 +95,6 @@ impl GamepadProvider for GamepadService {
 
     fn resume_shell_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         log::info!("tauri_gamepad_resume_shell_sampling source=provider");
-        self.request_main_focus_before_input_recovery("resumeShellSampling");
         let snapshot = self
             .host
             .resume_shell_sampling()
@@ -193,7 +195,6 @@ impl GamepadProvider for GamepadService {
     }
 
     fn try_stalled_sampling_self_heal(&self) -> Result<bool, String> {
-        self.request_main_focus_before_input_recovery("tryStalledSamplingSelfHeal");
         let result = self
             .host
             .try_stalled_sampling_self_heal()
@@ -217,7 +218,6 @@ impl GamepadProvider for GamepadService {
     }
 
     fn try_startup_sampling_self_heal(&self) -> Result<bool, String> {
-        self.request_main_focus_before_input_recovery("tryStartupSamplingSelfHeal");
         let result = self
             .host
             .try_startup_sampling_self_heal()
@@ -310,7 +310,7 @@ mod tests {
     };
 
     #[test]
-    fn background_warm_snapshot_hides_slots_for_external_consumers() {
+    fn sanitize_runtime_snapshot_is_identity() {
         let snapshot = OhMyGamepadRuntimeSnapshotDto {
             sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
             sampling_health: OhMyGamepadSamplingHealthDto::Healthy,
@@ -321,13 +321,13 @@ mod tests {
         };
 
         let sanitized = sanitize_runtime_snapshot_for_external_consumers(snapshot);
-        assert!(sanitized.slots.is_empty());
+        assert_eq!(sanitized.slots.len(), 1);
         assert_eq!(sanitized.last_sample_progress_at_ms, 1234);
         assert_eq!(sanitized.last_backend_sample_activity_at_ms, 5678);
     }
 
     #[test]
-    fn active_snapshot_keeps_slots_for_external_consumers() {
+    fn active_snapshot_round_trips_through_sanitize() {
         let snapshot = OhMyGamepadRuntimeSnapshotDto {
             sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
             slots: vec![GamepadSlotSnapshotDto::default()],

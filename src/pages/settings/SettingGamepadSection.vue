@@ -162,7 +162,7 @@ const gamepadStreamForwardingLabel = computed(() => {
 
 const gamepadHapticsSummary = computed(() => {
   const haptics = gamepadSnapshot.value?.haptics
-  if (!haptics || haptics.provider === 'none') {
+  if (!haptics) {
     return t('setting.gamepad.haptics.none')
   }
 
@@ -612,9 +612,13 @@ onMounted(() => {
 
     // 手柄物理键采集必须每帧处理，不能依赖调试开关，也不能被调试面板的节流丢掉。
     if (mappingCaptureActive) {
+      const targetButton = captureTargetButton.value
+      if (targetButton === null) {
+        return
+      }
       const rawIndex = detectPressedRawButtonIndex(snapshot)
       if (rawIndex !== null) {
-        gamepadButtonIndices.value[captureTargetButton.value] = rawIndex
+        gamepadButtonIndices.value[targetButton] = rawIndex
         captureTargetButton.value = null
       }
       else {
@@ -622,7 +626,7 @@ onMounted(() => {
         const sourceButton = detectPressedLogicalButton(snapshot)
         if (sourceButton !== null) {
           // 采集时应复制“当前实际映射索引”，而不是回退到默认索引。
-          gamepadButtonIndices.value[captureTargetButton.value] = gamepadButtonIndices.value[sourceButton]
+          gamepadButtonIndices.value[targetButton] = gamepadButtonIndices.value[sourceButton]
           captureTargetButton.value = null
         }
       }

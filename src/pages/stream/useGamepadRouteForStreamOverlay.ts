@@ -1,11 +1,34 @@
 import type { Ref } from 'vue'
-import { isStreamGamepadSessionActive } from '@shared/gamepad/input-routing'
+import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { requestGamepadUiListenerReset } from '../../navigation/core/gamepad-listener'
 
 export type GamepadRouteTargetSnapshot
   = | { kind: 'shell-ui' }
     | { kind: 'stream-session', sessionId: string }
+
+export function resolveDesiredGamepadRouteTarget(input: {
+  sessionId: string
+  overlayOpen: boolean
+  streamSessionPresent: boolean
+}): GamepadRouteTargetSnapshot | null {
+  const { sessionId, overlayOpen, streamSessionPresent } = input
+
+  // `sessionId` 与 `streamSessionPresent` 理论上同拍写入，但断开或竞态下可能出现
+  // 「会话仍视为串流态而 id 已空」；此时若 overlay 打开仍须走 shell-ui，否则会卡在
+  // forwarding 已关而 shell 优先未升起的窗口，手柄样本谁都不消费。
+  if (sessionId === '') {
+    if (!streamSessionPresent) {
+      return null
+    }
+    return overlayOpen ? { kind: 'shell-ui' } : { kind: 'stream-session', sessionId: '' }
+  }
+
+  if (overlayOpen) {
+    return { kind: 'shell-ui' }
+  }
+  return { kind: 'stream-session', sessionId }
+}
 
 export function useGamepadRouteForStreamOverlay(options: {
   isAnyOverlayOpen: Ref<boolean>
@@ -32,23 +55,11 @@ export function useGamepadRouteForStreamOverlay(options: {
   }
 
   function resolveDesiredTarget(): GamepadRouteTargetSnapshot | null {
-    const sessionId = options.sessionId.value
-    const overlay = options.isAnyOverlayOpen.value
-
-    // `sessionId` 与 `setStreamGamepadSessionActive(true)` 理论上同拍写入，但断开或竞态下可能出现
-    // 「会话仍视为串流态而 id 已空」；此时若 overlay 打开仍须走 shell-ui，否则会卡在
-    // forwarding 已关而 shell 优先未升起的窗口，手柄样本谁都不消费。
-    if (sessionId === '') {
-      if (!isStreamGamepadSessionActive()) {
-        return null
-      }
-      return overlay ? { kind: 'shell-ui' } : { kind: 'stream-session', sessionId: '' }
-    }
-
-    if (overlay) {
-      return { kind: 'shell-ui' }
-    }
-    return { kind: 'stream-session', sessionId }
+    return resolveDesiredGamepadRouteTarget({
+      sessionId: options.sessionId.value,
+      overlayOpen: options.isAnyOverlayOpen.value,
+      streamSessionPresent: businessInputArbiter.getState().streamSessionPresent,
+    })
   }
 
   async function applyTarget(target: GamepadRouteTargetSnapshot): Promise<void> {
@@ -62,6 +73,12 @@ export function useGamepadRouteForStreamOverlay(options: {
       // 如果在请求过程中状态又变了，不要覆盖后续请求的结果
       if (equals(pending, target)) {
         lastApplied = target
+        if (target.kind === 'stream-session') {
+          businessInputArbiter.patch({ rustEngineStreamPadRoutedToSession: true })
+        }
+        else {
+          businessInputArbiter.patch({ rustEngineStreamPadRoutedToSession: false })
+        }
       }
     }
     catch {
@@ -83,6 +100,7 @@ export function useGamepadRouteForStreamOverlay(options: {
           requestGamepadUiListenerReset('route:session-cleared')
           lastApplied = null
           pending = null
+          businessInputArbiter.patch({ rustEngineStreamPadRoutedToSession: false })
           return
         }
 

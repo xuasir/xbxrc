@@ -25,6 +25,23 @@ pub enum OhMyGamepadSamplingHealthDto {
     Stalled,
 }
 
+/// Tauri 推导并写入窗口 hints 后，由 host enrich 映射到快照；仅决定物理采样是否进入业务输入流。
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OhMyGamepadInputGateModeDto {
+    /// 业务输入不进入后续业务处理（物理采样仍继续）。
+    #[default]
+    Closed,
+    /// 业务输入允许继续进入后续业务处理；UI / stream 归属由消费层决定。
+    Open,
+}
+
+impl OhMyGamepadInputGateModeDto {
+    pub fn allows_business_input(self) -> bool {
+        matches!(self, Self::Open)
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRuntimeSnapshotDto {
@@ -33,7 +50,7 @@ pub struct OhMyGamepadRuntimeSnapshotDto {
     pub sampling: OhMyGamepadSamplingConfigDto,
     pub slots: Vec<GamepadSlotSnapshotDto>,
     pub haptics: OhMyGamepadRuntimeHapticsDto,
-    /// Runtime sampling lifecycle（仅 Active / BackgroundWarm）。
+    /// Runtime sampling lifecycle（仅 Active / BackgroundWarm）；诊断/兼容，业务放行判定已收口到 `input_gate`。
     #[serde(default)]
     pub sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
     /// Sampling chain health for diagnostics and stalled self-heal.
@@ -48,9 +65,15 @@ pub struct OhMyGamepadRuntimeSnapshotDto {
     /// Monotonic count of backend-driven sampling self-heal attempts (for diagnostics).
     #[serde(default)]
     pub sampling_self_heal_count: u32,
-    /// When true, logical pad samples may be forwarded to the active streaming/RTC session.
+    /// When true, logical pad samples may be forwarded to the active streaming/RTC session (仍受 `input_gate` 放行约束)。
     #[serde(default)]
     pub stream_pad_forwarding: bool,
+    /// 业务输入门控：由壳层窗口 hints 与 runtime lifecycle 推导并写入快照。
+    #[serde(default)]
+    pub input_gate: OhMyGamepadInputGateModeDto,
+    /// 最近一次门控推导原因（便于诊断）。
+    #[serde(default)]
+    pub input_gate_reason: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]

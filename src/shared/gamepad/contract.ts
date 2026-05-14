@@ -165,6 +165,9 @@ export type GamepadSamplingLifecycleDto = (typeof GAMEPAD_SAMPLING_LIFECYCLES)[n
 export const GAMEPAD_SAMPLING_HEALTH = ['healthy', 'awaitingBaseline', 'stalled'] as const
 export type GamepadSamplingHealthDto = (typeof GAMEPAD_SAMPLING_HEALTH)[number]
 
+export const GAMEPAD_INPUT_GATE_MODES = ['closed', 'open'] as const
+export type GamepadInputGateModeDto = (typeof GAMEPAD_INPUT_GATE_MODES)[number]
+
 export interface GamepadSlotSnapshotDto {
   slot: GamepadSlotDto
   deviceIds: string[]
@@ -241,6 +244,10 @@ export interface GamepadRuntimeSnapshotDto {
   samplingSelfHealCount?: number
   /** When true, samples may be forwarded to the active streaming/RTC session. */
   streamPadForwarding?: boolean
+  /** Business input gate (shell window hints + runtime lifecycle); see RFC gamepad active gate. */
+  inputGate?: GamepadInputGateModeDto
+  /** Diagnostic: last gate derivation reason from the shell/runtime snapshot. */
+  inputGateReason?: string
 }
 
 export type GamepadKeyboardKeyDto

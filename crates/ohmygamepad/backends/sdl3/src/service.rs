@@ -16,10 +16,10 @@ use ohmygamepad_core::{
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadId, LogicalPadStateDto, MultiControllerSamplingModeDto,
     MultiControllerSamplingStrategyDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
-    OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto, OhMyGamepadSamplingPresetDto,
-    OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
+    OhMyGamepadInputGateModeDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    OhMyGamepadSamplingPresetDto, OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
 };
 
 use crate::service_keyboard::{
@@ -85,12 +85,44 @@ struct OhMyGamepadServiceState {
     rumble_backend: Option<Box<dyn ServiceRumbleBackend>>,
 }
 
+/// 主窗口交互 hints，由 Tauri 写入；在 host enrich 中与 runtime lifecycle 一起派生 `input_gate`。
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ShellWindowGateHints {
+    pub focused: bool,
+    pub visible: bool,
+    pub minimized: bool,
+}
+
+pub fn derive_input_gate_from_hints(
+    hints: &ShellWindowGateHints,
+    sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+) -> (OhMyGamepadInputGateModeDto, String) {
+    if !hints.visible || hints.minimized || !hints.focused {
+        return (
+            OhMyGamepadInputGateModeDto::Closed,
+            "window-not-interactive".to_owned(),
+        );
+    }
+    if sampling_lifecycle != OhMyGamepadSamplingLifecycleDto::Active {
+        (
+            OhMyGamepadInputGateModeDto::Closed,
+            "sampling-not-active".to_owned(),
+        )
+    } else {
+        (
+            OhMyGamepadInputGateModeDto::Open,
+            "window-interactive-and-sampling-active".to_owned(),
+        )
+    }
+}
+
 pub struct OhMyGamepadService {
     runtime: InputRuntimeHandle,
     state: Mutex<OhMyGamepadServiceState>,
     last_sampling_self_heal_at: Mutex<Option<Instant>>,
     /// When true, RTC input loop may forward logical pad samples to the stream transport.
     stream_pad_forwarding: Arc<AtomicBool>,
+    shell_window_gate_hints: Arc<Mutex<ShellWindowGateHints>>,
 }
 
 impl OhMyGamepadService {
@@ -171,6 +203,7 @@ impl OhMyGamepadService {
             }),
             last_sampling_self_heal_at: Mutex::new(None),
             stream_pad_forwarding: Arc::new(AtomicBool::new(false)),
+            shell_window_gate_hints: Arc::new(Mutex::new(ShellWindowGateHints::default())),
         }
     }
 
@@ -214,6 +247,29 @@ impl OhMyGamepadService {
 
     pub fn stream_pad_forwarding(&self) -> bool {
         self.stream_pad_forwarding.load(Ordering::Relaxed)
+    }
+
+    pub fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {
+        *self
+            .shell_window_gate_hints
+            .lock()
+            .expect("lock shell window gate hints") = hints;
+        let _ = self.runtime.refresh_snapshot();
+    }
+
+    pub fn shell_window_gate_hints(&self) -> ShellWindowGateHints {
+        *self
+            .shell_window_gate_hints
+            .lock()
+            .expect("lock shell window gate hints")
+    }
+
+    pub fn peek_derived_input_gate(
+        &self,
+        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> (OhMyGamepadInputGateModeDto, String) {
+        let hints = self.shell_window_gate_hints();
+        derive_input_gate_from_hints(&hints, sampling_lifecycle)
     }
 
     pub fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
@@ -1021,7 +1077,32 @@ fn now_ms() -> u64 {
 mod tests {
     use super::*;
     use crate::NoopSdl3Source;
-    use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
+    use ohmygamepad_protocol::{OhMyGamepadInputGateModeDto, OhMyGamepadSamplingLifecycleDto};
+
+    #[test]
+    fn derive_input_gate_matches_window_and_forwarding() {
+        let hints = ShellWindowGateHints {
+            focused: true,
+            visible: true,
+            minimized: false,
+        };
+        let (open, _) =
+            derive_input_gate_from_hints(&hints, OhMyGamepadSamplingLifecycleDto::Active);
+        assert_eq!(open, OhMyGamepadInputGateModeDto::Open);
+        let (warm_closed, _) = derive_input_gate_from_hints(
+            &hints,
+            OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+        );
+        assert_eq!(warm_closed, OhMyGamepadInputGateModeDto::Closed);
+        let closed_hints = ShellWindowGateHints {
+            focused: false,
+            visible: true,
+            minimized: false,
+        };
+        let (cl, _) =
+            derive_input_gate_from_hints(&closed_hints, OhMyGamepadSamplingLifecycleDto::Active);
+        assert_eq!(cl, OhMyGamepadInputGateModeDto::Closed);
+    }
 
     #[test]
     fn resume_shell_sampling_promotes_background_warm_to_active() {

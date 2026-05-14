@@ -8384,6 +8384,210 @@ fn cloud_high_rtt_repeated_transport_expired_deadline_reconnects_after_recovery_
 }
 
 #[test]
+fn cloud_high_rtt_repeated_transport_expired_deadline_reconnects_after_decoded_pending_commit_timeout_and_connectivity_loss(
+) {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+        stats.session_phase = Some("steady".to_string());
+        stats.transport_recovery_epoch = 58;
+        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+        stats.host_no_pending_pressure_level = Some("critical".to_string());
+        stats.host_no_pending_streak = 420;
+        stats.latest_video_host_present_time_ms = Some(9_000.0);
+        stats.latest_video_decode_ok_time_ms = Some(9_350.0);
+        stats.latest_video_packet_arrival_time_ms = Some(9_480.0);
+        stats.video_decoder_stalled = Some(false);
+        stats.video_renderer_stalled = Some(true);
+        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: Some(1920),
+            video_height: Some(1080),
+            mime_type: Some("video/H264".to_string()),
+            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 520_000,
+            video_packet_count_total: 4_400,
+            audio_bytes_total: 96_000,
+            observed_at_ms: 9_500.0,
+        });
+        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "frame-await-recovery-anchor".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "recovering".to_string(),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                chain_break_evidence: None,
+
+                observed_at_ms: 9_500.0,
+            },
+            observed_at_ms: 9_500.0,
+        });
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+
+    let mut healthy_connection = ConnectionProjection::default();
+    healthy_connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+    healthy_connection.control_channel_open = true;
+    healthy_connection.latest_transport_path = Some("Direct".to_string());
+    healthy_connection.latest_rtt_ms = Some(260.0);
+    healthy_connection.latest_loss_ratio_1s = Some(0.04);
+    healthy_connection.last_observed_at_ms = Some(10_000.0);
+
+    let first_snapshot = TransportSnapshot::new(
+        1,
+        10_000.0,
+        healthy_connection,
+        MediaProjection {
+            frame_count: 220,
+            ..MediaProjection::default()
+        },
+        RecoveryProjection {
+            latest_diagnosis_label: Some("transportExpiredDeadline".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(10_000.0),
+            ..Default::default()
+        },
+        BweProjection {
+            latest_rtt_ms: Some(260.0),
+            latest_loss_ratio_1s: Some(0.04),
+            latest_actual_video_bitrate_kbps: Some(5_200.0),
+            latest_observed_remb_kbps: Some(6_500),
+            latest_transport_path: Some("Direct".to_string()),
+            latest_sample_tick_ms: Some(10_000.0),
+            target_remb_kbps: Some(6_500),
+            last_observed_at_ms: Some(10_000.0),
+        },
+        DiagnosticsProjection::default(),
+    );
+    let first_commands = transport_commands(policy.on_snapshot(&first_snapshot));
+    assert!(first_commands
+        .iter()
+        .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
+
+    sleep(Duration::from_millis(450));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.latest_video_nack_observation = Some(crate::XbxEngineVideoNackObservation {
+            observation_id: 2,
+            action: "sent".to_string(),
+            source: "sampleLoss".to_string(),
+            first_sequence: 10,
+            last_sequence: 12,
+            packet_count: 3,
+            retry_count: 0,
+            frame_rtp_timestamp: None,
+            frame_is_keyframe: Some(false),
+            frame_importance: Some("unknown".to_string()),
+            deadline_at_ms: None,
+            estimated_recovery_arrival_ms: None,
+            nack_disposition: Some("attempted".to_string()),
+            frame_playout_deadline_at_ms: None,
+            frame_unrecoverable_reason: None,
+            frame_budget: None,
+            observed_at_ms: 10_440.0,
+        });
+        stats.latest_video_packet_arrival_time_ms = Some(10_450.0);
+        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: Some(1920),
+            video_height: Some(1080),
+            mime_type: Some("video/H264".to_string()),
+            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 538_000,
+            video_packet_count_total: 4_520,
+            audio_bytes_total: 96_000,
+            observed_at_ms: 10_455.0,
+        });
+        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+            observation_id: 2,
+            source_event: "frame-await-recovery-anchor".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "recovering".to_string(),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 10_455.0,
+            },
+            observed_at_ms: 10_455.0,
+        });
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 58,
+                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "decoded".to_string(),
+                status_detail: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                requested_at_ms: 10_000.0,
+                sent_at_ms: Some(10_010.0),
+                deadline_at_ms: Some(10_900.0),
+                transport_detail: None,
+                first_video_packet_at_ms: Some(10_080.0),
+                first_video_packet_rtp_timestamp: Some(0x2233_4401),
+                first_video_packet_is_keyframe: Some(false),
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: Some(10_100.0),
+                response_rtp_timestamp: Some(0x2233_4401),
+                response_frame_seq: Some(41),
+                response_verdict: Some("pending".to_string()),
+                lifecycle_phase: Some("decoded".to_string()),
+                retired_at_ms: None,
+            });
+    }
+
+    let mut broken_connection = ConnectionProjection::default();
+    broken_connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+    broken_connection.last_observed_at_ms = Some(8_000.0);
+
+    let second_snapshot = TransportSnapshot::new(
+        2,
+        10_460.0,
+        broken_connection,
+        MediaProjection {
+            frame_count: 220,
+            ..MediaProjection::default()
+        },
+        RecoveryProjection {
+            latest_diagnosis_label: Some("transportExpiredDeadline".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(10_460.0),
+            ..Default::default()
+        },
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    let second_commands = transport_commands(policy.on_snapshot(&second_snapshot));
+    assert!(second_commands.iter().any(|command| {
+        matches!(
+            command,
+            TransportCommand::RequestReconnectCandidate {
+                reason,
+                reason_domain,
+                ..
+            } if reason == "transportExpiredDeadline"
+                && *reason_domain == crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
+        )
+    }));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let ledger = stats
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .expect("recovery decision ledger");
+    assert_eq!(
+        ledger.gate_result,
+        "pass:reconnectGranted:connectivityEvidence"
+    );
+    assert_eq!(ledger.action_selected, "requestReconnectCandidate");
+}
+
+#[test]
 fn cloud_high_rtt_sample_loss_then_recovered_late_stays_local_until_severe_deadline_reconnect() {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));

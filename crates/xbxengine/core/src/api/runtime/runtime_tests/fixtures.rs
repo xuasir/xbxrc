@@ -56,6 +56,8 @@ pub(crate) fn transport_commands(commands: Vec<SessionCommand>) -> Vec<Transport
 #[derive(Clone)]
 pub(crate) struct TestHostBridge {
     pub(crate) requests: Rc<RefCell<Vec<XbxEngineHostRequestDto>>>,
+    pub(crate) attached_viewports: Rc<RefCell<Vec<(String, Option<String>)>>>,
+    pub(crate) detached_viewports: Rc<RefCell<Vec<Option<String>>>>,
     pub(crate) fail_request_kind: Rc<RefCell<Option<&'static str>>>,
     pub(crate) fail_keepalive_message: Rc<RefCell<Option<String>>>,
     pub(crate) poll_ice_batches: Rc<RefCell<Vec<Vec<XbxEngineIceCandidateDto>>>>,
@@ -71,6 +73,8 @@ impl TestHostBridge {
     pub(crate) fn new(requests: Rc<RefCell<Vec<XbxEngineHostRequestDto>>>) -> Self {
         Self {
             requests,
+            attached_viewports: Rc::new(RefCell::new(Vec::new())),
+            detached_viewports: Rc::new(RefCell::new(Vec::new())),
             fail_request_kind: Rc::new(RefCell::new(None)),
             fail_keepalive_message: Rc::new(RefCell::new(None)),
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
@@ -89,6 +93,8 @@ impl TestHostBridge {
     ) -> Self {
         Self {
             requests,
+            attached_viewports: Rc::new(RefCell::new(Vec::new())),
+            detached_viewports: Rc::new(RefCell::new(Vec::new())),
             fail_request_kind,
             fail_keepalive_message: Rc::new(RefCell::new(None)),
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
@@ -125,6 +131,24 @@ impl TestHostBridge {
 impl XbxEngineHostBridge for TestHostBridge {
     fn current_cancellation_epoch(&self) -> u64 {
         self.cancellation_epoch.get()
+    }
+
+    fn attach_viewport(
+        &mut self,
+        viewport: &XbxEngineViewportDto,
+        surface_id: Option<&str>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.attached_viewports
+            .borrow_mut()
+            .push((viewport.viewport_id.clone(), surface_id.map(str::to_string)));
+        Ok(())
+    }
+
+    fn detach_viewport(&mut self, viewport_id: Option<&str>) -> Result<(), XbxEngineRuntimeError> {
+        self.detached_viewports
+            .borrow_mut()
+            .push(viewport_id.map(str::to_string));
+        Ok(())
     }
 
     fn present_frame(

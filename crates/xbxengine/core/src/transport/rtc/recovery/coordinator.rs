@@ -15,6 +15,7 @@ use crate::transport::rtc::recovery::escalation::{
     VideoEscalationReason,
 };
 use crate::transport::rtc::recovery::observation::{RecoveryObservation, RecoverySeverity};
+use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
 use crate::transport::rtc::recovery::state_coordinator::{
     RecoveryDecision, StateRecoveryCoordinator,
 };
@@ -558,6 +559,9 @@ impl RecoveryCoordinator {
         if has_current_clean_anchor_from_stats(stats) {
             return false;
         }
+        if Self::transport_await_decoded_pending_commit_expired(stats, now_ms) {
+            return true;
+        }
         let progress = stats
             .latest_keyframe_request_episode
             .as_ref()
@@ -628,6 +632,9 @@ impl RecoveryCoordinator {
         now_ms: f64,
     ) -> bool {
         RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            if Self::transport_await_decoded_pending_commit_expired(stats, now_ms) {
+                return false;
+            }
             let Some(nack_obs) = stats.latest_video_nack_observation.as_ref() else {
                 return false;
             };
@@ -642,6 +649,54 @@ impl RecoveryCoordinator {
             has_recent_nack && has_recent_packets
         })
         .unwrap_or(false)
+    }
+
+    fn transport_await_decoded_pending_commit_expired(
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) -> bool {
+        let has_current_clean_anchor = stats.video_anchor_clean_epoch
+            == Some(stats.transport_recovery_epoch)
+            && stats.video_anchor_clean_source_event.as_deref()
+                == Some("chain-clean-anchor-submitted")
+            && stats.video_anchor_clean_observed_at_ms.is_some();
+        if has_current_clean_anchor {
+            return false;
+        }
+
+        let profile = resolve_runtime_recovery_profile(stats);
+        stats
+            .recent_keyframe_request_episodes
+            .iter()
+            .chain(stats.latest_keyframe_request_episode.iter())
+            .filter(|episode| {
+                episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
+                    && episode.retired_at_ms.is_none()
+            })
+            .max_by(|left, right| {
+                left.first_keyframe_decoded_at_ms
+                    .is_some()
+                    .cmp(&right.first_keyframe_decoded_at_ms.is_some())
+                    .then_with(|| {
+                        left.first_keyframe_packet_at_ms
+                            .is_some()
+                            .cmp(&right.first_keyframe_packet_at_ms.is_some())
+                    })
+                    .then_with(|| left.sent_at_ms.is_some().cmp(&right.sent_at_ms.is_some()))
+                    .then_with(|| left.requested_at_ms.total_cmp(&right.requested_at_ms))
+                    .then_with(|| left.episode_id.cmp(&right.episode_id))
+            })
+            .and_then(|episode| {
+                matches!(
+                    episode.status.as_str(),
+                    "response-observed" | "packet-seen" | "decoded"
+                )
+                .then_some(episode)
+            })
+            .and_then(|episode| episode.first_keyframe_decoded_at_ms)
+            .is_some_and(|decoded_at_ms| {
+                (now_ms - decoded_at_ms).max(0.0) >= profile.decoded_pending_commit_hold_ms
+            })
     }
 }
 
@@ -919,6 +974,115 @@ mod tests {
         assert!(
             !RecoveryCoordinator::transport_await_local_recovery_active(&stats, 0, now_ms),
             "skipped NACK 不是正在进行的本地修复，不应继续压住 reconnect"
+        );
+    }
+
+    #[test]
+    fn decoded_pending_commit_timeout_releases_local_recovery_active() {
+        let now_ms = 2_000.0;
+        let stats = Mutex::new(XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 31,
+            latest_video_nack_observation: Some(crate::XbxEngineVideoNackObservation {
+                observation_id: 1,
+                action: "sent".to_string(),
+                source: "sampleLoss".to_string(),
+                first_sequence: 10,
+                last_sequence: 11,
+                packet_count: 2,
+                retry_count: 0,
+                frame_rtp_timestamp: None,
+                frame_is_keyframe: Some(false),
+                frame_importance: Some("unknown".to_string()),
+                deadline_at_ms: None,
+                estimated_recovery_arrival_ms: None,
+                nack_disposition: Some("attempted".to_string()),
+                frame_playout_deadline_at_ms: None,
+                frame_unrecoverable_reason: None,
+                frame_budget: None,
+                observed_at_ms: now_ms - 20.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(now_ms - 10.0),
+            latest_keyframe_request_episode: Some(
+                crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 31,
+                    request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    request_kind: Some("pli".to_string()),
+                    status: "decoded".to_string(),
+                    status_detail: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                    requested_at_ms: now_ms - 600.0,
+                    sent_at_ms: Some(now_ms - 580.0),
+                    deadline_at_ms: Some(now_ms + 100.0),
+                    transport_detail: None,
+                    first_video_packet_at_ms: Some(now_ms - 540.0),
+                    first_video_packet_rtp_timestamp: Some(0x2233_4401),
+                    first_video_packet_is_keyframe: Some(false),
+                    first_keyframe_packet_at_ms: None,
+                    first_keyframe_decoded_at_ms: Some(now_ms - 500.0),
+                    response_rtp_timestamp: Some(0x2233_4401),
+                    response_frame_seq: Some(41),
+                    response_verdict: Some("pending".to_string()),
+                    lifecycle_phase: Some("decoded".to_string()),
+                    retired_at_ms: None,
+                },
+            ),
+            ..Default::default()
+        });
+
+        assert!(
+            !RecoveryCoordinator::transport_await_local_recovery_active(&stats, 31, now_ms),
+            "decoded 后已跨过 clean-anchor 提交等待窗口时，应释放本地恢复活跃态"
+        );
+    }
+
+    #[test]
+    fn decoded_pending_commit_timeout_counts_as_hard_recovery_evidence() {
+        let now_ms = 2_000.0;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 31,
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 9,
+                source_event: "frame-await-recovery-anchor".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    chain_break_evidence: None,
+                    observed_at_ms: now_ms - 8.0,
+                },
+                observed_at_ms: now_ms - 8.0,
+            }),
+            latest_keyframe_request_episode: Some(
+                crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 31,
+                    request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    request_kind: Some("pli".to_string()),
+                    status: "decoded".to_string(),
+                    status_detail: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                    requested_at_ms: now_ms - 600.0,
+                    sent_at_ms: Some(now_ms - 580.0),
+                    deadline_at_ms: Some(now_ms + 100.0),
+                    transport_detail: None,
+                    first_video_packet_at_ms: Some(now_ms - 540.0),
+                    first_video_packet_rtp_timestamp: Some(0x2233_4401),
+                    first_video_packet_is_keyframe: Some(false),
+                    first_keyframe_packet_at_ms: None,
+                    first_keyframe_decoded_at_ms: Some(now_ms - 500.0),
+                    response_rtp_timestamp: Some(0x2233_4401),
+                    response_frame_seq: Some(41),
+                    response_verdict: Some("pending".to_string()),
+                    lifecycle_phase: Some("decoded".to_string()),
+                    retired_at_ms: None,
+                },
+            ),
+            ..Default::default()
+        };
+
+        assert!(
+            RecoveryCoordinator::transport_await_has_hard_recovery_evidence_from_stats(
+                &stats, now_ms
+            ),
+            "decoded 后迟迟没有 clean anchor 提交，应作为 transport-await 的硬失败证据"
         );
     }
 

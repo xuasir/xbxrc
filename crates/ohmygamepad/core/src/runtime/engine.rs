@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use ohmygamepad_protocol::{
     GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto, LogicalPadId,
     LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
-    OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
 use crate::{
@@ -93,6 +93,8 @@ where
             last_backend_sample_activity_at_ms: self.last_backend_sample_activity_at_ms,
             sampling_self_heal_count: 0,
             stream_pad_forwarding: false,
+            input_gate: OhMyGamepadInputGateModeDto::default(),
+            input_gate_reason: String::new(),
         }
     }
 

@@ -99,6 +99,38 @@ export interface StreamStats {
   videoBweReason?: string
   videoTargetRembKbps?: number
   videoObservedRembKbps?: number
+  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering'
+  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'decoderReset' | 'reconnect'
+  recoveryEpochId?: string
+  lastRecoveryActionLevel?: 'L0' | 'L1' | 'L2' | 'L3'
+  lastRecoveryActionResult?: 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
+  recoverySuppressedBy?: 'factWindow' | 'reasonWindow' | 'cooldown' | 'budget' | 'channelUnhealthy' | 'unknown'
+  recoveryBudgetRemaining?: string
+  controlChannelState?: string
+  lastControlChannelError?: string
+  keyframeRequestSuccessRate?: number
+  controlChannelOpenRatio?: number
+  controlChannelBufferedTrend?: 'rising' | 'stable' | 'falling'
+  controlChannelSendFailBurst?: number
+  lastRecoveryActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
+  lastRecoveryActionEffectScore?: number
+  lastRecoveryActionEffectReason?: string
+  networkConfidence?: 'high' | 'low'
+  decodeConfidence?: 'high' | 'low'
+  recoveryCause?: 'networkCongestion' | 'decodeBackpressure' | 'renderStarvation' | 'controlChannelUnhealthy' | 'unknown'
+  qualityLadderLevel?: 'L0' | 'L1' | 'L2'
+  decisionDigest?: string
+  firstFrameStage?: 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
+  firstFrameStageChangedAtMs?: number
+  firstDecodedAtMs?: number
+  firstPresentedAtMs?: number
+  firstFrameGuardTriggered?: boolean
+  renderBackpressure?: boolean
+  renderDroppedFrames?: number
+  renderFrameCallbackIntervalMs?: number
+  renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
+  displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
+  renderDecisionDigest?: string
   videoActualBitrateKbps?: number
   videoTwccReceiveBitrateKbps?: number
   videoTwccLossRatio?: number
@@ -182,4 +214,19 @@ export interface StreamStats {
   renderSuperResolutionRcasBaseStops?: number
   renderSuperResolutionFallbackReason?: string | null
   renderSharpenMode?: string
+  renderPipelineType?: 'video' | 'webgl2'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  renderProcessing?: 'usm' | 'cas'
+  renderProcessingMode?: 'quality' | 'performance'
+  renderShaderPath?: 'usm' | 'cas' | 'none'
+  renderFpsBudget?: number
+  rendererCapabilityReason?: string
+  frontEndProfileBaseline?: 'homeLan' | 'homeRelay' | 'cloud'
+  frontEndProfileDynamic?: 'startup' | 'steady' | 'highRtt' | 'decoderConstrained' | 'displayConstrained'
+  frontEndContentFpsClass?: 'content30' | 'content60' | 'contentUnknown'
+  frontEndExpectedContentFps?: number
+  frontEndPolicyPreset?: string
+  frontEndPolicyInputReason?: 'healthy' | 'networkLimited' | 'deliveryLimited'
+  frontEndWarmupUntilMs?: number
+  frontEndUpshiftBlockedReason?: string
 }

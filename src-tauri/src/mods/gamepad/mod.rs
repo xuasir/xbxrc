@@ -1,13 +1,14 @@
 pub mod events;
+pub mod input_gate;
 pub mod rpc;
 pub mod service;
 
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
-    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadInputGateModeDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -79,6 +80,11 @@ pub struct GamepadFilterConfigDto {
 pub trait GamepadProvider: Send + Sync {
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn stream_pad_forwarding(&self) -> bool;
+    fn peek_derived_input_gate(
+        &self,
+        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> (OhMyGamepadInputGateModeDto, String);
+    fn set_shell_window_gate_hints(&self, focused: bool, visible: bool, minimized: bool);
     fn set_stream_pad_forwarding(
         &self,
         enabled: bool,

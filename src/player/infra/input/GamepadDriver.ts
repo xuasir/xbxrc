@@ -9,7 +9,11 @@ import type {
   GamepadFrame,
   InputRuntimeConfig,
 } from '../../domain/input'
-import { shouldStreamSessionConsumeGamepadSlots } from '@shared/gamepad/input-routing'
+import {
+  businessInputArbiter,
+  type BusinessInputTracePayload,
+  toBusinessInputTracePayload,
+} from '@shared/gamepad/business-input-arbiter'
 import { events } from '../../../services/events'
 import { rpc } from '../../../services/rpc'
 import {
@@ -58,6 +62,13 @@ function recordDriverTrace(event: string, payload: Record<string, unknown>): voi
   }).catch(() => {})
 }
 
+function getBusinessInputTracePayload(): BusinessInputTracePayload {
+  return toBusinessInputTracePayload({
+    state: businessInputArbiter.getState(),
+    owner: businessInputArbiter.getOwner(),
+  })
+}
+
 export class GamepadDriver {
   private shadowGamepad: GamepadFrame = DEFAULT_GAMEPAD_FRAME()
   private nativeRuntimeSnapshot?: GamepadRuntimeSnapshotDto
@@ -65,16 +76,6 @@ export class GamepadDriver {
   private nativeRuntimeUnsubscribe?: () => void
   private nativePadUnsubscribe?: () => void
   private isVirtualButtonPressing = false
-  private readonly handleWindowFocus = () => {
-    void this.refreshNativeRuntimeSnapshot('window-focus')
-  }
-
-  private readonly handleVisibilityChange = () => {
-    if (document.visibilityState !== 'visible') {
-      return
-    }
-    void this.refreshNativeRuntimeSnapshot('document-visible')
-  }
 
   constructor(private readonly delegate: GamepadDriverDelegate) {}
 
@@ -82,13 +83,9 @@ export class GamepadDriver {
     this.nativeControllerConnected = false
     recordDriverTrace('gamepadDriverStarted', {})
     this.startNativeSnapshotBridge()
-    window.addEventListener('focus', this.handleWindowFocus)
-    document.addEventListener('visibilitychange', this.handleVisibilityChange)
   }
 
   stop(): void {
-    window.removeEventListener('focus', this.handleWindowFocus)
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
     if (this.nativeRuntimeUnsubscribe) {
       this.nativeRuntimeUnsubscribe()
       this.nativeRuntimeUnsubscribe = undefined
@@ -137,6 +134,9 @@ export class GamepadDriver {
     if (!snapshot) {
       return [DEFAULT_GAMEPAD_FRAME()]
     }
+    if (snapshot.inputGate !== 'open' || businessInputArbiter.getOwner() !== 'stream') {
+      return [DEFAULT_GAMEPAD_FRAME()]
+    }
 
     const pads = this.getNativePadSnapshots(snapshot)
     if (pads.length === 0) {
@@ -157,9 +157,10 @@ export class GamepadDriver {
         sampledAtMs: slotSnapshot.sampledAtMs,
         south: slotSnapshot.state.buttons.south,
         east: slotSnapshot.state.buttons.east,
+        ...getBusinessInputTracePayload(),
       })
       this.applyNativePadSnapshot(slotSnapshot)
-      if (!shouldStreamSessionConsumeGamepadSlots()) {
+      if (businessInputArbiter.getOwner() !== 'stream') {
         return
       }
       if (this.isVirtualButtonPressing) {
@@ -170,6 +171,7 @@ export class GamepadDriver {
         slot: slotSnapshot.slot,
         south: slotSnapshot.state.buttons.south,
         east: slotSnapshot.state.buttons.east,
+        ...getBusinessInputTracePayload(),
       })
       this.delegate.onFrame(this.mapNativePadState(slotSnapshot, 0))
     })
@@ -185,6 +187,8 @@ export class GamepadDriver {
         reason,
         slotCount: snapshot.slots.length,
         streamPadForwarding: snapshot.streamPadForwarding ?? false,
+        inputGate: snapshot.inputGate ?? 'open',
+        ...getBusinessInputTracePayload(),
       })
     }
     catch {
@@ -198,10 +202,13 @@ export class GamepadDriver {
     recordDriverTrace('gamepadDriverRuntimeSnapshotApplied', {
       slotCount: nativePads.length,
       streamPadForwarding: snapshot.streamPadForwarding ?? false,
+      inputGate: snapshot.inputGate ?? 'open',
       maxSampleSeq: nativePads.reduce((max, pad) => Math.max(max, pad.sampleSeq), 0),
+      ...getBusinessInputTracePayload(),
     })
     const hasController = nativePads.length > 0
-    const allowNativeFrames = shouldStreamSessionConsumeGamepadSlots()
+    const allowNativeFrames
+      = snapshot.inputGate === 'open' && businessInputArbiter.getOwner() === 'stream'
     if (hasController === this.nativeControllerConnected) {
       if (!this.isVirtualButtonPressing && nativePads.length > 0 && allowNativeFrames) {
         recordDriverTrace('gamepadDriverFrameEmitted', {
@@ -209,6 +216,7 @@ export class GamepadDriver {
           slot: nativePads[0].slot,
           south: nativePads[0].state.buttons.south,
           east: nativePads[0].state.buttons.east,
+          ...getBusinessInputTracePayload(),
         })
         this.delegate.onFrame(this.mapNativePadState(nativePads[0], 0))
       }
@@ -224,6 +232,7 @@ export class GamepadDriver {
           slot: nativePads[0].slot,
           south: nativePads[0].state.buttons.south,
           east: nativePads[0].state.buttons.east,
+          ...getBusinessInputTracePayload(),
         })
         this.delegate.onFrame(this.mapNativePadState(nativePads[0], 0))
       }

@@ -2,6 +2,7 @@
 import type { EventUnsubscribe } from '@shared/events/client'
 import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
 import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
+import { businessInputArbiter, toBusinessInputTracePayload } from '@shared/gamepad/business-input-arbiter'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -138,11 +139,16 @@ function connectedDeviceCount(snapshot: GamepadRuntimeSnapshotDto | null): numbe
 }
 
 function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null): Record<string, unknown> {
+  const businessInputTrace = toBusinessInputTracePayload({
+    state: businessInputArbiter.getState(),
+    owner: businessInputArbiter.getOwner(),
+  })
   if (!snapshot) {
     return {
       hasSnapshot: false,
       documentVisibility: document.visibilityState,
       hasFocus: document.hasFocus(),
+      ...businessInputTrace,
     }
   }
 
@@ -167,6 +173,7 @@ function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null)
     samplingSelfHealCount: snapshot.samplingSelfHealCount ?? null,
     documentVisibility: document.visibilityState,
     hasFocus: document.hasFocus(),
+    ...businessInputTrace,
   }
 }
 

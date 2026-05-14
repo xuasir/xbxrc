@@ -1020,7 +1020,6 @@ export function createBrowserRuntime(options: {
 
   async function attachGamepadSession(sessionId: string): Promise<void> {
     void sessionId
-    await rpc.gamepad.resumeShellSampling()
   }
 
   async function detachGamepadSession(sessionId: string | null): Promise<void> {

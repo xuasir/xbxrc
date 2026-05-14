@@ -19,7 +19,7 @@ import type {
   StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
-import { setStreamGamepadSessionActive } from '@shared/gamepad/input-routing'
+import { businessInputArbiter, mapStreamRuntimeModeToConsumer } from '@shared/gamepad/business-input-arbiter'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
@@ -117,6 +117,17 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
   let disposeStartupEvents: (() => void) | null = null
+
+  function setStreamSessionPresent(active: boolean): void {
+    if (!active) {
+      businessInputArbiter.applyActionOutcome({ kind: 'leave-stream' })
+      return
+    }
+    businessInputArbiter.patch({
+      streamSessionPresent: true,
+      rustEngineStreamPadRoutedToSession: false,
+    })
+  }
 
   async function recordExecutionTraceEvent(
     event: string,
@@ -238,6 +249,18 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       ?? streamConfig.value.stream_runtime_mode
       ?? 'webrtc-direct',
   )
+
+  watch(
+    [sessionId, streamRuntimeMode],
+    ([id, mode]) => {
+      businessInputArbiter.patch({
+        streamSessionId: id === '' ? null : id,
+        streamConsumer: mapStreamRuntimeModeToConsumer(mode),
+      })
+    },
+    { immediate: true },
+  )
+
   const streamResolutionMode = computed(() =>
     routeState.targetType.value === 'home'
       ? streamConfig.value.xhome_resolution
@@ -476,7 +499,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionId.value = ''
     sessionExecution.value = null
     sessionHealth.value = null
-    setStreamGamepadSessionActive(false)
+    setStreamSessionPresent(false)
     void rpc.gamepad.setStreamPadForwarding({ enabled: false })
     dispatchViewAction({ type: 'disconnected' })
 
@@ -525,7 +548,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
       sessionExecution.value = started.execution
       sessionId.value = started.execution.session.id
-      setStreamGamepadSessionActive(true)
+      setStreamSessionPresent(true)
       disposeStartupEventSubscription()
       enableSessionHealthReporting()
       applySessionProgress(started.progress, 'start')
@@ -543,7 +566,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionExecution.value = null
     sessionHealth.value = null
     closing.value = false
-    setStreamGamepadSessionActive(false)
+    setStreamSessionPresent(false)
     void rpc.gamepad.setStreamPadForwarding({ enabled: false })
     dispatchViewAction({ type: 'retryRequested' })
     await runtimeHost.closeRuntime('retry')

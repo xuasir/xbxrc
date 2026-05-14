@@ -124,6 +124,50 @@ fn start_negotiates_remote_and_reaches_running() {
 }
 
 #[test]
+fn renegotiated_media_ready_rebinds_host_viewport_route_immediately() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let host_bridge = TestHostBridge::new(requests.clone());
+    let attached_viewports = host_bridge.attached_viewports.clone();
+    let mut runtime = XbxEngineRuntime::new(
+        XbxEngineRuntimeConfig::default(),
+        host_bridge,
+        TestEventSink::new(events),
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    attached_viewports.borrow_mut().clear();
+
+    runtime.record_media_ready(&XbxEngineMediaNegotiation {
+        local_offer_sdp: "offer-restart".to_string(),
+        local_candidates: Vec::new(),
+        surface_id: "surface:viewport-1:restart-2".to_string(),
+        video_width: 1920,
+        video_height: 1080,
+        first_frame_packet_arrival_time_ms: Some(2_000.0),
+        frame_decoded_time_ms: Some(2_010.0),
+        frame_rendered_time_ms: Some(2_020.0),
+        input_status: XbxEngineInputStatus::default(),
+    });
+
+    assert_eq!(
+        attached_viewports.borrow().as_slice(),
+        &[(
+            "viewport-1".to_string(),
+            Some("surface:viewport-1:restart-2".to_string()),
+        )]
+    );
+    assert_eq!(
+        runtime.snapshot().surface_id.as_deref(),
+        Some("surface:viewport-1:restart-2")
+    );
+    assert_eq!(runtime.snapshot().video_size, Some((1920, 1080)));
+}
+
+#[test]
 fn runtime_tick_snapshots_runtime_stats_without_tick_pull_present() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));

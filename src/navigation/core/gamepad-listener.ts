@@ -1,5 +1,9 @@
 import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto } from '@shared/gamepad/contract'
-import { shouldNavigationConsumeGamepadSlots } from '@shared/gamepad/input-routing'
+import {
+  businessInputArbiter,
+  type BusinessInputTracePayload,
+  toBusinessInputTracePayload,
+} from '@shared/gamepad/business-input-arbiter'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
 import { setLastActivePadId } from './haptics'
@@ -37,6 +41,13 @@ function recordUiTrace(event: string, payload: Record<string, unknown>): void {
   }).catch(() => {})
 }
 
+function getBusinessInputTracePayload(): BusinessInputTracePayload {
+  return toBusinessInputTracePayload({
+    state: businessInputArbiter.getState(),
+    owner: businessInputArbiter.getOwner(),
+  })
+}
+
 interface GamepadState {
   pressed: Record<string, boolean>
   repeatTimers: Record<string, number | undefined>
@@ -50,17 +61,6 @@ class GamepadUIListener {
     this.resetAllInputState()
   }
 
-  private readonly handleWindowFocus = () => {
-    void this.refreshRuntimeSnapshot('window-focus')
-  }
-
-  private readonly handleVisibilityChange = () => {
-    if (document.visibilityState !== 'visible') {
-      return
-    }
-    void this.refreshRuntimeSnapshot('document-visible')
-  }
-
   start() {
     if (this.dispose)
       return
@@ -72,12 +72,10 @@ class GamepadUIListener {
     const disposeRuntime = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.applyRuntimeSnapshot(snapshot)
     })
-    const disposeBaseline = events.on('gamepad.inputBaselineAbsorbed', () => {
+    const disposeGate = events.on('gamepad.inputGateChanged', () => {
       this.resetAllInputState()
     })
     window.addEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
-    window.addEventListener('focus', this.handleWindowFocus)
-    document.addEventListener('visibilitychange', this.handleVisibilityChange)
 
     const disposeSlot = events.on('gamepad.slotSnapshot', (snapshot) => {
       this.applySlotSnapshot(snapshot)
@@ -85,10 +83,8 @@ class GamepadUIListener {
 
     this.dispose = () => {
       disposeRuntime()
-      disposeBaseline()
+      disposeGate()
       window.removeEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
-      window.removeEventListener('focus', this.handleWindowFocus)
-      document.removeEventListener('visibilitychange', this.handleVisibilityChange)
       disposeSlot()
     }
   }
@@ -203,7 +199,9 @@ class GamepadUIListener {
       recordUiTrace('gamepadUiRuntimeSnapshotRefreshed', {
         reason,
         streamPadForwarding: snapshot.streamPadForwarding ?? false,
+        inputGate: snapshot.inputGate ?? 'open',
         slotCount: snapshot.slots.length,
+        ...getBusinessInputTracePayload(),
       })
     }
     catch {
@@ -214,20 +212,26 @@ class GamepadUIListener {
   private applyRuntimeSnapshot(snapshot: GamepadRuntimeSnapshotDto): void {
     recordUiTrace('gamepadUiRuntimeSnapshotApplied', {
       streamPadForwarding: snapshot.streamPadForwarding ?? false,
+      inputGate: snapshot.inputGate ?? 'open',
       slotCount: snapshot.slots.length,
       maxSampleSeq: snapshot.slots.reduce((max, slot) => Math.max(max, slot.sampleSeq), 0),
+      ...getBusinessInputTracePayload(),
     })
+    if (snapshot.inputGate !== 'open') {
+      return
+    }
     for (const slot of snapshot.slots) {
       this.applySlotSnapshot(slot)
     }
   }
 
   private applySlotSnapshot(snapshot: LogicalPadSnapshotDto): void {
-    if (!shouldNavigationConsumeGamepadSlots()) {
+    if (businessInputArbiter.getOwner() !== 'ui') {
       recordUiTrace('gamepadUiSlotIgnored', {
-        reason: 'stream-session-active',
+        reason: 'business-input-owner-not-ui',
         slot: snapshot.slot,
         sampleSeq: snapshot.sampleSeq,
+        ...getBusinessInputTracePayload(),
       })
       return
     }
@@ -242,6 +246,7 @@ class GamepadUIListener {
       view: snapshot.state.buttons.view,
       dpadUp: snapshot.state.buttons.dpadUp,
       dpadDown: snapshot.state.buttons.dpadDown,
+      ...getBusinessInputTracePayload(),
     })
 
     const slotId = snapshot.slot

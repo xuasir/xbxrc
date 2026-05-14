@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
-import { setStreamGamepadShellUiPriority } from '@shared/gamepad/input-routing'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  businessInputArbiter,
+  selectStreamUiSurfaceFromPageFlags,
+} from '@shared/gamepad/business-input-arbiter'
+import {
+  createBrowserPlayerStreamInputAdapter,
+  createRustEngineStreamInputAdapter,
+} from '@shared/gamepad/stream-input-consumer-adapters'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core/engine'
@@ -111,7 +118,7 @@ const {
   closeSheet,
 } = pageActions
 
-// 串流会话期间由 `@shared/gamepad/input-routing` 决定导航层与 Player 谁消费 slot；覆盖层打开时壳层 UI 优先。
+// 串流会话期间由 `businessInputArbiter` 决定导航层与 Player 谁消费 slot；覆盖层打开时壳层 UI 优先。
 useGamepadRouteForStreamOverlay({
   isAnyOverlayOpen: computed(() =>
     isMenuSheetOpen.value
@@ -123,22 +130,29 @@ useGamepadRouteForStreamOverlay({
     || showWarningSheet.value,
   ),
   sessionId: execution.sessionId,
-  applyRouteTarget: async (target) => {
-    // 顺序敏感：关菜单恢复串流时须先打开 Rust 侧转发，再撤 TS 的 shell 优先，否则会出现
-    // `shouldStreamSessionConsumeGamepadSlots` 为 true 而 `streamPadForwarding` 仍为 false 的窗口；
-    // 开菜单则先让导航吃 slot，再关转发，避免菜单已开仍把样本送往串流。
-    if (target.kind === 'stream-session') {
-      await rpc.gamepad.setStreamPadForwarding({ enabled: true })
-      setStreamGamepadShellUiPriority(false)
-      // 清掉菜单/空间导航触发的马达，避免回到游戏后仍持续震动或与串流 rumble 叠在一起。
-      void rpc.gamepad.stopRumble({ target: { kind: 'auto' } }).catch(() => {})
-    }
-    else {
-      setStreamGamepadShellUiPriority(true)
-      await rpc.gamepad.setStreamPadForwarding({ enabled: false })
-    }
-  },
+  applyRouteTarget: target => businessInputArbiter.applyStreamPadRouteTarget(target),
 })
+
+watch(
+  () => ({
+    showFailedSheet: showFailedSheet.value,
+    showWarningSheet: showWarningSheet.value,
+    isMenuSheetOpen: isMenuSheetOpen.value,
+    isDiagnosticsMenuSheetOpen: isDiagnosticsMenuSheetOpen.value,
+    isDisplaySheetOpen: isDisplaySheetOpen.value,
+    isAudioSheetOpen: isAudioSheetOpen.value,
+    isTextSheetOpen: isTextSheetOpen.value,
+    chrome: shouldShowChrome.value,
+  }),
+  (flags) => {
+    const { chrome, ...sheetFlags } = flags
+    businessInputArbiter.patch({
+      streamUiSurface: selectStreamUiSurfaceFromPageFlags(sheetFlags),
+      chromeVisible: chrome,
+    })
+  },
+  { immediate: true },
+)
 
 function applyStreamUiWindowClass(active: boolean): void {
   // 串流页运行在上层透明 UI 窗口，需要显式切换全局页面底色。
@@ -154,10 +168,25 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   applyStreamUiWindowClass(false)
-  setStreamGamepadShellUiPriority(false)
-  void rpc.gamepad.setStreamPadForwarding({ enabled: false })
+  void businessInputArbiter.applyStreamPadRouteTarget({ kind: 'shell-ui' })
   window.removeEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
+
+watch(
+  runtimeMode,
+  (mode) => {
+    if (mode === 'rust-owned') {
+      businessInputArbiter.installStreamInputConsumerAdapter(
+        createRustEngineStreamInputAdapter(rpc.gamepad),
+      )
+      return
+    }
+    businessInputArbiter.installStreamInputConsumerAdapter(
+      createBrowserPlayerStreamInputAdapter(),
+    )
+  },
+  { immediate: true },
+)
 
 // 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
 const defaultFocusId = computed(() =>

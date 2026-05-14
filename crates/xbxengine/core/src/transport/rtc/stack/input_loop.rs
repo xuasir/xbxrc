@@ -123,6 +123,9 @@ impl RtcInputStreamController {
         let Ok(snapshot) = host.snapshot() else {
             return Vec::new();
         };
+        if !snapshot.input_gate.allows_business_input() {
+            return Vec::new();
+        }
         let mut frames = Vec::with_capacity(4);
         let mut sample_count = 0usize;
         for frame in snapshot.slots.iter().take(4) {

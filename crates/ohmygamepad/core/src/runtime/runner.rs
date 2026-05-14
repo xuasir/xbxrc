@@ -857,6 +857,8 @@ fn runtime_snapshot_broadcast_semantic_eq(
         && a.sampling_lifecycle == b.sampling_lifecycle
         && a.sampling_health == b.sampling_health
         && a.sampling_self_heal_count == b.sampling_self_heal_count
+        && a.input_gate == b.input_gate
+        && a.input_gate_reason == b.input_gate_reason
 }
 
 fn merge_sampling_diagnostic_timestamps(

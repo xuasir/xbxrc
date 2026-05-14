@@ -142,6 +142,7 @@ export class PlayerClient {
     if (!peer || peer.iceGatheringState === 'complete') {
       return this.getIceCandidates()
     }
+    const resolvedPeer: RTCPeerConnection = peer
 
     return await new Promise<Array<IceCandidateLike>>((resolve) => {
       let settled = false
@@ -155,6 +156,8 @@ export class PlayerClient {
         }
       }
 
+      const getIceCandidates = () => this.getIceCandidates()
+
       function finish(): void {
         if (settled) {
           return
@@ -162,13 +165,13 @@ export class PlayerClient {
         settled = true
         clearQuietTimer()
         window.clearTimeout(timeoutId)
-        peer.removeEventListener('icecandidate', handleIceCandidate)
-        peer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
-        resolve(this.getIceCandidates())
+        resolvedPeer.removeEventListener('icecandidate', handleIceCandidate)
+        resolvedPeer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
+        resolve(getIceCandidates())
       }
 
       function scheduleQuietFinish(): void {
-        if (this.getIceCandidates().length === 0) {
+        if (getIceCandidates().length === 0) {
           return
         }
         clearQuietTimer()
@@ -185,14 +188,14 @@ export class PlayerClient {
       }
 
       function handleGatheringStateChange(): void {
-        if (peer.iceGatheringState === 'complete') {
+        if (resolvedPeer.iceGatheringState === 'complete') {
           finish()
         }
       }
 
       timeoutId = window.setTimeout(finish, timeoutMs)
-      peer.addEventListener('icecandidate', handleIceCandidate)
-      peer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
+      resolvedPeer.addEventListener('icecandidate', handleIceCandidate)
+      resolvedPeer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
       scheduleQuietFinish()
     })
   }

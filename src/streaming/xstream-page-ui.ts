@@ -1,4 +1,5 @@
 import type { StreamErrorKind } from './types'
+import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 type BrowserTimeout = number
@@ -107,6 +108,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
       return
     }
     activeSheet.value = 'none'
+    businessInputArbiter.applyActionOutcome({ kind: 'resume-stream' })
   }
 
   watch(

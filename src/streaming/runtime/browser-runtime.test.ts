@@ -363,11 +363,11 @@ describe('browser-runtime super resolution state', () => {
     await runtime.stop()
   })
 
-  it('resumes shell sampling when attaching a stream session', async () => {
+  it('does not require resumeShellSampling when attaching a stream session', async () => {
     const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
 
     await runtime.launch(createLaunchSpec())
 
-    expect(testState.rpc.gamepad.resumeShellSampling).toHaveBeenCalledTimes(1)
+    expect(testState.rpc.gamepad.resumeShellSampling).not.toHaveBeenCalled()
   })
 })
