@@ -477,6 +477,7 @@ function openDisplaySheet(): void {
 
 function closeDisplaySheet(): void {
   closeSheet('display')
+  void moveStreamSpatialNavFocusToPostOverlaySink()
   if (displayOptions.value !== null) {
     actions.previewDisplayOptions(displayOptions.value)
   }
@@ -488,6 +489,7 @@ function openAudioSheet(): void {
 
 function closeAudioSheet(): void {
   closeSheet('audio')
+  void moveStreamSpatialNavFocusToPostOverlaySink()
 }
 
 function openTextSheet(): void {
@@ -501,6 +503,7 @@ function closeTextSheet(): void {
   }
   closeSheet('text')
   actions.setTextInputActive(false)
+  void moveStreamSpatialNavFocusToPostOverlaySink()
 }
 
 async function disconnectStream(options?: { navigateBack?: boolean, reason?: string }): Promise<void> {
@@ -530,8 +533,7 @@ async function handleSendText(text: string): Promise<void> {
   try {
     const accepted = await actions.sendText(text)
     if (accepted) {
-      closeSheet('text')
-      actions.setTextInputActive(false)
+      closeTextSheet()
     }
   }
   finally {
@@ -546,7 +548,7 @@ function handleDisplayPreview(value: DisplayOptionsValue): void {
 
 async function handleDisplaySubmit(value: DisplayOptionsValue): Promise<void> {
   await actions.saveDisplayOptions(value)
-  closeSheet('display')
+  closeDisplaySheet()
 }
 
 function resolveStreamCaptureSource(): HTMLCanvasElement | HTMLVideoElement | null {

@@ -6,6 +6,7 @@ import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 
 type BrowserTimeout = number
+const RESUME_STREAM_POLL_INTERVAL_MS = 120
 
 export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'display' | 'audio' | 'text'
 export type StreamPageOverlayState = 'none' | 'loading' | 'error' | 'connecting'
@@ -58,10 +59,12 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   const activeSheet = ref<StreamPageActiveSheet>('none')
   const chromeVisible = ref(true)
   const chromeTimer = ref<BrowserTimeout | null>(null)
+  const resumeStreamPollTimer = ref<BrowserTimeout | null>(null)
   const cleanupFns: Array<() => void> = []
   const latestSlots = new Map<string, LogicalPadSnapshotDto>()
   const pendingResumeStream = ref(false)
   const hasKnownRuntimeSnapshot = ref(false)
+  let runtimeSnapshotRefreshInFlight = false
 
   const showFailedSheet = computed(
     () => options.getHasError() && options.getErrorKind() === 'connectionFailed',
@@ -104,6 +107,13 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     }
   }
 
+  function clearResumeStreamPollTimer(): void {
+    if (resumeStreamPollTimer.value !== null) {
+      window.clearInterval(resumeStreamPollTimer.value)
+      resumeStreamPollTimer.value = null
+    }
+  }
+
   function scheduleChromeHide(): void {
     clearChromeTimer()
     if (!options.getIsConnected() || hasOverlay.value) {
@@ -124,6 +134,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   function openSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): void {
     revealChrome()
     pendingResumeStream.value = false
+    clearResumeStreamPollTimer()
     activeSheet.value = sheet
   }
 
@@ -138,11 +149,18 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
       return
     }
     pendingResumeStream.value = false
+    clearResumeStreamPollTimer()
     businessInputArbiter.applyActionOutcome({ kind: 'resume-stream' })
   }
 
   function requestResumeStreamAfterNeutral(): void {
     pendingResumeStream.value = true
+    if (resumeStreamPollTimer.value === null) {
+      resumeStreamPollTimer.value = window.setInterval(() => {
+        void refreshRuntimeSnapshot()
+      }, RESUME_STREAM_POLL_INTERVAL_MS)
+    }
+    void refreshRuntimeSnapshot()
     flushPendingResumeIfNeutral()
   }
 
@@ -169,11 +187,18 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   }
 
   async function refreshRuntimeSnapshot(): Promise<void> {
+    if (runtimeSnapshotRefreshInFlight) {
+      return
+    }
+    runtimeSnapshotRefreshInFlight = true
     try {
       applyRuntimeSnapshot(await rpc.gamepad.getRuntimeSnapshot())
     }
     catch {
       // runtime snapshot 拉取失败不阻断 overlay 逻辑；后续增量事件仍可推进 neutral 检测。
+    }
+    finally {
+      runtimeSnapshotRefreshInFlight = false
     }
   }
 
@@ -214,6 +239,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
 
   onBeforeUnmount(() => {
     clearChromeTimer()
+    clearResumeStreamPollTimer()
     syncStreamUiInputMode(true, false)
     for (const eventName of REVEAL_EVENTS) {
       window.removeEventListener(eventName, revealChrome)
