@@ -6845,14 +6845,14 @@ fn recovery_integration_trace_contract_continuation_heavy_second_refresh_still_r
 }
 
 #[test]
-fn recovery_integration_transport_await_suspect_compat_maps_to_immediate_transport_await() {
+fn recovery_integration_transport_await_anchor_maps_to_immediate_transport_await() {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
 
     let first = harness.apply(
         1_000.0,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoverySuspect",
+        "transportAwaitRecoveryAnchor",
         180,
         |stats| {
             stats.session_phase = Some("steady".to_string());
@@ -6890,7 +6890,7 @@ fn recovery_integration_transport_await_suspect_compat_maps_to_immediate_transpo
     assert_eq!(
         first,
         vec![TransportCommand::RequestPli {
-            reason: "transportAwaitRecoverySuspect".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             observation_id: 1,
         }]
     );
@@ -6931,7 +6931,7 @@ fn recovery_integration_transport_await_suspect_compat_maps_to_immediate_transpo
     let third = harness.apply(
         1_330.0,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoverySuspect",
+        "transportAwaitRecoveryAnchor",
         180,
         |stats| {
             stats.host_no_pending_pressure_level = Some("normal".to_string());
@@ -6951,7 +6951,7 @@ fn recovery_integration_transport_await_suspect_compat_maps_to_immediate_transpo
     );
     assert!(
         third.is_empty(),
-        "transport-await compat should respect in-flight throttle: {third:?}"
+        "transport-await anchor should respect in-flight throttle: {third:?}"
     );
     assert_eq!(harness.policy.local_supply_suspect_since_ms, None);
     harness.with_stats(|stats| {

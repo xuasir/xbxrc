@@ -158,7 +158,6 @@ fn resolve_session_phase_from_stats(
             "waitKeyframe"
                 | "ingressWaitKeyframe"
                 | "ingressFrameAbandoned"
-                | "transportAwaitRecoverySuspect"
                 | "transportAwaitRecoveryAnchor"
                 | "transportExpiredDeadline"
                 | "transportSevereDeadline"

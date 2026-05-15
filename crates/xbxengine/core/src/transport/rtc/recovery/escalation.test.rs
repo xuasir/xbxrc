@@ -5,9 +5,9 @@ use super::{
 use std::time::Duration;
 
 #[test]
-fn transport_await_suspect_label_parses_as_transport_await_keyframe() {
+fn transport_await_anchor_label_parses_as_transport_await_keyframe() {
     assert_eq!(
-        VideoEscalationReason::from_recovery_reason_label("transportAwaitRecoverySuspect"),
+        VideoEscalationReason::from_recovery_reason_label("transportAwaitRecoveryAnchor"),
         Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
     );
 }

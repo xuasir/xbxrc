@@ -192,7 +192,7 @@ pub(super) fn map_transport_observation_to_hint_label(
     match observation {
         TransportObservation::Admission(
             crate::transport::rtc::stream::adapter_types::TransportAdmissionObservation::AwaitRecoveryKeyframe,
-        ) => "transportAwaitRecoverySuspect",
+        ) => "transportAwaitRecoveryAnchor",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::PacketLossDetected,
         ) => "transportSampleLoss",
@@ -201,7 +201,7 @@ pub(super) fn map_transport_observation_to_hint_label(
         ) => "transportRecoveryKeyframeRequested",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::AwaitRecoveryKeyframe,
-        ) => "transportAwaitRecoverySuspect",
+        ) => "transportAwaitRecoveryAnchor",
         TransportObservation::StreamIdleTimeout => "adapterIdleTimeout",
         TransportObservation::StreamThinStall => "adapterThinStream",
         TransportObservation::NackRecoveredLate => "transportRecoveredLate",
@@ -289,7 +289,8 @@ mod tests {
     use super::{map_transport_observation_to_hint_label, transport_observation_severity};
     use crate::media::video::ingress::budget::FrameBudgetContext;
     use crate::transport::rtc::stream::adapter_types::{
-        NackDeadlineExpiredContext, TransportLossObservation, TransportObservation,
+        NackDeadlineExpiredContext, TransportAdmissionObservation, TransportLossObservation,
+        TransportObservation,
     };
 
     #[test]
@@ -299,6 +300,24 @@ mod tests {
             64,
         );
         assert_eq!(label, "transportRecoveryKeyframeRequested");
+    }
+
+    #[test]
+    fn admission_await_recovery_keyframe_maps_to_anchor_label() {
+        let label = map_transport_observation_to_hint_label(
+            &TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe),
+            64,
+        );
+        assert_eq!(label, "transportAwaitRecoveryAnchor");
+    }
+
+    #[test]
+    fn loss_await_recovery_keyframe_maps_to_anchor_label() {
+        let label = map_transport_observation_to_hint_label(
+            &TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe),
+            64,
+        );
+        assert_eq!(label, "transportAwaitRecoveryAnchor");
     }
 
     #[test]
