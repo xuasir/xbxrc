@@ -3079,6 +3079,12 @@ export function createBrowserRuntime(options: {
           : Math.max(0, now - mediaReadyMilestoneAt),
       })
     },
+    captureRenderedFrame: async () => {
+      if (client === null) {
+        return null
+      }
+      return await client.captureRenderedFrame()
+    },
     subscribe(listener) {
       listeners.add(listener)
       return () => {

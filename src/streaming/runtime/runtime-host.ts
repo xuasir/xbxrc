@@ -602,6 +602,13 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     pressNexus(durationMs: number) {
       runtime.value?.pressHome(durationMs)
     },
+    captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+      const current = runtime.value
+      if (current === null) {
+        return Promise.resolve(null)
+      }
+      return current.captureRenderedFrame()
+    },
   }
 
   function applyMicrophoneIntent(

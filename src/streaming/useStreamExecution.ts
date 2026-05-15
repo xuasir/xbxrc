@@ -906,6 +906,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       toggleRustDiagnostics,
       setSuperResolutionExperimental,
       toggleSuperResolutionExperimental,
+      captureStreamRenderedFrame: () => runtimeHost.captureRenderedFrame(),
       setTextInputActive,
       dismissWarning: () => {
         warningVisible.value = false

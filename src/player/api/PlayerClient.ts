@@ -298,6 +298,15 @@ export class PlayerClient {
     this.mediaService.setVolumeDirect(value)
   }
 
+  captureRenderedFrame(timeoutMs = 3500): Promise<HTMLCanvasElement | null> {
+    return Promise.race([
+      this.mediaService.captureRenderedFrame(),
+      new Promise<HTMLCanvasElement | null>((resolve) => {
+        window.setTimeout(() => resolve(null), timeoutMs)
+      }),
+    ])
+  }
+
   getMicState(): { capturing: boolean, paused: boolean } {
     return this.mediaService.getMicState()
   }

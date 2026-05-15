@@ -73,6 +73,8 @@ const testState = vi.hoisted(() => {
       sendFailBurst: 0,
     }))
 
+    readonly captureRenderedFrame = vi.fn(async (): Promise<null> => null)
+
     rendererState: Record<string, unknown>
 
     constructor(readonly init: { renderer?: Record<string, unknown> }) {

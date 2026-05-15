@@ -353,6 +353,7 @@ export function createXbxEngineRuntime(options: {
         lastDisplayedAtMs: snapshot.last_displayed_at_ms,
       }
     },
+    captureRenderedFrame: async () => null,
     subscribe(listener) {
       listeners.add(listener)
       return () => {

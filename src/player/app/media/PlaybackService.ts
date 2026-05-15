@@ -98,6 +98,10 @@ export class PlaybackService {
     this.frameTrackingStarted = false
   }
 
+  captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    return this.renderer.captureRenderedFrame()
+  }
+
   private createRenderer(): VideoRenderer {
     const attach = this.rendererAttach
     const config = this.rendererConfig

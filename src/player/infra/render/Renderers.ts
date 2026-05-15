@@ -1,4 +1,5 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
+import { captureVideoElementToCanvas, readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
 
 interface StreamPlayerOptions {
   processing: 'usm' | 'cas'
@@ -118,11 +119,20 @@ abstract class BaseCanvasVideoProcessor {
       return
     }
     this.animFrameId = this.frameCallback(this.boundDrawFrame)
-    if (!this.shouldDraw()) {
+    if (!this.shouldDraw() && !this.shouldForceRenderFrame()) {
       return
     }
     this.renderFrame()
+    this.onRenderFramePresented()
   }
+
+  /** When true, still runs `renderFrame` even if FPS throttle would skip this tick (e.g. pending export readback). */
+  protected shouldForceRenderFrame(): boolean {
+    return false
+  }
+
+  /** Runs after `renderFrame` while WebGL default framebuffer contents are still defined. */
+  protected onRenderFramePresented(): void {}
 
   protected abstract setup(): Promise<void> | void
   protected abstract refresh(): void
@@ -194,6 +204,8 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private textureAllocated = false
   private hasDrawnFrame = false
   private contextListenersBound = false
+  private readonly frameCaptureWaiters: Array<(frame: HTMLCanvasElement | null) => void> = []
+  private drewToScreenThisFrame = false
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault()
     this.gl = null
@@ -335,7 +347,36 @@ void main() {
     gl.uniform1f(gl.getUniformLocation(program, 'saturation'), this.options.saturation)
   }
 
+  captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    return new Promise((resolve) => {
+      this.frameCaptureWaiters.push(resolve)
+    })
+  }
+
+  protected override shouldForceRenderFrame(): boolean {
+    return this.frameCaptureWaiters.length > 0
+  }
+
+  protected override onRenderFramePresented(): void {
+    if (this.frameCaptureWaiters.length === 0) {
+      return
+    }
+    const resolve = this.frameCaptureWaiters.shift()!
+    const gl = this.gl
+    if (!this.drewToScreenThisFrame || gl === null || this.currentWidth < 2 || this.currentHeight < 2) {
+      resolve(null)
+      return
+    }
+    try {
+      resolve(readWebglDefaultFramebufferToCanvas(gl, this.currentWidth, this.currentHeight))
+    }
+    catch {
+      resolve(null)
+    }
+  }
+
   protected renderFrame(): void {
+    this.drewToScreenThisFrame = false
     const gl = this.gl
     if (gl === null || this.program === null) {
       return
@@ -366,6 +407,7 @@ void main() {
     }
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
+    this.drewToScreenThisFrame = true
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true
       this.canvas.style.opacity = '1'
@@ -373,6 +415,10 @@ void main() {
   }
 
   override destroy(): void {
+    while (this.frameCaptureWaiters.length > 0) {
+      const resolve = this.frameCaptureWaiters.shift()!
+      resolve(null)
+    }
     if (this.contextListenersBound) {
       this.canvas.removeEventListener('webglcontextlost', this.onContextLost as EventListener)
       this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener)
@@ -387,6 +433,7 @@ export interface VideoRenderer {
   attach: (video: HTMLVideoElement) => Promise<void> | void
   update: (config: Partial<RendererRuntimeConfig>) => void
   destroy: () => void
+  captureRenderedFrame: () => Promise<HTMLCanvasElement | null>
 }
 
 export class NativeVideoRenderer implements VideoRenderer {
@@ -394,12 +441,14 @@ export class NativeVideoRenderer implements VideoRenderer {
   private config: RendererRuntimeConfig
   private styleElement: HTMLStyleElement | null = null
   private matrixElement: SVGFEConvolveMatrixElement | null = null
+  private videoElement: HTMLVideoElement | null = null
 
   constructor(config: RendererRuntimeConfig) {
     this.config = config
   }
 
   attach(video: HTMLVideoElement): void {
+    this.videoElement = video
     this.ensureFilterNodes()
     video.dataset.renderPipeline = 'video'
     this.refreshVideoFilterStyle()
@@ -410,7 +459,16 @@ export class NativeVideoRenderer implements VideoRenderer {
     this.refreshVideoFilterStyle()
   }
 
+  async captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    const video = this.videoElement
+    if (video === null) {
+      return null
+    }
+    return captureVideoElementToCanvas(video)
+  }
+
   destroy(): void {
+    this.videoElement = null
     this.styleElement?.remove()
     this.styleElement = null
     this.matrixElement = null
@@ -506,6 +564,13 @@ export class WebGL2VideoRenderer implements VideoRenderer {
   destroy(): void {
     this.player?.destroy()
     this.player = null
+  }
+
+  async captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    if (this.player === null) {
+      return null
+    }
+    return await this.player.captureRenderedFrame()
   }
 }
 

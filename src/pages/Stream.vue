@@ -551,6 +551,15 @@ async function handleDisplaySubmit(value: DisplayOptionsValue): Promise<void> {
   closeDisplaySheet()
 }
 
+async function captureFrameForSrExport(): Promise<HTMLCanvasElement> {
+  const fromRuntime = await actions.captureStreamRenderedFrame()
+  if (fromRuntime !== null && fromRuntime.width > 1 && fromRuntime.height > 1) {
+    return fromRuntime
+  }
+  const source = await waitForStreamCaptureSource()
+  return captureSourceFrame(source)
+}
+
 function resolveStreamCaptureSource(): HTMLCanvasElement | HTMLVideoElement | null {
   const container = document.getElementById('stream-page-video')
   if (container === null) {
@@ -684,13 +693,12 @@ async function exportSuperResolutionComparison(): Promise<void> {
   const alternateEnabled = !originalEnabled
   try {
     await waitForAnimationFrames(2)
-    const beforeSource = await waitForStreamCaptureSource()
-    const beforeFrame = captureSourceFrame(beforeSource)
+    const beforeFrame = await captureFrameForSrExport()
     await actions.setSuperResolutionExperimental(alternateEnabled)
     await waitForAnimationFrames(2)
-    const afterSource = await waitForStreamCaptureSource()
+    await waitForStreamCaptureSource()
     await waitForAnimationFrames(2)
-    const afterFrame = captureSourceFrame(afterSource)
+    const afterFrame = await captureFrameForSrExport()
     const comparison = composeSrComparisonCanvas({
       before: beforeFrame,
       after: afterFrame,

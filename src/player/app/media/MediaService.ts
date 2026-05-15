@@ -85,6 +85,10 @@ export class MediaService {
     return this.mediaSourceFactory.createAudioMediaSource()
   }
 
+  captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    return this.playbackService.captureRenderedFrame()
+  }
+
   destroy(): void {
     this.audioEffectsService.destroy()
     this.playbackService.destroy()

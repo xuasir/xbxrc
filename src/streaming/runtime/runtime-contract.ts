@@ -57,5 +57,7 @@ export interface RuntimePort {
   setMicrophoneEnabled: (enabled: boolean) => Promise<boolean>
   pressHome: (durationMs: number) => void
   snapshotStats: () => Promise<StreamStats>
+  /** webrtc-direct：下一帧渲染后读回；rust-owned 返回 null。 */
+  captureRenderedFrame: () => Promise<HTMLCanvasElement | null>
   subscribe: (listener: (event: RuntimeEvent) => void) => () => void
 }

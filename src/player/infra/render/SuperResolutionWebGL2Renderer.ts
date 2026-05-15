@@ -14,6 +14,7 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import { computeFsrEasuCon, computeFsrRcasCon, rcasStopsToMobileFsrSharpness } from './fsr1-cpu'
 import { FSR1_MOBILE_OPT_SINGLE_PASS_FRAGMENT } from './fsr1-mobile-opt-fragment'
+import { readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
 
 const FSR_RCAS_LIMIT = (0.25 - (1.0 / 16.0))
 
@@ -364,6 +365,7 @@ class SuperResolutionProcessor {
   private contrast = 100.0
   private saturation = 100.0
   private rcasStops = 0.88
+  private readonly frameCaptureWaiters: Array<(frame: HTMLCanvasElement | null) => void> = []
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault()
     this.teardownGl()
@@ -465,6 +467,7 @@ class SuperResolutionProcessor {
   }
 
   destroy(): void {
+    this.drainFrameCaptureWaiters(false)
     this.stopped = true
     if (this.animId !== null) {
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
@@ -829,134 +832,172 @@ class SuperResolutionProcessor {
     this.onRuntimeDegrade(reason)
   }
 
-  private drawFrame(): void {
-    if (this.stopped) {
+  captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    return new Promise((resolve) => {
+      this.frameCaptureWaiters.push(resolve)
+    })
+  }
+
+  private drainFrameCaptureWaiters(presentedToDefault: boolean): void {
+    if (this.frameCaptureWaiters.length === 0) {
       return
     }
-    this.animId = this.frameCb(this.boundDraw)
-    if (!this.shouldDraw()) {
-      return
-    }
+    const waiters = this.frameCaptureWaiters.splice(0)
+    let canvas: HTMLCanvasElement | null = null
     const gl = this.gl
-    if (gl === null || this.presentProgram === null || this.easuTex === null) {
-      return
-    }
-    const vw = this.video.videoWidth
-    const vh = this.video.videoHeight
-    if (vw <= 0 || vh <= 0) {
-      return
-    }
-    this.clearGlErrors(gl)
-    this.uploadVideoSource(gl, vw, vh)
-
-    const noUpscale = this.outW <= vw && this.outH <= vh
-    if (noUpscale || !this.fsrPipelineAvailable || this.pipelineMode === 'linear') {
-      if (!this.drawPresentPass(gl, this.easuTex)) {
-        this.emitRuntimeDegradeOnce('srPresentDrawFailed')
+    if (presentedToDefault && gl !== null && this.outW >= 2 && this.outH >= 2) {
+      try {
+        canvas = readWebglDefaultFramebufferToCanvas(gl, this.outW, this.outH)
       }
-      if (!this.hasDrawn) {
-        this.hasDrawn = true
-        this.canvas.style.opacity = '1'
+      catch {
+        canvas = null
       }
-      return
     }
+    for (const resolve of waiters) {
+      resolve(canvas)
+    }
+  }
 
-    if (
-      this.fsrPipelineAvailable
-      && this.pipelineMode === 'mobileSinglePass'
-      && this.mobileOptProgram !== null
-    ) {
-      if (this.drawMobileOptPass(gl, vw, vh)) {
+  private drawFrame(): void {
+    let presentedToDefault = false
+    try {
+      if (this.stopped) {
+        return
+      }
+      this.animId = this.frameCb(this.boundDraw)
+      if (!this.shouldDraw() && this.frameCaptureWaiters.length === 0) {
+        return
+      }
+      const gl = this.gl
+      if (gl === null || this.presentProgram === null || this.easuTex === null) {
+        return
+      }
+      const vw = this.video.videoWidth
+      const vh = this.video.videoHeight
+      if (vw <= 0 || vh <= 0) {
+        return
+      }
+      this.clearGlErrors(gl)
+      this.uploadVideoSource(gl, vw, vh)
+
+      const noUpscale = this.outW <= vw && this.outH <= vh
+      if (noUpscale || !this.fsrPipelineAvailable || this.pipelineMode === 'linear') {
+        if (!this.drawPresentPass(gl, this.easuTex)) {
+          this.emitRuntimeDegradeOnce('srPresentDrawFailed')
+        }
         if (!this.hasDrawn) {
           this.hasDrawn = true
           this.canvas.style.opacity = '1'
         }
+        presentedToDefault = true
         return
       }
-      this.pipelineMode = 'twoPass'
-    }
 
-    if (this.easuProgram === null || this.midFbo === null || this.midTex === null) {
-      if (!this.drawPresentPass(gl, this.easuTex)) {
-        this.emitRuntimeDegradeOnce('srPresentDrawFailed')
+      if (
+        this.fsrPipelineAvailable
+        && this.pipelineMode === 'mobileSinglePass'
+        && this.mobileOptProgram !== null
+      ) {
+        if (this.drawMobileOptPass(gl, vw, vh)) {
+          if (!this.hasDrawn) {
+            this.hasDrawn = true
+            this.canvas.style.opacity = '1'
+          }
+          presentedToDefault = true
+          return
+        }
+        this.pipelineMode = 'twoPass'
       }
-      if (!this.hasDrawn) {
-        this.hasDrawn = true
-        this.canvas.style.opacity = '1'
-      }
-      return
-    }
 
-    const { con0, con1, con2, con3 } = computeFsrEasuCon(vw, vh, vw, vh, this.outW, this.outH)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.midFbo)
-    gl.viewport(0, 0, this.outW, this.outH)
-    gl.useProgram(this.easuProgram)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, this.easuTex)
-    gl.uniform1i(this.easuUniforms.easuTex, 0)
-    gl.uniform4fv(this.easuUniforms.con0, con0)
-    gl.uniform4fv(this.easuUniforms.con1, con1)
-    gl.uniform4fv(this.easuUniforms.con2, con2)
-    gl.uniform4fv(this.easuUniforms.con3, con3)
-    this.bindFullscreenTriangle(gl)
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
-    let easuOk = gl.getError() === gl.NO_ERROR
-    const fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
-    easuOk &&= fbStatus === gl.FRAMEBUFFER_COMPLETE
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-    if (!easuOk) {
-      this.pipelineMode = 'linear'
-      this.releaseMidTarget()
-      if (!this.drawPresentPass(gl, this.easuTex)) {
-        this.emitRuntimeDegradeOnce('srEasuDrawFailed')
-      }
-      if (!this.hasDrawn) {
-        this.hasDrawn = true
-        this.canvas.style.opacity = '1'
-      }
-      return
-    }
-
-    if (this.pipelineMode === 'easuOnly' || this.rcasProgram === null) {
-      if (!this.drawPresentPass(gl, this.midTex)) {
-        this.pipelineMode = 'linear'
+      if (this.easuProgram === null || this.midFbo === null || this.midTex === null) {
         if (!this.drawPresentPass(gl, this.easuTex)) {
-          this.emitRuntimeDegradeOnce('srEasuOnlyBlitFailed')
+          this.emitRuntimeDegradeOnce('srPresentDrawFailed')
+        }
+        if (!this.hasDrawn) {
+          this.hasDrawn = true
+          this.canvas.style.opacity = '1'
+        }
+        presentedToDefault = true
+        return
+      }
+
+      const { con0, con1, con2, con3 } = computeFsrEasuCon(vw, vh, vw, vh, this.outW, this.outH)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.midFbo)
+      gl.viewport(0, 0, this.outW, this.outH)
+      gl.useProgram(this.easuProgram)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this.easuTex)
+      gl.uniform1i(this.easuUniforms.easuTex, 0)
+      gl.uniform4fv(this.easuUniforms.con0, con0)
+      gl.uniform4fv(this.easuUniforms.con1, con1)
+      gl.uniform4fv(this.easuUniforms.con2, con2)
+      gl.uniform4fv(this.easuUniforms.con3, con3)
+      this.bindFullscreenTriangle(gl)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      let easuOk = gl.getError() === gl.NO_ERROR
+      const fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+      easuOk &&= fbStatus === gl.FRAMEBUFFER_COMPLETE
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      if (!easuOk) {
+        this.pipelineMode = 'linear'
+        this.releaseMidTarget()
+        if (!this.drawPresentPass(gl, this.easuTex)) {
+          this.emitRuntimeDegradeOnce('srEasuDrawFailed')
+        }
+        if (!this.hasDrawn) {
+          this.hasDrawn = true
+          this.canvas.style.opacity = '1'
+        }
+        presentedToDefault = true
+        return
+      }
+
+      if (this.pipelineMode === 'easuOnly' || this.rcasProgram === null) {
+        if (!this.drawPresentPass(gl, this.midTex)) {
+          this.pipelineMode = 'linear'
+          if (!this.drawPresentPass(gl, this.easuTex)) {
+            this.emitRuntimeDegradeOnce('srEasuOnlyBlitFailed')
+          }
+        }
+        if (!this.hasDrawn) {
+          this.hasDrawn = true
+          this.canvas.style.opacity = '1'
+        }
+        presentedToDefault = true
+        return
+      }
+
+      const rcasCon = computeFsrRcasCon(this.rcasStops)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.viewport(0, 0, this.outW, this.outH)
+      gl.useProgram(this.rcasProgram)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this.midTex)
+      gl.uniform1i(this.rcasUniforms.rcasTex, 0)
+      gl.uniform4fv(this.rcasUniforms.rcasCon, rcasCon)
+      gl.uniform1f(this.rcasUniforms.brightness, this.brightness)
+      gl.uniform1f(this.rcasUniforms.contrast, this.contrast)
+      gl.uniform1f(this.rcasUniforms.saturation, this.saturation)
+      this.bindFullscreenTriangle(gl)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      const rcasOk = gl.getError() === gl.NO_ERROR
+      if (!rcasOk) {
+        this.pipelineMode = 'easuOnly'
+        if (!this.drawPresentPass(gl, this.midTex)) {
+          this.pipelineMode = 'linear'
+          if (!this.drawPresentPass(gl, this.easuTex)) {
+            this.emitRuntimeDegradeOnce('srRcasRecoverFailed')
+          }
         }
       }
       if (!this.hasDrawn) {
         this.hasDrawn = true
         this.canvas.style.opacity = '1'
       }
-      return
+      presentedToDefault = true
     }
-
-    const rcasCon = computeFsrRcasCon(this.rcasStops)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-    gl.viewport(0, 0, this.outW, this.outH)
-    gl.useProgram(this.rcasProgram)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, this.midTex)
-    gl.uniform1i(this.rcasUniforms.rcasTex, 0)
-    gl.uniform4fv(this.rcasUniforms.rcasCon, rcasCon)
-    gl.uniform1f(this.rcasUniforms.brightness, this.brightness)
-    gl.uniform1f(this.rcasUniforms.contrast, this.contrast)
-    gl.uniform1f(this.rcasUniforms.saturation, this.saturation)
-    this.bindFullscreenTriangle(gl)
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
-    const rcasOk = gl.getError() === gl.NO_ERROR
-    if (!rcasOk) {
-      this.pipelineMode = 'easuOnly'
-      if (!this.drawPresentPass(gl, this.midTex)) {
-        this.pipelineMode = 'linear'
-        if (!this.drawPresentPass(gl, this.easuTex)) {
-          this.emitRuntimeDegradeOnce('srRcasRecoverFailed')
-        }
-      }
-    }
-    if (!this.hasDrawn) {
-      this.hasDrawn = true
-      this.canvas.style.opacity = '1'
+    finally {
+      this.drainFrameCaptureWaiters(presentedToDefault)
     }
   }
 }
@@ -1016,5 +1057,9 @@ export class SuperResolutionWebGL2Renderer {
   destroy(): void {
     this.processor?.destroy()
     this.processor = null
+  }
+
+  async captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
+    return (await this.processor?.captureRenderedFrame()) ?? null
   }
 }
