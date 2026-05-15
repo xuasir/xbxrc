@@ -1,5 +1,5 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { AudioRuntimeConfig, RendererRuntimeConfig } from '../../domain/media'
+import type { AudioRuntimeConfig, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
 import type { InputService } from '../input/InputService'
 import { AudioEffectsService } from './AudioEffectsService'
 import { MediaSourceFactory } from './MediaSourceFactory'
@@ -16,6 +16,7 @@ export class MediaService {
     private readonly getContainer: () => HTMLElement,
     private audioConfig: AudioRuntimeConfig,
     private rendererConfig: RendererRuntimeConfig,
+    private rendererAttach: RendererAttachSpec,
     private readonly inputService: InputService,
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
   ) {
@@ -24,6 +25,7 @@ export class MediaService {
       this.inputService,
       this.emitter,
       this.rendererConfig,
+      this.rendererAttach,
     )
     this.microphoneService = new MicrophoneService(this.emitter)
     this.audioEffectsService = new AudioEffectsService()
@@ -36,7 +38,12 @@ export class MediaService {
 
   updateRendererConfig(config: Partial<RendererRuntimeConfig>): void {
     this.rendererConfig = { ...this.rendererConfig, ...config }
-    this.playbackService.updateRendererConfig(this.rendererConfig)
+    this.playbackService.updateRendererConfig(config)
+  }
+
+  updateRendererAttach(spec: RendererAttachSpec): void {
+    this.rendererAttach = spec
+    this.playbackService.updateRendererAttach(spec)
   }
 
   attachVideoStream(stream: MediaStream): void {

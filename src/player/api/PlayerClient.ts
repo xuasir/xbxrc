@@ -2,7 +2,7 @@ import type { LogicalButtonDto } from '@shared/gamepad/contract'
 import type { InputDriverLike } from '../app/input/InputService'
 import type { PlayerClientOptions } from '../domain/config'
 import type { GamepadFrame, InputRuntimeConfig } from '../domain/input'
-import type { AudioRuntimeConfig, RendererRuntimeConfig, StreamStats } from '../domain/media'
+import type { AudioRuntimeConfig, RendererAttachSpec, RendererRuntimeConfig, StreamStats } from '../domain/media'
 import type {
   ConnectParams,
   ControlChannelHealthSnapshot,
@@ -20,6 +20,7 @@ import { MediaService } from '../app/media/MediaService'
 import { SessionService } from '../app/session/SessionService'
 import { StatsService } from '../app/stats/StatsService'
 import { DEFAULT_PLAYER_OPTIONS } from '../domain/config'
+import { deriveRendererAttachSpec } from '../domain/media'
 import { GamepadDriver } from '../infra/input/GamepadDriver'
 import { TypedEventEmitter } from './events'
 
@@ -91,6 +92,7 @@ export class PlayerClient {
       () => this.resolveContainer(),
       this.options.audio,
       this.options.renderer,
+      deriveRendererAttachSpec(this.options.renderer),
       this.inputService,
       this.emitter,
     )
@@ -233,6 +235,10 @@ export class PlayerClient {
   updateRenderer(config: Partial<RendererRuntimeConfig>): void {
     this.options.renderer = { ...this.options.renderer, ...config }
     this.mediaService.updateRendererConfig(config)
+  }
+
+  updateRendererAttach(spec: RendererAttachSpec): void {
+    this.mediaService.updateRendererAttach(spec)
   }
 
   async startMic(): Promise<void> {

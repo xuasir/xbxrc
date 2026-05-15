@@ -1,5 +1,94 @@
 export type VideoFit = 'Contain' | 'Stretch' | 'Zoom' | string
 
+/** 仅描述 renderer attach 所需的最小合同；策略字段留在 RendererRuntimeConfig。 */
+export interface RendererAttachSpec {
+  kind: 'video' | 'webgl2' | 'webgl2_sr'
+  targetFps: number
+  format: VideoFit
+  brightness: number
+  contrast: number
+  saturation: number
+  processing?: 'usm' | 'cas'
+  processingMode?: 'quality' | 'performance'
+  shaderPreset?: 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
+  sharpenStrength?: number
+  sr?: {
+    outputWidth: number
+    outputHeight: number
+    rcasStops: number
+  }
+}
+
+/** 将 attach 合同合并进 runtime config，供 WebGL / SR renderer 读取尺寸与管线字段。 */
+export function mergeRendererConfigWithAttachSpec(
+  config: RendererRuntimeConfig,
+  attach: RendererAttachSpec,
+): RendererRuntimeConfig {
+  const pipelineType: RendererRuntimeConfig['pipelineType'] = attach.kind === 'video' ? 'video' : 'webgl2'
+  const mode: RendererRuntimeConfig['mode'] = attach.kind === 'video' ? 'native' : 'webgl2'
+  return {
+    ...config,
+    targetFps: attach.targetFps,
+    format: attach.format,
+    brightness: attach.brightness,
+    contrast: attach.contrast,
+    saturation: attach.saturation,
+    processing: attach.processing ?? config.processing,
+    processingMode: attach.processingMode ?? config.processingMode,
+    shaderPreset: attach.shaderPreset ?? config.shaderPreset,
+    sharpenStrength: attach.sharpenStrength ?? config.sharpenStrength,
+    pipelineType,
+    mode,
+    superResolutionEnabled: attach.kind === 'webgl2_sr',
+    superResolutionOutputWidth: attach.sr?.outputWidth,
+    superResolutionOutputHeight: attach.sr?.outputHeight,
+    superResolutionRcasStops: attach.sr?.rcasStops,
+  }
+}
+
+export function deriveRendererAttachSpec(config: RendererRuntimeConfig): RendererAttachSpec {
+  let base: 'video' | 'webgl2' = 'video'
+  if (!config.enabled) {
+    base = 'video'
+  }
+  else if (config.pipelineType === 'video') {
+    base = 'video'
+  }
+  else if (config.pipelineType === 'webgl2') {
+    base = 'webgl2'
+  }
+  else {
+    base = config.mode === 'webgl2' ? 'webgl2' : 'video'
+  }
+  const kind: RendererAttachSpec['kind'] = base === 'webgl2'
+    && config.superResolutionEnabled === true
+    && config.superResolutionInactiveAfterFailure !== true
+    ? 'webgl2_sr'
+    : base
+  const sr = kind === 'webgl2_sr'
+    && config.superResolutionOutputWidth !== undefined
+    && config.superResolutionOutputHeight !== undefined
+    ? {
+        outputWidth: config.superResolutionOutputWidth,
+        outputHeight: config.superResolutionOutputHeight,
+        rcasStops: config.superResolutionRcasStops ?? 0.88,
+      }
+    : undefined
+  return {
+    kind,
+    targetFps: config.targetFps,
+    format: config.format,
+    brightness: config.brightness,
+    contrast: config.contrast,
+    saturation: config.saturation,
+    processing: config.processing,
+    processingMode: config.processingMode,
+    shaderPreset: config.shaderPreset,
+    sharpenStrength: config.sharpenStrength,
+    sr,
+  }
+}
+
 export interface AudioRuntimeConfig {
   volume: number
   enableAudioControl: boolean
@@ -214,8 +303,8 @@ export interface StreamStats {
   renderSuperResolutionRcasBaseStops?: number
   renderSuperResolutionFallbackReason?: string | null
   renderSharpenMode?: string
-  renderPipelineType?: 'video' | 'webgl2'
-  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
   renderShaderPath?: 'usm' | 'cas' | 'none'

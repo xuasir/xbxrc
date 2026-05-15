@@ -176,10 +176,20 @@ export interface StreamingRuntimeProjection {
   vibrationStrength: 'realistic' | 'enhanced' | 'full'
 }
 
+export type StreamingPipelineRenderPreference = 'auto' | 'video' | 'webgl2'
+
+export type StreamingSuperResolutionRenderPreference = 'off' | 'fsr1Experimental'
+
+export type StreamingRenderFallbackProcessing = 'usm' | 'cas'
+
 export interface StreamingRenderProjection {
   enableAudioControl: boolean
   videoFormat?: string | null
   displayOptions: StreamingDisplayOptionsValue
+  pipelinePreference?: StreamingPipelineRenderPreference
+  superResolutionPreference?: StreamingSuperResolutionRenderPreference
+  fallbackProcessing?: StreamingRenderFallbackProcessing
+  initialTargetFps?: number
 }
 
 export type StreamingTurnSource = 'none' | 'custom' | 'fallback'

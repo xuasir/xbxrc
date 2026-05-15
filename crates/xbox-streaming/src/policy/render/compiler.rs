@@ -16,5 +16,9 @@ pub fn compile_render(config: &Config) -> RenderPlan {
             contrast: config.render.display_options.contrast,
             brightness: config.render.display_options.brightness,
         },
+        pipeline_preference: config.render.pipeline_preference,
+        super_resolution_preference: config.render.super_resolution_preference,
+        fallback_processing: config.render.fallback_processing,
+        initial_target_fps: config.render.initial_target_fps,
     }
 }

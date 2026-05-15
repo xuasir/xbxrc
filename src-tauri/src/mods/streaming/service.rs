@@ -13,6 +13,7 @@ use tauri::AppHandle;
 use xbox_streaming::input::{
     SupportedInput as DomainSupportedInput, TitleCapabilities as DomainTitleCapabilities,
 };
+use xbox_streaming::policy::render::SuperResolutionRenderPreference;
 use xbox_streaming::policy::{
     session::SessionAccessContext as DomainSessionAccessContext,
     InputCapabilityContext as DomainInputCapabilityContext,
@@ -1852,6 +1853,11 @@ fn apply_streaming_preferences(
         saturation: snapshot.display_options.saturation,
         contrast: snapshot.display_options.contrast,
         brightness: snapshot.display_options.brightness,
+    };
+    config.render.super_resolution_preference = if snapshot.super_resolution_experimental {
+        SuperResolutionRenderPreference::Fsr1Experimental
+    } else {
+        SuperResolutionRenderPreference::Off
     };
 }
 

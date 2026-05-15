@@ -128,6 +128,34 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.mediaReadyMilestoneElapsedText).toBe('900ms')
   })
 
+  it('projects webgl2_sr pipeline without conflating standard sharpen path', () => {
+    const snapshot: StreamPerformanceSnapshot = {
+      resolution: '1920x1080',
+      rtt: '20ms',
+      fps: 60,
+      pl: '0',
+      fl: '0',
+      jit: '2ms',
+      decode: '3ms',
+      transportState: 'connected',
+      renderPipelineType: 'webgl2_sr',
+      renderPolicySource: 'auto',
+      renderShaderPath: 'none',
+      renderSharpenMode: 'fsr1_rcas',
+      renderSuperResolutionEnabled: true,
+      renderSuperResolutionActive: true,
+    }
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'playing',
+      warningVisible: false,
+    })
+    expect(diagnostics.renderPipelineType).toBe('webgl2_sr')
+    expect(diagnostics.renderShaderPath).toBe('none')
+    expect(diagnostics.renderSharpenMode).toBe('fsr1_rcas')
+  })
+
   it('projects render runtime fields for replay diagnostics', () => {
     vi.spyOn(Date, 'now').mockReturnValue(88_000)
     const snapshot: StreamPerformanceSnapshot = {

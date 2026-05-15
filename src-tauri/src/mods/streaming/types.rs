@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use xbox_streaming::{
-    runtime::RuntimeBweMode as DomainRuntimeBweMode, QueueDetails as MonitorQueueDetails,
-    QueueSnapshot as MonitorQueueSnapshot,
+    runtime::RuntimeBweMode as DomainRuntimeBweMode,
+    FallbackProcessingPreference as DomainFallbackProcessingPreference,
+    PipelineRenderPreference as DomainPipelineRenderPreference,
+    QueueDetails as MonitorQueueDetails, QueueSnapshot as MonitorQueueSnapshot,
     RenderDisplayOptionsProjection as DomainRenderDisplayOptionsProjection,
     RenderPlanProjection as DomainRenderPlanProjection,
     RuntimeCodecProjection as DomainRuntimeCodecProjection,
@@ -11,6 +13,7 @@ use xbox_streaming::{
     SessionMetadataProjection as DomainSessionMetadataProjection,
     SessionRegionProjection as DomainSessionRegionProjection, SessionRuntimeBinding,
     SessionRuntimeSnapshot,
+    SuperResolutionRenderPreference as DomainSuperResolutionRenderPreference,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -247,6 +250,10 @@ pub struct StreamingRenderProjection {
     pub enable_audio_control: bool,
     pub video_format: Option<String>,
     pub display_options: StreamingDisplayOptionsValue,
+    pub pipeline_preference: DomainPipelineRenderPreference,
+    pub super_resolution_preference: DomainSuperResolutionRenderPreference,
+    pub fallback_processing: DomainFallbackProcessingPreference,
+    pub initial_target_fps: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -840,6 +847,10 @@ impl From<DomainRenderPlanProjection> for StreamingRenderProjection {
             enable_audio_control: projection.enable_audio_control,
             video_format: projection.video_format,
             display_options: projection.display_options.into(),
+            pipeline_preference: projection.pipeline_preference,
+            super_resolution_preference: projection.super_resolution_preference,
+            fallback_processing: projection.fallback_processing,
+            initial_target_fps: projection.initial_target_fps,
         }
     }
 }

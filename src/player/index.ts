@@ -1,5 +1,5 @@
 export { PlayerClient } from './api/PlayerClient'
-export type { RendererRuntimeConfig, StreamStats } from './domain/media'
+export type { RendererAttachSpec, RendererRuntimeConfig, StreamStats } from './domain/media'
 export type {
   CodecPreferenceOptions,
   CreateOfferOptions,

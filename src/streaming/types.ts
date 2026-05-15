@@ -205,8 +205,8 @@ export interface StreamPerformanceSnapshot {
   renderAdaptiveProfileDigest?: string
   renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
   renderUpshiftBlockedReason?: string
-  renderPipelineType?: 'video' | 'webgl2'
-  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
   /** 浏览器端锐化后处理类型；当前口径统一为 USM/CAS，不表示 FSR 超分。 */
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
@@ -328,8 +328,8 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderAdaptiveProfileDigest?: string
   renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
   renderUpshiftBlockedReason?: string
-  renderPipelineType?: 'video' | 'webgl2'
-  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
   /** 浏览器端锐化后处理类型；当前口径统一为 USM/CAS，不表示 FSR 超分。 */
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'

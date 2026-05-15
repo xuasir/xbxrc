@@ -6,7 +6,10 @@ use crate::policy::input::InputCapabilitySource;
 use crate::policy::input::SupportedInput;
 use crate::policy::negotiation::Codec;
 use crate::policy::plan::Plan;
-use crate::policy::render::RenderDisplayOptions;
+use crate::policy::render::{
+    FallbackProcessingPreference, PipelineRenderPreference, RenderDisplayOptions,
+    SuperResolutionRenderPreference,
+};
 use crate::policy::runtime::{RuntimeBweMode, RuntimeMode};
 use crate::policy::session::SessionSchedulePlan;
 use crate::policy::types::{Owner, Region, TurnServer, TurnSource};
@@ -144,6 +147,14 @@ pub struct RenderPlanProjection {
     pub enable_audio_control: bool,
     pub video_format: Option<String>,
     pub display_options: RenderDisplayOptionsProjection,
+    #[serde(default)]
+    pub pipeline_preference: PipelineRenderPreference,
+    #[serde(default)]
+    pub super_resolution_preference: SuperResolutionRenderPreference,
+    #[serde(default)]
+    pub fallback_processing: FallbackProcessingPreference,
+    #[serde(default = "crate::policy::render::default_initial_target_fps")]
+    pub initial_target_fps: u16,
 }
 
 /// session 编排可消费的调度投影，避免 adapter/runtime 读取完整 plan。
@@ -197,6 +208,10 @@ pub fn project_render_plan(plan: &Plan) -> RenderPlanProjection {
         enable_audio_control: plan.render.enable_audio_control,
         video_format: plan.render.video_format.clone(),
         display_options: project_display_options(&plan.render.display_options),
+        pipeline_preference: plan.render.pipeline_preference,
+        super_resolution_preference: plan.render.super_resolution_preference,
+        fallback_processing: plan.render.fallback_processing,
+        initial_target_fps: plan.render.initial_target_fps,
     }
 }
 

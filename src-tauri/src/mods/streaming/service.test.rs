@@ -13,7 +13,8 @@ use crate::mods::streaming::types::{
 };
 use serde_json::json;
 use xbox_streaming::{
-    BitratePreference, CodecPreference, Config as DomainStreamingConfig, RuntimePreference,
+    policy::render::SuperResolutionRenderPreference, BitratePreference, CodecPreference,
+    Config as DomainStreamingConfig, RuntimePreference,
     SessionFlowStartupErrorHint as DomainStartupErrorHint,
     SessionFlowStartupErrorKind as DomainStartupErrorKind, SessionPhase as DomainSessionPhase,
     SessionProgressSnapshot as DomainSessionProgressSnapshot,
@@ -85,6 +86,10 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
     assert!(config.render.enable_audio_control);
     assert_eq!(config.render.video_format.as_deref(), Some("Zoom"));
     assert_eq!(config.render.display_options.sharpness, 5);
+    assert_eq!(
+        config.render.super_resolution_preference,
+        SuperResolutionRenderPreference::Fsr1Experimental
+    );
     assert_eq!(
         config
             .runtime

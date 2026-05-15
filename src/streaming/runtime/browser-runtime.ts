@@ -6,11 +6,13 @@ import type {
   TransportRuntimeConfig,
 } from '../../player'
 import type { RuntimeLaunchSpec } from '../types'
+import type { BrowserRendererPlan, BrowserRendererPolicySource } from './browser-render-policy'
 import type {
   EffectiveFrontEndPolicy,
   FrontEndPolicyInputReason,
   RuntimeProfileClassification,
 } from './browser-runtime-profile'
+import type { BrowserSuperResolutionState } from './browser-super-resolution-state'
 import type {
   RuntimeDisplayState,
   RuntimeEvent,
@@ -22,6 +24,15 @@ import type { RecoveryGateState } from './runtime-host-policy'
 import { PlayerClient as BrowserPlayerClient } from '../../player'
 import { rpc } from '../../services/rpc'
 import { normalizeDisplayOptions } from '../utils'
+import {
+  planToRendererAttachSpec,
+  planToRendererUpdatePatch,
+  projectRenderProcessingFromPlan,
+  projectRenderShaderPathFromPlan,
+  resolveBrowserRendererPlan,
+  resolvePipelineOverrideFromRenderPreference,
+  resolveSuperResolutionUserIntent,
+} from './browser-render-policy'
 import {
   buildRuntimeProfileClassification,
   classifyFrontEndBaseline,
@@ -39,6 +50,11 @@ import {
   shouldEndWarmupEarly,
 
 } from './browser-runtime-profile'
+import {
+
+  createBrowserSuperResolutionStateForLaunch,
+  defaultBrowserSuperResolutionState,
+} from './browser-super-resolution-state'
 import {
   applyBrowserVideoDisplay,
   bindBrowserVideoFrameTracking,
@@ -172,7 +188,7 @@ type QualityLadderLevel = 'L0' | 'L1' | 'L2'
 type FirstFrameStage = 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
 type RenderCause = 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
 type DisplayDegradeLevel = 'displayL0' | 'displayL1' | 'displayL2'
-type RenderPolicySource = 'auto' | 'userOverride' | 'capabilityFallback'
+type RenderPolicySource = BrowserRendererPolicySource
 type IcePolicyMode = 'passthrough' | 'policy'
 type ShaderPreset = 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
 type RenderHysteresisState = 'steady' | 'holdDown' | 'holdUp'
@@ -194,10 +210,6 @@ function buildSdpSummary(sdp: string): string {
 
 function shouldEnableSdpPatch(): boolean {
   return true
-}
-
-function resolveRendererPipelineOverride(): 'video' | 'webgl2' | 'auto' {
-  return 'auto'
 }
 
 function resolveIceCandidatePolicyConfig(spec: RuntimeLaunchSpec): {
@@ -301,9 +313,22 @@ function createPlayerClient(
   const displayOptions = normalizeDisplayOptions(spec.render.displayOptions)
   const tw = spec.runtime.targetVideoWidth
   const th = spec.runtime.targetVideoHeight
-  const srUser = spec.clientExperimentalSuperResolution === true
+  const render = spec.render
+  const pipelinePref = render.pipelinePreference
+  const initialPipelineType: RendererRuntimeConfig['pipelineType'] = pipelinePref === 'video'
+    ? 'video'
+    : pipelinePref === 'webgl2'
+      ? 'webgl2'
+      : 'auto'
+  const srUser = resolveSuperResolutionUserIntent({
+    superResolutionPreference: render.superResolutionPreference,
+    clientExperimentalSuperResolution: spec.clientExperimentalSuperResolution,
+    displaySuperResolutionExperimental: false,
+  })
+  const pipelineAllowsSr = initialPipelineType !== 'video'
   const initialPlan = resolveSuperResolutionTierPlan(tw, th, tw, th)
-  const srRenderer: Partial<RendererRuntimeConfig> = srUser
+  const fallbackProcessing: RendererRuntimeConfig['superResolutionFallbackProcessing'] = render.fallbackProcessing === 'usm' ? 'usm' : 'cas'
+  const srRenderer: Partial<RendererRuntimeConfig> = srUser && pipelineAllowsSr
     ? {
         superResolutionEnabled: true,
         superResolutionAlgorithm: 'fsr1',
@@ -312,7 +337,7 @@ function createPlayerClient(
         superResolutionOutputWidth: initialPlan.outputWidth,
         superResolutionOutputHeight: initialPlan.outputHeight,
         superResolutionRcasStops: resolveSuperResolutionRcasStops(initialPlan),
-        superResolutionFallbackProcessing: 'cas',
+        superResolutionFallbackProcessing: fallbackProcessing,
         superResolutionInactiveAfterFailure: false,
       }
     : {}
@@ -330,7 +355,7 @@ function createPlayerClient(
     },
     renderer: {
       enabled: true,
-      pipelineType: 'auto',
+      pipelineType: initialPipelineType,
       processing: 'usm',
       processingMode: 'quality',
       mode: 'native',
@@ -338,7 +363,7 @@ function createPlayerClient(
       brightness: displayOptions.brightness,
       contrast: displayOptions.contrast,
       saturation: displayOptions.saturation,
-      targetFps: 60,
+      targetFps: render.initialTargetFps ?? 60,
       format: toRendererFormat(spec.render.videoFormat ?? undefined),
       ...srRenderer,
     },
@@ -445,7 +470,8 @@ export function createBrowserRuntime(options: {
   let displayWarmupUntilMs = 0
   let renderDecisionDigest: string | undefined
   let renderAdaptiveProfileDigest: string | undefined
-  let renderPipelineType: 'video' | 'webgl2' = 'webgl2'
+  let lastBrowserRendererPlan: BrowserRendererPlan | null = null
+  let renderPipelineType: 'video' | 'webgl2' | 'webgl2_sr' = 'webgl2'
   let renderPolicySource: RenderPolicySource = 'auto'
   let renderProcessing: 'usm' | 'cas' | undefined
   let renderProcessingMode: 'quality' | 'performance' | undefined
@@ -468,12 +494,21 @@ export function createBrowserRuntime(options: {
   let frontEndUpshiftBlockedReason: string | undefined
   let frontEndPolicyInputReason: FrontEndPolicyInputReason = 'healthy'
   let latestTransportPath: string | undefined
-  let srOutputFrozen: ReturnType<typeof resolveSuperResolutionTierPlan> | null = null
-  let srRcasStopsBase = 0.88
-  let srRcasStopsEffective = 0.88
-  let srAttachFailed = false
-  let srFallbackReason: string | null = null
-  let latestVideoDimensions: { width: number, height: number } | null = null
+  let srState: BrowserSuperResolutionState = defaultBrowserSuperResolutionState()
+
+  function resolveRendererPipelineOverride(): 'video' | 'webgl2' | 'auto' {
+    const render = currentDisplayState?.render ?? currentSpec?.render
+    return resolvePipelineOverrideFromRenderPreference(render?.pipelinePreference)
+  }
+
+  function resolveSuperResolutionIntent(): boolean {
+    return resolveSuperResolutionUserIntent({
+      superResolutionPreference: currentDisplayState?.render.superResolutionPreference
+        ?? currentSpec?.render.superResolutionPreference,
+      clientExperimentalSuperResolution: currentSpec?.clientExperimentalSuperResolution,
+      displaySuperResolutionExperimental: currentDisplayState?.superResolutionExperimental,
+    })
+  }
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -685,51 +720,6 @@ export function createBrowserRuntime(options: {
     }
   }
 
-  function resolveDynamicSuperResolutionRcasStops(input: {
-    baseStops: number
-    level: DisplayDegradeLevel
-    stats: StreamStats
-  }): number {
-    const inboundVideoBitrateKbps = input.stats.inboundVideoBitrateKbps ?? 0
-    const baseBitrate = Math.max(8_000, baseVideoBitrateKbps)
-    const bitrateRatio = inboundVideoBitrateKbps > 0 ? inboundVideoBitrateKbps / baseBitrate : 1
-    let stops = input.baseStops
-
-    if (input.level === 'displayL1') {
-      stops += 0.06
-    }
-    else if (input.level === 'displayL2') {
-      stops += 0.12
-    }
-
-    if (
-      bandwidthState === 'congested'
-      || networkConfidence === 'low'
-      || qualityLadderLevel === 'L2'
-      || bitrateRatio < effectiveFrontEndPolicy.adaptiveCongestedBitrateRatio
-    ) {
-      stops += 0.12
-    }
-    else if (
-      bandwidthState === 'warning'
-      || qualityLadderLevel === 'L1'
-      || renderCause === 'decodeBackpressure'
-      || bitrateRatio < effectiveFrontEndPolicy.adaptiveStableBitrateRatio
-    ) {
-      stops += 0.06
-    }
-    else if (
-      bandwidthState === 'stable'
-      && networkConfidence === 'high'
-      && qualityLadderLevel === 'L0'
-      && bitrateRatio > effectiveFrontEndPolicy.adaptiveStableBitrateRatio
-    ) {
-      stops -= 0.04
-    }
-
-    return Number(Math.max(0.6, Math.min(1.1, stops)).toFixed(2))
-  }
-
   function levelRank(level: DisplayDegradeLevel): number {
     if (level === 'displayL0')
       return 0
@@ -792,39 +782,72 @@ export function createBrowserRuntime(options: {
     return { allowed: true }
   }
 
+  function applyBrowserRendererPlan(plan: BrowserRendererPlan): void {
+    lastBrowserRendererPlan = plan
+    if (plan.superResolutionRcasStopsForPatch !== undefined) {
+      srState.rcasStopsEffective = plan.superResolutionRcasStopsForPatch
+    }
+    const patch = planToRendererUpdatePatch({ plan, srAttachFailed: srState.attachFailed })
+    const attach = planToRendererAttachSpec(plan)
+    renderPipelineType = plan.kind
+    renderPolicySource = plan.source
+    renderProcessing = projectRenderProcessingFromPlan(plan)
+    renderProcessingMode = plan.sharpening.processingMode
+    renderShaderPath = projectRenderShaderPathFromPlan(plan)
+    renderFpsBudget = patch.targetFps
+    assertClient().updateRenderer(patch)
+    assertClient().updateRendererAttach(attach)
+  }
+
+  function shouldRefreshRenderPolicyWithoutLevelChange(reason: string): boolean {
+    return reason === 'superResolutionStateChanged'
+      || reason === 'superResolutionTierFrozen'
+      || reason === 'displayStateChanged'
+      || reason === 'superResolutionFallback'
+  }
+
   async function applyDisplayDegradeLevel(next: DisplayDegradeLevel, reason: string): Promise<void> {
     if (client === null || currentSpec === null || currentDisplayState === null) {
       return
     }
     const now = Date.now()
-    if (next === displayDegradeLevel && now - displayDegradeLevelChangedAtMs < effectiveFrontEndPolicy.displayLevelMinDwellMs) {
+    const levelUnchanged = next === displayDegradeLevel
+    const withinDisplayDwell = levelUnchanged
+      && now - displayDegradeLevelChangedAtMs < effectiveFrontEndPolicy.displayLevelMinDwellMs
+    const policyOnlyRefresh = withinDisplayDwell && shouldRefreshRenderPolicyWithoutLevelChange(reason)
+    if (withinDisplayDwell && !policyOnlyRefresh) {
       return
     }
-    const transitionDecision = shouldTransitionDisplayLevel({
-      previous: displayDegradeLevel,
-      next,
-      now,
-      reason,
-    })
-    recordRuntimeTraceEvent('displayHysteresisEvaluated', {
-      previous: displayDegradeLevel,
-      next,
-      reason,
-      allowed: transitionDecision.allowed,
-      state: renderHysteresisState,
-      blockedReason: transitionDecision.blockedReason ?? null,
-    })
-    if (!transitionDecision.allowed) {
-      recordRuntimeTraceEvent('displayHysteresisTransitionBlocked', {
+    if (!policyOnlyRefresh) {
+      const transitionDecision = shouldTransitionDisplayLevel({
+        previous: displayDegradeLevel,
+        next,
+        now,
+        reason,
+      })
+      recordRuntimeTraceEvent('displayHysteresisEvaluated', {
         previous: displayDegradeLevel,
         next,
         reason,
+        allowed: transitionDecision.allowed,
+        state: renderHysteresisState,
         blockedReason: transitionDecision.blockedReason ?? null,
       })
-      return
+      if (!transitionDecision.allowed) {
+        recordRuntimeTraceEvent('displayHysteresisTransitionBlocked', {
+          previous: displayDegradeLevel,
+          next,
+          reason,
+          blockedReason: transitionDecision.blockedReason ?? null,
+        })
+        return
+      }
     }
     const displayOptions = currentDisplayState.displayOptions
     const stats = await assertClient().stats().snapshot()
+    if (client === null || currentSpec === null || currentDisplayState === null) {
+      return
+    }
     const adaptive = resolveAdaptiveRenderProfile({ level: next, now, stats })
     renderAdaptiveProfileDigest = adaptive.digest
     recordRuntimeTraceEvent('renderAdaptiveProfileResolved', {
@@ -838,100 +861,65 @@ export function createBrowserRuntime(options: {
       shaderPreset: adaptive.shaderPreset,
     })
     const pipelineOverride = resolveRendererPipelineOverride()
-    const autoPipeline = 'webgl2' as const
-    const autoResolvedPipeline = webgl2Supported ? autoPipeline : 'video'
-    const pipelineType = pipelineOverride === 'auto' ? autoResolvedPipeline : pipelineOverride
-    const policySource: RenderPolicySource
-      = pipelineOverride !== 'auto'
-        ? 'userOverride'
-        : webgl2Supported
-          ? 'auto'
-          : 'capabilityFallback'
-    // 显示档位只调画质/管线，不通过 targetFps 压前端绘制节奏（与 Renderers.shouldDraw 的 >=60 全开一致）
-    const nextConfig: Record<DisplayDegradeLevel, Partial<RendererRuntimeConfig>> = {
-      displayL0: {
-        pipelineType,
-        processing: 'cas',
+    const autoResolvedPipeline = webgl2Supported ? 'webgl2' as const : 'video' as const
+    const basePipeline = pipelineOverride === 'auto' ? autoResolvedPipeline : pipelineOverride
+    const srIntent = resolveSuperResolutionIntent()
+    const srRendererEligible = basePipeline === 'webgl2'
+      && srIntent
+      && !srState.attachFailed
+    const applyDynamicSr = !srRendererEligible
+    const plan = resolveBrowserRendererPlan({
+      displayDegradeLevel: next,
+      displayOptions,
+      adaptive: {
+        sharpnessScale: adaptive.sharpnessScale,
+        targetFpsBias: adaptive.targetFpsBias,
+        preferredFormat: adaptive.preferredFormat,
         processingMode: adaptive.processingMode,
-        targetFps: 60,
-        format: adaptive.preferredFormat,
-        sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
         shaderPreset: adaptive.shaderPreset,
         sharpenStrength: adaptive.sharpenStrength,
-        brightness: displayOptions.brightness,
-        contrast: displayOptions.contrast,
-        saturation: displayOptions.saturation,
+        digest: adaptive.digest,
       },
-      displayL1: {
-        pipelineType,
-        processing: 'usm',
-        processingMode: adaptive.processingMode,
-        targetFps: 60,
-        format: adaptive.preferredFormat,
-        sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
-        shaderPreset: adaptive.shaderPreset,
-        sharpenStrength: adaptive.sharpenStrength,
-        brightness: displayOptions.brightness,
-        contrast: displayOptions.contrast,
-        saturation: displayOptions.saturation,
+      pipelineOverride,
+      webgl2Supported,
+      visibilityBudgetActive,
+      superResolutionExperimental: srIntent,
+      superResolutionUserIntent: srIntent,
+      superResolutionAttachFailed: srState.attachFailed,
+      superResolutionRcasStopsBase: srState.rcasStopsBase,
+      applyDynamicSrRcasForDisplayDegrade: applyDynamicSr,
+      srRcasDynamicContext: {
+        bandwidthState,
+        networkConfidence,
+        qualityLadderLevel,
+        renderCause,
+        adaptiveCongestedBitrateRatio: effectiveFrontEndPolicy.adaptiveCongestedBitrateRatio,
+        adaptiveStableBitrateRatio: effectiveFrontEndPolicy.adaptiveStableBitrateRatio,
       },
-      displayL2: {
-        pipelineType,
-        processing: 'usm',
-        processingMode: adaptive.processingMode,
-        targetFps: 60,
-        format: adaptive.preferredFormat,
-        sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
-        shaderPreset: adaptive.shaderPreset,
-        sharpenStrength: adaptive.sharpenStrength,
-        brightness: displayOptions.brightness,
-        contrast: displayOptions.contrast,
-        saturation: displayOptions.saturation,
-      },
-    }
-    if (currentDisplayState.superResolutionExperimental === true && !srAttachFailed) {
-      srRcasStopsEffective = resolveDynamicSuperResolutionRcasStops({
-        baseStops: srRcasStopsBase,
-        level: next,
-        stats,
-      })
-      nextConfig[next] = {
-        ...nextConfig[next],
-        superResolutionRcasStops: srRcasStopsEffective,
-      }
-    }
-    if (visibilityBudgetActive) {
-      nextConfig[next] = {
-        ...nextConfig[next],
-        targetFps: 0,
-      }
-    }
+      streamStats: stats,
+      baseVideoBitrateKbps,
+      superResolutionTierPlan: srState.outputFrozen,
+    })
     const previousPipelineType = renderPipelineType
     const previousFpsBudget = renderFpsBudget
-    renderPipelineType = pipelineType
-    renderPolicySource = policySource
-    renderProcessing = nextConfig[next].processing
-    renderProcessingMode = nextConfig[next].processingMode
-    renderShaderPath = pipelineType === 'webgl2'
-      ? (nextConfig[next].processing ?? 'none')
-      : 'none'
-    renderFpsBudget = nextConfig[next].targetFps
-    assertClient().updateRenderer(nextConfig[next])
-    const previous = displayDegradeLevel
-    displayDegradeLevel = next
-    displayDegradeLevelChangedAtMs = now
-    if (levelRank(next) > levelRank(previous)) {
-      displayLastDownshiftAtMs = now
-      displayRecoveryStableSinceMs = undefined
+    applyBrowserRendererPlan(plan)
+    if (!policyOnlyRefresh) {
+      const previous = displayDegradeLevel
+      displayDegradeLevel = next
+      displayDegradeLevelChangedAtMs = now
+      if (levelRank(next) > levelRank(previous)) {
+        displayLastDownshiftAtMs = now
+        displayRecoveryStableSinceMs = undefined
+      }
+      else if (levelRank(next) < levelRank(previous)) {
+        displayRecoveryStableSinceMs = now
+      }
+      recordRuntimeTraceEvent('displayDegradeLevelChanged', {
+        previous,
+        next,
+        reason,
+      })
     }
-    else if (levelRank(next) < levelRank(previous)) {
-      displayRecoveryStableSinceMs = now
-    }
-    recordRuntimeTraceEvent('displayDegradeLevelChanged', {
-      previous,
-      next,
-      reason,
-    })
     if (previousPipelineType !== renderPipelineType) {
       recordRuntimeTraceEvent('renderPipelineSwitched', {
         previous: previousPipelineType,
@@ -960,9 +948,9 @@ export function createBrowserRuntime(options: {
       pipelineType: renderPipelineType,
       level: next,
       reason,
-      targetFps: nextConfig[next].targetFps ?? null,
-      processing: nextConfig[next].processing ?? null,
-      processingMode: nextConfig[next].processingMode ?? null,
+      targetFps: renderFpsBudget ?? null,
+      processing: renderProcessing ?? null,
+      processingMode: renderProcessingMode ?? null,
       shaderPath: renderShaderPath ?? null,
       adaptiveProfileDigest: renderAdaptiveProfileDigest ?? null,
     })
@@ -1226,12 +1214,6 @@ export function createBrowserRuntime(options: {
       else {
         effectiveFrontEndPolicy = defaultEffectiveFrontEndPolicy()
       }
-      renderPipelineType = resolveRendererPipelineOverride() === 'video' ? 'video' : 'webgl2'
-      renderPolicySource = resolveRendererPipelineOverride() === 'auto' ? 'auto' : 'userOverride'
-      renderProcessing = undefined
-      renderProcessingMode = undefined
-      renderShaderPath = undefined
-      renderFpsBudget = undefined
       icePolicyMode = 'passthrough'
       icePolicyDigest = undefined
       updateFirstFrameStage('connecting', now, 'transportConnected')
@@ -1276,11 +1258,14 @@ export function createBrowserRuntime(options: {
     if (client === null || currentSpec === null || currentDisplayState === null) {
       return
     }
-    latestVideoDimensions = { width: videoWidth, height: videoHeight }
-    if (currentDisplayState.superResolutionExperimental !== true) {
+    srState.latestVideoDimensions = { width: videoWidth, height: videoHeight }
+    if (!resolveSuperResolutionIntent()) {
       return
     }
-    if (srOutputFrozen !== null) {
+    if (resolveRendererPipelineOverride() === 'video') {
+      return
+    }
+    if (srState.outputFrozen !== null) {
       return
     }
     if (videoWidth <= 0 || videoHeight <= 0) {
@@ -1289,21 +1274,24 @@ export function createBrowserRuntime(options: {
     const tw = currentSpec.runtime.targetVideoWidth
     const th = currentSpec.runtime.targetVideoHeight
     const plan = resolveSuperResolutionTierPlan(tw, th, videoWidth, videoHeight)
-    srOutputFrozen = plan
-    srRcasStopsBase = resolveSuperResolutionRcasStops(plan)
-    srRcasStopsEffective = srRcasStopsBase
+    srState.outputFrozen = plan
+    srState.rcasStopsBase = resolveSuperResolutionRcasStops(plan)
+    srState.rcasStopsEffective = srState.rcasStopsBase
     assertClient().updateRenderer({
       superResolutionOutputTier: plan.outputTier,
       superResolutionConfiguredTargetTier: `${plan.configuredTier}`,
       superResolutionOutputWidth: plan.outputWidth,
       superResolutionOutputHeight: plan.outputHeight,
-      superResolutionRcasStops: srRcasStopsBase,
+      superResolutionRcasStops: srState.rcasStopsBase,
     })
     void recordRuntimeTraceEvent('superResolutionTierFrozen', {
       outputTier: plan.outputTier,
       configuredTier: plan.configuredTier,
       actualSourceTier: plan.actualSourceTier,
-      rcasStopsBase: srRcasStopsBase,
+      rcasStopsBase: srState.rcasStopsBase,
+    })
+    void applyDisplayDegradeLevel(displayDegradeLevel, 'superResolutionTierFrozen').catch(() => {
+      // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
     })
   }
 
@@ -1314,21 +1302,19 @@ export function createBrowserRuntime(options: {
     if (client === null || currentDisplayState === null) {
       return
     }
-    const srEnabled = currentDisplayState.superResolutionExperimental === true
+    const srEnabled = resolveSuperResolutionIntent()
     if (srEnabled && options?.retryAfterExplicitEnable === true) {
-      srAttachFailed = false
-      srFallbackReason = null
+      srState.attachFailed = false
+      srState.fallbackReason = null
     }
     if (srEnabled
       && options?.freezeFromLatestVideoIfAvailable === true
-      && srOutputFrozen === null
-      && latestVideoDimensions !== null) {
-      freezeSuperResolutionOutputIfNeeded(latestVideoDimensions.width, latestVideoDimensions.height)
+      && srState.outputFrozen === null
+      && srState.latestVideoDimensions !== null) {
+      freezeSuperResolutionOutputIfNeeded(srState.latestVideoDimensions.width, srState.latestVideoDimensions.height)
     }
-    assertClient().updateRenderer({
-      superResolutionEnabled: srEnabled,
-      superResolutionInactiveAfterFailure: srAttachFailed,
-      superResolutionRcasStops: srEnabled ? srRcasStopsEffective : srRcasStopsBase,
+    void applyDisplayDegradeLevel(displayDegradeLevel, 'superResolutionStateChanged').catch(() => {
+      // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
     })
   }
 
@@ -1350,9 +1336,12 @@ export function createBrowserRuntime(options: {
         applyCurrentDisplayState()
       }),
       eventBus.on('media.superResolutionFallback', ({ reason }) => {
-        srAttachFailed = true
-        srFallbackReason = reason
+        srState.attachFailed = true
+        srState.fallbackReason = reason
         void recordRuntimeTraceEvent('superResolutionFallback', { reason })
+        void applyDisplayDegradeLevel(displayDegradeLevel, 'superResolutionFallback').catch(() => {
+          // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
+        })
       }),
       eventBus.on('stats.videoFrameProcessed', () => {
         markFrameReady()
@@ -2694,19 +2683,10 @@ export function createBrowserRuntime(options: {
   const runtime: RuntimePort = {
     async launch(spec) {
       currentSpec = spec
-      srOutputFrozen = null
-      srRcasStopsBase = resolveSuperResolutionRcasStops(
-        resolveSuperResolutionTierPlan(
-          spec.runtime.targetVideoWidth,
-          spec.runtime.targetVideoHeight,
-          spec.runtime.targetVideoWidth,
-          spec.runtime.targetVideoHeight,
-        ),
-      )
-      srRcasStopsEffective = srRcasStopsBase
-      srAttachFailed = false
-      srFallbackReason = null
-      latestVideoDimensions = null
+      srState = createBrowserSuperResolutionStateForLaunch({
+        targetVideoWidth: spec.runtime.targetVideoWidth,
+        targetVideoHeight: spec.runtime.targetVideoHeight,
+      })
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(spec.render.displayOptions),
         render: spec.render,
@@ -2779,6 +2759,7 @@ export function createBrowserRuntime(options: {
       displayWarmupUntilMs = 0
       renderDecisionDigest = undefined
       renderAdaptiveProfileDigest = undefined
+      lastBrowserRendererPlan = null
       renderPipelineType = 'webgl2'
       renderPolicySource = 'auto'
       renderProcessing = undefined
@@ -2886,6 +2867,7 @@ export function createBrowserRuntime(options: {
       displayWarmupUntilMs = 0
       renderDecisionDigest = undefined
       renderAdaptiveProfileDigest = undefined
+      lastBrowserRendererPlan = null
       renderPipelineType = 'webgl2'
       renderPolicySource = 'auto'
       renderProcessing = undefined
@@ -2957,7 +2939,7 @@ export function createBrowserRuntime(options: {
       return await reconnectPromise
     },
     applyDisplayState(state) {
-      const previousSuperResolutionEnabled = currentDisplayState?.superResolutionExperimental === true
+      const previousUiSuperResolution = currentDisplayState?.superResolutionExperimental === true
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(state.displayOptions),
         render: state.render,
@@ -2965,11 +2947,15 @@ export function createBrowserRuntime(options: {
       }
       applyCurrentDisplayState()
       if (client !== null) {
+        const srIntent = resolveSuperResolutionIntent()
         updateSuperResolutionRuntimeState({
           retryAfterExplicitEnable:
-            previousSuperResolutionEnabled !== true
+            previousUiSuperResolution !== true
             && currentDisplayState.superResolutionExperimental === true,
-          freezeFromLatestVideoIfAvailable: currentDisplayState.superResolutionExperimental === true,
+          freezeFromLatestVideoIfAvailable: srIntent,
+        })
+        void applyDisplayDegradeLevel(displayDegradeLevel, 'displayStateChanged').catch(() => {
+          // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
         })
       }
     },
@@ -3002,6 +2988,13 @@ export function createBrowserRuntime(options: {
       const stats = await assertClient().stats().snapshot()
       const now = Date.now()
       const controlChannelHealth = assertClient().getControlChannelHealthSnapshot()
+      const plan = lastBrowserRendererPlan
+      const observedPipelineType = plan?.kind ?? renderPipelineType
+      const observedPolicySource = plan?.source ?? renderPolicySource
+      const observedProcessing = plan ? projectRenderProcessingFromPlan(plan) : renderProcessing
+      const observedProcessingMode = plan?.sharpening.processingMode ?? renderProcessingMode
+      const observedShaderPath = plan ? projectRenderShaderPathFromPlan(plan) : renderShaderPath
+      const observedFpsBudget = plan?.targetFps ?? renderFpsBudget
       return normalizeObservedPresentationStats({
         ...stats,
         streamLifecyclePhase: runtimePhase,
@@ -3045,32 +3038,31 @@ export function createBrowserRuntime(options: {
         renderAdaptiveProfileDigest,
         renderHysteresisState,
         renderUpshiftBlockedReason,
-        renderPipelineType,
-        renderPolicySource,
-        renderProcessing,
-        renderProcessingMode,
-        renderShaderPath,
-        renderFpsBudget,
+        renderPipelineType: observedPipelineType,
+        renderPolicySource: observedPolicySource,
+        renderProcessing: observedProcessing,
+        renderProcessingMode: observedProcessingMode,
+        renderShaderPath: observedShaderPath,
+        renderFpsBudget: observedFpsBudget,
         rendererCapabilityReason,
-        renderSuperResolutionEnabled: currentDisplayState?.superResolutionExperimental === true,
-        renderSuperResolutionActive: currentDisplayState?.superResolutionExperimental === true
-          && !srAttachFailed
-          && srOutputFrozen !== null,
-        renderSuperResolutionAlgorithm: currentDisplayState?.superResolutionExperimental === true
+        renderSuperResolutionEnabled: resolveSuperResolutionIntent(),
+        renderSuperResolutionActive: observedPipelineType === 'webgl2_sr'
+          && srState.outputFrozen !== null,
+        renderSuperResolutionAlgorithm: resolveSuperResolutionIntent()
           ? 'fsr1'
           : undefined,
-        renderSuperResolutionConfiguredTarget: srOutputFrozen?.configuredTier,
-        renderSuperResolutionOutputTarget: srOutputFrozen?.outputTier,
-        renderSuperResolutionRcasStops: currentDisplayState?.superResolutionExperimental === true
-          ? srRcasStopsEffective
+        renderSuperResolutionConfiguredTarget: srState.outputFrozen?.configuredTier,
+        renderSuperResolutionOutputTarget: srState.outputFrozen?.outputTier,
+        renderSuperResolutionRcasStops: resolveSuperResolutionIntent()
+          ? srState.rcasStopsEffective
           : undefined,
-        renderSuperResolutionRcasBaseStops: currentDisplayState?.superResolutionExperimental === true
-          ? srRcasStopsBase
+        renderSuperResolutionRcasBaseStops: resolveSuperResolutionIntent()
+          ? srState.rcasStopsBase
           : undefined,
-        renderSuperResolutionFallbackReason: srFallbackReason,
-        renderSharpenMode: (currentDisplayState?.superResolutionExperimental === true && !srAttachFailed)
+        renderSuperResolutionFallbackReason: srState.fallbackReason,
+        renderSharpenMode: observedPipelineType === 'webgl2_sr'
           ? 'fsr1_rcas'
-          : (renderShaderPath ?? 'none'),
+          : (observedShaderPath ?? 'none'),
         icePolicyMode,
         icePolicyDigest,
         frontEndProfileBaseline: runtimeProfileClassification.baseline,

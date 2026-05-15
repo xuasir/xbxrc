@@ -34,6 +34,8 @@ const testState = vi.hoisted(() => {
       }
     })
 
+    readonly updateRendererAttach = vi.fn()
+
     readonly updateTransportConfig = vi.fn()
     readonly applyVideoSenderPolicy = vi.fn(async () => ({
       status: 'applied',
@@ -147,6 +149,8 @@ vi.mock('./browser-video-display', () => ({
 
 function createLaunchSpec(input?: {
   superResolutionExperimental?: boolean
+  superResolutionPreference?: 'off' | 'fsr1Experimental'
+  pipelinePreference?: 'auto' | 'video' | 'webgl2'
   targetWidth?: number
   targetHeight?: number
 }): RuntimeLaunchSpec {
@@ -170,6 +174,8 @@ function createLaunchSpec(input?: {
         contrast: 100,
         brightness: 100,
       },
+      pipelinePreference: input?.pipelinePreference,
+      superResolutionPreference: input?.superResolutionPreference,
     },
     clientExperimentalSuperResolution: input?.superResolutionExperimental ?? false,
   } as RuntimeLaunchSpec
@@ -220,6 +226,136 @@ describe('browser-runtime super resolution state', () => {
     globalThis.window = originalWindow
   })
 
+  it('keeps Rust pipelinePreference=video after display degrade recalculation', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ pipelinePreference: 'video' }))
+      const client = getClient()
+
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(4_100)
+
+      const snapshot = await runtime.snapshotStats()
+      expect(snapshot.renderPipelineType).toBe('video')
+      expect(snapshot.renderPolicySource).toBe('userOverride')
+      expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
+        pipelineType: 'video',
+        mode: 'native',
+      }))
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks SR attach when pipelinePreference=video even with fsr1Experimental', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({
+        pipelinePreference: 'video',
+        superResolutionPreference: 'fsr1Experimental',
+        superResolutionExperimental: false,
+      }))
+      const client = getClient()
+
+      expect(client.rendererState.superResolutionEnabled).not.toBe(true)
+
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(4_100)
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      const snapshot = await runtime.snapshotStats()
+      expect(snapshot.renderPipelineType).toBe('video')
+      expect(snapshot.renderSuperResolutionEnabled).toBe(true)
+      expect(snapshot.renderSuperResolutionActive).toBe(false)
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('honors Rust superResolutionPreference=fsr1Experimental when UI switch is off', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    await runtime.launch(createLaunchSpec({
+      superResolutionExperimental: false,
+      superResolutionPreference: 'fsr1Experimental',
+    }))
+    const client = getClient()
+
+    client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+
+    runtime.applyDisplayState({
+      displayOptions: {
+        sharpness: 0,
+        saturation: 100,
+        contrast: 100,
+        brightness: 100,
+      },
+      render: {
+        enableAudioControl: false,
+        videoFormat: 'Contain',
+        displayOptions: {
+          sharpness: 0,
+          saturation: 100,
+          contrast: 100,
+          brightness: 100,
+        },
+        superResolutionPreference: 'fsr1Experimental',
+      },
+      superResolutionExperimental: false,
+    })
+
+    const plan = resolveSuperResolutionTierPlan(2560, 1440, 1920, 1080)
+    expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
+      superResolutionOutputTier: plan.outputTier,
+    }))
+    await runtime.snapshotStats()
+    expect(client.updateRendererAttach).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'webgl2_sr',
+    }))
+
+    const snapshot = await runtime.snapshotStats()
+    expect(snapshot.renderSuperResolutionEnabled).toBe(true)
+    expect(snapshot.renderSuperResolutionActive).toBe(true)
+    expect(snapshot.renderSuperResolutionAlgorithm).toBe('fsr1')
+    expect(snapshot.renderSharpenMode).toBe('fsr1_rcas')
+
+    await runtime.stop()
+  })
+
   it('freezes sr tier from latest video size when enabled after videoReady', async () => {
     const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
     await runtime.launch(createLaunchSpec())
@@ -255,9 +391,9 @@ describe('browser-runtime super resolution state', () => {
       superResolutionOutputHeight: plan.outputHeight,
       superResolutionRcasStops: 0.88,
     }))
-    expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-      superResolutionEnabled: true,
-      superResolutionInactiveAfterFailure: false,
+    await runtime.snapshotStats()
+    expect(client.updateRendererAttach).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'webgl2_sr',
     }))
 
     await runtime.stop()
@@ -288,9 +424,28 @@ describe('browser-runtime super resolution state', () => {
 
   it('allows retry after fallback by toggling sr off then on and clears fallback reason', async () => {
     const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
-    await runtime.launch(createLaunchSpec({ superResolutionExperimental: true }))
+    await runtime.launch(createLaunchSpec())
     const client = getClient()
 
+    runtime.applyDisplayState({
+      displayOptions: {
+        sharpness: 0,
+        saturation: 100,
+        contrast: 100,
+        brightness: 100,
+      },
+      render: {
+        enableAudioControl: false,
+        videoFormat: 'Contain',
+        displayOptions: {
+          sharpness: 0,
+          saturation: 100,
+          contrast: 100,
+          brightness: 100,
+        },
+      },
+      superResolutionExperimental: true,
+    })
     client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
     client.eventBus.emit('media.superResolutionFallback', { reason: 'srFramebufferIncomplete:0' })
 
@@ -337,15 +492,12 @@ describe('browser-runtime super resolution state', () => {
     })
 
     expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-      superResolutionEnabled: false,
       superResolutionInactiveAfterFailure: true,
     }))
-    expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-      superResolutionEnabled: true,
-      superResolutionInactiveAfterFailure: false,
-    }))
-
     const recoveredSnapshot = await runtime.snapshotStats()
+    expect(client.updateRendererAttach).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'webgl2_sr',
+    }))
     expect(recoveredSnapshot.renderSuperResolutionFallbackReason).toBeNull()
 
     await runtime.stop()

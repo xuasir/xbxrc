@@ -15,7 +15,10 @@ pub use input::{InputConfig, InputMode, InputPlan, InputPreference};
 pub use negotiation::{
     AudioChannels, BitratePreference, CodecPreference, NegotiationConfig, NegotiationPlan,
 };
-pub use render::{DisplayOptions, RenderConfig, RenderPlan};
+pub use render::{
+    DisplayOptions, FallbackProcessingPreference, PipelineRenderPreference, RenderConfig,
+    RenderPlan, SuperResolutionRenderPreference,
+};
 pub use runtime::{RuntimeConfig, RuntimeMode, RuntimePlan, RuntimePreference};
 pub use session::{ResolutionPreference, SessionConfig, SessionPlan};
 pub use types::*;
