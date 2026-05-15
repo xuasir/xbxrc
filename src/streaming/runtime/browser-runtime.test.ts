@@ -36,9 +36,7 @@ const testState = vi.hoisted(() => {
 
     readonly updateTransportConfig = vi.fn()
     readonly applyVideoSenderPolicy = vi.fn(async () => ({
-      applied: false,
-      effectiveMaxBitrateKbps: 0,
-      reason: 'mock',
+      status: 'applied',
     }))
 
     readonly requestVideoKeyframe = vi.fn(() => ({
@@ -112,7 +110,25 @@ const testState = vi.hoisted(() => {
       },
     },
     applyBrowserVideoDisplay: vi.fn(),
-    bindBrowserVideoFrameTracking: vi.fn(() => () => {}),
+    frameTrackingHandler: undefined as undefined | ((meta?: {
+      callbackIntervalMs?: number
+      presentedFramesDelta?: number
+      sourceFpsEstimate?: number
+      sourceFrameIntervalMs?: number
+      droppedLike: boolean
+    }) => void),
+    bindBrowserVideoFrameTracking: vi.fn((input: {
+      onFrame: (meta?: {
+        callbackIntervalMs?: number
+        presentedFramesDelta?: number
+        sourceFpsEstimate?: number
+        sourceFrameIntervalMs?: number
+        droppedLike: boolean
+      }) => void
+    }) => {
+      testState.frameTrackingHandler = input.onFrame
+      return () => {}
+    }),
   }
 })
 
@@ -173,6 +189,7 @@ describe('browser-runtime super resolution state', () => {
 
   beforeEach(() => {
     testState.MockPlayerClient.instances.length = 0
+    testState.frameTrackingHandler = undefined
     vi.clearAllMocks()
     globalThis.window = {
       setInterval,
@@ -369,5 +386,232 @@ describe('browser-runtime super resolution state', () => {
     await runtime.launch(createLaunchSpec())
 
     expect(testState.rpc.gamepad.resumeShellSampling).not.toHaveBeenCalled()
+  })
+
+  it('promotes quality ladder after warmup when browser-direct has no local video sender', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(4_100)
+
+      const snapshot = await runtime.snapshotStats()
+      expect(snapshot.qualityLadderLevel).toBe('L0')
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'qualityLadderPolicyEvaluated',
+          payload: expect.objectContaining({
+            next: 'L0',
+            resultStatus: 'unsupported',
+            resultDetail: 'missingVideoSender',
+            acceptedWithoutSenderPolicy: true,
+          }),
+        }),
+      )
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps cloud high RTT as profile pressure without dropping quality to L2 when delivery is healthy', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'cloud'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'relay/udp',
+        rtt: 140,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 36_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(9_100)
+
+      const snapshot = await runtime.snapshotStats()
+      expect(snapshot.qualityLadderLevel).toBe('L0')
+      expect(snapshot.senderPolicyCause).toBe('none')
+      expect(testState.rpc.runtimeTrace.recordEvent).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'qualityLadderChanged',
+          payload: expect.objectContaining({
+            next: 'L2',
+            reason: 'networkCongestion',
+          }),
+        }),
+      )
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a single render backpressure event local without limiting sender framerate', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 53,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      testState.frameTrackingHandler?.({
+        callbackIntervalMs: 94,
+        presentedFramesDelta: 3,
+        droppedLike: true,
+      })
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
+        pipelineType: 'webgl2',
+        processing: 'usm',
+        shaderPreset: 'clarityL1',
+      }))
+      expect(client.updateRenderer).not.toHaveBeenCalledWith(expect.objectContaining({
+        pipelineType: 'video',
+      }))
+      for (const call of client.applyVideoSenderPolicy.mock.calls) {
+        expect(call[0]).toEqual(expect.objectContaining({ maxFramerate: 60 }))
+      }
+      const snapshot = await runtime.snapshotStats()
+      expect(snapshot.senderPolicyCause).toBe('none')
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('only reaches display L2 after sustained render pressure and still keeps 60 fps sender policy', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 53,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      testState.frameTrackingHandler?.({
+        callbackIntervalMs: 94,
+        presentedFramesDelta: 3,
+        droppedLike: true,
+      })
+      await vi.advanceTimersByTimeAsync(6_300)
+
+      expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
+        pipelineType: 'webgl2',
+        processing: 'usm',
+        shaderPreset: 'clarityL0',
+      }))
+      expect(client.updateRenderer).not.toHaveBeenCalledWith(expect.objectContaining({
+        pipelineType: 'video',
+      }))
+      for (const call of client.applyVideoSenderPolicy.mock.calls) {
+        expect(call[0]).toEqual(expect.objectContaining({ maxFramerate: 60 }))
+      }
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

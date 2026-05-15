@@ -166,6 +166,7 @@ type RecoveryActionLevel = 'L0' | 'L1' | 'L2' | 'L3'
 type RecoveryActionResult = 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
 type RecoverySuppressedBy = 'factWindow' | 'reasonWindow' | 'cooldown' | 'budget' | 'channelUnhealthy' | 'unknown'
 type RecoveryCause = 'networkCongestion' | 'decodeBackpressure' | 'renderStarvation' | 'controlChannelUnhealthy' | 'unknown'
+type SenderPolicyCause = 'networkCongestion' | 'decodeBackpressure' | 'controlChannelUnhealthy' | 'none'
 type ConfidenceLevel = 'high' | 'low'
 type QualityLadderLevel = 'L0' | 'L1' | 'L2'
 type FirstFrameStage = 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
@@ -414,6 +415,7 @@ export function createBrowserRuntime(options: {
   let networkConfidence: ConfidenceLevel | undefined
   let decodeConfidence: ConfidenceLevel | undefined
   let recoveryCause: RecoveryCause | undefined
+  let senderPolicyCause: SenderPolicyCause = 'none'
   let qualityLadderLevel: QualityLadderLevel = 'L0'
   let qualityLevelChangedAtMs = 0
   let warmupUntilMs = 0
@@ -428,7 +430,12 @@ export function createBrowserRuntime(options: {
   let renderBackpressure = false
   let renderDroppedFrames = 0
   let renderFrameCallbackIntervalMs: number | undefined
+  let renderFrameSourceFpsEstimate: number | undefined
+  let renderFrameSourceFrameIntervalMs: number | undefined
+  let renderFrameSourceFpsCeiling: number | undefined
+  let videoFrameSourceFpsObservationState = createFpsObservationState()
   let renderCause: RenderCause | undefined
+  let renderPressureConsecutiveCount = 0
   let displayDegradeLevel: DisplayDegradeLevel = 'displayL0'
   let displayDegradeLevelChangedAtMs = 0
   let displayRecoveryStableSinceMs: number | undefined
@@ -531,6 +538,39 @@ export function createBrowserRuntime(options: {
       return 'renderStarvation'
     }
     return 'renderStable'
+  }
+
+  function resolveNextDisplayDegradeLevel(input: {
+    renderCause: RenderCause | undefined
+    renderBackpressure: boolean
+  }): { level: DisplayDegradeLevel, reason: string } {
+    if (input.renderCause === 'renderStable' && !input.renderBackpressure) {
+      renderPressureConsecutiveCount = 0
+      return { level: 'displayL0', reason: displayWarmupUntilMs > Date.now() ? 'displayWarmup' : 'renderStable' }
+    }
+    if (input.renderCause === 'decodeBackpressure') {
+      renderPressureConsecutiveCount = 0
+      return { level: 'displayL1', reason: 'decodeBackpressure' }
+    }
+    renderPressureConsecutiveCount += 1
+    if (renderPressureConsecutiveCount >= 3) {
+      return { level: 'displayL2', reason: 'sustainedRenderStarvation' }
+    }
+    return { level: 'displayL1', reason: 'renderStarvation' }
+  }
+
+  function resolveSenderPolicyCause(cause: RecoveryCause | undefined): SenderPolicyCause {
+    if (cause === 'networkCongestion' || cause === 'decodeBackpressure' || cause === 'controlChannelUnhealthy') {
+      return cause
+    }
+    return 'none'
+  }
+
+  function resolveRenderBackpressureThresholdMs(): number {
+    if (renderFrameSourceFrameIntervalMs !== undefined) {
+      return Math.max(80, renderFrameSourceFrameIntervalMs * 2.5)
+    }
+    return 90
   }
 
   function buildRenderDecisionDigest(now: number): string {
@@ -798,8 +838,7 @@ export function createBrowserRuntime(options: {
       shaderPreset: adaptive.shaderPreset,
     })
     const pipelineOverride = resolveRendererPipelineOverride()
-    const srDegradeGuard = currentDisplayState.superResolutionExperimental === true && !srAttachFailed
-    const autoPipeline: 'video' | 'webgl2' = next === 'displayL2' && !srDegradeGuard ? 'video' : 'webgl2'
+    const autoPipeline = 'webgl2' as const
     const autoResolvedPipeline = webgl2Supported ? autoPipeline : 'video'
     const pipelineType = pipelineOverride === 'auto' ? autoResolvedPipeline : pipelineOverride
     const policySource: RenderPolicySource
@@ -1031,27 +1070,42 @@ export function createBrowserRuntime(options: {
   function markFrameReady(meta?: {
     callbackIntervalMs?: number
     presentedFramesDelta?: number
+    sourceFpsEstimate?: number
+    sourceFrameIntervalMs?: number
     droppedLike: boolean
   }): void {
     const now = Date.now()
     if (meta?.callbackIntervalMs !== undefined) {
       renderFrameCallbackIntervalMs = meta.callbackIntervalMs
     }
+    if (meta?.sourceFpsEstimate !== undefined) {
+      renderFrameSourceFpsEstimate = meta.sourceFpsEstimate
+      recordInboundFpsSample(videoFrameSourceFpsObservationState, meta.sourceFpsEstimate)
+    }
+    if (meta?.sourceFrameIntervalMs !== undefined) {
+      renderFrameSourceFrameIntervalMs = meta.sourceFrameIntervalMs
+    }
     if (meta?.droppedLike) {
       renderDroppedFrames += 1
     }
-    const nextBackpressure = (meta?.callbackIntervalMs ?? 0) > 90
+    const backpressureThresholdMs = resolveRenderBackpressureThresholdMs()
+    const nextBackpressure = (meta?.callbackIntervalMs ?? 0) > backpressureThresholdMs
     if (nextBackpressure !== renderBackpressure) {
       renderBackpressure = nextBackpressure
       recordRuntimeTraceEvent('renderBackpressureChanged', {
         backpressure: renderBackpressure,
         callbackIntervalMs: meta?.callbackIntervalMs ?? null,
+        backpressureThresholdMs,
+        sourceFpsEstimate: meta?.sourceFpsEstimate ?? renderFrameSourceFpsEstimate ?? null,
+        sourceFrameIntervalMs: meta?.sourceFrameIntervalMs ?? renderFrameSourceFrameIntervalMs ?? null,
       })
     }
     if (meta?.droppedLike) {
       recordRuntimeTraceEvent('renderFrameDropped', {
         callbackIntervalMs: meta.callbackIntervalMs ?? null,
         presentedFramesDelta: meta.presentedFramesDelta ?? null,
+        sourceFpsEstimate: meta.sourceFpsEstimate ?? renderFrameSourceFpsEstimate ?? null,
+        sourceFrameIntervalMs: meta.sourceFrameIntervalMs ?? renderFrameSourceFrameIntervalMs ?? null,
       })
     }
     if (lastMediaActivityAt !== null) {
@@ -1139,6 +1193,7 @@ export function createBrowserRuntime(options: {
       networkConfidence = undefined
       decodeConfidence = undefined
       recoveryCause = undefined
+      senderPolicyCause = 'none'
       decisionDigest = undefined
       firstDecodedAtMs = undefined
       firstPresentedAtMs = undefined
@@ -1146,7 +1201,12 @@ export function createBrowserRuntime(options: {
       renderBackpressure = false
       renderDroppedFrames = 0
       renderFrameCallbackIntervalMs = undefined
+      renderFrameSourceFpsEstimate = undefined
+      renderFrameSourceFrameIntervalMs = undefined
+      renderFrameSourceFpsCeiling = undefined
+      videoFrameSourceFpsObservationState = createFpsObservationState()
       renderCause = undefined
+      renderPressureConsecutiveCount = 0
       renderDecisionDigest = undefined
       renderAdaptiveProfileDigest = undefined
       fpsObservationState = createFpsObservationState()
@@ -1539,6 +1599,7 @@ export function createBrowserRuntime(options: {
     channelState: string
     sendFailBurst: number
     expectedContentFps: number
+    baseVideoBitrateKbps: number
   }): RecoveryCause {
     if (input.channelState !== 'open' || input.sendFailBurst >= 2) {
       return 'controlChannelUnhealthy'
@@ -1546,7 +1607,13 @@ export function createBrowserRuntime(options: {
     const loss = shortWindowSummary?.lossAvg ?? input.stats.videoTwccLossRatio ?? 0
     const jitter = shortWindowSummary?.jitterMsAvg ?? parseMsTextFromProfile(input.stats.jit)
     const rtt = shortWindowSummary?.rttMsAvg ?? parseMsTextFromProfile(input.stats.rtt)
-    if (loss >= 0.05 || jitter >= 25 || rtt >= 120) {
+    const feedbackIntervalMs = input.stats.videoTwccFeedbackIntervalMs ?? 0
+    const packetAgeMs = input.stats.packetAgeMs ?? 0
+    const inboundKbps = input.stats.inboundVideoBitrateKbps ?? 0
+    const baseBitrate = Math.max(4_000, input.baseVideoBitrateKbps)
+    const lowBitrate = inboundKbps > 0 && inboundKbps < baseBitrate * 0.35
+    const rttWithCorroboration = rtt >= 180 && (loss >= 0.02 || jitter >= 18 || feedbackIntervalMs >= 450 || packetAgeMs > 450 || lowBitrate)
+    if (loss >= 0.05 || jitter >= 35 || feedbackIntervalMs >= 550 || packetAgeMs > 650 || lowBitrate || rttWithCorroboration) {
       return 'networkCongestion'
     }
     const exp = Math.max(24, input.expectedContentFps)
@@ -1563,12 +1630,20 @@ export function createBrowserRuntime(options: {
     const bucket = Math.floor(now / 1000)
     return [
       `c:${recoveryCause ?? 'unknown'}`,
+      `sp:${senderPolicyCause}`,
       `q:${qualityLadderLevel}`,
       `bw:${bandwidthState}`,
       `nc:${networkConfidence ?? 'low'}`,
       `dc:${decodeConfidence ?? 'low'}`,
       `t:${bucket}`,
     ].join('|')
+  }
+
+  function canCommitQualityLadderTransitionWithoutSenderPolicy(result: {
+    status: 'applied' | 'unsupported' | 'failed'
+    detail?: string
+  }): boolean {
+    return result.status === 'unsupported' && result.detail === 'missingVideoSender'
   }
 
   async function applyQualityLadderLevel(next: QualityLadderLevel, reason: string): Promise<void> {
@@ -1581,8 +1656,8 @@ export function createBrowserRuntime(options: {
     }
     const levelConfig: Record<QualityLadderLevel, { bitrateFactor: number, maxFramerate: number }> = {
       L0: { bitrateFactor: 1, maxFramerate: 60 },
-      L1: { bitrateFactor: 0.78, maxFramerate: 45 },
-      L2: { bitrateFactor: 0.58, maxFramerate: 30 },
+      L1: { bitrateFactor: 0.78, maxFramerate: 60 },
+      L2: { bitrateFactor: 0.58, maxFramerate: 60 },
     }
     const config = levelConfig[next]
     const bitrateBps = Math.max(2_000_000, Math.round(baseVideoBitrateKbps * config.bitrateFactor * 1000))
@@ -1591,7 +1666,21 @@ export function createBrowserRuntime(options: {
       maxFramerate: config.maxFramerate,
       degradationPreference: 'maintain-framerate',
     })
-    if (result.status === 'applied') {
+    const acceptedWithoutSenderPolicy = canCommitQualityLadderTransitionWithoutSenderPolicy(result)
+    recordRuntimeTraceEvent('qualityLadderPolicyEvaluated', {
+      previous: qualityLadderLevel,
+      next,
+      reason,
+      maxBitrateBps: bitrateBps,
+      maxFramerate: config.maxFramerate,
+      senderPolicyCause,
+      resultStatus: result.status,
+      resultDetail: result.detail ?? null,
+      acceptedWithoutSenderPolicy,
+      frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+      frontEndExpectedContentFps: expectedContentFpsResolved,
+    })
+    if (result.status === 'applied' || acceptedWithoutSenderPolicy) {
       const previous = qualityLadderLevel
       qualityLadderLevel = next
       qualityLevelChangedAtMs = now
@@ -1601,6 +1690,9 @@ export function createBrowserRuntime(options: {
         reason,
         maxBitrateBps: bitrateBps,
         maxFramerate: config.maxFramerate,
+        senderPolicyCause,
+        policyResultStatus: result.status,
+        policyResultDetail: result.detail ?? null,
         frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
         frontEndExpectedContentFps: expectedContentFpsResolved,
       })
@@ -1945,8 +2037,13 @@ export function createBrowserRuntime(options: {
     controlChannelOpenRatio = nextOpenRatio
     controlChannelBufferedTrend = nextBufferedTrend
     recordInboundFpsSample(fpsObservationState, stats.inboundVideoFps)
-    const ceiling = estimatedCeilingFps(fpsObservationState)
-    const { expected, contentFpsClass } = resolveExpectedContentFps({ stats, estimatedCeiling: ceiling })
+    const inboundFpsCeiling = estimatedCeilingFps(fpsObservationState)
+    renderFrameSourceFpsCeiling = estimatedCeilingFps(videoFrameSourceFpsObservationState)
+    const { expected, contentFpsClass } = resolveExpectedContentFps({
+      stats,
+      estimatedCeiling: inboundFpsCeiling,
+      videoFrameSourceFps: renderFrameSourceFpsCeiling,
+    })
     expectedContentFpsResolved = expected
     if (stats.transportPath !== undefined && stats.transportPath.trim() !== '') {
       latestTransportPath = stats.transportPath.trim()
@@ -1974,6 +2071,9 @@ export function createBrowserRuntime(options: {
       frontEndProfileDynamic: runtimeProfileClassification.dynamic,
       frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
       frontEndExpectedContentFps: expectedContentFpsResolved,
+      frontEndVideoFrameSourceFps: renderFrameSourceFpsEstimate ?? null,
+      frontEndVideoFrameSourceFpsCeiling: renderFrameSourceFpsCeiling ?? null,
+      frontEndVideoFrameSourceFrameIntervalMs: renderFrameSourceFrameIntervalMs ?? null,
       frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
     })
     recoveryCause = classifyRecoveryCause({
@@ -1981,10 +2081,13 @@ export function createBrowserRuntime(options: {
       channelState: channelHealth.state,
       sendFailBurst: channelHealth.sendFailBurst ?? 0,
       expectedContentFps: expectedContentFpsResolved,
+      baseVideoBitrateKbps,
     })
+    senderPolicyCause = resolveSenderPolicyCause(recoveryCause)
     decisionDigest = buildDecisionDigest(now)
     recordRuntimeTraceEvent('recoveryCauseClassified', {
       cause: recoveryCause,
+      senderPolicyCause,
       decisionDigest,
       networkConfidence: networkConfidence ?? 'low',
       decodeConfidence: decodeConfidence ?? 'low',
@@ -2033,11 +2136,11 @@ export function createBrowserRuntime(options: {
         frontEndPolicyInputReason,
       })
     }
-    if (recoveryCause === 'networkCongestion') {
-      void applyQualityLadderLevel('L2', 'networkCongestion')
+    if (senderPolicyCause === 'networkCongestion') {
+      void applyQualityLadderLevel('L2', senderPolicyCause)
     }
-    else if (recoveryCause === 'decodeBackpressure' || recoveryCause === 'renderStarvation') {
-      void applyQualityLadderLevel('L1', recoveryCause)
+    else if (senderPolicyCause === 'decodeBackpressure') {
+      void applyQualityLadderLevel('L1', senderPolicyCause)
     }
     else if (warmupUntilMs > now) {
       void applyQualityLadderLevel('L1', 'warmupProfile')
@@ -2050,20 +2153,11 @@ export function createBrowserRuntime(options: {
       warmupUntilMs,
       bandwidthState,
       recoveryCause,
+      senderPolicyCause,
       qualityLadderLevel,
     })
-    if (renderCause === 'renderStarvation') {
-      void applyDisplayDegradeLevel('displayL2', 'renderStarvation')
-    }
-    else if (renderCause === 'decodeBackpressure' || renderBackpressure) {
-      void applyDisplayDegradeLevel('displayL1', 'decodeBackpressureOrBackpressure')
-    }
-    else if (displayWarmupUntilMs > now) {
-      void applyDisplayDegradeLevel('displayL0', 'displayWarmup')
-    }
-    else {
-      void applyDisplayDegradeLevel('displayL0', 'renderStable')
-    }
+    const nextDisplay = resolveNextDisplayDegradeLevel({ renderCause, renderBackpressure })
+    void applyDisplayDegradeLevel(nextDisplay.level, nextDisplay.reason)
   }
 
   async function checkMediaStalled(): Promise<void> {
@@ -2655,6 +2749,7 @@ export function createBrowserRuntime(options: {
       networkConfidence = undefined
       decodeConfidence = undefined
       recoveryCause = undefined
+      senderPolicyCause = 'none'
       qualityLadderLevel = 'L0'
       qualityLevelChangedAtMs = 0
       warmupUntilMs = 0
@@ -2669,7 +2764,12 @@ export function createBrowserRuntime(options: {
       renderBackpressure = false
       renderDroppedFrames = 0
       renderFrameCallbackIntervalMs = undefined
+      renderFrameSourceFpsEstimate = undefined
+      renderFrameSourceFrameIntervalMs = undefined
+      renderFrameSourceFpsCeiling = undefined
+      videoFrameSourceFpsObservationState = createFpsObservationState()
       renderCause = undefined
+      renderPressureConsecutiveCount = 0
       displayDegradeLevel = 'displayL0'
       displayDegradeLevelChangedAtMs = 0
       displayRecoveryStableSinceMs = undefined
@@ -2756,6 +2856,7 @@ export function createBrowserRuntime(options: {
       networkConfidence = undefined
       decodeConfidence = undefined
       recoveryCause = undefined
+      senderPolicyCause = 'none'
       qualityLadderLevel = 'L0'
       qualityLevelChangedAtMs = 0
       warmupUntilMs = 0
@@ -2770,7 +2871,12 @@ export function createBrowserRuntime(options: {
       renderBackpressure = false
       renderDroppedFrames = 0
       renderFrameCallbackIntervalMs = undefined
+      renderFrameSourceFpsEstimate = undefined
+      renderFrameSourceFrameIntervalMs = undefined
+      renderFrameSourceFpsCeiling = undefined
+      videoFrameSourceFpsObservationState = createFpsObservationState()
       renderCause = undefined
+      renderPressureConsecutiveCount = 0
       displayDegradeLevel = 'displayL0'
       displayDegradeLevelChangedAtMs = 0
       displayRecoveryStableSinceMs = undefined
@@ -2922,6 +3028,7 @@ export function createBrowserRuntime(options: {
         networkConfidence,
         decodeConfidence,
         recoveryCause,
+        senderPolicyCause,
         qualityLadderLevel,
         decisionDigest,
         firstFrameStage,

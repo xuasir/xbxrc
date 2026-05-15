@@ -66,6 +66,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const networkConfidence = input.runtimeSnapshot?.networkConfidence
   const decodeConfidence = input.runtimeSnapshot?.decodeConfidence
   const recoveryCause = input.runtimeSnapshot?.recoveryCause
+  const senderPolicyCause = input.runtimeSnapshot?.senderPolicyCause
   const qualityLadderLevel = input.runtimeSnapshot?.qualityLadderLevel
   const decisionDigest = input.runtimeSnapshot?.decisionDigest?.trim() || undefined
   const firstFrameStage = input.runtimeSnapshot?.firstFrameStage
@@ -236,6 +237,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
     networkConfidence,
     decodeConfidence,
     recoveryCause,
+    senderPolicyCause,
     qualityLadderLevel,
     decisionDigest,
     firstFrameStage,

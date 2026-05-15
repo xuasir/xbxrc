@@ -83,9 +83,9 @@ describe('bindBrowserVideoFrameTracking', () => {
     })
   })
 
-  it('reports presentedFramesDelta and droppedLike for video frame callback path', () => {
+  it('reports source fps, presentedFramesDelta, and droppedLike for video frame callback path', () => {
     const onFrame = vi.fn()
-    type FrameCallback = (now: number, metadata: { presentedFrames?: number }) => void
+    type FrameCallback = (now: number, metadata: { mediaTime?: number, presentedFrames?: number }) => void
     class LocalHTMLElement {}
     class LocalVideoElement extends LocalHTMLElement {
       style: Record<string, string> = {}
@@ -103,7 +103,7 @@ describe('bindBrowserVideoFrameTracking', () => {
         this.frameCallback = undefined
       }
 
-      fireFrame(now: number, metadata: { presentedFrames?: number }): void {
+      fireFrame(now: number, metadata: { mediaTime?: number, presentedFrames?: number }): void {
         this.frameCallback?.(now, metadata)
       }
     }
@@ -134,8 +134,8 @@ describe('bindBrowserVideoFrameTracking', () => {
       onFrame,
     })
 
-    video.fireFrame(10_000, { presentedFrames: 1 })
-    video.fireFrame(10_140, { presentedFrames: 3 })
+    video.fireFrame(10_000, { mediaTime: 100, presentedFrames: 1 })
+    video.fireFrame(10_140, { mediaTime: 100 + (2 / 30), presentedFrames: 3 })
     cleanup()
 
     expect(onFrame).toHaveBeenCalledTimes(2)
@@ -149,5 +149,7 @@ describe('bindBrowserVideoFrameTracking', () => {
       presentedFramesDelta: 2,
       droppedLike: true,
     })
+    expect(onFrame.mock.calls[1][0].sourceFpsEstimate).toBeCloseTo(30)
+    expect(onFrame.mock.calls[1][0].sourceFrameIntervalMs).toBeCloseTo(1000 / 30)
   })
 })

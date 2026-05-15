@@ -167,12 +167,24 @@ function parseNumericFps(value: string | number | undefined): number | undefined
 export function resolveExpectedContentFps(input: {
   stats: StreamStats
   estimatedCeiling?: number
+  videoFrameSourceFps?: number
 }): { expected: number, contentFpsClass: FrontEndContentFpsClass } {
-  const explicit = parseNumericFps(input.stats.fps)
-  let candidate = input.estimatedCeiling
-  if (candidate === undefined && explicit !== undefined && explicit >= 10 && explicit <= 120) {
-    candidate = explicit
+  if (input.videoFrameSourceFps !== undefined) {
+    if (input.videoFrameSourceFps <= 38) {
+      return { expected: 30, contentFpsClass: 'content30' }
+    }
+    if (input.videoFrameSourceFps >= 52) {
+      return { expected: 60, contentFpsClass: 'content60' }
+    }
   }
+  const explicit = parseNumericFps(input.stats.fps)
+  if (explicit !== undefined && explicit >= 52) {
+    return { expected: 60, contentFpsClass: 'content60' }
+  }
+  if (explicit !== undefined && explicit <= 38 && explicit >= 20) {
+    return { expected: 30, contentFpsClass: 'content30' }
+  }
+  const candidate = input.estimatedCeiling
   if (candidate !== undefined) {
     if (candidate <= 38) {
       return { expected: 30, contentFpsClass: 'content30' }
@@ -180,12 +192,6 @@ export function resolveExpectedContentFps(input: {
     if (candidate >= 52) {
       return { expected: 60, contentFpsClass: 'content60' }
     }
-  }
-  if (explicit !== undefined && explicit <= 38 && explicit >= 20) {
-    return { expected: 30, contentFpsClass: 'content30' }
-  }
-  if (explicit !== undefined && explicit >= 52) {
-    return { expected: 60, contentFpsClass: 'content60' }
   }
   return { expected: 60, contentFpsClass: 'contentUnknown' }
 }
@@ -479,6 +485,7 @@ export function explainFrontEndQualityUpshiftBlock(input: {
   warmupUntilMs: number
   bandwidthState: BandwidthState
   recoveryCause: RecoveryCause | undefined
+  senderPolicyCause?: 'networkCongestion' | 'decodeBackpressure' | 'controlChannelUnhealthy' | 'none'
   qualityLadderLevel: QualityLadderLevel
 }): string | undefined {
   if (input.qualityLadderLevel === 'L0') {
@@ -496,8 +503,8 @@ export function explainFrontEndQualityUpshiftBlock(input: {
   if (input.bandwidthState === 'recovering') {
     return 'bandwidthState:recovering'
   }
-  if (input.recoveryCause === 'decodeBackpressure' || input.recoveryCause === 'renderStarvation') {
-    return `recoveryCause:${input.recoveryCause}`
+  if (input.senderPolicyCause === 'decodeBackpressure') {
+    return `senderPolicyCause:${input.senderPolicyCause}`
   }
   return undefined
 }

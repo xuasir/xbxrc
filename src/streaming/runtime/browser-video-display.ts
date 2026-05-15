@@ -84,6 +84,8 @@ export function bindBrowserVideoFrameTracking(input: {
   onFrame: (meta?: {
     callbackIntervalMs?: number
     presentedFramesDelta?: number
+    sourceFpsEstimate?: number
+    sourceFrameIntervalMs?: number
     droppedLike: boolean
   }) => void
 }): () => void {
@@ -92,6 +94,7 @@ export function bindBrowserVideoFrameTracking(input: {
   const supportsVideoFrameCallback = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
   let lastCallbackAt = 0
   let lastPresentedFrames = 0
+  let lastMediaTime: number | undefined
   let frameCallbackHandle: number | null = null
 
   const handleTimeUpdate = (): void => {
@@ -122,6 +125,7 @@ export function bindBrowserVideoFrameTracking(input: {
     const video = boundVideo as HTMLVideoElement & {
       requestVideoFrameCallback: (
         callback: (now: number, metadata: {
+          mediaTime?: number
           presentedFrames?: number
         }) => void,
       ) => number
@@ -134,10 +138,28 @@ export function bindBrowserVideoFrameTracking(input: {
         ? Math.max(0, nextPresentedFrames - lastPresentedFrames)
         : undefined
       lastPresentedFrames = nextPresentedFrames
-      const droppedLike = (callbackIntervalMs ?? 0) > 90 || ((presentedFramesDelta ?? 1) > 1)
+      const mediaTimeDeltaSec = lastMediaTime !== undefined && metadata.mediaTime !== undefined
+        ? metadata.mediaTime - lastMediaTime
+        : undefined
+      lastMediaTime = metadata.mediaTime
+      const sourceFpsEstimate = mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec > 0.005 && mediaTimeDeltaSec < 1
+        ? (presentedFramesDelta !== undefined && presentedFramesDelta > 0 ? presentedFramesDelta : 1) / mediaTimeDeltaSec
+        : undefined
+      const normalizedSourceFpsEstimate = sourceFpsEstimate !== undefined && Number.isFinite(sourceFpsEstimate) && sourceFpsEstimate >= 10 && sourceFpsEstimate <= 120
+        ? sourceFpsEstimate
+        : undefined
+      const sourceFrameIntervalMs = normalizedSourceFpsEstimate !== undefined
+        ? 1000 / normalizedSourceFpsEstimate
+        : undefined
+      const intervalDropThresholdMs = sourceFrameIntervalMs !== undefined
+        ? Math.max(80, sourceFrameIntervalMs * 2.5)
+        : 90
+      const droppedLike = (callbackIntervalMs ?? 0) > intervalDropThresholdMs || ((presentedFramesDelta ?? 1) > 1)
       input.onFrame({
         callbackIntervalMs,
         presentedFramesDelta,
+        sourceFpsEstimate: normalizedSourceFpsEstimate,
+        sourceFrameIntervalMs,
         droppedLike,
       })
       scheduleVideoFrameCallback()
@@ -160,6 +182,7 @@ export function bindBrowserVideoFrameTracking(input: {
       boundVideo = video
       lastCallbackAt = 0
       lastPresentedFrames = 0
+      lastMediaTime = undefined
       if (!supportsVideoFrameCallback) {
         boundVideo.addEventListener('timeupdate', handleTimeUpdate, { passive: true })
       }

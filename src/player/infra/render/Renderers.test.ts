@@ -116,6 +116,7 @@ describe('renderers', () => {
       uniform2f: vi.fn(),
       uniform1f: vi.fn(),
       texImage2D: vi.fn(),
+      texSubImage2D: vi.fn(),
       drawArrays: vi.fn(),
       VERTEX_SHADER: 1,
       FRAGMENT_SHADER: 2,
@@ -131,6 +132,7 @@ describe('renderers', () => {
       TEXTURE_MAG_FILTER: 12,
       LINEAR: 13,
       RGB: 14,
+      RGBA: 19,
       UNSIGNED_BYTE: 15,
       TRIANGLES: 16,
       COMPILE_STATUS: 17,
@@ -159,9 +161,10 @@ describe('renderers', () => {
       dataset: Record<string, string> = {}
       videoWidth = 1920
       videoHeight = 1080
+      frameCallback: (() => void) | null = null
       insertAdjacentElement = vi.fn()
       requestVideoFrameCallback(callback: () => void): number {
-        void callback
+        this.frameCallback = callback
         return 1
       }
 
@@ -178,12 +181,14 @@ describe('renderers', () => {
       targetFps: 45,
     }))
     await renderer.attach(video)
+    ;(video as unknown as LocalVideoElement).frameCallback?.()
     renderer.update({ sharpness: 6, targetFps: 30, brightness: 120 })
     renderer.destroy()
 
     expect(video.dataset.renderPipeline).toBe('webgl2')
     expect((video as unknown as LocalVideoElement).insertAdjacentElement).toHaveBeenCalled()
     expect(gl.uniform1f).toHaveBeenCalled()
+    expect(gl.texSubImage2D).toHaveBeenCalled()
     expect(canvasNode.remove).toHaveBeenCalled()
     expect(canvasNode.addEventListener).toHaveBeenCalled()
     expect(canvasNode.removeEventListener).toHaveBeenCalled()
@@ -219,6 +224,7 @@ describe('renderers', () => {
       uniform2f: vi.fn(),
       uniform1f: vi.fn(),
       texImage2D: vi.fn(),
+      texSubImage2D: vi.fn(),
       drawArrays: vi.fn(),
       VERTEX_SHADER: 1,
       FRAGMENT_SHADER: 2,
@@ -234,6 +240,7 @@ describe('renderers', () => {
       TEXTURE_MAG_FILTER: 12,
       LINEAR: 13,
       RGB: 14,
+      RGBA: 19,
       UNSIGNED_BYTE: 15,
       TRIANGLES: 16,
       COMPILE_STATUS: 17,
@@ -307,6 +314,7 @@ describe('renderers', () => {
       uniform2f: vi.fn(),
       uniform1f: vi.fn(),
       texImage2D: vi.fn(),
+      texSubImage2D: vi.fn(),
       drawArrays: vi.fn(),
       VERTEX_SHADER: 1,
       FRAGMENT_SHADER: 2,
@@ -322,6 +330,7 @@ describe('renderers', () => {
       TEXTURE_MAG_FILTER: 12,
       LINEAR: 13,
       RGB: 14,
+      RGBA: 19,
       UNSIGNED_BYTE: 15,
       TRIANGLES: 16,
       COMPILE_STATUS: 17,

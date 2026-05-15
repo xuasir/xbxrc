@@ -147,6 +147,11 @@ function emitSelect(node: TopNavNodeKey): void {
   display: inline-flex;
 }
 
+.top-nav__avatar :deep(.sn-icon-button) {
+  padding: 0;
+  overflow: hidden;
+}
+
 .top-nav :deep(.sn-icon-button) {
   width: var(--ui-size-control-xl);
   height: var(--ui-size-control-xl);
@@ -171,8 +176,8 @@ function emitSelect(node: TopNavNodeKey): void {
 
 .top-nav__avatar-image,
 .top-nav__avatar-placeholder {
-  width: var(--ui-size-icon-lg);
-  height: var(--ui-size-icon-lg);
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   display: block;
 }

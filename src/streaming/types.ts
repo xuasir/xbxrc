@@ -188,6 +188,7 @@ export interface StreamPerformanceSnapshot {
   networkConfidence?: 'high' | 'low'
   decodeConfidence?: 'high' | 'low'
   recoveryCause?: 'networkCongestion' | 'decodeBackpressure' | 'renderStarvation' | 'controlChannelUnhealthy' | 'unknown'
+  senderPolicyCause?: 'networkCongestion' | 'decodeBackpressure' | 'controlChannelUnhealthy' | 'none'
   qualityLadderLevel?: 'L0' | 'L1' | 'L2'
   decisionDigest?: string
   firstFrameStage?: 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
@@ -310,6 +311,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   networkConfidence?: 'high' | 'low'
   decodeConfidence?: 'high' | 'low'
   recoveryCause?: 'networkCongestion' | 'decodeBackpressure' | 'renderStarvation' | 'controlChannelUnhealthy' | 'unknown'
+  senderPolicyCause?: 'networkCongestion' | 'decodeBackpressure' | 'controlChannelUnhealthy' | 'none'
   qualityLadderLevel?: 'L0' | 'L1' | 'L2'
   decisionDigest?: string
   firstFrameStage?: 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
@@ -415,6 +417,7 @@ export interface StreamBrowserDiagnosticsViewModel {
   controlChannelBufferedTrend: string
   keyframeSuccessRate: string
   recoveryCause: string
+  senderPolicyCause: string
   qualityLadderLevel: string
   decisionDigest: string
 }

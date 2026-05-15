@@ -191,6 +191,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private program: WebGLProgram | null = null
   private currentWidth = 0
   private currentHeight = 0
+  private textureAllocated = false
   private hasDrawnFrame = false
   private contextListenersBound = false
   private readonly onContextLost = (event: Event): void => {
@@ -210,12 +211,13 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
 
   protected setup(): void {
     const gl = this.canvas.getContext('webgl2', {
-      antialias: true,
-      alpha: true,
+      antialias: false,
+      alpha: false,
       depth: false,
+      desynchronized: true,
       preserveDrawingBuffer: false,
       stencil: false,
-      powerPreference: 'default',
+      powerPreference: 'high-performance',
     } as WebGLContextAttributes) as WebGL2RenderingContext | null
     if (gl === null) {
       throw new Error('webgl2ContextUnavailable')
@@ -257,11 +259,11 @@ vec3 clarityBoost(vec2 uv, vec3 center) {
   vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
   vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
   vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
-  vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
-  vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
-  vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
-  vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
   if (filterId == 1) {
+    vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
+    vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
+    vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
+    vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
     vec3 blur = (a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0;
     blur /= 16.0;
     return center + (center - blur) * (sharpenFactor / 3.0);
@@ -269,14 +271,11 @@ vec3 clarityBoost(vec2 uv, vec3 center) {
   // filterId == 2 走 CAS 风格锐化；这里是单通道锐化后处理，不含 FSR 超分重建。
   vec3 minRgb = min(min(min(d, center), min(f, b)), h);
   vec3 maxRgb = max(max(max(d, center), max(f, b)), h);
-  if (qualityMode) {
-    minRgb += min(min(a, c), min(g, i));
-    maxRgb += max(max(a, c), max(g, i));
-  }
   vec3 reciprocalMaxRgb = 1.0 / maxRgb;
   vec3 amplifyRgb = clamp(min(minRgb, 2.0 - maxRgb) * reciprocalMaxRgb, 0.0, 1.0);
   amplifyRgb = inversesqrt(amplifyRgb);
-  vec3 weightRgb = -(1.0 / (amplifyRgb * 5.6));
+  float qualityWeight = qualityMode ? 5.2 : 5.6;
+  vec3 weightRgb = -(1.0 / (amplifyRgb * qualityWeight));
   vec3 reciprocalWeightRgb = 1.0 / (4.0 * weightRgb + 1.0);
   vec3 window = b + d + f + h;
   vec3 outColor = clamp((window * weightRgb + center) * reciprocalWeightRgb, 0.0, 1.0);
@@ -320,6 +319,7 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.uniform1i(gl.getUniformLocation(program, 'data'), 0)
+    this.textureAllocated = false
     this.refresh()
   }
 
@@ -347,9 +347,24 @@ void main() {
       this.canvas.width = this.currentWidth
       this.canvas.height = this.currentHeight
       gl.viewport(0, 0, this.currentWidth, this.currentHeight)
+      this.textureAllocated = false
       this.refresh()
     }
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.video)
+    if (!this.textureAllocated) {
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        this.currentWidth,
+        this.currentHeight,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+      )
+      this.textureAllocated = true
+    }
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true

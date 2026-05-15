@@ -43,13 +43,13 @@ describe('classifyFrontEndBaseline', () => {
 })
 
 describe('resolveExpectedContentFps', () => {
-  it('classifies 30fps ceiling', () => {
+  it('keeps explicit 60fps ahead of a low observed ceiling', () => {
     const r = resolveExpectedContentFps({
       stats: baseStats({ fps: 60 }),
       estimatedCeiling: 29,
     })
-    expect(r.expected).toBe(30)
-    expect(r.contentFpsClass).toBe('content30')
+    expect(r.expected).toBe(60)
+    expect(r.contentFpsClass).toBe('content60')
   })
   it('classifies 60fps ceiling', () => {
     const r = resolveExpectedContentFps({
@@ -63,6 +63,23 @@ describe('resolveExpectedContentFps', () => {
     const r = resolveExpectedContentFps({
       stats: baseStats({ fps: 30 }),
       estimatedCeiling: undefined,
+    })
+    expect(r.expected).toBe(30)
+    expect(r.contentFpsClass).toBe('content30')
+  })
+  it('uses observed ceiling when explicit fps is unavailable', () => {
+    const r = resolveExpectedContentFps({
+      stats: baseStats({ fps: undefined }),
+      estimatedCeiling: 29,
+    })
+    expect(r.expected).toBe(30)
+    expect(r.contentFpsClass).toBe('content30')
+  })
+  it('prefers video frame source fps over playback fps', () => {
+    const r = resolveExpectedContentFps({
+      stats: baseStats({ fps: 60 }),
+      estimatedCeiling: 60,
+      videoFrameSourceFps: 30,
     })
     expect(r.expected).toBe(30)
     expect(r.contentFpsClass).toBe('content30')
