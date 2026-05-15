@@ -12,11 +12,11 @@
 ## Background
 
 - 最新 xHome 失败 trace 已确认：本地 recreate 已触发，但服务端在旧 session cleanup 未收敛时复用了同一个 `Provisioning` session。
-- 对比 `XStreamingDesktop` 后发现，两侧在 xHome 下最大的可疑差异不在 wake/Provisioning 时序，而在会话创建请求画像：`clientAppId`、浏览器版本、显示尺寸以及是否显式携带 `User-Agent` 都不同。
+- 对比 `参比实现` 后发现，两侧在 xHome 下最大的可疑差异不在 wake/Provisioning 时序，而在会话创建请求画像：`clientAppId`、浏览器版本、显示尺寸以及是否显式携带 `User-Agent` 都不同。
 
 ## Goal
 
-- 将我方 xHome `/v5/sessions/home/play` 请求画像向 `XStreamingDesktop` 做最小对齐。
+- 将我方 xHome `/v5/sessions/home/play` 请求画像向 `参比实现` 做最小对齐。
 - 先验证服务端是否会因为更接近官方 web 客户端画像而减少 `Provisioning` 粘滞 session / reused session 问题。
 
 ## Scope
@@ -32,14 +32,14 @@
 
 ## Plan
 
-1. 收敛 xHome 与 XStreamingDesktop 的画像差异。
+1. 收敛 xHome 与参比实现的画像差异。
 2. 实施最小 xHome-only 画像对齐。
 3. 补测试并完成编译验证。
 
 ## Validation
 
 - [x] `cargo fmt -p xbox-streaming`
-- [x] `cargo test -p xbox-streaming home_session_headers_align_with_xstreamingdesktop_image -- --nocapture`
+- [x] `cargo test -p xbox-streaming home_session_headers_include_user_agent_and_follow_home_resolution --lib -- --nocapture`
 - [x] `cargo test -p xbox-streaming cloud_session_headers_keep_custom_image -- --nocapture`
 - [x] `cargo check -p xbox-streaming`
 
@@ -58,7 +58,7 @@
 
 - Date: 2026-03-23 | Status: done
 - Update: 本轮先按最小实验原则，只改 xHome 会话创建画像，不碰 RTC/视频或更大握手策略。
-- Decision: 优先对齐 `XStreamingDesktop` 的 `www.xbox.com` 客户端画像，并保留 cloud 现有画像不动。
+- Decision: 优先对齐 `参比实现` 的 `www.xbox.com` 客户端画像，并保留 cloud 现有画像不动。
 - Update: `compile_session()` 现按 target 分流画像编译：home 对齐 `www.xbox.com` / `130.0` / `1920x1080`，且不再显式发送 `User-Agent`；cloud 保持原有 `com.xuasir.xbxrc` / `140.0.3485.54` / `4096x2160` 与设备型 `User-Agent`。
 - Validation: 两条定向单测与 `cargo check -p xbox-streaming` 已通过。
 - Risk/Blocker: 若对齐后仍复用旧 session，再继续回到更严格的 home ready 判定或服务端 sticky-session 规避策略。

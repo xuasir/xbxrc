@@ -13,12 +13,12 @@
 
 - 最新两份 home 失败日志显示：`waitingConsoleReady` 已由 SmartGlass-only 显式注册成功放行，`creatingSession` 也能成功返回 `sessionId`。
 - 失败点继续收敛在 `waitingSessionReady`：session 长时间停在 `Provisioning`，没有进入 `ReadyToConnect`，本地也从未发送 connect token。
-- 与 `XStreamingDesktop` 对照后可确认：对照实现面对 `Provisioning` 只持续轮询，不会因为本地超时推断而主动 recreate。
+- 与 `参比实现` 对照后可确认：对照实现面对 `Provisioning` 只持续轮询，不会因为本地超时推断而主动 recreate。
 - 现有本地 `Provisioning` 超时重建补偿已经被新日志证伪：即使 recreate 拿到新的 `sessionId`，仍会继续卡在 `Provisioning`。
 
 ## Goal
 
-- 让 home 会话层在 `Provisioning` 阶段对齐 `XStreamingDesktop` 的保守等待策略。
+- 让 home 会话层在 `Provisioning` 阶段对齐 `参比实现` 的保守等待策略。
 - 收紧本地补偿逻辑，避免因过早 recreate 打断服务端原本还会推进的 session。
 
 ## Scope
@@ -50,7 +50,7 @@
 ## Risks
 
 - 如果远端 `Provisioning` 真会永久卡住，本次改动会把失败显式推迟到更晚的统一 timeout，而不是 10 秒内快速重建。
-- 当前结论建立在本地日志与 `XStreamingDesktop` 行为对照上，仍需用户再跑一轮真实 home 握手验证。
+- 当前结论建立在本地日志与 `参比实现` 行为对照上，仍需用户再跑一轮真实 home 握手验证。
 
 ## Progress
 
@@ -63,5 +63,5 @@
 - Date: 2026-03-23 | Status: completed
 - Update: 已在 `wait_until_session_started_or_failed()` 移除首个 home attempt 的 `Provisioning` 10 秒快速失败逻辑，不再生成 `homeProvisioningStallTimeout`。
 - Update: 已在 `decide_home_session_ready_recreate_retry()` 中删除 `streamingStartTimeout` / `homeProvisioningStallTimeout` 对应的 recreate 分支，仅保留 `WaitingForServerToRegister / ServerNeverRegistered` 这类显式注册错误。
-- Decision: `Provisioning` 本身不再作为本地主动 recreate 的证据；本地对齐 `XStreamingDesktop`，在该状态只继续轮询等待服务端推进。
+- Decision: `Provisioning` 本身不再作为本地主动 recreate 的证据；本地对齐 `参比实现`，在该状态只继续轮询等待服务端推进。
 - Risk/Blocker: 仍需结合下一份真实 home 失败/成功日志，确认本地不再因为补偿逻辑过早打断 session。

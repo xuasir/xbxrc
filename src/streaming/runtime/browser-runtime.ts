@@ -861,13 +861,9 @@ export function createBrowserRuntime(options: {
       shaderPreset: adaptive.shaderPreset,
     })
     const pipelineOverride = resolveRendererPipelineOverride()
-    const autoResolvedPipeline = webgl2Supported ? 'webgl2' as const : 'video' as const
-    const basePipeline = pipelineOverride === 'auto' ? autoResolvedPipeline : pipelineOverride
     const srIntent = resolveSuperResolutionIntent()
-    const srRendererEligible = basePipeline === 'webgl2'
-      && srIntent
-      && !srState.attachFailed
-    const applyDynamicSr = !srRendererEligible
+    // SR 走 webgl2_sr 时仍应用动态 RCAS（拥塞/档位/码率），低码率时抬高 stops 减轻块噪声锐化。
+    const applyDynamicSrRcasForDisplayDegrade = true
     const plan = resolveBrowserRendererPlan({
       displayDegradeLevel: next,
       displayOptions,
@@ -887,7 +883,7 @@ export function createBrowserRuntime(options: {
       superResolutionUserIntent: srIntent,
       superResolutionAttachFailed: srState.attachFailed,
       superResolutionRcasStopsBase: srState.rcasStopsBase,
-      applyDynamicSrRcasForDisplayDegrade: applyDynamicSr,
+      applyDynamicSrRcasForDisplayDegrade,
       srRcasDynamicContext: {
         bandwidthState,
         networkConfidence,

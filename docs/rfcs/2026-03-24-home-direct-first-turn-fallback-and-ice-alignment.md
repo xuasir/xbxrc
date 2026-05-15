@@ -11,14 +11,14 @@
 
 ## Background
 
-- 当前 home Rust-owned 路径会在 plan resolved 后直接把 fallback TURN 注入 PeerConnection，与 `XStreamingDesktop` 的“先直连，失败后再 fallback TURN”策略不一致。
-- 当前 `XStreamingDesktop` 还会对远端 ICE candidates 做 Teredo IPv4 派生、排序和 end-of-candidates 归一化；canonical 路径虽已有部分归一化能力，但整体行为边界仍未显式对齐。
+- 当前 home Rust-owned 路径会在 plan resolved 后直接把 fallback TURN 注入 PeerConnection，与 `参比实现` 的“先直连，失败后再 fallback TURN”策略不一致。
+- 当前 `参比实现` 还会对远端 ICE candidates 做 Teredo IPv4 派生、排序和 end-of-candidates 归一化；canonical 路径虽已有部分归一化能力，但整体行为边界仍未显式对齐。
 - 最新 home trace 显示单次 Rust-owned 协商在未建立媒体前即关闭，需把“直连优先 + fallback 重试”和候选加工对齐纳入同一改造面。
 
 ## Goal
 
 - 让 home Rust-owned 路径先尝试 direct ICE，不在首轮协商时立即使用 fallback TURN。
-- 当 direct 尝试明确失败后，再进入 fallback TURN 重试，行为语义对齐 `XStreamingDesktop`。
+- 当 direct 尝试明确失败后，再进入 fallback TURN 重试，行为语义对齐 `参比实现`。
 - 对齐 ICE candidate 加工策略，确保 canonical 路径在候选归一化、Teredo 补偿、排序与收敛上具备稳定一致的语义。
 
 ## Scope
@@ -27,7 +27,7 @@
   - `crates/xbox-streaming` 中 home fallback TURN 的 runtime / signaling 策略编排
   - `src-tauri/src/mods/streaming` 与 `src-tauri/src/mods/xbxengine` 的 runtime 启动/重试桥接
   - `crates/xbxengine` 的 home ICE 启动、失败切换、候选交换与相关诊断
-  - 对照 `XStreamingDesktop` 的 direct-first / fallback TURN 与 ICE candidate 加工行为
+  - 对照 `参比实现` 的 direct-first / fallback TURN 与 ICE candidate 加工行为
   - 必要的文档、RFC、task tracker、完成后 report
 - Out of scope:
   - cloud streaming 行为改动
@@ -44,13 +44,13 @@
 
 - [x] 验证 home direct-first 尝试首轮不注入 fallback TURN。
 - [x] 验证 direct 失败后会进入 fallback TURN 重试，且 trace 可区分两轮尝试。
-- [x] 验证 ICE candidate 加工与 `XStreamingDesktop` 对齐的关键场景（Teredo、排序、EOC）。
+- [x] 验证 ICE candidate 加工与 `参比实现` 对齐的关键场景（Teredo、排序、EOC）。
 - [x] 运行受影响 Rust crate 的定点测试与 `cargo check`。
 
 ## Risks
 
 - direct/fallback 切换 owner 选错层级，可能让 runtime / session / recovery 边界继续腐化。
-- 过度照搬 `XStreamingDesktop` 的浏览器行为，可能与 Rust-owned RTC 栈的时序约束不匹配。
+- 过度照搬 `参比实现` 的浏览器行为，可能与 Rust-owned RTC 栈的时序约束不匹配。
 - fallback TURN 重试若与现有 reconnect/recovery 机制叠加不当，可能出现重复重试或 session 清理不完整。
 
 ## Progress

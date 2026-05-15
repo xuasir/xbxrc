@@ -161,7 +161,7 @@ interface BrowserSuperResolutionState {
 }
 ```
 
-首轮按既有行为迁移。第二步按 `browser-fsr1-super-resolution-experimental` RFC 收紧为固定低 RCAS，停止把 display degrade / bandwidth 动态映射到 SR RCAS。
+首轮按既有行为迁移。`webgl2_sr` 激活时 RCAS stops 仍经 `resolveDynamicSuperResolutionRcasStops`（拥塞、显示档位、入站码率 vs 基线），在固定 tier 合同上软化低码率下的锐化；`applyDynamicSrRcasForDisplayDegrade === false` 仅用于单测/显式关闭路径。
 
 ## Plan
 
@@ -186,8 +186,8 @@ interface BrowserSuperResolutionState {
    - Tauri DTO 与 `src/shared/rpc/streaming.ts` 同步
    - 浏览器 policy input 改为消费 projection 字段
 6. 按 SR RFC 修正合同漂移。
-   - SR active 后固定使用 `FSR1 EASU + low RCAS`
-   - display degrade 只影响标准 `webgl2` USM/CAS 路径
+   - SR active 后固定使用 `FSR1 EASU + RCAS`；RCAS stops 基线由 tier ladder 定，运行期可由 policy 动态调节（拥塞等）
+   - display degrade 同时影响标准 `webgl2` USM/CAS 与 SR 路径的 RCAS stops
    - diagnostics 明确 `renderPipelineKind = webgl2_sr`
 
 ## Validation

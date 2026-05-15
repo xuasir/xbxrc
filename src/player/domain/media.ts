@@ -126,6 +126,11 @@ export interface RendererRuntimeConfig {
   superResolutionFallbackProcessing?: 'usm' | 'cas'
   /** 本会话内 SR attach 失败后置位，阻止再次选用 SR renderer。 */
   superResolutionInactiveAfterFailure?: boolean
+  /**
+   * 仅客户端注入：SR 在 attach 成功后绘制期仍失败（如持续 GL 错误）时回调，
+   * 由 PlaybackService 切回标准 webgl2。不向 Rust 序列化。
+   */
+  superResolutionRuntimeDegradeNotifier?: (reason: string) => void
 }
 
 export interface StreamStats {

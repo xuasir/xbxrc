@@ -2,10 +2,18 @@
  * FSR1 EASU + RCAS 双 pass（WebGL2 / GLSL ES 3.00）。
  * 算法与常量布局源自 AMD GPUOpen FidelityFX-FSR `ffx_fsr1.h` / `ffx_a.h`；
  * 本文件为 API 与着色语言移植，采样回调用 `textureGather`/`texelFetch` 实现。
+ *
+ * 运行期策略（对齐常见 Web 端视频呈现链思路，简化版）：
+ * - P0：视频源纹理尺寸稳定后用 `texSubImage2D`；输出不大于源分辨率时走呈现 shader，跳过 EASU/RCAS。
+ * - P1：绘制链 twoPass → EASU-only（blit 中间纹理）→ linear（视频直出缩放）；仍失败则
+ *   `superResolutionRuntimeDegradeNotifier` 交 PlaybackService 回退标准 webgl2。
+ * - RCAS：十字邻域 min/max 外扩钳制 + 与锐化结果混合，减轻低码率 ringing / 块边界过冲。
+ * - Mobile single-pass：`fsr1-mobile-opt-fragment.ts`；编译成功则优先于双 pass。
  */
 
 import type { RendererRuntimeConfig } from '../../domain/media'
-import { computeFsrEasuCon, computeFsrRcasCon } from './fsr1-cpu'
+import { computeFsrEasuCon, computeFsrRcasCon, rcasStopsToMobileFsrSharpness } from './fsr1-cpu'
+import { FSR1_MOBILE_OPT_SINGLE_PASS_FRAGMENT } from './fsr1-mobile-opt-fragment'
 
 const FSR_RCAS_LIMIT = (0.25 - (1.0 / 16.0))
 
@@ -270,7 +278,44 @@ void main(){
   float pixR=(lobe*bR+lobe*dR+lobe*hR+lobe*fR+eR)*rcpL;
   float pixG=(lobe*bG+lobe*dG+lobe*hG+lobe*fG+eG)*rcpL;
   float pixB=(lobe*bB+lobe*dB+lobe*hB+lobe*fB+eB)*rcpL;
-  vec3 color = vec3(pixR, pixG, pixB);
+  // 邻域 ringing / 块边界控制：在 b,d,e,f,h 十字邻域 min/max 外扩一环后钳制 RCAS 输出，减轻低码率振铃与 DCT 块边界过冲。
+  const float SR_RCAS_RING_PAD_SCALE = 0.38;
+  const float SR_RCAS_RING_BLEND = 0.92;
+  vec3 sharpened = vec3(pixR, pixG, pixB);
+  vec3 ringLo = vec3(min(mn4R, eR), min(mn4G, eG), min(mn4B, eB));
+  vec3 ringHi = vec3(max(mx4R, eR), max(mx4G, eG), max(mx4B, eB));
+  vec3 ringRange = max(ringHi - ringLo, vec3(1e-4));
+  vec3 ringPad = ringRange * SR_RCAS_RING_PAD_SCALE;
+  vec3 ringClamped = clamp(sharpened, ringLo - ringPad, ringHi + ringPad);
+  vec3 color = mix(sharpened, ringClamped, SR_RCAS_RING_BLEND);
+  color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+  color = (contrast / 100.0) * (color - 0.5) + 0.5;
+  color = (brightness / 100.0) * color;
+  fragColor = vec4(color, 1.0);
+}
+`
+
+/** 全屏纹理呈现（视频直出 / EASU 中间纹理 blit），与 RCAS 末尾色彩调整一致。 */
+const VERTEX_SHADER_BLIT = `#version 300 es
+layout(location=0) in vec4 position;
+out vec2 v_uv;
+void main(){
+  gl_Position = position;
+  v_uv = position.xy * 0.5 + 0.5;
+}
+`
+
+const PRESENT_TEXTURE_FRAGMENT = `#version 300 es
+precision highp float;
+uniform sampler2D uTex;
+uniform float brightness;
+uniform float contrast;
+uniform float saturation;
+const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
+in vec2 v_uv;
+out vec4 fragColor;
+void main(){
+  vec3 color = texture(uTex, v_uv).rgb;
   color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
   color = (contrast / 100.0) * (color - 0.5) + 0.5;
   color = (brightness / 100.0) * color;
@@ -280,10 +325,17 @@ void main(){
 
 type FrameCb = (callback: () => void) => number
 
+type SrPipelineMode = 'mobileSinglePass' | 'twoPass' | 'easuOnly' | 'linear'
+
 class SuperResolutionProcessor {
   private readonly canvas: HTMLCanvasElement
   private readonly video: HTMLVideoElement
+  private readonly onRuntimeDegrade?: (reason: string) => void
   private gl: WebGL2RenderingContext | null = null
+  private presentProgram: WebGLProgram | null = null
+  private presentUniforms: Record<string, WebGLUniformLocation | null> = {}
+  private mobileOptProgram: WebGLProgram | null = null
+  private mobileOptUniforms: Record<string, WebGLUniformLocation | null> = {}
   private easuProgram: WebGLProgram | null = null
   private rcasProgram: WebGLProgram | null = null
   private easuTex: WebGLTexture | null = null
@@ -292,6 +344,11 @@ class SuperResolutionProcessor {
   private vbo: WebGLBuffer | null = null
   private easuUniforms: Record<string, WebGLUniformLocation | null> = {}
   private rcasUniforms: Record<string, WebGLUniformLocation | null> = {}
+  private fsrPipelineAvailable = false
+  private pipelineMode: SrPipelineMode = 'linear'
+  private videoTexAllocW = 0
+  private videoTexAllocH = 0
+  private runtimeDegradeEmitted = false
   private outW = 1920
   private outH = 1080
   private targetFps = 60
@@ -318,11 +375,20 @@ class SuperResolutionProcessor {
     if (this.stopped) {
       return
     }
+    this.runtimeDegradeEmitted = false
+    this.videoTexAllocW = 0
+    this.videoTexAllocH = 0
     this.setupGl()
   }
 
-  constructor(video: HTMLVideoElement, outWidth: number, outHeight: number) {
+  constructor(
+    video: HTMLVideoElement,
+    outWidth: number,
+    outHeight: number,
+    onRuntimeDegrade?: (reason: string) => void,
+  ) {
     this.video = video
+    this.onRuntimeDegrade = onRuntimeDegrade
     this.outW = outWidth
     this.outH = outHeight
     this.canvas = document.createElement('canvas')
@@ -351,7 +417,15 @@ class SuperResolutionProcessor {
       this.canvas.width = width
       this.canvas.height = height
       this.gl.viewport(0, 0, width, height)
-      this.resizeMidTarget()
+      if (this.fsrPipelineAvailable) {
+        try {
+          this.resizeMidTarget()
+        }
+        catch {
+          this.releaseMidTarget()
+          this.pipelineMode = 'linear'
+        }
+      }
     }
   }
 
@@ -417,11 +491,17 @@ class SuperResolutionProcessor {
       this.contextListenersBound = false
     }
     if (gl !== null) {
+      if (this.presentProgram !== null) {
+        gl.deleteProgram(this.presentProgram)
+      }
       if (this.easuProgram !== null) {
         gl.deleteProgram(this.easuProgram)
       }
       if (this.rcasProgram !== null) {
         gl.deleteProgram(this.rcasProgram)
+      }
+      if (this.mobileOptProgram !== null) {
+        gl.deleteProgram(this.mobileOptProgram)
       }
       if (this.easuTex !== null) {
         gl.deleteTexture(this.easuTex)
@@ -437,12 +517,20 @@ class SuperResolutionProcessor {
       }
     }
     this.gl = null
+    this.presentProgram = null
+    this.presentUniforms = {}
     this.easuProgram = null
     this.rcasProgram = null
+    this.mobileOptProgram = null
+    this.mobileOptUniforms = {}
     this.easuTex = null
     this.midTex = null
     this.midFbo = null
     this.vbo = null
+    this.fsrPipelineAvailable = false
+    this.pipelineMode = 'linear'
+    this.videoTexAllocW = 0
+    this.videoTexAllocH = 0
   }
 
   private compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -493,37 +581,109 @@ class SuperResolutionProcessor {
       this.canvas.addEventListener('webglcontextrestored', this.onContextRestored as EventListener)
       this.contextListenersBound = true
     }
-    this.easuProgram = this.linkEasuProgram(gl)
-    this.rcasProgram = this.link(gl, VERTEX_SHADER, RCAS_FRAGMENT)
-    gl.useProgram(this.easuProgram)
-    this.easuUniforms = {
-      easuTex: gl.getUniformLocation(this.easuProgram, 'easuTex'),
-      con0: gl.getUniformLocation(this.easuProgram, 'con0'),
-      con1: gl.getUniformLocation(this.easuProgram, 'con1'),
-      con2: gl.getUniformLocation(this.easuProgram, 'con2'),
-      con3: gl.getUniformLocation(this.easuProgram, 'con3'),
-    }
-    gl.useProgram(this.rcasProgram)
-    this.rcasUniforms = {
-      rcasTex: gl.getUniformLocation(this.rcasProgram, 'rcasTex'),
-      rcasCon: gl.getUniformLocation(this.rcasProgram, 'rcasCon'),
-      brightness: gl.getUniformLocation(this.rcasProgram, 'brightness'),
-      contrast: gl.getUniformLocation(this.rcasProgram, 'contrast'),
-      saturation: gl.getUniformLocation(this.rcasProgram, 'saturation'),
+    this.presentProgram = this.link(gl, VERTEX_SHADER_BLIT, PRESENT_TEXTURE_FRAGMENT)
+    gl.useProgram(this.presentProgram)
+    this.presentUniforms = {
+      uTex: gl.getUniformLocation(this.presentProgram, 'uTex'),
+      brightness: gl.getUniformLocation(this.presentProgram, 'brightness'),
+      contrast: gl.getUniformLocation(this.presentProgram, 'contrast'),
+      saturation: gl.getUniformLocation(this.presentProgram, 'saturation'),
     }
     this.vbo = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
     gl.enableVertexAttribArray(0)
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
-    this.easuTex = gl.createTexture()!
-    gl.bindTexture(gl.TEXTURE_2D, this.easuTex)
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    this.resizeMidTarget()
+    this.tryInitFsrPipeline(gl)
+  }
+
+  private tryInitFsrPipeline(gl: WebGL2RenderingContext): void {
+    let easu: WebGLProgram | null = null
+    let rcas: WebGLProgram | null = null
+    let mobile: WebGLProgram | null = null
+    let easuTex: WebGLTexture | null = null
+    try {
+      easuTex = gl.createTexture()!
+      this.easuTex = easuTex
+      gl.bindTexture(gl.TEXTURE_2D, this.easuTex)
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+      try {
+        mobile = this.link(gl, VERTEX_SHADER, FSR1_MOBILE_OPT_SINGLE_PASS_FRAGMENT)
+      }
+      catch {
+        mobile = null
+      }
+
+      easu = this.linkEasuProgram(gl)
+      rcas = this.link(gl, VERTEX_SHADER, RCAS_FRAGMENT)
+      this.easuProgram = easu
+      this.rcasProgram = rcas
+      this.mobileOptProgram = mobile
+      gl.useProgram(this.easuProgram)
+      this.easuUniforms = {
+        easuTex: gl.getUniformLocation(this.easuProgram, 'easuTex'),
+        con0: gl.getUniformLocation(this.easuProgram, 'con0'),
+        con1: gl.getUniformLocation(this.easuProgram, 'con1'),
+        con2: gl.getUniformLocation(this.easuProgram, 'con2'),
+        con3: gl.getUniformLocation(this.easuProgram, 'con3'),
+      }
+      gl.useProgram(this.rcasProgram)
+      this.rcasUniforms = {
+        rcasTex: gl.getUniformLocation(this.rcasProgram, 'rcasTex'),
+        rcasCon: gl.getUniformLocation(this.rcasProgram, 'rcasCon'),
+        brightness: gl.getUniformLocation(this.rcasProgram, 'brightness'),
+        contrast: gl.getUniformLocation(this.rcasProgram, 'contrast'),
+        saturation: gl.getUniformLocation(this.rcasProgram, 'saturation'),
+      }
+      if (mobile !== null) {
+        gl.useProgram(mobile)
+        this.mobileOptUniforms = {
+          inputTexture: gl.getUniformLocation(mobile, 'inputTexture'),
+          inputTextureSize: gl.getUniformLocation(mobile, 'inputTextureSize'),
+          outputTextureSize: gl.getUniformLocation(mobile, 'outputTextureSize'),
+          uHdrToneMap: gl.getUniformLocation(mobile, 'uHdrToneMap'),
+          sharpness: gl.getUniformLocation(mobile, 'sharpness'),
+          brightness: gl.getUniformLocation(mobile, 'brightness'),
+          contrast: gl.getUniformLocation(mobile, 'contrast'),
+          saturation: gl.getUniformLocation(mobile, 'saturation'),
+        }
+      }
+      else {
+        this.mobileOptUniforms = {}
+      }
+
+      this.resizeMidTarget()
+      this.fsrPipelineAvailable = true
+      this.pipelineMode = mobile !== null ? 'mobileSinglePass' : 'twoPass'
+    }
+    catch (error) {
+      if (mobile !== null) {
+        gl.deleteProgram(mobile)
+      }
+      if (easu !== null) {
+        gl.deleteProgram(easu)
+      }
+      if (rcas !== null) {
+        gl.deleteProgram(rcas)
+      }
+      if (easuTex !== null) {
+        gl.deleteTexture(easuTex)
+      }
+      this.releaseMidTarget()
+      this.easuProgram = null
+      this.rcasProgram = null
+      this.mobileOptProgram = null
+      this.mobileOptUniforms = {}
+      this.easuTex = null
+      this.fsrPipelineAvailable = false
+      this.pipelineMode = 'linear'
+      throw error
+    }
   }
 
   private linkEasuProgram(gl: WebGL2RenderingContext): WebGLProgram {
@@ -539,17 +699,27 @@ class SuperResolutionProcessor {
     }
   }
 
-  private resizeMidTarget(): void {
+  private releaseMidTarget(): void {
     const gl = this.gl
     if (gl === null) {
       return
     }
     if (this.midTex !== null) {
       gl.deleteTexture(this.midTex)
+      this.midTex = null
     }
     if (this.midFbo !== null) {
       gl.deleteFramebuffer(this.midFbo)
+      this.midFbo = null
     }
+  }
+
+  private resizeMidTarget(): void {
+    const gl = this.gl
+    if (gl === null) {
+      return
+    }
+    this.releaseMidTarget()
     this.midTex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, this.midTex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.outW, this.outH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
@@ -586,6 +756,79 @@ class SuperResolutionProcessor {
     return true
   }
 
+  private clearGlErrors(gl: WebGL2RenderingContext): void {
+    while (gl.getError() !== gl.NO_ERROR) {
+      // drain stale errors before a frame
+    }
+  }
+
+  private uploadVideoSource(gl: WebGL2RenderingContext, vw: number, vh: number): void {
+    gl.bindTexture(gl.TEXTURE_2D, this.easuTex!)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+    if (this.videoTexAllocW !== vw || this.videoTexAllocH !== vh) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.video)
+      this.videoTexAllocW = vw
+      this.videoTexAllocH = vh
+    }
+    else {
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGB, gl.UNSIGNED_BYTE, this.video)
+    }
+  }
+
+  private bindFullscreenTriangle(gl: WebGL2RenderingContext): void {
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+  }
+
+  private drawPresentPass(gl: WebGL2RenderingContext, tex: WebGLTexture): boolean {
+    if (this.presentProgram === null) {
+      return false
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, this.outW, this.outH)
+    gl.useProgram(this.presentProgram)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.uniform1i(this.presentUniforms.uTex, 0)
+    gl.uniform1f(this.presentUniforms.brightness, this.brightness)
+    gl.uniform1f(this.presentUniforms.contrast, this.contrast)
+    gl.uniform1f(this.presentUniforms.saturation, this.saturation)
+    this.bindFullscreenTriangle(gl)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    return gl.getError() === gl.NO_ERROR
+  }
+
+  private drawMobileOptPass(gl: WebGL2RenderingContext, vw: number, vh: number): boolean {
+    if (this.mobileOptProgram === null) {
+      return false
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, this.outW, this.outH)
+    gl.useProgram(this.mobileOptProgram)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.easuTex!)
+    gl.uniform1i(this.mobileOptUniforms.inputTexture, 0)
+    gl.uniform2f(this.mobileOptUniforms.inputTextureSize, vw, vh)
+    gl.uniform2f(this.mobileOptUniforms.outputTextureSize, this.outW, this.outH)
+    gl.uniform1f(this.mobileOptUniforms.uHdrToneMap, 0.0)
+    gl.uniform1f(this.mobileOptUniforms.sharpness, rcasStopsToMobileFsrSharpness(this.rcasStops))
+    gl.uniform1f(this.mobileOptUniforms.brightness, this.brightness)
+    gl.uniform1f(this.mobileOptUniforms.contrast, this.contrast)
+    gl.uniform1f(this.mobileOptUniforms.saturation, this.saturation)
+    this.bindFullscreenTriangle(gl)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    return gl.getError() === gl.NO_ERROR
+  }
+
+  private emitRuntimeDegradeOnce(reason: string): void {
+    if (this.runtimeDegradeEmitted || this.onRuntimeDegrade === undefined) {
+      return
+    }
+    this.runtimeDegradeEmitted = true
+    this.onRuntimeDegrade(reason)
+  }
+
   private drawFrame(): void {
     if (this.stopped) {
       return
@@ -595,7 +838,7 @@ class SuperResolutionProcessor {
       return
     }
     const gl = this.gl
-    if (gl === null || this.easuProgram === null || this.rcasProgram === null) {
+    if (gl === null || this.presentProgram === null || this.easuTex === null) {
       return
     }
     const vw = this.video.videoWidth
@@ -603,12 +846,48 @@ class SuperResolutionProcessor {
     if (vw <= 0 || vh <= 0) {
       return
     }
+    this.clearGlErrors(gl)
+    this.uploadVideoSource(gl, vw, vh)
+
+    const noUpscale = this.outW <= vw && this.outH <= vh
+    if (noUpscale || !this.fsrPipelineAvailable || this.pipelineMode === 'linear') {
+      if (!this.drawPresentPass(gl, this.easuTex)) {
+        this.emitRuntimeDegradeOnce('srPresentDrawFailed')
+      }
+      if (!this.hasDrawn) {
+        this.hasDrawn = true
+        this.canvas.style.opacity = '1'
+      }
+      return
+    }
+
+    if (
+      this.fsrPipelineAvailable
+      && this.pipelineMode === 'mobileSinglePass'
+      && this.mobileOptProgram !== null
+    ) {
+      if (this.drawMobileOptPass(gl, vw, vh)) {
+        if (!this.hasDrawn) {
+          this.hasDrawn = true
+          this.canvas.style.opacity = '1'
+        }
+        return
+      }
+      this.pipelineMode = 'twoPass'
+    }
+
+    if (this.easuProgram === null || this.midFbo === null || this.midTex === null) {
+      if (!this.drawPresentPass(gl, this.easuTex)) {
+        this.emitRuntimeDegradeOnce('srPresentDrawFailed')
+      }
+      if (!this.hasDrawn) {
+        this.hasDrawn = true
+        this.canvas.style.opacity = '1'
+      }
+      return
+    }
+
     const { con0, con1, con2, con3 } = computeFsrEasuCon(vw, vh, vw, vh, this.outW, this.outH)
-    const rcasCon = computeFsrRcasCon(this.rcasStops)
-    gl.bindTexture(gl.TEXTURE_2D, this.easuTex)
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.video)
-    // Pass 1: EASU -> mid FBO
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.midFbo)
     gl.viewport(0, 0, this.outW, this.outH)
     gl.useProgram(this.easuProgram)
@@ -619,11 +898,40 @@ class SuperResolutionProcessor {
     gl.uniform4fv(this.easuUniforms.con1, con1)
     gl.uniform4fv(this.easuUniforms.con2, con2)
     gl.uniform4fv(this.easuUniforms.con3, con3)
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
-    gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+    this.bindFullscreenTriangle(gl)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
-    // Pass 2: RCAS -> default framebuffer
+    let easuOk = gl.getError() === gl.NO_ERROR
+    const fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+    easuOk &&= fbStatus === gl.FRAMEBUFFER_COMPLETE
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    if (!easuOk) {
+      this.pipelineMode = 'linear'
+      this.releaseMidTarget()
+      if (!this.drawPresentPass(gl, this.easuTex)) {
+        this.emitRuntimeDegradeOnce('srEasuDrawFailed')
+      }
+      if (!this.hasDrawn) {
+        this.hasDrawn = true
+        this.canvas.style.opacity = '1'
+      }
+      return
+    }
+
+    if (this.pipelineMode === 'easuOnly' || this.rcasProgram === null) {
+      if (!this.drawPresentPass(gl, this.midTex)) {
+        this.pipelineMode = 'linear'
+        if (!this.drawPresentPass(gl, this.easuTex)) {
+          this.emitRuntimeDegradeOnce('srEasuOnlyBlitFailed')
+        }
+      }
+      if (!this.hasDrawn) {
+        this.hasDrawn = true
+        this.canvas.style.opacity = '1'
+      }
+      return
+    }
+
+    const rcasCon = computeFsrRcasCon(this.rcasStops)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, this.outW, this.outH)
     gl.useProgram(this.rcasProgram)
@@ -634,7 +942,18 @@ class SuperResolutionProcessor {
     gl.uniform1f(this.rcasUniforms.brightness, this.brightness)
     gl.uniform1f(this.rcasUniforms.contrast, this.contrast)
     gl.uniform1f(this.rcasUniforms.saturation, this.saturation)
+    this.bindFullscreenTriangle(gl)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
+    const rcasOk = gl.getError() === gl.NO_ERROR
+    if (!rcasOk) {
+      this.pipelineMode = 'easuOnly'
+      if (!this.drawPresentPass(gl, this.midTex)) {
+        this.pipelineMode = 'linear'
+        if (!this.drawPresentPass(gl, this.easuTex)) {
+          this.emitRuntimeDegradeOnce('srRcasRecoverFailed')
+        }
+      }
+    }
     if (!this.hasDrawn) {
       this.hasDrawn = true
       this.canvas.style.opacity = '1'
@@ -655,7 +974,12 @@ export class SuperResolutionWebGL2Renderer {
     this.destroy()
     const w = this.config.superResolutionOutputWidth ?? 1920
     const h = this.config.superResolutionOutputHeight ?? 1080
-    this.processor = new SuperResolutionProcessor(video, w, h)
+    this.processor = new SuperResolutionProcessor(
+      video,
+      w,
+      h,
+      this.config.superResolutionRuntimeDegradeNotifier,
+    )
     this.processor.setDisplayFormat(this.config.format)
     this.processor.setColorOptions(this.config.brightness, this.config.contrast, this.config.saturation)
     this.processor.setRcasStops(this.config.superResolutionRcasStops ?? 0.88)
@@ -665,7 +989,13 @@ export class SuperResolutionWebGL2Renderer {
   }
 
   update(config: Partial<RendererRuntimeConfig>): void {
-    this.config = { ...this.config, ...config }
+    const notifier = this.config.superResolutionRuntimeDegradeNotifier
+    this.config = {
+      ...this.config,
+      ...config,
+      superResolutionRuntimeDegradeNotifier:
+        config.superResolutionRuntimeDegradeNotifier ?? notifier,
+    }
     if (this.config.superResolutionOutputWidth !== undefined
       && this.config.superResolutionOutputHeight !== undefined) {
       this.processor?.setOutputSize(

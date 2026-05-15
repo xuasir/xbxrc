@@ -81,7 +81,7 @@ export interface BrowserRendererPolicyInput {
   superResolutionUserIntent: boolean
   superResolutionAttachFailed: boolean
   superResolutionRcasStopsBase: number
-  /** display degrade 下动态 RCAS；Step 6 起 SR 路径可固定为 false */
+  /** 拥塞/显示档位/码率等驱动 `resolveDynamicSuperResolutionRcasStops`；SR webgl2_sr 与回退前意图路径共用。 */
   applyDynamicSrRcasForDisplayDegrade: boolean
   srRcasDynamicContext: SuperResolutionRcasDynamicContext
   streamStats: {

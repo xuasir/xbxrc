@@ -22,7 +22,7 @@
 ## Validation
 
 - `cargo fmt -p xbox-streaming`
-- `cargo test -p xbox-streaming home_session_headers_align_with_xstreamingdesktop_image -- --nocapture`
+- `cargo test -p xbox-streaming home_session_headers_include_user_agent_and_follow_home_resolution --lib -- --nocapture`
 - `cargo test -p xbox-streaming cloud_session_headers_keep_custom_image -- --nocapture`
 - `cargo check -p xbox-streaming`
 

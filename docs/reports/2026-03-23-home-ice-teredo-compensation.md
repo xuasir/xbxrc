@@ -5,7 +5,7 @@
 ## Summary
 
 - Related RFC: [`docs/rfcs/2026-03-23-home-ice-teredo-compensation.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-03-23-home-ice-teredo-compensation.md)
-- 已补齐 `XStreamingDesktop` 参考实现里最关键的 Teredo IPv4 candidate compensation。
+- 已补齐 `参比实现` 侧最关键的 Teredo IPv4 candidate compensation。
 
 ## Delivered
 
@@ -33,4 +33,4 @@
 ## Follow-up
 
 - 用新 trace 验证 `pollIceResult` 后归一化结果里是否已出现 Teredo 派生的 IPv4 host candidates。
-- 若仍失败，继续对比 `XStreamingDesktop` 的候选重写排序与 foundation/priority 规则。
+- 若仍失败，继续对比 `参比实现` 的候选重写排序与 foundation/priority 规则。

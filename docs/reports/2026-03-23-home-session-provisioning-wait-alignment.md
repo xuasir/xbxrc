@@ -5,7 +5,7 @@
 ## Summary
 
 - Related RFC: [`docs/rfcs/2026-03-23-home-session-provisioning-wait-alignment.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-03-23-home-session-provisioning-wait-alignment.md)
-- 已将 home 会话层的 `Provisioning` 补偿逻辑对齐到 `XStreamingDesktop`：不再因本地超时推断而主动 recreate。
+- 已将 home 会话层的 `Provisioning` 补偿逻辑对齐到 `参比实现`：不再因本地超时推断而主动 recreate。
 
 ## Delivered
 

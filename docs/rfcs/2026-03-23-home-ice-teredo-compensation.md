@@ -11,7 +11,7 @@
 
 ## Background
 
-- `XStreamingDesktop` 在拉取远端 ICE candidates 后，会对 Teredo IPv6 (`2001:0::/32`) 额外派生 IPv4 host candidates。
+- `参比实现` 在拉取远端 ICE candidates 后，会对 Teredo IPv6 (`2001:0::/32`) 额外派生 IPv4 host candidates。
 - 我们当前只做候选清洗和排序，没有这层补偿。
 - 新日志已经从 session 层卡点转到 runtime/ICE，补偿逻辑值得单独补齐。
 
@@ -33,7 +33,7 @@
 
 ## Plan
 
-1. 提取 `XStreamingDesktop` 的补偿模式。
+1. 提取 `参比实现` 的补偿模式。
 2. 在当前归一化链加入 Teredo IPv4 派生。
 3. 补单测并验证编译。
 
@@ -50,7 +50,7 @@
 
 ## Progress
 
-- [x] Step 1: 已确认 `XStreamingDesktop` 会把 Teredo IPv6 派生成 `client4:9002` 和 `client4:teredoPort` 两个 host candidates。
+- [x] Step 1: 已确认 `参比实现` 会把 Teredo IPv6 派生成 `client4:9002` 和 `client4:teredoPort` 两个 host candidates。
 - [x] Step 2: 已在 `IcePolicy::normalize()` 中加入 Teredo IPv4 补偿。
 - [x] Step 3: 已补单测并完成编译验证。
 

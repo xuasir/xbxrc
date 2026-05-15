@@ -12,7 +12,7 @@
 ## Background
 
 - 目前 xHome `waitingConsoleReady` 的裁决主要依赖 xHome `/v6/servers/home` 返回的 capability / 地址字段。
-- 对比 `XStreamingDesktop` 后已确认：它的首页主机列表实际来自 SmartGlass `getConsolesList()`，并不是同一条数据源。
+- 对比 `参比实现` 后已确认：它的首页主机列表实际来自 SmartGlass `getConsolesList()`，并不是同一条数据源。
 - 在继续调整 ready gate 前，需要先把 SmartGlass hosts 与 xHome `/v6/servers/home` 在同一时刻并排打到 trace，确认两边观测差异。
 
 ## Goal
@@ -50,7 +50,7 @@
 
 ## Progress
 
-- [x] Step 1: 已确认 `XStreamingDesktop` 首页主机列表实际来自 SmartGlass，而不是 xHome `/v6/servers/home`。
+- [x] Step 1: 已确认 `参比实现` 首页主机列表实际来自 SmartGlass，而不是 xHome `/v6/servers/home`。
 - [x] Step 2: 已增加 `consoleReadySourcesSnapshot`，并在 adapter 层并排采样两路数据源。
 - [x] Step 3: 已补纯函数测试并完成验证。
 

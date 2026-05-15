@@ -102,11 +102,67 @@ export class PlaybackService {
     const attach = this.rendererAttach
     const config = this.rendererConfig
     if (attach.kind === 'webgl2_sr') {
-      return new SuperResolutionWebGL2Renderer(config)
+      return new SuperResolutionWebGL2Renderer({
+        ...config,
+        superResolutionRuntimeDegradeNotifier: this.onSuperResolutionRuntimeDegrade,
+      })
     }
     return attach.kind === 'webgl2'
       ? new WebGL2VideoRenderer(config)
       : new NativeVideoRenderer(config)
+  }
+
+  private readonly onSuperResolutionRuntimeDegrade = (reason: string): void => {
+    const video = this.videoElement
+    if (video === null || this.rendererAttach.kind !== 'webgl2_sr') {
+      return
+    }
+    void this.applySuperResolutionFallbackChain(video, reason)
+  }
+
+  /** SR（attach 或运行期）失败时统一回退：webgl2 锐化 → 仍失败则 native video。 */
+  private async applySuperResolutionFallbackChain(video: HTMLVideoElement, reason: string): Promise<void> {
+    this.renderer.destroy()
+    const fb = this.rendererConfig.superResolutionFallbackProcessing ?? 'cas'
+    this.rendererConfig = {
+      ...this.rendererConfig,
+      superResolutionInactiveAfterFailure: true,
+      pipelineType: 'webgl2',
+      mode: 'webgl2',
+      processing: fb,
+    }
+    this.rendererAttach = {
+      ...this.rendererAttach,
+      kind: 'webgl2',
+      processing: fb,
+      sr: undefined,
+    }
+    this.renderer = this.createRenderer()
+    try {
+      await this.renderer.attach(video)
+      this.emitter.emit('media.superResolutionFallback', { reason })
+    }
+    catch {
+      this.renderer.destroy()
+      this.rendererConfig = {
+        ...this.rendererConfig,
+        pipelineType: 'video',
+        mode: 'native',
+      }
+      this.rendererAttach = {
+        ...this.rendererAttach,
+        kind: 'video',
+        processing: this.rendererAttach.processing,
+        sr: undefined,
+      }
+      this.renderer = this.createRenderer()
+      try {
+        await this.renderer.attach(video)
+      }
+      catch (videoFallbackError) {
+        this.emitter.emit('error', { error: videoFallbackError })
+      }
+    }
   }
 
   private async attachRendererWithFallback(video: HTMLVideoElement): Promise<void> {
@@ -115,52 +171,11 @@ export class PlaybackService {
     }
     catch (error) {
       if (this.renderer.kind === 'webgl2_sr') {
-        this.renderer.destroy()
-        const fb = this.rendererConfig.superResolutionFallbackProcessing ?? 'cas'
-        this.rendererConfig = {
-          ...this.rendererConfig,
-          superResolutionInactiveAfterFailure: true,
-          pipelineType: 'webgl2',
-          mode: 'webgl2',
-          processing: fb,
-        }
-        this.rendererAttach = {
-          ...this.rendererAttach,
-          kind: 'webgl2',
-          processing: fb,
-          sr: undefined,
-        }
-        this.renderer = this.createRenderer()
-        try {
-          await this.renderer.attach(video)
-          this.emitter.emit('media.superResolutionFallback', {
-            reason: error instanceof Error ? error.message : 'attachFailed',
-          })
-          return
-        }
-        catch {
-          this.renderer.destroy()
-          this.rendererConfig = {
-            ...this.rendererConfig,
-            pipelineType: 'video',
-            mode: 'native',
-          }
-          this.rendererAttach = {
-            ...this.rendererAttach,
-            kind: 'video',
-            processing: this.rendererAttach.processing,
-            sr: undefined,
-          }
-          this.renderer = this.createRenderer()
-          try {
-            await this.renderer.attach(video)
-            return
-          }
-          catch (videoFallbackError) {
-            this.emitter.emit('error', { error: videoFallbackError })
-            return
-          }
-        }
+        await this.applySuperResolutionFallbackChain(
+          video,
+          error instanceof Error ? error.message : 'attachFailed',
+        )
+        return
       }
       if (this.renderer.kind === 'webgl2') {
         this.renderer.destroy()

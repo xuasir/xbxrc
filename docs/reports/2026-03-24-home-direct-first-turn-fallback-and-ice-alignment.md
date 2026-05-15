@@ -5,7 +5,7 @@
 ## Summary
 
 - Related RFC: [`docs/rfcs/2026-03-24-home-direct-first-turn-fallback-and-ice-alignment.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-03-24-home-direct-first-turn-fallback-and-ice-alignment.md)
-- 已完成 home rust-owned 串流的“先直连、失败后单次 fallback TURN”主线，并把远端 ICE candidate 归一化语义进一步对齐到 `XStreamingDesktop`。
+- 已完成 home rust-owned 串流的“先直连、失败后单次 fallback TURN”主线，并把远端 ICE candidate 归一化语义进一步对齐到 `参比实现`。
 
 ## Delivered
 
@@ -19,7 +19,7 @@
 - direct-first/fallback 的切换 owner 放在 runtime host 层，不改动 session create 主线与既有 recovery owner。
 - fallback 重试仅允许在首轮尚未 `connected` 时触发一次，避免和 transport reconnect 叠加。
 - runtime host 增加启动尝试与 fallback 切换日志，同时补齐 fallback launch 失败时的本地清理，避免残留 runtime 状态。
-- ICE normalize 现在按输出顺序重写 foundation，并让首个候选 priority 对齐 `2130706431`、其余候选降为 `1`，与 `XStreamingDesktop` 行为保持一致。
+- ICE normalize 现在按输出顺序重写 foundation，并让首个候选 priority 对齐 `2130706431`、其余候选降为 `1`，与 `参比实现` 行为保持一致。
 
 ## Validation
 

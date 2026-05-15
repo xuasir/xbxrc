@@ -13,12 +13,12 @@
 
 - `runtime-trace-1774268830150.jsonl` 已证明：wake 后 SmartGlass 一直能看到主机从 `ConnectedStandby` 变为 `On`，且 `remoteManagementEnabled=true`、`consoleStreamingEnabled=true`。
 - 同一窗口内，xHome `/v6/servers/home` 长时间返回空列表，导致当前 `waitingConsoleReady` 继续使用 xHome 单源 hard gate 时会被卡死。
-- `XStreamingDesktop` 首页和启动入口实际依赖 SmartGlass `getConsolesList()`，不会因为 xHome `/v6/servers/home` 暂时缺席而阻断启动。
+- `参比实现` 首页和启动入口实际依赖 SmartGlass `getConsolesList()`，不会因为 xHome `/v6/servers/home` 暂时缺席而阻断启动。
 
 ## Goal
 
 - 将 home wake 后的 `waitingConsoleReady` 从“xHome 单源 gate”调整为“SmartGlass / xHome 双源观测，显式 ready 信号统一裁决”。
-- 去掉 `consoleAddrs` 作为 ready hard gate，避免继续引入与 `XStreamingDesktop` 不一致的推断信号。
+- 去掉 `consoleAddrs` 作为 ready hard gate，避免继续引入与 `参比实现` 不一致的推断信号。
 
 ## Scope
 
@@ -48,7 +48,7 @@
 ## Risks
 
 - SmartGlass 与 xHome 仍可能出现 identity 不一致；当前合并只按 `serverId/id/deviceId` 做最小匹配。
-- 如果 SmartGlass 侧也短暂不可见，启动仍可能 timeout，但这比被 xHome 单源硬卡更接近 `XStreamingDesktop` 行为。
+- 如果 SmartGlass 侧也短暂不可见，启动仍可能 timeout，但这比被 xHome 单源硬卡更接近 `参比实现` 行为。
 
 ## Progress
 

@@ -73,3 +73,11 @@ export function computeFsrRcasCon(sharpnessStops: number): Float32Array {
   const sharpness = 2 ** (-sharpnessStops)
   return packUvec4AsVec4FloatBits(au1FromAf1(sharpness), au1FromAf1(sharpness), 0, 0)
 }
+
+/**
+ * 由 `superResolutionRcasStops` 映射：stops 越大越柔和 → mobile 锐化强度略降。
+ */
+export function rcasStopsToMobileFsrSharpness(stops: number): number {
+  const s = Math.max(0.6, Math.min(1.1, stops))
+  return Math.max(0.28, Math.min(1.9, 2.18 - s * 1.32))
+}

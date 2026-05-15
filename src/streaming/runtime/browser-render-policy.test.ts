@@ -210,7 +210,7 @@ describe('resolveBrowserRendererPlan', () => {
     expect(update.processing).toBe('cas')
   })
 
-  it('does not apply display-degrade RCAS bumps when dynamic SR RCAS is off (SR active contract)', () => {
+  it('does not apply display-degrade RCAS bumps when applyDynamicSrRcasForDisplayDegrade is false', () => {
     const plan = resolveBrowserRendererPlan(baseInput({
       displayDegradeLevel: 'displayL2',
       superResolutionExperimental: true,
@@ -226,5 +226,27 @@ describe('resolveBrowserRendererPlan', () => {
     }))
     expect(plan.kind).toBe('webgl2_sr')
     expect(plan.superResolutionRcasStopsForPatch).toBe(0.88)
+  })
+
+  it('applies dynamic RCAS to webgl2_sr under congestion (sr contract + tier rcas)', () => {
+    const plan = resolveBrowserRendererPlan(baseInput({
+      displayDegradeLevel: 'displayL2',
+      superResolutionExperimental: true,
+      superResolutionUserIntent: true,
+      applyDynamicSrRcasForDisplayDegrade: true,
+      superResolutionRcasStopsBase: 0.88,
+      srRcasDynamicContext: {
+        bandwidthState: 'congested',
+        networkConfidence: 'low',
+        qualityLadderLevel: 'L2',
+        renderCause: 'renderStable',
+        adaptiveCongestedBitrateRatio: 0.55,
+        adaptiveStableBitrateRatio: 0.92,
+      },
+      streamStats: { inboundVideoBitrateKbps: 1000 },
+    }))
+    expect(plan.kind).toBe('webgl2_sr')
+    expect(plan.superResolutionRcasStopsForPatch).toBe(1.1)
+    expect(plan.sr?.rcasStops).toBe(1.1)
   })
 })

@@ -1,6 +1,6 @@
 # xbxrc
 
-[English README](/Users/guo.xu/Documents/code/games/XStreamingDesktop/README.md)
+[English README](./README.md)
 
 `xbxrc` 是一个基于 Electron、Vue 3 与 TypeScript 的桌面端 Xbox 串流客户端。当前活跃代码库集中在 `src/main`、`src/preload`、`src/renderer`，后续开发以这三个目录为准。
 
@@ -71,7 +71,7 @@ pnpm build
 ## 开发说明
 
 - 活跃开发目录仅限 `src/main`、`src/preload`、`src/renderer`
-- 任务跟踪统一维护在 [docs/project-task.md](/Users/guo.xu/Documents/code/games/XStreamingDesktop/docs/project-task.md)
+- 任务跟踪统一维护在 [docs/project-task.md](./docs/project-task.md)
 - 优先保证代码可读性、模块边界与长期可维护性
 - 代码中的轻量注释以中文为主
 
@@ -87,4 +87,4 @@ pnpm build
 
 ## License
 
-本仓库采用 MIT License，详见 [LICENSE](/Users/guo.xu/Documents/code/games/XStreamingDesktop/LICENSE)。
+本仓库采用 MIT License，详见 [LICENSE](./LICENSE)。
