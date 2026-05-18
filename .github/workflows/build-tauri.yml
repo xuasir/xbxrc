@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   build:
+    name: build-${{ matrix.label }}
     permissions:
       contents: read
 
@@ -21,8 +22,12 @@ jobs:
         include:
           - os: macos-latest
             label: macos
+            bundle: dmg
+            artifact_glob: target/release/bundle/dmg/*.dmg
           - os: windows-latest
             label: windows
+            bundle: nsis
+            artifact_glob: target/release/bundle/nsis/*.exe
 
     runs-on: ${{ matrix.os }}
     env:
@@ -32,6 +37,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
@@ -44,6 +56,7 @@ jobs:
             test -d "src-tauri/resources/ffmpeg/windows-x64/include"
             test -d "src-tauri/resources/ffmpeg/windows-x64/lib"
             test -d "src-tauri/resources/ffmpeg/windows-x64/bin"
+            test -f "src-tauri/resources/ffmpeg/windows-x64/bin/ffmpeg.exe"
           else
             if [[ "$(uname -m)" == "arm64" ]]; then
               test -d "src-tauri/resources/ffmpeg/macos-arm64/include"
@@ -72,8 +85,7 @@ jobs:
           cache: pnpm
 
       - name: Rust toolchain
-        # `uses` 这里必须引用 action 的分支/标签，Rust 版本要放到 `toolchain` 参数里。
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.93.1
           components: rustfmt, clippy
@@ -81,7 +93,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          # 工作区根在仓库根目录，共享 target/
+          workspaces: .
           shared-key: tauri-${{ matrix.label }}
 
       - name: Install JS dependencies
@@ -93,23 +105,40 @@ jobs:
         with:
           arch: x64
 
-      - name: Build Tauri bundles (macOS dmg)
-        if: runner.os == 'macOS'
-        run: pnpm tauri:build:dmg
+      - name: Build Tauri bundle (${{ matrix.bundle }})
+        run: pnpm tauri build --bundles ${{ matrix.bundle }}
         env:
           CI: true
 
-      - name: Build Tauri bundles (Windows exe)
-        if: runner.os == 'Windows'
-        run: pnpm tauri:build:nsis
-        env:
-          CI: true
-
-      - name: Upload bundle artifacts
+      - name: Upload platform bundle
         uses: actions/upload-artifact@v4
         with:
-          name: xbxrc-${{ matrix.label }}-${{ runner.arch }}
+          name: xbxrc-${{ matrix.label }}-${{ steps.version.outputs.value }}-${{ runner.arch }}
           if-no-files-found: error
-          path: |
-            target/release/bundle/**/*.dmg
-            target/release/bundle/**/*.exe
+          path: ${{ matrix.artifact_glob }}
+
+  package:
+    name: package-installers
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download platform bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xbxrc-*
+          merge-multiple: true
+          path: dist/installers
+
+      - name: List installers
+        run: find dist/installers -type f | sort
+
+      - name: Upload combined installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: xbxrc-installers
+          if-no-files-found: error
+          path: dist/installers/**/*
+          retention-days: 30
