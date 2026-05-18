@@ -42,7 +42,11 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       firstFrameGuardTriggered: false,
       renderBackpressure: false,
       renderDroppedFrames: 2,
+      renderCallbackGapCount: 1,
       renderFrameCallbackIntervalMs: 41.3,
+      renderCallbackGapCountLastSample: 1,
+      renderPresentedFramesJumpCount: 2,
+      renderPresentedFramesJumpCountLastSample: 1,
       renderCause: 'renderStable',
       displayDegradeLevel: 'displayL1',
       renderDecisionDigest: 'rf:renderStable|dl:displayL1|bp:0|dr:2|iv:50',
@@ -56,6 +60,16 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       renderShaderPath: 'cas',
       renderFpsBudget: 60,
       rendererCapabilityReason: 'webgl2ContextAvailable',
+      renderDisplayFullscreen: true,
+      renderDisplayRefreshHz: 120,
+      renderDisplayWidth: 1920,
+      renderDisplayHeight: 1200,
+      renderPresentTargetWidth: 2880,
+      renderPresentTargetHeight: 1620,
+      renderViewportWidth: 1920,
+      renderViewportHeight: 1080,
+      renderSourceWidth: 1920,
+      renderSourceHeight: 1080,
       icePolicyMode: 'policy',
       icePolicyDigest: 'f[ipv4:1]|t[udp:1]|k[srflx:1]',
       frontEndProfileBaseline: 'homeLan',
@@ -99,6 +113,10 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.firstFrameStage).toBe('firstPresented')
     expect(diagnostics.renderCause).toBe('renderStable')
     expect(diagnostics.displayDegradeLevel).toBe('displayL1')
+    expect(diagnostics.renderCallbackGapCount).toBe(1)
+    expect(diagnostics.renderCallbackGapCountLastSample).toBe(1)
+    expect(diagnostics.renderPresentedFramesJumpCount).toBe(2)
+    expect(diagnostics.renderPresentedFramesJumpCountLastSample).toBe(1)
     expect(diagnostics.renderDecisionDigest).toContain('rf:renderStable')
     expect(diagnostics.renderAdaptiveProfileDigest).toContain('lv:displayL1')
     expect(diagnostics.renderHysteresisState).toBe('steady')
@@ -110,6 +128,16 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.renderShaderPath).toBe('cas')
     expect(diagnostics.renderFpsBudget).toBe(60)
     expect(diagnostics.rendererCapabilityReason).toBe('webgl2ContextAvailable')
+    expect(diagnostics.renderDisplayFullscreen).toBe(true)
+    expect(diagnostics.renderDisplayRefreshHz).toBe(120)
+    expect(diagnostics.renderDisplayWidth).toBe(1920)
+    expect(diagnostics.renderDisplayHeight).toBe(1200)
+    expect(diagnostics.renderPresentTargetWidth).toBe(2880)
+    expect(diagnostics.renderPresentTargetHeight).toBe(1620)
+    expect(diagnostics.renderViewportWidth).toBe(1920)
+    expect(diagnostics.renderViewportHeight).toBe(1080)
+    expect(diagnostics.renderSourceWidth).toBe(1920)
+    expect(diagnostics.renderSourceHeight).toBe(1080)
     expect(diagnostics.icePolicyMode).toBe('policy')
     expect(diagnostics.icePolicyDigest).toContain('ipv4')
     expect(diagnostics.frontEndProfileBaseline).toBe('homeLan')

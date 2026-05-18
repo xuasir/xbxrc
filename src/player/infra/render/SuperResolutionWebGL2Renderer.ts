@@ -352,6 +352,8 @@ class SuperResolutionProcessor {
   private runtimeDegradeEmitted = false
   private outW = 1920
   private outH = 1080
+  private viewportWidthCss: number | null = null
+  private viewportHeightCss: number | null = null
   private targetFps = 60
   private frameInterval = 16
   private lastFrameTime = 0
@@ -413,6 +415,9 @@ class SuperResolutionProcessor {
     if (width <= 0 || height <= 0) {
       return
     }
+    if (width === this.outW && height === this.outH) {
+      return
+    }
     this.outW = width
     this.outH = height
     if (this.gl !== null) {
@@ -429,6 +434,35 @@ class SuperResolutionProcessor {
         }
       }
     }
+  }
+
+  setDisplayViewport(widthCss?: number, heightCss?: number): void {
+    const normalizedWidthCss = widthCss !== undefined && widthCss > 0
+      ? Math.round(widthCss)
+      : null
+    const normalizedHeightCss = heightCss !== undefined && heightCss > 0
+      ? Math.round(heightCss)
+      : null
+    if (
+      normalizedWidthCss === this.viewportWidthCss
+      && normalizedHeightCss === this.viewportHeightCss
+    ) {
+      return
+    }
+    this.viewportWidthCss = normalizedWidthCss
+    this.viewportHeightCss = normalizedHeightCss
+    if (
+      normalizedWidthCss !== null
+      && normalizedHeightCss !== null
+    ) {
+      this.canvas.style.width = `${normalizedWidthCss}px`
+      this.canvas.style.height = `${normalizedHeightCss}px`
+      this.canvas.style.margin = 'auto'
+      return
+    }
+    this.canvas.style.width = '100%'
+    this.canvas.style.height = '100%'
+    this.canvas.style.margin = ''
   }
 
   setDisplayFormat(format: RendererRuntimeConfig['format']): void {
@@ -802,6 +836,25 @@ class SuperResolutionProcessor {
     return gl.getError() === gl.NO_ERROR
   }
 
+  private drawRcasPass(gl: WebGL2RenderingContext, tex: WebGLTexture): boolean {
+    if (this.rcasProgram === null) {
+      return false
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, this.outW, this.outH)
+    gl.useProgram(this.rcasProgram)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.uniform1i(this.rcasUniforms.rcasTex, 0)
+    gl.uniform4fv(this.rcasUniforms.rcasCon, computeFsrRcasCon(this.rcasStops))
+    gl.uniform1f(this.rcasUniforms.brightness, this.brightness)
+    gl.uniform1f(this.rcasUniforms.contrast, this.contrast)
+    gl.uniform1f(this.rcasUniforms.saturation, this.saturation)
+    this.bindFullscreenTriangle(gl)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    return gl.getError() === gl.NO_ERROR
+  }
+
   private drawMobileOptPass(gl: WebGL2RenderingContext, vw: number, vh: number): boolean {
     if (this.mobileOptProgram === null) {
       return false
@@ -881,8 +934,15 @@ class SuperResolutionProcessor {
       this.uploadVideoSource(gl, vw, vh)
 
       const noUpscale = this.outW <= vw && this.outH <= vh
+      const sameResolution = this.outW === vw && this.outH === vh
       if (noUpscale || !this.fsrPipelineAvailable || this.pipelineMode === 'linear') {
-        if (!this.drawPresentPass(gl, this.easuTex)) {
+        const rcasOnlyPreferred = sameResolution
+          && this.pipelineMode !== 'linear'
+          && this.rcasProgram !== null
+        const drawn = rcasOnlyPreferred
+          ? this.drawRcasPass(gl, this.easuTex)
+          : this.drawPresentPass(gl, this.easuTex)
+        if (!drawn) {
           this.emitRuntimeDegradeOnce('srPresentDrawFailed')
         }
         if (!this.hasDrawn) {
@@ -967,20 +1027,7 @@ class SuperResolutionProcessor {
         return
       }
 
-      const rcasCon = computeFsrRcasCon(this.rcasStops)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      gl.viewport(0, 0, this.outW, this.outH)
-      gl.useProgram(this.rcasProgram)
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, this.midTex)
-      gl.uniform1i(this.rcasUniforms.rcasTex, 0)
-      gl.uniform4fv(this.rcasUniforms.rcasCon, rcasCon)
-      gl.uniform1f(this.rcasUniforms.brightness, this.brightness)
-      gl.uniform1f(this.rcasUniforms.contrast, this.contrast)
-      gl.uniform1f(this.rcasUniforms.saturation, this.saturation)
-      this.bindFullscreenTriangle(gl)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
-      const rcasOk = gl.getError() === gl.NO_ERROR
+      const rcasOk = this.drawRcasPass(gl, this.midTex)
       if (!rcasOk) {
         this.pipelineMode = 'easuOnly'
         if (!this.drawPresentPass(gl, this.midTex)) {
@@ -1021,6 +1068,7 @@ export class SuperResolutionWebGL2Renderer {
       h,
       this.config.superResolutionRuntimeDegradeNotifier,
     )
+    this.processor.setDisplayViewport(this.config.renderViewportWidth, this.config.renderViewportHeight)
     this.processor.setDisplayFormat(this.config.format)
     this.processor.setColorOptions(this.config.brightness, this.config.contrast, this.config.saturation)
     this.processor.setRcasStops(this.config.superResolutionRcasStops ?? 0.88)
@@ -1044,6 +1092,7 @@ export class SuperResolutionWebGL2Renderer {
         this.config.superResolutionOutputHeight,
       )
     }
+    this.processor?.setDisplayViewport(this.config.renderViewportWidth, this.config.renderViewportHeight)
     this.processor?.setDisplayFormat(this.config.format)
     this.processor?.setColorOptions(
       this.config.brightness,

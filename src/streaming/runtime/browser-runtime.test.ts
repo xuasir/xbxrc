@@ -35,9 +35,15 @@ const testState = vi.hoisted(() => {
     })
 
     readonly updateRendererAttach = vi.fn()
+    readonly updateRendererState = vi.fn((config: Record<string, unknown>, attach: Record<string, unknown>) => {
+      this.updateRenderer(config)
+      this.updateRendererAttach(attach)
+    })
 
     readonly updateTransportConfig = vi.fn()
-    readonly applyVideoSenderPolicy = vi.fn(async () => ({
+    readonly applyVideoSenderPolicy = vi.fn(async (
+      _input?: Record<string, unknown>,
+    ): Promise<{ status: string, detail?: string }> => ({
       status: 'applied',
     }))
 
@@ -110,23 +116,33 @@ const testState = vi.hoisted(() => {
         setStreamPadForwarding: vi.fn(async () => {}),
       },
       runtimeTrace: {
-        recordEvent: vi.fn(async () => {}),
+        recordEvent: vi.fn(async (_entry: { event?: string, payload?: unknown }) => {}),
       },
     },
     applyBrowserVideoDisplay: vi.fn(),
     frameTrackingHandler: undefined as undefined | ((meta?: {
       callbackIntervalMs?: number
       presentedFramesDelta?: number
+      mediaTimeDeltaSec?: number
+      expectedDisplayLeadMs?: number
+      rawSourceFpsEstimate?: number
       sourceFpsEstimate?: number
       sourceFrameIntervalMs?: number
+      sourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
+      trackingSource?: 'videoFrameCallback' | 'timeupdate'
       droppedLike: boolean
     }) => void),
     bindBrowserVideoFrameTracking: vi.fn((input: {
       onFrame: (meta?: {
         callbackIntervalMs?: number
         presentedFramesDelta?: number
+        mediaTimeDeltaSec?: number
+        expectedDisplayLeadMs?: number
+        rawSourceFpsEstimate?: number
         sourceFpsEstimate?: number
         sourceFrameIntervalMs?: number
+        sourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
+        trackingSource?: 'videoFrameCallback' | 'timeupdate'
         droppedLike: boolean
       }) => void
     }) => {
@@ -144,10 +160,14 @@ vi.mock('../../services/rpc', () => ({
   rpc: testState.rpc,
 }))
 
-vi.mock('./browser-video-display', () => ({
-  applyBrowserVideoDisplay: testState.applyBrowserVideoDisplay,
-  bindBrowserVideoFrameTracking: testState.bindBrowserVideoFrameTracking,
-}))
+vi.mock('./browser-video-display', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./browser-video-display')>()
+  return {
+    ...actual,
+    applyBrowserVideoDisplay: testState.applyBrowserVideoDisplay,
+    bindBrowserVideoFrameTracking: testState.bindBrowserVideoFrameTracking,
+  }
+})
 
 function createLaunchSpec(input?: {
   superResolutionExperimental?: boolean
@@ -194,6 +214,7 @@ function getClient() {
 describe('browser-runtime super resolution state', () => {
   const originalDocument = globalThis.document
   const originalWindow = globalThis.window
+  const originalResizeObserver = globalThis.ResizeObserver
 
   beforeEach(() => {
     testState.MockPlayerClient.instances.length = 0
@@ -226,6 +247,7 @@ describe('browser-runtime super resolution state', () => {
   afterEach(() => {
     globalThis.document = originalDocument
     globalThis.window = originalWindow
+    globalThis.ResizeObserver = originalResizeObserver
   })
 
   it('keeps Rust pipelinePreference=video after display degrade recalculation', async () => {
@@ -356,6 +378,395 @@ describe('browser-runtime super resolution state', () => {
     expect(snapshot.renderSharpenMode).toBe('fsr1_rcas')
 
     await runtime.stop()
+  })
+
+  it('projects fullscreen display context into renderer attach and snapshot', async () => {
+    vi.useFakeTimers()
+    try {
+      const container = {
+        getBoundingClientRect: () => ({
+          width: 1920,
+          height: 1200,
+        }),
+      }
+      globalThis.window = {
+        setInterval,
+        clearInterval,
+        setTimeout,
+        clearTimeout,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        devicePixelRatio: 1.5,
+        screen: {
+          frameRate: 120,
+        },
+      } as unknown as Window & typeof globalThis
+      globalThis.document = {
+        hidden: false,
+        fullscreenElement: container,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        createElement: (tag: string) => {
+          if (tag === 'canvas') {
+            return {
+              getContext: vi.fn(() => ({})),
+            }
+          }
+          return {}
+        },
+        getElementById: vi.fn(() => container),
+      } as unknown as Document
+
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ pipelinePreference: 'webgl2' }))
+      const client = getClient()
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 10,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      await vi.advanceTimersByTimeAsync(4_100)
+
+      expect(client.updateRendererAttach).toHaveBeenLastCalledWith(expect.objectContaining({
+        presentTarget: expect.objectContaining({
+          outputWidth: 1920,
+          outputHeight: 1080,
+          viewportWidthCss: 1920,
+          viewportHeightCss: 1080,
+          fullscreen: true,
+          refreshRateHz: 120,
+          sourceWidth: 1920,
+          sourceHeight: 1080,
+        }),
+      }))
+
+      const snapshot = await runtime.snapshotStats() as Awaited<ReturnType<typeof runtime.snapshotStats>> & {
+        renderDisplayFullscreen?: boolean
+        renderDisplayRefreshHz?: number
+        renderDisplayWidth?: number
+        renderDisplayHeight?: number
+        renderPresentTargetWidth?: number
+        renderPresentTargetHeight?: number
+        renderViewportWidth?: number
+        renderViewportHeight?: number
+      }
+      expect(snapshot.renderDisplayFullscreen).toBe(true)
+      expect(snapshot.renderDisplayRefreshHz).toBe(120)
+      expect(snapshot.renderDisplayWidth).toBe(1920)
+      expect(snapshot.renderDisplayHeight).toBe(1200)
+      expect(snapshot.renderPresentTargetWidth).toBe(1920)
+      expect(snapshot.renderPresentTargetHeight).toBe(1080)
+      expect(snapshot.renderViewportWidth).toBe(1920)
+      expect(snapshot.renderViewportHeight).toBe(1080)
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refreshes renderer attach when observed display geometry changes', async () => {
+    vi.useFakeTimers()
+    try {
+      let bounds = { width: 1280, height: 720 }
+      let resizeObserverCallback: ResizeObserverCallback | null = null
+      const windowListeners = new Map<string, EventListenerOrEventListenerObject>()
+      const documentListeners = new Map<string, EventListenerOrEventListenerObject>()
+      const container = {
+        getBoundingClientRect: vi.fn(() => bounds),
+      } as unknown as Element & {
+        getBoundingClientRect: () => { width: number, height: number }
+      }
+      class MockResizeObserver {
+        constructor(callback: ResizeObserverCallback) {
+          resizeObserverCallback = callback
+        }
+
+        observe = vi.fn()
+        disconnect = vi.fn()
+      }
+      globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+      globalThis.window = {
+        setInterval,
+        clearInterval,
+        setTimeout,
+        clearTimeout,
+        addEventListener: vi.fn((event: string, listener: EventListenerOrEventListenerObject) => {
+          windowListeners.set(event, listener)
+        }),
+        removeEventListener: vi.fn((event: string) => {
+          windowListeners.delete(event)
+        }),
+        devicePixelRatio: 1.5,
+        screen: {
+          frameRate: 120,
+        },
+      } as unknown as Window & typeof globalThis
+      globalThis.document = {
+        hidden: false,
+        fullscreenElement: null,
+        addEventListener: vi.fn((event: string, listener: EventListenerOrEventListenerObject) => {
+          documentListeners.set(event, listener)
+        }),
+        removeEventListener: vi.fn((event: string) => {
+          documentListeners.delete(event)
+        }),
+        createElement: (tag: string) => {
+          if (tag === 'canvas') {
+            return {
+              getContext: vi.fn(() => ({})),
+            }
+          }
+          return {}
+        },
+        getElementById: vi.fn(() => container),
+      } as unknown as Document
+
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ pipelinePreference: 'webgl2' }))
+      const client = getClient()
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 10,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      await vi.advanceTimersByTimeAsync(4_100)
+
+      expect(client.updateRendererAttach).toHaveBeenLastCalledWith(expect.objectContaining({
+        presentTarget: expect.objectContaining({
+          outputWidth: 1920,
+          outputHeight: 1080,
+          viewportWidthCss: 1280,
+          viewportHeightCss: 720,
+        }),
+      }))
+
+      bounds = { width: 1920, height: 1200 }
+      ;(globalThis.document as Document & { fullscreenElement?: unknown }).fullscreenElement = container
+      testState.rpc.runtimeTrace.recordEvent.mockClear()
+      const triggerResizeObserver = resizeObserverCallback as unknown as
+        | ((entries: ResizeObserverEntry[], observer: ResizeObserver) => void)
+        | null
+      if (triggerResizeObserver !== null) {
+        triggerResizeObserver([] as ResizeObserverEntry[], {} as ResizeObserver)
+      }
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(client.updateRendererAttach).toHaveBeenLastCalledWith(expect.objectContaining({
+        presentTarget: expect.objectContaining({
+          outputWidth: 1920,
+          outputHeight: 1080,
+          viewportWidthCss: 1920,
+          viewportHeightCss: 1080,
+          fullscreen: true,
+        }),
+      }))
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderPolicyApplied',
+          payload: expect.objectContaining({
+            reason: 'displayGeometryChanged:containerResize',
+            displayGeometryTrigger: 'containerResize',
+          }),
+        }),
+      )
+
+      expect(globalThis.window.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function), { passive: true })
+      expect(globalThis.document.addEventListener).toHaveBeenCalledWith('fullscreenchange', expect.any(Function), { passive: true })
+      expect(windowListeners.has('resize')).toBe(true)
+      expect(documentListeners.has('fullscreenchange')).toBe(true)
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('estimates display refresh rate from requestAnimationFrame when screen.frameRate is unavailable', async () => {
+    vi.useFakeTimers()
+    try {
+      let resizeObserverCallback: ResizeObserverCallback | null = null
+      let nextRafId = 0
+      const rafCallbacks = new Map<number, FrameRequestCallback>()
+      const container = {
+        getBoundingClientRect: () => ({
+          width: 1920,
+          height: 1200,
+        }),
+      } as unknown as Element & {
+        getBoundingClientRect: () => { width: number, height: number }
+      }
+      class MockResizeObserver {
+        constructor(callback: ResizeObserverCallback) {
+          resizeObserverCallback = callback
+        }
+
+        observe = vi.fn()
+        disconnect = vi.fn()
+      }
+      globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+      globalThis.window = {
+        setInterval,
+        clearInterval,
+        setTimeout,
+        clearTimeout,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
+          nextRafId += 1
+          rafCallbacks.set(nextRafId, callback)
+          return nextRafId
+        }),
+        cancelAnimationFrame: vi.fn((id: number) => {
+          rafCallbacks.delete(id)
+        }),
+        devicePixelRatio: 1.5,
+        screen: {},
+      } as unknown as Window & typeof globalThis
+      globalThis.document = {
+        hidden: false,
+        fullscreenElement: container,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        createElement: (tag: string) => {
+          if (tag === 'canvas') {
+            return {
+              getContext: vi.fn(() => ({})),
+            }
+          }
+          return {}
+        },
+        getElementById: vi.fn(() => container),
+      } as unknown as Document
+
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ pipelinePreference: 'webgl2' }))
+      const client = getClient()
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 10,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      await vi.advanceTimersByTimeAsync(4_100)
+
+      client.updateRendererAttach.mockClear()
+      testState.rpc.runtimeTrace.recordEvent.mockClear()
+
+      const driveRaf = (now: number): void => {
+        const next = [...rafCallbacks.entries()].sort((a, b) => a[0] - b[0])[0]
+        if (next === undefined) {
+          throw new Error('raf callback missing')
+        }
+        const [id, callback] = next
+        rafCallbacks.delete(id)
+        callback(now)
+      }
+
+      for (const now of [0, 7, 14, 21, 28, 35, 42, 49]) {
+        driveRaf(now)
+      }
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(client.updateRendererAttach).toHaveBeenLastCalledWith(expect.objectContaining({
+        presentTarget: expect.objectContaining({
+          refreshRateHz: 144,
+          fullscreen: true,
+        }),
+      }))
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderPolicyApplied',
+          payload: expect.objectContaining({
+            reason: 'displayGeometryChanged:refreshRateEstimateChanged',
+            displayGeometryTrigger: 'refreshRateEstimateChanged',
+          }),
+        }),
+      )
+
+      const snapshot = await runtime.snapshotStats()
+      expect(snapshot.renderDisplayRefreshHz).toBe(144)
+
+      void resizeObserverCallback
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refreshes renderer attach when videoReady changes source dimensions', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ pipelinePreference: 'webgl2' }))
+      const client = getClient()
+
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 10,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 60,
+        presentAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(4_100)
+
+      client.updateRendererAttach.mockClear()
+      testState.rpc.runtimeTrace.recordEvent.mockClear()
+      client.eventBus.emit('media.videoReady', { width: 1440, height: 1080 })
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(client.updateRendererAttach).toHaveBeenCalledWith(expect.objectContaining({
+        presentTarget: expect.objectContaining({
+          sourceWidth: 1440,
+          sourceHeight: 1080,
+        }),
+      }))
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderPolicyApplied',
+          payload: expect.objectContaining({
+            reason: 'displayGeometryChanged:sourceDimensionsChanged',
+            displayGeometryTrigger: 'sourceDimensionsChanged',
+          }),
+        }),
+      )
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 
   it('freezes sr tier from latest video size when enabled after videoReady', async () => {
@@ -683,7 +1094,7 @@ describe('browser-runtime super resolution state', () => {
       })
 
       client.eventBus.emit('transport.connectionState', { state: 'connected' })
-      testState.frameTrackingHandler?.({
+      client.eventBus.emit('media.videoFramePresented', {
         callbackIntervalMs: 94,
         presentedFramesDelta: 3,
         droppedLike: true,
@@ -743,7 +1154,7 @@ describe('browser-runtime super resolution state', () => {
       })
 
       client.eventBus.emit('transport.connectionState', { state: 'connected' })
-      testState.frameTrackingHandler?.({
+      client.eventBus.emit('media.videoFramePresented', {
         callbackIntervalMs: 94,
         presentedFramesDelta: 3,
         droppedLike: true,
@@ -761,6 +1172,276 @@ describe('browser-runtime super resolution state', () => {
       for (const call of client.applyVideoSenderPolicy.mock.calls) {
         expect(call[0]).toEqual(expect.objectContaining({ maxFramerate: 60 }))
       }
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('records browser-direct render telemetry summaries and exposes frame-tracking state in snapshots', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 58,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 18,
+        presentedFramesDelta: 1,
+        mediaTimeDeltaSec: 1 / 60,
+        expectedDisplayLeadMs: 5,
+        sourceFpsEstimate: 60,
+        sourceFrameIntervalMs: 16.7,
+        trackingSource: 'videoFrameCallback',
+        droppedLike: false,
+      })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 94,
+        presentedFramesDelta: 3,
+        mediaTimeDeltaSec: 3 / 60,
+        expectedDisplayLeadMs: -7,
+        sourceFpsEstimate: 59.5,
+        sourceFrameIntervalMs: 16.8,
+        trackingSource: 'videoFrameCallback',
+        droppedLike: true,
+      })
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderTelemetryObserved',
+          payload: expect.objectContaining({
+            trackingSource: 'videoFrameCallback',
+            callbackIntervalMs: 94,
+            presentedFramesDelta: 3,
+            callbackCountSinceLastSample: 2,
+            callbackGapCountSinceLastSample: 1,
+            presentedFramesAdvancedSinceLastSample: 4,
+            presentedFramesJumpCountSinceLastSample: 1,
+            mediaTimeDeltaSec: 3 / 60,
+            expectedDisplayLeadMs: -7,
+            sourceFpsEstimate: 59.5,
+            sourceFrameIntervalMs: 16.8,
+            droppedFrames: 1,
+            droppedFramesSinceLastSample: 1,
+            droppedLikeStreak: 1,
+            frameEventsSinceLastSample: 2,
+            maxCallbackIntervalMsSinceLastSample: 94,
+            maxPresentedFramesDeltaSinceLastSample: 3,
+            renderBackpressure: true,
+          }),
+        }),
+      )
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderFrameDropped',
+          payload: expect.objectContaining({
+            callbackGap: true,
+            presentedFramesJump: true,
+          }),
+        }),
+      )
+
+      const snapshot = await runtime.snapshotStats() as Awaited<ReturnType<typeof runtime.snapshotStats>> & {
+        renderCallbackGapCount?: number
+        renderCallbackCountLastSample?: number
+        renderCallbackGapCountLastSample?: number
+        renderFrameTrackingSource?: string
+        renderPresentedFramesDelta?: number
+        renderPresentedFramesJumpCount?: number
+        renderPresentedFramesAdvancedLastSample?: number
+        renderPresentedFramesJumpCountLastSample?: number
+        renderFrameMediaTimeDeltaSec?: number
+        renderFrameExpectedDisplayLeadMs?: number
+        renderFrameSourceFpsEstimate?: number
+        renderFrameSourceFrameIntervalMs?: number
+        renderDroppedLikeStreak?: number
+      }
+      expect(snapshot.renderCallbackGapCount).toBe(1)
+      expect(snapshot.renderCallbackCountLastSample).toBe(2)
+      expect(snapshot.renderCallbackGapCountLastSample).toBe(1)
+      expect(snapshot.renderFrameTrackingSource).toBe('videoFrameCallback')
+      expect(snapshot.renderPresentedFramesDelta).toBe(3)
+      expect(snapshot.renderPresentedFramesJumpCount).toBe(1)
+      expect(snapshot.renderPresentedFramesAdvancedLastSample).toBe(4)
+      expect(snapshot.renderPresentedFramesJumpCountLastSample).toBe(1)
+      expect(snapshot.renderFrameMediaTimeDeltaSec).toBeCloseTo(3 / 60)
+      expect(snapshot.renderFrameExpectedDisplayLeadMs).toBe(-7)
+      expect(snapshot.renderFrameSourceFpsEstimate).toBe(59.5)
+      expect(snapshot.renderFrameSourceFrameIntervalMs).toBe(16.8)
+      expect(snapshot.renderDroppedLikeStreak).toBe(1)
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not double-count Player videoFrameProcessed events into browser render telemetry', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 58,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 20,
+        presentedFramesDelta: 1,
+        sourceFpsEstimate: 60,
+        sourceFrameIntervalMs: 16.7,
+        trackingSource: 'videoFrameCallback',
+        droppedLike: false,
+      })
+      client.eventBus.emit('stats.videoFrameProcessed', {
+        serverDataKey: 1,
+        firstFramePacketArrivalTimeMs: 1,
+        frameSubmittedTimeMs: 2,
+        frameDecodedTimeMs: 3,
+        frameRenderedTimeMs: 4,
+      })
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      const telemetryCall = testState.rpc.runtimeTrace.recordEvent.mock.calls.find(
+        ([entry]) => entry?.event === 'renderTelemetryObserved',
+      )
+      expect(telemetryCall).toBeTruthy()
+      expect(telemetryCall?.[0]).toEqual(expect.objectContaining({
+        event: 'renderTelemetryObserved',
+        payload: expect.objectContaining({
+          frameEventsSinceLastSample: 1,
+          callbackIntervalMs: 20,
+          presentedFramesDelta: 1,
+          trackingSource: 'videoFrameCallback',
+          droppedFramesSinceLastSample: 0,
+        }),
+      }))
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('records why source fps estimation is unavailable in render telemetry', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 58,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 44,
+        presentedFramesDelta: 2,
+        sourceFpsUnavailableReason: 'mediaTimeMissing',
+        trackingSource: 'videoFrameCallback',
+        droppedLike: true,
+      })
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderTelemetryObserved',
+          payload: expect.objectContaining({
+            callbackGapCountSinceLastSample: 0,
+            presentedFramesJumpCountSinceLastSample: 1,
+            rawSourceFpsEstimate: null,
+            sourceFpsEstimate: null,
+            sourceFpsUnavailableReason: 'mediaTimeMissing',
+          }),
+        }),
+      )
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderFrameDropped',
+          payload: expect.objectContaining({
+            callbackGap: false,
+            presentedFramesJump: true,
+            sourceFpsUnavailableReason: 'mediaTimeMissing',
+          }),
+        }),
+      )
 
       await runtime.stop()
     }

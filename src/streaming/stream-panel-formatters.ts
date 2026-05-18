@@ -30,12 +30,15 @@ export function formatPanelFps(value?: string | number): string {
   return numericValue.toFixed(1)
 }
 
-export function formatRenderPipelineType(value?: 'video' | 'webgl2'): string {
+export function formatRenderPipelineType(value?: 'video' | 'webgl2' | 'webgl2_sr'): string {
   if (value === 'video') {
     return 'Video'
   }
   if (value === 'webgl2') {
     return 'WebGL2'
+  }
+  if (value === 'webgl2_sr') {
+    return 'WebGL2 + SR'
   }
   return '--'
 }

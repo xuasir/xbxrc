@@ -76,7 +76,11 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const firstFrameGuardTriggered = input.runtimeSnapshot?.firstFrameGuardTriggered
   const renderBackpressure = input.runtimeSnapshot?.renderBackpressure
   const renderDroppedFrames = input.runtimeSnapshot?.renderDroppedFrames
+  const renderCallbackGapCount = input.runtimeSnapshot?.renderCallbackGapCount
   const renderFrameCallbackIntervalMs = input.runtimeSnapshot?.renderFrameCallbackIntervalMs
+  const renderCallbackGapCountLastSample = input.runtimeSnapshot?.renderCallbackGapCountLastSample
+  const renderPresentedFramesJumpCount = input.runtimeSnapshot?.renderPresentedFramesJumpCount
+  const renderPresentedFramesJumpCountLastSample = input.runtimeSnapshot?.renderPresentedFramesJumpCountLastSample
   const renderCause = input.runtimeSnapshot?.renderCause
   const displayDegradeLevel = input.runtimeSnapshot?.displayDegradeLevel
   const renderDecisionDigest = input.runtimeSnapshot?.renderDecisionDigest?.trim() || undefined
@@ -90,6 +94,16 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const renderShaderPath = input.runtimeSnapshot?.renderShaderPath
   const renderFpsBudget = input.runtimeSnapshot?.renderFpsBudget
   const rendererCapabilityReason = input.runtimeSnapshot?.rendererCapabilityReason?.trim() || undefined
+  const renderDisplayFullscreen = input.runtimeSnapshot?.renderDisplayFullscreen
+  const renderDisplayRefreshHz = input.runtimeSnapshot?.renderDisplayRefreshHz
+  const renderDisplayWidth = input.runtimeSnapshot?.renderDisplayWidth
+  const renderDisplayHeight = input.runtimeSnapshot?.renderDisplayHeight
+  const renderPresentTargetWidth = input.runtimeSnapshot?.renderPresentTargetWidth
+  const renderPresentTargetHeight = input.runtimeSnapshot?.renderPresentTargetHeight
+  const renderViewportWidth = input.runtimeSnapshot?.renderViewportWidth
+  const renderViewportHeight = input.runtimeSnapshot?.renderViewportHeight
+  const renderSourceWidth = input.runtimeSnapshot?.renderSourceWidth
+  const renderSourceHeight = input.runtimeSnapshot?.renderSourceHeight
   const renderSuperResolutionEnabled = input.runtimeSnapshot?.renderSuperResolutionEnabled
   const renderSuperResolutionActive = input.runtimeSnapshot?.renderSuperResolutionActive
   const renderSuperResolutionAlgorithm = input.runtimeSnapshot?.renderSuperResolutionAlgorithm
@@ -247,7 +261,11 @@ export function buildStreamDiagnosticsSnapshot(input: {
     firstFrameGuardTriggered,
     renderBackpressure,
     renderDroppedFrames,
+    renderCallbackGapCount,
     renderFrameCallbackIntervalMs,
+    renderCallbackGapCountLastSample,
+    renderPresentedFramesJumpCount,
+    renderPresentedFramesJumpCountLastSample,
     renderCause,
     displayDegradeLevel,
     renderDecisionDigest,
@@ -261,6 +279,16 @@ export function buildStreamDiagnosticsSnapshot(input: {
     renderShaderPath,
     renderFpsBudget,
     rendererCapabilityReason,
+    renderDisplayFullscreen,
+    renderDisplayRefreshHz,
+    renderDisplayWidth,
+    renderDisplayHeight,
+    renderPresentTargetWidth,
+    renderPresentTargetHeight,
+    renderViewportWidth,
+    renderViewportHeight,
+    renderSourceWidth,
+    renderSourceHeight,
     renderSuperResolutionEnabled,
     renderSuperResolutionActive,
     renderSuperResolutionAlgorithm,

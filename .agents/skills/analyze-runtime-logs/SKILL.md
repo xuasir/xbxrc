@@ -43,6 +43,27 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
    - `hostMailbox*`: host pending/displayed mailbox 与上屏执行态
 17. Do not read `renderMailboxStateTransition` or `renderMailboxDecision` as a second value-comparator.
     They report mailbox overwrite / recovery telemetry after `pacer` has already chosen the frame.
+18. For browser-direct render pacing / WebGL2 drawing questions, always read these browser-side structured events first:
+   - `renderTelemetryObserved`
+   - `renderFrameDropped`
+   - `renderBackpressureChanged`
+   - `renderCauseClassified`
+   - `renderPolicyApplied`
+19. Read browser-direct render telemetry with fixed semantics:
+   - `trackingSource`: `videoFrameCallback` 表示基于 `requestVideoFrameCallback`，`timeupdate` 表示 fallback 粗粒度节拍
+   - `callbackCountSinceLastSample` / `frameEventsSinceLastSample`: sample 窗口内浏览器回调次数；两者当前等价，后者是历史兼容字段
+   - `callbackGapCountSinceLastSample`: sample 窗口内“回调间隔超过本地阈值”的次数；优先拿它判断 callback 稀疏/晚到
+   - `presentedFramesAdvancedSinceLastSample`: sample 窗口内浏览器 `presentedFrames` 总推进量；拿它和 callback count 对比，区分“50Hz 回调 + 60Hz 呈现推进”与“真实显示不足 60Hz”
+   - `presentedFramesDelta`: 单次回调跨度内浏览器已呈现帧数变化，`>1` 表示该窗口内有跳帧/批量呈现迹象
+   - `presentedFramesJumpCountSinceLastSample`: sample 窗口内 `presentedFramesDelta > 1` 的次数；优先拿它判断多帧推进被浏览器合并到一次 callback
+   - `mediaTimeDeltaSec`: 相邻 video-frame callback 之间源 `mediaTime` 推进量；判断源节拍是否真在 30/60fps 附近
+   - `expectedDisplayLeadMs`: callback 到达时距离浏览器预计显示时间的提前/滞后量；负值表示回调已晚于预计显示点
+   - `sourceFpsEstimate` / `sourceFrameIntervalMs`: 视频源节拍估算，优先用来区分 30fps / 60fps 源与本地绘制问题
+   - `droppedFramesSinceLastSample` / `droppedLikeStreak`: 浏览器侧 dropped-like 并集计数与连续性；它同时覆盖 callback gap 和 `presentedFrames` jump，不能单独当成真实掉帧结论
+   - `maxCallbackIntervalMsSinceLastSample` / `maxPresentedFramesDeltaSinceLastSample`: 当前 sample 窗口内最差回调间隔与最大跳帧跨度
+20. Treat `renderFrameDropped` as browser-side dropped-like evidence, not literal GPU draw failure.
+    It means callback cadence or presented-frame progression crossed the local threshold.
+    Use `callbackGap` and `presentedFramesJump` to split “callback 稀疏” from “多帧合批推进”.
 
 ## Follow This Workflow
 
@@ -66,6 +87,12 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
    - `videoIngressTermination`: `RtcVideoFrameSource rx closed` and upstream-cause chain
    - `firstFrameLatencyObserved`: first-frame five-stage latency breakdown
    - `h264InspectionObserved` / `h264InspectionRejected`: packet-level H264 bootstrap verdict
+12. When the question involves browser-direct render stability, read the structured chain in this order:
+   - `renderTelemetryObserved`: sample 窗口总览
+   - `renderFrameDropped`: 单次 dropped-like 证据
+   - `renderBackpressureChanged`: 本地 backpressure 起落点
+   - `renderCauseClassified`: 本地 render 原因归类
+   - `renderPolicyApplied`: 当前 WebGL2 / video / SR 路径与 display degrade 策略结果
 
 ## Use The Bundled Resources
 
@@ -84,6 +111,12 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
   - `nackEffectiveness.effectiveRate`: NACK 有效性聚合统计（`effectiveCount / sentCount`）。
   - `repairabilityPersistence`: repairability 评分样本、均值区间、缺口长度、缺失连续段等持久化统计。
   - `recoveryEffectiveness`: 综合恢复有效性评分（由 keyframe、建链、NACK、repairability 持久化加权得到）。
+- Browser-direct render telemetry currently relies on raw structured events in the trace:
+  - `renderTelemetryObserved`: 浏览器直连绘制 sample 汇总
+  - `renderFrameDropped`: 单次 dropped-like 事件
+  - `renderBackpressureChanged`: 本地 backpressure 门限跨越
+  - `renderCauseClassified`: render starvation / decode backpressure / stable 分类
+  - `renderPolicyApplied`: renderer attach / display degrade / shader 路径落地结果
 
 ## Reporting Contract
 
@@ -113,6 +146,16 @@ Return results in this shape unless the user asked for a different format:
    - `videoIngressTermination`
    - `firstFrameLatencyObserved`
    - `h264InspectionObserved` / `h264InspectionRejected` as packet-level supplement
+10. If browser-direct render stability is involved, explicitly state:
+   - `trackingSource` 是 `videoFrameCallback` 还是 `timeupdate`
+   - `sourceFpsEstimate` / `sourceFrameIntervalMs` 是否稳定
+   - `callbackIntervalMs` 与 `maxCallbackIntervalMsSinceLastSample` 是否出现长尾
+   - `callbackGapCountSinceLastSample` 是否增长，以及它和 `presentedFramesAdvancedSinceLastSample` 是否互相矛盾
+   - `presentedFramesDelta` / `maxPresentedFramesDeltaSinceLastSample` 是否持续大于 `1`
+   - `presentedFramesJumpCountSinceLastSample` 是否增长
+   - `droppedFramesSinceLastSample` 与 `droppedLikeStreak` 是否连续增长
+   - `renderBackpressure` 是否仅短时出现，还是长期维持
+   - `renderCauseClassified` 与 `renderPolicyApplied` 是否把问题收敛为本地绘制、解码背压或稳定状态
 
 ## Guardrails
 
@@ -123,3 +166,4 @@ Return results in this shape unless the user asked for a different format:
 - Flag missing instrumentation when the trace cannot prove a causal link.
 - Compare multiple traces only after normalizing by phase, `sessionId`, and timestamp window.
 - Do not treat `recovery_keyframe_request_count` or raw `nack` counts as outcome metrics; use episode/disposition/effectiveness fields first.
+- Do not treat `renderFrameDropped` count alone as proof of GPU draw failure; always correlate it with `trackingSource`, `callbackGap`, `presentedFramesJump`, `sourceFpsEstimate`, `presentedFramesDelta`, and `renderBackpressure`.

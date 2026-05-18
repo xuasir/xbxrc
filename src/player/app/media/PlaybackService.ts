@@ -1,5 +1,9 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
+import type {
+  PresentedVideoFrameMetadata,
+  RendererAttachSpec,
+  RendererRuntimeConfig,
+} from '../../domain/media'
 import type {
   VideoRenderer,
 } from '../../infra/render/Renderers'
@@ -20,7 +24,7 @@ export class PlaybackService {
   private audioElement: HTMLAudioElement | null = null
   private renderer: VideoRenderer
   private rendererAttach: RendererAttachSpec
-  private frameTrackingStarted = false
+  private frameTrackingCleanup: (() => void) | null = null
 
   constructor(
     private readonly getContainer: () => HTMLElement,
@@ -35,14 +39,23 @@ export class PlaybackService {
   }
 
   updateRendererConfig(config: Partial<RendererRuntimeConfig>): void {
-    this.rendererConfig = { ...this.rendererConfig, ...config }
-    this.renderer.update(this.rendererConfig)
+    this.updateRendererState(config, this.rendererAttach)
   }
 
   updateRendererAttach(spec: RendererAttachSpec): void {
+    this.updateRendererState({}, spec)
+  }
+
+  updateRendererState(
+    config: Partial<RendererRuntimeConfig>,
+    spec: RendererAttachSpec,
+  ): void {
     const previousKind = this.rendererAttach.kind
     this.rendererAttach = spec
-    this.rendererConfig = mergeRendererConfigWithAttachSpec(this.rendererConfig, spec)
+    this.rendererConfig = mergeRendererConfigWithAttachSpec({
+      ...this.rendererConfig,
+      ...config,
+    }, spec)
     if (previousKind !== spec.kind && this.videoElement) {
       const currentVideo = this.videoElement
       this.renderer.destroy()
@@ -95,7 +108,8 @@ export class PlaybackService {
     this.audioElement?.remove()
     this.videoElement = null
     this.audioElement = null
-    this.frameTrackingStarted = false
+    this.frameTrackingCleanup?.()
+    this.frameTrackingCleanup = null
   }
 
   captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
@@ -207,24 +221,112 @@ export class PlaybackService {
   }
 
   private startVideoFrameTracking(video: HTMLVideoElement): void {
-    if (this.frameTrackingStarted || !('requestVideoFrameCallback' in HTMLVideoElement.prototype)) {
+    if (this.frameTrackingCleanup !== null) {
       return
     }
-    this.frameTrackingStarted = true
-    const loop = (_t: number, metadata: VideoFrameCallbackMetadata) => {
-      if (!this.videoElement) {
-        return
+
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      let lastCallbackAt = 0
+      let lastPresentedFrames = 0
+      let lastMediaTime: number | undefined
+      let frameCallbackHandle: number | null = null
+      const loop = (now: number, metadata: VideoFrameCallbackMetadata): void => {
+        if (!this.videoElement) {
+          return
+        }
+        frameCallbackHandle = this.videoElement.requestVideoFrameCallback(loop)
+        this.inputService.addProcessedFrame({
+          serverDataKey: metadata.rtpTimestamp ?? 0,
+          firstFramePacketArrivalTimeMs: metadata.receiveTime ?? performance.now(),
+          frameSubmittedTimeMs: metadata.receiveTime ?? performance.now(),
+          frameDecodedTimeMs: metadata.expectedDisplayTime ?? performance.now(),
+          frameRenderedTimeMs: metadata.expectedDisplayTime ?? performance.now(),
+        })
+
+        const hadPriorMediaTime = lastMediaTime !== undefined
+        const callbackIntervalMs = lastCallbackAt > 0 ? now - lastCallbackAt : undefined
+        lastCallbackAt = now
+        const nextPresentedFrames = metadata.presentedFrames ?? 0
+        const presentedFramesDelta = lastPresentedFrames > 0
+          ? Math.max(0, nextPresentedFrames - lastPresentedFrames)
+          : undefined
+        lastPresentedFrames = nextPresentedFrames
+        const mediaTimeDeltaSec = lastMediaTime !== undefined && metadata.mediaTime !== undefined
+          ? metadata.mediaTime - lastMediaTime
+          : undefined
+        lastMediaTime = metadata.mediaTime
+        const expectedDisplayLeadMs = metadata.expectedDisplayTime !== undefined
+          ? metadata.expectedDisplayTime - now
+          : undefined
+        const rawSourceFpsEstimate = mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec > 0.005 && mediaTimeDeltaSec < 1
+          ? (presentedFramesDelta !== undefined && presentedFramesDelta > 0 ? presentedFramesDelta : 1) / mediaTimeDeltaSec
+          : undefined
+        const sourceFpsEstimate = rawSourceFpsEstimate !== undefined
+          && Number.isFinite(rawSourceFpsEstimate)
+          && rawSourceFpsEstimate >= 10
+          && rawSourceFpsEstimate <= 120
+          ? rawSourceFpsEstimate
+          : undefined
+        let sourceFpsUnavailableReason: PresentedVideoFrameMetadata['sourceFpsUnavailableReason']
+        if (sourceFpsEstimate === undefined) {
+          if (metadata.mediaTime === undefined) {
+            sourceFpsUnavailableReason = 'mediaTimeMissing'
+          }
+          else if (!hadPriorMediaTime) {
+            sourceFpsUnavailableReason = 'noPriorMediaTime'
+          }
+          else if (mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec <= 0.005) {
+            sourceFpsUnavailableReason = 'mediaTimeDeltaTooSmall'
+          }
+          else if (mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec >= 1) {
+            sourceFpsUnavailableReason = 'mediaTimeDeltaTooLarge'
+          }
+          else if (rawSourceFpsEstimate !== undefined) {
+            sourceFpsUnavailableReason = 'sourceFpsOutOfRange'
+          }
+        }
+        const sourceFrameIntervalMs = sourceFpsEstimate !== undefined ? 1000 / sourceFpsEstimate : undefined
+        const intervalDropThresholdMs = sourceFrameIntervalMs !== undefined
+          ? Math.max(80, sourceFrameIntervalMs * 2.5)
+          : 90
+        this.emitter.emit('media.videoFramePresented', {
+          callbackIntervalMs,
+          presentedFramesDelta,
+          mediaTimeDeltaSec,
+          expectedDisplayLeadMs,
+          rawSourceFpsEstimate,
+          sourceFpsEstimate,
+          sourceFrameIntervalMs,
+          sourceFpsUnavailableReason,
+          trackingSource: 'videoFrameCallback',
+          droppedLike: (callbackIntervalMs ?? 0) > intervalDropThresholdMs || ((presentedFramesDelta ?? 1) > 1),
+        })
       }
-      this.videoElement.requestVideoFrameCallback(loop)
-      this.inputService.addProcessedFrame({
-        serverDataKey: metadata.rtpTimestamp ?? 0,
-        firstFramePacketArrivalTimeMs: metadata.receiveTime ?? performance.now(),
-        frameSubmittedTimeMs: metadata.receiveTime ?? performance.now(),
-        frameDecodedTimeMs: metadata.expectedDisplayTime ?? performance.now(),
-        frameRenderedTimeMs: metadata.expectedDisplayTime ?? performance.now(),
+      frameCallbackHandle = video.requestVideoFrameCallback(loop)
+      this.frameTrackingCleanup = () => {
+        if (frameCallbackHandle !== null) {
+          video.cancelVideoFrameCallback(frameCallbackHandle)
+          frameCallbackHandle = null
+        }
+      }
+      return
+    }
+
+    let lastTimeUpdateAt = 0
+    const onTimeUpdate = (): void => {
+      const now = Date.now()
+      const callbackIntervalMs = lastTimeUpdateAt > 0 ? now - lastTimeUpdateAt : undefined
+      lastTimeUpdateAt = now
+      this.emitter.emit('media.videoFramePresented', {
+        callbackIntervalMs,
+        trackingSource: 'timeupdate',
+        droppedLike: (callbackIntervalMs ?? 0) > 90,
       })
     }
-    video.requestVideoFrameCallback(loop)
+    video.addEventListener('timeupdate', onTimeUpdate)
+    this.frameTrackingCleanup = () => {
+      video.removeEventListener('timeupdate', onTimeUpdate)
+    }
   }
 
   private toObjectFit(format: string): string {

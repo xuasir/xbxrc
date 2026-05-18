@@ -105,6 +105,68 @@ Script-level recovery aggregates (from `scripts/summarize_runtime_trace.py`):
 - `recoveryAudit.recoveryEffectiveness.score`:
   综合恢复有效性评分（基于 keyframe/NACK/建链/repairability 持久化的加权结果）。
 
+## Browser-Direct Render Structured Events
+
+当问题集中在浏览器直连模式的 WebGL2 / video 呈现稳定性时，优先读这些结构化事件：
+
+- `renderTelemetryObserved`:
+  浏览器端绘制 sample 窗口总览。重点字段：
+  - `trackingSource`: `videoFrameCallback` 或 `timeupdate`
+  - `callbackCountSinceLastSample`: sample 窗口内浏览器回调次数
+  - `callbackGapCountSinceLastSample`: sample 窗口内回调间隔超过本地阈值的次数
+  - `callbackIntervalMs`
+  - `presentedFramesAdvancedSinceLastSample`: sample 窗口内 `presentedFrames` 总推进量
+  - `presentedFramesDelta`
+  - `presentedFramesJumpCountSinceLastSample`: sample 窗口内 `presentedFramesDelta > 1` 的次数
+  - `mediaTimeDeltaSec`
+  - `expectedDisplayLeadMs`
+  - `sourceFpsEstimate`
+  - `sourceFrameIntervalMs`
+  - `droppedFrames`
+  - `droppedFramesSinceLastSample`
+  - `droppedLikeStreak`
+  - `frameEventsSinceLastSample`
+  - `maxCallbackIntervalMsSinceLastSample`
+  - `maxPresentedFramesDeltaSinceLastSample`
+  - `renderBackpressure`
+  - `renderCause`
+  - `displayDegradeLevel`
+  这条事件适合回答“当前时间窗内回调节奏稳不稳、实际呈现推进有没有接近 60、源节拍稳不稳、局部跳帧是否在累积”。
+- `renderFrameDropped`:
+  单次 dropped-like 证据。它表示浏览器侧回调间隔或 `presentedFrames` 推进跨过本地阈值，
+  适合作为“哪一拍开始恶化”的锚点。它不直接等价于 GPU draw failure。
+  重点补充字段：
+  - `callbackGap`: 该次事件是否由 callback 间隔过长触发
+  - `presentedFramesJump`: 该次事件是否由 `presentedFramesDelta > 1` 触发
+- `renderBackpressureChanged`:
+  本地 backpressure 状态切换锚点。结合 `callbackIntervalMs`、`backpressureThresholdMs`、
+  `sourceFpsEstimate` 与 `sourceFrameIntervalMs` 判断是偶发长尾还是持续供给不足。
+- `renderCauseClassified`:
+  浏览器端本地 render 解释层。用 `cause`、`renderDecisionDigest`、`renderBackpressure`、
+  `frontEndVideoFrameSourceFps`、`frontEndVideoFrameSourceFpsCeiling` 区分：
+  - `renderStable`
+  - `renderStarvation`
+  - `decodeBackpressure`
+- `renderPolicyApplied`:
+  当前浏览器 renderer 策略落地事件。用 `pipelineType`、`processing`、`processingMode`、
+  `shaderPreset`、`displayDegradeLevel`、`renderFpsBudget`、`reason` 判断 runtime 是否已切换
+  WebGL2 / 原生 video / SR 路径，或是否进入 display degrade。
+
+浏览器端绘制字段的实用解释：
+
+- `trackingSource=videoFrameCallback`:
+  更接近浏览器真实解码/呈现节拍，优先级高于 `timeupdate`。
+- `trackingSource=timeupdate`:
+  fallback 粗粒度节拍，适合判定“明显卡顿”，不适合做精细 30/60fps 结论。
+- `presentedFramesDelta > 1`:
+  当前回调窗口内浏览器已呈现帧跨步推进，表示跳帧或批量呈现迹象。
+- `callbackGapCountSinceLastSample > 0` 且 `presentedFramesAdvancedSinceLastSample` 仍接近 60fps:
+  优先判定为 callback 稀疏，不要直接把它读成“真实显示只有 50fps”。
+- `droppedLikeStreak`:
+  连续 sample 中 dropped-like 现象是否持续，适合区分偶发毛刺和持续抖动。
+- `sourceFpsEstimate` / `sourceFrameIntervalMs`:
+  视频源节拍估算。优先用于区分源本身是 30fps，还是 60fps 源在本地绘制阶段出现抖动。
+
 ## Practical Read Order
 
 1. File open and session bootstrap rows.
@@ -113,3 +175,6 @@ Script-level recovery aggregates (from `scripts/summarize_runtime_trace.py`):
 4. `decision` rows for branch reasoning.
 5. `snapshot` rows for capability, transport, and performance context.
 6. `log` rows only around suspicious windows.
+7. For browser-direct render investigations, add this local render order:
+   `renderTelemetryObserved` -> `renderFrameDropped` -> `renderBackpressureChanged`
+   -> `renderCauseClassified` -> `renderPolicyApplied`.

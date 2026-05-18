@@ -1,5 +1,5 @@
 import type { ProcessedVideoFrameMetadata } from '../domain/input'
-import type { StreamStats } from '../domain/media'
+import type { PresentedVideoFrameMetadata, StreamStats } from '../domain/media'
 import type { ChannelMessage } from '../domain/messages'
 import type { IceCandidateLike, SessionState } from '../domain/session'
 import type { FpsStats, InputPacketStats } from '../domain/stats'
@@ -14,6 +14,7 @@ export interface PlayerEvents {
   'stats.fps': FpsStats
   'stats.inputPacket': InputPacketStats
   'stats.videoFrameProcessed': ProcessedVideoFrameMetadata
+  'media.videoFramePresented': PresentedVideoFrameMetadata
   'media.videoReady': { width: number, height: number }
   /** SR renderer 初始化失败并已回退到标准 webgl2。 */
   'media.superResolutionFallback': { reason: string }

@@ -46,6 +46,15 @@ export class MediaService {
     this.playbackService.updateRendererAttach(spec)
   }
 
+  updateRendererState(
+    config: Partial<RendererRuntimeConfig>,
+    spec: RendererAttachSpec,
+  ): void {
+    this.rendererConfig = { ...this.rendererConfig, ...config }
+    this.rendererAttach = spec
+    this.playbackService.updateRendererState(config, spec)
+  }
+
   attachVideoStream(stream: MediaStream): void {
     this.playbackService.attachVideoStream(stream)
   }

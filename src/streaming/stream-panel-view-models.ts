@@ -111,6 +111,7 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
       diagnostics.keyframeRequestSuccessRate ?? s?.keyframeRequestSuccessRate,
     ),
     recoveryCause: stringOrDash(diagnostics.recoveryCause ?? s?.recoveryCause),
+    senderPolicyCause: stringOrDash(diagnostics.senderPolicyCause ?? s?.senderPolicyCause),
     qualityLadderLevel: stringOrDash(diagnostics.qualityLadderLevel ?? s?.qualityLadderLevel),
     decisionDigest: stringOrDash(diagnostics.decisionDigest ?? s?.decisionDigest),
   }

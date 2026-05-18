@@ -1,11 +1,21 @@
+import type {
+  PresentedVideoFrameMetadata,
+  VideoFrameSourceFpsUnavailableReason,
+} from '../../player/domain/media'
 import type { DisplayOptionsValue, StreamRenderProjection } from '../types'
 import { isAspectRatioFormat } from '../utils'
+import { resolveDisplayViewport } from './display-viewport'
 
 interface ApplyBrowserVideoDisplayInput {
   playerElementId: string
   displayOptions: DisplayOptionsValue
   render: StreamRenderProjection
+  sourceWidth?: number
+  sourceHeight?: number
+  fullscreen?: boolean
 }
+
+export type RenderFrameSourceFpsUnavailableReason = VideoFrameSourceFpsUnavailableReason
 
 function toVideoObjectFit(videoFormat: string | undefined): string {
   if (videoFormat === 'Stretch') {
@@ -33,37 +43,35 @@ export function applyBrowserVideoDisplay(input: ApplyBrowserVideoDisplayInput): 
   const container = document.getElementById(input.playerElementId)
 
   withVideoElement(input.playerElementId, (video) => {
+    const bounds = container instanceof HTMLElement
+      ? container.getBoundingClientRect()
+      : { width: 0, height: 0 }
+    const winWidth = bounds.width > 0 ? bounds.width : document.documentElement.clientWidth
+    const winHeight = bounds.height > 0 ? bounds.height : document.documentElement.clientHeight
+    const applyViewportSizing = (objectFit: string): void => {
+      const viewportFormat = videoFormat ?? 'Contain'
+      const viewport = resolveDisplayViewport({
+        containerWidthCss: winWidth,
+        containerHeightCss: winHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+        format: viewportFormat,
+        fullscreen: input.fullscreen ?? false,
+        sourceWidth: input.sourceWidth ?? video.videoWidth ?? 0,
+        sourceHeight: input.sourceHeight ?? video.videoHeight ?? 0,
+      })
+
+      video.style.width = `${viewport.viewportWidthCss}px`
+      video.style.height = `${viewport.viewportHeightCss}px`
+      video.style.objectFit = objectFit
+    }
+
     if (isAspectRatioFormat(videoFormat)) {
-      const [widthRatio, heightRatio] = videoFormat.split(':').map(Number)
-      if (!Number.isFinite(widthRatio) || !Number.isFinite(heightRatio) || heightRatio === 0) {
-        return
-      }
+      applyViewportSizing(videoFormat === '16:9' ? 'contain' : 'fill')
+      return
+    }
 
-      const videoRatio = widthRatio / heightRatio
-      const { width: boundedWidth, height: boundedHeight } = container instanceof HTMLElement
-        ? container.getBoundingClientRect()
-        : { width: 0, height: 0 }
-      const winWidth = boundedWidth > 0 ? boundedWidth : document.documentElement.clientWidth
-      const winHeight = boundedHeight > 0 ? boundedHeight : document.documentElement.clientHeight
-      const parentRatio = winWidth / winHeight
-
-      let width = 0
-      let height = 0
-      if (parentRatio > videoRatio) {
-        height = winHeight
-        width = height * videoRatio
-      }
-      else {
-        width = winWidth
-        height = width / videoRatio
-      }
-
-      width = Math.ceil(Math.min(winWidth, width))
-      height = Math.ceil(Math.min(winHeight, height))
-
-      video.style.width = `${width}px`
-      video.style.height = `${height}px`
-      video.style.objectFit = videoFormat === '16:9' ? 'contain' : 'fill'
+    if (videoFormat === 'Contain') {
+      applyViewportSizing('contain')
       return
     }
 
@@ -76,18 +84,13 @@ export function applyBrowserVideoDisplay(input: ApplyBrowserVideoDisplayInput): 
 /**
  * 浏览器 runtime 内部直接监听 DOM 帧呈现，外层只接收 frameReady 事件。
  *
- * 注意：当浏览器支持 `requestVideoFrameCallback` 时，Player 会通过 `stats.videoFrameProcessed`
- * 提供更贴近解码/呈现节拍的帧信号；此时不再使用 `timeupdate` 作为主链，以避免重复与错位。
+ * 注意：这里的 render telemetry 只使用这一条 DOM 帧链。
+ * Player 内部也会基于 `requestVideoFrameCallback` 产出 `stats.videoFrameProcessed`
+ * 供 metadata / fps 统计使用，但 runtime 侧不再重复消费那条事件，以避免同一浏览器帧被双重记账。
  */
 export function bindBrowserVideoFrameTracking(input: {
   playerElementId: string
-  onFrame: (meta?: {
-    callbackIntervalMs?: number
-    presentedFramesDelta?: number
-    sourceFpsEstimate?: number
-    sourceFrameIntervalMs?: number
-    droppedLike: boolean
-  }) => void
+  onFrame: (meta?: PresentedVideoFrameMetadata) => void
 }): () => void {
   const cleanups: Array<() => void> = []
   let boundVideo: HTMLVideoElement | null = null
@@ -104,6 +107,7 @@ export function bindBrowserVideoFrameTracking(input: {
     input.onFrame({
       callbackIntervalMs: interval,
       presentedFramesDelta: undefined,
+      trackingSource: 'timeupdate',
       droppedLike: (interval ?? 0) > 90,
     })
   }
@@ -127,10 +131,12 @@ export function bindBrowserVideoFrameTracking(input: {
         callback: (now: number, metadata: {
           mediaTime?: number
           presentedFrames?: number
+          expectedDisplayTime?: number
         }) => void,
       ) => number
     }
     frameCallbackHandle = video.requestVideoFrameCallback((now, metadata) => {
+      const hadPriorMediaTime = lastMediaTime !== undefined
       const callbackIntervalMs = lastCallbackAt > 0 ? now - lastCallbackAt : undefined
       lastCallbackAt = now
       const nextPresentedFrames = metadata.presentedFrames ?? 0
@@ -142,12 +148,33 @@ export function bindBrowserVideoFrameTracking(input: {
         ? metadata.mediaTime - lastMediaTime
         : undefined
       lastMediaTime = metadata.mediaTime
-      const sourceFpsEstimate = mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec > 0.005 && mediaTimeDeltaSec < 1
+      const expectedDisplayLeadMs = metadata.expectedDisplayTime !== undefined
+        ? metadata.expectedDisplayTime - now
+        : undefined
+      const rawSourceFpsEstimate = mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec > 0.005 && mediaTimeDeltaSec < 1
         ? (presentedFramesDelta !== undefined && presentedFramesDelta > 0 ? presentedFramesDelta : 1) / mediaTimeDeltaSec
         : undefined
-      const normalizedSourceFpsEstimate = sourceFpsEstimate !== undefined && Number.isFinite(sourceFpsEstimate) && sourceFpsEstimate >= 10 && sourceFpsEstimate <= 120
-        ? sourceFpsEstimate
+      const normalizedSourceFpsEstimate = rawSourceFpsEstimate !== undefined && Number.isFinite(rawSourceFpsEstimate) && rawSourceFpsEstimate >= 10 && rawSourceFpsEstimate <= 120
+        ? rawSourceFpsEstimate
         : undefined
+      let sourceFpsUnavailableReason: RenderFrameSourceFpsUnavailableReason | undefined
+      if (normalizedSourceFpsEstimate === undefined) {
+        if (metadata.mediaTime === undefined) {
+          sourceFpsUnavailableReason = 'mediaTimeMissing'
+        }
+        else if (!hadPriorMediaTime) {
+          sourceFpsUnavailableReason = 'noPriorMediaTime'
+        }
+        else if (mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec <= 0.005) {
+          sourceFpsUnavailableReason = 'mediaTimeDeltaTooSmall'
+        }
+        else if (mediaTimeDeltaSec !== undefined && mediaTimeDeltaSec >= 1) {
+          sourceFpsUnavailableReason = 'mediaTimeDeltaTooLarge'
+        }
+        else if (rawSourceFpsEstimate !== undefined) {
+          sourceFpsUnavailableReason = 'sourceFpsOutOfRange'
+        }
+      }
       const sourceFrameIntervalMs = normalizedSourceFpsEstimate !== undefined
         ? 1000 / normalizedSourceFpsEstimate
         : undefined
@@ -158,8 +185,13 @@ export function bindBrowserVideoFrameTracking(input: {
       input.onFrame({
         callbackIntervalMs,
         presentedFramesDelta,
+        mediaTimeDeltaSec,
+        expectedDisplayLeadMs,
+        rawSourceFpsEstimate,
         sourceFpsEstimate: normalizedSourceFpsEstimate,
         sourceFrameIntervalMs,
+        sourceFpsUnavailableReason,
+        trackingSource: 'videoFrameCallback',
         droppedLike,
       })
       scheduleVideoFrameCallback()

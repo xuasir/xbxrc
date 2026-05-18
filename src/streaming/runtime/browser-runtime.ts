@@ -1,6 +1,7 @@
 import type {
   CreateOfferOptions,
   PlayerClient,
+  PresentedVideoFrameMetadata,
   RendererRuntimeConfig,
   StreamStats,
   TransportRuntimeConfig,
@@ -57,7 +58,6 @@ import {
 } from './browser-super-resolution-state'
 import {
   applyBrowserVideoDisplay,
-  bindBrowserVideoFrameTracking,
 } from './browser-video-display'
 import { applyIceCandidatePolicy } from './ice-candidate-policy'
 import {
@@ -188,10 +188,17 @@ type QualityLadderLevel = 'L0' | 'L1' | 'L2'
 type FirstFrameStage = 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
 type RenderCause = 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
 type DisplayDegradeLevel = 'displayL0' | 'displayL1' | 'displayL2'
+type DisplayGeometryRefreshTrigger
+  = | 'windowResize'
+    | 'fullscreenChange'
+    | 'containerResize'
+    | 'sourceDimensionsChanged'
+    | 'refreshRateEstimateChanged'
 type RenderPolicySource = BrowserRendererPolicySource
 type IcePolicyMode = 'passthrough' | 'policy'
 type ShaderPreset = 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
 type RenderHysteresisState = 'steady' | 'holdDown' | 'holdUp'
+type RenderFrameTrackingSource = 'videoFrameCallback' | 'timeupdate'
 
 function createUnavailableError(): Error {
   return new Error('streamRuntimeNotStarted')
@@ -409,7 +416,6 @@ export function createBrowserRuntime(options: {
   let lastStallReason: string | undefined
   let recoveryGate: RecoveryGateState = {}
   let lastStallEvidenceSnapshot: StallEvidenceSnapshot | null = null
-  let frameTrackingCleanup: (() => void) | null = null
   let connectedMilestoneAt: number | null = null
   let mediaReadyMilestoneAt: number | null = null
   let pendingConnectedMilestone = false
@@ -454,10 +460,30 @@ export function createBrowserRuntime(options: {
   let firstFrameGuardTriggered = false
   let renderBackpressure = false
   let renderDroppedFrames = 0
+  let renderCallbackGapCount = 0
+  let renderPresentedFramesJumpCount = 0
   let renderFrameCallbackIntervalMs: number | undefined
+  let renderFrameTrackingSource: RenderFrameTrackingSource | undefined
+  let renderPresentedFramesDelta: number | undefined
+  let renderFrameMediaTimeDeltaSec: number | undefined
+  let renderFrameExpectedDisplayLeadMs: number | undefined
+  let renderFrameRawSourceFpsEstimate: number | undefined
   let renderFrameSourceFpsEstimate: number | undefined
   let renderFrameSourceFrameIntervalMs: number | undefined
   let renderFrameSourceFpsCeiling: number | undefined
+  let renderFrameSourceFpsUnavailableReason: PresentedVideoFrameMetadata['sourceFpsUnavailableReason']
+  let renderDroppedLikeStreak = 0
+  let renderFrameEventsSinceLastSample = 0
+  let renderPresentedFramesAdvancedSinceLastSample = 0
+  let renderLastCallbackCountSinceLastSample: number | undefined
+  let renderLastCallbackGapCountSinceLastSample: number | undefined
+  let renderLastPresentedFramesAdvancedSinceLastSample: number | undefined
+  let renderLastPresentedFramesJumpCountSinceLastSample: number | undefined
+  let renderDroppedFramesSinceLastSample = 0
+  let renderCallbackGapCountSinceLastSample = 0
+  let renderPresentedFramesJumpCountSinceLastSample = 0
+  let renderMaxCallbackIntervalMsSinceLastSample: number | undefined
+  let renderMaxPresentedFramesDeltaSinceLastSample: number | undefined
   let videoFrameSourceFpsObservationState = createFpsObservationState()
   let renderCause: RenderCause | undefined
   let renderPressureConsecutiveCount = 0
@@ -480,6 +506,11 @@ export function createBrowserRuntime(options: {
   let rendererCapabilityReason: string | undefined
   let webgl2Supported = true
   let visibilityGovernorCleanup: (() => void) | null = null
+  let displayGeometryObserverCleanup: (() => void) | null = null
+  let displayGeometryRefreshTimer: number | null = null
+  let pendingDisplayGeometryRefreshTrigger: DisplayGeometryRefreshTrigger | null = null
+  let lastDisplayContextDigest: string | undefined
+  let estimatedDisplayRefreshHz: number | undefined
   let visibilityBudgetActive = false
   let icePolicyMode: IcePolicyMode = 'passthrough'
   let icePolicyDigest: string | undefined
@@ -508,6 +539,131 @@ export function createBrowserRuntime(options: {
       clientExperimentalSuperResolution: currentSpec?.clientExperimentalSuperResolution,
       displaySuperResolutionExperimental: currentDisplayState?.superResolutionExperimental,
     })
+  }
+
+  function resolveDisplayRefreshHz(): number | undefined {
+    const raw = (window.screen as { frameRate?: unknown } | undefined)?.frameRate
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      return Math.round(raw)
+    }
+    return estimatedDisplayRefreshHz
+  }
+
+  function quantizeDisplayRefreshHz(refreshRateHz: number): number {
+    const commonRefreshRates = [50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 200, 240]
+    for (const candidate of commonRefreshRates) {
+      if (Math.abs(refreshRateHz - candidate) / candidate <= 0.08) {
+        return candidate
+      }
+    }
+    return Math.round(refreshRateHz)
+  }
+
+  function estimateDisplayRefreshHz(sampleIntervalsMs: number[]): number | undefined {
+    if (sampleIntervalsMs.length < 6) {
+      return undefined
+    }
+    const sorted = [...sampleIntervalsMs].sort((a, b) => a - b)
+    const trimmed = sorted.slice(1, Math.max(2, sorted.length - 1))
+    if (trimmed.length === 0) {
+      return undefined
+    }
+    const avgIntervalMs = trimmed.reduce((sum, value) => sum + value, 0) / trimmed.length
+    if (!Number.isFinite(avgIntervalMs) || avgIntervalMs <= 0) {
+      return undefined
+    }
+    const refreshRateHz = 1000 / avgIntervalMs
+    if (!Number.isFinite(refreshRateHz) || refreshRateHz < 40 || refreshRateHz > 260) {
+      return undefined
+    }
+    return quantizeDisplayRefreshHz(refreshRateHz)
+  }
+
+  function resolveCurrentDisplayContext():
+    | NonNullable<Parameters<typeof resolveBrowserRendererPlan>[0]['displayContext']>
+    | undefined {
+    if (currentSpec === null) {
+      return undefined
+    }
+    const container = document.getElementById(playerElementId) as
+      | { getBoundingClientRect?: () => { width: number, height: number } }
+      | null
+    const bounds = typeof container?.getBoundingClientRect === 'function'
+      ? container.getBoundingClientRect()
+      : undefined
+    const containerWidthCss = Math.max(
+      1,
+      Math.round(bounds?.width ?? document.documentElement?.clientWidth ?? currentSpec.runtime.targetVideoWidth),
+    )
+    const containerHeightCss = Math.max(
+      1,
+      Math.round(bounds?.height ?? document.documentElement?.clientHeight ?? currentSpec.runtime.targetVideoHeight),
+    )
+    const devicePixelRatio = typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1
+    const fullscreenElement = (document as Document & { fullscreenElement?: unknown }).fullscreenElement ?? null
+    return {
+      containerWidthCss,
+      containerHeightCss,
+      devicePixelRatio,
+      refreshRateHz: resolveDisplayRefreshHz(),
+      fullscreen: fullscreenElement !== null && (container === null || fullscreenElement === container),
+      configuredWidth: currentSpec.runtime.targetVideoWidth,
+      configuredHeight: currentSpec.runtime.targetVideoHeight,
+      sourceWidth: srState.latestVideoDimensions?.width ?? currentSpec.runtime.targetVideoWidth,
+      sourceHeight: srState.latestVideoDimensions?.height ?? currentSpec.runtime.targetVideoHeight,
+    }
+  }
+
+  function buildDisplayContextDigest(
+    context: NonNullable<Parameters<typeof resolveBrowserRendererPlan>[0]['displayContext']> | undefined,
+  ): string | undefined {
+    if (context === undefined) {
+      return undefined
+    }
+    return [
+      context.containerWidthCss,
+      context.containerHeightCss,
+      context.devicePixelRatio.toFixed(3),
+      context.refreshRateHz ?? 'na',
+      context.fullscreen ? 1 : 0,
+      context.configuredWidth,
+      context.configuredHeight,
+      context.sourceWidth,
+      context.sourceHeight,
+    ].join('|')
+  }
+
+  function toDisplayGeometryRefreshReason(trigger: DisplayGeometryRefreshTrigger): string {
+    return `displayGeometryChanged:${trigger}`
+  }
+
+  function resolveDisplayGeometryRefreshTrigger(reason: string): DisplayGeometryRefreshTrigger | undefined {
+    if (!reason.startsWith('displayGeometryChanged:')) {
+      return reason === 'displayGeometryChanged' ? 'containerResize' : undefined
+    }
+    const trigger = reason.slice('displayGeometryChanged:'.length)
+    if (
+      trigger === 'windowResize'
+      || trigger === 'fullscreenChange'
+      || trigger === 'containerResize'
+      || trigger === 'sourceDimensionsChanged'
+      || trigger === 'refreshRateEstimateChanged'
+    ) {
+      return trigger
+    }
+    return undefined
+  }
+
+  function buildTraceReasonPayload(reason: string): {
+    reason: string
+    displayGeometryTrigger: DisplayGeometryRefreshTrigger | null
+  } {
+    return {
+      reason,
+      displayGeometryTrigger: resolveDisplayGeometryRefreshTrigger(reason) ?? null,
+    }
   }
 
   function emit(event: RuntimeEvent): void {
@@ -795,14 +951,14 @@ export function createBrowserRuntime(options: {
     renderProcessingMode = plan.sharpening.processingMode
     renderShaderPath = projectRenderShaderPathFromPlan(plan)
     renderFpsBudget = patch.targetFps
-    assertClient().updateRenderer(patch)
-    assertClient().updateRendererAttach(attach)
+    assertClient().updateRendererState(patch, attach)
   }
 
   function shouldRefreshRenderPolicyWithoutLevelChange(reason: string): boolean {
     return reason === 'superResolutionStateChanged'
       || reason === 'superResolutionTierFrozen'
       || reason === 'displayStateChanged'
+      || resolveDisplayGeometryRefreshTrigger(reason) !== undefined
       || reason === 'superResolutionFallback'
   }
 
@@ -828,7 +984,7 @@ export function createBrowserRuntime(options: {
       recordRuntimeTraceEvent('displayHysteresisEvaluated', {
         previous: displayDegradeLevel,
         next,
-        reason,
+        ...buildTraceReasonPayload(reason),
         allowed: transitionDecision.allowed,
         state: renderHysteresisState,
         blockedReason: transitionDecision.blockedReason ?? null,
@@ -837,7 +993,7 @@ export function createBrowserRuntime(options: {
         recordRuntimeTraceEvent('displayHysteresisTransitionBlocked', {
           previous: displayDegradeLevel,
           next,
-          reason,
+          ...buildTraceReasonPayload(reason),
           blockedReason: transitionDecision.blockedReason ?? null,
         })
         return
@@ -852,7 +1008,7 @@ export function createBrowserRuntime(options: {
     renderAdaptiveProfileDigest = adaptive.digest
     recordRuntimeTraceEvent('renderAdaptiveProfileResolved', {
       level: next,
-      reason,
+      ...buildTraceReasonPayload(reason),
       digest: adaptive.digest,
       sharpnessScale: adaptive.sharpnessScale,
       targetFpsBias: adaptive.targetFpsBias,
@@ -862,6 +1018,8 @@ export function createBrowserRuntime(options: {
     })
     const pipelineOverride = resolveRendererPipelineOverride()
     const srIntent = resolveSuperResolutionIntent()
+    const displayContext = resolveCurrentDisplayContext()
+    lastDisplayContextDigest = buildDisplayContextDigest(displayContext)
     // SR 走 webgl2_sr 时仍应用动态 RCAS（拥塞/档位/码率），低码率时抬高 stops 减轻块噪声锐化。
     const applyDynamicSrRcasForDisplayDegrade = true
     const plan = resolveBrowserRendererPlan({
@@ -894,6 +1052,7 @@ export function createBrowserRuntime(options: {
       },
       streamStats: stats,
       baseVideoBitrateKbps,
+      displayContext,
       superResolutionTierPlan: srState.outputFrozen,
     })
     const previousPipelineType = renderPipelineType
@@ -913,14 +1072,14 @@ export function createBrowserRuntime(options: {
       recordRuntimeTraceEvent('displayDegradeLevelChanged', {
         previous,
         next,
-        reason,
+        ...buildTraceReasonPayload(reason),
       })
     }
     if (previousPipelineType !== renderPipelineType) {
       recordRuntimeTraceEvent('renderPipelineSwitched', {
         previous: previousPipelineType,
         next: renderPipelineType,
-        reason,
+        ...buildTraceReasonPayload(reason),
         source: renderPolicySource,
       })
     }
@@ -928,7 +1087,7 @@ export function createBrowserRuntime(options: {
       recordRuntimeTraceEvent('renderPipelineFallback', {
         previous: previousPipelineType,
         next: renderPipelineType,
-        reason,
+        ...buildTraceReasonPayload(reason),
         capabilityReason: rendererCapabilityReason ?? null,
       })
     }
@@ -936,14 +1095,14 @@ export function createBrowserRuntime(options: {
       recordRuntimeTraceEvent('renderFpsBudgetChanged', {
         previous: previousFpsBudget ?? null,
         next: renderFpsBudget ?? null,
-        reason,
+        ...buildTraceReasonPayload(reason),
       })
     }
     recordRuntimeTraceEvent('renderPolicyApplied', {
       source: renderPolicySource,
       pipelineType: renderPipelineType,
       level: next,
-      reason,
+      ...buildTraceReasonPayload(reason),
       targetFps: renderFpsBudget ?? null,
       processing: renderProcessing ?? null,
       processingMode: renderProcessingMode ?? null,
@@ -972,17 +1131,22 @@ export function createBrowserRuntime(options: {
     }
   }
 
-  function clearFrameTracking(): void {
-    if (frameTrackingCleanup !== null) {
-      frameTrackingCleanup()
-      frameTrackingCleanup = null
-    }
-  }
-
   function clearVisibilityGovernor(): void {
     if (visibilityGovernorCleanup !== null) {
       visibilityGovernorCleanup()
       visibilityGovernorCleanup = null
+    }
+  }
+
+  function clearDisplayGeometryObserver(): void {
+    if (displayGeometryRefreshTimer !== null) {
+      window.clearTimeout(displayGeometryRefreshTimer)
+      displayGeometryRefreshTimer = null
+    }
+    pendingDisplayGeometryRefreshTrigger = null
+    if (displayGeometryObserverCleanup !== null) {
+      displayGeometryObserverCleanup()
+      displayGeometryObserverCleanup = null
     }
   }
 
@@ -1016,15 +1180,123 @@ export function createBrowserRuntime(options: {
     }
   }
 
+  function bindDisplayGeometryObserver(): void {
+    clearDisplayGeometryObserver()
+    const scheduleRefresh = (trigger: DisplayGeometryRefreshTrigger): void => {
+      if (client === null || currentDisplayState === null) {
+        return
+      }
+      const nextDigest = buildDisplayContextDigest(resolveCurrentDisplayContext())
+      if (nextDigest === lastDisplayContextDigest) {
+        return
+      }
+      pendingDisplayGeometryRefreshTrigger = trigger
+      if (displayGeometryRefreshTimer !== null) {
+        return
+      }
+      displayGeometryRefreshTimer = window.setTimeout(() => {
+        displayGeometryRefreshTimer = null
+        const refreshTrigger = pendingDisplayGeometryRefreshTrigger ?? trigger
+        pendingDisplayGeometryRefreshTrigger = null
+        if (client === null || currentDisplayState === null) {
+          return
+        }
+        const latestDigest = buildDisplayContextDigest(resolveCurrentDisplayContext())
+        if (latestDigest === lastDisplayContextDigest) {
+          return
+        }
+        applyCurrentDisplayState()
+        void applyDisplayDegradeLevel(
+          displayDegradeLevel,
+          toDisplayGeometryRefreshReason(refreshTrigger),
+        ).catch(() => {
+          // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
+        })
+      }, 0)
+    }
+
+    const onWindowResize = (): void => {
+      scheduleRefresh('windowResize')
+    }
+    const onFullscreenChange = (): void => {
+      scheduleRefresh('fullscreenChange')
+    }
+
+    window.addEventListener('resize', onWindowResize, { passive: true })
+    document.addEventListener('fullscreenchange', onFullscreenChange, { passive: true })
+
+    const nativeRefreshRate = (window.screen as { frameRate?: unknown } | undefined)?.frameRate
+    let refreshEstimateRafId: number | null = null
+    let refreshEstimateLastAt: number | undefined
+    let refreshEstimateSamples: number[] = []
+    if (
+      (typeof nativeRefreshRate !== 'number' || !Number.isFinite(nativeRefreshRate) || nativeRefreshRate <= 0)
+      && typeof window.requestAnimationFrame === 'function'
+      && typeof window.cancelAnimationFrame === 'function'
+    ) {
+      const estimateLoop = (now: number): void => {
+        if (client === null || currentDisplayState === null) {
+          return
+        }
+        if (document.visibilityState === 'hidden') {
+          refreshEstimateLastAt = now
+          refreshEstimateRafId = window.requestAnimationFrame(estimateLoop)
+          return
+        }
+        if (refreshEstimateLastAt !== undefined) {
+          const intervalMs = now - refreshEstimateLastAt
+          if (intervalMs >= 3 && intervalMs <= 40) {
+            refreshEstimateSamples.push(intervalMs)
+            if (refreshEstimateSamples.length > 12) {
+              refreshEstimateSamples.shift()
+            }
+            const nextEstimate = estimateDisplayRefreshHz(refreshEstimateSamples)
+            if (nextEstimate !== undefined && nextEstimate !== estimatedDisplayRefreshHz) {
+              estimatedDisplayRefreshHz = nextEstimate
+              scheduleRefresh('refreshRateEstimateChanged')
+            }
+          }
+          else {
+            refreshEstimateSamples = []
+          }
+        }
+        refreshEstimateLastAt = now
+        refreshEstimateRafId = window.requestAnimationFrame(estimateLoop)
+      }
+      refreshEstimateRafId = window.requestAnimationFrame(estimateLoop)
+    }
+
+    const container = document.getElementById(playerElementId)
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined' && container !== null) {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleRefresh('containerResize')
+      })
+      resizeObserver.observe(container as Element)
+    }
+
+    displayGeometryObserverCleanup = () => {
+      window.removeEventListener('resize', onWindowResize)
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      if (refreshEstimateRafId !== null) {
+        window.cancelAnimationFrame(refreshEstimateRafId)
+        refreshEstimateRafId = null
+      }
+      resizeObserver?.disconnect()
+    }
+  }
+
   function destroyClient(): void {
     const currentClient = client
     client = null
     clearClientSubscriptions()
-    clearFrameTracking()
     clearVisibilityGovernor()
+    clearDisplayGeometryObserver()
     connectedMilestoneAt = null
     mediaReadyMilestoneAt = null
     pendingConnectedMilestone = false
+    lastDisplayContextDigest = undefined
+    estimatedDisplayRefreshHz = undefined
     currentClient?.close()
   }
 
@@ -1051,45 +1323,96 @@ export function createBrowserRuntime(options: {
     void rpc.gamepad.setStreamPadForwarding({ enabled: false })
   }
 
-  function markFrameReady(meta?: {
-    callbackIntervalMs?: number
-    presentedFramesDelta?: number
-    sourceFpsEstimate?: number
-    sourceFrameIntervalMs?: number
-    droppedLike: boolean
-  }): void {
+  function markFrameReady(meta?: PresentedVideoFrameMetadata): void {
     const now = Date.now()
+    renderFrameEventsSinceLastSample += 1
+    renderPresentedFramesAdvancedSinceLastSample += meta?.presentedFramesDelta ?? 1
     if (meta?.callbackIntervalMs !== undefined) {
       renderFrameCallbackIntervalMs = meta.callbackIntervalMs
+      renderMaxCallbackIntervalMsSinceLastSample = renderMaxCallbackIntervalMsSinceLastSample === undefined
+        ? meta.callbackIntervalMs
+        : Math.max(renderMaxCallbackIntervalMsSinceLastSample, meta.callbackIntervalMs)
+    }
+    if (meta?.trackingSource !== undefined) {
+      renderFrameTrackingSource = meta.trackingSource
+    }
+    if (meta?.presentedFramesDelta !== undefined) {
+      renderPresentedFramesDelta = meta.presentedFramesDelta
+      renderMaxPresentedFramesDeltaSinceLastSample = renderMaxPresentedFramesDeltaSinceLastSample === undefined
+        ? meta.presentedFramesDelta
+        : Math.max(renderMaxPresentedFramesDeltaSinceLastSample, meta.presentedFramesDelta)
+    }
+    if (meta?.mediaTimeDeltaSec !== undefined) {
+      renderFrameMediaTimeDeltaSec = meta.mediaTimeDeltaSec
+    }
+    if (meta?.expectedDisplayLeadMs !== undefined) {
+      renderFrameExpectedDisplayLeadMs = meta.expectedDisplayLeadMs
+    }
+    if (meta?.rawSourceFpsEstimate !== undefined) {
+      renderFrameRawSourceFpsEstimate = meta.rawSourceFpsEstimate
     }
     if (meta?.sourceFpsEstimate !== undefined) {
       renderFrameSourceFpsEstimate = meta.sourceFpsEstimate
+      renderFrameSourceFpsUnavailableReason = undefined
       recordInboundFpsSample(videoFrameSourceFpsObservationState, meta.sourceFpsEstimate)
+    }
+    else if (meta?.sourceFpsUnavailableReason !== undefined) {
+      renderFrameSourceFpsUnavailableReason = meta.sourceFpsUnavailableReason
     }
     if (meta?.sourceFrameIntervalMs !== undefined) {
       renderFrameSourceFrameIntervalMs = meta.sourceFrameIntervalMs
     }
-    if (meta?.droppedLike) {
-      renderDroppedFrames += 1
-    }
     const backpressureThresholdMs = resolveRenderBackpressureThresholdMs()
+    const callbackGap = (meta?.callbackIntervalMs ?? 0) > backpressureThresholdMs
+    const presentedFramesJump = (meta?.presentedFramesDelta ?? 1) > 1
+    const droppedLike = meta?.droppedLike ?? (callbackGap || presentedFramesJump)
+    if (callbackGap) {
+      renderCallbackGapCount += 1
+      renderCallbackGapCountSinceLastSample += 1
+    }
+    if (presentedFramesJump) {
+      renderPresentedFramesJumpCount += 1
+      renderPresentedFramesJumpCountSinceLastSample += 1
+    }
+    if (droppedLike) {
+      renderDroppedFrames += 1
+      renderDroppedFramesSinceLastSample += 1
+      renderDroppedLikeStreak += 1
+    }
+    else {
+      renderDroppedLikeStreak = 0
+    }
     const nextBackpressure = (meta?.callbackIntervalMs ?? 0) > backpressureThresholdMs
     if (nextBackpressure !== renderBackpressure) {
       renderBackpressure = nextBackpressure
       recordRuntimeTraceEvent('renderBackpressureChanged', {
+        trackingSource: renderFrameTrackingSource ?? null,
         backpressure: renderBackpressure,
         callbackIntervalMs: meta?.callbackIntervalMs ?? null,
         backpressureThresholdMs,
+        presentedFramesDelta: meta?.presentedFramesDelta ?? renderPresentedFramesDelta ?? null,
+        mediaTimeDeltaSec: meta?.mediaTimeDeltaSec ?? renderFrameMediaTimeDeltaSec ?? null,
+        expectedDisplayLeadMs: meta?.expectedDisplayLeadMs ?? renderFrameExpectedDisplayLeadMs ?? null,
+        rawSourceFpsEstimate: meta?.rawSourceFpsEstimate ?? renderFrameRawSourceFpsEstimate ?? null,
         sourceFpsEstimate: meta?.sourceFpsEstimate ?? renderFrameSourceFpsEstimate ?? null,
         sourceFrameIntervalMs: meta?.sourceFrameIntervalMs ?? renderFrameSourceFrameIntervalMs ?? null,
+        sourceFpsUnavailableReason: meta?.sourceFpsUnavailableReason ?? renderFrameSourceFpsUnavailableReason ?? null,
       })
     }
-    if (meta?.droppedLike) {
+    if (droppedLike) {
       recordRuntimeTraceEvent('renderFrameDropped', {
-        callbackIntervalMs: meta.callbackIntervalMs ?? null,
-        presentedFramesDelta: meta.presentedFramesDelta ?? null,
-        sourceFpsEstimate: meta.sourceFpsEstimate ?? renderFrameSourceFpsEstimate ?? null,
-        sourceFrameIntervalMs: meta.sourceFrameIntervalMs ?? renderFrameSourceFrameIntervalMs ?? null,
+        trackingSource: meta?.trackingSource ?? renderFrameTrackingSource ?? null,
+        callbackIntervalMs: meta?.callbackIntervalMs ?? null,
+        presentedFramesDelta: meta?.presentedFramesDelta ?? null,
+        callbackGap,
+        presentedFramesJump,
+        mediaTimeDeltaSec: meta?.mediaTimeDeltaSec ?? renderFrameMediaTimeDeltaSec ?? null,
+        expectedDisplayLeadMs: meta?.expectedDisplayLeadMs ?? renderFrameExpectedDisplayLeadMs ?? null,
+        rawSourceFpsEstimate: meta?.rawSourceFpsEstimate ?? renderFrameRawSourceFpsEstimate ?? null,
+        sourceFpsEstimate: meta?.sourceFpsEstimate ?? renderFrameSourceFpsEstimate ?? null,
+        sourceFrameIntervalMs: meta?.sourceFrameIntervalMs ?? renderFrameSourceFrameIntervalMs ?? null,
+        sourceFpsUnavailableReason: meta?.sourceFpsUnavailableReason ?? renderFrameSourceFpsUnavailableReason ?? null,
+        droppedLikeStreak: renderDroppedLikeStreak,
       })
     }
     if (lastMediaActivityAt !== null) {
@@ -1124,18 +1447,14 @@ export function createBrowserRuntime(options: {
     if (currentDisplayState === null) {
       return
     }
+    const displayContext = resolveCurrentDisplayContext()
     applyBrowserVideoDisplay({
       playerElementId,
       displayOptions: currentDisplayState.displayOptions,
       render: currentDisplayState.render,
-    })
-  }
-
-  function ensureFrameTracking(): void {
-    clearFrameTracking()
-    frameTrackingCleanup = bindBrowserVideoFrameTracking({
-      playerElementId,
-      onFrame: markFrameReady,
+      sourceWidth: displayContext?.sourceWidth,
+      sourceHeight: displayContext?.sourceHeight,
+      fullscreen: displayContext?.fullscreen,
     })
   }
 
@@ -1184,10 +1503,30 @@ export function createBrowserRuntime(options: {
       firstFrameGuardTriggered = false
       renderBackpressure = false
       renderDroppedFrames = 0
+      renderCallbackGapCount = 0
+      renderPresentedFramesJumpCount = 0
       renderFrameCallbackIntervalMs = undefined
+      renderFrameTrackingSource = undefined
+      renderPresentedFramesDelta = undefined
+      renderFrameMediaTimeDeltaSec = undefined
+      renderFrameExpectedDisplayLeadMs = undefined
+      renderFrameRawSourceFpsEstimate = undefined
       renderFrameSourceFpsEstimate = undefined
       renderFrameSourceFrameIntervalMs = undefined
       renderFrameSourceFpsCeiling = undefined
+      renderFrameSourceFpsUnavailableReason = undefined
+      renderDroppedLikeStreak = 0
+      renderFrameEventsSinceLastSample = 0
+      renderPresentedFramesAdvancedSinceLastSample = 0
+      renderLastCallbackCountSinceLastSample = undefined
+      renderLastCallbackGapCountSinceLastSample = undefined
+      renderLastPresentedFramesAdvancedSinceLastSample = undefined
+      renderLastPresentedFramesJumpCountSinceLastSample = undefined
+      renderDroppedFramesSinceLastSample = 0
+      renderCallbackGapCountSinceLastSample = 0
+      renderPresentedFramesJumpCountSinceLastSample = 0
+      renderMaxCallbackIntervalMsSinceLastSample = undefined
+      renderMaxPresentedFramesDeltaSinceLastSample = undefined
       videoFrameSourceFpsObservationState = createFpsObservationState()
       renderCause = undefined
       renderPressureConsecutiveCount = 0
@@ -1250,22 +1589,22 @@ export function createBrowserRuntime(options: {
     }
   }
 
-  function freezeSuperResolutionOutputIfNeeded(videoWidth: number, videoHeight: number): void {
+  function freezeSuperResolutionOutputIfNeeded(videoWidth: number, videoHeight: number): boolean {
     if (client === null || currentSpec === null || currentDisplayState === null) {
-      return
+      return false
     }
     srState.latestVideoDimensions = { width: videoWidth, height: videoHeight }
     if (!resolveSuperResolutionIntent()) {
-      return
+      return false
     }
     if (resolveRendererPipelineOverride() === 'video') {
-      return
+      return false
     }
     if (srState.outputFrozen !== null) {
-      return
+      return false
     }
     if (videoWidth <= 0 || videoHeight <= 0) {
-      return
+      return false
     }
     const tw = currentSpec.runtime.targetVideoWidth
     const th = currentSpec.runtime.targetVideoHeight
@@ -1289,6 +1628,7 @@ export function createBrowserRuntime(options: {
     void applyDisplayDegradeLevel(displayDegradeLevel, 'superResolutionTierFrozen').catch(() => {
       // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
     })
+    return true
   }
 
   function updateSuperResolutionRuntimeState(options?: {
@@ -1324,12 +1664,29 @@ export function createBrowserRuntime(options: {
       eventBus.on('chat.stateChanged', ({ capturing, paused }) => {
         emit({ type: 'microphoneStateChanged', capturing, paused })
       }),
+      eventBus.on('media.videoFramePresented', (meta) => {
+        markFrameReady(meta)
+      }),
       eventBus.on('media.videoReady', ({ width, height }) => {
         if (transportState === 'connected') {
           emitConnectedMilestoneIfPending(Date.now(), 'connected')
         }
-        freezeSuperResolutionOutputIfNeeded(width, height)
+        const previousDisplayContext = resolveCurrentDisplayContext()
+        const previousSourceWidth = previousDisplayContext?.sourceWidth
+        const previousSourceHeight = previousDisplayContext?.sourceHeight
+        const srRefreshTriggered = freezeSuperResolutionOutputIfNeeded(width, height)
         applyCurrentDisplayState()
+        if (
+          !srRefreshTriggered
+          && (previousSourceWidth !== width || previousSourceHeight !== height)
+        ) {
+          void applyDisplayDegradeLevel(
+            displayDegradeLevel,
+            toDisplayGeometryRefreshReason('sourceDimensionsChanged'),
+          ).catch(() => {
+            // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
+          })
+        }
       }),
       eventBus.on('media.superResolutionFallback', ({ reason }) => {
         srState.attachFailed = true
@@ -1338,9 +1695,6 @@ export function createBrowserRuntime(options: {
         void applyDisplayDegradeLevel(displayDegradeLevel, 'superResolutionFallback').catch(() => {
           // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
         })
-      }),
-      eventBus.on('stats.videoFrameProcessed', () => {
-        markFrameReady()
       }),
       eventBus.on('error', ({ error }) => {
         emit({ type: 'error', error })
@@ -1353,7 +1707,6 @@ export function createBrowserRuntime(options: {
     const nextClient = createPlayerClient(playerElementId, spec, audioVolume)
     client = nextClient
     bindClientEvents(nextClient)
-    ensureFrameTracking()
     nextClient.audio().setVolumeDirect(audioVolume)
     return nextClient
   }
@@ -2046,11 +2399,56 @@ export function createBrowserRuntime(options: {
     })
     effectiveFrontEndPolicy = resolveEffectiveFrontEndPolicy(runtimeProfileClassification)
     renderDecisionDigest = buildRenderDecisionDigest(now)
+    if (renderFrameEventsSinceLastSample > 0) {
+      renderLastCallbackCountSinceLastSample = renderFrameEventsSinceLastSample
+      renderLastCallbackGapCountSinceLastSample = renderCallbackGapCountSinceLastSample
+      renderLastPresentedFramesAdvancedSinceLastSample = renderPresentedFramesAdvancedSinceLastSample
+      renderLastPresentedFramesJumpCountSinceLastSample = renderPresentedFramesJumpCountSinceLastSample
+      recordRuntimeTraceEvent('renderTelemetryObserved', {
+        trackingSource: renderFrameTrackingSource ?? null,
+        callbackCountSinceLastSample: renderFrameEventsSinceLastSample,
+        callbackGapCountSinceLastSample: renderCallbackGapCountSinceLastSample,
+        callbackIntervalMs: renderFrameCallbackIntervalMs ?? null,
+        presentedFramesDelta: renderPresentedFramesDelta ?? null,
+        presentedFramesAdvancedSinceLastSample: renderPresentedFramesAdvancedSinceLastSample,
+        presentedFramesJumpCountSinceLastSample: renderPresentedFramesJumpCountSinceLastSample,
+        mediaTimeDeltaSec: renderFrameMediaTimeDeltaSec ?? null,
+        expectedDisplayLeadMs: renderFrameExpectedDisplayLeadMs ?? null,
+        rawSourceFpsEstimate: renderFrameRawSourceFpsEstimate ?? null,
+        sourceFpsEstimate: renderFrameSourceFpsEstimate ?? null,
+        sourceFrameIntervalMs: renderFrameSourceFrameIntervalMs ?? null,
+        sourceFpsUnavailableReason: renderFrameSourceFpsUnavailableReason ?? null,
+        droppedFrames: renderDroppedFrames,
+        droppedFramesSinceLastSample: renderDroppedFramesSinceLastSample,
+        droppedLikeStreak: renderDroppedLikeStreak,
+        frameEventsSinceLastSample: renderFrameEventsSinceLastSample,
+        maxCallbackIntervalMsSinceLastSample: renderMaxCallbackIntervalMsSinceLastSample ?? null,
+        maxPresentedFramesDeltaSinceLastSample: renderMaxPresentedFramesDeltaSinceLastSample ?? null,
+        renderBackpressure,
+        renderCause: renderCause ?? null,
+        displayDegradeLevel,
+        frontEndExpectedContentFps: expectedContentFpsResolved,
+        frontEndVideoFrameSourceFpsCeiling: renderFrameSourceFpsCeiling ?? null,
+      })
+      renderFrameEventsSinceLastSample = 0
+      renderPresentedFramesAdvancedSinceLastSample = 0
+      renderDroppedFramesSinceLastSample = 0
+      renderCallbackGapCountSinceLastSample = 0
+      renderPresentedFramesJumpCountSinceLastSample = 0
+      renderMaxCallbackIntervalMsSinceLastSample = undefined
+      renderMaxPresentedFramesDeltaSinceLastSample = undefined
+    }
     recordRuntimeTraceEvent('renderCauseClassified', {
       cause: renderCause,
       renderDecisionDigest,
+      trackingSource: renderFrameTrackingSource ?? null,
       callbackIntervalMs: renderFrameCallbackIntervalMs ?? null,
+      presentedFramesDelta: renderPresentedFramesDelta ?? null,
+      mediaTimeDeltaSec: renderFrameMediaTimeDeltaSec ?? null,
+      expectedDisplayLeadMs: renderFrameExpectedDisplayLeadMs ?? null,
+      rawSourceFpsEstimate: renderFrameRawSourceFpsEstimate ?? null,
       droppedFrames: renderDroppedFrames,
+      droppedLikeStreak: renderDroppedLikeStreak,
       renderBackpressure,
       frontEndProfileBaseline: runtimeProfileClassification.baseline,
       frontEndProfileDynamic: runtimeProfileClassification.dynamic,
@@ -2059,6 +2457,7 @@ export function createBrowserRuntime(options: {
       frontEndVideoFrameSourceFps: renderFrameSourceFpsEstimate ?? null,
       frontEndVideoFrameSourceFpsCeiling: renderFrameSourceFpsCeiling ?? null,
       frontEndVideoFrameSourceFrameIntervalMs: renderFrameSourceFrameIntervalMs ?? null,
+      sourceFpsUnavailableReason: renderFrameSourceFpsUnavailableReason ?? null,
       frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
     })
     recoveryCause = classifyRecoveryCause({
@@ -2739,10 +3138,30 @@ export function createBrowserRuntime(options: {
       firstFrameGuardTriggered = false
       renderBackpressure = false
       renderDroppedFrames = 0
+      renderCallbackGapCount = 0
+      renderPresentedFramesJumpCount = 0
       renderFrameCallbackIntervalMs = undefined
+      renderFrameTrackingSource = undefined
+      renderPresentedFramesDelta = undefined
+      renderFrameMediaTimeDeltaSec = undefined
+      renderFrameExpectedDisplayLeadMs = undefined
+      renderFrameRawSourceFpsEstimate = undefined
       renderFrameSourceFpsEstimate = undefined
       renderFrameSourceFrameIntervalMs = undefined
       renderFrameSourceFpsCeiling = undefined
+      renderFrameSourceFpsUnavailableReason = undefined
+      renderDroppedLikeStreak = 0
+      renderFrameEventsSinceLastSample = 0
+      renderPresentedFramesAdvancedSinceLastSample = 0
+      renderLastCallbackCountSinceLastSample = undefined
+      renderLastCallbackGapCountSinceLastSample = undefined
+      renderLastPresentedFramesAdvancedSinceLastSample = undefined
+      renderLastPresentedFramesJumpCountSinceLastSample = undefined
+      renderDroppedFramesSinceLastSample = 0
+      renderCallbackGapCountSinceLastSample = 0
+      renderPresentedFramesJumpCountSinceLastSample = 0
+      renderMaxCallbackIntervalMsSinceLastSample = undefined
+      renderMaxPresentedFramesDeltaSinceLastSample = undefined
       videoFrameSourceFpsObservationState = createFpsObservationState()
       renderCause = undefined
       renderPressureConsecutiveCount = 0
@@ -2765,6 +3184,7 @@ export function createBrowserRuntime(options: {
       const capability = detectWebgl2Capability()
       rendererCapabilityReason = capability.reason
       webgl2Supported = capability.supported
+      estimatedDisplayRefreshHz = undefined
       recordRuntimeTraceEvent('rendererCapabilityDetected', {
         webgl2Supported,
         reason: rendererCapabilityReason,
@@ -2786,6 +3206,7 @@ export function createBrowserRuntime(options: {
       await attachGamepadSession(spec.sessionId)
       prepareFreshClient(spec)
       bindVisibilityGovernor()
+      bindDisplayGeometryObserver()
       startMediaStallMonitoring()
       bindProtocolSession(spec)
       await connectMediaProtocol(spec, { restart: false })
@@ -2847,10 +3268,30 @@ export function createBrowserRuntime(options: {
       firstFrameGuardTriggered = false
       renderBackpressure = false
       renderDroppedFrames = 0
+      renderCallbackGapCount = 0
+      renderPresentedFramesJumpCount = 0
       renderFrameCallbackIntervalMs = undefined
+      renderFrameTrackingSource = undefined
+      renderPresentedFramesDelta = undefined
+      renderFrameMediaTimeDeltaSec = undefined
+      renderFrameExpectedDisplayLeadMs = undefined
+      renderFrameRawSourceFpsEstimate = undefined
       renderFrameSourceFpsEstimate = undefined
       renderFrameSourceFrameIntervalMs = undefined
       renderFrameSourceFpsCeiling = undefined
+      renderFrameSourceFpsUnavailableReason = undefined
+      renderDroppedLikeStreak = 0
+      renderFrameEventsSinceLastSample = 0
+      renderPresentedFramesAdvancedSinceLastSample = 0
+      renderLastCallbackCountSinceLastSample = undefined
+      renderLastCallbackGapCountSinceLastSample = undefined
+      renderLastPresentedFramesAdvancedSinceLastSample = undefined
+      renderLastPresentedFramesJumpCountSinceLastSample = undefined
+      renderDroppedFramesSinceLastSample = 0
+      renderCallbackGapCountSinceLastSample = 0
+      renderPresentedFramesJumpCountSinceLastSample = 0
+      renderMaxCallbackIntervalMsSinceLastSample = undefined
+      renderMaxPresentedFramesDeltaSinceLastSample = undefined
       videoFrameSourceFpsObservationState = createFpsObservationState()
       renderCause = undefined
       renderPressureConsecutiveCount = 0
@@ -2872,6 +3313,7 @@ export function createBrowserRuntime(options: {
       renderFpsBudget = undefined
       rendererCapabilityReason = undefined
       webgl2Supported = true
+      estimatedDisplayRefreshHz = undefined
       icePolicyMode = 'passthrough'
       icePolicyDigest = undefined
       fpsObservationState = createFpsObservationState()
@@ -2991,6 +3433,7 @@ export function createBrowserRuntime(options: {
       const observedProcessingMode = plan?.sharpening.processingMode ?? renderProcessingMode
       const observedShaderPath = plan ? projectRenderShaderPathFromPlan(plan) : renderShaderPath
       const observedFpsBudget = plan?.targetFps ?? renderFpsBudget
+      const observedPresentTarget = plan?.presentTarget
       return normalizeObservedPresentationStats({
         ...stats,
         streamLifecyclePhase: runtimePhase,
@@ -3027,7 +3470,22 @@ export function createBrowserRuntime(options: {
         firstFrameGuardTriggered,
         renderBackpressure,
         renderDroppedFrames,
+        renderCallbackGapCount,
         renderFrameCallbackIntervalMs,
+        renderCallbackCountLastSample: renderLastCallbackCountSinceLastSample,
+        renderCallbackGapCountLastSample: renderLastCallbackGapCountSinceLastSample,
+        renderFrameTrackingSource,
+        renderPresentedFramesDelta,
+        renderPresentedFramesJumpCount,
+        renderPresentedFramesAdvancedLastSample: renderLastPresentedFramesAdvancedSinceLastSample,
+        renderPresentedFramesJumpCountLastSample: renderLastPresentedFramesJumpCountSinceLastSample,
+        renderFrameMediaTimeDeltaSec,
+        renderFrameExpectedDisplayLeadMs,
+        renderFrameRawSourceFpsEstimate,
+        renderFrameSourceFpsEstimate,
+        renderFrameSourceFrameIntervalMs,
+        renderFrameSourceFpsUnavailableReason,
+        renderDroppedLikeStreak,
         renderCause,
         displayDegradeLevel,
         renderDecisionDigest,
@@ -3041,6 +3499,16 @@ export function createBrowserRuntime(options: {
         renderShaderPath: observedShaderPath,
         renderFpsBudget: observedFpsBudget,
         rendererCapabilityReason,
+        renderDisplayFullscreen: observedPresentTarget?.fullscreen,
+        renderDisplayRefreshHz: observedPresentTarget?.refreshRateHz,
+        renderDisplayWidth: observedPresentTarget?.displayWidthCss,
+        renderDisplayHeight: observedPresentTarget?.displayHeightCss,
+        renderPresentTargetWidth: observedPresentTarget?.outputWidth,
+        renderPresentTargetHeight: observedPresentTarget?.outputHeight,
+        renderViewportWidth: observedPresentTarget?.viewportWidthCss,
+        renderViewportHeight: observedPresentTarget?.viewportHeightCss,
+        renderSourceWidth: observedPresentTarget?.sourceWidth,
+        renderSourceHeight: observedPresentTarget?.sourceHeight,
         renderSuperResolutionEnabled: resolveSuperResolutionIntent(),
         renderSuperResolutionActive: observedPipelineType === 'webgl2_sr'
           && srState.outputFrozen !== null,

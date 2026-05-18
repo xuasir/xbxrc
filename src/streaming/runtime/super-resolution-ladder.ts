@@ -1,9 +1,10 @@
 /**
- * 浏览器 SR 固定档位：configured target tier 与 actual source tier 取低后再升一档。
+ * 浏览器 SR 固定档位：源分辨率低于目标档位时补到目标档位；
+ * 源分辨率已到 1440p 或更高时保持同档输出。
  * 语义对齐 RFC `docs/rfcs/2026-05-12-browser-fsr1-super-resolution-experimental.md`。
  */
 
-export type SuperResolutionOutputTierLabel = '1080p' | '1440p' | '2160p'
+export type SuperResolutionOutputTierLabel = '720p' | '1080p' | '1440p' | '2160p'
 
 export type SuperResolutionConfiguredTierLabel = '720p' | '1080p' | '1440p' | '2160p'
 
@@ -65,20 +66,30 @@ function minTier(
   return tierRank(a) <= tierRank(b) ? a : b
 }
 
-function nextOutputFromBase(base: SuperResolutionConfiguredTierLabel): SuperResolutionOutputTierLabel {
+function preferredOutputFromBase(base: SuperResolutionConfiguredTierLabel): SuperResolutionOutputTierLabel {
   switch (base) {
     case '720p':
       return '1080p'
     case '1080p':
       return '1440p'
     case '1440p':
+      return '1440p'
     case '2160p':
       return '2160p'
   }
 }
 
+function clampOutputToConfiguredTarget(
+  preferred: SuperResolutionOutputTierLabel,
+  configuredTarget: SuperResolutionConfiguredTierLabel,
+): SuperResolutionOutputTierLabel {
+  return tierRank(preferred) <= tierRank(configuredTarget) ? preferred : configuredTarget
+}
+
 function outputDimensions(label: SuperResolutionOutputTierLabel): { width: number, height: number } {
   switch (label) {
+    case '720p':
+      return { width: 1280, height: 720 }
     case '1080p':
       return { width: 1920, height: 1080 }
     case '1440p':
@@ -111,7 +122,7 @@ export function resolveSuperResolutionTierPlan(
   const configuredTier = shortSideToTierLabel(cfgShort)
   const actualSourceTier = shortSideToTierLabel(actShort)
   const base = minTier(configuredTier, actualSourceTier)
-  const outputTier = nextOutputFromBase(base)
+  const outputTier = clampOutputToConfiguredTarget(preferredOutputFromBase(base), configuredTier)
   const { width, height } = outputDimensions(outputTier)
   return {
     configuredTier,

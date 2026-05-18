@@ -1,5 +1,10 @@
 export { PlayerClient } from './api/PlayerClient'
-export type { RendererAttachSpec, RendererRuntimeConfig, StreamStats } from './domain/media'
+export type {
+  PresentedVideoFrameMetadata,
+  RendererAttachSpec,
+  RendererRuntimeConfig,
+  StreamStats,
+} from './domain/media'
 export type {
   CodecPreferenceOptions,
   CreateOfferOptions,

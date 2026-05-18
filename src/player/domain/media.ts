@@ -1,5 +1,41 @@
 export type VideoFit = 'Contain' | 'Stretch' | 'Zoom' | string
 
+export type VideoFrameTrackingSource = 'videoFrameCallback' | 'timeupdate'
+
+export type VideoFrameSourceFpsUnavailableReason
+  = | 'mediaTimeMissing'
+    | 'noPriorMediaTime'
+    | 'mediaTimeDeltaTooSmall'
+    | 'mediaTimeDeltaTooLarge'
+    | 'sourceFpsOutOfRange'
+
+export interface PresentedVideoFrameMetadata {
+  callbackIntervalMs?: number
+  presentedFramesDelta?: number
+  mediaTimeDeltaSec?: number
+  expectedDisplayLeadMs?: number
+  rawSourceFpsEstimate?: number
+  sourceFpsEstimate?: number
+  sourceFrameIntervalMs?: number
+  sourceFpsUnavailableReason?: VideoFrameSourceFpsUnavailableReason
+  trackingSource?: VideoFrameTrackingSource
+  droppedLike: boolean
+}
+
+export interface RendererPresentTarget {
+  outputWidth: number
+  outputHeight: number
+  viewportWidthCss: number
+  viewportHeightCss: number
+  displayWidthCss: number
+  displayHeightCss: number
+  devicePixelRatio: number
+  fullscreen: boolean
+  refreshRateHz?: number
+  sourceWidth: number
+  sourceHeight: number
+}
+
 /** 仅描述 renderer attach 所需的最小合同；策略字段留在 RendererRuntimeConfig。 */
 export interface RendererAttachSpec {
   kind: 'video' | 'webgl2' | 'webgl2_sr'
@@ -12,6 +48,7 @@ export interface RendererAttachSpec {
   processingMode?: 'quality' | 'performance'
   shaderPreset?: 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
   sharpenStrength?: number
+  presentTarget?: RendererPresentTarget
   sr?: {
     outputWidth: number
     outputHeight: number
@@ -43,6 +80,17 @@ export function mergeRendererConfigWithAttachSpec(
     superResolutionOutputWidth: attach.sr?.outputWidth,
     superResolutionOutputHeight: attach.sr?.outputHeight,
     superResolutionRcasStops: attach.sr?.rcasStops,
+    renderOutputWidth: attach.presentTarget?.outputWidth,
+    renderOutputHeight: attach.presentTarget?.outputHeight,
+    renderViewportWidth: attach.presentTarget?.viewportWidthCss,
+    renderViewportHeight: attach.presentTarget?.viewportHeightCss,
+    renderDisplayWidth: attach.presentTarget?.displayWidthCss,
+    renderDisplayHeight: attach.presentTarget?.displayHeightCss,
+    renderDevicePixelRatio: attach.presentTarget?.devicePixelRatio,
+    renderDisplayFullscreen: attach.presentTarget?.fullscreen,
+    renderDisplayRefreshHz: attach.presentTarget?.refreshRateHz,
+    renderSourceWidth: attach.presentTarget?.sourceWidth,
+    renderSourceHeight: attach.presentTarget?.sourceHeight,
   }
 }
 
@@ -85,6 +133,30 @@ export function deriveRendererAttachSpec(config: RendererRuntimeConfig): Rendere
     processingMode: config.processingMode,
     shaderPreset: config.shaderPreset,
     sharpenStrength: config.sharpenStrength,
+    presentTarget: config.renderOutputWidth !== undefined
+      && config.renderOutputHeight !== undefined
+      && config.renderViewportWidth !== undefined
+      && config.renderViewportHeight !== undefined
+      && config.renderDisplayWidth !== undefined
+      && config.renderDisplayHeight !== undefined
+      && config.renderDevicePixelRatio !== undefined
+      && config.renderDisplayFullscreen !== undefined
+      && config.renderSourceWidth !== undefined
+      && config.renderSourceHeight !== undefined
+      ? {
+          outputWidth: config.renderOutputWidth,
+          outputHeight: config.renderOutputHeight,
+          viewportWidthCss: config.renderViewportWidth,
+          viewportHeightCss: config.renderViewportHeight,
+          displayWidthCss: config.renderDisplayWidth,
+          displayHeightCss: config.renderDisplayHeight,
+          devicePixelRatio: config.renderDevicePixelRatio,
+          fullscreen: config.renderDisplayFullscreen,
+          refreshRateHz: config.renderDisplayRefreshHz,
+          sourceWidth: config.renderSourceWidth,
+          sourceHeight: config.renderSourceHeight,
+        }
+      : undefined,
     sr,
   }
 }
@@ -113,7 +185,7 @@ export interface RendererRuntimeConfig {
   /** 用户意图：开启后优先走独立 SR renderer，不因 display degrade 动态关闭。 */
   superResolutionEnabled?: boolean
   superResolutionAlgorithm?: 'fsr1'
-  superResolutionOutputTier?: '1080p' | '1440p' | '2160p'
+  superResolutionOutputTier?: '720p' | '1080p' | '1440p' | '2160p'
   superResolutionConfiguredTargetTier?: string
   superResolutionOutputWidth?: number
   superResolutionOutputHeight?: number
@@ -126,6 +198,17 @@ export interface RendererRuntimeConfig {
   superResolutionFallbackProcessing?: 'usm' | 'cas'
   /** 本会话内 SR attach 失败后置位，阻止再次选用 SR renderer。 */
   superResolutionInactiveAfterFailure?: boolean
+  renderOutputWidth?: number
+  renderOutputHeight?: number
+  renderViewportWidth?: number
+  renderViewportHeight?: number
+  renderDisplayWidth?: number
+  renderDisplayHeight?: number
+  renderDevicePixelRatio?: number
+  renderDisplayFullscreen?: boolean
+  renderDisplayRefreshHz?: number
+  renderSourceWidth?: number
+  renderSourceHeight?: number
   /**
    * 仅客户端注入：SR 在 attach 成功后绘制期仍失败（如持续 GL 错误）时回调，
    * 由 PlaybackService 切回标准 webgl2。不向 Rust 序列化。
@@ -221,10 +304,26 @@ export interface StreamStats {
   firstFrameGuardTriggered?: boolean
   renderBackpressure?: boolean
   renderDroppedFrames?: number
+  renderCallbackGapCount?: number
   renderFrameCallbackIntervalMs?: number
+  renderCallbackCountLastSample?: number
+  renderCallbackGapCountLastSample?: number
+  renderFrameTrackingSource?: 'videoFrameCallback' | 'timeupdate'
+  renderPresentedFramesDelta?: number
+  renderPresentedFramesJumpCount?: number
+  renderPresentedFramesAdvancedLastSample?: number
+  renderPresentedFramesJumpCountLastSample?: number
+  renderFrameMediaTimeDeltaSec?: number
+  renderFrameExpectedDisplayLeadMs?: number
+  renderFrameRawSourceFpsEstimate?: number
+  renderFrameSourceFpsEstimate?: number
+  renderFrameSourceFrameIntervalMs?: number
+  renderFrameSourceFpsUnavailableReason?: VideoFrameSourceFpsUnavailableReason
+  renderDroppedLikeStreak?: number
   renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
+  senderPolicyCause?: 'networkCongestion' | 'decodeBackpressure' | 'controlChannelUnhealthy' | 'none'
   videoActualBitrateKbps?: number
   videoTwccReceiveBitrateKbps?: number
   videoTwccLossRatio?: number
@@ -315,6 +414,16 @@ export interface StreamStats {
   renderShaderPath?: 'usm' | 'cas' | 'none'
   renderFpsBudget?: number
   rendererCapabilityReason?: string
+  renderDisplayWidth?: number
+  renderDisplayHeight?: number
+  renderDisplayFullscreen?: boolean
+  renderDisplayRefreshHz?: number
+  renderPresentTargetWidth?: number
+  renderPresentTargetHeight?: number
+  renderViewportWidth?: number
+  renderViewportHeight?: number
+  renderSourceWidth?: number
+  renderSourceHeight?: number
   frontEndProfileBaseline?: 'homeLan' | 'homeRelay' | 'cloud'
   frontEndProfileDynamic?: 'startup' | 'steady' | 'highRtt' | 'decoderConstrained' | 'displayConstrained'
   frontEndContentFpsClass?: 'content30' | 'content60' | 'contentUnknown'

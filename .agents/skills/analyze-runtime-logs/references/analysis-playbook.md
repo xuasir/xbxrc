@@ -70,6 +70,7 @@ Keep these cases distinct:
 - media flows but recovery cannot obtain a keyframe
 - media ingress is present but local pipeline is backpressured
 - performance is degraded without a terminal failure
+- browser-direct render callback cadence is unstable while transport and decode still look healthy
 
 For keyframe and NACK analysis, split outcomes further:
 
@@ -91,6 +92,14 @@ For keyframe and NACK analysis, split outcomes further:
 - repairability score persistence continuity (sample coverage / missing streak / missing gap)
 - recovery effectiveness composite score (keyframe + chain build + NACK + repairability persistence)
 
+For browser-direct render analysis, split outcomes further:
+
+- source cadence is stable, callback cadence is stable, local render is healthy
+- source cadence is stable, callback cadence has long-tail spikes, local render shows intermittent backpressure
+- source cadence is stable, `presentedFramesDelta` repeatedly jumps, browser side is skipping or batch-presenting frames
+- source cadence already falls to 30fps or lower, local render follows source and is not the primary bottleneck
+- `trackingSource=timeupdate` only, current trace supports coarse stutter judgement and supports limited fps attribution
+
 ### 6. Evaluate Performance Explicitly
 
 For performance analysis, always state:
@@ -101,6 +110,7 @@ For performance analysis, always state:
 - repeated retries, reconnects, or resets
 - sustained low-throughput / no-throughput windows
 - whether evidence points to network, provisioning, control-plane, or local pipeline pressure
+- for browser-direct mode, whether evidence points to source cadence, callback cadence, decode pressure, or local drawing pressure
 
 ## Output Format
 
@@ -123,6 +133,12 @@ Use this template unless the user asks for something else:
   - `firstFrameLatencyObserved`
 - then place the stall on the canonical chain:
   - `PliRequested -> PliSent -> ResponseObserved/PacketSeen -> Decoded -> CleanAnchorCommitted -> DisplayStable`
+- if browser-direct render is involved, list structured events in this order:
+  - `renderTelemetryObserved`
+  - `renderFrameDropped`
+  - `renderBackpressureChanged`
+  - `renderCauseClassified`
+  - `renderPolicyApplied`
 
 ### Findings
 
@@ -139,6 +155,25 @@ Use this template unless the user asks for something else:
   - `nackEffectiveness.effectiveRate`
   - `repairabilityPersistence`
   - `recoveryEffectiveness.score`
+- for browser-direct render, state these fields explicitly when available:
+  - `trackingSource`
+  - `callbackCountSinceLastSample`
+  - `callbackGapCountSinceLastSample`
+  - `presentedFramesAdvancedSinceLastSample`
+  - `sourceFpsEstimate`
+  - `sourceFrameIntervalMs`
+  - `mediaTimeDeltaSec`
+  - `expectedDisplayLeadMs`
+  - `callbackIntervalMs`
+  - `maxCallbackIntervalMsSinceLastSample`
+  - `presentedFramesDelta`
+  - `presentedFramesJumpCountSinceLastSample`
+  - `maxPresentedFramesDeltaSinceLastSample`
+  - `droppedFramesSinceLastSample`
+  - `droppedLikeStreak`
+  - `renderBackpressure`
+  - `renderCause`
+  - `displayDegradeLevel`
 
 ### Evidence
 
@@ -170,3 +205,8 @@ Use this template unless the user asks for something else:
 - `nackSent` / `nackRecovered` / `nackSkipped` / `nackExpired` already encode terminal NACK outcome classes; pair them with `nackDisposition` and `frameUnrecoverableReason`.
 - `cleanAnchorCommitted` is the media gate; `DisplayStable` is the display gate; `stableServingSettled` is the event name / close reason for `DisplayStable`.
 - repairability score may appear as `repairabilityScore` / `repairability_score` / `repairability` / `repairabilityIndex`; persistence should be judged from continuity, not single-point value.
+- `renderTelemetryObserved` is the canonical browser-direct render sample summary. Prefer it over guessing from sparse `fps/presentFps` snapshots.
+- `trackingSource=videoFrameCallback` supports finer render cadence judgement than `timeupdate`.
+- `callbackGapCountSinceLastSample` separates callback sparsity from aggregate dropped-like counts.
+- `presentedFramesJumpCountSinceLastSample` separates `presentedFrames` coalescing from callback cadence issues.
+- `renderFrameDropped` reports dropped-like cadence evidence. Read it with `callbackGap`, `presentedFramesJump`, `presentedFramesDelta`, and `renderBackpressure`, then decide whether the issue is local draw pressure, callback batching, or source-side cadence drift.

@@ -141,6 +141,23 @@ abstract class BaseCanvasVideoProcessor {
   setDisplayFormat(format: RendererRuntimeConfig['format']): void {
     this.canvas.style.objectFit = resolveCanvasObjectFit(format)
   }
+
+  protected setCanvasViewport(viewportWidthCss?: number, viewportHeightCss?: number): void {
+    if (
+      viewportWidthCss !== undefined
+      && viewportHeightCss !== undefined
+      && viewportWidthCss > 0
+      && viewportHeightCss > 0
+    ) {
+      this.canvas.style.width = `${Math.round(viewportWidthCss)}px`
+      this.canvas.style.height = `${Math.round(viewportHeightCss)}px`
+      this.canvas.style.margin = 'auto'
+      return
+    }
+    this.canvas.style.width = '100%'
+    this.canvas.style.height = '100%'
+    this.canvas.style.margin = ''
+  }
 }
 
 function resolveCanvasObjectFit(format: RendererRuntimeConfig['format']): 'contain' | 'cover' | 'fill' {
@@ -199,17 +216,38 @@ function resolveShaderPreset(
 class WebGL2Processor extends BaseCanvasVideoProcessor {
   private gl: WebGL2RenderingContext | null = null
   private program: WebGLProgram | null = null
-  private currentWidth = 0
-  private currentHeight = 0
+  private currentSourceWidth = 0
+  private currentSourceHeight = 0
+  private currentOutputWidth = 0
+  private currentOutputHeight = 0
+  private currentViewportWidthCss: number | null = null
+  private currentViewportHeightCss: number | null = null
+  private explicitPresentTarget = false
   private textureAllocated = false
   private hasDrawnFrame = false
   private contextListenersBound = false
+  private outputResolutionUniform: WebGLUniformLocation | null = null
+  private sourceResolutionUniform: WebGLUniformLocation | null = null
+  private filterIdUniform: WebGLUniformLocation | null = null
+  private qualityModeUniform: WebGLUniformLocation | null = null
+  private sharpenFactorUniform: WebGLUniformLocation | null = null
+  private brightnessUniform: WebGLUniformLocation | null = null
+  private contrastUniform: WebGLUniformLocation | null = null
+  private saturationUniform: WebGLUniformLocation | null = null
   private readonly frameCaptureWaiters: Array<(frame: HTMLCanvasElement | null) => void> = []
   private drewToScreenThisFrame = false
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault()
     this.gl = null
     this.program = null
+    this.outputResolutionUniform = null
+    this.sourceResolutionUniform = null
+    this.filterIdUniform = null
+    this.qualityModeUniform = null
+    this.sharpenFactorUniform = null
+    this.brightnessUniform = null
+    this.contrastUniform = null
+    this.saturationUniform = null
     this.hasDrawnFrame = false
     this.canvas.style.opacity = '0'
   }
@@ -219,6 +257,47 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
       return
     }
     this.setup()
+  }
+
+  applyRendererPresentationConfig(config: RendererRuntimeConfig): void {
+    this.explicitPresentTarget = config.renderOutputWidth !== undefined
+      && config.renderOutputHeight !== undefined
+    const nextOutputWidth = this.explicitPresentTarget
+      ? Math.max(1, Math.round(config.renderOutputWidth!))
+      : Math.max(1, this.video.videoWidth || this.currentSourceWidth || 1)
+    const nextOutputHeight = this.explicitPresentTarget
+      ? Math.max(1, Math.round(config.renderOutputHeight!))
+      : Math.max(1, this.video.videoHeight || this.currentSourceHeight || 1)
+    const nextViewportWidthCss = config.renderViewportWidth !== undefined && config.renderViewportWidth > 0
+      ? Math.round(config.renderViewportWidth)
+      : null
+    const nextViewportHeightCss = config.renderViewportHeight !== undefined && config.renderViewportHeight > 0
+      ? Math.round(config.renderViewportHeight)
+      : null
+    const outputChanged = nextOutputWidth !== this.currentOutputWidth
+      || nextOutputHeight !== this.currentOutputHeight
+    const viewportChanged = nextViewportWidthCss !== this.currentViewportWidthCss
+      || nextViewportHeightCss !== this.currentViewportHeightCss
+    if (!outputChanged && !viewportChanged) {
+      return
+    }
+    if (outputChanged) {
+      this.currentOutputWidth = nextOutputWidth
+      this.currentOutputHeight = nextOutputHeight
+      this.canvas.width = nextOutputWidth
+      this.canvas.height = nextOutputHeight
+    }
+    if (viewportChanged) {
+      this.currentViewportWidthCss = nextViewportWidthCss
+      this.currentViewportHeightCss = nextViewportHeightCss
+      this.setCanvasViewport(nextViewportWidthCss ?? undefined, nextViewportHeightCss ?? undefined)
+    }
+    if (this.gl !== null && outputChanged) {
+      this.gl.viewport(0, 0, nextOutputWidth, nextOutputHeight)
+    }
+    if (this.gl !== null) {
+      this.refresh()
+    }
   }
 
   protected setup(): void {
@@ -237,14 +316,16 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
     this.gl = gl
     // 避免初始化失败时以黑底覆盖原生 video。
     this.canvas.style.opacity = '0'
-    this.currentWidth = Math.max(1, this.canvas.width)
-    this.currentHeight = Math.max(1, this.canvas.height)
+    this.currentOutputWidth = Math.max(1, this.canvas.width)
+    this.currentOutputHeight = Math.max(1, this.canvas.height)
+    this.currentSourceWidth = Math.max(1, this.video.videoWidth || this.currentOutputWidth)
+    this.currentSourceHeight = Math.max(1, this.video.videoHeight || this.currentOutputHeight)
     if (!this.contextListenersBound) {
       this.canvas.addEventListener('webglcontextlost', this.onContextLost as EventListener)
       this.canvas.addEventListener('webglcontextrestored', this.onContextRestored as EventListener)
       this.contextListenersBound = true
     }
-    gl.viewport(0, 0, this.currentWidth, this.currentHeight)
+    gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
     const vShader = gl.createShader(gl.VERTEX_SHADER)!
     gl.shaderSource(vShader, `#version 300 es
 layout(location=0) in vec4 position;
@@ -257,7 +338,8 @@ void main(){ gl_Position = position; }`)
     gl.shaderSource(fShader, `#version 300 es
 precision highp float;
 uniform sampler2D data;
-uniform vec2 iResolution;
+uniform vec2 outputResolution;
+uniform vec2 sourceResolution;
 uniform int filterId;
 uniform bool qualityMode;
 uniform float sharpenFactor;
@@ -266,7 +348,7 @@ uniform float contrast;
 uniform float saturation;
 const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
 vec3 clarityBoost(vec2 uv, vec3 center) {
-  vec2 texel = 1.0 / iResolution.xy;
+  vec2 texel = 1.0 / sourceResolution.xy;
   vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
   vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
   vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
@@ -295,7 +377,7 @@ vec3 clarityBoost(vec2 uv, vec3 center) {
 }
 out vec4 fragColor;
 void main() {
-  vec2 uv = gl_FragCoord.xy / iResolution.xy;
+  vec2 uv = gl_FragCoord.xy / outputResolution.xy;
   vec3 color = texture(data, uv).rgb;
   if (sharpenFactor > 0.0) {
     color = clarityBoost(uv, color);
@@ -318,6 +400,14 @@ void main() {
       throw new Error(`webgl2ProgramLinkFailed:${gl.getProgramInfoLog(program) ?? 'unknown'}`)
     }
     gl.useProgram(program)
+    this.outputResolutionUniform = gl.getUniformLocation(program, 'outputResolution')
+    this.sourceResolutionUniform = gl.getUniformLocation(program, 'sourceResolution')
+    this.filterIdUniform = gl.getUniformLocation(program, 'filterId')
+    this.qualityModeUniform = gl.getUniformLocation(program, 'qualityMode')
+    this.sharpenFactorUniform = gl.getUniformLocation(program, 'sharpenFactor')
+    this.brightnessUniform = gl.getUniformLocation(program, 'brightness')
+    this.contrastUniform = gl.getUniformLocation(program, 'contrast')
+    this.saturationUniform = gl.getUniformLocation(program, 'saturation')
     const buffer = gl.createBuffer()!
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, 3.0, -1.0, -1.0, 3.0]), gl.STATIC_DRAW)
@@ -337,14 +427,14 @@ void main() {
 
   protected refresh(): void {
     const gl = this.gl!
-    const program = this.program!
-    gl.uniform2f(gl.getUniformLocation(program, 'iResolution'), this.currentWidth, this.currentHeight)
-    gl.uniform1i(gl.getUniformLocation(program, 'filterId'), this.toFilterId(this.options.processing))
-    gl.uniform1i(gl.getUniformLocation(program, 'qualityMode'), this.options.processingMode === 'quality' ? 1 : 0)
-    gl.uniform1f(gl.getUniformLocation(program, 'sharpenFactor'), this.options.sharpness)
-    gl.uniform1f(gl.getUniformLocation(program, 'brightness'), this.options.brightness)
-    gl.uniform1f(gl.getUniformLocation(program, 'contrast'), this.options.contrast)
-    gl.uniform1f(gl.getUniformLocation(program, 'saturation'), this.options.saturation)
+    gl.uniform2f(this.outputResolutionUniform, this.currentOutputWidth, this.currentOutputHeight)
+    gl.uniform2f(this.sourceResolutionUniform, this.currentSourceWidth, this.currentSourceHeight)
+    gl.uniform1i(this.filterIdUniform, this.toFilterId(this.options.processing))
+    gl.uniform1i(this.qualityModeUniform, this.options.processingMode === 'quality' ? 1 : 0)
+    gl.uniform1f(this.sharpenFactorUniform, this.options.sharpness)
+    gl.uniform1f(this.brightnessUniform, this.options.brightness)
+    gl.uniform1f(this.contrastUniform, this.options.contrast)
+    gl.uniform1f(this.saturationUniform, this.options.saturation)
   }
 
   captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
@@ -363,12 +453,12 @@ void main() {
     }
     const resolve = this.frameCaptureWaiters.shift()!
     const gl = this.gl
-    if (!this.drewToScreenThisFrame || gl === null || this.currentWidth < 2 || this.currentHeight < 2) {
+    if (!this.drewToScreenThisFrame || gl === null || this.currentOutputWidth < 2 || this.currentOutputHeight < 2) {
       resolve(null)
       return
     }
     try {
-      resolve(readWebglDefaultFramebufferToCanvas(gl, this.currentWidth, this.currentHeight))
+      resolve(readWebglDefaultFramebufferToCanvas(gl, this.currentOutputWidth, this.currentOutputHeight))
     }
     catch {
       resolve(null)
@@ -382,12 +472,16 @@ void main() {
       return
     }
     if (this.video.videoWidth > 0 && this.video.videoHeight > 0
-      && (this.video.videoWidth !== this.currentWidth || this.video.videoHeight !== this.currentHeight)) {
-      this.currentWidth = this.video.videoWidth
-      this.currentHeight = this.video.videoHeight
-      this.canvas.width = this.currentWidth
-      this.canvas.height = this.currentHeight
-      gl.viewport(0, 0, this.currentWidth, this.currentHeight)
+      && (this.video.videoWidth !== this.currentSourceWidth || this.video.videoHeight !== this.currentSourceHeight)) {
+      this.currentSourceWidth = this.video.videoWidth
+      this.currentSourceHeight = this.video.videoHeight
+      if (!this.explicitPresentTarget) {
+        this.currentOutputWidth = this.currentSourceWidth
+        this.currentOutputHeight = this.currentSourceHeight
+        this.canvas.width = this.currentOutputWidth
+        this.canvas.height = this.currentOutputHeight
+        gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
+      }
       this.textureAllocated = false
       this.refresh()
     }
@@ -396,8 +490,8 @@ void main() {
         gl.TEXTURE_2D,
         0,
         gl.RGBA,
-        this.currentWidth,
-        this.currentHeight,
+        this.currentSourceWidth,
+        this.currentSourceHeight,
         0,
         gl.RGBA,
         gl.UNSIGNED_BYTE,
@@ -531,6 +625,7 @@ export class WebGL2VideoRenderer implements VideoRenderer {
   async attach(video: HTMLVideoElement): Promise<void> {
     this.destroy()
     this.player = new WebGL2Processor(video)
+    this.player.applyRendererPresentationConfig(this.config)
     this.player.setDisplayFormat(this.config.format)
     const preset = resolveShaderPreset(this.config)
     this.player.updateOptions({
@@ -548,6 +643,7 @@ export class WebGL2VideoRenderer implements VideoRenderer {
 
   update(config: Partial<RendererRuntimeConfig>): void {
     this.config = { ...this.config, ...config }
+    this.player?.applyRendererPresentationConfig(this.config)
     this.player?.setDisplayFormat(this.config.format)
     const preset = resolveShaderPreset(this.config)
     this.player?.updateOptions({

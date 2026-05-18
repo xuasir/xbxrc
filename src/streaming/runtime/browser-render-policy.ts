@@ -7,8 +7,17 @@ import type {
   StreamingPipelineRenderPreference,
   StreamingSuperResolutionRenderPreference,
 } from '@shared/rpc/streaming'
-import type { RendererAttachSpec, RendererRuntimeConfig, VideoFit } from '../../player/domain/media'
-import type { SuperResolutionTierPlan } from './super-resolution-ladder'
+import type {
+  RendererAttachSpec,
+  RendererPresentTarget,
+  RendererRuntimeConfig,
+  VideoFit,
+} from '../../player/domain/media'
+import type {
+  SuperResolutionOutputTierLabel,
+  SuperResolutionTierPlan,
+} from './super-resolution-ladder'
+import { resolveDisplayViewport } from './display-viewport'
 
 /** 从 Rust render projection 解析管线覆盖；缺省为 auto。 */
 export function resolvePipelineOverrideFromRenderPreference(
@@ -88,6 +97,17 @@ export interface BrowserRendererPolicyInput {
     inboundVideoBitrateKbps?: number
   }
   baseVideoBitrateKbps: number
+  displayContext?: {
+    containerWidthCss: number
+    containerHeightCss: number
+    devicePixelRatio: number
+    refreshRateHz?: number
+    fullscreen: boolean
+    configuredWidth: number
+    configuredHeight: number
+    sourceWidth: number
+    sourceHeight: number
+  }
   /** 仅用于计划中的 SR 合同展示；degrade patch 本身不写 tier（由 freeze 路径负责） */
   superResolutionTierPlan: SuperResolutionTierPlan | null
 }
@@ -113,11 +133,12 @@ export interface BrowserRendererPlan {
   superResolutionRcasStopsForPatch?: number
   sr?: {
     algorithm: 'fsr1'
-    outputTier: '1080p' | '1440p' | '2160p'
+    outputTier: SuperResolutionOutputTierLabel
     outputWidth: number
     outputHeight: number
     rcasStops: number
   }
+  presentTarget?: RendererPresentTarget
 }
 
 export function toRendererFormat(videoFormat: string | undefined): RendererRuntimeConfig['format'] {
@@ -201,6 +222,67 @@ function resolvePipelinePolicy(input: BrowserRendererPolicyInput): {
 
 function degradeBaseProcessing(level: BrowserDisplayDegradeLevel): 'usm' | 'cas' {
   return level === 'displayL0' ? 'cas' : 'usm'
+}
+
+function resolvePresentTargetOutputConstraint(input: BrowserRendererPolicyInput): {
+  maxOutputDevicePixelRatio: number
+  maxOutputPixels: number
+} {
+  const refreshRateHz = input.displayContext?.refreshRateHz ?? 60
+  const highRefresh = refreshRateHz > 90
+  switch (input.displayDegradeLevel) {
+    case 'displayL0':
+      return {
+        maxOutputDevicePixelRatio: highRefresh ? 1.75 : 2,
+        maxOutputPixels: 3840 * 2160,
+      }
+    case 'displayL1':
+      return {
+        maxOutputDevicePixelRatio: highRefresh ? 1.25 : 1.5,
+        maxOutputPixels: 2560 * 1440,
+      }
+    case 'displayL2':
+      return {
+        maxOutputDevicePixelRatio: 1,
+        maxOutputPixels: 1920 * 1080,
+      }
+  }
+}
+
+function minPositive(...values: Array<number | undefined>): number | undefined {
+  const positives = values.filter((value): value is number => value !== undefined && Number.isFinite(value) && value > 0)
+  if (positives.length === 0) {
+    return undefined
+  }
+  return Math.min(...positives)
+}
+
+function resolvePresentTargetResolutionCap(input: {
+  plan: BrowserRendererPlan
+  displayContext: NonNullable<BrowserRendererPolicyInput['displayContext']>
+}): {
+  maxOutputWidth?: number
+  maxOutputHeight?: number
+} {
+  if (input.plan.kind === 'webgl2_sr' && input.plan.sr !== undefined) {
+    return {
+      maxOutputWidth: input.plan.sr.outputWidth,
+      maxOutputHeight: input.plan.sr.outputHeight,
+    }
+  }
+  if (!input.displayContext.fullscreen) {
+    return {}
+  }
+  return {
+    maxOutputWidth: minPositive(
+      input.displayContext.configuredWidth,
+      input.displayContext.sourceWidth,
+    ),
+    maxOutputHeight: minPositive(
+      input.displayContext.configuredHeight,
+      input.displayContext.sourceHeight,
+    ),
+  }
 }
 
 /**
@@ -295,6 +377,37 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
     }
   }
 
+  if (input.displayContext !== undefined) {
+    const outputConstraint = resolvePresentTargetOutputConstraint(input)
+    const resolutionCap = resolvePresentTargetResolutionCap({
+      plan,
+      displayContext: input.displayContext,
+    })
+    const viewport = resolveDisplayViewport({
+      containerWidthCss: input.displayContext.containerWidthCss,
+      containerHeightCss: input.displayContext.containerHeightCss,
+      devicePixelRatio: input.displayContext.devicePixelRatio,
+      maxOutputDevicePixelRatio: outputConstraint.maxOutputDevicePixelRatio,
+      maxOutputPixels: outputConstraint.maxOutputPixels,
+      maxOutputWidth: resolutionCap.maxOutputWidth,
+      maxOutputHeight: resolutionCap.maxOutputHeight,
+      format: plan.display.format,
+      fullscreen: input.displayContext.fullscreen,
+      sourceWidth: input.displayContext.sourceWidth,
+      sourceHeight: input.displayContext.sourceHeight,
+    })
+    plan.presentTarget = {
+      ...viewport,
+      displayWidthCss: Math.max(1, Math.round(input.displayContext.containerWidthCss)),
+      displayHeightCss: Math.max(1, Math.round(input.displayContext.containerHeightCss)),
+      devicePixelRatio: input.displayContext.devicePixelRatio,
+      fullscreen: input.displayContext.fullscreen,
+      refreshRateHz: input.displayContext.refreshRateHz,
+      sourceWidth: input.displayContext.sourceWidth,
+      sourceHeight: input.displayContext.sourceHeight,
+    }
+  }
+
   return plan
 }
 
@@ -339,6 +452,17 @@ export function planToRendererRuntimeConfigPatch(plan: BrowserRendererPlan): Par
     brightness: plan.display.brightness,
     contrast: plan.display.contrast,
     saturation: plan.display.saturation,
+    renderOutputWidth: plan.presentTarget?.outputWidth,
+    renderOutputHeight: plan.presentTarget?.outputHeight,
+    renderViewportWidth: plan.presentTarget?.viewportWidthCss,
+    renderViewportHeight: plan.presentTarget?.viewportHeightCss,
+    renderDisplayWidth: plan.presentTarget?.displayWidthCss,
+    renderDisplayHeight: plan.presentTarget?.displayHeightCss,
+    renderDevicePixelRatio: plan.presentTarget?.devicePixelRatio,
+    renderDisplayFullscreen: plan.presentTarget?.fullscreen,
+    renderDisplayRefreshHz: plan.presentTarget?.refreshRateHz,
+    renderSourceWidth: plan.presentTarget?.sourceWidth,
+    renderSourceHeight: plan.presentTarget?.sourceHeight,
   }
 
   if (plan.superResolutionRcasStopsForPatch !== undefined) {
@@ -376,6 +500,7 @@ export function planToRendererAttachSpec(plan: BrowserRendererPlan): RendererAtt
     processingMode: plan.sharpening.processingMode,
     shaderPreset: plan.sharpening.preset,
     sharpenStrength: plan.sharpening.strength,
+    presentTarget: plan.presentTarget,
     sr: plan.sr
       ? {
           outputWidth: plan.sr.outputWidth,

@@ -198,7 +198,22 @@ export interface StreamPerformanceSnapshot {
   firstFrameGuardTriggered?: boolean
   renderBackpressure?: boolean
   renderDroppedFrames?: number
+  renderCallbackGapCount?: number
   renderFrameCallbackIntervalMs?: number
+  renderCallbackCountLastSample?: number
+  renderCallbackGapCountLastSample?: number
+  renderFrameTrackingSource?: 'videoFrameCallback' | 'timeupdate'
+  renderPresentedFramesDelta?: number
+  renderPresentedFramesJumpCount?: number
+  renderPresentedFramesAdvancedLastSample?: number
+  renderPresentedFramesJumpCountLastSample?: number
+  renderFrameMediaTimeDeltaSec?: number
+  renderFrameExpectedDisplayLeadMs?: number
+  renderFrameRawSourceFpsEstimate?: number
+  renderFrameSourceFpsEstimate?: number
+  renderFrameSourceFrameIntervalMs?: number
+  renderFrameSourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
+  renderDroppedLikeStreak?: number
   renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
@@ -213,6 +228,16 @@ export interface StreamPerformanceSnapshot {
   renderShaderPath?: 'usm' | 'cas' | 'none'
   renderFpsBudget?: number
   rendererCapabilityReason?: string
+  renderDisplayFullscreen?: boolean
+  renderDisplayRefreshHz?: number
+  renderDisplayWidth?: number
+  renderDisplayHeight?: number
+  renderPresentTargetWidth?: number
+  renderPresentTargetHeight?: number
+  renderViewportWidth?: number
+  renderViewportHeight?: number
+  renderSourceWidth?: number
+  renderSourceHeight?: number
   renderSuperResolutionEnabled?: boolean
   renderSuperResolutionActive?: boolean
   renderSuperResolutionAlgorithm?: string
@@ -321,7 +346,22 @@ export interface StreamSessionDiagnosticsSnapshot {
   firstFrameGuardTriggered?: boolean
   renderBackpressure?: boolean
   renderDroppedFrames?: number
+  renderCallbackGapCount?: number
   renderFrameCallbackIntervalMs?: number
+  renderCallbackCountLastSample?: number
+  renderCallbackGapCountLastSample?: number
+  renderFrameTrackingSource?: 'videoFrameCallback' | 'timeupdate'
+  renderPresentedFramesDelta?: number
+  renderPresentedFramesJumpCount?: number
+  renderPresentedFramesAdvancedLastSample?: number
+  renderPresentedFramesJumpCountLastSample?: number
+  renderFrameMediaTimeDeltaSec?: number
+  renderFrameExpectedDisplayLeadMs?: number
+  renderFrameRawSourceFpsEstimate?: number
+  renderFrameSourceFpsEstimate?: number
+  renderFrameSourceFrameIntervalMs?: number
+  renderFrameSourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
+  renderDroppedLikeStreak?: number
   renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
@@ -336,6 +376,16 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderShaderPath?: 'usm' | 'cas' | 'none'
   renderFpsBudget?: number
   rendererCapabilityReason?: string
+  renderDisplayFullscreen?: boolean
+  renderDisplayRefreshHz?: number
+  renderDisplayWidth?: number
+  renderDisplayHeight?: number
+  renderPresentTargetWidth?: number
+  renderPresentTargetHeight?: number
+  renderViewportWidth?: number
+  renderViewportHeight?: number
+  renderSourceWidth?: number
+  renderSourceHeight?: number
   renderSuperResolutionEnabled?: boolean
   renderSuperResolutionActive?: boolean
   renderSuperResolutionAlgorithm?: string

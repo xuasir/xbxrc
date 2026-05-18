@@ -26,9 +26,9 @@ function baseInput(over: Partial<BrowserRendererPolicyInput> = {}): BrowserRende
   const tier: SuperResolutionTierPlan = {
     configuredTier: '1080p',
     actualSourceTier: '1080p',
-    outputTier: '1440p',
-    outputWidth: 2560,
-    outputHeight: 1440,
+    outputTier: '1080p',
+    outputWidth: 1920,
+    outputHeight: 1080,
   }
   return {
     displayDegradeLevel: 'displayL0',
@@ -146,7 +146,7 @@ describe('resolveBrowserRendererPlan', () => {
       superResolutionAttachFailed: false,
     }))
     expect(plan.kind).toBe('webgl2_sr')
-    expect(plan.sr?.outputTier).toBe('1440p')
+    expect(plan.sr?.outputTier).toBe('1080p')
     expect(plan.superResolutionRcasStopsForPatch).toBeDefined()
     const patch = planToRendererRuntimeConfigPatch(plan)
     expect(patch.superResolutionRcasStops).toBe(plan.superResolutionRcasStopsForPatch)
@@ -248,5 +248,76 @@ describe('resolveBrowserRendererPlan', () => {
     expect(plan.kind).toBe('webgl2_sr')
     expect(plan.superResolutionRcasStopsForPatch).toBe(1.1)
     expect(plan.sr?.rcasStops).toBe(1.1)
+  })
+
+  it('projects fullscreen present target from display context', () => {
+    const plan = resolveBrowserRendererPlan({
+      ...baseInput(),
+      displayContext: {
+        containerWidthCss: 1920,
+        containerHeightCss: 1200,
+        devicePixelRatio: 1.5,
+        refreshRateHz: 120,
+        fullscreen: true,
+        configuredWidth: 1920,
+        configuredHeight: 1080,
+        sourceWidth: 1920,
+        sourceHeight: 1080,
+      },
+    } as BrowserRendererPolicyInput) as ReturnType<typeof resolveBrowserRendererPlan> & {
+      presentTarget?: {
+        outputWidth: number
+        outputHeight: number
+        viewportWidthCss: number
+        viewportHeightCss: number
+        refreshRateHz?: number
+        fullscreen: boolean
+        sourceWidth: number
+        sourceHeight: number
+      }
+    }
+
+    expect(plan.presentTarget).toMatchObject({
+      outputWidth: 1920,
+      outputHeight: 1080,
+      viewportWidthCss: 1920,
+      viewportHeightCss: 1080,
+      refreshRateHz: 120,
+      fullscreen: true,
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+    })
+  })
+
+  it('caps present target output on high-dpr display-constrained paths', () => {
+    const plan = resolveBrowserRendererPlan({
+      ...baseInput({
+        displayDegradeLevel: 'displayL1',
+      }),
+      displayContext: {
+        containerWidthCss: 1920,
+        containerHeightCss: 1200,
+        devicePixelRatio: 2,
+        fullscreen: true,
+        configuredWidth: 1920,
+        configuredHeight: 1080,
+        sourceWidth: 1920,
+        sourceHeight: 1080,
+      },
+    } as BrowserRendererPolicyInput) as ReturnType<typeof resolveBrowserRendererPlan> & {
+      presentTarget?: {
+        outputWidth: number
+        outputHeight: number
+        viewportWidthCss: number
+        viewportHeightCss: number
+      }
+    }
+
+    expect(plan.presentTarget).toMatchObject({
+      outputWidth: 1920,
+      outputHeight: 1080,
+      viewportWidthCss: 1920,
+      viewportHeightCss: 1080,
+    })
   })
 })

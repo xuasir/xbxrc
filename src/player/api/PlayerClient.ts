@@ -241,6 +241,14 @@ export class PlayerClient {
     this.mediaService.updateRendererAttach(spec)
   }
 
+  updateRendererState(
+    config: Partial<RendererRuntimeConfig>,
+    spec: RendererAttachSpec,
+  ): void {
+    this.options.renderer = { ...this.options.renderer, ...config }
+    this.mediaService.updateRendererState(config, spec)
+  }
+
   async startMic(): Promise<void> {
     await this.sessionService.getChatChannel()?.startMic()
   }
