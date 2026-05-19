@@ -1,5 +1,5 @@
 import type { UpdaterProgressEvent } from '@shared/events/updater'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 
@@ -57,12 +57,23 @@ export function useAppUpdater() {
   }
 
   async function loadChannel() {
-    const result = await rpc.updater.getChannel()
-    channel.value = result.channel
+    try {
+      const result = await rpc.updater.getChannel()
+      channel.value = result.channel
+    }
+    catch (error) {
+      console.error('[useAppUpdater] Failed to load update channel', error)
+    }
   }
 
   async function setChannel(next: UpdateChannel) {
-    await rpc.updater.setChannel({ channel: next })
+    try {
+      await rpc.updater.setChannel({ channel: next })
+    }
+    catch (error) {
+      console.error('[useAppUpdater] Failed to save update channel', error)
+      throw error
+    }
     channel.value = next
     state.value = 'idle'
     targetVersion.value = null
@@ -136,6 +147,11 @@ export function useAppUpdater() {
   onMounted(async () => {
     unsubscribeProgress = events['updater.progress'](handleProgress)
     await Promise.all([refreshCurrentVersion(), loadChannel()])
+  })
+
+  // 设置页被 KeepAlive 缓存后再次进入时不会 remount，需主动从 store 刷新通道。
+  onActivated(() => {
+    void loadChannel()
   })
 
   onUnmounted(() => {

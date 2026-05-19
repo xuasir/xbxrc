@@ -93,7 +93,12 @@ function openChannelSheet() {
 async function handleChannelSelect(value: string | number) {
   const next = value as UpdateChannel
   if (next !== updater.channel.value) {
-    await updater.setChannel(next)
+    try {
+      await updater.setChannel(next)
+    }
+    catch {
+      return
+    }
   }
   isChannelSheetOpen.value = false
 }
