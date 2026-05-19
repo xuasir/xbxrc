@@ -1274,6 +1274,7 @@ describe('browser-runtime super resolution state', () => {
         renderCallbackGapCount?: number
         renderCallbackCountLastSample?: number
         renderCallbackGapCountLastSample?: number
+        renderCause?: string
         renderFrameTrackingSource?: string
         renderPresentedFramesDelta?: number
         renderPresentedFramesJumpCount?: number
@@ -1298,6 +1299,93 @@ describe('browser-runtime super resolution state', () => {
       expect(snapshot.renderFrameSourceFpsEstimate).toBe(59.5)
       expect(snapshot.renderFrameSourceFrameIntervalMs).toBe(16.8)
       expect(snapshot.renderDroppedLikeStreak).toBe(1)
+      expect(snapshot.renderCause).toBe('renderStarvation')
+
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not classify batched RVFC callbacks as renderStarvation without presentAge or callback gap', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+
+      client.applyVideoSenderPolicy.mockResolvedValue({
+        status: 'unsupported',
+        detail: 'missingVideoSender',
+      })
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        rtt: 16,
+        fps: 60,
+        inboundVideoFps: 60,
+        decodeFps: 60,
+        presentFps: 58,
+        presentAgeMs: 0,
+        packetAgeMs: 0,
+        inboundVideoBitrateKbps: 18_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+      })
+
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 32,
+        presentedFramesDelta: 2,
+        mediaTimeDeltaSec: 0,
+        sourceFpsUnavailableReason: 'mediaTimeDeltaTooSmall',
+        trackingSource: 'videoFrameCallback',
+        droppedLike: true,
+      })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 32,
+        presentedFramesDelta: 2,
+        mediaTimeDeltaSec: 0,
+        sourceFpsUnavailableReason: 'mediaTimeDeltaTooSmall',
+        trackingSource: 'videoFrameCallback',
+        droppedLike: true,
+      })
+      client.eventBus.emit('media.videoFramePresented', {
+        callbackIntervalMs: 32,
+        presentedFramesDelta: 2,
+        mediaTimeDeltaSec: 0,
+        sourceFpsUnavailableReason: 'mediaTimeDeltaTooSmall',
+        trackingSource: 'videoFrameCallback',
+        droppedLike: true,
+      })
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      const snapshot = await runtime.snapshotStats() as Awaited<ReturnType<typeof runtime.snapshotStats>> & {
+        renderCause?: string
+        renderBackpressure?: boolean
+        renderPresentedFramesAdvancedLastSample?: number
+        renderPresentedFramesJumpCountLastSample?: number
+      }
+      expect(snapshot.renderBackpressure).toBe(false)
+      expect(snapshot.renderPresentedFramesAdvancedLastSample).toBe(6)
+      expect(snapshot.renderPresentedFramesJumpCountLastSample).toBe(3)
+      expect(snapshot.renderCause).toBe('renderStable')
+
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'renderCauseClassified',
+          payload: expect.objectContaining({
+            cause: 'renderStable',
+          }),
+        }),
+      )
 
       await runtime.stop()
     }

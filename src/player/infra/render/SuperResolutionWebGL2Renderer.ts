@@ -324,9 +324,25 @@ void main(){
 }
 `
 
-type FrameCb = (callback: () => void) => number
-
 type SrPipelineMode = 'mobileSinglePass' | 'twoPass' | 'easuOnly' | 'linear'
+
+function resolveEffectiveSrOutputSize(config: RendererRuntimeConfig): { width: number, height: number } {
+  const tierW = config.superResolutionOutputWidth ?? 1920
+  const tierH = config.superResolutionOutputHeight ?? 1080
+  const budgetW = config.renderOutputWidth
+  const budgetH = config.renderOutputHeight
+  if (budgetW === undefined || budgetH === undefined || budgetW <= 0 || budgetH <= 0) {
+    return { width: tierW, height: tierH }
+  }
+  if (tierW <= budgetW && tierH <= budgetH) {
+    return { width: tierW, height: tierH }
+  }
+  const scale = Math.min(budgetW / tierW, budgetH / tierH)
+  return {
+    width: Math.max(1, Math.floor(tierW * scale)),
+    height: Math.max(1, Math.floor(tierH * scale)),
+  }
+}
 
 class SuperResolutionProcessor {
   private readonly canvas: HTMLCanvasElement
@@ -357,9 +373,10 @@ class SuperResolutionProcessor {
   private targetFps = 60
   private frameInterval = 16
   private lastFrameTime = 0
-  private animId: number | null = null
+  private animRafId: number | null = null
+  private videoFrameCbId: number | null = null
+  private hasFreshVideoFrame = false
   private stopped = false
-  private readonly frameCb: FrameCb
   private readonly boundDraw: () => void
   private hasDrawn = false
   private contextListenersBound = false
@@ -383,6 +400,7 @@ class SuperResolutionProcessor {
     this.videoTexAllocW = 0
     this.videoTexAllocH = 0
     this.setupGl()
+    this.startPresentationLoop()
   }
 
   constructor(
@@ -404,9 +422,6 @@ class SuperResolutionProcessor {
     this.canvas.style.height = '100%'
     this.canvas.style.pointerEvents = 'none'
     video.insertAdjacentElement('afterend', this.canvas)
-    this.frameCb = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
-      ? video.requestVideoFrameCallback.bind(video)
-      : window.requestAnimationFrame.bind(window)
     this.boundDraw = this.drawFrame.bind(this)
     this.frameInterval = Math.floor(1000 / 60)
   }
@@ -491,26 +506,74 @@ class SuperResolutionProcessor {
   }
 
   setTargetFps(fps: number): void {
+    const wasBudgetActive = this.targetFps <= 0
     this.targetFps = fps
     this.frameInterval = fps > 0 ? Math.floor(1000 / fps) : 0
+    if (fps <= 0) {
+      this.hasFreshVideoFrame = false
+      if (this.videoFrameCbId !== null && 'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        this.video.cancelVideoFrameCallback(this.videoFrameCbId)
+        this.videoFrameCbId = null
+      }
+      return
+    }
+    if (wasBudgetActive && !this.stopped && this.gl !== null) {
+      this.scheduleVideoFrameMarker()
+    }
   }
 
   init(): void {
     this.setupGl()
-    this.animId = this.frameCb(this.boundDraw)
+    this.startPresentationLoop()
+  }
+
+  private startPresentationLoop(): void {
+    if (this.stopped) {
+      return
+    }
+    if (this.animRafId !== null) {
+      cancelAnimationFrame(this.animRafId)
+      this.animRafId = null
+    }
+    if (this.videoFrameCbId !== null && 'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      this.video.cancelVideoFrameCallback(this.videoFrameCbId)
+      this.videoFrameCbId = null
+    }
+    if (this.targetFps > 0 && 'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      this.hasFreshVideoFrame = false
+      this.scheduleVideoFrameMarker()
+    }
+    else if (this.targetFps > 0) {
+      this.hasFreshVideoFrame = true
+    }
+    else {
+      this.hasFreshVideoFrame = false
+    }
+    this.animRafId = requestAnimationFrame(this.boundDraw)
+  }
+
+  private scheduleVideoFrameMarker(): void {
+    if (this.stopped || this.targetFps <= 0 || !('requestVideoFrameCallback' in HTMLVideoElement.prototype)) {
+      return
+    }
+    this.videoFrameCbId = this.video.requestVideoFrameCallback(() => {
+      this.hasFreshVideoFrame = true
+      if (!this.stopped) {
+        this.scheduleVideoFrameMarker()
+      }
+    })
   }
 
   destroy(): void {
     this.drainFrameCaptureWaiters(false)
     this.stopped = true
-    if (this.animId !== null) {
-      if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-        this.video.cancelVideoFrameCallback(this.animId)
-      }
-      else {
-        cancelAnimationFrame(this.animId)
-      }
-      this.animId = null
+    if (this.animRafId !== null) {
+      cancelAnimationFrame(this.animRafId)
+      this.animRafId = null
+    }
+    if (this.videoFrameCbId !== null && 'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      this.video.cancelVideoFrameCallback(this.videoFrameCbId)
+      this.videoFrameCbId = null
     }
     if (this.canvas.isConnected) {
       this.canvas.remove()
@@ -602,8 +665,9 @@ class SuperResolutionProcessor {
   private setupGl(): void {
     const gl = this.canvas.getContext('webgl2', {
       antialias: false,
-      alpha: true,
+      alpha: false,
       depth: false,
+      desynchronized: true,
       preserveDrawingBuffer: false,
       stencil: false,
       powerPreference: 'high-performance',
@@ -775,9 +839,6 @@ class SuperResolutionProcessor {
   }
 
   private shouldDraw(): boolean {
-    if (this.targetFps >= 60) {
-      return true
-    }
     if (this.targetFps <= 0) {
       return false
     }
@@ -917,9 +978,14 @@ class SuperResolutionProcessor {
       if (this.stopped) {
         return
       }
-      this.animId = this.frameCb(this.boundDraw)
+      this.animRafId = requestAnimationFrame(this.boundDraw)
       if (!this.shouldDraw() && this.frameCaptureWaiters.length === 0) {
-        return
+        if (this.targetFps <= 0) {
+          return
+        }
+        if (!this.hasFreshVideoFrame) {
+          return
+        }
       }
       const gl = this.gl
       if (gl === null || this.presentProgram === null || this.easuTex === null) {
@@ -1044,6 +1110,9 @@ class SuperResolutionProcessor {
       presentedToDefault = true
     }
     finally {
+      if (presentedToDefault) {
+        this.hasFreshVideoFrame = false
+      }
       this.drainFrameCaptureWaiters(presentedToDefault)
     }
   }
@@ -1060,8 +1129,7 @@ export class SuperResolutionWebGL2Renderer {
 
   async attach(video: HTMLVideoElement): Promise<void> {
     this.destroy()
-    const w = this.config.superResolutionOutputWidth ?? 1920
-    const h = this.config.superResolutionOutputHeight ?? 1080
+    const { width: w, height: h } = resolveEffectiveSrOutputSize(this.config)
     this.processor = new SuperResolutionProcessor(
       video,
       w,
@@ -1087,10 +1155,8 @@ export class SuperResolutionWebGL2Renderer {
     }
     if (this.config.superResolutionOutputWidth !== undefined
       && this.config.superResolutionOutputHeight !== undefined) {
-      this.processor?.setOutputSize(
-        this.config.superResolutionOutputWidth,
-        this.config.superResolutionOutputHeight,
-      )
+      const { width, height } = resolveEffectiveSrOutputSize(this.config)
+      this.processor?.setOutputSize(width, height)
     }
     this.processor?.setDisplayViewport(this.config.renderViewportWidth, this.config.renderViewportHeight)
     this.processor?.setDisplayFormat(this.config.format)

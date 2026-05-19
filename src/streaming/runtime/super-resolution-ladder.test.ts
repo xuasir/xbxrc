@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveSuperResolutionTierPlan } from './super-resolution-ladder'
+import {
+  resolveSuperResolutionOutputTierLabelFromDimensions,
+  resolveSuperResolutionTierPlan,
+} from './super-resolution-ladder'
 
 describe('super-resolution-ladder', () => {
   it('caps 1080 configured + 1080 actual at 1080 output', () => {
@@ -33,5 +36,10 @@ describe('super-resolution-ladder', () => {
     const p = resolveSuperResolutionTierPlan(1280, 720, 1280, 720)
     expect(p.configuredTier).toBe('720p')
     expect(p.outputTier).toBe('720p')
+  })
+
+  it('maps clamped output dimensions back to tier label', () => {
+    expect(resolveSuperResolutionOutputTierLabelFromDimensions(1920, 1080)).toBe('1080p')
+    expect(resolveSuperResolutionOutputTierLabelFromDimensions(2560, 1440)).toBe('1440p')
   })
 })

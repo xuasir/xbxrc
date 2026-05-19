@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { waitForPadNeutral } from './wait-pad-neutral'
+
 const listenerMap = new Map<string, Set<(payload: unknown) => void>>()
 let disposeCount = 0
 const getRuntimeSnapshot = vi.fn(async () => ({
@@ -41,8 +43,6 @@ vi.mock('../../services/rpc', () => ({
     },
   },
 }))
-
-import { waitForPadNeutral } from './wait-pad-neutral'
 
 describe('waitForPadNeutral', () => {
   beforeEach(() => {

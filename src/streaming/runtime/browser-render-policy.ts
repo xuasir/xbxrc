@@ -13,6 +13,7 @@ import type {
   RendererRuntimeConfig,
   VideoFit,
 } from '../../player/domain/media'
+import type { FrontEndContentFpsClass } from './browser-runtime-profile'
 import type {
   SuperResolutionOutputTierLabel,
   SuperResolutionTierPlan,
@@ -55,7 +56,6 @@ export type BrowserShaderPreset = 'clarityL0' | 'clarityL1' | 'clarityL2' | 'cla
 
 export interface BrowserAdaptiveRenderProfile {
   sharpnessScale: number
-  targetFpsBias: number
   preferredFormat: VideoFit
   processingMode: 'quality' | 'performance'
   shaderPreset: BrowserShaderPreset
@@ -110,6 +110,9 @@ export interface BrowserRendererPolicyInput {
   }
   /** 仅用于计划中的 SR 合同展示；degrade patch 本身不写 tier（由 freeze 路径负责） */
   superResolutionTierPlan: SuperResolutionTierPlan | null
+  /** 内容呈现帧率分类；驱动 renderer present targetFps（30 内容少做重复 FSR，60 内容满刷新） */
+  contentFpsClass?: FrontEndContentFpsClass
+  contentPresentFpsEstimate?: number
 }
 
 export interface BrowserRendererPlan {
@@ -258,18 +261,11 @@ function minPositive(...values: Array<number | undefined>): number | undefined {
 }
 
 function resolvePresentTargetResolutionCap(input: {
-  plan: BrowserRendererPlan
   displayContext: NonNullable<BrowserRendererPolicyInput['displayContext']>
 }): {
   maxOutputWidth?: number
   maxOutputHeight?: number
 } {
-  if (input.plan.kind === 'webgl2_sr' && input.plan.sr !== undefined) {
-    return {
-      maxOutputWidth: input.plan.sr.outputWidth,
-      maxOutputHeight: input.plan.sr.outputHeight,
-    }
-  }
   if (!input.displayContext.fullscreen) {
     return {}
   }
@@ -286,6 +282,46 @@ function resolvePresentTargetResolutionCap(input: {
 }
 
 /**
+ * Renderer 绘制预算：visibility=0；30fps 内容对齐内容帧率；60fps/未知内容保持 60 与显示刷新对齐。
+ */
+export function resolveRendererPresentTargetFps(input: {
+  visibilityBudgetActive: boolean
+  contentFpsClass?: FrontEndContentFpsClass
+  contentPresentFpsEstimate?: number
+}): number {
+  if (input.visibilityBudgetActive) {
+    return 0
+  }
+  const estimate = input.contentPresentFpsEstimate
+  if (estimate !== undefined && Number.isFinite(estimate) && estimate > 0) {
+    if (estimate >= 52) {
+      return 60
+    }
+    if (estimate <= 38) {
+      return 30
+    }
+  }
+  if (input.contentFpsClass === 'content30') {
+    return 30
+  }
+  return 60
+}
+
+function clampSrOutputToPresentTarget(plan: BrowserRendererPlan): void {
+  if (plan.sr === undefined || plan.presentTarget === undefined) {
+    return
+  }
+  const maxW = plan.presentTarget.outputWidth
+  const maxH = plan.presentTarget.outputHeight
+  if (plan.sr.outputWidth <= maxW && plan.sr.outputHeight <= maxH) {
+    return
+  }
+  const scale = Math.min(maxW / plan.sr.outputWidth, maxH / plan.sr.outputHeight)
+  plan.sr.outputWidth = Math.max(1, Math.floor(plan.sr.outputWidth * scale))
+  plan.sr.outputHeight = Math.max(1, Math.floor(plan.sr.outputHeight * scale))
+}
+
+/**
  * 编译当前显示档位与能力事实下的浏览器 render 计划（与 applyDisplayDegradeLevel 决策对齐）。
  */
 export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): BrowserRendererPlan {
@@ -296,10 +332,11 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
     0,
     Math.round(input.displayOptions.sharpness * input.adaptive.sharpnessScale),
   )
-  let targetFps = 60
-  if (input.visibilityBudgetActive) {
-    targetFps = 0
-  }
+  const targetFps = resolveRendererPresentTargetFps({
+    visibilityBudgetActive: input.visibilityBudgetActive,
+    contentFpsClass: input.contentFpsClass,
+    contentPresentFpsEstimate: input.contentPresentFpsEstimate,
+  })
 
   const baseKind: 'video' | 'webgl2' = pipelineType === 'video' ? 'video' : 'webgl2'
   const srWantsRenderer = baseKind === 'webgl2'
@@ -380,7 +417,6 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
   if (input.displayContext !== undefined) {
     const outputConstraint = resolvePresentTargetOutputConstraint(input)
     const resolutionCap = resolvePresentTargetResolutionCap({
-      plan,
       displayContext: input.displayContext,
     })
     const viewport = resolveDisplayViewport({
@@ -406,6 +442,7 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
       sourceWidth: input.displayContext.sourceWidth,
       sourceHeight: input.displayContext.sourceHeight,
     }
+    clampSrOutputToPresentTarget(plan)
   }
 
   return plan

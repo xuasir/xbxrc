@@ -23,6 +23,17 @@ const TIER_HEIGHT_MAX: Array<{ label: SuperResolutionConfiguredTierLabel, maxH: 
   { label: '2160p', maxH: 4096 },
 ]
 
+export function resolveSuperResolutionOutputTierLabelFromDimensions(
+  outputWidth: number,
+  outputHeight: number,
+): SuperResolutionOutputTierLabel {
+  const shortSide = Math.min(
+    Math.max(1, Math.round(outputWidth)),
+    Math.max(1, Math.round(outputHeight)),
+  )
+  return shortSideToTierLabel(shortSide)
+}
+
 function shortSideToTierLabel(shortSide: number): SuperResolutionConfiguredTierLabel {
   const s = Math.max(1, Math.round(shortSide))
   for (const row of TIER_HEIGHT_MAX) {

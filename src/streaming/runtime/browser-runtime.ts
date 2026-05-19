@@ -66,6 +66,7 @@ import {
 
 } from './runtime-host-policy'
 import {
+  resolveSuperResolutionOutputTierLabelFromDimensions,
   resolveSuperResolutionRcasStops,
   resolveSuperResolutionTierPlan,
 } from './super-resolution-ladder'
@@ -780,7 +781,6 @@ export function createBrowserRuntime(options: {
     stats: StreamStats
   }): {
     sharpnessScale: number
-    targetFpsBias: number
     preferredFormat: RendererRuntimeConfig['format']
     processingMode: 'quality' | 'performance'
     shaderPreset: ShaderPreset
@@ -799,7 +799,6 @@ export function createBrowserRuntime(options: {
       && healthyRenderSupply
       && input.level !== 'displayL2'
     let sharpnessScale = 1
-    let targetFpsBias = 0
     let processingMode: 'quality' | 'performance' = 'quality'
     let preferredFormat: RendererRuntimeConfig['format'] = toRendererFormat(currentDisplayState?.render.videoFormat ?? undefined)
     let shaderPreset: ShaderPreset = 'clarityL2'
@@ -807,21 +806,18 @@ export function createBrowserRuntime(options: {
     if (input.level === 'displayL2') {
       sharpnessScale = 0
       processingMode = 'performance'
-      targetFpsBias = -5
       preferredFormat = 'Contain'
       shaderPreset = 'clarityL0'
     }
     else if (input.level === 'displayL1') {
       sharpnessScale = 0.7
       processingMode = 'performance'
-      targetFpsBias = -3
       preferredFormat = 'Contain'
       shaderPreset = 'clarityL1'
     }
     else if (renderCause === 'decodeBackpressure' || bandwidthState === 'warning') {
       sharpnessScale = 0.85
       processingMode = 'performance'
-      targetFpsBias = -2
       shaderPreset = 'clarityL1'
     }
 
@@ -832,14 +828,12 @@ export function createBrowserRuntime(options: {
       sharpnessScale = Math.min(sharpnessScale, 0.6)
       processingMode = 'performance'
       shaderPreset = input.level === 'displayL2' ? 'clarityL0' : 'clarityL1'
-      targetFpsBias = Math.min(targetFpsBias, -4)
     }
     else if (
       bandwidthState === 'stable'
       && bitrateRatio > p.adaptiveStableBitrateRatio
     ) {
       sharpnessScale = Math.max(sharpnessScale, 1)
-      targetFpsBias = Math.max(targetFpsBias, 0)
     }
 
     if (casPreferred) {
@@ -867,7 +861,6 @@ export function createBrowserRuntime(options: {
 
     return {
       sharpnessScale,
-      targetFpsBias,
       preferredFormat,
       processingMode,
       shaderPreset,
@@ -1011,7 +1004,6 @@ export function createBrowserRuntime(options: {
       ...buildTraceReasonPayload(reason),
       digest: adaptive.digest,
       sharpnessScale: adaptive.sharpnessScale,
-      targetFpsBias: adaptive.targetFpsBias,
       processingMode: adaptive.processingMode,
       preferredFormat: adaptive.preferredFormat,
       shaderPreset: adaptive.shaderPreset,
@@ -1022,18 +1014,24 @@ export function createBrowserRuntime(options: {
     lastDisplayContextDigest = buildDisplayContextDigest(displayContext)
     // SR 走 webgl2_sr 时仍应用动态 RCAS（拥塞/档位/码率），低码率时抬高 stops 减轻块噪声锐化。
     const applyDynamicSrRcasForDisplayDegrade = true
+    const contentFps = resolveExpectedContentFps({
+      stats,
+      estimatedCeiling: estimatedCeilingFps(fpsObservationState),
+      videoFrameSourceFps: renderFrameSourceFpsCeiling ?? renderFrameSourceFpsEstimate,
+    })
     const plan = resolveBrowserRendererPlan({
       displayDegradeLevel: next,
       displayOptions,
       adaptive: {
         sharpnessScale: adaptive.sharpnessScale,
-        targetFpsBias: adaptive.targetFpsBias,
         preferredFormat: adaptive.preferredFormat,
         processingMode: adaptive.processingMode,
         shaderPreset: adaptive.shaderPreset,
         sharpenStrength: adaptive.sharpenStrength,
         digest: adaptive.digest,
       },
+      contentFpsClass: contentFps.contentFpsClass,
+      contentPresentFpsEstimate: contentFps.expected,
       pipelineOverride,
       webgl2Supported,
       visibilityBudgetActive,
@@ -2386,19 +2384,6 @@ export function createBrowserRuntime(options: {
     if (stats.transportPath !== undefined && stats.transportPath.trim() !== '') {
       latestTransportPath = stats.transportPath.trim()
     }
-    renderCause = resolveRenderCause(stats, expected)
-    runtimeProfileClassification = buildRuntimeProfileClassification({
-      targetType: spec.targetType,
-      transportPath: latestTransportPath,
-      stats,
-      nowMs: now,
-      connectedAtMs: connectedAt,
-      warmupUntilMs,
-      renderCause,
-      contentFpsClass,
-    })
-    effectiveFrontEndPolicy = resolveEffectiveFrontEndPolicy(runtimeProfileClassification)
-    renderDecisionDigest = buildRenderDecisionDigest(now)
     if (renderFrameEventsSinceLastSample > 0) {
       renderLastCallbackCountSinceLastSample = renderFrameEventsSinceLastSample
       renderLastCallbackGapCountSinceLastSample = renderCallbackGapCountSinceLastSample
@@ -2438,6 +2423,19 @@ export function createBrowserRuntime(options: {
       renderMaxCallbackIntervalMsSinceLastSample = undefined
       renderMaxPresentedFramesDeltaSinceLastSample = undefined
     }
+    renderCause = resolveRenderCause(stats, expected)
+    runtimeProfileClassification = buildRuntimeProfileClassification({
+      targetType: spec.targetType,
+      transportPath: latestTransportPath,
+      stats,
+      nowMs: now,
+      connectedAtMs: connectedAt,
+      warmupUntilMs,
+      renderCause,
+      contentFpsClass,
+    })
+    effectiveFrontEndPolicy = resolveEffectiveFrontEndPolicy(runtimeProfileClassification)
+    renderDecisionDigest = buildRenderDecisionDigest(now)
     recordRuntimeTraceEvent('renderCauseClassified', {
       cause: renderCause,
       renderDecisionDigest,
@@ -3516,7 +3514,16 @@ export function createBrowserRuntime(options: {
           ? 'fsr1'
           : undefined,
         renderSuperResolutionConfiguredTarget: srState.outputFrozen?.configuredTier,
-        renderSuperResolutionOutputTarget: srState.outputFrozen?.outputTier,
+        renderSuperResolutionOutputTarget: (() => {
+          const effectiveSr = plan?.sr
+          if (effectiveSr !== undefined) {
+            return resolveSuperResolutionOutputTierLabelFromDimensions(
+              effectiveSr.outputWidth,
+              effectiveSr.outputHeight,
+            )
+          }
+          return srState.outputFrozen?.outputTier
+        })(),
         renderSuperResolutionRcasStops: resolveSuperResolutionIntent()
           ? srState.rcasStopsEffective
           : undefined,

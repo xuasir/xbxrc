@@ -9,6 +9,7 @@ import {
   resolveBrowserRendererPlan,
   resolveDynamicSuperResolutionRcasStops,
   resolvePipelineOverrideFromRenderPreference,
+  resolveRendererPresentTargetFps,
   resolveSuperResolutionUserIntent,
   toRendererFormat,
 } from './browser-render-policy'
@@ -35,7 +36,6 @@ function baseInput(over: Partial<BrowserRendererPolicyInput> = {}): BrowserRende
     displayOptions: { sharpness: 4, brightness: 1, contrast: 1, saturation: 1 },
     adaptive: {
       sharpnessScale: 1,
-      targetFpsBias: 0,
       preferredFormat: 'Contain',
       processingMode: 'quality',
       shaderPreset: 'clarityL2',
@@ -90,6 +90,41 @@ describe('toRendererFormat', () => {
     expect(toRendererFormat(undefined)).toBe('Contain')
     expect(toRendererFormat('Stretch')).toBe('Stretch')
     expect(toRendererFormat('Zoom')).toBe('Zoom')
+  })
+})
+
+describe('resolveRendererPresentTargetFps', () => {
+  it('returns 0 under visibility budget', () => {
+    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: true })).toBe(0)
+  })
+
+  it('maps 30fps content to 30 present budget', () => {
+    expect(resolveRendererPresentTargetFps({
+      visibilityBudgetActive: false,
+      contentFpsClass: 'content30',
+    })).toBe(30)
+    expect(resolveRendererPresentTargetFps({
+      visibilityBudgetActive: false,
+      contentPresentFpsEstimate: 30,
+    })).toBe(30)
+  })
+
+  it('maps 60fps content to 60 present budget', () => {
+    expect(resolveRendererPresentTargetFps({
+      visibilityBudgetActive: false,
+      contentFpsClass: 'content60',
+    })).toBe(60)
+    expect(resolveRendererPresentTargetFps({
+      visibilityBudgetActive: false,
+      contentPresentFpsEstimate: 60,
+    })).toBe(60)
+  })
+
+  it('defaults unknown content to 60', () => {
+    expect(resolveRendererPresentTargetFps({
+      visibilityBudgetActive: false,
+      contentFpsClass: 'contentUnknown',
+    })).toBe(60)
   })
 })
 
@@ -167,6 +202,22 @@ describe('resolveBrowserRendererPlan', () => {
     const plan = resolveBrowserRendererPlan(baseInput({ visibilityBudgetActive: true }))
     expect(plan.targetFps).toBe(0)
     expect(planToRendererRuntimeConfigPatch(plan).targetFps).toBe(0)
+  })
+
+  it('sets targetFps to 30 for 30fps content class', () => {
+    const plan = resolveBrowserRendererPlan(baseInput({
+      contentFpsClass: 'content30',
+      contentPresentFpsEstimate: 30,
+    }))
+    expect(plan.targetFps).toBe(30)
+  })
+
+  it('sets targetFps to 60 for 60fps content class', () => {
+    const plan = resolveBrowserRendererPlan(baseInput({
+      contentFpsClass: 'content60',
+      contentPresentFpsEstimate: 60,
+    }))
+    expect(plan.targetFps).toBe(60)
   })
 
   it('uses USM on displayL1', () => {
@@ -287,6 +338,43 @@ describe('resolveBrowserRendererPlan', () => {
       sourceWidth: 1920,
       sourceHeight: 1080,
     })
+  })
+
+  it('clamps webgl2_sr output to presentTarget display budget on fullscreen high-dpr paths', () => {
+    const tier: SuperResolutionTierPlan = {
+      configuredTier: '1440p',
+      actualSourceTier: '1080p',
+      outputTier: '1440p',
+      outputWidth: 2560,
+      outputHeight: 1440,
+    }
+    const plan = resolveBrowserRendererPlan(baseInput({
+      superResolutionExperimental: true,
+      superResolutionUserIntent: true,
+      displayDegradeLevel: 'displayL1',
+      superResolutionTierPlan: tier,
+      displayContext: {
+        containerWidthCss: 1920,
+        containerHeightCss: 1200,
+        devicePixelRatio: 2,
+        refreshRateHz: 60,
+        fullscreen: true,
+        configuredWidth: 1920,
+        configuredHeight: 1080,
+        sourceWidth: 1920,
+        sourceHeight: 1080,
+      },
+    })) as ReturnType<typeof resolveBrowserRendererPlan> & {
+      presentTarget?: { outputWidth: number, outputHeight: number }
+      sr?: { outputWidth: number, outputHeight: number }
+    }
+
+    expect(plan.presentTarget).toBeDefined()
+    expect(plan.sr).toBeDefined()
+    expect(plan.sr!.outputWidth).toBeLessThanOrEqual(plan.presentTarget!.outputWidth)
+    expect(plan.sr!.outputHeight).toBeLessThanOrEqual(plan.presentTarget!.outputHeight)
+    expect(plan.sr!.outputWidth).toBe(1920)
+    expect(plan.sr!.outputHeight).toBe(1080)
   })
 
   it('caps present target output on high-dpr display-constrained paths', () => {
