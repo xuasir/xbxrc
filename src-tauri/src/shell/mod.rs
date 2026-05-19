@@ -212,6 +212,7 @@ pub fn schedule_gamepad_cold_start_sdl_binding_nudge(app: &AppHandle) {
 
             if phase_index == 0 {
                 request_main_window_focus_for_input_stack(&app, "cold-start-sdl-binding-nudge");
+                input_gate::sync_gamepad_input_gate(&app);
                 if let Err(error) = state.gamepad.set_sampling_lifecycle(
                     ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
                 ) {
@@ -237,12 +238,7 @@ pub fn schedule_gamepad_cold_start_sdl_binding_nudge(app: &AppHandle) {
                     );
                 }
 
-                if let Err(error) = state.gamepad.resume_shell_sampling() {
-                    log::warn!(
-                        "gamepad_cold_start_sdl_binding_nudge resume_shell_sampling failed error={}",
-                        error
-                    );
-                }
+                refresh_gamepad_on_window_foreground(&app, "cold-start-sdl-binding-nudge");
             }
 
             if let Ok(snapshot) = state.gamepad.get_runtime_snapshot() {
@@ -363,7 +359,7 @@ fn should_auto_promote_background_warm(
     snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
     visible: bool,
     minimized: bool,
-    focused: bool,
+    shell_app_active: bool,
     last_background_warm_progress_promoted_at_ms: u64,
 ) -> bool {
     snapshot.sampling_lifecycle
@@ -372,7 +368,7 @@ fn should_auto_promote_background_warm(
         && snapshot.last_sample_progress_at_ms > last_background_warm_progress_promoted_at_ms
         && visible
         && !minimized
-        && focused
+        && shell_app_active
 }
 
 #[cfg(any(test, target_os = "windows"))]
@@ -438,6 +434,8 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
 
     bind_background_tasks(app.handle(), &state).await?;
     input_gate::sync_gamepad_input_gate(app.handle());
+    #[cfg(target_os = "windows")]
+    refresh_gamepad_on_window_foreground(app.handle(), "shell-init");
     match state.gamepad.activate_sampling() {
         Ok(snapshot) => {
             trace_gamepad_runtime_snapshot(
@@ -853,12 +851,13 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 if let Some(window) = app_handle_gamepad.get_webview_window("main") {
                     let visible = window.is_visible().unwrap_or(false);
                     let minimized = window.is_minimized().unwrap_or(false);
-                    let focused = window.is_focused().unwrap_or(false);
+                    let shell_app_active =
+                        input_gate::current_shell_window_gate_hints(&window).shell_app_active;
                     if should_auto_promote_background_warm(
                         &snapshot,
                         visible,
                         minimized,
-                        focused,
+                        shell_app_active,
                         last_background_warm_progress_promoted_at_ms,
                     ) {
                         last_background_warm_progress_promoted_at_ms =
@@ -871,17 +870,21 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                                 "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
                                 "visible": visible,
                                 "minimized": minimized,
-                                "focused": focused,
+                                "shellAppActive": shell_app_active,
                             }),
                         );
                         let promote_result = gamepad_provider
                             .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
                         if promote_result.is_ok() {
-                            // `WindowEvent::Focused(true)` 在部分 Windows/WebView2 回焦路径上可能缺失；
-                            // 此处已与 `should_auto_promote_background_warm` 共用同一 `is_focused()` 判定，
-                            // 升 Active 成功后必须把门控焦点位对齐，否则 `input_gate` 永久 Closed。
-                            input_gate::record_shell_main_window_focused_from_os_event(true);
+                            // FSE 下 `WindowEvent::Focused(true)` 可能缺失；promote 与 gate 共用 foreground hints。
+                            if shell_app_active {
+                                input_gate::record_shell_main_window_focused_from_os_event(true);
+                            }
                             input_gate::sync_gamepad_input_gate(&app_handle_gamepad);
+                            refresh_gamepad_on_window_foreground(
+                                &app_handle_gamepad,
+                                "background-warm-progress-auto-promote",
+                            );
                         }
                     }
                 }
@@ -1004,7 +1007,7 @@ mod tests {
     }
 
     #[test]
-    fn background_warm_auto_promote_requires_window_focus() {
+    fn background_warm_auto_promote_requires_shell_app_active() {
         let snapshot = OhMyGamepadRuntimeSnapshotDto {
             sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
             last_sample_progress_at_ms: 1284,

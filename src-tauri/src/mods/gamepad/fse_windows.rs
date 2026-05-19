@@ -142,6 +142,28 @@ pub fn init_fse_monitor(app: &AppHandle) {
         "fse_windows monitor registered active={}",
         FSE_ACTIVE.load(Ordering::Relaxed)
     );
+    schedule_fse_cold_start_foreground_resync(app);
+}
+
+/// FSE 已在启动前激活时，change notification 不会触发；短时重读 foreground 并刷新 gate/采样。
+fn schedule_fse_cold_start_foreground_resync(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        const PHASE_DELAYS_MS: [(u32, u64); 3] = [(0, 0), (1, 250), (2, 1000)];
+        for (phase_index, delay_ms) in PHASE_DELAYS_MS {
+            if delay_ms > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            }
+            if !is_fse_active() {
+                continue;
+            }
+            sync_gamepad_input_gate(&app);
+            refresh_gamepad_on_window_foreground(
+                &app,
+                &format!("fse-cold-start-foreground-resync-{phase_index}"),
+            );
+        }
+    });
 }
 
 pub fn shutdown_fse_monitor() {

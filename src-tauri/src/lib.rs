@@ -88,7 +88,10 @@ pub fn run() {
             }
             let visible = webview.window().is_visible().unwrap_or(false);
             let minimized = webview.window().is_minimized().unwrap_or(false);
-            mods::gamepad::input_gate::sync_gamepad_input_gate(&webview.window().app_handle());
+            shell::refresh_gamepad_on_window_foreground(
+                &webview.window().app_handle(),
+                "page-load",
+            );
             if visible && !minimized {
                 #[cfg(target_os = "windows")]
                 shell::schedule_gamepad_cold_start_sdl_binding_nudge(
