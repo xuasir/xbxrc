@@ -4,6 +4,23 @@ use xbxengine::{
     WindowsD3d11TextureDescriptor, XbxEngineRenderFrame, XbxEngineRenderPixelData,
 };
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NativeVideoDisplayState {
+    pub video_format: Option<String>,
+}
+
+impl NativeVideoDisplayState {
+    pub fn from_video_format(video_format: Option<&str>) -> Self {
+        let normalized = video_format
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        Self {
+            video_format: normalized,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VideoPlatformKind {
     MacOs,

@@ -33,6 +33,7 @@ export interface XbxEngineDisplayOptionsDto {
 }
 
 export interface XbxEngineDisplayStateDto {
+  video_format?: string | null
   display_options: XbxEngineDisplayOptionsDto
 }
 

@@ -18,7 +18,7 @@ use xbxengine_protocol::{
 };
 
 use crate::error::{AppError, AppResult};
-use crate::mods::native_video::NativeVideoRegistryRef;
+use crate::mods::native_video::{NativeVideoDisplayState, NativeVideoRegistryRef};
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
@@ -810,6 +810,32 @@ impl TauriXbxEngineHostBridge {
         Ok(())
     }
 
+    fn apply_native_display_state(
+        &self,
+        viewport_id: &str,
+        state: &xbxengine_protocol::XbxEngineDisplayStateDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineNativeVideoRegistryLockFailed",
+            ));
+        };
+        registry.apply_display_state(
+            viewport_id,
+            NativeVideoDisplayState::from_video_format(state.video_format.as_deref()),
+        );
+        self.runtime_trace.record_state(
+            "xbxengine-host",
+            "nativeDisplayStateApplied",
+            None,
+            serde_json::json!({
+                "viewportId": viewport_id,
+                "videoFormat": state.video_format.clone(),
+            }),
+        );
+        Ok(())
+    }
+
     fn reset_native_presenter_for_host_stall(
         &self,
         viewport_id: &str,
@@ -857,6 +883,17 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
         frame: &xbxengine::XbxEngineRenderFrame,
     ) -> Result<(), XbxEngineRuntimeError> {
         self.present_native_frame(&viewport.viewport_id, surface_id, frame)
+    }
+
+    fn apply_display_state(
+        &mut self,
+        viewport: Option<&xbxengine_protocol::XbxEngineViewportDto>,
+        state: &xbxengine_protocol::XbxEngineDisplayStateDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Some(viewport) = viewport else {
+            return Ok(());
+        };
+        self.apply_native_display_state(&viewport.viewport_id, state)
     }
 
     fn reset_native_video_presenter_for_host_stall(

@@ -194,6 +194,7 @@ export function createXbxEngineRuntime(options: {
     applyDisplayState(state: RuntimeDisplayState) {
       void rpc.xbxEngine.applyDisplayState({
         state: {
+          video_format: state.render.videoFormat ?? null,
           display_options: {
             sharpness: state.displayOptions.sharpness,
             saturation: state.displayOptions.saturation,

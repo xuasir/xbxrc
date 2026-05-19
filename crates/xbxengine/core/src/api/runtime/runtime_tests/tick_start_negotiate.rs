@@ -657,6 +657,7 @@ fn start_runtime_control_consumes_execution_spec() {
     assert_eq!(
         runtime.snapshot().display_state,
         Some(XbxEngineDisplayStateDto {
+            video_format: Some("nv12".to_string()),
             display_options: XbxEngineDisplayOptionsDto {
                 sharpness: 1.1,
                 saturation: 1.2,
@@ -665,6 +666,9 @@ fn start_runtime_control_consumes_execution_spec() {
             },
         })
     );
+    let display_state_json = serde_json::to_value(runtime.snapshot().display_state.clone())
+        .expect("display state should serialize");
+    assert_eq!(display_state_json["video_format"], "nv12");
 }
 
 #[test]
@@ -1020,6 +1024,7 @@ fn control_commands_update_local_runtime_snapshot() {
     runtime
         .apply_control(XbxEngineControlCommandDto::ApplyDisplayState {
             state: XbxEngineDisplayStateDto {
+                video_format: Some("Zoom".to_string()),
                 display_options: XbxEngineDisplayOptionsDto {
                     sharpness: 1.0,
                     saturation: 1.1,
@@ -1059,6 +1064,9 @@ fn control_commands_update_local_runtime_snapshot() {
             viewport_id: "viewport-1".to_string(),
         })
     );
+    let display_state_json = serde_json::to_value(runtime.snapshot().display_state.clone())
+        .expect("display state should serialize");
+    assert_eq!(display_state_json["video_format"], "Zoom");
     assert_eq!(
         runtime.snapshot().last_pressed_controller_button,
         Some(("nexus".to_string(), 120))
@@ -1067,6 +1075,55 @@ fn control_commands_update_local_runtime_snapshot() {
         runtime.snapshot().last_keyboard_pointer_event,
         Some(XbxEngineInputEventDto::Keyboard { .. })
     ));
+}
+
+#[test]
+fn display_state_control_is_forwarded_to_host_bridge_and_reapplied_on_attach() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let host_bridge = TestHostBridge::new(requests);
+    let applied_display_states = host_bridge.applied_display_states.clone();
+    let mut runtime = XbxEngineRuntime::new(
+        XbxEngineRuntimeConfig::default(),
+        host_bridge,
+        TestEventSink::new(events),
+    );
+    let display_state = XbxEngineDisplayStateDto {
+        video_format: Some("Zoom".to_string()),
+        display_options: XbxEngineDisplayOptionsDto {
+            sharpness: 1.0,
+            saturation: 1.1,
+            contrast: 1.2,
+            brightness: 1.3,
+        },
+    };
+
+    runtime
+        .apply_control(XbxEngineControlCommandDto::AttachViewport {
+            viewport: viewport(),
+        })
+        .expect("viewport attach should succeed");
+    runtime
+        .apply_control(XbxEngineControlCommandDto::ApplyDisplayState {
+            state: display_state.clone(),
+        })
+        .expect("display state update should succeed");
+    runtime
+        .apply_control(XbxEngineControlCommandDto::DetachViewport)
+        .expect("viewport detach should succeed");
+    runtime
+        .apply_control(XbxEngineControlCommandDto::AttachViewport {
+            viewport: viewport(),
+        })
+        .expect("viewport reattach should succeed");
+
+    assert_eq!(
+        applied_display_states.borrow().as_slice(),
+        &[
+            (Some("viewport-1".to_string()), display_state.clone()),
+            (Some("viewport-1".to_string()), display_state),
+        ]
+    );
 }
 
 #[test]

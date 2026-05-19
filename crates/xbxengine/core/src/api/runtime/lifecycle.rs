@@ -738,6 +738,10 @@ where
                 self.host_bridge
                     .attach_viewport(&viewport, self.snapshot.surface_id.as_deref())?;
                 self.snapshot.viewport = Some(viewport);
+                if let Some(display_state) = self.snapshot.display_state.as_ref() {
+                    self.host_bridge
+                        .apply_display_state(self.snapshot.viewport.as_ref(), display_state)?;
+                }
                 Ok(())
             }
             XbxEngineControlCommandDto::DetachViewport => {
@@ -752,6 +756,8 @@ where
             }
             XbxEngineControlCommandDto::ApplyDisplayState { state } => {
                 self.media_backend.apply_display_state(state.clone())?;
+                self.host_bridge
+                    .apply_display_state(self.snapshot.viewport.as_ref(), &state)?;
                 self.snapshot.display_state = Some(state);
                 Ok(())
             }
@@ -898,10 +904,13 @@ where
 
         if let Some(render) = render {
             let display_state = XbxEngineDisplayStateDto {
+                video_format: render.video_format.clone(),
                 display_options: render.display_options.clone(),
             };
             self.media_backend
                 .apply_display_state(display_state.clone())?;
+            self.host_bridge
+                .apply_display_state(self.snapshot.viewport.as_ref(), &display_state)?;
             self.snapshot.display_state = Some(display_state);
         }
 

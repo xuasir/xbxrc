@@ -25,7 +25,7 @@ use super::{
 };
 use super::{
     now_ms_f64, record_native_video_timing_event_lazy, record_native_video_trace,
-    NativeVideoViewportState,
+    NativeVideoDisplayState, NativeVideoViewportState,
 };
 #[cfg(target_os = "windows")]
 use super::{HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS};
@@ -85,6 +85,7 @@ pub(super) trait NativeVideoPresenter: Send {
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool;
     fn detach(&mut self);
     fn begin_media_epoch(&mut self) {}
+    fn apply_display_state(&mut self, _state: &NativeVideoDisplayState) {}
     fn apply_viewport_diagnostics(&self, _viewport: &mut NativeVideoViewportState) {}
     fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
         Vec::new()
@@ -98,6 +99,8 @@ pub(super) struct NoopVideoPresenter {
     window_label: String,
     #[allow(dead_code)]
     surface_id: Option<String>,
+    #[allow(dead_code)]
+    display_state: NativeVideoDisplayState,
 }
 
 impl NoopVideoPresenter {
@@ -106,6 +109,7 @@ impl NoopVideoPresenter {
             viewport_id: viewport_id.to_string(),
             window_label: window_label.to_string(),
             surface_id: None,
+            display_state: NativeVideoDisplayState::default(),
         }
     }
 }
@@ -128,6 +132,10 @@ impl NativeVideoPresenter for NoopVideoPresenter {
 
     fn detach(&mut self) {
         self.surface_id = None;
+    }
+
+    fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {
+        self.display_state = state.clone();
     }
 }
 
@@ -177,6 +185,7 @@ pub(super) struct WindowsWgpuPresenter {
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
+    display_state: NativeVideoDisplayState,
 }
 
 #[cfg(target_os = "windows")]
@@ -198,6 +207,7 @@ impl WindowsWgpuPresenter {
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runtime_trace,
+            display_state: NativeVideoDisplayState::default(),
         }
     }
 
@@ -323,6 +333,10 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
             telemetry.reset_frame_slot();
         }
         self.render_loop_pending.store(false, Ordering::Relaxed);
+    }
+
+    fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {
+        self.display_state = state.clone();
     }
 
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool {
@@ -765,6 +779,7 @@ pub(super) struct MacOsWgpuPresenter {
     render_loop_rerun_requested: Arc<std::sync::atomic::AtomicBool>,
     display_link: Option<MacOsDisplayLinkHandle>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
+    display_state: NativeVideoDisplayState,
 }
 
 #[cfg(target_os = "macos")]
@@ -788,6 +803,7 @@ impl MacOsWgpuPresenter {
             render_loop_rerun_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             display_link: None,
             runtime_trace,
+            display_state: NativeVideoDisplayState::default(),
         }
     }
 
@@ -953,6 +969,10 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
             &self.render_loop_pending,
             &self.render_loop_rerun_requested,
         );
+    }
+
+    fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {
+        self.display_state = state.clone();
     }
 
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool {
@@ -1266,6 +1286,7 @@ pub(super) struct MacOsVideoPresenter {
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
     display_link: Option<MacOsLayerDisplayLinkHandle>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
+    display_state: NativeVideoDisplayState,
 }
 
 #[cfg(target_os = "macos")]
@@ -1288,6 +1309,7 @@ impl MacOsVideoPresenter {
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             display_link: None,
             runtime_trace,
+            display_state: NativeVideoDisplayState::default(),
         }
     }
 
@@ -1456,11 +1478,37 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         self.render_loop_pending.store(false, Ordering::Relaxed);
     }
 
+    fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {
+        self.display_state = state.clone();
+        if let Ok(mut layer_state) = self.layer_state.lock() {
+            layer_state.display_state = state.clone();
+            layer_state.layout_dirty = true;
+        }
+        self.ensure_layer_ready_on_main_thread();
+    }
+
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool {
         self.surface_id = surface_id
             .map(str::to_string)
             .or_else(|| self.surface_id.clone());
         self.ensure_render_loop();
+        let source_size = Some((frame.width, frame.height));
+        let should_refresh_layout = self
+            .layer_state
+            .lock()
+            .ok()
+            .map(|mut layer_state| {
+                let changed = layer_state.latest_source_size != source_size;
+                layer_state.latest_source_size = source_size;
+                if changed {
+                    layer_state.layout_dirty = true;
+                }
+                changed
+            })
+            .unwrap_or(false);
+        if should_refresh_layout {
+            self.ensure_layer_ready_on_main_thread();
+        }
         if !frame_has_cv_pixelbuffer(frame) {
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),

@@ -1,9 +1,10 @@
 use super::{
     clear_host_present_tick_dispatch, finish_host_present_tick_dispatch,
     request_host_present_tick_dispatch, reset_viewport_present_runtime_state,
-    resolve_host_timing_record_policy, should_emit_sampled_host_timing, should_reattach_viewport,
-    should_update_scale, HostTimingRecordPolicy, MacOsWgpuTelemetry, NativeVideoRegistry,
-    NativeVideoViewportState,
+    resolve_display_layer_layout, resolve_host_timing_record_policy,
+    should_emit_sampled_host_timing, should_reattach_viewport, should_update_scale,
+    HostTimingRecordPolicy, MacOsDisplayLayerGravity, MacOsWgpuTelemetry, NativeVideoDisplayState,
+    NativeVideoRegistry, NativeVideoViewportState,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -22,6 +23,35 @@ fn scale_update_detects_real_change() {
 fn scale_update_detects_presence_change() {
     assert!(should_update_scale(None, Some(2.0)));
     assert!(should_update_scale(Some(2.0), None));
+}
+
+#[test]
+fn display_layer_layout_stretches_to_full_bounds_for_stretch() {
+    let layout = resolve_display_layer_layout([0.0, 0.0, 1920.0, 1080.0], Some("Stretch"), None);
+    assert_eq!(layout.frame, [0.0, 0.0, 1920.0, 1080.0]);
+    assert_eq!(layout.gravity, MacOsDisplayLayerGravity::Resize);
+}
+
+#[test]
+fn display_layer_layout_uses_fixed_ratio_box_for_aspect_formats() {
+    let layout =
+        resolve_display_layer_layout([0.0, 0.0, 1920.0, 1080.0], Some("4:3"), Some((1280, 720)));
+    assert_eq!(layout.frame, [240.0, 0.0, 1440.0, 1080.0]);
+    assert_eq!(layout.gravity, MacOsDisplayLayerGravity::Resize);
+}
+
+#[test]
+fn registry_persists_display_state_for_future_presenter_attach() {
+    let mut registry = NativeVideoRegistry::default();
+    registry.apply_display_state(
+        "stream-page-video",
+        NativeVideoDisplayState::from_video_format(Some("Zoom")),
+    );
+
+    let viewport = registry
+        .snapshot("stream-page-video")
+        .expect("viewport should exist");
+    assert_eq!(viewport.video_format.as_deref(), Some("Zoom"));
 }
 
 #[test]

@@ -301,6 +301,14 @@ pub trait XbxEngineHostBridge {
         Ok(())
     }
 
+    fn apply_display_state(
+        &mut self,
+        _viewport: Option<&XbxEngineViewportDto>,
+        _state: &XbxEngineDisplayStateDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
     /// Host present 停滞时由 runtime 触发：detach 本机 presenter，下一帧 `present_frame` 会重建。
     fn reset_native_video_presenter_for_host_stall(
         &mut self,

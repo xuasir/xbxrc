@@ -18,6 +18,8 @@ pub struct XbxEngineDisplayOptionsDto {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineDisplayStateDto {
+    #[serde(default)]
+    pub video_format: Option<String>,
     pub display_options: XbxEngineDisplayOptionsDto,
 }
 

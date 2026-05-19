@@ -34,6 +34,7 @@ use self::presenters::{MacOsVideoPresenter, MacOsWgpuPresenter};
 use self::scheduling::HostCadenceTelemetry;
 #[cfg(target_os = "macos")]
 use self::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameTakeOutcome};
+pub(crate) use self::types::NativeVideoDisplayState;
 use self::types::{
     DecodedVideoSurface, VideoEffectPipelineKind, VideoPlatformCapabilities, VideoPresenterMode,
 };
@@ -185,6 +186,7 @@ pub struct NativeVideoViewportState {
     pub viewport_id: String,
     pub window_label: Option<String>,
     pub surface_id: Option<String>,
+    pub video_format: Option<String>,
     pub latest_frame_seq: Option<u64>,
     pub latest_frame_width: Option<u32>,
     pub latest_frame_height: Option<u32>,
@@ -290,10 +292,37 @@ impl NativeVideoRegistry {
             Some(presenter) => presenter,
             None => return false,
         };
+        if let Some(display_state) =
+            self.viewports
+                .get(viewport_id)
+                .map(|viewport| NativeVideoDisplayState {
+                    video_format: viewport.video_format.clone(),
+                })
+        {
+            presenter.apply_display_state(&display_state);
+        }
         if attach_changed {
             presenter.attach(surface_id);
         }
         attach_changed
+    }
+
+    pub fn apply_display_state(
+        &mut self,
+        viewport_id: &str,
+        display_state: NativeVideoDisplayState,
+    ) {
+        let viewport = self
+            .viewports
+            .entry(viewport_id.to_string())
+            .or_insert_with(|| NativeVideoViewportState {
+                viewport_id: viewport_id.to_string(),
+                ..Default::default()
+            });
+        viewport.video_format = display_state.video_format.clone();
+        if let Some(presenter) = self.presenters.get_mut(viewport_id) {
+            presenter.apply_display_state(&display_state);
+        }
     }
 
     pub fn detach_viewport(&mut self, viewport_id: &str) {
@@ -389,6 +418,15 @@ impl NativeVideoRegistry {
             Some(presenter) => presenter,
             None => return false,
         };
+        if let Some(display_state) =
+            self.viewports
+                .get(viewport_id)
+                .map(|viewport| NativeVideoDisplayState {
+                    video_format: viewport.video_format.clone(),
+                })
+        {
+            presenter.apply_display_state(&display_state);
+        }
         let accepted = presenter.present(surface_id, frame);
         self.sync_presenter_diagnostics(viewport_id);
         accepted
@@ -745,11 +783,15 @@ impl Drop for PendingFlagGuard {
 #[cfg(target_os = "macos")]
 #[derive(Default)]
 pub(super) struct MacOsLayerState {
+    backing_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
     display_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
     first_present_logged: bool,
     cached_format_desc: Option<CachedFormatDescription>,
     last_layer_bounds: Option<[f64; 4]>,
     last_layer_scale: Option<f64>,
+    display_state: NativeVideoDisplayState,
+    latest_source_size: Option<(u32, u32)>,
+    layout_dirty: bool,
     display_layer_generation: u64,
     latest_display_layer_created_at_ms: Option<f64>,
 }
@@ -1678,7 +1720,7 @@ pub(super) fn ensure_display_layer(
     use objc2::runtime::{AnyClass, AnyObject};
     use objc2::{msg_send, rc::autoreleasepool};
     use objc2_app_kit::NSView;
-    use objc2_foundation::{NSRect, NSString};
+    use objc2_foundation::NSRect;
     use std::ffi::CStr;
 
     let ns_view_ptr = window.ns_view().ok()? as *mut AnyObject;
@@ -1689,6 +1731,7 @@ pub(super) fn ensure_display_layer(
             let bounds: NSRect = msg_send![view, bounds];
             let bounds_key = ns_rect_to_key(bounds);
             let bounds_changed = state.last_layer_bounds != Some(bounds_key);
+            let layout_dirty = state.layout_dirty;
             let ns_window: *mut AnyObject = msg_send![view, window];
             let mut scale_changed = false;
             if !ns_window.is_null() {
@@ -1696,20 +1739,25 @@ pub(super) fn ensure_display_layer(
                 scale_changed = should_update_scale(state.last_layer_scale, Some(scale_factor));
                 if scale_changed {
                     let _: () = msg_send![ptr, setContentsScale: scale_factor];
+                    if let Some(backing_layer_ptr) = state.backing_layer_ptr {
+                        let _: () = msg_send![backing_layer_ptr, setContentsScale: scale_factor];
+                    }
                     state.last_layer_scale = Some(scale_factor);
                 }
             }
             if bounds_changed {
-                let _: () = msg_send![ptr, setFrame: bounds];
                 state.last_layer_bounds = Some(bounds_key);
             }
-            if scale_changed || bounds_changed {
+            apply_display_layer_layout(ptr, state.backing_layer_ptr, state, bounds);
+            if scale_changed || bounds_changed || layout_dirty {
                 let _: () = msg_send![ptr, setNeedsLayout];
                 record_native_video_trace(
                     "layout_updated",
                     json!({
                         "scaleChanged": scale_changed,
                         "boundsChanged": bounds_changed,
+                        "layoutDirty": layout_dirty,
+                        "videoFormat": state.display_state.video_format.clone(),
                         "windowLabel": window.label(),
                     }),
                 );
@@ -1724,6 +1772,18 @@ pub(super) fn ensure_display_layer(
         if view_layer.is_null() {
             return;
         }
+        let backing_class_name = match CStr::from_bytes_with_nul(b"CALayer\0") {
+            Ok(name) => name,
+            Err(_) => return,
+        };
+        let Some(backing_layer_class) = AnyClass::get(backing_class_name) else {
+            return;
+        };
+        let backing_layer: *mut AnyObject = msg_send![backing_layer_class, alloc];
+        let backing_layer: *mut AnyObject = msg_send![backing_layer, init];
+        if backing_layer.is_null() {
+            return;
+        }
         let class_name = match CStr::from_bytes_with_nul(b"AVSampleBufferDisplayLayer\0") {
             Ok(name) => name,
             Err(_) => return,
@@ -1735,27 +1795,46 @@ pub(super) fn ensure_display_layer(
         let layer: *mut AnyObject = msg_send![layer_class, alloc];
         let layer: *mut AnyObject = msg_send![layer, init];
         if layer.is_null() {
+            let _: () = msg_send![backing_layer, release];
             return;
         }
-
-        let gravity = NSString::from_str("AVLayerVideoGravityResizeAspect");
-        let gravity_ref: &NSString = gravity.as_ref();
-        let _: () = msg_send![layer, setVideoGravity: gravity_ref];
+        let color_class_name = match CStr::from_bytes_with_nul(b"NSColor\0") {
+            Ok(name) => name,
+            Err(_) => {
+                let _: () = msg_send![layer, release];
+                let _: () = msg_send![backing_layer, release];
+                return;
+            }
+        };
+        let Some(color_class) = AnyClass::get(color_class_name) else {
+            let _: () = msg_send![layer, release];
+            let _: () = msg_send![backing_layer, release];
+            return;
+        };
+        let black_color: *mut AnyObject = msg_send![color_class, blackColor];
+        if !black_color.is_null() {
+            let background_color: *mut std::ffi::c_void = msg_send![black_color, CGColor];
+            let _: () = msg_send![backing_layer, setBackgroundColor: background_color];
+        }
 
         let ns_window: *mut AnyObject = msg_send![view, window];
         if !ns_window.is_null() {
             let scale_factor: f64 = msg_send![ns_window, backingScaleFactor];
             let _: () = msg_send![layer, setContentsScale: scale_factor];
+            let _: () = msg_send![backing_layer, setContentsScale: scale_factor];
             let _: () = msg_send![view_layer, setContentsScale: scale_factor];
             state.last_layer_scale = Some(scale_factor);
         }
 
         let bounds: NSRect = msg_send![view, bounds];
-        let _: () = msg_send![layer, setFrame: bounds];
+        let _: () = msg_send![backing_layer, setFrame: bounds];
         // 视频层强制插到底部，webview 透明后即可在其上方继续承载菜单与面板。
-        let _: () = msg_send![view_layer, insertSublayer: layer, atIndex: 0usize];
+        let _: () = msg_send![view_layer, insertSublayer: backing_layer, atIndex: 0usize];
+        let _: () = msg_send![view_layer, insertSublayer: layer, atIndex: 1usize];
+        apply_display_layer_layout(layer, Some(backing_layer), state, bounds);
         let _: () = msg_send![layer, setNeedsLayout];
 
+        state.backing_layer_ptr = Some(backing_layer);
         state.display_layer_ptr = Some(layer);
         state.last_layer_bounds = Some(ns_rect_to_key(bounds));
         state.display_layer_generation = state.display_layer_generation.saturating_add(1);
@@ -1765,6 +1844,7 @@ pub(super) fn ensure_display_layer(
             json!({
                 "windowLabel": window.label(),
                 "displayLayerGeneration": state.display_layer_generation,
+                "videoFormat": state.display_state.video_format.clone(),
             }),
         );
     });
@@ -1781,9 +1861,12 @@ pub(super) fn drop_display_layer(window: &Window, state: &mut MacOsLayerState) {
     let Some(layer_ptr) = state.display_layer_ptr.take() else {
         return;
     };
+    let backing_layer_ptr = state.backing_layer_ptr.take();
     state.cached_format_desc = None;
     state.last_layer_bounds = None;
     state.last_layer_scale = None;
+    state.latest_source_size = None;
+    state.layout_dirty = false;
     let ns_view_ptr = match window.ns_view() {
         Ok(ptr) => ptr as *mut AnyObject,
         Err(_) => return,
@@ -1793,6 +1876,10 @@ pub(super) fn drop_display_layer(window: &Window, state: &mut MacOsLayerState) {
     autoreleasepool(|_| unsafe {
         let _: () = msg_send![layer_ptr, removeFromSuperlayer];
         let _: () = msg_send![layer_ptr, release];
+        if let Some(backing_layer_ptr) = backing_layer_ptr {
+            let _: () = msg_send![backing_layer_ptr, removeFromSuperlayer];
+            let _: () = msg_send![backing_layer_ptr, release];
+        }
         let _: () = msg_send![view, setNeedsDisplay: true];
     });
 }
@@ -2353,6 +2440,146 @@ fn ns_rect_to_key(rect: objc2_foundation::NSRect) -> [f64; 4] {
         rect.size.width as f64,
         rect.size.height as f64,
     ]
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MacOsDisplayLayerGravity {
+    ResizeAspect,
+    ResizeAspectFill,
+    Resize,
+}
+
+#[cfg(target_os = "macos")]
+impl MacOsDisplayLayerGravity {
+    fn as_ns_string(self) -> &'static str {
+        match self {
+            Self::ResizeAspect => "AVLayerVideoGravityResizeAspect",
+            Self::ResizeAspectFill => "AVLayerVideoGravityResizeAspectFill",
+            Self::Resize => "AVLayerVideoGravityResize",
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MacOsDisplayLayerLayout {
+    frame: [f64; 4],
+    gravity: MacOsDisplayLayerGravity,
+}
+
+#[cfg(target_os = "macos")]
+fn parse_aspect_ratio(video_format: Option<&str>) -> Option<(f64, f64)> {
+    let value = video_format?.trim();
+    let mut parts = value.split(':');
+    let width = parts.next()?.trim().parse::<f64>().ok()?;
+    let height = parts.next()?.trim().parse::<f64>().ok()?;
+    if parts.next().is_some()
+        || !width.is_finite()
+        || !height.is_finite()
+        || width <= 0.0
+        || height <= 0.0
+    {
+        return None;
+    }
+    Some((width, height))
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_display_layer_layout(
+    bounds: [f64; 4],
+    video_format: Option<&str>,
+    source_size: Option<(u32, u32)>,
+) -> MacOsDisplayLayerLayout {
+    let container_width = bounds[2].max(1.0);
+    let container_height = bounds[3].max(1.0);
+    let normalized_format = video_format
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if normalized_format == Some("Stretch") {
+        return MacOsDisplayLayerLayout {
+            frame: bounds,
+            gravity: MacOsDisplayLayerGravity::Resize,
+        };
+    }
+    if normalized_format == Some("Zoom") {
+        return MacOsDisplayLayerLayout {
+            frame: bounds,
+            gravity: MacOsDisplayLayerGravity::ResizeAspectFill,
+        };
+    }
+
+    let (video_ratio, gravity) =
+        if let Some((width_ratio, height_ratio)) = parse_aspect_ratio(normalized_format) {
+            let gravity = if normalized_format == Some("16:9") {
+                MacOsDisplayLayerGravity::ResizeAspect
+            } else {
+                MacOsDisplayLayerGravity::Resize
+            };
+            (width_ratio / height_ratio, gravity)
+        } else if let Some((source_width, source_height)) =
+            source_size.filter(|(width, height)| *width > 0 && *height > 0)
+        {
+            (
+                source_width as f64 / source_height as f64,
+                MacOsDisplayLayerGravity::ResizeAspect,
+            )
+        } else {
+            (
+                container_width / container_height,
+                MacOsDisplayLayerGravity::ResizeAspect,
+            )
+        };
+
+    let container_ratio = container_width / container_height;
+    let (width, height) = if container_ratio > video_ratio {
+        let height = container_height;
+        (height * video_ratio, height)
+    } else {
+        let width = container_width;
+        (width, width / video_ratio)
+    };
+    let width = width.min(container_width).max(1.0);
+    let height = height.min(container_height).max(1.0);
+    let x = bounds[0] + ((container_width - width) / 2.0);
+    let y = bounds[1] + ((container_height - height) / 2.0);
+
+    MacOsDisplayLayerLayout {
+        frame: [x, y, width, height],
+        gravity,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn apply_display_layer_layout(
+    display_layer_ptr: *mut objc2::runtime::AnyObject,
+    backing_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
+    state: &mut MacOsLayerState,
+    bounds: objc2_foundation::NSRect,
+) {
+    use objc2::msg_send;
+    use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+
+    unsafe {
+        if let Some(backing_layer_ptr) = backing_layer_ptr {
+            let _: () = msg_send![backing_layer_ptr, setFrame: bounds];
+        }
+        let layout = resolve_display_layer_layout(
+            ns_rect_to_key(bounds),
+            state.display_state.video_format.as_deref(),
+            state.latest_source_size,
+        );
+        let gravity = NSString::from_str(layout.gravity.as_ns_string());
+        let gravity_ref: &NSString = gravity.as_ref();
+        let _: () = msg_send![display_layer_ptr, setVideoGravity: gravity_ref];
+        let frame = NSRect {
+            origin: NSPoint::new(layout.frame[0], layout.frame[1]),
+            size: NSSize::new(layout.frame[2], layout.frame[3]),
+        };
+        let _: () = msg_send![display_layer_ptr, setFrame: frame];
+    }
+    state.layout_dirty = false;
 }
 
 #[cfg(target_os = "macos")]

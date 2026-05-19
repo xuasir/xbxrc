@@ -58,6 +58,7 @@ pub(crate) struct TestHostBridge {
     pub(crate) requests: Rc<RefCell<Vec<XbxEngineHostRequestDto>>>,
     pub(crate) attached_viewports: Rc<RefCell<Vec<(String, Option<String>)>>>,
     pub(crate) detached_viewports: Rc<RefCell<Vec<Option<String>>>>,
+    pub(crate) applied_display_states: Rc<RefCell<Vec<(Option<String>, XbxEngineDisplayStateDto)>>>,
     pub(crate) fail_request_kind: Rc<RefCell<Option<&'static str>>>,
     pub(crate) fail_keepalive_message: Rc<RefCell<Option<String>>>,
     pub(crate) poll_ice_batches: Rc<RefCell<Vec<Vec<XbxEngineIceCandidateDto>>>>,
@@ -75,6 +76,7 @@ impl TestHostBridge {
             requests,
             attached_viewports: Rc::new(RefCell::new(Vec::new())),
             detached_viewports: Rc::new(RefCell::new(Vec::new())),
+            applied_display_states: Rc::new(RefCell::new(Vec::new())),
             fail_request_kind: Rc::new(RefCell::new(None)),
             fail_keepalive_message: Rc::new(RefCell::new(None)),
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
@@ -95,6 +97,7 @@ impl TestHostBridge {
             requests,
             attached_viewports: Rc::new(RefCell::new(Vec::new())),
             detached_viewports: Rc::new(RefCell::new(Vec::new())),
+            applied_display_states: Rc::new(RefCell::new(Vec::new())),
             fail_request_kind,
             fail_keepalive_message: Rc::new(RefCell::new(None)),
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
@@ -160,6 +163,18 @@ impl XbxEngineHostBridge for TestHostBridge {
         if let Ok(mut order) = self.call_order.lock() {
             order.push("present");
         }
+        Ok(())
+    }
+
+    fn apply_display_state(
+        &mut self,
+        viewport: Option<&XbxEngineViewportDto>,
+        state: &XbxEngineDisplayStateDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.applied_display_states.borrow_mut().push((
+            viewport.map(|viewport| viewport.viewport_id.clone()),
+            state.clone(),
+        ));
         Ok(())
     }
 

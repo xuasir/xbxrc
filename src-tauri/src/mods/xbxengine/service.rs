@@ -151,11 +151,38 @@ impl XbxEngineProvider for XbxEngineService {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     #[test]
     fn runtime_tick_does_not_skip_missed_intervals() {
         assert_eq!(
             super::runtime_tick_missed_behavior(),
             tokio::time::MissedTickBehavior::Delay
+        );
+    }
+
+    #[test]
+    fn parse_apply_display_state_preserves_video_format() {
+        let command = super::parse_control_command(
+            "ApplyDisplayState",
+            Some(json!({
+                "state": {
+                    "video_format": "Stretch",
+                    "display_options": {
+                        "sharpness": 1.0,
+                        "saturation": 1.1,
+                        "contrast": 1.2,
+                        "brightness": 1.3
+                    }
+                }
+            })),
+        )
+        .expect("command should parse");
+
+        let value = serde_json::to_value(command).expect("command should serialize");
+        assert_eq!(
+            value["ApplyDisplayState"]["state"]["video_format"],
+            "Stretch"
         );
     }
 }
@@ -238,6 +265,8 @@ struct ApplyDisplayStateParams {
 
 #[derive(Debug, Deserialize)]
 struct ApplyDisplayStateValue {
+    #[serde(default)]
+    video_format: Option<String>,
     display_options: ApplyDisplayOptionsValue,
 }
 
@@ -357,6 +386,7 @@ fn parse_control_command(
             let params: ApplyDisplayStateParams = parse_required_params(command_name, params)?;
             Ok(XbxEngineControlCommandDto::ApplyDisplayState {
                 state: XbxEngineDisplayStateDto {
+                    video_format: params.state.video_format,
                     display_options: XbxEngineDisplayOptionsDto {
                         sharpness: params.state.display_options.sharpness,
                         saturation: params.state.display_options.saturation,
