@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,7 +15,27 @@ fn link_macos_availability_runtime() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
         return;
     }
-    println!("cargo:rustc-link-lib=clang_rt.osx");
+    let Some(path) = clang_runtime_library_path("libclang_rt.osx.a") else {
+        return;
+    };
+    println!("cargo:rustc-link-arg=-Wl,-force_load,{}", path.display());
+}
+
+fn clang_runtime_library_path(lib: &str) -> Option<PathBuf> {
+    let output = Command::new("clang")
+        .arg(format!("--print-file-name={lib}"))
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8(output.stdout).ok()?;
+    let path = path.trim();
+    if path.is_empty() || path == lib {
+        return None;
+    }
+    let path = PathBuf::from(path);
+    path.exists().then_some(path)
 }
 
 fn emit_build_metadata() {

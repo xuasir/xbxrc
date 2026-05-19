@@ -31,6 +31,8 @@ jobs:
     env:
       CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+      # CI 下关闭增量编译，便于 rust-cache 稳定命中 target/
+      CARGO_INCREMENTAL: "0"
 
     steps:
       - name: Checkout
@@ -71,17 +73,11 @@ jobs:
             fi
           fi
 
-      - name: Install Clang (Windows, bindgen)
-        if: runner.os == 'Windows'
-        uses: egor-tensin/setup-clang@v2
-        with:
-          platform: x64
-          cc: "0"
-
       - name: Configure LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # windows-latest 已预装 LLVM，无需 choco 重装（可节省数分钟）
           $libclang = Join-Path $env:ProgramFiles 'LLVM\bin'
           if (-not (Test-Path (Join-Path $libclang 'libclang.dll'))) {
             throw "libclang.dll not found under $libclang"
@@ -103,14 +99,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.93.1
-          components: rustfmt, clippy
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          # macos13：SDL3 静态库部署目标变更后需失效旧缓存
-          shared-key: tauri-${{ matrix.label }}-macos13
+          shared-key: xbxrc-${{ matrix.label }}
+          cache-all-crates: true
+          cache-workspace-crates: true
 
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
