@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::OnceLock;
 
 use ohmygamepad_sdl3::ShellWindowGateHints;
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, WebviewWindow};
 use windows::core::PCSTR;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::WindowsProgramming::IsApiSetImplemented;
@@ -210,27 +210,30 @@ pub fn foreground_belongs_to_main(main_hwnd: isize) -> bool {
     }
 }
 
-/// FSE 下 `WindowEvent::Focused(false)` 可能由触屏/WebView2 子 HWND 抢前台引起，但应用仍应视为可交互。
-pub fn shell_retains_foreground_despite_focus_loss(app: &AppHandle) -> bool {
-    if !is_fse_active() {
-        return false;
-    }
-    let Some(window) = app.get_webview_window("main") else {
-        return false;
-    };
-    let Some(main_hwnd) = crate::shell::win_hwnd::try_main_window_hwnd(&window) else {
-        return false;
-    };
-    foreground_belongs_to_main(main_hwnd)
+/// FSE 下 gate：Win32 前台 HWND 归属 **或** 主窗口仍聚焦（触屏后常见子 HWND 抢前台但 Tauri 仍报失焦）。
+fn fse_shell_app_active(
+    foreground_belongs_to_main: bool,
+    focused_from_event: bool,
+    window_visible: bool,
+    window_minimized: bool,
+) -> bool {
+    foreground_belongs_to_main || (focused_from_event && window_visible && !window_minimized)
 }
 
 pub fn build_gate_hints(window: &WebviewWindow, focused_from_event: bool) -> ShellWindowGateHints {
     let fse_active = is_fse_active();
+    let window_visible = window.is_visible().unwrap_or(false);
+    let window_minimized = window.is_minimized().unwrap_or(false);
     let main_hwnd = try_main_window_hwnd(window);
-    let foreground_belongs_to_main = main_hwnd.map(foreground_belongs_to_main).unwrap_or(false);
+    let foreground_ok = main_hwnd.map(foreground_belongs_to_main).unwrap_or(false);
 
     let shell_app_active = if fse_active {
-        foreground_belongs_to_main
+        fse_shell_app_active(
+            foreground_ok,
+            focused_from_event,
+            window_visible,
+            window_minimized,
+        )
     } else {
         focused_from_event
     };
@@ -274,5 +277,14 @@ mod tests {
     #[test]
     fn foreground_hwnd_belongs_to_main_when_handles_differ_without_win32() {
         assert!(!super::foreground_hwnd_belongs_to_main(0x100, 0x200));
+    }
+
+    #[test]
+    fn fse_gate_uses_foreground_or_focused_visible_window() {
+        assert!(super::fse_shell_app_active(true, false, true, false));
+        assert!(super::fse_shell_app_active(false, true, true, false));
+        assert!(!super::fse_shell_app_active(false, false, true, false));
+        assert!(!super::fse_shell_app_active(false, true, false, false));
+        assert!(!super::fse_shell_app_active(false, true, true, true));
     }
 }

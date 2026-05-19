@@ -122,27 +122,28 @@ pub fn run() {
                             "window-focused",
                         );
                     } else {
-                        #[cfg(target_os = "windows")]
-                        let fse_still_owns_foreground =
-                            mods::gamepad::fse_windows::shell_retains_foreground_despite_focus_loss(
-                                &window.app_handle(),
-                            );
-                        #[cfg(not(target_os = "windows"))]
-                        let fse_still_owns_foreground = false;
-                        if fse_still_owns_foreground {
+                        mods::gamepad::input_gate::sync_gamepad_input_gate(&window.app_handle());
+                        let shell_still_active = window
+                            .app_handle()
+                            .get_webview_window("main")
+                            .map(|main_window| {
+                                mods::gamepad::input_gate::current_shell_window_gate_hints(
+                                    &main_window,
+                                )
+                                .shell_app_active
+                            })
+                            .unwrap_or(false);
+                        if shell_still_active {
                             record_gamepad_shell_trace(
                                 window,
-                                "windowUnfocusedIgnoredFseForegroundRetained",
+                                "windowUnfocusedIgnoredShellStillActive",
                                 serde_json::json!({
                                     "windowLabel": window.label(),
                                 }),
                             );
-                            mods::gamepad::input_gate::sync_gamepad_input_gate(
-                                &window.app_handle(),
-                            );
                             shell::refresh_gamepad_on_window_foreground(
                                 &window.app_handle(),
-                                "fse-foreground-retained-after-unfocus",
+                                "shell-still-active-after-unfocus",
                             );
                         } else {
                             hint_gamepad_shell_background(window, "window-unfocused");
