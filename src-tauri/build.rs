@@ -11,7 +11,7 @@ fn main() {
 
 /// SDL3 静态库中的 ObjC `@available` 会引用 `___isPlatformVersionAtLeast`。
 fn link_macos_availability_runtime() {
-    if std::env::var_os("CARGO_CFG_TARGET_OS").as_deref() != Some("macos") {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
         return;
     }
     println!("cargo:rustc-link-lib=clang_rt.osx");
