@@ -122,40 +122,47 @@ pub fn run() {
                             &window.app_handle(),
                             "window-focused",
                         );
-                    } else if window
-                        .app_handle()
-                        .get_webview_window("main")
-                        .map(|main_window| {
-                            let hints = mods::gamepad::input_gate::current_shell_window_gate_hints(
-                                &main_window,
-                            );
+                    } else {
+                        let shell_still_active = window
+                            .app_handle()
+                            .get_webview_window("main")
+                            .map(|main_window| {
+                                let hints =
+                                    mods::gamepad::input_gate::current_shell_window_gate_hints(
+                                        &main_window,
+                                    );
+                                #[cfg(target_os = "windows")]
+                                record_gamepad_shell_trace(
+                                    window,
+                                    "windowUnfocusedGateEvaluated",
+                                    serde_json::json!({
+                                        "windowLabel": window.label(),
+                                        "shellAppActive": hints.shell_app_active,
+                                        "usesWin32ForegroundGate":
+                                            mods::gamepad::fse_windows::uses_win32_foreground_gate(
+                                                &main_window,
+                                            ),
+                                        "isFseActive":
+                                            mods::gamepad::fse_windows::is_fse_active(),
+                                        "isFullscreen": main_window
+                                            .is_fullscreen()
+                                            .unwrap_or(false),
+                                    }),
+                                );
+                                hints.shell_app_active
+                            })
+                            .unwrap_or(false);
+                        if shell_still_active {
                             record_gamepad_shell_trace(
                                 window,
-                                "windowUnfocusedGateEvaluated",
+                                "windowUnfocusedShellGateStillActive",
                                 serde_json::json!({
                                     "windowLabel": window.label(),
-                                    "shellAppActive": hints.shell_app_active,
-                                    "usesWin32ForegroundGate":
-                                        mods::gamepad::fse_windows::uses_win32_foreground_gate(
-                                            &main_window,
-                                        ),
-                                    "isFseActive": mods::gamepad::fse_windows::is_fse_active(),
-                                    "isFullscreen": main_window.is_fullscreen().unwrap_or(false),
                                 }),
                             );
-                            hints.shell_app_active
-                        })
-                        .unwrap_or(false)
-                    {
-                        record_gamepad_shell_trace(
-                            window,
-                            "windowUnfocusedShellGateStillActive",
-                            serde_json::json!({
-                                "windowLabel": window.label(),
-                            }),
-                        );
-                    } else {
-                        hint_gamepad_shell_background(window, "window-unfocused");
+                        } else {
+                            hint_gamepad_shell_background(window, "window-unfocused");
+                        }
                     }
                 }
                 tauri::WindowEvent::Resized(_) => match window.is_minimized() {
