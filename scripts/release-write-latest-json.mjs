@@ -3,9 +3,14 @@
  * 根据 release-assets 目录生成 Tauri updater latest.json
  * 用法: node scripts/release-write-latest-json.mjs <assetsRoot> <version> <downloadBaseUrl>
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
+import {
+  checkReleaseCollected,
+  findBundleFile,
+  resolveCollectedDir,
+} from './release-bundle-lib.mjs'
 
 const assetsRoot = resolve(process.argv[2] ?? 'release-assets')
 const version = process.argv[3]
@@ -20,46 +25,41 @@ function readSig(path) {
   return readFileSync(path, 'utf8').trim()
 }
 
-function findFile(dir, pattern) {
-  if (!existsSync(dir)) {
-    return null
-  }
-  const re = new RegExp(pattern)
-  return readdirSync(dir).find(name => re.test(name)) ?? null
-}
-
-function resolvePlatformDir(root, label) {
-  const candidates = [
-    join(root, label),
-    join(root, `release-assets-${label}`),
-  ]
-  return candidates.find(path => existsSync(path)) ?? null
-}
-
 const platforms = {}
+const errors = []
 
-const macDir = resolvePlatformDir(assetsRoot, 'macos')
-const macTar = findFile(macDir, '\\.tar\\.gz$')
-const macSig = findFile(macDir, '\\.tar\\.gz\\.sig$')
-if (macTar && macSig) {
-  platforms['darwin-aarch64'] = {
-    signature: readSig(join(macDir, macSig)),
-    url: `${downloadBase}/${macTar}`,
+for (const [label, platformKey, tarSuffix, sigSuffix] of [
+  ['macos', 'darwin-aarch64', '.tar.gz', '.tar.gz.sig'],
+  ['windows', 'windows-x86_64', '-windows-setup.exe', '-windows-setup.exe.sig'],
+]) {
+  const { missing } = checkReleaseCollected(assetsRoot, label)
+  if (missing.length > 0) {
+    errors.push(`${label}: 缺少 ${missing.map(item => item.hint).join(', ')}`)
+    continue
+  }
+  const dir = resolveCollectedDir(assetsRoot, label)
+  const bundle = findBundleFile(dir, tarSuffix, { excludeSuffix: sigSuffix })
+  const sig = findBundleFile(dir, sigSuffix)
+  if (!bundle || !sig) {
+    errors.push(`${label}: 无法定位 updater 包或签名`)
+    continue
+  }
+  platforms[platformKey] = {
+    signature: readSig(join(dir, sig)),
+    url: `${downloadBase}/${bundle}`,
   }
 }
 
-const winDir = resolvePlatformDir(assetsRoot, 'windows')
-const winExe = findFile(winDir, 'setup\\.exe$')
-const winSig = findFile(winDir, 'setup\\.exe\\.sig$')
-if (winExe && winSig) {
-  platforms['windows-x86_64'] = {
-    signature: readSig(join(winDir, winSig)),
-    url: `${downloadBase}/${winExe}`,
+if (errors.length > 0) {
+  console.error('无法生成 latest.json:')
+  for (const line of errors) {
+    console.error(`  - ${line}`)
   }
+  process.exit(1)
 }
 
 if (Object.keys(platforms).length === 0) {
-  console.error('未找到任何平台 updater 资产，无法生成 latest.json')
+  console.error('未找到任何平台 updater 资产')
   process.exit(1)
 }
 

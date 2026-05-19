@@ -146,6 +146,10 @@ jobs:
           set -euo pipefail
           node scripts/release-collect-assets.mjs "release-assets-${{ matrix.label }}" "${{ steps.version.outputs.value }}" "${{ matrix.label }}"
 
+      - name: Verify collected release assets
+        shell: bash
+        run: node scripts/release-check-collected.mjs "release-assets-${{ matrix.label }}" "${{ matrix.label }}"
+
       - name: Upload release assets
         uses: actions/upload-artifact@v7
         with:
@@ -181,6 +185,9 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           version="$(node -p "require('./release-assets/release-assets-macos/manifest.json').version")"
           echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify all collected assets
+        run: node scripts/release-check-collected.mjs release-assets
 
       - name: Build latest.json
         run: |
