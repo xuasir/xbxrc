@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
 import {
-  businessInputArbiter,
-  selectStreamUiSurfaceFromPageFlags,
-} from '@shared/gamepad/business-input-arbiter'
-import {
   createBrowserPlayerStreamInputAdapter,
   createRustEngineStreamInputAdapter,
 } from '@shared/gamepad/stream-input-consumer-adapters'
@@ -31,7 +27,7 @@ import { rpc } from '../services/rpc'
 import { resolveEnhancementBinding } from '../streaming/enhancements'
 import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
-import { useGamepadRouteForStreamOverlay } from './stream/useGamepadRouteForStreamOverlay'
+import { streamInputRouteController } from './stream/stream-input-route-controller'
 
 const { t, te } = useI18n()
 const router = useRouter()
@@ -118,42 +114,6 @@ const {
   closeSheet,
 } = pageActions
 
-// 串流会话期间由 `businessInputArbiter` 决定导航层与 Player 谁消费 slot；覆盖层打开时壳层 UI 优先。
-useGamepadRouteForStreamOverlay({
-  isAnyOverlayOpen: computed(() =>
-    isMenuSheetOpen.value
-    || isDiagnosticsMenuSheetOpen.value
-    || isDisplaySheetOpen.value
-    || isAudioSheetOpen.value
-    || isTextSheetOpen.value
-    || showFailedSheet.value
-    || showWarningSheet.value,
-  ),
-  sessionId: execution.sessionId,
-  applyRouteTarget: target => businessInputArbiter.applyStreamPadRouteTarget(target),
-})
-
-watch(
-  () => ({
-    showFailedSheet: showFailedSheet.value,
-    showWarningSheet: showWarningSheet.value,
-    isMenuSheetOpen: isMenuSheetOpen.value,
-    isDiagnosticsMenuSheetOpen: isDiagnosticsMenuSheetOpen.value,
-    isDisplaySheetOpen: isDisplaySheetOpen.value,
-    isAudioSheetOpen: isAudioSheetOpen.value,
-    isTextSheetOpen: isTextSheetOpen.value,
-    chrome: shouldShowChrome.value,
-  }),
-  (flags) => {
-    const { chrome, ...sheetFlags } = flags
-    businessInputArbiter.patch({
-      streamUiSurface: selectStreamUiSurfaceFromPageFlags(sheetFlags),
-      chromeVisible: chrome,
-    })
-  },
-  { immediate: true },
-)
-
 function applyStreamUiWindowClass(active: boolean): void {
   // 串流页运行在上层透明 UI 窗口，需要显式切换全局页面底色。
   const method = active ? 'add' : 'remove'
@@ -168,7 +128,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   applyStreamUiWindowClass(false)
-  void businessInputArbiter.applyStreamPadRouteTarget({ kind: 'shell-ui' })
+  void streamInputRouteController.resetOnLeaveStream()
   window.removeEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
 
@@ -176,12 +136,12 @@ watch(
   runtimeMode,
   (mode) => {
     if (mode === 'rust-owned') {
-      businessInputArbiter.installStreamInputConsumerAdapter(
+      streamInputRouteController.installStreamInputConsumerAdapter(
         createRustEngineStreamInputAdapter(rpc.gamepad),
       )
       return
     }
-    businessInputArbiter.installStreamInputConsumerAdapter(
+    streamInputRouteController.installStreamInputConsumerAdapter(
       createBrowserPlayerStreamInputAdapter(),
     )
   },

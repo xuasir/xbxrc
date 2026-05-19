@@ -44,6 +44,9 @@ pub fn build_external_link_patch_script() -> &'static str {
 
 #[cfg(target_os = "macos")]
 pub fn handle_macos_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    use crate::mods::gamepad::input_gate::{
+        clear_shell_main_window_focus_from_shell_action, sync_gamepad_input_gate,
+    };
     use crate::AppState;
     use std::sync::atomic::Ordering;
 
@@ -53,6 +56,8 @@ pub fn handle_macos_window_event(window: &tauri::Window, event: &tauri::WindowEv
             if !app_state.is_quitting.load(Ordering::Relaxed) {
                 // 对齐 Electron：macOS 关闭窗口时仅隐藏，不退出进程。
                 api.prevent_close();
+                clear_shell_main_window_focus_from_shell_action();
+                sync_gamepad_input_gate(&window.app_handle());
                 let _ = window.hide();
             }
         }

@@ -86,17 +86,14 @@ pub fn run() {
             }
             let visible = webview.window().is_visible().unwrap_or(false);
             let minimized = webview.window().is_minimized().unwrap_or(false);
+            mods::gamepad::input_gate::sync_gamepad_input_gate(&webview.window().app_handle());
             if visible && !minimized {
-                shell::hint_gamepad_shell_interactive(
-                    &webview.window().app_handle(),
-                    "page-load-visible-window",
-                );
                 #[cfg(target_os = "windows")]
                 shell::schedule_gamepad_cold_start_sdl_binding_nudge(
                     &webview.window().app_handle(),
                 );
-            } else {
-                mods::gamepad::input_gate::sync_gamepad_input_gate(&webview.window().app_handle());
+                #[cfg(target_os = "windows")]
+                shell::schedule_gamepad_fse_gate_fallback_nudge(&webview.window().app_handle());
             }
             let _ = webview.eval(shell::build_external_link_patch_script());
         })
@@ -115,7 +112,7 @@ pub fn run() {
                         }),
                     );
                     if *focused {
-                        shell::hint_gamepad_shell_interactive(
+                        shell::refresh_gamepad_on_window_foreground(
                             &window.app_handle(),
                             "window-focused",
                         );
@@ -133,7 +130,7 @@ pub fn run() {
                                 "minimized": false,
                             }),
                         );
-                        shell::hint_gamepad_shell_interactive(
+                        shell::refresh_gamepad_on_window_foreground(
                             &window.app_handle(),
                             "window-restored-from-minimized",
                         );

@@ -19,8 +19,9 @@ import type {
   StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
-import { businessInputArbiter, mapStreamRuntimeModeToConsumer } from '@shared/gamepad/business-input-arbiter'
+import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { buildStreamDiagnosticsSnapshot } from './diagnostics'
@@ -120,13 +121,15 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   function setStreamSessionPresent(active: boolean): void {
     if (!active) {
-      businessInputArbiter.applyActionOutcome({ kind: 'leave-stream' })
+      businessInputArbiter.patch({
+        streamActive: false,
+        overlayCapturing: false,
+      })
+      streamInputRouteController.resetOnLeaveStream()
       return
     }
-    businessInputArbiter.patch({
-      streamSessionPresent: true,
-      rustEngineStreamPadRoutedToSession: false,
-    })
+    businessInputArbiter.patch({ streamActive: true })
+    void streamInputRouteController.syncStreamInputRoute()
   }
 
   async function recordExecutionTraceEvent(
@@ -248,17 +251,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       sessionExecution.value?.runtime.mode
       ?? streamConfig.value.stream_runtime_mode
       ?? 'webrtc-direct',
-  )
-
-  watch(
-    [sessionId, streamRuntimeMode],
-    ([id, mode]) => {
-      businessInputArbiter.patch({
-        streamSessionId: id === '' ? null : id,
-        streamConsumer: mapStreamRuntimeModeToConsumer(mode),
-      })
-    },
-    { immediate: true },
   )
 
   const streamResolutionMode = computed(() =>

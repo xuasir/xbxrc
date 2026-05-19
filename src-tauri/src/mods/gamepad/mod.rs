@@ -1,8 +1,11 @@
 pub mod events;
+#[cfg(target_os = "windows")]
+pub mod fse_windows;
 pub mod input_gate;
 pub mod rpc;
 pub mod service;
 
+pub use ohmygamepad_sdl3::ShellWindowGateHints;
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
@@ -84,7 +87,7 @@ pub trait GamepadProvider: Send + Sync {
         &self,
         sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
     ) -> (OhMyGamepadInputGateModeDto, String);
-    fn set_shell_window_gate_hints(&self, focused: bool, visible: bool, minimized: bool);
+    fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints);
     fn set_stream_pad_forwarding(
         &self,
         enabled: bool,

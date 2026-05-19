@@ -13,6 +13,7 @@ use ohmygamepad_protocol::{
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
     OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
+use ohmygamepad_sdl3::ShellWindowGateHints;
 use tauri::{AppHandle, Manager};
 
 pub struct GamepadService {
@@ -56,9 +57,8 @@ impl GamepadProvider for GamepadService {
         self.host.peek_derived_input_gate(sampling_lifecycle)
     }
 
-    fn set_shell_window_gate_hints(&self, focused: bool, visible: bool, minimized: bool) {
-        self.host
-            .set_shell_window_gate_hints(focused, visible, minimized);
+    fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {
+        self.host.set_shell_window_gate_hints(hints);
     }
 
     fn set_stream_pad_forwarding(

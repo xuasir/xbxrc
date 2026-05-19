@@ -100,13 +100,8 @@ impl GamepadRuntimeHost {
         self.runtime.peek_derived_input_gate(sampling_lifecycle)
     }
 
-    pub fn set_shell_window_gate_hints(&self, focused: bool, visible: bool, minimized: bool) {
-        self.runtime
-            .set_shell_window_gate_hints(ShellWindowGateHints {
-                focused,
-                visible,
-                minimized,
-            });
+    pub fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {
+        self.runtime.set_shell_window_gate_hints(hints);
         let _ = self.publish_current_snapshot();
     }
 
@@ -456,14 +451,14 @@ mod tests {
 
         let mut snapshot = OhMyGamepadRuntimeSnapshotDto::default();
         snapshot.input_gate = OhMyGamepadInputGateModeDto::Closed;
-        snapshot.input_gate_reason = "window-not-interactive".to_owned();
+        snapshot.input_gate_reason = "shell-app-inactive".to_owned();
         broadcaster.publish(snapshot.clone());
 
         let first = rx.recv().expect("receive first snapshot");
         assert_eq!(first.input_gate, OhMyGamepadInputGateModeDto::Closed);
 
         snapshot.input_gate = OhMyGamepadInputGateModeDto::Open;
-        snapshot.input_gate_reason = "window-interactive-and-sampling-active".to_owned();
+        snapshot.input_gate_reason = "sampling-active-and-shell-app-active".to_owned();
         broadcaster.publish(snapshot.clone());
 
         let second = rx.recv().expect("receive second snapshot");

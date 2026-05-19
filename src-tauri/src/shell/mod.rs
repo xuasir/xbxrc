@@ -19,6 +19,8 @@ pub mod window;
 
 #[cfg(target_os = "windows")]
 mod win_foreground;
+#[cfg(target_os = "windows")]
+pub mod win_hwnd;
 
 pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
@@ -28,8 +30,17 @@ pub use window::build_external_link_patch_script;
 #[cfg(target_os = "windows")]
 static GAMEPAD_COLD_START_SDL_NUDGE_TASK_SCHEDULED: AtomicBool = AtomicBool::new(false);
 
+#[cfg(target_os = "windows")]
+static GAMEPAD_FSE_GATE_FALLBACK_SCHEDULED: AtomicBool = AtomicBool::new(false);
+
 #[cfg(target_os = "macos")]
 pub use window::handle_macos_window_event;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ForegroundRefreshPlan {
+    should_resume_sampling: bool,
+    should_try_stalled_self_heal: bool,
+}
 
 /// 在跑 SDL `prime/reopen` 自愈链之前，先把主窗口拉到前台并请求焦点，
 /// 以贴近用户「切到后台再回来」后输入才恢复的系统行为（部分蓝牙/虚拟手柄）。
@@ -67,10 +78,46 @@ pub fn request_main_window_focus_for_input_stack(app: &AppHandle, reason: &str) 
     }
 }
 
-/// 页面可见 / 窗口聚焦时拉回手柄采样并跑轻恢复。
-/// 使用 `AppHandle` 解析主窗口，避免 `Window` / `WebviewWindow` 类型分裂；全屏冷启动的延迟补打见 `build_services`。
-///
-/// UI/串流输入归属由前端消费层门控；RTC 是否转发样本由 `set_stream_pad_forwarding` 控制（见 RFC gamepad lifecycle simplification）。
+/// 窗口回到前台：先同步 gate，再按前台事实决定是否拉回采样（不重复承担 routing 职责）。
+pub fn refresh_gamepad_on_window_foreground(app: &AppHandle, reason: &str) {
+    input_gate::sync_gamepad_input_gate(app);
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let Some(app_state) = window.try_state::<AppState>() else {
+        return;
+    };
+    app_state.runtime_trace.record_event(
+        "gamepad-shell",
+        "shellForegroundRefresh",
+        None,
+        serde_json::json!({
+            "reason": reason,
+            "windowLabel": window.label(),
+        }),
+    );
+    let Ok(snapshot) = app_state.gamepad.get_runtime_snapshot() else {
+        return;
+    };
+    let plan = plan_foreground_refresh_actions(
+        &snapshot,
+        &input_gate::current_shell_window_gate_hints(&window),
+    );
+    if plan.should_resume_sampling {
+        if let Err(error) = app_state.gamepad.resume_shell_sampling() {
+            log::warn!(
+                "refresh_gamepad_on_window_foreground resume_shell_sampling failed reason={} error={}",
+                reason,
+                error
+            );
+        }
+    }
+    if plan.should_try_stalled_self_heal {
+        let _ = app_state.gamepad.try_stalled_sampling_self_heal();
+    }
+}
+
+/// 页面可见 / 窗口聚焦时拉回手柄采样并跑轻恢复（显式恢复路径；常规 focus 优先 `refresh_gamepad_on_window_foreground`）。
 pub fn hint_gamepad_shell_interactive(app: &AppHandle, reason: &str) {
     input_gate::sync_gamepad_input_gate(app);
     let Some(window) = app.get_webview_window("main") else {
@@ -214,6 +261,56 @@ pub fn schedule_gamepad_cold_start_sdl_binding_nudge(app: &AppHandle) {
     });
 }
 
+/// Windows FSE：gate 长时间未开且已有采样事实时的低频 fallback（默认关闭）。
+#[cfg(target_os = "windows")]
+pub fn schedule_gamepad_fse_gate_fallback_nudge(app: &AppHandle) {
+    if GAMEPAD_FSE_GATE_FALLBACK_SCHEDULED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        sleep(Duration::from_secs(4)).await;
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        let enabled = match state
+            .config
+            .get_by_keys(&[String::from("gamepad_fse_gate_fallback_nudge")])
+        {
+            Ok(value) => value
+                .get("gamepad_fse_gate_fallback_nudge")
+                .and_then(|entry| entry.as_bool())
+                .unwrap_or(false),
+            Err(_) => false,
+        };
+        if !enabled {
+            return;
+        }
+        if !mods::gamepad::fse_windows::is_fse_active() {
+            return;
+        }
+        let Ok(snapshot) = state.gamepad.get_runtime_snapshot() else {
+            return;
+        };
+        if snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Closed {
+            return;
+        }
+        if snapshot.slots.is_empty() {
+            return;
+        }
+        state.runtime_trace.record_event(
+            "gamepad-shell",
+            "gamepadFseGateFallbackNudge",
+            None,
+            serde_json::json!({
+                "inputGateReason": snapshot.input_gate_reason,
+                "slotCount": snapshot.slots.len(),
+            }),
+        );
+        hint_gamepad_shell_interactive(&app, "fse-gate-fallback-nudge");
+    });
+}
+
 fn trace_gamepad_runtime_snapshot(
     runtime_trace: &mods::runtime_trace::RuntimeTraceRecorderRef,
     event: &str,
@@ -276,6 +373,52 @@ fn should_auto_promote_background_warm(
         && visible
         && !minimized
         && focused
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn should_resume_sampling_on_foreground_refresh(
+    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
+    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
+) -> bool {
+    if !hints.shell_app_active {
+        return false;
+    }
+    snapshot.sampling_lifecycle != ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active
+        || snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Open
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn plan_foreground_refresh_actions(
+    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
+    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
+) -> ForegroundRefreshPlan {
+    if !hints.shell_app_active {
+        return ForegroundRefreshPlan::default();
+    }
+
+    ForegroundRefreshPlan {
+        should_resume_sampling: should_resume_sampling_on_foreground_refresh(snapshot, hints),
+        should_try_stalled_self_heal: snapshot.sampling_health
+            == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled,
+    }
+}
+
+#[cfg(not(any(test, target_os = "windows")))]
+fn plan_foreground_refresh_actions(
+    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
+    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
+) -> ForegroundRefreshPlan {
+    if !hints.shell_app_active {
+        return ForegroundRefreshPlan::default();
+    }
+
+    ForegroundRefreshPlan {
+        should_resume_sampling: snapshot.sampling_lifecycle
+            != ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active
+            || snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Open,
+        should_try_stalled_self_heal: snapshot.sampling_health
+            == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled,
+    }
 }
 
 pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
@@ -590,22 +733,10 @@ async fn build_services(
     if let Some(main_window) = app_handle.get_webview_window("main") {
         let fullscreen = state.startup_flags.read().await.fullscreen;
         let _ = main_window.set_fullscreen(fullscreen);
-        if fullscreen {
-            // Xbox 大屏首开：全屏切换后 WebView 可见 / pageLoad 与 SDL 采样链时序常偏晚，
-            // 仅靠首次 activate_sampling 仍可能出现“已识别设备但逻辑样本不推进”；延迟补打交互提示链。
-            // 部分环境（尤其虚拟手柄/手表）需多轮 resume+prime/reopen 后才有稳定的逻辑槽位增量；
-            // 否则用户只能依赖失焦再回前台触发同一套链。
-            for (delay_ms, reason) in [
-                (500u64, "fullscreen-cold-start"),
-                (2000u64, "fullscreen-cold-start-delay-2s"),
-                (4000u64, "fullscreen-cold-start-delay-4s"),
-            ] {
-                let app_delayed = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    sleep(Duration::from_millis(delay_ms)).await;
-                    hint_gamepad_shell_interactive(&app_delayed, reason);
-                });
-            }
+        #[cfg(target_os = "windows")]
+        {
+            mods::gamepad::fse_windows::init_fse_monitor(&app_handle);
+            schedule_gamepad_fse_gate_fallback_nudge(&app_handle);
         }
     }
     mods::native_video::configure_main_window_video_host(&app_handle);
@@ -821,6 +952,9 @@ pub async fn terminate(app_handle: &AppHandle) {
         }),
     );
 
+    #[cfg(target_os = "windows")]
+    mods::gamepad::fse_windows::shutdown_fse_monitor();
+
     state.gamepad.shutdown();
     state.xbxengine.shutdown().await;
     state.streaming.shutdown().await;
@@ -841,8 +975,15 @@ pub async fn terminate(app_handle: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{should_auto_promote_background_warm, should_force_gamepad_startup_rearm};
-    use ohmygamepad_protocol::{OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingLifecycleDto};
+    use super::{
+        plan_foreground_refresh_actions, should_auto_promote_background_warm,
+        should_force_gamepad_startup_rearm, should_resume_sampling_on_foreground_refresh,
+    };
+    use ohmygamepad_protocol::{
+        OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto,
+        OhMyGamepadSamplingLifecycleDto,
+    };
+    use ohmygamepad_sdl3::ShellWindowGateHints;
 
     #[test]
     fn startup_rearm_stays_independent_from_focus_state() {
@@ -874,5 +1015,41 @@ mod tests {
         assert!(should_auto_promote_background_warm(
             &snapshot, true, false, true, 0,
         ));
+    }
+
+    #[test]
+    fn foreground_refresh_resumes_when_fse_foreground_returns_from_background_warm() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+            input_gate: OhMyGamepadInputGateModeDto::Closed,
+            ..Default::default()
+        };
+        let hints = ShellWindowGateHints {
+            shell_app_active: true,
+            ..Default::default()
+        };
+
+        assert!(should_resume_sampling_on_foreground_refresh(
+            &snapshot, &hints
+        ));
+    }
+
+    #[test]
+    fn foreground_refresh_still_attempts_self_heal_when_active_gate_is_open_but_sampling_stalled() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
+            sampling_health: OhMyGamepadSamplingHealthDto::Stalled,
+            input_gate: OhMyGamepadInputGateModeDto::Open,
+            ..Default::default()
+        };
+        let hints = ShellWindowGateHints {
+            shell_app_active: true,
+            ..Default::default()
+        };
+
+        let plan = plan_foreground_refresh_actions(&snapshot, &hints);
+
+        assert!(!plan.should_resume_sampling);
+        assert!(plan.should_try_stalled_self_heal);
     }
 }

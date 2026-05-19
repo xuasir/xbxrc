@@ -6,11 +6,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use serde_json::json;
 use tauri::{AppHandle, Manager, Window};
+#[cfg(target_os = "macos")]
 use xbxengine::{
     MacOsCVPixelBufferDescriptor, MacOsVideoChromaLocation, MacOsVideoColorMatrix,
     MacOsVideoColorPrimaries, MacOsVideoColorRange, MacOsVideoTransferFunction,
-    XbxEngineRenderFrame, XbxEngineRenderPixelData,
 };
+use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
 mod effects;
 mod native_video_policy;

@@ -1,12 +1,9 @@
-import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto, LogicalPadStateDto } from '@shared/gamepad/contract'
+import type { UiCaptureReason, UiReleaseReason } from '../pages/stream/stream-input-route-controller'
 import type { StreamErrorKind } from './types'
-import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { events } from '../services/events'
-import { rpc } from '../services/rpc'
+import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
 
 type BrowserTimeout = number
-const RESUME_STREAM_POLL_INTERVAL_MS = 120
 
 export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'display' | 'audio' | 'text'
 export type StreamPageOverlayState = 'none' | 'loading' | 'error' | 'connecting'
@@ -28,28 +25,32 @@ const REVEAL_EVENTS: Array<keyof WindowEventMap> = [
   'keydown',
 ]
 
-function isLogicalPadStateNeutral(state: LogicalPadStateDto): boolean {
-  return (
-    Object.values(state.buttons).every(value => value === 0)
-    && state.leftStick.x === 0
-    && state.leftStick.y === 0
-    && state.rightStick.x === 0
-    && state.rightStick.y === 0
-    && state.leftTrigger === 0
-    && state.rightTrigger === 0
-  )
-}
-
-function areAllSlotsNeutral(slots: readonly LogicalPadSnapshotDto[]): boolean {
-  return slots.every(slot => isLogicalPadStateNeutral(slot.state))
-}
-
 function syncStreamUiInputMode(enabled: boolean, overlayOpen: boolean): void {
   window.dispatchEvent(
     new CustomEvent('stream-ui-input-mode', {
       detail: { enabled, overlayOpen },
     }),
   )
+}
+
+function captureReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): UiCaptureReason {
+  if (sheet === 'menu') {
+    return 'menu'
+  }
+  if (sheet === 'diagnosticsMenu') {
+    return 'diagnostics'
+  }
+  return 'sheet'
+}
+
+function releaseReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): UiReleaseReason {
+  if (sheet === 'menu') {
+    return 'menu-close'
+  }
+  if (sheet === 'diagnosticsMenu') {
+    return 'diagnostics-close'
+  }
+  return 'sheet-close'
 }
 
 /**
@@ -59,12 +60,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   const activeSheet = ref<StreamPageActiveSheet>('none')
   const chromeVisible = ref(true)
   const chromeTimer = ref<BrowserTimeout | null>(null)
-  const resumeStreamPollTimer = ref<BrowserTimeout | null>(null)
-  const cleanupFns: Array<() => void> = []
-  const latestSlots = new Map<string, LogicalPadSnapshotDto>()
-  const pendingResumeStream = ref(false)
-  const hasKnownRuntimeSnapshot = ref(false)
-  let runtimeSnapshotRefreshInFlight = false
+  const lastOpenedSheet = ref<Exclude<StreamPageActiveSheet, 'none'> | null>(null)
 
   const showFailedSheet = computed(
     () => options.getHasError() && options.getErrorKind() === 'connectionFailed',
@@ -107,13 +103,6 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     }
   }
 
-  function clearResumeStreamPollTimer(): void {
-    if (resumeStreamPollTimer.value !== null) {
-      window.clearInterval(resumeStreamPollTimer.value)
-      resumeStreamPollTimer.value = null
-    }
-  }
-
   function scheduleChromeHide(): void {
     clearChromeTimer()
     if (!options.getIsConnected() || hasOverlay.value) {
@@ -133,72 +122,29 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
 
   function openSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): void {
     revealChrome()
-    pendingResumeStream.value = false
-    clearResumeStreamPollTimer()
+    const previous = activeSheet.value
+    const previousCapture = previous !== 'none' && previous !== sheet
+      ? captureReasonForSheet(previous)
+      : null
+    lastOpenedSheet.value = sheet
     activeSheet.value = sheet
-  }
-
-  function flushPendingResumeIfNeutral(): void {
-    if (!pendingResumeStream.value) {
+    if (previousCapture !== null) {
+      streamInputRouteController.replaceUiCapture(previousCapture, captureReasonForSheet(sheet))
       return
     }
-    if (!hasKnownRuntimeSnapshot.value) {
-      return
-    }
-    if (!areAllSlotsNeutral(Array.from(latestSlots.values()))) {
-      return
-    }
-    pendingResumeStream.value = false
-    clearResumeStreamPollTimer()
-    businessInputArbiter.applyActionOutcome({ kind: 'resume-stream' })
-  }
-
-  function requestResumeStreamAfterNeutral(): void {
-    pendingResumeStream.value = true
-    if (resumeStreamPollTimer.value === null) {
-      resumeStreamPollTimer.value = window.setInterval(() => {
-        void refreshRuntimeSnapshot()
-      }, RESUME_STREAM_POLL_INTERVAL_MS)
-    }
-    void refreshRuntimeSnapshot()
-    flushPendingResumeIfNeutral()
+    streamInputRouteController.captureUiInput(captureReasonForSheet(sheet))
   }
 
   function closeSheet(sheet?: Exclude<StreamPageActiveSheet, 'none'>): void {
     if (sheet !== undefined && activeSheet.value !== sheet) {
       return
     }
+    const closing = sheet
+      ?? (activeSheet.value === 'none' ? lastOpenedSheet.value : activeSheet.value)
     activeSheet.value = 'none'
-    requestResumeStreamAfterNeutral()
-  }
-
-  function applyRuntimeSnapshot(snapshot: GamepadRuntimeSnapshotDto): void {
-    hasKnownRuntimeSnapshot.value = true
-    latestSlots.clear()
-    for (const slot of snapshot.slots) {
-      latestSlots.set(slot.slot, slot)
-    }
-    flushPendingResumeIfNeutral()
-  }
-
-  function applySlotSnapshot(snapshot: LogicalPadSnapshotDto): void {
-    latestSlots.set(snapshot.slot, snapshot)
-    flushPendingResumeIfNeutral()
-  }
-
-  async function refreshRuntimeSnapshot(): Promise<void> {
-    if (runtimeSnapshotRefreshInFlight) {
-      return
-    }
-    runtimeSnapshotRefreshInFlight = true
-    try {
-      applyRuntimeSnapshot(await rpc.gamepad.getRuntimeSnapshot())
-    }
-    catch {
-      // runtime snapshot 拉取失败不阻断 overlay 逻辑；后续增量事件仍可推进 neutral 检测。
-    }
-    finally {
-      runtimeSnapshotRefreshInFlight = false
+    lastOpenedSheet.value = null
+    if (closing !== null) {
+      void streamInputRouteController.releaseUiInputAfterNeutral(releaseReasonForSheet(closing))
     }
   }
 
@@ -227,30 +173,38 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     { immediate: true },
   )
 
+  watch(showFailedSheet, (visible, wasVisible) => {
+    if (visible) {
+      streamInputRouteController.captureUiInput('failed')
+      return
+    }
+    if (wasVisible) {
+      void streamInputRouteController.releaseUiInputAfterNeutral('failed-close')
+    }
+  })
+
+  watch(showWarningSheet, (visible, wasVisible) => {
+    if (visible) {
+      streamInputRouteController.captureUiInput('warning')
+      return
+    }
+    if (wasVisible) {
+      void streamInputRouteController.releaseUiInputAfterNeutral('warning-close')
+    }
+  })
+
   onMounted(() => {
     for (const eventName of REVEAL_EVENTS) {
       window.addEventListener(eventName, revealChrome)
     }
-    const disposeRuntime = events.on('gamepad.runtimeSnapshot', applyRuntimeSnapshot)
-    const disposeSlot = events.on('gamepad.slotSnapshot', applySlotSnapshot)
-    cleanupFns.push(disposeRuntime, disposeSlot)
-    void refreshRuntimeSnapshot()
   })
 
   onBeforeUnmount(() => {
     clearChromeTimer()
-    clearResumeStreamPollTimer()
     syncStreamUiInputMode(true, false)
     for (const eventName of REVEAL_EVENTS) {
       window.removeEventListener(eventName, revealChrome)
     }
-    pendingResumeStream.value = false
-    hasKnownRuntimeSnapshot.value = false
-    latestSlots.clear()
-    for (const cleanup of cleanupFns) {
-      cleanup()
-    }
-    cleanupFns.length = 0
   })
 
   return {
