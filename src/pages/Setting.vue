@@ -680,6 +680,7 @@ onUnmounted(() => {
               v-else-if="!isLoading"
               :class="{
                 'setting-panel__content--input-tools': activeTabKey === 'inputDevices',
+                'setting-panel__content--general': activeTabKey === 'general',
               }"
             >
               <SettingSectionList
@@ -861,6 +862,10 @@ onUnmounted(() => {
 
 .setting-panel__content--input-tools :deep(.setting-panel__list) {
   padding-bottom: 24px;
+}
+
+.setting-panel__content--general :deep(.setting-panel__list) {
+  padding-bottom: 0;
 }
 
 :global(html[data-ui-density='compact']) .setting-page__layout {
