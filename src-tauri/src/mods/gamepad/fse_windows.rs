@@ -1,15 +1,19 @@
 //! Windows FSE（Gaming Full Screen Experience）检测与前台窗口 gate 判定。
+//!
+//! GDK：FSE 或 Tauri 全屏下 gate 以 Win32 前台 HWND 归属为准；窗口化非 FSE 仍用 Tauri focus 事件。
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::OnceLock;
 
 use ohmygamepad_sdl3::ShellWindowGateHints;
-use tauri::{AppHandle, WebviewWindow};
+use tauri::{AppHandle, Manager, WebviewWindow};
 use windows::core::PCSTR;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::WindowsProgramming::IsApiSetImplemented;
-use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GetForegroundWindow, IsChild, GA_ROOT};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetAncestor, GetForegroundWindow, GetWindowThreadProcessId, IsChild, GA_ROOT,
+};
 
 use crate::mods::gamepad::input_gate::sync_gamepad_input_gate;
 use crate::shell::refresh_gamepad_on_window_foreground;
@@ -123,30 +127,29 @@ pub fn init_fse_monitor(app: &AppHandle) {
     let _ = FSE_APIS.set(apis);
     refresh_fse_active_flag();
 
-    let Some(apis) = FSE_APIS.get().and_then(|entry| entry.as_ref()) else {
-        return;
-    };
-
-    let mut token: *mut c_void = std::ptr::null_mut();
-    let hr = unsafe {
-        (apis.register_change)(Some(fse_change_callback), std::ptr::null_mut(), &mut token)
-    };
-    if hr < 0 {
-        log::warn!(
-            "fse_windows RegisterGamingFullScreenExperienceChangeNotification failed hr={hr}"
-        );
-        return;
+    if let Some(apis) = FSE_APIS.get().and_then(|entry| entry.as_ref()) {
+        let mut token: *mut c_void = std::ptr::null_mut();
+        let hr = unsafe {
+            (apis.register_change)(Some(fse_change_callback), std::ptr::null_mut(), &mut token)
+        };
+        if hr < 0 {
+            log::warn!(
+                "fse_windows RegisterGamingFullScreenExperienceChangeNotification failed hr={hr}"
+            );
+        } else {
+            REGISTRATION_TOKEN.store(token, Ordering::Relaxed);
+            log::info!(
+                "fse_windows monitor registered active={}",
+                FSE_ACTIVE.load(Ordering::Relaxed)
+            );
+        }
     }
-    REGISTRATION_TOKEN.store(token, Ordering::Relaxed);
-    log::info!(
-        "fse_windows monitor registered active={}",
-        FSE_ACTIVE.load(Ordering::Relaxed)
-    );
-    schedule_fse_cold_start_foreground_resync(app);
+
+    schedule_win32_foreground_gate_resync(app);
 }
 
-/// FSE 已在启动前激活时，change notification 不会触发；短时重读 foreground 并刷新 gate/采样。
-fn schedule_fse_cold_start_foreground_resync(app: &AppHandle) {
+/// Win32 前台 gate 冷启动重同步（FSE 或 Tauri 全屏；change notification 可能尚未触发）。
+fn schedule_win32_foreground_gate_resync(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         const PHASE_DELAYS_MS: [(u32, u64); 3] = [(0, 0), (1, 250), (2, 1000)];
@@ -154,13 +157,16 @@ fn schedule_fse_cold_start_foreground_resync(app: &AppHandle) {
             if delay_ms > 0 {
                 tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
             }
-            if !is_fse_active() {
+            let Some(window) = app.get_webview_window("main") else {
+                return;
+            };
+            if !uses_win32_foreground_gate(&window) {
                 continue;
             }
             sync_gamepad_input_gate(&app);
             refresh_gamepad_on_window_foreground(
                 &app,
-                &format!("fse-cold-start-foreground-resync-{phase_index}"),
+                &format!("win32-foreground-gate-resync-{phase_index}"),
             );
         }
     });
@@ -200,45 +206,64 @@ fn foreground_hwnd_belongs_to_main(main_hwnd: isize, foreground_hwnd: isize) -> 
     }
 }
 
+fn foreground_same_process_as_main(main_hwnd: isize, foreground_hwnd: isize) -> bool {
+    unsafe {
+        let mut foreground_pid = 0u32;
+        let mut main_pid = 0u32;
+        GetWindowThreadProcessId(HWND(foreground_hwnd as *mut _), Some(&mut foreground_pid));
+        GetWindowThreadProcessId(HWND(main_hwnd as *mut _), Some(&mut main_pid));
+        foreground_pid != 0 && foreground_pid == main_pid
+    }
+}
+
 pub fn foreground_belongs_to_main(main_hwnd: isize) -> bool {
     unsafe {
         let foreground = GetForegroundWindow();
         if foreground.0.is_null() {
             return false;
         }
-        foreground_hwnd_belongs_to_main(main_hwnd, foreground.0 as isize)
+        let foreground_hwnd = foreground.0 as isize;
+        if foreground_hwnd_belongs_to_main(main_hwnd, foreground_hwnd) {
+            return true;
+        }
+        foreground_same_process_as_main(main_hwnd, foreground_hwnd)
     }
 }
 
-/// FSE 下 gate：Win32 前台 HWND 归属 **或** 主窗口仍聚焦（触屏后常见子 HWND 抢前台但 Tauri 仍报失焦）。
-fn fse_shell_app_active(
-    foreground_belongs_to_main: bool,
-    focused_from_event: bool,
+/// Gate 以 Win32 前台 HWND 为准（GDK）：FSE API 激活，或壳层处于 Tauri 全屏。
+pub fn uses_win32_foreground_gate(window: &WebviewWindow) -> bool {
+    is_fse_active() || window.is_fullscreen().unwrap_or(false)
+}
+
+/// Win32 前台 gate：窗口可见且前台仍归属本应用（不读 Tauri Focused，避免触屏假失焦）。
+fn win32_foreground_shell_app_active(
+    foreground_ok: bool,
     window_visible: bool,
     window_minimized: bool,
 ) -> bool {
-    foreground_belongs_to_main || (focused_from_event && window_visible && !window_minimized)
+    window_visible && !window_minimized && foreground_ok
 }
 
 pub fn build_gate_hints(window: &WebviewWindow, focused_from_event: bool) -> ShellWindowGateHints {
-    let fse_active = is_fse_active();
+    if !uses_win32_foreground_gate(window) {
+        return ShellWindowGateHints {
+            shell_app_active: focused_from_event,
+        };
+    }
+
     let window_visible = window.is_visible().unwrap_or(false);
     let window_minimized = window.is_minimized().unwrap_or(false);
-    let main_hwnd = try_main_window_hwnd(window);
-    let foreground_ok = main_hwnd.map(foreground_belongs_to_main).unwrap_or(false);
+    let foreground_ok = try_main_window_hwnd(window)
+        .map(foreground_belongs_to_main)
+        .unwrap_or(false);
 
-    let shell_app_active = if fse_active {
-        fse_shell_app_active(
+    ShellWindowGateHints {
+        shell_app_active: win32_foreground_shell_app_active(
             foreground_ok,
-            focused_from_event,
             window_visible,
             window_minimized,
-        )
-    } else {
-        focused_from_event
-    };
-
-    ShellWindowGateHints { shell_app_active }
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -280,11 +305,14 @@ mod tests {
     }
 
     #[test]
-    fn fse_gate_uses_foreground_or_focused_visible_window() {
-        assert!(super::fse_shell_app_active(true, false, true, false));
-        assert!(super::fse_shell_app_active(false, true, true, false));
-        assert!(!super::fse_shell_app_active(false, false, true, false));
-        assert!(!super::fse_shell_app_active(false, true, false, false));
-        assert!(!super::fse_shell_app_active(false, true, true, true));
+    fn win32_foreground_gate_follows_foreground_and_window_visibility() {
+        assert!(super::win32_foreground_shell_app_active(true, true, false));
+        assert!(!super::win32_foreground_shell_app_active(
+            false, true, false
+        ));
+        assert!(!super::win32_foreground_shell_app_active(
+            true, false, false
+        ));
+        assert!(!super::win32_foreground_shell_app_active(true, true, true));
     }
 }

@@ -282,7 +282,10 @@ pub fn schedule_gamepad_fse_gate_fallback_nudge(app: &AppHandle) {
         if !enabled {
             return;
         }
-        if !mods::gamepad::fse_windows::is_fse_active() {
+        let Some(window) = app.get_webview_window("main") else {
+            return;
+        };
+        if !mods::gamepad::fse_windows::uses_win32_foreground_gate(&window) {
             return;
         }
         let Ok(snapshot) = state.gamepad.get_runtime_snapshot() else {
@@ -876,7 +879,6 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                         let promote_result = gamepad_provider
                             .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
                         if promote_result.is_ok() {
-                            // FSE 下 `WindowEvent::Focused(true)` 可能缺失；promote 与 gate 共用 foreground hints。
                             if shell_app_active {
                                 input_gate::record_shell_main_window_focused_from_os_event(true);
                             }
