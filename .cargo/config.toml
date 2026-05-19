@@ -1,0 +1,11 @@
+# SDL3 静态库在 macOS 11 部署目标下会引用 ___isPlatformVersionAtLeast，链接阶段会失败。
+# 与 CI / 本地统一抬高到 13.0，并保证 SDL cmake 与最终二进制使用同一目标。
+[env]
+MACOSX_DEPLOYMENT_TARGET = "13.0"
+CMAKE_OSX_DEPLOYMENT_TARGET = "13.0"
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-mmacosx-version-min=13.0"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-mmacosx-version-min=13.0"]

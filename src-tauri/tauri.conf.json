@@ -25,6 +25,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    },
     "resources": {
       "resources/ffmpeg/windows-x64/bin/*.dll": "",
       "resources/ffmpeg/windows-x64/bin/ffmpeg.exe": "resources/ffmpeg/windows-x64/bin/ffmpeg.exe",

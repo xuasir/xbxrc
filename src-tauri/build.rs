@@ -5,7 +5,16 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
     emit_build_metadata();
+    link_macos_availability_runtime();
     tauri_build::build()
+}
+
+/// SDL3 静态库中的 ObjC `@available` 会引用 `___isPlatformVersionAtLeast`。
+fn link_macos_availability_runtime() {
+    if std::env::var_os("CARGO_CFG_TARGET_OS").as_deref() != Some("macos") {
+        return;
+    }
+    println!("cargo:rustc-link-lib=clang_rt.osx");
 }
 
 fn emit_build_metadata() {

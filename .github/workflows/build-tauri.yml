@@ -23,11 +23,9 @@ jobs:
           - os: macos-latest
             label: macos
             bundle: dmg
-            artifact_glob: target/release/bundle/dmg/*.dmg
           - os: windows-latest
             label: windows
             bundle: nsis
-            artifact_glob: target/release/bundle/nsis/*.exe
 
     runs-on: ${{ matrix.os }}
     env:
@@ -36,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read app version
         id: version
@@ -45,9 +43,15 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Install system dependencies (macOS)
+      - name: Verify native build prerequisites (macOS)
         if: runner.os == 'macOS'
-        run: brew install opus pkg-config libx11 libxcb
+        shell: bash
+        run: |
+          set -euo pipefail
+          # macos-latest 镜像已预装 pkgconf / cmake，无需 brew install。
+          # 见 https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
+          command -v cmake >/dev/null
+          command -v pkg-config >/dev/null
 
       - name: Verify vendored FFmpeg SDK
         shell: bash
@@ -67,19 +71,30 @@ jobs:
             fi
           fi
 
-      - name: Install LLVM (Windows, bindgen)
+      - name: Install Clang (Windows, bindgen)
         if: runner.os == 'Windows'
-        uses: KyleMayes/install-llvm-action@v2
+        uses: egor-tensin/setup-clang@v2
         with:
-          version: "18.1"
+          platform: x64
+          cc: "0"
+
+      - name: Configure LIBCLANG_PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $libclang = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (-not (Test-Path (Join-Path $libclang 'libclang.dll'))) {
+            throw "libclang.dll not found under $libclang"
+          }
+          "LIBCLANG_PATH=$libclang" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 9
 
       - name: Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -94,14 +109,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          shared-key: tauri-${{ matrix.label }}
+          # macos13：SDL3 静态库部署目标变更后需失效旧缓存
+          shared-key: tauri-${{ matrix.label }}-macos13
 
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Setup MSVC environment (Windows)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
 
@@ -110,35 +126,42 @@ jobs:
         env:
           CI: true
 
-      - name: Upload platform bundle
-        uses: actions/upload-artifact@v4
+      - name: Stage installer
+        id: installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          version="${{ steps.version.outputs.value }}"
+          label="${{ matrix.label }}"
+
+          if [[ "$label" == "macos" ]]; then
+            shopt -s nullglob
+            bundles=(target/release/bundle/dmg/*.dmg)
+            if [[ ${#bundles[@]} -eq 0 ]]; then
+              echo "No DMG found under target/release/bundle/dmg/"
+              exit 1
+            fi
+            file="dist/xbxrc-${version}-macos.dmg"
+            cp "${bundles[0]}" "$file"
+          else
+            shopt -s nullglob
+            bundles=(target/release/bundle/nsis/*.exe)
+            if [[ ${#bundles[@]} -eq 0 ]]; then
+              echo "No NSIS installer found under target/release/bundle/nsis/"
+              exit 1
+            fi
+            file="dist/xbxrc-${version}-windows-setup.exe"
+            cp "${bundles[0]}" "$file"
+          fi
+
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          ls -lh "$file"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
         with:
-          name: xbxrc-${{ matrix.label }}-${{ steps.version.outputs.value }}-${{ runner.arch }}
+          name: xbxrc-${{ matrix.label }}-${{ steps.version.outputs.value }}
+          path: ${{ steps.installer.outputs.file }}
+          compression-level: 0
           if-no-files-found: error
-          path: ${{ matrix.artifact_glob }}
-
-  package:
-    name: package-installers
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Download platform bundles
-        uses: actions/download-artifact@v4
-        with:
-          pattern: xbxrc-*
-          merge-multiple: true
-          path: dist/installers
-
-      - name: List installers
-        run: find dist/installers -type f | sort
-
-      - name: Upload combined installers
-        uses: actions/upload-artifact@v4
-        with:
-          name: xbxrc-installers
-          if-no-files-found: error
-          path: dist/installers/**/*
-          retention-days: 30
