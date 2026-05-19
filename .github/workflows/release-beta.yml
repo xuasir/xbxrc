@@ -10,10 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publish-beta:
-    name: publish-${{ matrix.label }}
+  build:
+    name: build-${{ matrix.label }}
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       fail-fast: false
@@ -21,10 +21,10 @@ jobs:
         include:
           - os: macos-latest
             label: macos
-            args: --bundles dmg
+            bundle: dmg
           - os: windows-latest
             label: windows
-            args: --bundles nsis
+            bundle: nsis
 
     runs-on: ${{ matrix.os }}
     env:
@@ -112,7 +112,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          shared-key: xbxrc-release-beta-${{ matrix.label }}
+          shared-key: xbxrc-${{ matrix.label }}
           cache-all-crates: true
           cache-workspace-crates: true
 
@@ -125,18 +125,79 @@ jobs:
         with:
           arch: x64
 
-      - name: Build and publish beta release
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri bundle (${{ matrix.bundle }})
+        run: pnpm tauri build --bundles ${{ matrix.bundle }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release-collect-assets.mjs "release-assets-${{ matrix.label }}" "${{ steps.version.outputs.value }}" "${{ matrix.label }}"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
         with:
-          projectPath: src-tauri
-          tagName: beta
-          releaseName: xbxrc beta
-          releaseBody: Rolling beta channel for release/test. Do not delete this release tag.
-          prerelease: true
-          uploadUpdaterJson: true
-          updaterJsonPreferNsis: true
-          args: ${{ matrix.args }}
+          name: release-assets-${{ matrix.label }}
+          path: release-assets-${{ matrix.label }}/
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    name: publish-github-release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release-assets
+          pattern: release-assets-*
+          merge-multiple: false
+
+      - name: Resolve beta version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./release-assets/release-assets-macos/manifest.json').version")"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build latest.json
+        run: |
+          node scripts/release-write-latest-json.mjs release-assets "${{ steps.version.outputs.value }}" \
+            "https://github.com/xuasir/xbxrc/releases/download/beta"
+
+      - name: Publish beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.value }}"
+          upload_dir="upload"
+          mkdir -p "$upload_dir"
+          shopt -s nullglob
+          for dir in release-assets/release-assets-*; do
+            cp -a "$dir"/* "$upload_dir"/
+          done
+          cp release-assets/latest.json "$upload_dir/latest.json"
+
+          if ! gh release view beta >/dev/null 2>&1; then
+            gh release create beta \
+              --prerelease \
+              --title "xbxrc beta" \
+              --notes "Rolling beta channel (release/test). Version ${version}. Do not delete this release."
+          fi
+
+          gh release upload beta "$upload_dir"/* --clobber
+          echo "Published beta ${version} to https://github.com/xuasir/xbxrc/releases/tag/beta"
