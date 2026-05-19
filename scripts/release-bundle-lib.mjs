@@ -1,11 +1,15 @@
 import { existsSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 
 export function resolveBundleRoot(root) {
-  const candidates = [
+  const candidates = []
+  if (process.env.RELEASE_BUNDLE_ROOT) {
+    candidates.push(resolve(process.env.RELEASE_BUNDLE_ROOT))
+  }
+  candidates.push(
     join(root, 'target', 'release', 'bundle'),
     join(root, 'src-tauri', 'target', 'release', 'bundle'),
-  ]
+  )
   const hit = candidates.find(path => existsSync(path))
   if (!hit) {
     throw new Error(
@@ -59,12 +63,40 @@ export const COLLECTED_RELEASE_EXPECTATIONS = {
   ],
 }
 
+function dirHasCollectedFiles(dir, label) {
+  const expectations = COLLECTED_RELEASE_EXPECTATIONS[label]
+  if (!expectations || !existsSync(dir)) {
+    return false
+  }
+  return expectations.every(item => findBundleFile(dir, item.suffix, item))
+}
+
 export function resolveCollectedDir(assetsRoot, label) {
-  const candidates = [
-    join(assetsRoot, label),
-    join(assetsRoot, `release-assets-${label}`),
-  ]
-  return candidates.find(path => existsSync(path)) ?? null
+  const root = resolve(assetsRoot)
+  const platformDirName = `release-assets-${label}`
+
+  // build job：collect 写入的目录（通常为 release-assets-<label>/）
+  if (basename(root) === platformDirName && existsSync(root)) {
+    return root
+  }
+
+  // 传入路径本身就是已收集的平台目录
+  if (dirHasCollectedFiles(root, label)) {
+    return root
+  }
+
+  // publish job：download-artifact 后为 release-assets/release-assets-macos/
+  const nested = join(root, platformDirName)
+  if (existsSync(nested)) {
+    return nested
+  }
+
+  const flat = join(root, label)
+  if (existsSync(flat)) {
+    return flat
+  }
+
+  return null
 }
 
 export function checkReleaseCollected(assetsRoot, label) {

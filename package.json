@@ -18,7 +18,8 @@
     "tauri:build:release:macos": "pnpm tauri build --bundles app,dmg",
     "tauri:build:release:windows": "pnpm tauri build --bundles nsis",
     "release:check-bundle": "node scripts/release-check-bundle.mjs",
-    "release:check-collected": "node scripts/release-check-collected.mjs"
+    "release:check-collected": "node scripts/release-check-collected.mjs",
+    "release:verify-pipeline": "node scripts/release-verify-pipeline.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

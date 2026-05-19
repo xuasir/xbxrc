@@ -21,7 +21,7 @@ let failed = false
 for (const label of labels) {
   const { dir, found, missing } = checkReleaseCollected(assetsRoot, label)
   if (!dir) {
-    console.error(`[${label}] 缺少目录: ${assetsRoot}/release-assets-${label}`)
+    console.error(`[${label}] 未找到收集目录 (root=${assetsRoot})`)
     failed = true
     continue
   }
