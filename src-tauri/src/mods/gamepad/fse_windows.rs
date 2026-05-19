@@ -7,8 +7,9 @@ use std::sync::OnceLock;
 use ohmygamepad_sdl3::ShellWindowGateHints;
 use tauri::{AppHandle, Manager, WebviewWindow};
 use windows::core::PCSTR;
+use windows::Win32::Foundation::HWND;
 use windows::Win32::System::WindowsProgramming::IsApiSetImplemented;
-use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GetForegroundWindow, IsChild, GA_ROOT};
 
 use crate::mods::gamepad::input_gate::sync_gamepad_input_gate;
 use crate::shell::refresh_gamepad_on_window_foreground;
@@ -160,20 +161,54 @@ pub fn shutdown_fse_monitor() {
     }
 }
 
-pub fn foreground_hwnd_matches_main(main_hwnd: isize) -> bool {
+/// 前台 HWND 是否仍属于主窗口（含 WebView2 子窗口；触屏后常见前台落在子 HWND 上）。
+fn foreground_hwnd_belongs_to_main(main_hwnd: isize, foreground_hwnd: isize) -> bool {
+    if main_hwnd == foreground_hwnd {
+        return true;
+    }
+    unsafe {
+        let main = HWND(main_hwnd as *mut _);
+        let foreground = HWND(foreground_hwnd as *mut _);
+        if IsChild(main, foreground).as_bool() {
+            return true;
+        }
+        let main_root = GetAncestor(main, GA_ROOT);
+        let foreground_root = GetAncestor(foreground, GA_ROOT);
+        !main_root.0.is_null() && main_root == foreground_root
+    }
+}
+
+pub fn foreground_belongs_to_main(main_hwnd: isize) -> bool {
     unsafe {
         let foreground = GetForegroundWindow();
-        !foreground.0.is_null() && foreground.0 as isize == main_hwnd
+        if foreground.0.is_null() {
+            return false;
+        }
+        foreground_hwnd_belongs_to_main(main_hwnd, foreground.0 as isize)
     }
+}
+
+/// FSE 下 `WindowEvent::Focused(false)` 可能由触屏/WebView2 子 HWND 抢前台引起，但应用仍应视为可交互。
+pub fn shell_retains_foreground_despite_focus_loss(app: &AppHandle) -> bool {
+    if !is_fse_active() {
+        return false;
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        return false;
+    };
+    let Some(main_hwnd) = crate::shell::win_hwnd::try_main_window_hwnd(&window) else {
+        return false;
+    };
+    foreground_belongs_to_main(main_hwnd)
 }
 
 pub fn build_gate_hints(window: &WebviewWindow, focused_from_event: bool) -> ShellWindowGateHints {
     let fse_active = is_fse_active();
     let main_hwnd = try_main_window_hwnd(window);
-    let foreground_hwnd_matches_main = main_hwnd.map(foreground_hwnd_matches_main).unwrap_or(false);
+    let foreground_belongs_to_main = main_hwnd.map(foreground_belongs_to_main).unwrap_or(false);
 
     let shell_app_active = if fse_active {
-        foreground_hwnd_matches_main
+        foreground_belongs_to_main
     } else {
         focused_from_event
     };
@@ -207,5 +242,15 @@ mod tests {
             FseApiLoadError::ApiSetUnavailable,
             FseApiLoadError::LibraryUnavailable
         );
+    }
+
+    #[test]
+    fn foreground_hwnd_belongs_to_main_when_handles_match() {
+        assert!(super::foreground_hwnd_belongs_to_main(0x100, 0x100));
+    }
+
+    #[test]
+    fn foreground_hwnd_belongs_to_main_when_handles_differ_without_win32() {
+        assert!(!super::foreground_hwnd_belongs_to_main(0x100, 0x200));
     }
 }

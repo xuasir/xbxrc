@@ -119,7 +119,31 @@ pub fn run() {
                             "window-focused",
                         );
                     } else {
-                        hint_gamepad_shell_background(window, "window-unfocused");
+                        #[cfg(target_os = "windows")]
+                        let fse_still_owns_foreground =
+                            mods::gamepad::fse_windows::shell_retains_foreground_despite_focus_loss(
+                                &window.app_handle(),
+                            );
+                        #[cfg(not(target_os = "windows"))]
+                        let fse_still_owns_foreground = false;
+                        if fse_still_owns_foreground {
+                            record_gamepad_shell_trace(
+                                window,
+                                "windowUnfocusedIgnoredFseForegroundRetained",
+                                serde_json::json!({
+                                    "windowLabel": window.label(),
+                                }),
+                            );
+                            mods::gamepad::input_gate::sync_gamepad_input_gate(
+                                &window.app_handle(),
+                            );
+                            shell::refresh_gamepad_on_window_foreground(
+                                &window.app_handle(),
+                                "fse-foreground-retained-after-unfocus",
+                            );
+                        } else {
+                            hint_gamepad_shell_background(window, "window-unfocused");
+                        }
                     }
                 }
                 tauri::WindowEvent::Resized(_) => match window.is_minimized() {
