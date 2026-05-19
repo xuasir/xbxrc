@@ -836,7 +836,26 @@
     "pages": {
       "general": {
         "title": "General",
-        "sectionAppearance": "Appearance & interface"
+        "sectionAppearance": "Appearance & interface",
+        "appUpdate": {
+          "sectionTitle": "App updates",
+          "currentVersion": "Current version {version}",
+          "channelLabel": "Update channel",
+          "channelStable": "Stable",
+          "channelBeta": "Beta",
+          "channelHint": "Switching from beta back to stable may require a reinstall if the stable build is older.",
+          "statusIdle": "Check for a new version.",
+          "statusChecking": "Checking for updates…",
+          "statusAvailable": "Update available: {version}",
+          "statusDownloading": "Downloading update…",
+          "statusDownloadingPercent": "Downloading update… {percent}%",
+          "statusInstalling": "Installing update…",
+          "statusInstalled": "Update installed. Restart to apply.",
+          "statusError": "Update failed. Try again later.",
+          "actionCheck": "Check for updates",
+          "actionDownload": "Download and install",
+          "actionRelaunch": "Restart app"
+        }
       },
       "streamingExperience": {
         "title": "Streaming",

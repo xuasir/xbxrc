@@ -302,4 +302,20 @@ export interface XBoxRpcSchema {
   system: {
     openExternal: RpcMethod<{ url: string }, void>
   }
+  updater: {
+    getChannel: RpcMethod<void, { channel: 'stable' | 'beta' }>
+    setChannel: RpcMethod<{ channel: 'stable' | 'beta' }, { channel: 'stable' | 'beta' }>
+    check: RpcMethod<
+      void,
+      {
+        currentVersion: string
+        updateAvailable: boolean
+        version: string | null
+        notes: string | null
+        date: string | null
+      }
+    >
+    downloadAndInstall: RpcMethod<void, { accepted: boolean }>
+    relaunch: RpcMethod<void, { accepted: boolean }>
+  }
 }

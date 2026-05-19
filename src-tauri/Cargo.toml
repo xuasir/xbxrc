@@ -68,6 +68,8 @@ tauri-plugin-shell = "2.3.5"
 tauri-plugin-fs = "2.4.5"
 tauri-plugin-store = "2.4.2"
 tauri-plugin-keepawake = "0.1.1"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 tokio.workspace = true
 

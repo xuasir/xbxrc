@@ -143,6 +143,13 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
         )
         .await
         .map_err(Into::into),
+        "updater" => mods::updater::rpc::handle_rpc(
+            payload.method.as_str(),
+            payload.params,
+            app_handle.clone(),
+        )
+        .await
+        .map_err(Into::into),
         _ => Err(crate::error::AppError::Internal(format!(
             "Unknown namespace: {}",
             payload.namespace

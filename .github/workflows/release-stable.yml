@@ -1,0 +1,139 @@
+name: Release Stable
+
+on:
+  push:
+    tags:
+      - v*
+
+concurrency:
+  group: release-stable-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-stable:
+    name: publish-${{ matrix.label }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macos
+            args: --bundles dmg
+          - os: windows-latest
+            label: windows
+            args: --bundles nsis
+
+    runs-on: ${{ matrix.os }}
+    env:
+      CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+      CARGO_INCREMENTAL: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          expected="${tag#v}"
+          actual="$(node -p "require('./package.json').version")"
+          tauri="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "package.json version ($actual) does not match tag ($tag)"
+            exit 1
+          fi
+          if [[ "$tauri" != "$expected" ]]; then
+            echo "tauri.conf.json version ($tauri) does not match tag ($tag)"
+            exit 1
+          fi
+
+      - name: Verify native build prerequisites (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v cmake >/dev/null
+          command -v pkg-config >/dev/null
+
+      - name: Verify vendored FFmpeg SDK
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            test -d "src-tauri/resources/ffmpeg/windows-x64/include"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/lib"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/bin"
+            test -f "src-tauri/resources/ffmpeg/windows-x64/bin/ffmpeg.exe"
+          else
+            if [[ "$(uname -m)" == "arm64" ]]; then
+              test -d "src-tauri/resources/ffmpeg/macos-arm64/include"
+              test -d "src-tauri/resources/ffmpeg/macos-arm64/lib"
+            else
+              test -d "src-tauri/resources/ffmpeg/macos-x64/include"
+              test -d "src-tauri/resources/ffmpeg/macos-x64/lib"
+            fi
+          fi
+
+      - name: Configure LIBCLANG_PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $libclang = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (-not (Test-Path (Join-Path $libclang 'libclang.dll'))) {
+            throw "libclang.dll not found under $libclang"
+          }
+          "LIBCLANG_PATH=$libclang" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          shared-key: xbxrc-release-stable-${{ matrix.label }}
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Build and publish stable release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: src-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: xbxrc ${{ github.ref_name }}
+          releaseBody: Stable release for ${{ github.ref_name }}.
+          prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

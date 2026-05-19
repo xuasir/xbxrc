@@ -713,6 +713,7 @@ async fn build_services(
             auth_provider.clone(),
             startup_flags.clone(),
         ));
+    let updater_service = Arc::new(mods::updater::UpdaterService::new(app_handle.clone()));
 
     let state = AppState {
         app_state: app_state_service,
@@ -723,6 +724,7 @@ async fn build_services(
         runtime_trace,
         xbxengine: xbxengine_service,
         gamepad: gamepad_service,
+        updater: updater_service,
         native_video,
         startup_flags,
         is_quitting,

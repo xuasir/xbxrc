@@ -31,6 +31,7 @@ import {
   SETTING_PAGE_LABEL_KEYS,
   SETTING_PAGE_ORDER,
 } from './settings/setting-page-schema'
+import SettingAppUpdateSection from './settings/SettingAppUpdateSection.vue'
 import SettingInputToolsSection from './settings/SettingInputToolsSection.vue'
 import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
@@ -689,6 +690,12 @@ onUnmounted(() => {
                 @row-confirm="(row) => void handleRowConfirm(row)"
                 @tool-click="handleToolClick"
                 @action-click="(id) => void handleActionClick(id)"
+              />
+
+              <SettingAppUpdateSection
+                v-if="activeTabKey === 'general'"
+                :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                :nav-node-base-id="`${SPATIAL_NAV_NODE_IDS.settingTabs.general}.appUpdate`"
               />
 
               <SettingInputToolsSection

@@ -74,6 +74,7 @@
 - `project-task` 的整理与常见冲突吸收由后台 skills 负责：
   - [`task-housekeeping`](.agents/skills/task-housekeeping/SKILL.md)
   - [`task-merge-guard`](.agents/skills/task-merge-guard/SKILL.md)
+- 桌面应用发版（beta / stable，仅需提供版本号）使用 [`release-desktop`](.agents/skills/release-desktop/SKILL.md)
 
 # Task Policy
 

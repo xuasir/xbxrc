@@ -836,7 +836,26 @@
     "pages": {
       "general": {
         "title": "通用",
-        "sectionAppearance": "外观与界面"
+        "sectionAppearance": "外观与界面",
+        "appUpdate": {
+          "sectionTitle": "应用更新",
+          "currentVersion": "当前版本 {version}",
+          "channelLabel": "更新通道",
+          "channelStable": "稳定版",
+          "channelBeta": "测试版",
+          "channelHint": "从测试版切回稳定版时，若版本号更低，可能需要重新安装。",
+          "statusIdle": "可检查是否有新版本。",
+          "statusChecking": "正在检查更新…",
+          "statusAvailable": "发现新版本 {version}",
+          "statusDownloading": "正在下载更新…",
+          "statusDownloadingPercent": "正在下载更新… {percent}%",
+          "statusInstalling": "正在安装更新…",
+          "statusInstalled": "更新已安装，重启后生效。",
+          "statusError": "更新失败，请稍后重试。",
+          "actionCheck": "检查更新",
+          "actionDownload": "下载并安装",
+          "actionRelaunch": "重启应用"
+        }
       },
       "streamingExperience": {
         "title": "串流体验",

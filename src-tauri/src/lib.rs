@@ -72,6 +72,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_keepawake::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .on_page_load(|webview, _payload| {
             if let Some(app_state) = webview.window().try_state::<shell::state::AppState>() {
                 app_state.runtime_trace.record_event(

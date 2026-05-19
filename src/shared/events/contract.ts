@@ -8,6 +8,7 @@ import type {
   GamepadSlotSnapshotRendererEvent,
 } from './gamepad'
 import type { StreamingStartupEventRendererEvent } from './streaming'
+import type { UpdaterProgressEvent } from './updater'
 import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 import { AUTH_SESSION_READY_CHANNEL, AUTH_STATE_CHANGED_CHANNEL } from './auth'
 import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
@@ -22,6 +23,7 @@ import {
 import {
   STREAMING_STARTUP_EVENT_CHANNEL,
 } from './streaming'
+import { UPDATER_PROGRESS_CHANNEL } from './updater'
 import {
   STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
 
@@ -37,6 +39,7 @@ export type {
   GamepadSlotSnapshotRendererEvent,
 } from './gamepad'
 export type { StreamingStartupEventRendererEvent } from './streaming'
+export type { UpdaterProgressEvent } from './updater'
 export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 
 /**
@@ -55,6 +58,7 @@ export interface XBoxEventSchema {
   'gamepad.inputGateChanged': GamepadInputGateChangedRendererEvent
   'streaming.startupEvent': StreamingStartupEventRendererEvent
   'streaming.xbxEngineRuntimeEvent': XbxEngineRuntimeEventRendererEvent
+  'updater.progress': UpdaterProgressEvent
 }
 
 export type XBoxEventName = keyof XBoxEventSchema
@@ -74,4 +78,5 @@ export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
   'gamepad.inputGateChanged': GAMEPAD_INPUT_GATE_CHANGED_CHANNEL,
   'streaming.startupEvent': STREAMING_STARTUP_EVENT_CHANNEL,
   'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
+  'updater.progress': UPDATER_PROGRESS_CHANNEL,
 }

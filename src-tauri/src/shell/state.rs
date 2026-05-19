@@ -20,6 +20,7 @@ pub struct AppState {
     pub runtime_trace: mods::runtime_trace::RuntimeTraceRecorderRef,
     pub xbxengine: mods::xbxengine::XbxEngineProviderRef,
     pub gamepad: mods::gamepad::GamepadProviderRef,
+    pub updater: mods::updater::UpdaterServiceRef,
     pub native_video: NativeVideoRegistryRef,
     pub startup_flags: Arc<RwLock<StartupFlagsState>>,
     pub is_quitting: Arc<AtomicBool>,

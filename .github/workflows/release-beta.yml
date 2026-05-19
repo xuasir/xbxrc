@@ -1,0 +1,142 @@
+name: Release Beta
+
+on:
+  push:
+    branches:
+      - release/test
+
+concurrency:
+  group: release-beta-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-beta:
+    name: publish-${{ matrix.label }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macos
+            args: --bundles dmg
+          - os: windows-latest
+            label: windows
+            args: --bundles nsis
+
+    runs-on: ${{ matrix.os }}
+    env:
+      CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+      CARGO_INCREMENTAL: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set beta version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(node -p "require('./package.json').version")"
+          version="${base}-beta.${{ github.run_number }}"
+          node <<EOF
+          const fs = require('fs');
+          const pkgPath = 'package.json';
+          const tauriPath = 'src-tauri/tauri.conf.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = '${version}';
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+          tauri.version = '${version}';
+          fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
+          EOF
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify native build prerequisites (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v cmake >/dev/null
+          command -v pkg-config >/dev/null
+
+      - name: Verify vendored FFmpeg SDK
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            test -d "src-tauri/resources/ffmpeg/windows-x64/include"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/lib"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/bin"
+            test -f "src-tauri/resources/ffmpeg/windows-x64/bin/ffmpeg.exe"
+          else
+            if [[ "$(uname -m)" == "arm64" ]]; then
+              test -d "src-tauri/resources/ffmpeg/macos-arm64/include"
+              test -d "src-tauri/resources/ffmpeg/macos-arm64/lib"
+            else
+              test -d "src-tauri/resources/ffmpeg/macos-x64/include"
+              test -d "src-tauri/resources/ffmpeg/macos-x64/lib"
+            fi
+          fi
+
+      - name: Configure LIBCLANG_PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $libclang = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (-not (Test-Path (Join-Path $libclang 'libclang.dll'))) {
+            throw "libclang.dll not found under $libclang"
+          }
+          "LIBCLANG_PATH=$libclang" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          shared-key: xbxrc-release-beta-${{ matrix.label }}
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Build and publish beta release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: src-tauri
+          tagName: beta
+          releaseName: xbxrc beta
+          releaseBody: Rolling beta channel for release/test. Do not delete this release tag.
+          prerelease: true
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

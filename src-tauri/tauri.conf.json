@@ -22,9 +22,21 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2MkNBNDE3NjA2NkMzOEMKUldTTXcyWmdGNlFzRmk3TDNKVXk5YitZMjNnOHRTeC9VSUZ1cDdFLzJrSzRXVmxYbnNBVU5KK00K",
+      "endpoints": [
+        "https://github.com/xuasir/xbxrc/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "macOS": {
       "minimumSystemVersion": "13.0"
     },
