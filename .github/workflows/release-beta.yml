@@ -21,7 +21,7 @@ jobs:
         include:
           - os: macos-latest
             label: macos
-            bundle: dmg
+            bundle: app,dmg
           - os: windows-latest
             label: windows
             bundle: nsis
@@ -131,6 +131,10 @@ jobs:
           CI: true
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Verify release bundle layout
+        shell: bash
+        run: node scripts/release-check-bundle.mjs "${{ matrix.label }}"
 
       - name: Collect release assets
         shell: bash
