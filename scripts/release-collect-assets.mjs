@@ -18,7 +18,23 @@ if (!version || !label) {
 }
 
 const root = resolve(import.meta.dirname, '..')
-const bundleRoot = join(root, 'src-tauri', 'target', 'release', 'bundle')
+
+function resolveBundleRoot() {
+  const candidates = [
+    join(root, 'target', 'release', 'bundle'),
+    join(root, 'src-tauri', 'target', 'release', 'bundle'),
+  ]
+  const hit = candidates.find(path => existsSync(path))
+  if (!hit) {
+    throw new Error(
+      `未找到 bundle 目录，已尝试:\n${candidates.map(path => `  - ${path}`).join('\n')}`,
+    )
+  }
+  return hit
+}
+
+const bundleRoot = resolveBundleRoot()
+console.log(`bundle root: ${bundleRoot}`)
 
 function copyFirstMatch(dir, pattern, destName) {
   if (!existsSync(dir)) {
