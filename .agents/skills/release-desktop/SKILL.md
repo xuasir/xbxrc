@@ -19,7 +19,8 @@ description: >-
 
 - Beta 实际构建版本：`{基础版本}-beta.{github.run_number}`（CI 自动，勿写入仓库）
 - Stable：tag 为 `v0.2.0`，`package.json` / `tauri.conf.json` 必须为 `0.2.0`（**无 v**）
-- `build-tauri.yml` 只打 artifact，**不会**发 Release
+- `build-tauri.yml` 仅在 push **`release/quick`** 时跑构建验收（artifact），**不会**发 Release
+- 快速验证：合并到 `release/quick` 并 push，无需发 beta/stable
 
 ## 解析用户意图
 

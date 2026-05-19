@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - "release/**"
+      # 构建验收（artifact only）：推 release/quick 做快速验证，不触发 Release 发布
+      - release/quick
 
 concurrency:
   group: build-tauri-${{ github.workflow }}-${{ github.ref }}

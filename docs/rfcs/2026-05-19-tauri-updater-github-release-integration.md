@@ -11,7 +11,7 @@
 
 ## Background
 
-- 当前仓库已经具备 GitHub CI 构建基础，[`.github/workflows/build-tauri.yml`](/Users/guo.xu/Documents/code/games/xbxrc/.github/workflows/build-tauri.yml) 会在 `release/**` 分支上构建 `dmg` 与 `nsis` 安装包，并上传为 GitHub Actions artifact。
+- 当前仓库已经具备 GitHub CI 构建基础，[`.github/workflows/build-tauri.yml`](/Users/guo.xu/Documents/code/games/xbxrc/.github/workflows/build-tauri.yml) 会在 `release/quick` 分支上构建 `dmg` 与 `nsis` 安装包，并上传为 GitHub Actions artifact（快速验收，不发布 Release）。
 - 当前发布链路还缺少 release 级分发与应用内更新入口：
   - workflow `permissions` 仍为 `contents: read`
   - 构建产物只进入 Actions artifact，没有进入 GitHub Release
@@ -83,7 +83,7 @@
 
 ### B. 保留现有 build CI，新增 release CI
 
-- 现有 [`build-tauri.yml`](/Users/guo.xu/Documents/code/games/xbxrc/.github/workflows/build-tauri.yml) 继续承担分支上的构建验收与 artifact 输出。
+- 现有 [`build-tauri.yml`](/Users/guo.xu/Documents/code/games/xbxrc/.github/workflows/build-tauri.yml) 在 `release/quick` 承担构建验收与 artifact 输出；`release/test` 仅触发 beta 发布。
 - 新增独立 release workflow，承担：
   - tag 触发或人工触发的正式发布
   - GitHub Release 创建
