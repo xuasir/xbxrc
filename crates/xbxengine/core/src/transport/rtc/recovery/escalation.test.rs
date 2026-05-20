@@ -5,10 +5,10 @@ use super::{
 use std::time::Duration;
 
 #[test]
-fn transport_await_anchor_label_parses_as_transport_await_keyframe() {
+fn receiver_waiting_keyframe_label_parses_as_wait_keyframe() {
     assert_eq!(
-        VideoEscalationReason::from_recovery_reason_label("transportAwaitRecoveryAnchor"),
-        Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        VideoEscalationReason::from_recovery_reason_label("receiverWaitingKeyframe"),
+        Some(VideoEscalationReason::WaitKeyframe)
     );
 }
 
@@ -452,7 +452,7 @@ fn display_supply_critical_never_promotes_to_reconnect_candidate() {
 }
 
 #[test]
-fn await_recovery_keyframe_is_throttled_within_same_epoch() {
+fn transport_await_recovery_keyframe_is_suppressed_for_receiver_local() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 250,
         keyframe_burst_threshold: 3,
@@ -461,36 +461,18 @@ fn await_recovery_keyframe_is_throttled_within_same_epoch() {
         ..VideoEscalationConfig::default()
     });
 
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::RequestPli
-    );
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::CoalescedKeyframeInFlight
-    );
-    std::thread::sleep(Duration::from_millis(130));
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::CoalescedKeyframeInFlight
-    );
-    std::thread::sleep(Duration::from_millis(130));
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::CoalescedKeyframeInFlight
-    );
+    for _ in 0..4 {
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            RecoveryAction::CooldownSuppressed
+        );
+    }
 }
 
 #[test]
-fn persistent_await_recovery_keyframe_stays_in_keyframe_chain() {
+fn persistent_await_recovery_keyframe_stays_suppressed_for_receiver_local() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 120,
         keyframe_burst_threshold: 1,
@@ -500,26 +482,15 @@ fn persistent_await_recovery_keyframe_stays_in_keyframe_chain() {
         keyframe_upgrade_min_delay_ms: 0,
     });
 
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::RequestPli
-    );
-    std::thread::sleep(Duration::from_millis(240));
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::RequestFir
-    );
-    std::thread::sleep(Duration::from_millis(480));
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::RequestFir
-    );
+    for _ in 0..3 {
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            RecoveryAction::CooldownSuppressed
+        );
+        std::thread::sleep(Duration::from_millis(240));
+    }
 }
 
 #[test]
@@ -537,14 +508,14 @@ fn keyframe_epoch_resets_on_reason_change() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::CooldownSuppressed
     );
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::CooldownSuppressed
     );
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(
@@ -570,13 +541,13 @@ fn keyframe_epoch_can_be_reset_explicitly_after_recovery() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::CooldownSuppressed
     );
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::CooldownSuppressed
     );
     controller.reset_keyframe_epoch();
     std::thread::sleep(Duration::from_millis(220));
@@ -584,7 +555,7 @@ fn keyframe_epoch_can_be_reset_explicitly_after_recovery() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::CooldownSuppressed
     );
 }
 
@@ -655,26 +626,15 @@ fn await_recovery_keyframe_is_throttled_within_window_and_releases_after_window(
         keyframe_upgrade_min_delay_ms: 0,
     });
 
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::RequestPli
-    );
-    std::thread::sleep(Duration::from_millis(180));
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::CoalescedKeyframeInFlight
-    );
-    std::thread::sleep(Duration::from_millis(140));
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .action,
-        RecoveryAction::RequestFir
-    );
+    for _ in 0..3 {
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            RecoveryAction::CooldownSuppressed
+        );
+        std::thread::sleep(Duration::from_millis(180));
+    }
 }
 
 #[test]
@@ -819,18 +779,18 @@ fn media_policy_disallows_reconnect_for_transport_await_hard_stuck() {
         controller
             .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, false)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::CooldownSuppressed
     );
     std::thread::sleep(Duration::from_millis(240));
     let second = controller
         .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, false)
         .action;
-    assert_ne!(second, RecoveryAction::RequestReconnectCandidate);
+    assert_eq!(second, RecoveryAction::CooldownSuppressed);
     std::thread::sleep(Duration::from_millis(480));
     let third = controller
         .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, false)
         .action;
-    assert_ne!(third, RecoveryAction::RequestReconnectCandidate);
+    assert_eq!(third, RecoveryAction::CooldownSuppressed);
 }
 
 #[test]
@@ -848,18 +808,18 @@ fn transport_await_hard_stuck_never_promotes_to_reconnect_even_when_reconnect_al
         controller
             .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, true)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::CooldownSuppressed
     );
     std::thread::sleep(Duration::from_millis(240));
     let second = controller
         .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, true)
         .action;
-    assert_ne!(second, RecoveryAction::RequestReconnectCandidate);
+    assert_eq!(second, RecoveryAction::CooldownSuppressed);
     std::thread::sleep(Duration::from_millis(480));
     let third = controller
         .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, true)
         .action;
-    assert_ne!(third, RecoveryAction::RequestReconnectCandidate);
+    assert_eq!(third, RecoveryAction::CooldownSuppressed);
 }
 
 #[test]
@@ -877,7 +837,7 @@ fn keyframe_budget_resets_after_new_recovery_epoch() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::CooldownSuppressed
     );
     controller.reconcile_keyframe_transport_feedback(KeyframeTransportFeedback::SentPending);
     std::thread::sleep(Duration::from_millis(130));
@@ -893,16 +853,13 @@ fn keyframe_budget_resets_after_new_recovery_epoch() {
     let held = controller
         .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         .action;
-    assert!(matches!(
-        held,
-        RecoveryAction::CooldownSuppressed | RecoveryAction::CoalescedKeyframeInFlight
-    ));
+    assert_eq!(held, RecoveryAction::CooldownSuppressed);
     controller.begin_recovery_epoch(4);
     std::thread::sleep(Duration::from_millis(130));
     let reopened = controller
         .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         .action;
-    assert_ne!(reopened, RecoveryAction::CooldownSuppressed);
+    assert_eq!(reopened, RecoveryAction::CooldownSuppressed);
 }
 
 #[test]
@@ -919,7 +876,7 @@ fn unsent_pending_keyframe_feedback_rolls_back_provisional_budget() {
     let first = controller
         .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         .action;
-    assert_eq!(first, RecoveryAction::RequestPli);
+    assert_eq!(first, RecoveryAction::CooldownSuppressed);
     assert_eq!(controller.budget_state().keyframe_budget_used, 0);
 
     controller.reconcile_keyframe_transport_feedback(KeyframeTransportFeedback::UnsentPending);
@@ -928,7 +885,7 @@ fn unsent_pending_keyframe_feedback_rolls_back_provisional_budget() {
     let second = controller
         .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         .action;
-    assert_eq!(second, RecoveryAction::CoalescedKeyframeInFlight);
+    assert_eq!(second, RecoveryAction::CooldownSuppressed);
 }
 
 #[test]
@@ -945,10 +902,10 @@ fn sent_pending_keyframe_feedback_keeps_budget_consumed() {
     let first = controller
         .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         .action;
-    assert_eq!(first, RecoveryAction::RequestPli);
+    assert_eq!(first, RecoveryAction::CooldownSuppressed);
 
     controller.reconcile_keyframe_transport_feedback(KeyframeTransportFeedback::SentPending);
-    assert_eq!(controller.budget_state().keyframe_budget_used, 1);
+    assert_eq!(controller.budget_state().keyframe_budget_used, 0);
 }
 
 #[test]

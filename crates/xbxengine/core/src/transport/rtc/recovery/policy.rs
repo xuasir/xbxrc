@@ -345,7 +345,7 @@ impl ScenarioPolicyResolver {
                 decoder_backend_failure_min_twcc_delivery_ratio: 0.92,
                 decoder_backend_failure_max_twcc_loss_ratio: 0.08,
                 // 云侧仍保留较稳的 startup，但恢复节流要比旧档松一档，
-                // 避免 transportAwaitRecoveryAnchor 长时间被冷却窗压住。
+                // 避免 receiverWaitingKeyframe 长时间被冷却窗压住。
                 escalation_cooldown_ms: 420,
                 escalation_keyframe_burst_threshold: 2,
                 escalation_decoder_reset_burst_threshold: 3,

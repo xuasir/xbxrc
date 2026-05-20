@@ -20,9 +20,7 @@ pub(crate) fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalat
         "ingressFrameAbandoned" => Some(VideoEscalationReason::LocalSupplySuspect),
         "waitKeyframeEntered" => Some(VideoEscalationReason::WaitKeyframe),
         "frameAbandoned" => Some(VideoEscalationReason::LocalSupplySuspect),
-        "transportAwaitRecoveryAnchor" => {
-            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-        }
+        "receiverWaitingKeyframe" => Some(VideoEscalationReason::WaitKeyframe),
         "localSupplySuspect" | "rebuildingSupplySuspect" => {
             Some(VideoEscalationReason::LocalSupplySuspect)
         }
@@ -49,10 +47,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn transport_await_anchor_maps_to_transport_await_keyframe() {
+    fn receiver_waiting_keyframe_maps_to_wait_keyframe_not_transport_await() {
         assert_eq!(
-            map_label_to_escalation_reason("transportAwaitRecoveryAnchor"),
-            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+            map_label_to_escalation_reason("receiverWaitingKeyframe"),
+            Some(VideoEscalationReason::WaitKeyframe)
         );
     }
 

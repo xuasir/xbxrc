@@ -544,7 +544,7 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
     stats.transport_recovery_epoch_at_last_escalation = 4;
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 70,
-        reason: "transportAwaitRecoveryAnchor".to_string(),
+        reason: "receiverWaitingKeyframe".to_string(),
         action: "requestPli".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
@@ -555,7 +555,7 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 70,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: None,
             status: "requested".to_string(),
             status_detail: None,
@@ -580,8 +580,8 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
-            reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            state: "waiting-keyframe".to_string(),
+            reason: Some("receiverWaitingKeyframe".to_string()),
             chain_break_evidence: None,
 
             observed_at_ms: now_ms,

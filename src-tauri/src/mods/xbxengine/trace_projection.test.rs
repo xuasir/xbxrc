@@ -158,7 +158,7 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 91,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "decoded",
             "lifecycle_phase": "decoded",
@@ -193,7 +193,7 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
     );
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["request_reason"],
-        "transportAwaitRecoveryAnchor"
+        "receiverWaitingKeyframe"
     );
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["response_verdict"],
@@ -229,7 +229,7 @@ fn build_observability_snapshot_includes_suppression_family_and_health_split() {
         "presentation_health": "displaySupplyStarved",
         "latest_keyframe_request_episode": {
             "episode_id": 91,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "deferred",
             "status_detail": "transport-suppressed",
@@ -237,7 +237,7 @@ fn build_observability_snapshot_includes_suppression_family_and_health_split() {
             "deadline_at_ms": 2160.0,
             "transport_detail": "coalesced:keyframeInFlight",
             "response_verdict": "pending",
-            "family_id": "transportAwaitRecoveryAnchor:pli",
+            "family_id": "receiverWaitingKeyframe:pli",
             "owner_episode_id": 88,
             "suppress_duration_ms": 240.0,
             "release_reason": "ownerEpisodeSucceeded"
@@ -253,7 +253,7 @@ fn build_observability_snapshot_includes_suppression_family_and_health_split() {
     );
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["family_id"],
-        "transportAwaitRecoveryAnchor:pli"
+        "receiverWaitingKeyframe:pli"
     );
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["owner_episode_id"],
@@ -581,7 +581,7 @@ fn record_runtime_trace_observations_projects_keyframe_episode_lifecycle() {
             "decode": "",
             "latest_keyframe_request_episode": {
                 "episode_id": episode_id,
-                "request_reason": "transportAwaitRecoveryAnchor",
+                "request_reason": "receiverWaitingKeyframe",
                 "request_kind": request_kind,
                 "status": status,
                 "requested_at_ms": 1200.0,
@@ -712,7 +712,7 @@ fn record_runtime_trace_observations_emits_keyframe_succeeded_with_lifecycle_pha
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 100,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "succeeded",
             "lifecycle_phase": "success",
@@ -750,7 +750,7 @@ fn record_runtime_trace_observations_projects_keyframe_response_observed_event()
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 93,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "response-observed",
             "status_detail": "bootstrapMissingSps",
@@ -804,14 +804,14 @@ fn record_runtime_trace_observations_projects_keyframe_transport_suppression_eve
             },
             "chain": {
                 "state": "waiting-keyframe",
-                "reason": "transportAwaitRecoveryAnchor",
+                "reason": "receiverWaitingKeyframe",
                 "observed_at_ms": 1290.0
             },
             "observed_at_ms": 1290.0
         },
         "latest_keyframe_request_episode": {
             "episode_id": 94,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "deferred",
             "status_detail": "transport-suppressed",
@@ -819,7 +819,7 @@ fn record_runtime_trace_observations_projects_keyframe_transport_suppression_eve
             "deadline_at_ms": 2160.0,
             "transport_detail": "coalesced:keyframeInFlight",
             "response_verdict": "pending",
-            "family_id": "transportAwaitRecoveryAnchor:pli",
+            "family_id": "receiverWaitingKeyframe:pli",
             "owner_episode_id": 90,
             "suppress_duration_ms": 180.0,
             "release_reason": "ownerEpisodeSucceeded"
@@ -834,7 +834,7 @@ fn record_runtime_trace_observations_projects_keyframe_transport_suppression_eve
     assert_eq!(payload["status"], "deferred");
     assert_eq!(payload["statusDetail"], "transport-suppressed");
     assert_eq!(payload["transportDetail"], "coalesced:keyframeInFlight");
-    assert_eq!(payload["familyId"], "transportAwaitRecoveryAnchor:pli");
+    assert_eq!(payload["familyId"], "receiverWaitingKeyframe:pli");
     assert_eq!(payload["ownerEpisodeId"], 90);
     assert_eq!(payload["suppressDurationMs"], 180.0);
     assert_eq!(payload["releaseReason"], "ownerEpisodeSucceeded");
@@ -920,7 +920,7 @@ fn record_runtime_trace_observations_projects_bootstrap_reject_event() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 95,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "packet-seen",
             "requested_at_ms": 1200.0,
@@ -982,7 +982,7 @@ fn bootstrap_reject_observed_classifies_non_idr_before_usable_idr() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 96,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "decoded",
             "requested_at_ms": 1200.0,
@@ -1043,7 +1043,7 @@ fn bootstrap_reject_observed_classifies_non_idr_without_usable_idr() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 97,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "missed",
             "requested_at_ms": 1200.0,
@@ -1306,7 +1306,7 @@ fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 91,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "packet-seen",
             "requested_at_ms": 1200.0,
@@ -1361,7 +1361,7 @@ fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
     assert_eq!(inspection_payload["linkedEpisodeStatus"], "packet-seen");
     assert_eq!(
         inspection_payload["linkedEpisodeRequestReason"],
-        "transportAwaitRecoveryAnchor"
+        "receiverWaitingKeyframe"
     );
     assert_eq!(
         inspection_payload["isRecoveryKeyframeResponseContext"],
@@ -1389,7 +1389,7 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 101,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "response-observed",
             "requested_at_ms": 1200.0,
@@ -1446,8 +1446,8 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
                 "observed_at_ms": 1300.0
             },
             "chain": {
-                "state": "recovering",
-                "reason": "awaitingRecoveryAnchor",
+                "state": "waiting-keyframe",
+                "reason": "receiverWaitingKeyframe",
                 "observed_at_ms": 1300.0
             },
             "observed_at_ms": 1300.0
@@ -1500,7 +1500,7 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
             "decision_id": 9001,
             "state_before": "observing",
             "state_after": "recovery-blocked",
-            "input_signal": "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor",
+            "input_signal": "waitKeyframe:receiverWaitingKeyframe",
             "gate_result": "coalesced:keyframeInFlight",
             "action_selected": "coalesced:keyframeInFlight",
             "frame_value": "RecoveryAnchor",
@@ -1562,10 +1562,10 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
         payload["diagnosticTimelineSourceEvent"],
         "frame-inspection-rejected-await-anchor"
     );
-    assert_eq!(payload["diagnosticTimelineChainState"], "recovering");
+    assert_eq!(payload["diagnosticTimelineChainState"], "waiting-keyframe");
     assert_eq!(
         payload["diagnosticTimelineChainReason"],
-        "awaitingRecoveryAnchor"
+        "receiverWaitingKeyframe"
     );
     assert_eq!(payload["diagnosticAnchorState"], "rejected");
     assert_eq!(payload["diagnosticAnchorFailureReason"], "unknown");
@@ -1930,7 +1930,7 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
                 "observed_at_ms": 1500.0
             },
             "chain": {
-                "state": "recovering",
+                "state": "receiving",
                 "reason": "awaitingCleanAnchor",
                 "observed_at_ms": 1500.0
             },
@@ -1969,7 +1969,7 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
                 "observed_at_ms": 1510.0
             },
             "chain": {
-                "state": "recovering",
+                "state": "receiving",
                 "reason": "decodeFeedbackBlocked",
                 "observed_at_ms": 1510.0
             },
@@ -2021,7 +2021,7 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
 
     let candidate_payload = find_event_payload(&entries, "cleanAnchorCompleteCandidateObserved");
     assert_eq!(candidate_payload["frameRtpTimestamp"], 4001);
-    assert_eq!(candidate_payload["chainState"], "recovering");
+    assert_eq!(candidate_payload["chainState"], "receiving");
     assert_eq!(candidate_payload["recoveryEpoch"], 12);
 
     let blocked_payload = find_event_payload(&entries, "cleanAnchorCompleteCandidateBlocked");
@@ -2072,7 +2072,7 @@ fn chain_flush_timeline_projects_backlog_flushed_event() {
                 "observed_at_ms": 1410.0
             },
             "chain": {
-                "state": "recovering",
+                "state": "waiting-keyframe",
                 "reason": "referenceChainBroken",
                 "observed_at_ms": 1410.0
             },
@@ -2086,7 +2086,7 @@ fn chain_flush_timeline_projects_backlog_flushed_event() {
     assert_eq!(payload["observationId"], 91);
     assert_eq!(payload["sourceEvent"], "gap-expired-chain-flush");
     assert_eq!(payload["gap"]["sequence"], 2001);
-    assert_eq!(payload["chain"]["state"], "recovering");
+    assert_eq!(payload["chain"]["state"], "waiting-keyframe");
 }
 
 #[test]
@@ -3170,7 +3170,7 @@ fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
         "session_phase": "steady",
         "stream_lifecycle_phase": "recovering",
         "recovery_strategy_profile": "cloud",
-        "recovery_diagnosis": "transportAwaitRecoveryAnchor"
+        "recovery_diagnosis": "receiverWaitingKeyframe"
     }));
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
@@ -3187,7 +3187,7 @@ fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
     );
     assert_eq!(
         snapshot_payload["recovery"]["diagnosis"],
-        "transportAwaitRecoveryAnchor"
+        "receiverWaitingKeyframe"
     );
 }
 
@@ -3210,9 +3210,9 @@ fn recovery_state_emits_transition_when_only_diagnosis_changes() {
         "session_phase": "recovering",
         "stream_lifecycle_phase": "recovering",
         "recovery_strategy_profile": "cloud",
-        "recovery_diagnosis": "transportAwaitRecoveryAnchor",
+        "recovery_diagnosis": "receiverWaitingKeyframe",
         "recovery_owner_state": "rebuilding-supply",
-        "recovery_owner_reason": "transportAwaitRecoveryAnchor"
+        "recovery_owner_reason": "receiverWaitingKeyframe"
     }));
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &baseline);
 
@@ -3230,16 +3230,16 @@ fn recovery_state_emits_transition_when_only_diagnosis_changes() {
         "recovery_strategy_profile": "cloud",
         "recovery_diagnosis": "decoderBackendFailure",
         "recovery_owner_state": "rebuilding-supply",
-        "recovery_owner_reason": "transportAwaitRecoveryAnchor"
+        "recovery_owner_reason": "receiverWaitingKeyframe"
     }));
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &changed_diagnosis);
 
     let entries = read_trace_lines(recorder.as_ref());
     let rows = event_payloads(&entries, "recoveryState");
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0]["diagnosis"], "transportAwaitRecoveryAnchor");
+    assert_eq!(rows[0]["diagnosis"], "receiverWaitingKeyframe");
     assert_eq!(rows[1]["diagnosis"], "decoderBackendFailure");
-    assert_eq!(rows[1]["videoOwnerReason"], "transportAwaitRecoveryAnchor");
+    assert_eq!(rows[1]["videoOwnerReason"], "receiverWaitingKeyframe");
 }
 
 #[test]
@@ -3290,7 +3290,7 @@ fn recovery_state_owner_contract_unchanged_does_not_repeat_transition() {
             "gap": null,
             "frame": null,
             "chain": {
-                "state": "recovering",
+                "state": "receiving",
                 "reason": "timelineReferenceBroken",
                 "observed_at_ms": 5000.0
             },
@@ -3328,7 +3328,7 @@ fn h264_inspection_snapshot_unlinks_when_frame_rtp_mismatches_keyframe_episode()
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 1,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "missed",
             "requested_at_ms": 100.0,
@@ -3382,7 +3382,7 @@ fn h264_inspection_time_window_skips_retired_keyframe_episode() {
         "latest_keyframe_request_episode": null,
         "recent_keyframe_request_episodes": [{
             "episode_id": 9,
-            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_reason": "receiverWaitingKeyframe",
             "request_kind": "pli",
             "status": "packet-seen",
             "requested_at_ms": 100.0,

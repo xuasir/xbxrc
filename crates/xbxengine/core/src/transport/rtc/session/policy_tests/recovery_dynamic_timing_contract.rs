@@ -22,10 +22,6 @@ use crate::transport::rtc::recovery::timing::{
 };
 use crate::transport::rtc::session::policy::RecoveryAction;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
-use crate::transport::rtc::stream::nack_scheduler::{
-    NackObservePolicy, NackScheduler, NackSchedulerConfig, PacketRecoveryDisposition,
-};
-
 #[test]
 fn home_wan_supply_gap_does_not_escalate_before_dynamic_first_attempt_timeout() {
     let merged = merge_nack_admission_deadline_with_dynamic_timeout(
@@ -76,69 +72,13 @@ fn recovery_profile_enables_dynamic_pli_and_fir_timing_dimensions() {
 }
 
 #[test]
-fn cloud_high_rtt_reference_gap_prefers_wider_first_attempt_window_before_retry_or_pli() {
-    let mut scheduler = NackScheduler::new(NackSchedulerConfig {
-        max_age_ms: 2_000,
-        frame_deadline_ms: 50,
-        burst_count: 1,
-        retry_interval_ms: 5,
-        max_retry_count: 1,
-    });
-    let p = NackObservePolicy {
-        source: "sampleLoss",
-        deadline_at_ms: Some(3_000.0),
-        max_age_ms: Some(1_800),
-        retry_interval_ms: Some(5),
-        burst_count: Some(1),
-        max_tracked_sequences: Some(4),
-        frame_rtp_timestamp: Some(90_000),
-        frame_is_keyframe: Some(false),
-        frame_importance: "supply",
-        priority: 2,
-        budget_context: FrameBudgetContext::steady_for_value(FrameValue::new(
-            false,
-            true,
-            48 * 1024,
-        )),
-        estimated_recovery_arrival_ms: Some(150.0),
-        frame_playout_deadline_at_ms: Some(3_000.0),
-        nack_disposition: PacketRecoveryDisposition::Attempted,
-        frame_unrecoverable_reason: None,
-        max_retry_count_override: Some(1),
-        first_attempt_survival_window_ms: Some(200.0),
-        repairability_schedule: Some(0.9),
-        admission_deadline_floor_at_ms: None,
-    };
-    let (b, _) = scheduler.observe_missing_sequences_with_policy(&[7], 100.0, p);
-    assert!(b.is_some());
-    let polled = scheduler.poll(105.0);
-    assert!(polled.retry_batch.is_none());
-    assert_eq!(
-        polled
-            .recovery_telemetry
-            .as_ref()
-            .and_then(|t| t.retry_suppressed_reason.as_deref()),
-        Some("firstAttemptSurvival")
-    );
-    let polled2 = scheduler.poll(310.0);
-    assert!(polled2.retry_batch.is_some());
-    assert_eq!(
-        polled2
-            .recovery_telemetry
-            .as_ref()
-            .and_then(|t| t.retry_allowed_reason.as_deref()),
-        Some("firstAttemptWindowElapsed")
-    );
-}
-
-#[test]
 fn fir_is_cloud_only_and_requires_failed_pli_progress() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let owner_signal = crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal {
         reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-        reason_label: "transportAwaitRecoveryAnchor".to_string(),
+        reason_label: "receiverWaitingKeyframe".to_string(),
         observed_at_ms: 12_180.0,
         gap_severity: None,
         repairability: None,
@@ -179,7 +119,7 @@ fn fir_is_cloud_only_and_requires_failed_pli_progress() {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 45,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "packet-seen".to_string(),
                 status_detail: None,

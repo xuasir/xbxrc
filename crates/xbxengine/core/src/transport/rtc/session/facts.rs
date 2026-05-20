@@ -93,6 +93,7 @@ pub(crate) fn build_rtc_session_policy_orchestration_input(
 #[derive(Clone, Debug, Default)]
 pub(crate) struct OwnerRuntimeFacts {
     pub(crate) recovery_epoch: u64,
+    pub(crate) latest_video_receiver_observation: Option<crate::XbxEngineVideoReceiverObservation>,
     pub(crate) latest_video_timeline_observation: Option<XbxEngineVideoTimelineObservation>,
     pub(crate) clean_anchor_epoch: Option<u64>,
     pub(crate) clean_anchor_observed_at_ms: Option<f64>,
@@ -177,6 +178,7 @@ pub(crate) fn read_owner_runtime_facts(
 ) -> OwnerRuntimeFacts {
     RuntimeStatsSink::read_shared(runtime_stats, |stats| OwnerRuntimeFacts {
         recovery_epoch: stats.transport_recovery_epoch,
+        latest_video_receiver_observation: stats.latest_video_receiver_observation.clone(),
         latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
         clean_anchor_epoch: stats.video_anchor_clean_epoch,
         clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
@@ -218,9 +220,14 @@ pub(crate) fn build_owner_input(
         .latest_video_track_status
         .as_ref()
         .map(|status| status.video_bytes_total);
+    let receiver_state = owner_facts
+        .latest_video_receiver_observation
+        .as_ref()
+        .map(|observation| observation.receiver_state.clone());
     VideoSchedulingOwnerInput {
         connection_state: snapshot.connection.lifecycle_state,
         recovery_epoch: owner_facts.recovery_epoch,
+        receiver_state,
         first_frame_acquisition_priority_allowed,
         anchor_reason_label,
         demand,
@@ -297,8 +304,8 @@ fn resolve_anchor_reason_label_from_timeline(
         timeline.source_event.as_str(),
     ) {
         (true, _, "broken", Some(reason), _) | (true, _, "recovering", Some(reason), _) => reason,
-        (_, true, _, _, "frame-await-recovery-anchor") => "transportAwaitRecoveryAnchor",
-        (_, true, _, _, "frame-inspection-rejected-await-anchor") => "transportAwaitRecoveryAnchor",
+        (_, true, _, _, "frame-await-recovery-anchor") => "receiverWaitingKeyframe",
+        (_, true, _, _, "frame-inspection-rejected-await-anchor") => "receiverWaitingKeyframe",
         _ => return None,
     };
     // 时间线分支已给出结构化上下文；此处仅校验 `reason` 字符串是否为已知 wire 标签（与 `escalation` 单点映射一致），
@@ -361,8 +368,8 @@ mod tests {
                 gap: None,
                 frame: None,
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    state: "waiting-keyframe".to_string(),
+                    reason: Some("receiverWaitingKeyframe".to_string()),
                     chain_break_evidence: None,
 
                     observed_at_ms: 110.0,
@@ -388,8 +395,8 @@ mod tests {
                 gap: None,
                 frame: None,
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    state: "waiting-keyframe".to_string(),
+                    reason: Some("receiverWaitingKeyframe".to_string()),
                     chain_break_evidence: None,
 
                     observed_at_ms: 130.0,
@@ -401,7 +408,7 @@ mod tests {
 
         assert_eq!(
             resolve_anchor_reason_label(&facts, false),
-            Some("transportAwaitRecoveryAnchor".to_string())
+            Some("receiverWaitingKeyframe".to_string())
         );
     }
 }
@@ -436,7 +443,7 @@ fn check_episode_stalled(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
     match timeline.chain.reason.as_deref() {
-        Some("transportAwaitRecoveryAnchor") => {
+        Some("receiverWaitingKeyframe") => {
             let clean_anchor_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats);
             let has_recent_progress = clean_anchor_at_ms
                 .map(|t| timeline.observed_at_ms - t < 2000.0)
@@ -567,7 +574,7 @@ fn continuation_only_observed_at_ms(
     {
         return None;
     }
-    if inspection.continuation_verdict.as_deref() == Some("continuationAcceptedWhileAwaitingIdr")
+    if inspection.continuation_verdict.as_deref() == Some("receiverLocalContinuation")
         && inspection.committed_sps_present
         && inspection.committed_pps_present
         && inspection.delta_continuation_ready

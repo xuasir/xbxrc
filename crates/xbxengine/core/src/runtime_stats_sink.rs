@@ -206,7 +206,7 @@ impl RuntimeStatsSink {
             invalidated = true;
         }
         if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
-            if episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
+            if episode.request_reason.as_deref() == Some("receiverWaitingKeyframe")
                 && episode.response_verdict.as_deref() == Some("cleanAnchorCommitted")
             {
                 episode.status = "decoded".to_string();
@@ -1647,6 +1647,7 @@ impl RuntimeStatsSink {
         self.publish(ObservationEvent::InboundVideoPacketLossEstimate { packet_count });
     }
 
+    #[allow(dead_code)]
     pub(crate) fn add_video_loss_finalized(&self, packet_count: usize) {
         self.publish(ObservationEvent::VideoLossFinalized { packet_count });
     }
@@ -1707,6 +1708,13 @@ impl RuntimeStatsSink {
         observation: XbxEngineVideoTimelineObservation,
     ) {
         self.publish(ObservationEvent::VideoTimelineObserved { observation });
+    }
+
+    pub(crate) fn record_video_receiver_observation(
+        &self,
+        observation: crate::XbxEngineVideoReceiverObservation,
+    ) {
+        self.publish(ObservationEvent::VideoReceiverObserved { observation });
     }
 
     pub(crate) fn record_anchor_candidate_ledger(
@@ -2134,8 +2142,7 @@ fn reuse_active_transport_recovery_episode_id(
     stats: &XbxEngineMediaRuntimeStats,
     request_reason: Option<&str>,
 ) -> Option<u64> {
-    if request_reason != Some("transportAwaitRecoveryAnchor")
-        || !stats.transport_recovery_episode_active
+    if request_reason != Some("receiverWaitingKeyframe") || !stats.transport_recovery_episode_active
     {
         return None;
     }
@@ -2143,7 +2150,7 @@ fn reuse_active_transport_recovery_episode_id(
     if !keyframe_episode_observability_active(episode) {
         return None;
     }
-    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
+    if episode.request_reason.as_deref() != Some("receiverWaitingKeyframe") {
         return None;
     }
     if recovery_window_has_clean_anchor(stats) {
@@ -2172,7 +2179,7 @@ fn should_advance_transport_await_owner_frame(
     latest_h264_observation: Option<&XbxEngineH264InspectionObservation>,
     latest_clean_anchor_submission_episode_id: Option<u64>,
 ) -> bool {
-    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor")
+    if episode.request_reason.as_deref() != Some("receiverWaitingKeyframe")
         || episode.retired_at_ms.is_some()
         || keyframe_episode_is_terminal(episode)
     {
@@ -2223,7 +2230,7 @@ fn retire_transport_await_episode_for_new_recovery_epoch(
     let Some(episode) = stats.latest_keyframe_request_episode.as_mut() else {
         return;
     };
-    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor")
+    if episode.request_reason.as_deref() != Some("receiverWaitingKeyframe")
         || !keyframe_episode_observability_active(episode)
     {
         return;
@@ -2532,7 +2539,7 @@ fn recovery_window_has_clean_anchor(stats: &XbxEngineMediaRuntimeStats) -> bool 
 fn request_reason_is_transport_recovery_keyframe_family(request_reason: Option<&str>) -> bool {
     matches!(
         request_reason,
-        Some("transportAwaitRecoveryAnchor" | "transportExpiredDeadline")
+        Some("receiverWaitingKeyframe" | "transportExpiredDeadline")
     )
 }
 
@@ -2770,7 +2777,7 @@ fn transport_recovery_serviceable_continuation(
         && observation.delta_continuation_ready
         && matches!(
             observation.continuation_verdict.as_deref(),
-            Some("continuationAcceptedWhileAwaitingIdr" | "continuationReady")
+            Some("receiverLocalContinuation" | "continuationReady")
         )
         && matches!(
             observation.bootstrap_reject_reason.as_deref(),
@@ -2818,8 +2825,11 @@ fn has_serviceable_continuation_visible_for_submission(
 }
 
 fn classify_h264_reject(observation: &XbxEngineH264InspectionObservation) -> Option<String> {
-    if observation.continuation_verdict.as_deref() == Some("continuationAcceptedWhileAwaitingIdr") {
-        return Some("continuationAcceptedWhileAwaitingIdr".to_string());
+    if observation.continuation_verdict.as_deref() == Some("receiverLocalContinuation") {
+        return Some("receiverLocalContinuation".to_string());
+    }
+    if observation.continuation_verdict.as_deref() == Some("receiverLocalContinuation") {
+        return Some("receiverLocalContinuation".to_string());
     }
     if !matches!(
         observation.bootstrap_reject_reason.as_deref(),
@@ -3061,7 +3071,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             7,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             15.0,
             None,
         );
@@ -3200,7 +3210,7 @@ mod tests {
 
         sink.record_picture_recovery_episode_requested(
             77,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3242,14 +3252,14 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             20.0,
             Some(120.0),
         );
         sink.record_picture_recovery_episode_sent("pli", 21.0, Some(121.0));
         sink.record_picture_recovery_episode_requested(
             1002,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             40.0,
             Some(140.0),
         );
@@ -3280,7 +3290,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             2001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             20.0,
             None,
         );
@@ -3288,7 +3298,7 @@ mod tests {
         sink.advance_transport_recovery_episode(50.0);
         sink.record_picture_recovery_episode_requested(
             2002,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             60.0,
             None,
         );
@@ -3318,7 +3328,7 @@ mod tests {
 
         sink.record_picture_recovery_episode_requested(
             90,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3387,7 +3397,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9010,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3433,7 +3443,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9016,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3458,7 +3468,7 @@ mod tests {
             committed_sps_present: true,
             committed_pps_present: true,
             delta_continuation_ready: true,
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             ..Default::default()
         });
         sink.record_picture_recovery_episode_response_observed(
@@ -3490,7 +3500,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9011,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3538,7 +3548,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9012,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3595,7 +3605,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9013,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3642,7 +3652,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9014,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3669,7 +3679,7 @@ mod tests {
             stats.latest_keyframe_request_episode =
                 Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                     episode_id: 9015,
-                    request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    request_reason: Some("receiverWaitingKeyframe".to_string()),
                     status: "waiting-response".to_string(),
                     requested_at_ms: 230.0,
                     ..Default::default()
@@ -3701,7 +3711,7 @@ mod tests {
 
         sink.record_picture_recovery_episode_requested(
             901,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3737,7 +3747,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             902,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3766,7 +3776,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             903,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -3799,7 +3809,7 @@ mod tests {
         });
         sink.record_picture_recovery_episode_requested(
             904,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             110.0,
             None,
         );
@@ -3867,7 +3877,7 @@ mod tests {
         });
         sink.record_picture_recovery_episode_requested(
             905,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             110.0,
             None,
         );
@@ -3918,7 +3928,7 @@ mod tests {
         });
         sink.record_picture_recovery_episode_requested(
             906,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             110.0,
             None,
         );
@@ -3973,7 +3983,7 @@ mod tests {
 
         sink.record_picture_recovery_episode_requested(
             88,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4066,7 +4076,7 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.record_picture_recovery_episode_requested(
             1,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4103,7 +4113,7 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.record_picture_recovery_episode_requested(
             42,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4163,7 +4173,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             43,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4191,7 +4201,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms: 200.0,
             ..Default::default()
@@ -4207,7 +4217,7 @@ mod tests {
         assert_eq!(h264.is_post_recovery_degradation, Some(true));
         assert_eq!(
             h264.reject_classification.as_deref(),
-            Some("continuationAcceptedWhileAwaitingIdr")
+            Some("receiverLocalContinuation")
         );
     }
 
@@ -4222,7 +4232,7 @@ mod tests {
 
         sink.record_picture_recovery_episode_requested(
             42,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             Some(400.0),
         );
@@ -4273,7 +4283,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms: 230.0,
             ..Default::default()
@@ -4289,7 +4299,7 @@ mod tests {
         assert!(h264.bound_as_recovery_response.unwrap_or(false));
         assert_eq!(
             h264.reject_classification.as_deref(),
-            Some("continuationAcceptedWhileAwaitingIdr")
+            Some("receiverLocalContinuation")
         );
     }
 
@@ -4303,7 +4313,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9101,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4338,7 +4348,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms: 190.0,
             ..Default::default()
@@ -4359,7 +4369,7 @@ mod tests {
         assert_eq!(h264.bound_response_rtp_timestamp, Some(20_001));
         assert_eq!(
             h264.reject_classification.as_deref(),
-            Some("continuationAcceptedWhileAwaitingIdr")
+            Some("receiverLocalContinuation")
         );
     }
 
@@ -4373,7 +4383,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9201,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4401,7 +4411,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms: 15_200.0,
             ..Default::default()
@@ -4433,7 +4443,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             9202,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4445,7 +4455,7 @@ mod tests {
                 committed_sps_present: true,
                 committed_pps_present: true,
                 delta_continuation_ready: true,
-                continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                continuation_verdict: Some("receiverLocalContinuation".to_string()),
                 bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
                 admission_accepted: true,
                 observed_at_ms: 500.0,
@@ -4474,7 +4484,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms: 20_500.0,
             ..Default::default()
@@ -4490,7 +4500,7 @@ mod tests {
         assert!(h264.bound_as_recovery_response.unwrap_or(false));
         assert_eq!(
             h264.reject_classification.as_deref(),
-            Some("continuationAcceptedWhileAwaitingIdr")
+            Some("receiverLocalContinuation")
         );
     }
 
@@ -4504,7 +4514,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             3446,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -4541,7 +4551,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms: 212.0,
             ..Default::default()
@@ -4561,10 +4571,7 @@ mod tests {
             .as_ref()
             .expect("blocker observation");
         assert_eq!(blocker.episode_id, Some(3593));
-        assert_eq!(
-            blocker.blocker_kind.as_str(),
-            "continuationAcceptedWhileAwaitingIdr"
-        );
+        assert_eq!(blocker.blocker_kind.as_str(), "receiverLocalContinuation");
     }
 
     #[test]

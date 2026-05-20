@@ -125,6 +125,10 @@ function normalizeObservedPresentationStats(stats: StreamStats): StreamStats {
     = stats.primaryIssueChain === 'startup:priming'
       || stats.primaryIssueChain === 'recovery:transportAwaitRecoveryAnchor'
       || stats.primaryIssueChain === 'local-self-healing:transportAwaitRecoveryAnchor'
+      || stats.primaryIssueChain === 'recovery:receiverWaitingKeyframe'
+      || stats.primaryIssueChain === 'local-self-healing:receiverWaitingKeyframe'
+      || stats.primaryIssueChain === 'active-recovery:receiverWaitingKeyframe'
+      || stats.primaryIssueChain === 'recovery-eligible:receiverWaitingKeyframe'
   const staleStall = stats.stallKind === 'startupPriming'
   if (!staleOwner && !staleHealth && !staleIssue && !staleStall) {
     return stats

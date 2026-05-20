@@ -287,6 +287,7 @@ impl FrameBudgetContext {
             .min(4)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn retry_budget(&self, _value: FrameValue, default_max_retry_count: u8) -> u8 {
         if matches!(
             (self.failure_cost, self.rtt_slack),
@@ -326,6 +327,7 @@ impl FrameBudgetContext {
         self
     }
 
+    #[allow(dead_code)]
     pub(crate) fn prefers_low_value_skip(&self) -> bool {
         matches!(self.link_value, FrameBudgetLinkValue::Disposable)
             && matches!(

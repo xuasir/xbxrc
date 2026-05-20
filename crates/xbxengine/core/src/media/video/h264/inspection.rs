@@ -342,6 +342,7 @@ pub struct H264AccessUnitInspector {
 }
 
 impl H264AccessUnitInspector {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(H264AccessUnitInspectorState::default())),

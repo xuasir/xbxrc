@@ -89,7 +89,7 @@ fn runtime_summary_includes_transport_recovery_epoch_note() {
         host_mailbox_enqueue_count_total: 1,
         direct_gaming_bitrate_band: Some("steady".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_reason: Some("receiverWaitingKeyframe".to_string()),
         transport_recovery_epoch: 7,
         transport_recovery_epoch_at_last_escalation: 6,
         transport_recovery_episode_active: true,
@@ -113,7 +113,7 @@ fn runtime_summary_uses_remote_profile_input_and_owner_state_as_main_view() {
         session_phase: Some("recovering".to_string()),
         direct_gaming_bitrate_band: Some("steady".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_reason: Some("receiverWaitingKeyframe".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -198,7 +198,7 @@ fn latest_decision_summary_is_driven_by_canonical_owner_contract() {
         transport_recovery_epoch: 3,
         transport_recovery_epoch_at_last_escalation: 3,
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_reason: Some("receiverWaitingKeyframe".to_string()),
         video_owner_source: Some("anchor".to_string()),
         video_owner_observed_at_ms: Some(1234.0),
         ..XbxEngineMediaRuntimeStats::default()
@@ -207,7 +207,7 @@ fn latest_decision_summary_is_driven_by_canonical_owner_contract() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("phase:recovery-eligible:transportAwaitRecoveryAnchor")
+        Some("phase:recovery-eligible:receiverWaitingKeyframe")
     );
 }
 
@@ -219,7 +219,7 @@ fn latest_decision_summary_surfaces_reconnect_gate_detail_when_present() {
             decision_id: 9,
             state_before: "recovery-eligible".to_string(),
             state_after: "recovery-blocked".to_string(),
-            input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor".to_string(),
+            input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
             gate_result: "suppressed:reconnectBlocked:mediaGate:localRecoveryActive".to_string(),
             action_selected: "cooldownSuppressed".to_string(),
             frame_value: None,
@@ -261,7 +261,7 @@ fn latest_decision_summary_marks_local_decoder_maintenance_family() {
             decision_id: 42,
             state_before: "active-recovery".to_string(),
             state_after: "local-self-healing".to_string(),
-            input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor".to_string(),
+            input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
             gate_result: "pass".to_string(),
             action_selected: "requestDecoderReset".to_string(),
             frame_value: None,
@@ -303,7 +303,7 @@ fn latest_recovery_decision_ledger_projects_extended_observability_fields() {
             decision_id: 43,
             state_before: "recovery-eligible".to_string(),
             state_after: "active-recovery".to_string(),
-            input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor".to_string(),
+            input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
             gate_result: "pass".to_string(),
             action_selected: "requestPli".to_string(),
             frame_value: Some("delta".to_string()),
@@ -358,7 +358,7 @@ fn runtime_summary_and_issue_chain_use_local_self_healing_lifecycle_when_present
         session_phase: Some("local-self-healing".to_string()),
         direct_gaming_bitrate_band: Some("steady".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_reason: Some("receiverWaitingKeyframe".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -370,11 +370,11 @@ fn runtime_summary_and_issue_chain_use_local_self_healing_lifecycle_when_present
     );
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("local-self-healing:transportAwaitRecoveryAnchor")
+        Some("local-self-healing:receiverWaitingKeyframe")
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("phase:local-self-healing:transportAwaitRecoveryAnchor")
+        Some("phase:local-self-healing:receiverWaitingKeyframe")
     );
 }
 
@@ -605,7 +605,7 @@ fn owner_contract_projection_reads_canonical_runtime_owner_fields() {
 fn owner_contract_falls_back_to_runtime_state_primary_view() {
     let stats = XbxEngineMediaRuntimeStats {
         session_phase: Some("recovering".to_string()),
-        recovery_active_escalation_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        recovery_active_escalation_reason: Some("receiverWaitingKeyframe".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -617,7 +617,7 @@ fn owner_contract_falls_back_to_runtime_state_primary_view() {
     );
     assert_eq!(
         dto.recovery_owner_reason.as_deref(),
-        Some("transportAwaitRecoveryAnchor")
+        Some("receiverWaitingKeyframe")
     );
     assert_eq!(
         dto.video_owner_source.as_deref(),
@@ -625,7 +625,7 @@ fn owner_contract_falls_back_to_runtime_state_primary_view() {
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("phase:recovering:transportAwaitRecoveryAnchor")
+        Some("phase:recovering:receiverWaitingKeyframe")
     );
 }
 
@@ -841,7 +841,7 @@ fn build_stats_keeps_recovering_when_decode_or_submit_is_still_fresh() {
         host_no_pending_streak: 320,
         host_no_pending_max_streak: 320,
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_reason: Some("receiverWaitingKeyframe".to_string()),
         video_owner_source: Some("anchor".to_string()),
         video_owner_observed_at_ms: Some(now_ms - 10.0),
         video_decoder_stalled: Some(false),
@@ -855,7 +855,7 @@ fn build_stats_keeps_recovering_when_decode_or_submit_is_still_fresh() {
     assert_eq!(dto.video_health.as_deref(), Some("recovering"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("active-recovery:transportAwaitRecoveryAnchor")
+        Some("active-recovery:receiverWaitingKeyframe")
     );
 }
 
@@ -1155,7 +1155,7 @@ fn build_stats_prioritizes_recent_timeline_recovering_over_healthy_summary() {
         }),
         latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
             observation_id: 1,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             action: "requestDecoderReset".to_string(),
             recovery_stage: "rebuilding-supply".to_string(),
             recovery_chain_value: "anchor".to_string(),
@@ -1882,7 +1882,7 @@ fn trace_projection_uses_structured_recovery_fields_not_legacy_diagnosis() {
     let stats = XbxEngineMediaRuntimeStats {
         transport_state: XbxEngineTransportStateDto::Connected,
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_reason: Some("receiverWaitingKeyframe".to_string()),
         video_owner_source: Some("anchor".to_string()),
         video_owner_observed_at_ms: Some(now_ms - 10.0),
         recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
@@ -1894,7 +1894,7 @@ fn trace_projection_uses_structured_recovery_fields_not_legacy_diagnosis() {
     // trace 投影应该优先使用结构化 owner reason，而不是回退到旧 diagnosis
     assert_eq!(
         dto.recovery_owner_reason.as_deref(),
-        Some("transportAwaitRecoveryAnchor")
+        Some("receiverWaitingKeyframe")
     );
     assert_ne!(
         dto.recovery_owner_reason.as_deref(),

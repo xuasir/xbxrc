@@ -2035,6 +2035,7 @@ fn is_transport_suppression_detail(detail: &str) -> bool {
         || detail.contains("familyInFlight:")
         || detail.contains("videoRtcpFeedbackTransportNotReady")
         || detail.contains("videoRtcpFeedbackTargetPending")
+        || detail.contains("videoFeedbackWarming")
         || detail.contains("controlPending")
         || detail.contains("transport-await")
         || detail.contains("transport-suppressed")
@@ -2340,7 +2341,7 @@ fn select_keyframe_episode_dto_for_h264(
     let mut best_delta = f64::INFINITY;
     for episode in candidates.iter().filter(|episode| {
         keyframe_episode_dto_observability_active(episode)
-            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
+            && episode.request_reason.as_deref() == Some("receiverWaitingKeyframe")
     }) {
         let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
         let delta = (inspection.observed_at_ms - anchor_ms).abs();
@@ -2494,7 +2495,7 @@ fn keyframe_episode_response_context(
     let Some(keyframe_episode) = keyframe_episode else {
         return false;
     };
-    if keyframe_episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
+    if keyframe_episode.request_reason.as_deref() != Some("receiverWaitingKeyframe") {
         return false;
     }
     if !matches!(

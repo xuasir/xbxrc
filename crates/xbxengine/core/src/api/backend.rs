@@ -806,6 +806,18 @@ pub struct XbxEngineVideoTimelineObservation {
     pub observed_at_ms: f64,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoReceiverObservation {
+    pub observation_id: u64,
+    pub receiver_state: String,
+    pub gap_sequence: Option<u16>,
+    pub gap_span: Option<u16>,
+    pub nack_in_flight: bool,
+    pub keyframe_request_pending: bool,
+    pub bootstrap_reject_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XbxEngineAnchorCandidateState {
     Observed,
@@ -1376,6 +1388,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_recovery_decision_ledger: Option<XbxEngineRecoveryDecisionLedgerObservation>,
     pub recent_recovery_decision_ledgers: Vec<XbxEngineRecoveryDecisionLedgerObservation>,
     pub latest_video_timeline_observation: Option<XbxEngineVideoTimelineObservation>,
+    pub latest_video_receiver_observation: Option<XbxEngineVideoReceiverObservation>,
     pub latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservation>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservation>,
@@ -1611,6 +1624,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_recovery_decision_ledger: None,
             recent_recovery_decision_ledgers: Vec::new(),
             latest_video_timeline_observation: None,
+            latest_video_receiver_observation: None,
             latest_anchor_candidate_ledger: None,
             latest_video_bwe_observation: None,
             latest_video_twcc_observation: None,

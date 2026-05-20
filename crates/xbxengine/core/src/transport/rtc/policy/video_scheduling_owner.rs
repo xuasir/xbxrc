@@ -93,7 +93,9 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) clean_anchor_bridge_observed_at_ms: Option<f64>,
     pub(crate) clean_anchor_bridge_source_event: Option<String>,
     pub(crate) latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
-    /// 与下面 chain/source 字段同源；优先用此完整观测驱动 `is_ingress_waiting_keyframe` 等合同入口，避免 reason 丢失。
+    /// RFC 四态；优先于 timeline.chain.state 驱动 owner / contract。
+    pub(crate) receiver_state: Option<String>,
+    /// gap/frame 快照；chain.state 应与 `receiver_state` 一致。
     pub(crate) latest_video_timeline_observation: Option<XbxEngineVideoTimelineObservation>,
     pub(crate) latest_timeline_chain_state: Option<String>,
     pub(crate) latest_timeline_source_event: Option<String>,
@@ -111,11 +113,19 @@ pub(crate) struct VideoSchedulingOwnerInput {
 }
 
 impl VideoSchedulingOwnerInput {
-    fn effective_chain_state(&self) -> Option<&str> {
-        self.latest_video_timeline_observation
-            .as_ref()
-            .map(|o| o.chain.state.as_str())
+    fn effective_receiver_state(&self) -> Option<&str> {
+        self.receiver_state
+            .as_deref()
+            .or_else(|| {
+                self.latest_video_timeline_observation
+                    .as_ref()
+                    .map(|o| o.chain.state.as_str())
+            })
             .or(self.latest_timeline_chain_state.as_deref())
+    }
+
+    fn effective_chain_state(&self) -> Option<&str> {
+        self.effective_receiver_state()
     }
 
     fn effective_chain_reason(&self) -> Option<&str> {
@@ -174,7 +184,7 @@ impl OwnerRecoveryReason {
 
     pub(crate) fn as_reason_label(self) -> &'static str {
         match self {
-            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryAnchor",
+            Self::TransportAwaitRecoveryKeyframe => "receiverWaitingKeyframe",
             Self::LocalSupplySuspect => "rebuildingSupplySuspect",
             Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::DisplaySupplyDegraded => "displaySupplyDegraded",
@@ -313,8 +323,9 @@ impl VideoSchedulingOwner {
             .demand
             .critical_signal(&input.display_supply_thresholds);
         let has_clean_anchor_evidence = Self::has_current_clean_anchor_release_evidence(input);
-        let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"));
+        let chain_healthy = matches!(input.effective_chain_state(), Some("receiving"));
         let ingress_waiting_keyframe = is_ingress_waiting_keyframe(
+            input.effective_receiver_state(),
             input.effective_chain_state(),
             input.effective_chain_reason(),
             input.effective_source_event(),
@@ -680,7 +691,7 @@ impl VideoSchedulingOwner {
                     && candidate.source_event == "chain-clean-anchor-submitted"
                     && candidate.recovery_epoch != input.recovery_epoch
             });
-        let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"))
+        let chain_healthy = matches!(input.effective_chain_state(), Some("receiving"))
             || transient_anchor_noise_settled;
         let media_healthy_baseline = is_media_healthy_baseline(
             input.connection_state == ConnectionLifecycleStateFact::Connected,
@@ -739,7 +750,7 @@ impl VideoSchedulingOwner {
         if terminal_invalid_bootstrap_serving_ready {
             // 仅 broken 链走 terminal-invalid 的 ServingReady；repairing/healthy 等交给后续 Ready
             // 判定（见 transient_anchor_noise / non_idr 与 degraded_supply_still_releases）。
-            if matches!(input.effective_chain_state(), Some("broken")) {
+            if matches!(input.effective_chain_state(), Some("waiting-keyframe")) {
                 return RecoveryCompletionEvidence::ServingReady;
             }
         }
@@ -1020,7 +1031,7 @@ impl VideoSchedulingOwner {
             // broken 链 + 终端 deferred invalid 时，display 可能暂时不满足 degraded fresh，
             // 但仍需退出 rebuilding-supply 进入 degraded-serving 吸收尾风险（见单测
             // degraded_supply_still_releases_terminal_invalid_bootstrap_waiting）。
-            if matches!(input.effective_chain_state(), Some("broken")) {
+            if matches!(input.effective_chain_state(), Some("waiting-keyframe")) {
                 return true;
             }
             return Self::terminal_invalid_bootstrap_has_serviceable_output(input, supply_state);
@@ -1089,6 +1100,7 @@ impl VideoSchedulingOwner {
         }
         // 除显式 wait-keyframe 外，ingress 等关键帧 / gap 修复噪声也应保持首帧前保护，避免时间线先滑到 gap-* 即失效。
         is_ingress_waiting_keyframe(
+            input.effective_receiver_state(),
             input.effective_chain_state(),
             input.effective_chain_reason(),
             input.effective_source_event(),
@@ -1616,6 +1628,7 @@ impl VideoSchedulingOwner {
             }
         }
         is_ingress_waiting_keyframe(
+            input.effective_receiver_state(),
             input.effective_chain_state(),
             input.effective_chain_reason(),
             input.effective_source_event(),
@@ -1721,7 +1734,7 @@ impl VideoSchedulingOwner {
     }
 
     fn transport_await_chain_is_hard_broken(input: &VideoSchedulingOwnerInput) -> bool {
-        input.effective_chain_state() == Some("broken")
+        input.effective_chain_state() == Some("waiting-keyframe")
             && Self::is_transport_await_probe_signal(input)
     }
 
@@ -1855,7 +1868,7 @@ impl VideoSchedulingOwner {
                 .pending_supply_starved_label = None;
             return false;
         }
-        let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"));
+        let chain_healthy = matches!(input.effective_chain_state(), Some("receiving"));
         let track_attached = matches!(
             input.latest_track_state.as_deref(),
             Some("remoteTrackAttached")
@@ -1914,7 +1927,7 @@ impl VideoSchedulingOwner {
                 Some("bootstrapMissingIdr" | "NonIdrVcl")
             )
             && input.latest_h264_continuation_verdict.as_deref()
-                == Some("continuationAcceptedWhileAwaitingIdr")
+                == Some("receiverLocalContinuation")
             && input.latest_h264_committed_sps_present.unwrap_or(false)
             && input.latest_h264_committed_pps_present.unwrap_or(false)
             && input.latest_h264_delta_continuation_ready.unwrap_or(false)
@@ -1941,10 +1954,7 @@ impl VideoSchedulingOwner {
                     } else if Self::recovery_sustaining_phase_active(input, completion_evidence) {
                         "recoverySustaining".to_string()
                     } else {
-                        input
-                            .anchor_reason_label
-                            .clone()
-                            .unwrap_or_else(|| reason.as_reason_label().to_string())
+                        reason.as_reason_label().to_string()
                     };
                     (reason, label)
                 } else {

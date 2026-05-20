@@ -256,7 +256,7 @@ fn resolve_effective_diagnosis_label_for_test(
             | "transportSevereDeadline"
             | "transportSampleLoss"
             | "adapterIdleTimeout"
-            | "transportAwaitRecoveryAnchor"
+            | "receiverWaitingKeyframe"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned"
     ) {
@@ -410,7 +410,7 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         escalation_structured_label(stats),
         Some(
             "waitKeyframe"
-                | "transportAwaitRecoveryAnchor"
+                | "receiverWaitingKeyframe"
                 | "ingressWaitKeyframe"
                 | "ingressFrameAbandoned"
                 | "transportExpiredDeadline"
@@ -429,7 +429,7 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
 fn recovery_chain_value_label(reason: &str) -> &'static str {
     match reason {
         "waitKeyframe"
-        | "transportAwaitRecoveryAnchor"
+        | "receiverWaitingKeyframe"
         | "ingressWaitKeyframe"
         | "ingressFrameAbandoned" => "anchor",
         "reconfigure"
@@ -468,7 +468,7 @@ fn recovery_window_source_label(stats: &XbxEngineMediaRuntimeStats, reason: &str
     if matches!(
         reason,
         "waitKeyframe"
-            | "transportAwaitRecoveryAnchor"
+            | "receiverWaitingKeyframe"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned"
     ) {
@@ -531,7 +531,7 @@ fn resolve_effective_diagnosis_label_from_stats(
             | "transportSevereDeadline"
             | "transportSampleLoss"
             | "adapterIdleTimeout"
-            | "transportAwaitRecoveryAnchor"
+            | "receiverWaitingKeyframe"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned"
     ) {
@@ -603,7 +603,7 @@ fn resolve_recovery_owner_mode_by_signals(
     match diagnosis {
         Some(
             "waitKeyframe"
-            | "transportAwaitRecoveryAnchor"
+            | "receiverWaitingKeyframe"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned",
         ) => RecoveryOwnerMode::WaitingKeyframe,
@@ -694,7 +694,7 @@ fn should_absorb_stale_recovery_diagnosis(
 ) -> bool {
     if !matches!(
         diagnosis_label,
-        "transportAwaitRecoveryAnchor"
+        "receiverWaitingKeyframe"
             | "transportExpiredDeadline"
             | "transportSevereDeadline"
             | "transportSampleLoss"
@@ -847,7 +847,7 @@ mod tests {
         let now_ms = unix_now_ms();
         let stats = XbxEngineMediaRuntimeStats {
             session_phase: Some("recovering".to_string()),
-            recovery_active_escalation_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            recovery_active_escalation_reason: Some("receiverWaitingKeyframe".to_string()),
             video_owner_state: Some("degraded-serving".to_string()),
             latest_video_host_present_time_ms: Some(now_ms - 18.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
@@ -859,12 +859,8 @@ mod tests {
         };
 
         assert_eq!(
-            resolve_effective_diagnosis_label_from_stats(
-                &stats,
-                "transportAwaitRecoveryAnchor",
-                now_ms
-            ),
-            "transportAwaitRecoveryAnchor"
+            resolve_effective_diagnosis_label_from_stats(&stats, "receiverWaitingKeyframe", now_ms),
+            "receiverWaitingKeyframe"
         );
         assert_eq!(recovery_stage_label(&stats), "rebuilding-supply");
     }
@@ -874,7 +870,7 @@ mod tests {
         let now_ms = unix_now_ms();
         let stats = XbxEngineMediaRuntimeStats {
             session_phase: Some("recovering".to_string()),
-            recovery_active_escalation_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            recovery_active_escalation_reason: Some("receiverWaitingKeyframe".to_string()),
             video_owner_state: Some("degraded-serving".to_string()),
             latest_video_host_present_time_ms: Some(now_ms - 18.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
@@ -886,11 +882,7 @@ mod tests {
         };
 
         assert_eq!(
-            resolve_effective_diagnosis_label_from_stats(
-                &stats,
-                "transportAwaitRecoveryAnchor",
-                now_ms
-            ),
+            resolve_effective_diagnosis_label_from_stats(&stats, "receiverWaitingKeyframe", now_ms),
             "healthy"
         );
         assert_eq!(recovery_stage_label(&stats), "steady");

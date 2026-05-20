@@ -46,7 +46,7 @@ fn stale_adapter_idle_timeout_does_not_replay_during_steady_progress() {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
+                state: "receiving".to_string(),
                 reason: None,
                 chain_break_evidence: None,
 
@@ -154,7 +154,7 @@ fn stale_transport_await_does_not_replay_during_steady_progress() {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
+                state: "receiving".to_string(),
                 reason: None,
                 chain_break_evidence: None,
 
@@ -211,7 +211,7 @@ fn stale_transport_await_does_not_replay_during_steady_progress() {
             ..MediaProjection::default()
         },
         RecoveryProjection {
-            latest_diagnosis_label: Some("transportAwaitRecoveryAnchor".to_string()),
+            latest_diagnosis_label: Some("receiverWaitingKeyframe".to_string()),
             pending_action: false,
             successful_action_count: 0,
             failed_action_count: 0,
@@ -266,8 +266,8 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 1_000.0,
@@ -277,7 +277,7 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 88,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: None,
                 status: "deferred".to_string(),
                 status_detail: None,
@@ -368,7 +368,7 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
             ..MediaProjection::default()
         },
         RecoveryProjection {
-            latest_diagnosis_label: Some("transportAwaitRecoveryAnchor".to_string()),
+            latest_diagnosis_label: Some("receiverWaitingKeyframe".to_string()),
             pending_action: false,
             successful_action_count: 0,
             failed_action_count: 0,

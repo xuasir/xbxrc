@@ -383,7 +383,7 @@ fn coordinator_staged_recovery_reissues_keyframe_before_transport_await_reset() 
     let first = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -393,7 +393,7 @@ fn coordinator_staged_recovery_reissues_keyframe_before_transport_await_reset() 
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 80.0,
         },
         &shared_stats,
@@ -407,7 +407,7 @@ fn coordinator_staged_recovery_reissues_keyframe_before_transport_await_reset() 
     let third = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 420.0,
         },
         &shared_stats,
@@ -435,7 +435,7 @@ fn packet_seen_transport_await_episode_upgrades_to_decoder_reset_after_decode_gr
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "waiting-keyframe".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -453,7 +453,7 @@ fn packet_seen_transport_await_episode_upgrades_to_decoder_reset_after_decode_gr
     let first = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -464,7 +464,7 @@ fn packet_seen_transport_await_episode_upgrades_to_decoder_reset_after_decode_gr
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: first.decision.observation_id,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "packet-seen".to_string(),
                 status_detail: None,
@@ -489,7 +489,7 @@ fn packet_seen_transport_await_episode_upgrades_to_decoder_reset_after_decode_gr
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 260.0,
         },
         &shared_stats,
@@ -524,7 +524,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "receiving".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -542,7 +542,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
     let first = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -553,7 +553,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: first.decision.observation_id,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: None,
                 status: "deferred".to_string(),
                 status_detail: None,
@@ -610,7 +610,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 180.0,
         },
         &shared_stats,
@@ -644,7 +644,7 @@ fn stale_transport_await_decoder_reset_without_progress_can_reopen_decoder_reset
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "waiting-keyframe".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -655,7 +655,7 @@ fn stale_transport_await_decoder_reset_without_progress_can_reopen_decoder_reset
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 9001,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: Some("pli".to_string()),
             status: "missed".to_string(),
             status_detail: None,
@@ -676,7 +676,7 @@ fn stale_transport_await_decoder_reset_without_progress_can_reopen_decoder_reset
         });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 8001,
-        reason: "transportAwaitRecoveryAnchor".to_string(),
+        reason: "receiverWaitingKeyframe".to_string(),
         action: "requestDecoderReset".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
@@ -695,7 +695,7 @@ fn stale_transport_await_decoder_reset_without_progress_can_reopen_decoder_reset
     let proposal = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -740,7 +740,7 @@ fn invalid_transport_await_keyframe_response_releases_decoder_reset_inflight() {
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "waiting-keyframe".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -751,7 +751,7 @@ fn invalid_transport_await_keyframe_response_releases_decoder_reset_inflight() {
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 9200,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: Some("pli".to_string()),
             status: "packet-seen".to_string(),
             status_detail: None,
@@ -796,7 +796,7 @@ fn invalid_transport_await_keyframe_response_releases_decoder_reset_inflight() {
     });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 9202,
-        reason: "transportAwaitRecoveryAnchor".to_string(),
+        reason: "receiverWaitingKeyframe".to_string(),
         action: "requestDecoderReset".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
@@ -820,7 +820,7 @@ fn invalid_transport_await_keyframe_response_releases_decoder_reset_inflight() {
     let proposal = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -845,7 +845,7 @@ fn transport_await_lane_distinguishes_probe_decode_and_reset_progress() {
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "waiting-keyframe".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -856,7 +856,7 @@ fn transport_await_lane_distinguishes_probe_decode_and_reset_progress() {
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 9100,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: Some("pli".to_string()),
             status: "sent".to_string(),
             status_detail: None,
@@ -898,7 +898,7 @@ fn transport_await_lane_distinguishes_probe_decode_and_reset_progress() {
         stats.latest_video_escalation_observation =
             Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 8200,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
                 action: "requestDecoderReset".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -928,7 +928,7 @@ fn transport_await_invalid_nonidr_response_releases_reset_and_decode_wait_lanes(
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "waiting-keyframe".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -950,7 +950,7 @@ fn transport_await_invalid_nonidr_response_releases_reset_and_decode_wait_lanes(
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 9_200,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: Some("pli".to_string()),
             status: "packet-seen".to_string(),
             status_detail: None,
@@ -995,7 +995,7 @@ fn transport_await_invalid_nonidr_response_releases_reset_and_decode_wait_lanes(
     });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 8_521,
-        reason: "transportAwaitRecoveryAnchor".to_string(),
+        reason: "receiverWaitingKeyframe".to_string(),
         action: "requestDecoderReset".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
@@ -1026,8 +1026,8 @@ fn transport_await_invalid_nonidr_inspection_after_reset_does_not_coalesce_stale
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
-            reason: Some("awaitingRecoveryAnchor".to_string()),
+            state: "repairing".to_string(),
+            reason: Some("gapRepairInFlight".to_string()),
             chain_break_evidence: None,
 
             observed_at_ms: now_ms,
@@ -1048,7 +1048,7 @@ fn transport_await_invalid_nonidr_inspection_after_reset_does_not_coalesce_stale
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 9_300,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: Some("pli".to_string()),
             status: "decoded".to_string(),
             status_detail: None,
@@ -1093,7 +1093,7 @@ fn transport_await_invalid_nonidr_inspection_after_reset_does_not_coalesce_stale
     });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 8_621,
-        reason: "transportAwaitRecoveryAnchor".to_string(),
+        reason: "receiverWaitingKeyframe".to_string(),
         action: "requestDecoderReset".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
@@ -1112,7 +1112,7 @@ fn transport_await_invalid_nonidr_inspection_after_reset_does_not_coalesce_stale
     let proposal = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1141,7 +1141,7 @@ fn transport_await_with_connected_stall_evidence_escalates_on_second_post_cooldo
     let first = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1152,7 +1152,7 @@ fn transport_await_with_connected_stall_evidence_escalates_on_second_post_cooldo
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 220.0,
         },
         &shared_stats,
@@ -1175,7 +1175,7 @@ fn coordinator_staged_recovery_handles_sparse_transport_await_signals() {
     let first = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1185,7 +1185,7 @@ fn coordinator_staged_recovery_handles_sparse_transport_await_signals() {
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 1_600.0,
         },
         &shared_stats,
@@ -1219,7 +1219,7 @@ fn recent_clean_anchor_keeps_transport_await_recovery_keyframe_from_forcing_hard
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "healthy".to_string(),
+            state: "receiving".to_string(),
             reason: None,
             chain_break_evidence: None,
 
@@ -1237,7 +1237,7 @@ fn recent_clean_anchor_keeps_transport_await_recovery_keyframe_from_forcing_hard
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1245,7 +1245,7 @@ fn recent_clean_anchor_keeps_transport_await_recovery_keyframe_from_forcing_hard
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 60.0,
         },
         &shared_stats,
@@ -1253,7 +1253,7 @@ fn recent_clean_anchor_keeps_transport_await_recovery_keyframe_from_forcing_hard
     let third = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 120.0,
         },
         &shared_stats,
@@ -1291,8 +1291,8 @@ fn clean_anchor_absorbs_stale_transport_await_ingress_waiting_stage() {
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
-            reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            state: "waiting-keyframe".to_string(),
+            reason: Some("receiverWaitingKeyframe".to_string()),
             chain_break_evidence: None,
 
             observed_at_ms: now_ms - 120.0,
@@ -1341,7 +1341,7 @@ fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "healthy".to_string(),
+            state: "receiving".to_string(),
             reason: None,
             chain_break_evidence: None,
 
@@ -1359,7 +1359,7 @@ fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1367,7 +1367,7 @@ fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 60.0,
         },
         &shared_stats,
@@ -1375,7 +1375,7 @@ fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_
     let third = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 120.0,
         },
         &shared_stats,
@@ -1401,7 +1401,7 @@ fn clean_anchor_acknowledgement_resets_transport_await_streak() {
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1409,7 +1409,7 @@ fn clean_anchor_acknowledgement_resets_transport_await_streak() {
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 120.0,
         },
         &shared_stats,
@@ -1420,7 +1420,7 @@ fn clean_anchor_acknowledgement_resets_transport_await_streak() {
     let after_clean_anchor = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 240.0,
         },
         &shared_stats,
@@ -1452,7 +1452,7 @@ fn transport_await_hard_fallback_timeout_resets_across_recovery_epoch() {
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1463,7 +1463,7 @@ fn transport_await_hard_fallback_timeout_resets_across_recovery_epoch() {
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 1_600.0,
         },
         &shared_stats,
@@ -1472,7 +1472,7 @@ fn transport_await_hard_fallback_timeout_resets_across_recovery_epoch() {
         stats.latest_video_escalation_observation =
             Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 901,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
                 action: "requestDecoderReset".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -1485,7 +1485,7 @@ fn transport_await_hard_fallback_timeout_resets_across_recovery_epoch() {
     let timeout = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 2_700.0,
         },
         &shared_stats,
@@ -1514,7 +1514,7 @@ fn transport_await_reconnecting_stage_stays_in_decoder_reset_after_hard_fallback
     stats.transport_recovery_epoch = 31;
     stats.transport_state = XbxEngineTransportStateDto::Connecting;
     stats.transport_recovery_episode_active = true;
-    stats.recovery_diagnosis = Some("transportAwaitRecoveryAnchor".to_string());
+    stats.recovery_diagnosis = Some("receiverWaitingKeyframe".to_string());
     stats.video_renderer_stalled = Some(true);
     stats.latest_video_host_present_time_ms = Some(now_ms - 10_000.0);
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 10_000.0);
@@ -1528,7 +1528,7 @@ fn transport_await_reconnecting_stage_stays_in_decoder_reset_after_hard_fallback
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1536,7 +1536,7 @@ fn transport_await_reconnecting_stage_stays_in_decoder_reset_after_hard_fallback
     let promoted = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 10_000.0,
         },
         &shared_stats,
@@ -1559,7 +1559,7 @@ fn bootstrap_in_flight_signal_stays_in_local_probe_domain() {
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 1,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: None,
             status: "requested".to_string(),
             status_detail: None,
@@ -1584,7 +1584,7 @@ fn bootstrap_in_flight_signal_stays_in_local_probe_domain() {
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "receiving".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -1647,7 +1647,7 @@ fn transport_await_nonidr_breaks_sustaining_wait_burst_suppression() {
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 1,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            request_reason: Some("receiverWaitingKeyframe".to_string()),
             request_kind: None,
             status: "requested".to_string(),
             status_detail: None,
@@ -1672,7 +1672,7 @@ fn transport_await_nonidr_breaks_sustaining_wait_burst_suppression() {
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
-            state: "recovering".to_string(),
+            state: "waiting-keyframe".to_string(),
             reason: Some("awaitingRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
@@ -1762,7 +1762,7 @@ fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,
@@ -1777,7 +1777,7 @@ fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
+                state: "receiving".to_string(),
                 reason: None,
                 chain_break_evidence: None,
 
@@ -1802,7 +1802,7 @@ fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 120.0,
         },
         &shared_stats,
@@ -1829,7 +1829,7 @@ fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
+                state: "waiting-keyframe".to_string(),
                 reason: Some("streamThinStall".to_string()),
                 chain_break_evidence: None,
 
@@ -1843,7 +1843,7 @@ fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
     let after_reentry = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "transportAwaitRecoveryAnchor".to_string(),
+            reason_label: "receiverWaitingKeyframe".to_string(),
             observed_at_ms: now_ms + 1_000.0,
         },
         &shared_stats,

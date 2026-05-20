@@ -16,7 +16,9 @@ use crate::{
     XbxEngineMediaRuntimeStats,
 };
 
-use super::ingress::drain_ingress_to_decode;
+use crate::transport::rtc::ingress::DecodeIngressAdapter;
+use crate::transport::rtc::latency::PostDecodeLatencyController;
+
 use super::observation::{
     map_transport_observation_to_hint_label, transport_observation_severity,
     MediaSupervisorObservationState,
@@ -57,6 +59,8 @@ struct MediaSessionLoop {
     transport_observation_rx: mpsc::UnboundedReceiver<TransportObservation>,
     ingress: VideoIngress,
     decode_handle: Arc<crate::media::video::decode::actor::DecodeActorHandle>,
+    decode_adapter: DecodeIngressAdapter,
+    post_decode: PostDecodeLatencyController,
     runtime_stats: RuntimeStatsSink,
     transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     observation: MediaSupervisorObservationState,
@@ -85,7 +89,13 @@ impl MediaSessionLoop {
                 usize::from(config.backlog_drop_threshold_packets.max(1)),
                 Duration::from_millis(config.late_frame_drop_threshold_ms),
             ),
-            decode_handle,
+            decode_handle: decode_handle.clone(),
+            decode_adapter: DecodeIngressAdapter::new(
+                decode_handle,
+                PostDecodeLatencyController::new(runtime_stats.clone()),
+                RuntimeStatsSink::new(runtime_stats.clone()),
+            ),
+            post_decode: PostDecodeLatencyController::new(runtime_stats.clone()),
             runtime_stats: RuntimeStatsSink::new(runtime_stats),
             transport_fact_sink,
             observation: MediaSupervisorObservationState::new(),
@@ -142,10 +152,8 @@ impl MediaSessionLoop {
     }
 
     fn drive_decode_pull(&mut self) {
-        drain_ingress_to_decode(
+        self.decode_adapter.drain_to_decode(
             &mut self.ingress,
-            &self.decode_handle,
-            &self.runtime_stats,
             self.observation.total_frame_count(),
             &self.observation,
         );

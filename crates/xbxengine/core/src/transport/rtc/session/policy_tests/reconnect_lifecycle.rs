@@ -261,7 +261,7 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let snapshot = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryAnchor",
+        "receiverWaitingKeyframe",
         100.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
@@ -311,7 +311,7 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
         .expect("recovery decision ledger");
     assert_eq!(
         ledger.input_signal,
-        "transportAwaitRecoveryAnchor:bootstrapMissingSps"
+        "receiverWaitingKeyframe:bootstrapMissingSps"
     );
     assert_eq!(ledger.action_selected, "requestPli");
 }
@@ -380,7 +380,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
         .expect("recovery decision ledger");
     assert_eq!(
         ledger.input_signal,
-        "transportAwaitRecoveryAnchor:bootstrapMissingSps"
+        "receiverWaitingKeyframe:bootstrapMissingSps"
     );
     assert_recovery_family_hold_semantics(
         ledger.gate_result.as_str(),
@@ -880,7 +880,7 @@ fn connected_ingress_without_success_output_can_enter_failed_terminal_after_reco
             ..MediaProjection::default()
         },
         RecoveryProjection {
-            latest_diagnosis_label: Some("transportAwaitRecoveryAnchor".to_string()),
+            latest_diagnosis_label: Some("receiverWaitingKeyframe".to_string()),
             pending_action: false,
             successful_action_count: 0,
             failed_action_count: 0,
@@ -931,8 +931,8 @@ fn same_tick_failed_terminal_does_not_forward_original_reconnect_proposal() {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 7_540.0,
@@ -1405,7 +1405,7 @@ fn pre_first_frame_display_supply_degraded_does_not_upgrade_recovery() {
                     gap: None,
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                        state: "healthy".to_string(),
+                        state: "receiving".to_string(),
                         reason: None,
                         chain_break_evidence: None,
 

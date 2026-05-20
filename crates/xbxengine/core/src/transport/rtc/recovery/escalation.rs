@@ -80,7 +80,7 @@ impl VideoEscalationReason {
         match self {
             Self::LifecycleRecovering => "rtcConnectionRecovering",
             Self::WaitKeyframe => "waitKeyframe",
-            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryAnchor",
+            Self::TransportAwaitRecoveryKeyframe => "receiverWaitingKeyframe",
             Self::LocalSupplySuspect => "localSupplySuspect",
             Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::Reconfigure => "reconfigure",
@@ -128,7 +128,7 @@ impl VideoEscalationReason {
                 Some(Self::WaitKeyframe)
             }
             "frameAbandoned" | "ingressFrameAbandoned" => Some(Self::LocalSupplySuspect),
-            "transportAwaitRecoveryAnchor" => Some(Self::TransportAwaitRecoveryKeyframe),
+            "receiverWaitingKeyframe" => Some(Self::WaitKeyframe),
             "localSupplySuspect"
             | "rebuildingSupplySuspect"
             | "bootstrapMissingSps"
@@ -595,8 +595,15 @@ impl VideoEscalationController {
                 self.pending_decoder_reset_signals = 0;
                 RecoveryAction::CooldownSuppressed
             }
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
+                // RFC 2026-05-20：关键帧由 RtcReceiveCore + capability 本地执行，session 不再走 PLI/FIR 预算环。
+                self.wait_keyframe_started_at = None;
+                self.transport_await_recovery_started_at = None;
+                self.pending_keyframe_signals = 0;
+                self.pending_decoder_reset_signals = 0;
+                RecoveryAction::CooldownSuppressed
+            }
             VideoEscalationReason::WaitKeyframe
-            | VideoEscalationReason::TransportAwaitRecoveryKeyframe
             | VideoEscalationReason::DisplaySupplyCritical
             | VideoEscalationReason::AdapterIdleTimeout
             | VideoEscalationReason::AdapterThinStream
@@ -605,9 +612,6 @@ impl VideoEscalationController {
             | VideoEscalationReason::TransportSampleLoss => {
                 let reason_class = match reason {
                     VideoEscalationReason::WaitKeyframe => KeyframeReasonClass::WaitKeyframe,
-                    VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
-                        KeyframeReasonClass::TransportAwaitRecoveryKeyframe
-                    }
                     VideoEscalationReason::DisplaySupplyCritical => {
                         KeyframeReasonClass::DisplaySupplyCritical
                     }
@@ -631,7 +635,6 @@ impl VideoEscalationController {
                 let immediate_keyframe_reason = matches!(
                     reason,
                     VideoEscalationReason::WaitKeyframe
-                        | VideoEscalationReason::TransportAwaitRecoveryKeyframe
                         | VideoEscalationReason::DisplaySupplyCritical
                         | VideoEscalationReason::TransportExpiredDeadline
                         | VideoEscalationReason::TransportSampleLoss
@@ -663,18 +666,7 @@ impl VideoEscalationController {
                     } else {
                         self.wait_keyframe_started_at = None;
                     }
-                    if matches!(
-                        reason,
-                        VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                    ) {
-                        if self.last_keyframe_reason_class != Some(reason_class) {
-                            self.transport_await_recovery_started_at = Some(now);
-                        } else {
-                            self.transport_await_recovery_started_at.get_or_insert(now);
-                        }
-                    } else {
-                        self.transport_await_recovery_started_at = None;
-                    }
+                    self.transport_await_recovery_started_at = None;
                     if self
                         .last_keyframe_signal_at
                         .map_or(true, |last| last.elapsed() > self.burst_window)

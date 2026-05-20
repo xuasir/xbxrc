@@ -468,6 +468,7 @@
           "priming": "Priming",
           "rebuildingSupply": "Rebuilding supply",
           "transportAwaitRecoveryAnchor": "Awaiting recovery keyframe",
+          "receiverWaitingKeyframe": "Awaiting recovery keyframe",
           "transportRecoveryKeyframeRequested": "Recovery keyframe requested",
           "ingressWaitKeyframe": "Ingress waiting keyframe",
           "displaySupplyCritical": "Display supply critical",
@@ -499,6 +500,7 @@
           "healthy": "Healthy",
           "supplyStarved": "Supply starved",
           "transportAwaitRecoveryAnchor": "Awaiting recovery keyframe",
+          "receiverWaitingKeyframe": "Awaiting recovery keyframe",
           "transportRecoveryKeyframeRequested": "Recovery keyframe requested",
           "timelineReferenceBroken": "Reference chain broken",
           "displaySupplyCritical": "Display supply critical",
@@ -510,13 +512,21 @@
           "startup__priming": "Startup · priming",
           "display__supplyStarved": "Display · supply starved",
           "local-self-healing__transportAwaitRecoveryAnchor": "Local self-healing · awaiting keyframe",
-          "recovery__transportAwaitRecoveryAnchor": "Recovery · awaiting keyframe"
+          "recovery__transportAwaitRecoveryAnchor": "Recovery · awaiting keyframe",
+          "local-self-healing__receiverWaitingKeyframe": "Local self-healing · awaiting keyframe",
+          "recovery__receiverWaitingKeyframe": "Recovery · awaiting keyframe",
+          "active-recovery__receiverWaitingKeyframe": "Active recovery · awaiting keyframe",
+          "recovery-eligible__receiverWaitingKeyframe": "Recovery eligible · awaiting keyframe"
         },
         "latestDecision": {
           "phase__local-self-healing__transportAwaitRecoveryAnchor": "Phase: local self-healing / awaiting keyframe",
+          "phase__local-self-healing__receiverWaitingKeyframe": "Phase: local self-healing / awaiting keyframe",
+          "phase__active-recovery__receiverWaitingKeyframe": "Phase: active recovery / awaiting keyframe",
+          "phase__recovery-eligible__receiverWaitingKeyframe": "Phase: recovery eligible / awaiting keyframe",
           "owner__stable-serving__steady": "Owner: stable serving / steady",
           "owner__supply-starved__supplyStarved": "Owner: supply starved",
           "owner__rebuilding-supply__transportAwaitRecoveryAnchor": "Owner: rebuilding / awaiting keyframe",
+          "owner__rebuilding-supply__receiverWaitingKeyframe": "Owner: rebuilding / awaiting keyframe",
           "owner__seeking-anchor__seekingAnchor": "Owner: seeking anchor",
           "owner__priming__priming": "Owner: priming",
           "owner__degraded-serving__degradedSteady": "Owner: degraded serving / degraded steady"

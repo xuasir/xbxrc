@@ -6,7 +6,7 @@ use crate::{
 };
 use std::collections::VecDeque;
 
-pub(super) struct MediaSupervisorObservationState {
+pub(crate) struct MediaSupervisorObservationState {
     frame_count: u64,
     frame_drop_observation_id: u64,
     recent_receive_frame_times_ms: VecDeque<f64>,
@@ -39,7 +39,7 @@ impl MediaSupervisorObservationState {
         self.frame_count
     }
 
-    pub(super) fn record_stream_dimensions(
+    pub(crate) fn record_stream_dimensions(
         &self,
         runtime_stats: &RuntimeStatsSink,
         width: u32,
@@ -192,7 +192,7 @@ pub(super) fn map_transport_observation_to_hint_label(
     match observation {
         TransportObservation::Admission(
             crate::transport::rtc::stream::adapter_types::TransportAdmissionObservation::AwaitRecoveryKeyframe,
-        ) => "transportAwaitRecoveryAnchor",
+        ) => "receiverWaitingKeyframe",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::PacketLossDetected,
         ) => "transportSampleLoss",
@@ -201,7 +201,7 @@ pub(super) fn map_transport_observation_to_hint_label(
         ) => "transportRecoveryKeyframeRequested",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::AwaitRecoveryKeyframe,
-        ) => "transportAwaitRecoveryAnchor",
+        ) => "receiverWaitingKeyframe",
         TransportObservation::StreamIdleTimeout => "adapterIdleTimeout",
         TransportObservation::StreamThinStall => "adapterThinStream",
         TransportObservation::NackRecoveredLate => "transportRecoveredLate",
@@ -308,7 +308,7 @@ mod tests {
             &TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe),
             64,
         );
-        assert_eq!(label, "transportAwaitRecoveryAnchor");
+        assert_eq!(label, "receiverWaitingKeyframe");
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
             &TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe),
             64,
         );
-        assert_eq!(label, "transportAwaitRecoveryAnchor");
+        assert_eq!(label, "receiverWaitingKeyframe");
     }
 
     #[test]

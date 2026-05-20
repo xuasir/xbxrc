@@ -1447,6 +1447,23 @@ pub fn build_xbxengine_stats(
                     },
                 )
         }),
+        latest_video_receiver_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_video_receiver_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineVideoReceiverObservationDto {
+                        observation_id: observation.observation_id,
+                        receiver_state: observation.receiver_state.clone(),
+                        gap_sequence: observation.gap_sequence,
+                        gap_span: observation.gap_span,
+                        nack_in_flight: observation.nack_in_flight,
+                        keyframe_request_pending: observation.keyframe_request_pending,
+                        bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
         latest_video_timeline_observation: runtime_stats.and_then(|stats| {
             stats
                 .latest_video_timeline_observation
@@ -1956,7 +1973,7 @@ fn build_transport_recovery_note(
     if stats
         .video_owner_reason
         .as_deref()
-        .is_some_and(|r| r == "transportAwaitRecoveryAnchor")
+        .is_some_and(|r| r == "receiverWaitingKeyframe")
     {
         parts.push("awaitKeyframe:hostIdrOrCleanAnchor".to_string());
     } else if stats
@@ -2316,7 +2333,7 @@ fn classify_stall_kind(
             "displaySupplyDegraded" => "displaySupplyDegraded".to_string(),
             "decoderBackendFailure" => "decoderBackendFailure".to_string(),
             "transportSampleLoss" => "sampleLoss".to_string(),
-            "transportAwaitRecoveryAnchor" | "ingressWaitKeyframe" => "waitingKeyframe".to_string(),
+            "receiverWaitingKeyframe" | "ingressWaitKeyframe" => "waitingKeyframe".to_string(),
             "reconfigure" => "reconfigure".to_string(),
             // steady 主路径不应落在笼统 recovering，避免与传输/解码恢复混淆。
             "steady" => "none".to_string(),

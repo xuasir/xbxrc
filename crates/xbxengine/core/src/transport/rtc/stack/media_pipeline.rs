@@ -5,12 +5,13 @@ use tokio::time::Duration;
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::capability::ConnectionRtcpCapability;
 use crate::transport::rtc::connection::RtcConnectionService;
+use crate::transport::rtc::receive::build_rtc_receive_pipeline;
 use crate::transport::rtc::stream::audio::{
     build_audio_playback_components, RtcAudioPlaybackSink, XbxRemoteAudioPlaybackSession,
 };
-use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
-use crate::transport::rtc::stream::{build_rtc_video_frame_source, RtcMediaService, RtcMediaSink};
+use crate::transport::rtc::stream::{RtcMediaService, RtcMediaSink};
 use crate::XbxEngineRuntimeConfig;
 
 /// sink 背压队列定时 flush 的间隔，与 sink 内部的 flush_tick 保持一致。
@@ -52,56 +53,6 @@ impl RtcMediaSink for RtcCompositeMediaSink {
             .on_raw_packet(packet, route_label, route_reason, rtp_meta);
         self.secondary
             .on_raw_packet(packet, route_label, route_reason, rtp_meta);
-    }
-}
-
-struct ConnectionRtcpPort {
-    connection: Arc<Mutex<RtcConnectionService>>,
-    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-}
-
-impl ConnectionRtcpPort {
-    fn new(
-        connection: Arc<Mutex<RtcConnectionService>>,
-        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Self {
-        Self {
-            connection,
-            runtime_stats,
-        }
-    }
-}
-
-impl RtcRtcpSendPort for ConnectionRtcpPort {
-    fn send_rtcp(&self, buf: &[u8]) -> Result<(), String> {
-        let mut connection = self.connection.lock().map_err(|_| {
-            crate::xbx_log_warn!(
-                "[xbxengine][rtc][rtcp] drop rtcp payload because connection lock failed"
-            );
-            "connection lock failed".to_string()
-        })?;
-
-        connection
-            .send_video_rtcp_payload(buf)
-            .map_err(|error| {
-                crate::xbx_log_warn!(
-                    "[xbxengine][rtc][rtcp] failed to send video rtcp payload: {error}"
-                );
-                RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_rtcp_send_failure(
-                    crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
-                    &error.to_string(),
-                );
-                error.to_string()
-            })
-            .map(|_| {
-                RuntimeStatsSink::new(self.runtime_stats.clone())
-                    .record_feedback_target_availability(
-                        crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
-                        "videoRtcpFeedback",
-                        "ready",
-                        "rtcpSendSucceeded",
-                    );
-            })
     }
 }
 
@@ -157,20 +108,21 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
             .map(|config| config.webrtc.clone())
             .unwrap_or_else(|| XbxEngineRuntimeConfig::default().webrtc);
         let video_pipeline = webrtc.video_pipeline;
-        let (video_sink, frame_sources) = build_rtc_video_frame_source(
+        let (video_sink, frame_sources) = build_rtc_receive_pipeline(
             8192,
-            Arc::new(ConnectionRtcpPort::new(
+            Arc::new(ConnectionRtcpCapability::new(
                 self.connection.clone(),
                 self.runtime_stats.clone(),
             )),
             self.runtime_stats.clone(),
+            self.connection.clone(),
             video_pipeline.jitter_buffer_max_packets.max(64),
             Duration::from_millis(video_pipeline.jitter_buffer_min_delay_ms),
             Duration::from_millis(video_pipeline.jitter_buffer_max_delay_ms),
             Duration::from_millis(video_pipeline.idle_timeout_ms.max(120)),
             // `max_retry_count` 与 `FrameBudgetContext::retry_budget` 取小后生效；高价值帧在
             // `ingress/budget::retry_budget` 下可获 1 次 RTT 感知重试（见 recovery timing RFC）。
-            crate::transport::rtc::stream::nack_scheduler::NackSchedulerConfig {
+            crate::transport::rtc::stream::nack_contract::NackSchedulerConfig {
                 max_age_ms: video_pipeline.nack_max_age_ms,
                 frame_deadline_ms: video_pipeline.late_frame_drop_threshold_ms.max(40),
                 burst_count: video_pipeline.nack_burst_count.max(1),

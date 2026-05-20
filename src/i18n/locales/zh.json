@@ -468,6 +468,7 @@
           "priming": "首帧准备",
           "rebuildingSupply": "重建供给",
           "transportAwaitRecoveryAnchor": "等待恢复关键帧",
+          "receiverWaitingKeyframe": "等待恢复关键帧",
           "transportRecoveryKeyframeRequested": "已请求恢复关键帧",
           "ingressWaitKeyframe": "入口等待关键帧",
           "displaySupplyCritical": "显示供给危急",
@@ -499,6 +500,7 @@
           "healthy": "健康",
           "supplyStarved": "供给不足",
           "transportAwaitRecoveryAnchor": "等待恢复关键帧",
+          "receiverWaitingKeyframe": "等待恢复关键帧",
           "transportRecoveryKeyframeRequested": "已请求恢复关键帧",
           "timelineReferenceBroken": "参考链断裂",
           "displaySupplyCritical": "显示供给危急",
@@ -510,13 +512,21 @@
           "startup__priming": "启动 · 首帧准备",
           "display__supplyStarved": "显示 · 供给不足",
           "local-self-healing__transportAwaitRecoveryAnchor": "局部自愈 · 等待恢复关键帧",
-          "recovery__transportAwaitRecoveryAnchor": "恢复 · 等待恢复关键帧"
+          "recovery__transportAwaitRecoveryAnchor": "恢复 · 等待恢复关键帧",
+          "local-self-healing__receiverWaitingKeyframe": "局部自愈 · 等待恢复关键帧",
+          "recovery__receiverWaitingKeyframe": "恢复 · 等待恢复关键帧",
+          "active-recovery__receiverWaitingKeyframe": "主动恢复 · 等待恢复关键帧",
+          "recovery-eligible__receiverWaitingKeyframe": "恢复资格 · 等待恢复关键帧"
         },
         "latestDecision": {
           "phase__local-self-healing__transportAwaitRecoveryAnchor": "阶段：局部自愈 / 等待恢复关键帧",
+          "phase__local-self-healing__receiverWaitingKeyframe": "阶段：局部自愈 / 等待恢复关键帧",
+          "phase__active-recovery__receiverWaitingKeyframe": "阶段：主动恢复 / 等待恢复关键帧",
+          "phase__recovery-eligible__receiverWaitingKeyframe": "阶段：恢复资格 / 等待恢复关键帧",
           "owner__stable-serving__steady": "主视图：稳定输出 / 稳态",
           "owner__supply-starved__supplyStarved": "主视图：供给不足",
           "owner__rebuilding-supply__transportAwaitRecoveryAnchor": "主视图：重建供给 / 等待恢复关键帧",
+          "owner__rebuilding-supply__receiverWaitingKeyframe": "主视图：重建供给 / 等待恢复关键帧",
           "owner__seeking-anchor__seekingAnchor": "主视图：寻找锚点",
           "owner__priming__priming": "主视图：首帧准备",
           "owner__degraded-serving__degradedSteady": "主视图：降级输出 / 稳态降级"

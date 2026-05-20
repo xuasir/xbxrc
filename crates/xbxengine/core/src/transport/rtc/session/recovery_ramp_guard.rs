@@ -2,7 +2,9 @@ use std::sync::Mutex;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
-use crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats;
+use crate::transport::rtc::recovery::contract::{
+    has_current_clean_anchor_from_stats, is_timeline_chain_receiving_from_stats,
+};
 use crate::transport::rtc::recovery::coordinator::CoordinatorProposal;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::runtime_state::{
@@ -82,10 +84,7 @@ pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
                     })
             }
             VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
-                let chain_healthy = stats
-                    .latest_video_timeline_observation
-                    .as_ref()
-                    .is_some_and(|timeline| timeline.chain.state == "healthy");
+                let chain_healthy = is_timeline_chain_receiving_from_stats(stats);
                 let track_attached_with_video = stats
                     .latest_video_track_status
                     .as_ref()

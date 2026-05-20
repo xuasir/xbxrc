@@ -28,8 +28,7 @@ const RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_CONTROL_PENDING: &str =
 /// 视频 RTCP 反馈目标（TWCC/SSRC）尚未就绪，与「控制通道未就绪」同属可重试窗口，避免记 transportFailed。
 const RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY: &str =
     "familyDeferred:videoRtcpFeedbackTransportNotReady";
-const RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING: &str =
-    "familyDeferred:videoRtcpFeedbackTargetPending";
+const CAPABILITY_FEEDBACK_WARMING_REASON: &str = "capability:videoFeedbackWarming";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryCommandKind {
     RequestPli,
@@ -916,7 +915,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
             ),
             Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => (
                 CommandResultStatus::Deferred {
-                    reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING.to_string(),
+                    reason: CAPABILITY_FEEDBACK_WARMING_REASON.to_string(),
                 },
                 None,
             ),
@@ -941,8 +940,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 if Self::is_keyframe_video_rtcp_feedback_target_pending_error(&error_text) {
                     return (
                         CommandResultStatus::Deferred {
-                            reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING
-                                .to_string(),
+                            reason: CAPABILITY_FEEDBACK_WARMING_REASON.to_string(),
                         },
                         None,
                     );
@@ -1070,7 +1068,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
             .iter()
             .chain(stats.latest_keyframe_request_episode.iter())
             .filter(|episode| {
-                episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
+                episode.request_reason.as_deref() == Some("receiverWaitingKeyframe")
                     && episode.retired_at_ms.is_none()
             })
             .max_by(|left, right| {
@@ -1112,7 +1110,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     inspection.bootstrap_reject_reason.as_deref(),
                     Some("bootstrapMissingIdr")
                 ) && inspection.continuation_verdict.as_deref()
-                    == Some("continuationAcceptedWhileAwaitingIdr")
+                    == Some("receiverLocalContinuation")
                     && inspection.committed_sps_present
                     && inspection.committed_pps_present
                     && inspection.delta_continuation_ready
@@ -1177,7 +1175,7 @@ mod tests {
     };
 
     use super::RtcTransportSessionBridge;
-    use super::RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING;
+    use super::CAPABILITY_FEEDBACK_WARMING_REASON;
     use super::RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY;
     use crate::transport::rtc::connection::VideoRecoveryRequestOutcome;
 
@@ -1291,13 +1289,13 @@ mod tests {
 
         bridge.apply_transport_session_command(SessionCommand::LocalDecoderReset {
             observation_id: 42,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
         });
 
         let msg = rx.recv().expect("local decoder reset message");
         match msg {
             DecodeMsg::LocalDecoderReset { reason, .. } => {
-                assert_eq!(reason, "recoveryCommand:transportAwaitRecoveryAnchor");
+                assert_eq!(reason, "recoveryCommand:receiverWaitingKeyframe");
             }
             _ => panic!("unexpected decode message"),
         }
@@ -1316,7 +1314,7 @@ mod tests {
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 70.0);
         stats.latest_video_escalation_observation = Some(XbxEngineVideoEscalationObservation {
             observation_id: 41,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             action: "requestDecoderReset".to_string(),
             recovery_stage: "rebuilding-supply".to_string(),
             recovery_chain_value: "anchor".to_string(),
@@ -1327,7 +1325,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 18,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -1376,8 +1374,7 @@ mod tests {
                 decision_id: 42,
                 state_before: "recovering".to_string(),
                 state_after: "recovering".to_string(),
-                input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
-                    .to_string(),
+                input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
                 gate_result: "pass".to_string(),
                 action_selected: "requestDecoderReset".to_string(),
                 frame_value: None,
@@ -1416,13 +1413,13 @@ mod tests {
 
         bridge.apply_transport_session_command(SessionCommand::LocalDecoderReset {
             observation_id: 42,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
         });
 
         let msg = rx.recv().expect("decoder reset should proceed");
         match msg {
             DecodeMsg::LocalDecoderReset { reason, .. } => {
-                assert_eq!(reason, "recoveryCommand:transportAwaitRecoveryAnchor");
+                assert_eq!(reason, "recoveryCommand:receiverWaitingKeyframe");
             }
             _ => panic!("unexpected decode message"),
         }
@@ -1453,7 +1450,7 @@ mod tests {
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 70.0);
         stats.latest_video_escalation_observation = Some(XbxEngineVideoEscalationObservation {
             observation_id: 41,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             action: "requestDecoderReset".to_string(),
             recovery_stage: "rebuilding-supply".to_string(),
             recovery_chain_value: "anchor".to_string(),
@@ -1464,7 +1461,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 19,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -1513,8 +1510,7 @@ mod tests {
                 decision_id: 43,
                 state_before: "recovering".to_string(),
                 state_after: "recovering".to_string(),
-                input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
-                    .to_string(),
+                input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
                 gate_result: "pass".to_string(),
                 action_selected: "requestDecoderReset".to_string(),
                 frame_value: None,
@@ -1553,13 +1549,13 @@ mod tests {
 
         bridge.apply_transport_session_command(SessionCommand::LocalDecoderReset {
             observation_id: 43,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
         });
 
         let msg = rx.recv().expect("decoder reset should proceed");
         match msg {
             DecodeMsg::LocalDecoderReset { reason, .. } => {
-                assert_eq!(reason, "recoveryCommand:transportAwaitRecoveryAnchor");
+                assert_eq!(reason, "recoveryCommand:receiverWaitingKeyframe");
             }
             _ => panic!("unexpected decode message"),
         }
@@ -1707,7 +1703,7 @@ mod tests {
         ));
         assert!(!bridge.should_advance_transport_recovery_epoch_on_success(
             RecoveryAction::RequestDecoderReset,
-            "transportAwaitRecoveryAnchor",
+            "receiverWaitingKeyframe",
         ));
     }
 
@@ -1718,7 +1714,7 @@ mod tests {
         stats.transport_recovery_epoch = 7;
         stats.latest_video_escalation_observation = Some(XbxEngineVideoEscalationObservation {
             observation_id: 101,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             action: "requestDecoderReset".to_string(),
             recovery_stage: "rebuilding-supply".to_string(),
             recovery_chain_value: "anchor".to_string(),
@@ -1732,7 +1728,7 @@ mod tests {
 
         bridge.apply_transport_session_command(SessionCommand::LocalDecoderReset {
             observation_id: 202,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
@@ -1753,7 +1749,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: None,
                 status: "requested".to_string(),
                 status_detail: None,
@@ -1808,7 +1804,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -1904,7 +1900,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -1953,8 +1949,7 @@ mod tests {
                 decision_id: 22,
                 state_before: "recovering".to_string(),
                 state_after: "recovering".to_string(),
-                input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
-                    .to_string(),
+                input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
                 gate_result: "pass".to_string(),
                 action_selected: "requestPli".to_string(),
                 frame_value: None,
@@ -1988,7 +1983,7 @@ mod tests {
         bridge.apply_transport_session_command(SessionCommand::Transport(
             TransportCommand::RequestPli {
                 observation_id: 22,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
             },
         ));
 
@@ -2026,7 +2021,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 41,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "packet-seen".to_string(),
                 status_detail: None,
@@ -2058,8 +2053,7 @@ mod tests {
                 decision_id: 42,
                 state_before: "recovering".to_string(),
                 state_after: "recovering".to_string(),
-                input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
-                    .to_string(),
+                input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
                 gate_result: "pass".to_string(),
                 action_selected: "requestPli".to_string(),
                 frame_value: None,
@@ -2093,7 +2087,7 @@ mod tests {
         bridge.apply_transport_session_command(SessionCommand::Transport(
             TransportCommand::RequestPli {
                 observation_id: 42,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
             },
         ));
 
@@ -2124,7 +2118,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -2207,7 +2201,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -2264,7 +2258,7 @@ mod tests {
 
         bridge.apply_transport_session_command(SessionCommand::LocalDecoderReset {
             observation_id: 202,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
@@ -2291,7 +2285,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -2405,7 +2399,7 @@ mod tests {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
+                state: "receiving".to_string(),
                 reason: None,
                 chain_break_evidence: None,
 
@@ -2520,7 +2514,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 30191,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -2578,7 +2572,7 @@ mod tests {
         bridge.apply_transport_session_command(SessionCommand::Transport(
             TransportCommand::RequestPli {
                 observation_id: 30191,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
             },
         ));
 
@@ -2601,7 +2595,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 35010,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
@@ -2685,7 +2679,7 @@ mod tests {
         bridge.apply_transport_session_command(SessionCommand::Transport(
             TransportCommand::RequestPli {
                 observation_id: 35010,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
             },
         ));
 
@@ -2726,7 +2720,7 @@ mod tests {
             }),
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
+                state: "receiving".to_string(),
                 reason: None,
                 chain_break_evidence: None,
 
@@ -2737,7 +2731,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 1,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -2991,7 +2985,7 @@ mod tests {
         assert_eq!(
             status,
             CommandResultStatus::Deferred {
-                reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING.to_string(),
+                reason: CAPABILITY_FEEDBACK_WARMING_REASON.to_string(),
             }
         );
         assert_eq!(detail, None);
@@ -3023,7 +3017,7 @@ mod tests {
             decision_id: 42,
             state_before: "recovering".to_string(),
             state_after: "active-recovery".to_string(),
-            input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor".to_string(),
+            input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
             gate_result: "pass:localProbe".to_string(),
             action_selected: "requestPli".to_string(),
             frame_value: Some("RecoveryAnchor".to_string()),
@@ -3057,10 +3051,10 @@ mod tests {
         bridge.record_transport_command_status(
             TransportCommand::RequestPli {
                 observation_id: 42,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
             },
             CommandResultStatus::Deferred {
-                reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING.to_string(),
+                reason: CAPABILITY_FEEDBACK_WARMING_REASON.to_string(),
             },
         );
 
@@ -3072,7 +3066,7 @@ mod tests {
         assert_eq!(ledger.command_result.as_deref(), Some("deferred"));
         assert_eq!(
             ledger.command_detail.as_deref(),
-            Some("command=requestPli detail=familyDeferred:videoRtcpFeedbackTargetPending")
+            Some("command=requestPli detail=capability:videoFeedbackWarming")
         );
     }
 
@@ -3083,7 +3077,7 @@ mod tests {
             decision_id: 43,
             state_before: "recovering".to_string(),
             state_after: "active-recovery".to_string(),
-            input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor".to_string(),
+            input_signal: "waitKeyframe:receiverWaitingKeyframe".to_string(),
             gate_result: "pass:localProbe".to_string(),
             action_selected: "requestPli".to_string(),
             frame_value: Some("RecoveryAnchor".to_string()),
@@ -3117,7 +3111,7 @@ mod tests {
         bridge.record_transport_command_status(
             TransportCommand::RequestPli {
                 observation_id: 43,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
             },
             CommandResultStatus::Deferred {
                 reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY.to_string(),

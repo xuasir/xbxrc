@@ -66,6 +66,7 @@ pub(crate) enum ObservationEvent {
     InboundVideoPacketLossEstimate {
         packet_count: u16,
     },
+    #[allow(dead_code)]
     VideoLossFinalized {
         packet_count: usize,
     },
@@ -90,6 +91,9 @@ pub(crate) enum ObservationEvent {
     },
     VideoTimelineObserved {
         observation: XbxEngineVideoTimelineObservation,
+    },
+    VideoReceiverObserved {
+        observation: crate::XbxEngineVideoReceiverObservation,
     },
     LatestVideoPacketGap {
         observation: XbxEngineVideoPacketGapObservation,
@@ -345,6 +349,16 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                     .unwrap_or("-")
             ),
         },
+        ObservationEvent::VideoReceiverObserved { observation } => ObservationPublication {
+            label: "videoReceiver".to_string(),
+            summary: format!(
+                "state={} gap={:?} nackInFlight={} keyframePending={}",
+                observation.receiver_state,
+                observation.gap_sequence,
+                observation.nack_in_flight,
+                observation.keyframe_request_pending
+            ),
+        },
         ObservationEvent::LatestVideoPacketGap {
             observation,
             latest_sequence,
@@ -552,6 +566,9 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
                 );
             }
             stats.latest_video_timeline_observation = Some(observation);
+        }
+        ObservationEvent::VideoReceiverObserved { observation } => {
+            stats.latest_video_receiver_observation = Some(observation);
         }
         ObservationEvent::LatestVideoPacketGap {
             observation,

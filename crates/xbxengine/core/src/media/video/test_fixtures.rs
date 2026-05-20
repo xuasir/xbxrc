@@ -8,13 +8,14 @@ use crate::media::video::h264::inspection::H264AccessUnitInspector;
 use crate::media::video::types::{
     AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
 };
+use crate::transport::rtc::capability::TestTransportCapability;
+use crate::transport::rtc::receive::RtcVideoFrameSource;
 use crate::transport::rtc::stream::adapter_types::TransportObservation;
-use crate::transport::rtc::stream::nack_scheduler::NackSchedulerConfig;
+use crate::transport::rtc::stream::nack_contract::NackSchedulerConfig;
 use crate::transport::rtc::stream::packet_types::{
     RtcRtpPacketMeta, RtcVideoIngressKind, RtcVideoRtpPacket,
 };
 use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
-use crate::transport::rtc::stream::video_source::RtcVideoFrameSource;
 
 #[derive(Clone, Default)]
 pub(crate) struct NoopRtcpPort;
@@ -148,13 +149,8 @@ pub(crate) fn make_video_source_for_test() -> (
         Duration::from_millis(10),
         Duration::from_millis(20),
         Duration::from_millis(200),
-        NackSchedulerConfig {
-            max_age_ms: 1_000,
-            frame_deadline_ms: 120,
-            burst_count: 2,
-            retry_interval_ms: 20,
-            max_retry_count: 3,
-        },
+        crate::transport::rtc::receive::test_nack_scheduler_config(),
+        Arc::new(TestTransportCapability),
     );
     (tx, transport_observation_rx, source)
 }

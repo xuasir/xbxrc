@@ -56,7 +56,7 @@ mod tests {
             source_event: "frame-await-recovery-anchor".to_string(),
             chain: XbxEngineVideoTimelineChainSnapshot {
                 state: "broken".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 5000.0,
             },
@@ -85,8 +85,8 @@ mod tests {
             observation_id: 3,
             source_event: "frame-await-recovery-anchor".to_string(),
             chain: XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 1300.0,
             },
@@ -101,7 +101,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 9,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "response-observed".to_string(),
                 status_detail: Some("firstResponseNonKeyframe".to_string()),
@@ -143,8 +143,8 @@ mod tests {
             observation_id: 4,
             source_event: "frame-await-recovery-anchor".to_string(),
             chain: XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 2_000.0,
             },
@@ -159,7 +159,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 10,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -190,7 +190,7 @@ mod tests {
             observation_id: 5,
             source_event: "frame-complete-candidate".to_string(),
             chain: XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
+                state: "receiving".to_string(),
                 reason: None,
                 chain_break_evidence: None,
                 observed_at_ms: 2_200.0,
@@ -206,7 +206,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 11,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -246,7 +246,7 @@ mod tests {
                 bootstrap_ready: false,
                 bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
                 admission_accepted: true,
-                continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                continuation_verdict: Some("receiverLocalContinuation".to_string()),
                 observed_at_ms: 2_180.0,
                 bound_episode_id: Some(7),
                 ..Default::default()
@@ -268,8 +268,8 @@ mod tests {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 2_150.0,
             },
@@ -280,7 +280,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 7,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -320,7 +320,7 @@ mod tests {
                 bootstrap_ready: false,
                 bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
                 admission_accepted: true,
-                continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                continuation_verdict: Some("receiverLocalContinuation".to_string()),
                 observed_at_ms: 2_180.0,
                 bound_episode_id: None,
                 ..Default::default()
@@ -342,8 +342,8 @@ mod tests {
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 2_420.0,
             },
@@ -354,7 +354,7 @@ mod tests {
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 8,
-                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
@@ -394,7 +394,7 @@ mod tests {
                 bootstrap_ready: false,
                 bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
                 admission_accepted: true,
-                continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                continuation_verdict: Some("receiverLocalContinuation".to_string()),
                 observed_at_ms: 2_360.0,
                 bound_episode_id: Some(8),
                 ..Default::default()

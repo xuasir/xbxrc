@@ -418,6 +418,19 @@ pub struct XbxEngineVideoTimelineChainSnapshotDto {
     pub observed_at_ms: f64,
 }
 
+/// receiver-local 接收观测（pre-decode）；不驱动全局 recovery owner。
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineVideoReceiverObservationDto {
+    pub observation_id: u64,
+    pub receiver_state: String,
+    pub gap_sequence: Option<u16>,
+    pub gap_span: Option<u16>,
+    pub nack_in_flight: bool,
+    pub keyframe_request_pending: bool,
+    pub bootstrap_reject_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineVideoTimelineObservationDto {
     pub observation_id: u64,
@@ -958,6 +971,7 @@ pub struct XbxEngineStatsDto {
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservationDto>,
     pub latest_recovery_decision_ledger: Option<XbxEngineRecoveryDecisionLedgerObservationDto>,
     pub latest_video_timeline_observation: Option<XbxEngineVideoTimelineObservationDto>,
+    pub latest_video_receiver_observation: Option<XbxEngineVideoReceiverObservationDto>,
     pub latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedgerDto>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservationDto>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservationDto>,

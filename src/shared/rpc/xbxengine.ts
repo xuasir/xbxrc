@@ -405,6 +405,16 @@ export interface XbxEngineStatsDto {
     command_detail?: string | null
     observed_at_ms: number
   }
+  latest_video_receiver_observation?: {
+    observation_id: number
+    receiver_state: string
+    gap_sequence?: number | null
+    gap_span?: number | null
+    nack_in_flight: boolean
+    keyframe_request_pending: boolean
+    bootstrap_reject_reason?: string | null
+    observed_at_ms: number
+  }
   latest_video_timeline_observation?: {
     observation_id: number
     source_event: string

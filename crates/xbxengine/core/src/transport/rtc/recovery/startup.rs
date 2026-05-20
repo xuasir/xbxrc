@@ -79,9 +79,7 @@ impl StartupRecoveryProbe {
                 let waiting_for_clean_video = matches!(
                     escalation_structured_label(stats),
                     Some(
-                        "ingressWaitKeyframe"
-                            | "ingressFrameAbandoned"
-                            | "transportAwaitRecoveryAnchor"
+                        "ingressWaitKeyframe" | "ingressFrameAbandoned" | "receiverWaitingKeyframe"
                     )
                 ) || stats.direct_gaming_bitrate_band.as_deref()
                     == Some("startupLow");
@@ -158,7 +156,7 @@ fn resolve_session_phase_from_stats(
             "waitKeyframe"
                 | "ingressWaitKeyframe"
                 | "ingressFrameAbandoned"
-                | "transportAwaitRecoveryAnchor"
+                | "receiverWaitingKeyframe"
                 | "transportExpiredDeadline"
                 | "transportSevereDeadline"
                 | "transportSampleLoss"
@@ -496,7 +494,7 @@ mod tests {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.inbound_video_bitrate_kbps = Some(9_000.0);
         stats.video_present_fps = 42.0;
-        stats.recovery_active_escalation_reason = Some("transportAwaitRecoveryAnchor".to_string());
+        stats.recovery_active_escalation_reason = Some("receiverWaitingKeyframe".to_string());
         assert_eq!(
             resolve_session_phase_from_stats(
                 Some(&stats),

@@ -13,9 +13,7 @@ use crate::api::backend::{
     XbxEngineVideoFrameDropObservation, XbxHostRenderFramePush,
 };
 use crate::media::video::render::renderer::XbxRenderState;
-use crate::transport::rtc::connection::{
-    RtcConnectionService, VideoRecoveryRequestOutcome, VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON,
-};
+use crate::transport::rtc::connection::{RtcConnectionService, VideoRecoveryRequestOutcome};
 use crate::transport::rtc::facts::{CommandResultStatus, TransportCommand, TransportFact};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
@@ -56,7 +54,7 @@ fn map_video_recovery_request_result_to_command_status(
             }
         }
         Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => CommandResultStatus::Deferred {
-            reason: format!("familyDeferred:{VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON}"),
+            reason: "capability:videoFeedbackWarming".to_string(),
         },
         Err(error) => CommandResultStatus::Failed {
             error: error.to_string(),
@@ -414,9 +412,9 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
                 ))
             }
             Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => {
-                Err(XbxEngineRuntimeError::new(format!(
-                    "xbxEngineRtcVideoKeyframeDeferred:{VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON}"
-                )))
+                Err(XbxEngineRuntimeError::new(
+                    "xbxEngineRtcVideoKeyframeDeferred:videoFeedbackWarming",
+                ))
             }
             Err(error) => Err(error),
         }
@@ -602,7 +600,7 @@ mod tests {
         assert_eq!(
             status,
             CommandResultStatus::Deferred {
-                reason: format!("familyDeferred:{VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON}")
+                reason: "capability:videoFeedbackWarming".to_string(),
             }
         );
     }

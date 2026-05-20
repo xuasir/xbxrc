@@ -687,8 +687,7 @@ where
                         .latest_keyframe_request_episode
                         .as_ref()
                         .filter(|episode| {
-                            episode.request_reason.as_deref()
-                                == Some("transportAwaitRecoveryAnchor")
+                            episode.request_reason.as_deref() == Some("receiverWaitingKeyframe")
                         })
                         .is_none_or(|episode| {
                             episode.response_rtp_timestamp == Some(frame.rtp_timestamp)
@@ -760,7 +759,7 @@ where
                                 .as_ref()
                                 .filter(|episode| {
                                     episode.request_reason.as_deref()
-                                        == Some("transportAwaitRecoveryAnchor")
+                                        == Some("receiverWaitingKeyframe")
                                 });
                             let inspection_bound_episode_id = stats
                                 .latest_h264_inspection_observation
@@ -789,7 +788,7 @@ where
                                     stats.recent_keyframe_request_episodes.iter().find_map(
                                         |episode| {
                                             (episode.request_reason.as_deref()
-                                                == Some("transportAwaitRecoveryAnchor")
+                                                == Some("receiverWaitingKeyframe")
                                                 && (owner_rtp_timestamp.is_some_and(
                                                     |owner_rtp_timestamp| {
                                                         episode.response_rtp_timestamp
@@ -1364,7 +1363,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -1472,7 +1471,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -1574,7 +1573,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -1671,7 +1670,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -1690,7 +1689,7 @@ mod tests {
             stats.latest_keyframe_request_episode =
                 Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                     episode_id: 1002,
-                    request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    request_reason: Some("receiverWaitingKeyframe".to_string()),
                     status: "waiting-response".to_string(),
                     requested_at_ms: 160.0,
                     ..Default::default()
@@ -1725,7 +1724,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -1781,7 +1780,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );
@@ -1851,7 +1850,7 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_picture_recovery_episode_requested(
             1001,
-            Some("transportAwaitRecoveryAnchor".to_string()),
+            Some("receiverWaitingKeyframe".to_string()),
             100.0,
             None,
         );

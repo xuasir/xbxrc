@@ -1544,7 +1544,7 @@ fn video_recovery_requests_fir_explicitly_within_same_epoch() {
         stats.latest_observation_label.as_deref(),
         Some("rtcVideoPliRequested")
     );
-    assert_eq!(stats.video_pli_request_count_total, 2);
+    assert_eq!(stats.video_pli_request_count_total, 1);
     assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
@@ -2758,7 +2758,7 @@ fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
         stats.latest_observation_label.as_deref(),
         Some("rtcVideoPliRequested")
     );
-    assert_eq!(stats.video_pli_request_count_total, 2);
+    assert_eq!(stats.video_pli_request_count_total, 1);
     assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
@@ -2776,7 +2776,7 @@ fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
         stats.latest_observation_label.as_deref(),
         Some("rtcVideoPliRequested")
     );
-    assert_eq!(stats.video_pli_request_count_total, 3);
+    assert_eq!(stats.video_pli_request_count_total, 2);
     assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
@@ -2860,7 +2860,7 @@ fn request_video_pli_does_not_suppress_stale_clean_anchor_when_transport_await_r
             frame: None,
             chain: XbxEngineVideoTimelineChainSnapshot {
                 state: "repairing".to_string(),
-                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                reason: Some("receiverWaitingKeyframe".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 180.0,
             },

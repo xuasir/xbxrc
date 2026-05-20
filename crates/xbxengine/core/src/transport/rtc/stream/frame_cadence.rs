@@ -3,14 +3,14 @@ use crate::media::video::types::FrameValue;
 
 /// transport 侧只关心“帧到达节奏”和“还能给 NACK 多久恢复窗口”，
 /// 不负责 playout target 的最终定义。
-pub(super) struct TransportFrameDeadlineTracker {
+pub(crate) struct TransportFrameDeadlineTracker {
     fallback_deadline_ms: u64,
     estimated_frame_interval_ms: f64,
     last_frame_arrival_at_ms: Option<f64>,
 }
 
 impl TransportFrameDeadlineTracker {
-    pub(super) fn new(fallback_deadline_ms: u64) -> Self {
+    pub(crate) fn new(fallback_deadline_ms: u64) -> Self {
         Self {
             fallback_deadline_ms,
             estimated_frame_interval_ms: 33.0,
@@ -18,7 +18,7 @@ impl TransportFrameDeadlineTracker {
         }
     }
 
-    pub(super) fn record_frame_arrival(&mut self, frame_arrival_at_ms: f64) {
+    pub(crate) fn record_frame_arrival(&mut self, frame_arrival_at_ms: f64) {
         if let Some(previous_arrival_at_ms) = self.last_frame_arrival_at_ms {
             let observed_interval_ms =
                 (frame_arrival_at_ms - previous_arrival_at_ms).clamp(16.0, 100.0);
@@ -44,7 +44,7 @@ impl TransportFrameDeadlineTracker {
         )
     }
 
-    pub(super) fn next_transport_deadline_with_context_at_ms(
+    pub(crate) fn next_transport_deadline_with_context_at_ms(
         &self,
         now_ms: f64,
         value: FrameValue,

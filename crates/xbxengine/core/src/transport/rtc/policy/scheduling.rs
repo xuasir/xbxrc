@@ -136,17 +136,10 @@ fn map_recovery_action_to_session_commands(
     observation_id: u64,
 ) -> Vec<SessionCommand> {
     match action {
-        RecoveryAction::RequestPli => {
-            vec![SessionCommand::Transport(TransportCommand::RequestPli {
-                reason,
-                observation_id,
-            })]
-        }
-        RecoveryAction::RequestFir => {
-            vec![SessionCommand::Transport(TransportCommand::RequestFir {
-                reason,
-                observation_id,
-            })]
+        // PLI/FIR 由 RtcReceiveCore + RtcTransportCapability 本地执行，不再经 scheduling 审批。
+        RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
+            let _ = (reason, observation_id);
+            Vec::new()
         }
         RecoveryAction::RequestDecoderReset => vec![SessionCommand::LocalDecoderReset {
             reason,
@@ -385,7 +378,7 @@ mod tests {
                     action: RecoveryAction::RequestPli,
                 },
                 reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-                reason_label: "transportAwaitRecoveryAnchor".to_string(),
+                reason_label: "receiverWaitingKeyframe".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
                 reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {

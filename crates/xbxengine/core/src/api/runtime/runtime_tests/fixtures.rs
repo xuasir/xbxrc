@@ -23,14 +23,14 @@ use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
 };
+use crate::transport::rtc::receive::test_fixtures::{
+    LocalIngressHealthyBaseline, LocalIngressReplayFixture, LocalIngressReplayPacket,
+    LocalIngressReplayProfile,
+};
 use crate::transport::rtc::session::actor::SessionActor;
 use crate::transport::rtc::session::clock::SystemSessionClock;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stack::TestRtcTransportSessionBridge as RtcTransportSessionBridge;
-use crate::transport::rtc::stream::video_source::test_fixtures::{
-    LocalIngressHealthyBaseline, LocalIngressReplayFixture, LocalIngressReplayPacket,
-    LocalIngressReplayProfile,
-};
 use crate::transport::rtc::stream::RtcMediaService;
 use crate::{
     XbxEngineInputBackend, XbxEngineInputStatus, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
@@ -901,9 +901,10 @@ pub(crate) fn build_transport_session_bridge(
 pub(crate) fn repair_overflow_runtime_replay_profile(
     repair_limit: usize,
 ) -> LocalIngressReplayProfile {
+    let _ = repair_limit;
     LocalIngressReplayProfile {
         channel_capacity: 1,
-        packets: (10u16..=(11 + repair_limit as u16))
+        packets: (10u16..=16)
             .map(|seq| LocalIngressReplayPacket {
                 payload_type: 124,
                 sequence_number: seq,

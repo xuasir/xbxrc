@@ -24,7 +24,7 @@ use crate::{
     media::video::test_fixtures::{make_bootstrap_assembled_frame, send_bootstrap_access_unit},
     media::video::types::{DecodedFrame, EncodedFrame, FrameRecoveryDisposition},
     transport::rtc::stream::adapter_types::FrameSource,
-    transport::rtc::stream::nack_scheduler::NackSchedulerConfig,
+    transport::rtc::stream::nack_contract::NackSchedulerConfig,
     XbxEngineRenderPixelData,
 };
 use bytes::Bytes;
@@ -3267,7 +3267,7 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
         tokio::sync::mpsc::unbounded_channel();
     let source_runtime_stats =
         Arc::new(std::sync::Mutex::new(XbxEngineMediaRuntimeStats::default()));
-    let mut source = crate::transport::rtc::stream::video_source::RtcVideoFrameSource::new(
+    let mut source = crate::transport::rtc::receive::RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
         Arc::new(crate::media::video::test_fixtures::NoopRtcpPort),
@@ -3276,13 +3276,8 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
         Duration::from_millis(10),
         Duration::from_millis(20),
         Duration::from_millis(200),
-        NackSchedulerConfig {
-            max_age_ms: 1_000,
-            frame_deadline_ms: 120,
-            burst_count: 2,
-            retry_interval_ms: 20,
-            max_retry_count: 3,
-        },
+        crate::transport::rtc::receive::test_nack_scheduler_config(),
+        crate::transport::rtc::receive::test_transport_capability(),
     );
     source_runtime_stats
         .lock()

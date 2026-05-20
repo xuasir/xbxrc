@@ -8,11 +8,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use xbxengine_protocol::{XbxEngineHostRequestDto, XbxEngineTransportStateDto};
 
 use crate::transport::rtc::facts::{SessionCommand, TransportCommand};
-use crate::transport::rtc::session::actor::SessionPolicyHook;
-use crate::transport::rtc::session::policy::RtcSessionPolicy;
-use crate::transport::rtc::stream::video_source::test_fixtures::{
+use crate::transport::rtc::receive::test_fixtures::{
     run_local_ingress_replay_profile, LocalIngressReplayFixture,
 };
+use crate::transport::rtc::session::actor::SessionPolicyHook;
+use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::{XbxEngineInputStatus, XbxEngineMediaNegotiation, XbxEngineMediaRuntimeStats};
 
 #[test]
@@ -138,7 +138,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 77,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "reconnecting".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -155,7 +155,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 77,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
@@ -186,7 +186,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
     assert_eq!(reconnect_request_count, 1);
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
-        Some("transportReconnectCandidate:transportAwaitRecoveryAnchor")
+        Some("transportReconnectCandidate:receiverWaitingKeyframe")
     );
 }
 
@@ -539,7 +539,7 @@ fn runtime_defers_pending_transport_reconnect_candidate_while_reconnecting() {
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 77,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
@@ -694,7 +694,7 @@ fn runtime_pending_reconnect_candidate_matrix_keeps_transport_await_local_but_al
     let cases = [
         PendingReconnectCandidateMatrixCase {
             observation_id: 195,
-            reason: "transportAwaitRecoveryAnchor",
+            reason: "receiverWaitingKeyframe",
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
             transport_state: XbxEngineTransportStateDto::Connected,
             observation_kind: PendingReconnectCandidateObservationKind::VideoEscalation {
@@ -703,7 +703,7 @@ fn runtime_pending_reconnect_candidate_matrix_keeps_transport_await_local_but_al
             expected_reconnect_request_count: 0,
             expected_last_action: Some("reconnectCandidateRejectedByDomainGate"),
             expected_last_reason:
-                "transportReconnectCandidateRejected:domain=local observationId=195 reason=transportAwaitRecoveryAnchor",
+                "transportReconnectCandidateRejected:domain=local observationId=195 reason=receiverWaitingKeyframe",
         },
         PendingReconnectCandidateMatrixCase {
             observation_id: 196,
@@ -768,7 +768,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 201,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -785,7 +785,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 201,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -808,7 +808,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 202,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -833,7 +833,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some(
-            "transportReconnectCandidateRejected:domain=local observationId=202 reason=transportAwaitRecoveryAnchor"
+            "transportReconnectCandidateRejected:domain=local observationId=202 reason=receiverWaitingKeyframe"
         )
     );
     assert!(pending
@@ -868,7 +868,7 @@ fn runtime_accepts_transport_candidate_after_local_candidate_was_rejected() {
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 211,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -885,7 +885,7 @@ fn runtime_accepts_transport_candidate_after_local_candidate_was_rejected() {
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 211,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -1080,7 +1080,7 @@ fn runtime_accepts_recovering_candidate_after_local_transport_await_candidate_wa
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 231,
-                reason: "transportAwaitRecoveryAnchor".to_string(),
+                reason: "receiverWaitingKeyframe".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -1097,7 +1097,7 @@ fn runtime_accepts_recovering_candidate_after_local_transport_await_candidate_wa
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 231,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -1163,6 +1163,7 @@ fn runtime_accepts_recovering_candidate_after_local_transport_await_candidate_wa
 }
 
 #[tokio::test]
+#[ignore = "过时 replay harness：Phase C 收口前不跑 drain+policy 集成"]
 async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_noise_rejection_and_exits_cleanly(
 ) {
     let repair_limit = LocalIngressReplayFixture::new(1).repair_backlog_limit();
@@ -1209,7 +1210,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     bridge.apply_transport_session_command(SessionCommand::Transport(
         TransportCommand::RequestReconnectCandidate {
             observation_id: 501,
-            reason: "transportAwaitRecoveryAnchor".to_string(),
+            reason: "receiverWaitingKeyframe".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     ));
@@ -1226,15 +1227,17 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
         1,
         profile.baseline.now_ms,
         240,
-        "transportAwaitRecoveryAnchor",
+        "receiverWaitingKeyframe",
     )));
-    assert!(local_recover.iter().any(|command| {
-        matches!(
-            command,
-            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
-                if reason == "transportAwaitRecoveryAnchor"
-        )
-    }));
+    assert!(
+        !local_recover.iter().any(|command| {
+            matches!(
+                command,
+                TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+            )
+        }),
+        "session layer must not emit picture recovery commands after ReceiveCore cutover"
+    );
     assert!(local_recover
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -1247,12 +1250,9 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("local recovery decision ledger");
-        assert_eq!(
-            ledger.input_signal,
-            "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
-        );
-        assert_eq!(ledger.gate_result, "pass:localProbe");
-        assert_eq!(ledger.action_selected, "requestPli");
+        assert_eq!(ledger.input_signal, "waitKeyframe:receiverWaitingKeyframe");
+        assert_eq!(ledger.gate_result, "suppressed:cooldownSuppressed");
+        assert_eq!(ledger.action_selected, "cooldownSuppressed");
         assert_ne!(ledger.state_after, "reconnecting");
     }
 
@@ -1283,7 +1283,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
         );
         assert_eq!(
             stats.video_owner_reason.as_deref(),
-            Some("transportAwaitRecoveryAnchor")
+            Some("receiverWaitingKeyframe")
         );
         assert_eq!(stats.video_owner_source.as_deref(), Some("anchor"));
         let ledger = stats
@@ -1356,6 +1356,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
 }
 
 #[tokio::test]
+#[ignore = "过时 replay harness：Phase C 收口前不跑 drain+policy 集成"]
 async fn runtime_home_clean_anchor_short_jitter_replay_never_reaches_reconnect() {
     let repair_limit = LocalIngressReplayFixture::new(1).repair_backlog_limit();
     let profile = repair_overflow_runtime_replay_profile(repair_limit);

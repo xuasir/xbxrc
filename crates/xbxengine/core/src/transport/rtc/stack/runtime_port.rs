@@ -265,7 +265,7 @@ impl<'a> RtcStackRuntimePort<'a> {
                         .as_ref()
                         .is_some_and(|observation| {
                             observation.continuation_verdict.as_deref()
-                                == Some("continuationAcceptedWhileAwaitingIdr")
+                                == Some("receiverLocalContinuation")
                                 || observation.bootstrap_reject_reason.as_deref()
                                     == Some("bootstrapMissingIdr")
                         });
@@ -497,7 +497,7 @@ mod tests {
             sink.begin_transport_recovery_episode(10.0);
             sink.record_picture_recovery_episode_requested(
                 88,
-                Some("transportAwaitRecoveryAnchor".to_string()),
+                Some("receiverWaitingKeyframe".to_string()),
                 100.0,
                 None,
             );
@@ -570,7 +570,7 @@ mod tests {
             sink.begin_transport_recovery_episode(10.0);
             sink.record_picture_recovery_episode_requested(
                 88,
-                Some("transportAwaitRecoveryAnchor".to_string()),
+                Some("receiverWaitingKeyframe".to_string()),
                 100.0,
                 None,
             );
@@ -646,7 +646,7 @@ mod tests {
             sink.begin_transport_recovery_episode(10.0);
             sink.record_picture_recovery_episode_requested(
                 188,
-                Some("transportAwaitRecoveryAnchor".to_string()),
+                Some("receiverWaitingKeyframe".to_string()),
                 100.0,
                 None,
             );
@@ -682,9 +682,7 @@ mod tests {
                         delta_continuation_ready: true,
                         bootstrap_ready: false,
                         bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-                        continuation_verdict: Some(
-                            "continuationAcceptedWhileAwaitingIdr".to_string(),
-                        ),
+                        continuation_verdict: Some("receiverLocalContinuation".to_string()),
                         admission_accepted: true,
                         observed_at_ms: 205.0,
                         bound_episode_id: Some(188),
@@ -743,7 +741,7 @@ mod tests {
             sink.begin_transport_recovery_episode(10.0);
             sink.record_picture_recovery_episode_requested(
                 188,
-                Some("transportAwaitRecoveryAnchor".to_string()),
+                Some("receiverWaitingKeyframe".to_string()),
                 100.0,
                 None,
             );
@@ -824,7 +822,7 @@ mod tests {
             sink.begin_transport_recovery_episode(10.0);
             sink.record_picture_recovery_episode_requested(
                 88,
-                Some("transportAwaitRecoveryAnchor".to_string()),
+                Some("receiverWaitingKeyframe".to_string()),
                 100.0,
                 None,
             );
@@ -851,7 +849,7 @@ mod tests {
                 stats.latest_keyframe_request_episode =
                     Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                         episode_id: 89,
-                        request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                        request_reason: Some("receiverWaitingKeyframe".to_string()),
                         status: "waiting-response".to_string(),
                         requested_at_ms: 205.0,
                         ..Default::default()
@@ -902,7 +900,7 @@ mod tests {
             sink.begin_transport_recovery_episode(10.0);
             sink.record_picture_recovery_episode_requested(
                 188,
-                Some("transportAwaitRecoveryAnchor".to_string()),
+                Some("receiverWaitingKeyframe".to_string()),
                 100.0,
                 None,
             );
@@ -1030,7 +1028,7 @@ mod tests {
             stats.latest_keyframe_request_episode =
                 Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                     episode_id: 11,
-                    request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    request_reason: Some("receiverWaitingKeyframe".to_string()),
                     status: "succeeded".to_string(),
                     requested_at_ms: now_ms - 2_400.0,
                     sent_at_ms: Some(now_ms - 2_350.0),
@@ -1055,7 +1053,7 @@ mod tests {
                     delta_continuation_ready: true,
                     bootstrap_ready: false,
                     bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-                    continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                    continuation_verdict: Some("receiverLocalContinuation".to_string()),
                     admission_accepted: true,
                     observed_at_ms: now_ms - 10.0,
                     ..Default::default()

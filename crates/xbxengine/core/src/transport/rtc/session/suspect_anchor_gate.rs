@@ -34,8 +34,7 @@ fn continuation_only_anchor_missing_observation(
                     inspection.bootstrap_reject_reason.as_deref(),
                     Some("bootstrapMissingIdr" | "NonIdrVcl")
                 )
-                && inspection.continuation_verdict.as_deref()
-                    == Some("continuationAcceptedWhileAwaitingIdr")
+                && inspection.continuation_verdict.as_deref() == Some("receiverLocalContinuation")
         })
 }
 
@@ -138,7 +137,7 @@ pub(crate) fn upgrade_local_supply_suspect_signal_if_ready(
     }
     RecoveryOwnerSignal {
         reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-        reason_label: "transportAwaitRecoveryAnchor".to_string(),
+        reason_label: "receiverWaitingKeyframe".to_string(),
         observed_at_ms: signal.observed_at_ms,
         gap_severity: signal.gap_severity,
         repairability: signal.repairability,
@@ -162,11 +161,10 @@ pub(crate) fn recovery_anchor_evidence_trace_code(
                     inspection.bootstrap_reject_reason.as_deref(),
                     Some("bootstrapMissingIdr" | "NonIdrVcl")
                 )
-                && inspection.continuation_verdict.as_deref()
-                    == Some("continuationAcceptedWhileAwaitingIdr")
+                && inspection.continuation_verdict.as_deref() == Some("receiverLocalContinuation")
         })
     {
-        return Some("continuationAcceptedWhileAwaitingIdr".to_string());
+        return Some("receiverLocalContinuation".to_string());
     }
     if stats
         .video_decoder_recovery_state
@@ -236,7 +234,7 @@ mod tests {
             sample_height: None,
             bootstrap_ready: false,
             bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
-            continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+            continuation_verdict: Some("receiverLocalContinuation".to_string()),
             admission_accepted: true,
             observed_at_ms,
             bound_episode_id: Some(7),
@@ -295,6 +293,6 @@ mod tests {
             upgraded.reason,
             VideoEscalationReason::TransportAwaitRecoveryKeyframe
         );
-        assert_eq!(upgraded.reason_label, "transportAwaitRecoveryAnchor");
+        assert_eq!(upgraded.reason_label, "receiverWaitingKeyframe");
     }
 }

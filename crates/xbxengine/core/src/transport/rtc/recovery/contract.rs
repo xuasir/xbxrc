@@ -212,7 +212,7 @@ impl CoalescingMode {
 }
 
 const TRANSPORT_AWAIT_UNRESOLVED_REASONS: [&str; 4] = [
-    "transportAwaitRecoveryAnchor",
+    "receiverWaitingKeyframe",
     "awaitingRecoveryAnchor",
     "awaitRecoveryAnchor",
     "referenceChainUnrecoverable",
@@ -265,7 +265,10 @@ pub(crate) fn is_terminal_transport_await_deferred_episode(
     now_ms: f64,
     fresh_window_ms: f64,
 ) -> bool {
-    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
+    if !matches!(
+        episode.request_reason.as_deref(),
+        Some("receiverWaitingKeyframe")
+    ) {
         return false;
     }
     let stage = recovery_episode_stage_from_status(episode.status.as_str());
@@ -299,29 +302,47 @@ pub(crate) fn is_terminal_transport_await_deferred_episode(
     }
 }
 
-fn is_recovery_sustaining_observation(
-    chain_state: Option<&str>,
-    chain_reason: Option<&str>,
-) -> bool {
-    matches!(chain_state, Some("sustaining-recovery"))
-        || matches!(chain_reason, Some("recoverySustaining"))
+pub(crate) fn is_receiver_state_receiving(receiver_state: Option<&str>) -> bool {
+    matches!(receiver_state, Some("receiving"))
+}
+
+/// 与 RFC 四态一致：优先 `receiver_observation`，其次 timeline `chain.state`。
+pub(crate) fn is_timeline_chain_receiving_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    if stats
+        .latest_video_receiver_observation
+        .as_ref()
+        .is_some_and(|obs| is_receiver_state_receiving(Some(obs.receiver_state.as_str())))
+    {
+        return true;
+    }
+    stats
+        .latest_video_timeline_observation
+        .as_ref()
+        .is_some_and(|timeline| matches!(timeline.chain.state.as_str(), "receiving"))
+}
+
+pub(crate) fn is_receiver_state_waiting_keyframe(receiver_state: Option<&str>) -> bool {
+    matches!(receiver_state, Some("waiting-keyframe"))
 }
 
 pub(crate) fn is_ingress_waiting_keyframe(
+    receiver_state: Option<&str>,
     chain_state: Option<&str>,
     chain_reason: Option<&str>,
     source_event: Option<&str>,
 ) -> bool {
-    if is_recovery_sustaining_observation(chain_state, chain_reason) {
+    if is_receiver_state_receiving(receiver_state) {
         return false;
     }
-    if matches!(chain_state, Some("healthy")) {
-        // 链路已 healthy 时，不应再被尚未回填的 transport-await reason 锁在 ingress waiting。
+    if is_receiver_state_waiting_keyframe(receiver_state) {
+        return true;
+    }
+    if matches!(chain_state, Some("receiving" | "priming")) {
         return false;
     }
     let probe_event_waiting = is_transport_await_probe_source_event(source_event)
-        && !matches!(chain_state, Some("healthy"));
-    matches!(chain_state, Some("broken" | "recovering"))
+        && !matches!(chain_state, Some("receiving" | "priming"));
+    matches!(chain_state, Some("waiting-keyframe" | "repairing"))
         || chain_reason.is_some_and(is_transport_await_unresolved_reason)
         || probe_event_waiting
 }
@@ -329,13 +350,7 @@ pub(crate) fn is_ingress_waiting_keyframe(
 pub(crate) fn has_unresolved_transport_await_issue_from_observation(
     timeline: &XbxEngineVideoTimelineObservation,
 ) -> bool {
-    if matches!(timeline.chain.state.as_str(), "healthy") {
-        return false;
-    }
-    if is_recovery_sustaining_observation(
-        Some(timeline.chain.state.as_str()),
-        timeline.chain.reason.as_deref(),
-    ) {
+    if matches!(timeline.chain.state.as_str(), "receiving" | "priming") {
         return false;
     }
     if timeline
@@ -431,10 +446,11 @@ pub(crate) fn has_current_transport_await_issue_from_stats(
     ) {
         return true;
     }
-    if !is_recovery_sustaining_observation(
-        Some(timeline.chain.state.as_str()),
-        timeline.chain.reason.as_deref(),
-    ) {
+    let receiver_receiving = stats
+        .latest_video_receiver_observation
+        .as_ref()
+        .is_some_and(|obs| is_receiver_state_receiving(Some(obs.receiver_state.as_str())));
+    if !receiver_receiving {
         return false;
     }
     let Some(clean_anchor_at_ms) = current_clean_anchor_observed_at_ms else {
@@ -456,12 +472,6 @@ pub(crate) fn has_current_transport_await_issue_from_stats(
 pub(crate) fn derive_gap_severity_from_timeline_observation(
     timeline: &XbxEngineVideoTimelineObservation,
 ) -> GapSeverity {
-    if is_recovery_sustaining_observation(
-        Some(timeline.chain.state.as_str()),
-        timeline.chain.reason.as_deref(),
-    ) {
-        return GapSeverity::LowValueGap;
-    }
     let reason = timeline.chain.reason.as_deref();
     if matches!(reason, Some("referenceChainUnrecoverable")) {
         if chain_broken_observation_lacks_media_evidence(timeline) {
@@ -471,7 +481,7 @@ pub(crate) fn derive_gap_severity_from_timeline_observation(
     }
     if matches!(
         reason,
-        Some("awaitingRecoveryAnchor" | "awaitRecoveryAnchor" | "transportAwaitRecoveryAnchor",)
+        Some("awaitingRecoveryAnchor" | "awaitRecoveryAnchor" | "receiverWaitingKeyframe",)
     ) {
         return GapSeverity::AnchorGap;
     }
@@ -530,7 +540,7 @@ pub(crate) fn derive_gap_severity_with_episode_stall(
             Some(
                 "awaitingRecoveryAnchor"
                     | "awaitRecoveryAnchor"
-                    | "transportAwaitRecoveryAnchor"
+                    | "receiverWaitingKeyframe"
                     | "referenceChainUnrecoverable",
             )
         ) {
@@ -625,7 +635,7 @@ mod derive_gap_observation_tests {
             }),
             frame: None,
             chain: XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".into(),
+                state: "receiving".into(),
                 reason: None,
                 chain_break_evidence: None,
                 observed_at_ms: 0.0,
@@ -655,7 +665,7 @@ mod derive_gap_observation_tests {
             }),
             frame: None,
             chain: XbxEngineVideoTimelineChainSnapshot {
-                state: "broken".into(),
+                state: "waiting-keyframe".into(),
                 reason: Some("referenceChainUnrecoverable".into()),
                 chain_break_evidence: None,
                 observed_at_ms: 0.0,
