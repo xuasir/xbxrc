@@ -1,6 +1,4 @@
-use crate::media::video::h264::inspection::{
-    H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
-};
+use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use crate::media::video::types::AssembledVideoFrame;
 use crate::transport::rtc::recovery::contract::is_recovery_delta_continuation_ready;
 
@@ -62,40 +60,6 @@ pub fn prior_output_continuation_allowed(
     is_blocking_non_keyframe_admission: bool,
 ) -> bool {
     first_frame_acquired && !is_blocking_non_keyframe_admission
-}
-
-pub fn try_h264_bootstrap_ps_salvage_au(
-    inspector: &H264AccessUnitInspector,
-    inspection: &H264AccessUnitInspection,
-    payload: &[u8],
-) -> Option<Vec<u8>> {
-    if inspection.bootstrap_ready {
-        return None;
-    }
-    let reject = inspection.bootstrap_reject_reason.as_ref()?;
-    if !matches!(
-        reject,
-        H264BootstrapRejectReason::MissingSps | H264BootstrapRejectReason::MissingPps
-    ) {
-        return None;
-    }
-    if !inspection.is_idr {
-        return None;
-    }
-    if inspection.parameter_sets_changed || inspection.config_changed {
-        return None;
-    }
-    if !inspection.slice_headers_valid {
-        return None;
-    }
-    if !inspection.committed_sps_present() || !inspection.committed_pps_present() {
-        return None;
-    }
-    let mut prefix = inspector.committed_parameter_set_annex_b_prefix()?;
-    let mut out = Vec::with_capacity(prefix.len() + payload.len());
-    out.append(&mut prefix);
-    out.extend_from_slice(payload);
-    Some(out)
 }
 
 pub fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'static str {

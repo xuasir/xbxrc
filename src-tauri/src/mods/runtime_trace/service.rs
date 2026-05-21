@@ -331,6 +331,9 @@ impl RuntimeTraceRecorder {
             }
             Err(_) => return,
         };
+        if !super::policy::should_record_trace_event(&trace_mode, domain, event, now_ms() as f64) {
+            return;
+        }
         let line = json!({
             "schemaVersion": TRACE_SCHEMA_VERSION,
             "seq": self.sequence.fetch_add(1, Ordering::Relaxed) + 1,

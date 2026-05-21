@@ -10,6 +10,7 @@ use crate::{
 
 use crate::media::video::types::{FrameRecoveryDisposition, FrameValue};
 use crate::runtime_stats_sink::RuntimeStatsSink;
+#[cfg(test)]
 use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
 };
@@ -39,10 +40,10 @@ use crate::transport::rtc::stream::adapter_types::{
 pub struct RtcVideoFrameSource {
     pub(crate) rx: tokio::sync::mpsc::Receiver<RtcVideoRtpPacket>,
     pub(crate) transport_observation_tx: tokio::sync::mpsc::UnboundedSender<TransportObservation>,
-    pub(crate) rtcp_port: Arc<dyn RtcRtcpSendPort>,
+    pub(crate) _rtcp_port: Arc<dyn RtcRtcpSendPort>,
     pub(crate) runtime_stats: RuntimeStatsSink,
-    pub(crate) max_late_packets: u16,
-    pub(crate) jitter_buffer_max_delay: Duration,
+    pub(crate) _max_late_packets: u16,
+    pub(crate) _jitter_buffer_max_delay: Duration,
     pub(crate) idle_timeout: std::time::Duration,
     pub(crate) idle_hint_cooldown: std::time::Duration,
     pub(crate) last_packet_time: std::time::Instant,
@@ -87,7 +88,6 @@ pub struct RtcVideoFrameSource {
     pub(crate) last_submitted_frame_value: FrameValue,
     pub(crate) nack_recovery_ewma_ms: f64,
     pub(crate) nack_late_ewma: f64,
-    /// `RtcReceiveCore::new` 会 `take` 走；测试或未包一层时保持 `Some`。
     pub(crate) core_body_slot: Option<ReceiveCoreBody>,
     pub(crate) first_frame_acquisition_keyframe_request_count: u8,
     pub(crate) reinject_read_poll_count: u64,
@@ -107,9 +107,6 @@ pub struct RtcVideoFrameSource {
     pub(crate) receiver_observation_id: u64,
 }
 
-const SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS: f64 = 180.0;
-const SOURCE_SERVICEABLE_PRESENT_MAX_AGE_MS: f64 = 220.0;
-
 pub struct RtcVideoTransportObservationSource {
     pub(crate) rx: tokio::sync::mpsc::UnboundedReceiver<TransportObservation>,
 }
@@ -118,19 +115,13 @@ impl RtcVideoFrameSource {
     pub(crate) fn receive_core(&self) -> &ReceiveCoreBody {
         self.core_body_slot
             .as_ref()
-            .expect("ReceiveCoreBody owned by RtcReceiveCore")
+            .expect("ReceiveCoreBody not initialized")
     }
 
     pub(crate) fn receive_core_mut(&mut self) -> &mut ReceiveCoreBody {
         self.core_body_slot
             .as_mut()
-            .expect("ReceiveCoreBody owned by RtcReceiveCore")
-    }
-
-    pub(crate) fn take_receive_core(&mut self) -> ReceiveCoreBody {
-        self.core_body_slot
-            .take()
-            .expect("ReceiveCoreBody already taken by RtcReceiveCore")
+            .expect("ReceiveCoreBody not initialized")
     }
 
     pub fn new(
@@ -157,10 +148,10 @@ impl RtcVideoFrameSource {
         let source = Self {
             rx,
             transport_observation_tx,
-            rtcp_port,
+            _rtcp_port: rtcp_port,
             runtime_stats: RuntimeStatsSink::new(runtime_stats),
-            max_late_packets,
-            jitter_buffer_max_delay,
+            _max_late_packets: max_late_packets,
+            _jitter_buffer_max_delay: jitter_buffer_max_delay,
             idle_timeout,
             idle_hint_cooldown: idle_timeout.max(std::time::Duration::from_millis(400)),
             last_packet_time: std::time::Instant::now(),
@@ -448,35 +439,7 @@ impl RtcVideoFrameSource {
         }
     }
 
-    fn has_serviceable_output_for_soft_recovery_request(
-        stats: &XbxEngineMediaRuntimeStats,
-        now_ms: f64,
-    ) -> bool {
-        if stats.transport_state != XbxEngineTransportStateDto::Connected
-            || stats.video_renderer_stalled == Some(true)
-        {
-            return false;
-        }
-        let track_attached = stats
-            .latest_video_track_status
-            .as_ref()
-            .is_some_and(|status| {
-                status.state == "remoteTrackAttached" && status.video_bytes_total > 0
-            });
-        if !track_attached {
-            return false;
-        }
-        let decode_fresh = stats
-            .latest_video_decode_ok_time_ms
-            .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS);
-        let present_fresh = stats
-            .latest_video_host_present_time_ms
-            .is_some_and(|at_ms| {
-                (now_ms - at_ms).max(0.0) <= SOURCE_SERVICEABLE_PRESENT_MAX_AGE_MS
-            });
-        decode_fresh && present_fresh
-    }
-
+    #[cfg(test)]
     fn has_current_transport_await_issue_in_source(stats: &XbxEngineMediaRuntimeStats) -> bool {
         let Some(timeline) = stats.latest_video_timeline_observation.as_ref() else {
             return false;
@@ -492,6 +455,7 @@ impl RtcVideoFrameSource {
         )
     }
 
+    #[cfg(test)]
     pub(super) fn should_rearm_clean_anchor_for_transport_await(
         stats: &XbxEngineMediaRuntimeStats,
     ) -> bool {
@@ -548,9 +512,6 @@ impl RtcVideoFrameSource {
             .flatten();
         self.receiver_observation_id = self.receiver_observation_id.saturating_add(1);
         let observation = ReceiverObservation {
-            state,
-            gap_sequence,
-            gap_span: None,
             nack_in_flight: has_gap,
             keyframe_request_pending: self.waiting_recovery_keyframe_since_ms.is_some(),
             bootstrap_reject_reason: bootstrap_reject,
@@ -576,11 +537,6 @@ impl RtcVideoFrameSource {
         now_ms: f64,
         soft: bool,
     ) {
-        if soft {
-            self.trace_ledger.on_recovery_keyframe_requested_soft();
-        } else {
-            self.trace_ledger.on_recovery_keyframe_requested();
-        }
         self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
         let capability = self.receive_core().transport_capability.clone();
         let outcome = self
@@ -700,14 +656,6 @@ pub(crate) fn now_ms_f64() -> f64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0)
-}
-
-pub(super) fn capitalize_reason(reason: &str) -> String {
-    let mut chars = reason.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
 }
 
 const UINT32SIZE_HALF: u32 = 0x8000_0000;

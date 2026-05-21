@@ -43,7 +43,7 @@ const MAIN_WINDOW_LABEL: &str = "main";
 const STREAM_VIEWPORT_ID: &str = "stream-page-video";
 const HOST_TIMING_QUEUE_WARN_MS: f64 = 24.0;
 const HOST_TIMING_TICK_WARN_MS: f64 = 24.0;
-const HOST_TIMING_SAMPLED_STAGE_INTERVAL_MS: f64 = 1_000.0;
+const HOST_TIMING_SAMPLED_STAGE_INTERVAL_MS: f64 = 2_000.0;
 
 static RUNTIME_TRACE: OnceLock<Mutex<Option<RuntimeTraceRecorderRef>>> = OnceLock::new();
 static HOST_TIMING_STAGE_SAMPLE_TS_MS: OnceLock<Mutex<HashMap<String, f64>>> = OnceLock::new();
@@ -132,6 +132,10 @@ fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
     match stage {
         // 高频阶段在 present/pre-present 主链上会逐帧触发，按窗口采样降级。
         "hostMailboxIdle"
+        | "hostMailboxRetainedDisplayed"
+        | "hostMailboxAccepted"
+        | "prepare_sample_ready"
+        | "hostFramePresented"
         | "run_on_main_thread_delay"
         | "tick_total"
         | "hostMailboxSubmitGap"

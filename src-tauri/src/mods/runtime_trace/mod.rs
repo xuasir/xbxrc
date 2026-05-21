@@ -2,7 +2,10 @@ pub mod policy;
 pub mod rpc;
 pub mod service;
 
-pub use policy::{apply_xbxengine_trace_logging, stats_snapshot_interval};
+pub use policy::{
+    apply_xbxengine_trace_logging, should_record_trace_event, stats_snapshot_interval,
+    trace_observation_tick_interval,
+};
 pub use service::{RuntimeTraceRecorder, RuntimeTraceRecorderRef};
 
 /// 新配置或未写入磁盘时的默认 `runtime_trace_mode`（与 `defaults::default_config_map` 对齐）。

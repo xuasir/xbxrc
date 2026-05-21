@@ -17,10 +17,6 @@ impl H264BootstrapTracker {
         self.inspector.inspect_access_unit(payload)
     }
 
-    pub fn inspect(&mut self, payload: &[u8]) -> Option<H264AccessUnitInspection> {
-        self.inspect_access_unit(payload).ok()
-    }
-
     pub fn committed_sps_present(&self) -> bool {
         self.inspector.committed_sps_present()
     }
@@ -67,20 +63,5 @@ impl H264BootstrapTracker {
         out.append(&mut prefix);
         out.extend_from_slice(payload);
         Some(out)
-    }
-
-    pub fn requires_keyframe(&self, inspection: &H264AccessUnitInspection) -> bool {
-        if inspection.bootstrap_ready {
-            return false;
-        }
-        matches!(
-            inspection.bootstrap_reject_reason,
-            Some(
-                H264BootstrapRejectReason::BootstrapMissingIdr
-                    | H264BootstrapRejectReason::MissingSps
-                    | H264BootstrapRejectReason::MissingPps
-                    | H264BootstrapRejectReason::MixedIdrWithTrailingDelta
-            )
-        )
     }
 }

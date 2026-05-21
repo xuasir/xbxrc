@@ -1947,3 +1947,30 @@ fn stats_prioritize_runtime_remote_profile_facts_when_present() {
         Some("relayGaming+steady")
     );
 }
+
+#[test]
+fn stats_project_latest_video_receiver_observation() {
+    let now_ms = 1_000.0;
+    let stats = XbxEngineMediaRuntimeStats {
+        latest_video_receiver_observation: Some(crate::XbxEngineVideoReceiverObservation {
+            observation_id: 7,
+            receiver_state: "repairing".to_string(),
+            gap_sequence: Some(42),
+            gap_span: None,
+            nack_in_flight: true,
+            keyframe_request_pending: false,
+            bootstrap_reject_reason: None,
+            observed_at_ms: now_ms,
+        }),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    let receiver = dto
+        .latest_video_receiver_observation
+        .expect("receiver observation dto");
+    assert_eq!(receiver.observation_id, 7);
+    assert_eq!(receiver.receiver_state, "repairing");
+    assert_eq!(receiver.gap_sequence, Some(42));
+    assert!(receiver.nack_in_flight);
+}

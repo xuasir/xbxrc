@@ -6,6 +6,7 @@ use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::XbxEngineMediaRuntimeStats;
 
 /// 经 connection service 写出视频 RTCP（NACK 等）。
+#[allow(dead_code)]
 pub struct ConnectionRtcpCapability {
     connection: Arc<Mutex<RtcConnectionService>>,
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,

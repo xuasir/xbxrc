@@ -13,7 +13,12 @@
      键）。
 
 
-  2. RTC 传输层实现 (transport/rtc/)
+  2. 观测与统计 (diagnostics/)
+   * `RuntimeStatsSink`（[`diagnostics/sink/`](src/diagnostics/sink/)）：媒体 runtime 事实唯一写入入口，经 `ObservationBus` 落库。
+   * `stats`：将 runtime 事实投影为 `XbxEngineStatsDto`（展示用 `recovery_diagnosis`，控制面用 `escalation_structured_label` / `video_owner_reason`）。
+   * 接收侧 trace：`ReceiverTraceLedger`（事实）+ `ReceiverState`（裁决）→ `timeline_projection` → sink。
+
+  3. RTC 传输层实现 (transport/rtc/)
    * 连接管理 (transport.rs & stack.rs)：
        * 实现了标准的 WebRTC 协商流程（CreateOffer / SetRemoteDescription）。
        * 针对云游戏场景优化了 SDP，如注入 b=AS 码率限制、开启音频 stereo、配置 H.264 Profile 约束。

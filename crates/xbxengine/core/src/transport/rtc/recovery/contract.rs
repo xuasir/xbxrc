@@ -1,5 +1,4 @@
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
-use crate::media::video::types::FrameValue as MediaFrameValue;
 use crate::{
     XbxEngineH264InspectionObservation,
     XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation,
@@ -558,33 +557,6 @@ pub(crate) fn frame_value_from_gap_severity(gs: GapSeverity) -> Option<FrameValu
         GapSeverity::ReferenceGap => Some(FrameValue::Reference),
         GapSeverity::LowValueGap | GapSeverity::RepairableGap => Some(FrameValue::Continuity),
     }
-}
-
-/// 将恢复语义帧价值映射到媒体层 `FrameValue`（NACK/transport repair 预算）。
-pub(crate) fn media_frame_value_from_recovery_semantics(
-    fv: FrameValue,
-    base_payload_size: usize,
-) -> MediaFrameValue {
-    match fv {
-        FrameValue::Disposable | FrameValue::Continuity => {
-            MediaFrameValue::new(false, false, base_payload_size.max(1))
-        }
-        FrameValue::Reference => MediaFrameValue::new(false, true, base_payload_size.max(1)),
-        FrameValue::RecoveryAnchor | FrameValue::CleanAnchor => {
-            MediaFrameValue::new(true, false, base_payload_size.max(1))
-        }
-    }
-}
-
-/// `LowValueGap` / `RepairableGap` 不触发 transport 恢复主线加压；其余严重度会加压。
-pub(crate) fn gap_severity_indicates_transport_recovery_pressure(gs: GapSeverity) -> bool {
-    matches!(
-        gs,
-        GapSeverity::ReferenceGap
-            | GapSeverity::AnchorGap
-            | GapSeverity::ChainBroken
-            | GapSeverity::RecoveryBlocked
-    )
 }
 
 pub(crate) fn is_media_healthy_baseline(

@@ -104,6 +104,11 @@ pub fn xbx_log_enabled(level: XbxLogLevel) -> bool {
     configured_level().is_some_and(|configured| level <= configured)
 }
 
+/// Per-frame decode/pacer/renderer diagnostics; default log level (Warn) keeps this off.
+pub fn playback_flow_log_enabled() -> bool {
+    xbx_log_enabled(XbxLogLevel::Debug)
+}
+
 pub fn xbx_log(level: XbxLogLevel, args: std::fmt::Arguments<'_>) {
     if !xbx_log_enabled(level) {
         return;
@@ -166,5 +171,17 @@ macro_rules! xbx_log_debug {
 macro_rules! xbx_log_trace {
     ($($arg:tt)*) => {{
         $crate::logging::xbx_log($crate::logging::XbxLogLevel::Trace, format_args!($($arg)*));
+    }};
+}
+
+#[macro_export]
+macro_rules! xbx_log_playback_flow {
+    ($($arg:tt)*) => {{
+        if $crate::logging::playback_flow_log_enabled() {
+            $crate::logging::xbx_log(
+                $crate::logging::XbxLogLevel::Debug,
+                format_args!($($arg)*),
+            );
+        }
     }};
 }

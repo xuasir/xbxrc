@@ -71,6 +71,24 @@ impl RtcVideoFrameSource {
         rtp_timestamp: u32,
         now_ms: f64,
     ) {
+        if !outcome.newly_opened_gaps.is_empty() {
+            self.trace_ledger.observe_gap(
+                &outcome.newly_opened_gaps,
+                now_ms,
+                Some(rtp_timestamp),
+                "unknown",
+                "unknown",
+            );
+            if outcome.is_reorder {
+                self.trace_ledger.mark_gap_reorder_pending(
+                    &outcome.newly_opened_gaps,
+                    now_ms,
+                    Some(rtp_timestamp),
+                    "unknown",
+                    "unknown",
+                );
+            }
+        }
         if outcome.is_reorder {
             self.oos_event_count = self.oos_event_count.saturating_add(1);
             self.recent_oos_active_until_ms = Some(now_ms + OOS_ACTIVITY_COOLDOWN_MS);

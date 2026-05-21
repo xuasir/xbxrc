@@ -10,6 +10,7 @@ use rtc_rtp::packet::Packet;
 pub enum FrameAssemblyState {
     #[default]
     Open,
+    #[allow(dead_code)]
     Complete,
     Incomplete,
 }
@@ -99,6 +100,7 @@ impl RtpFrameAssembler {
         self.assembled_count
     }
 
+    #[allow(dead_code)]
     pub fn packet_count(&self) -> u16 {
         self.packet_count
     }

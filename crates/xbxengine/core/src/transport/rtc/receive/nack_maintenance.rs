@@ -11,8 +11,16 @@ use crate::media::video::ingress::budget::{
     DynamicRepairValueTier, FrameBudgetContext, FrameBudgetLinkValue, FrameBudgetWindowSource,
 };
 use crate::media::video::types::FrameRecoveryDisposition;
+use crate::transport::rtc::receive::nack_policy::{
+    cloud_nack_rtt_margin_ms, cloud_startup_head_hole_deadline_at_ms, sample_loss_nack_policy,
+    OOS_REPAIRABILITY_PENALTY,
+};
 use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
-use crate::transport::rtc::recovery::timing::resolve_effective_rtt_ms;
+use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
+use crate::transport::rtc::recovery::timing::{
+    merge_nack_admission_deadline_with_dynamic_timeout, resolve_effective_rtt_ms,
+    resolve_recovery_dynamic_timing,
+};
 use crate::transport::rtc::stream::nack_contract::{
     NackBatch, PacketRecoveryDisposition, ResolvedNack, SkippedNackBatch,
 };
@@ -28,32 +36,6 @@ use crate::transport::rtc::stream::adapter_types::TransportObservation;
 
 const LOW_VALUE_NEAR_DEADLINE_GUARD_MS: f64 = 12.0;
 const SUPPLY_NEAR_DEADLINE_GUARD_MS: f64 = 6.0;
-const CLEAN_ANCHOR_TRANSPORT_SUPPLY_WINDOW_MS: f64 = 320.0;
-const CLEAN_ANCHOR_TRANSPORT_SUPPLY_FRESH_MEDIA_MS: f64 = 320.0;
-
-fn gap_expired_skipped_anchor_failure_reason(
-    frame_unrecoverable_reason: Option<&'static str>,
-) -> XbxEngineAnchorCandidateFailureReason {
-    match frame_unrecoverable_reason {
-        Some("referenceChainUnrecoverable") => {
-            XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-        }
-        Some("sampleLossLowRepairability" | "sampleLossReferenceLowRepairability") => {
-            XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-        }
-        Some("cloudHighRttLowValueAdmission") => {
-            XbxEngineAnchorCandidateFailureReason::TransportLowValueCloudHighRttAdmission
-        }
-        Some("displayStarvedLowValueAdmission") => {
-            XbxEngineAnchorCandidateFailureReason::TransportLowValueDisplayStarvedAdmission
-        }
-        Some("estimatedArrivalNearDeadlineSupplyRecovery") => {
-            XbxEngineAnchorCandidateFailureReason::TransportTimingNearDeadlineSupplyRecovery
-        }
-        Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
-        _ => XbxEngineAnchorCandidateFailureReason::Unknown,
-    }
-}
 
 /// transport 路径上仅有显式 keyframe 标记才写入 gap 的媒体证据 importance。
 pub(super) fn gap_transport_evidence(frame_is_keyframe: Option<bool>) -> &'static str {
@@ -62,21 +44,6 @@ pub(super) fn gap_transport_evidence(frame_is_keyframe: Option<bool>) -> &'stati
     } else {
         "unknown"
     }
-}
-
-/// 仅这些 reason 允许在 timeline 未记坏链时仍由 `SkippedChainBroken` 触发 reference 恢复。
-fn nack_reference_chain_recovery_evidence(reason: Option<&'static str>) -> bool {
-    matches!(
-        reason,
-        Some(
-            "awaitingRecoveryAnchor"
-                | "localBackpressureDeltaGap"
-                | "sampleLossReferenceLowRepairability"
-                | "referenceChainUnrecoverable"
-                | "deadlineExceededBeforeAdmission"
-                | "estimatedArrivalPastDeadline"
-        )
-    )
 }
 
 impl RtcVideoFrameSource {
@@ -472,22 +439,129 @@ impl RtcVideoFrameSource {
             false,
             FrameBudgetWindowSource::Transport,
         );
+        let cloud_mode = self.is_cloud_transport_profile();
+        let cloud_startup_mode = self.is_cloud_startup_transport_profile();
+        let cloud_rtt_ms = Some(self.cloud_nack_rtt_ms().max(0.0));
+        let repairability = sample_loss_repairability(
+            frame_is_keyframe,
+            frame_importance,
+            self.oos_recently_active(now_ms),
+        );
+        let nack_timeout_ms = self
+            .runtime_stats
+            .read(|stats| {
+                let profile = resolve_runtime_recovery_profile(stats);
+                resolve_recovery_dynamic_timing(stats, profile).nack_timeout_ms
+            })
+            .unwrap_or(120.0);
+        let base_deadline_at_ms = now_ms + nack_timeout_ms.max(0.0);
+        let policy = sample_loss_nack_policy(
+            sample_rtp_timestamp,
+            frame_is_keyframe,
+            budget_context.clone(),
+            base_deadline_at_ms,
+            repairability,
+            cloud_mode,
+            cloud_startup_mode,
+            cloud_rtt_ms,
+        );
+        let mut deadline_at_ms = merge_nack_admission_deadline_with_dynamic_timeout(
+            now_ms,
+            policy.deadline_at_ms.unwrap_or(base_deadline_at_ms),
+            policy.frame_importance,
+            nack_timeout_ms,
+            policy.frame_playout_deadline_at_ms,
+        );
+        if cloud_mode {
+            deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
+                now_ms,
+                deadline_at_ms,
+                cloud_mode,
+                cloud_startup_mode,
+                cloud_rtt_ms,
+                Some(nack_timeout_ms),
+            );
+        }
+        let estimated_recovery_arrival_ms = if cloud_mode {
+            now_ms + cloud_nack_rtt_margin_ms(cloud_startup_mode, cloud_rtt_ms).max(8.0)
+        } else {
+            let rtt = cloud_rtt_ms.unwrap_or(40.0).max(0.0);
+            now_ms + (0.75 * rtt + 8.0).clamp(8.0, 40.0)
+        };
+        let repair_tier = classify_repair_value_tier(
+            budget_context.clone(),
+            frame_is_keyframe,
+            cloud_startup_mode,
+        );
+        if repair_tier == FrameBudgetLinkValue::Disposable
+            && should_skip_low_value_near_deadline(
+                estimated_recovery_arrival_ms,
+                Some(deadline_at_ms),
+                LOW_VALUE_NEAR_DEADLINE_GUARD_MS,
+            )
+        {
+            self.record_nack_skipped(
+                &SkippedNackBatch {
+                    sequences: missing_sequences.clone(),
+                    source: policy.source,
+                    frame_rtp_timestamp: Some(sample_rtp_timestamp),
+                    frame_is_keyframe: Some(frame_is_keyframe),
+                    frame_importance: policy.frame_importance,
+                    deadline_at_ms: Some(deadline_at_ms),
+                    estimated_recovery_arrival_ms: Some(estimated_recovery_arrival_ms),
+                    frame_playout_deadline_at_ms: Some(deadline_at_ms),
+                    nack_disposition: PacketRecoveryDisposition::SkippedLowValue,
+                    frame_unrecoverable_reason: Some("estimatedArrivalNearDeadline"),
+                    budget_context,
+                },
+                now_ms,
+            );
+            return false;
+        }
+        if !frame_is_keyframe
+            && !matches!(policy.frame_importance, "anchor")
+            && should_skip_non_anchor_near_deadline(
+                estimated_recovery_arrival_ms,
+                Some(deadline_at_ms),
+                SUPPLY_NEAR_DEADLINE_GUARD_MS,
+            )
+        {
+            self.record_nack_skipped(
+                &SkippedNackBatch {
+                    sequences: missing_sequences.clone(),
+                    source: policy.source,
+                    frame_rtp_timestamp: Some(sample_rtp_timestamp),
+                    frame_is_keyframe: Some(frame_is_keyframe),
+                    frame_importance: policy.frame_importance,
+                    deadline_at_ms: Some(deadline_at_ms),
+                    estimated_recovery_arrival_ms: Some(estimated_recovery_arrival_ms),
+                    frame_playout_deadline_at_ms: Some(deadline_at_ms),
+                    nack_disposition: PacketRecoveryDisposition::SkippedTooLate,
+                    frame_unrecoverable_reason: Some("estimatedArrivalNearDeadlineSupplyRecovery"),
+                    budget_context,
+                },
+                now_ms,
+            );
+            return false;
+        }
         let batch = NackBatch {
             sequences: missing_sequences.clone(),
             retry_count: 0,
             source: if used_recent_fallback {
                 "sampleLossFallback"
             } else {
-                "sampleLoss"
+                policy.source
             },
             frame_rtp_timestamp: Some(sample_rtp_timestamp),
             frame_is_keyframe: Some(frame_is_keyframe),
-            frame_importance,
-            deadline_at_ms: None,
-            estimated_recovery_arrival_ms: None,
-            frame_playout_deadline_at_ms: None,
-            nack_disposition: PacketRecoveryDisposition::Attempted,
-            frame_unrecoverable_reason: None,
+            frame_importance: policy.frame_importance,
+            deadline_at_ms: Some(deadline_at_ms),
+            estimated_recovery_arrival_ms: Some(estimated_recovery_arrival_ms),
+            frame_playout_deadline_at_ms: policy
+                .frame_playout_deadline_at_ms
+                .or(Some(deadline_at_ms)),
+            nack_disposition: policy.nack_disposition,
+            frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
             budget_context,
         };
         self.trace_ledger.mark_gap_repair_in_flight(
@@ -623,10 +697,6 @@ impl RtcVideoFrameSource {
             return Some(FrameRecoveryDisposition::UnrecoverableReferenceChain);
         }
         Some(FrameRecoveryDisposition::UnrecoverableSupplyMiss)
-    }
-
-    fn is_cloud_high_rtt_path(&self) -> bool {
-        self.cloud_nack_rtt_ms() >= 120.0
     }
 
     fn collect_recent_missing_sequences(&self, media_dropped_packets: u16) -> Vec<u16> {
@@ -812,6 +882,27 @@ fn should_skip_low_value_near_deadline(
 ) -> bool {
     deadline_at_ms
         .is_some_and(|deadline_at_ms| estimated_recovery_arrival_ms + guard_ms >= deadline_at_ms)
+}
+
+fn sample_loss_repairability(
+    frame_is_keyframe: bool,
+    frame_importance: &str,
+    oos_active: bool,
+) -> f64 {
+    let base = if frame_is_keyframe {
+        0.95
+    } else {
+        match frame_importance {
+            "anchor" | "keyframe" => 0.95,
+            "supply" | "reference" | "continuation" => 0.82,
+            _ => 0.45,
+        }
+    };
+    if oos_active {
+        (base - OOS_REPAIRABILITY_PENALTY).max(0.2)
+    } else {
+        base
+    }
 }
 
 fn should_skip_non_anchor_near_deadline(

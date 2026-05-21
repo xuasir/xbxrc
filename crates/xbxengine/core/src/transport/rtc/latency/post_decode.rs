@@ -14,12 +14,6 @@ impl PostDecodeLatencyController {
         Self { runtime_stats }
     }
 
-    pub fn record_host_present_stall_throttle(&self, enabled: bool) {
-        RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
-            stats.host_present_stall_decode_throttle = enabled;
-        });
-    }
-
     pub fn host_stall_throttle_enabled(&self) -> bool {
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             stats.host_present_stall_decode_throttle

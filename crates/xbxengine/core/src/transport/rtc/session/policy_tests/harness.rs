@@ -70,6 +70,8 @@ impl RecoveryIntegrationHarness {
         update_stats: impl FnOnce(&mut XbxEngineMediaRuntimeStats),
     ) -> Vec<TransportCommand> {
         if let Ok(mut stats) = self.runtime_stats.lock() {
+            stats.recovery_active_escalation_reason = Some(diagnosis.to_string());
+            stats.video_owner_reason = Some(diagnosis.to_string());
             update_stats(&mut stats);
         }
         let mut connection = ConnectionProjection::default();
@@ -118,6 +120,8 @@ impl RecoveryIntegrationHarness {
         update_stats: impl FnOnce(&mut XbxEngineMediaRuntimeStats),
     ) -> Vec<TransportCommand> {
         if let Ok(mut stats) = self.runtime_stats.lock() {
+            stats.recovery_active_escalation_reason = Some(diagnosis.to_string());
+            stats.video_owner_reason = Some(diagnosis.to_string());
             update_stats(&mut stats);
         }
         let snapshot = TransportSnapshot::new(
@@ -229,6 +233,61 @@ pub(super) fn assert_recovery_family_hold_semantics(gate_result: &str, action_se
         matches_legacy_cooldown || matches_family_coalesce || matches_in_flight,
         "expected recovery family hold semantics, got gate_result={gate_result}, action_selected={action_selected}"
     );
+}
+
+pub(super) fn seed_structured_recovery_label(
+    stats: &mut XbxEngineMediaRuntimeStats,
+    diagnosis: &str,
+) {
+    stats.recovery_active_escalation_reason = Some(diagnosis.to_string());
+    stats.video_owner_reason = Some(diagnosis.to_string());
+}
+
+/// 首帧采集窗口：避免 owner 落入 `SupplyStarved` 静默 intent，使 policy 能走 fallback/coordinator 合同路径。
+pub(super) fn seed_pre_first_frame_acquisition_stats(
+    stats: &mut XbxEngineMediaRuntimeStats,
+    diagnosis: &str,
+    observed_at_ms: f64,
+) {
+    use xbxengine_protocol::XbxEngineTransportStateDto;
+
+    seed_structured_recovery_label(stats, diagnosis);
+    stats.transport_state = XbxEngineTransportStateDto::Connected;
+    stats.session_phase = Some("priming".to_string());
+    stats.host_cadence_phase = Some("priming".to_string());
+    stats.host_display_tick_epoch = 1;
+    stats.host_frame_present_epoch = 0;
+    stats.host_mailbox_enqueue_count_total = 0;
+    stats.first_video_packet_arrival_time_ms = Some(
+        stats
+            .first_video_packet_arrival_time_ms
+            .unwrap_or((observed_at_ms - 90.0).max(0.0)),
+    );
+    if stats.latest_video_track_status.is_none() {
+        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: Some(1920),
+            video_height: Some(1080),
+            mime_type: Some("video/H264".to_string()),
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 128_000,
+            video_packet_count_total: 96,
+            audio_bytes_total: 16_000,
+            observed_at_ms,
+        });
+    }
+}
+
+pub(super) fn build_snapshot_with_stats(
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    lifecycle_state: ConnectionLifecycleStateFact,
+    diagnosis: &str,
+    observed_at_ms: f64,
+) -> TransportSnapshot {
+    if let Ok(mut stats) = runtime_stats.lock() {
+        seed_structured_recovery_label(&mut stats, diagnosis);
+    }
+    build_snapshot(lifecycle_state, diagnosis, observed_at_ms)
 }
 
 pub(super) fn build_snapshot(

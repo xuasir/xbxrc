@@ -482,10 +482,6 @@ async fn clean_anchor_allows_first_recovery_idr_to_bypass_stale_decoder_feedback
         stats.video_decoder_stalled = Some(false);
         stats.video_renderer_stalled = Some(false);
     });
-    source
-        .trace_ledger
-        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
-
     send_bootstrap_access_unit(&tx, 100, 9_000).await;
     tx.send(make_video_rtp_packet(
         103,
@@ -636,46 +632,6 @@ fn sustaining_recovery_continuation_is_accepted_before_first_frame_output() {
         resolve_inspection_admission(&inspection, false, false, true),
         crate::transport::rtc::receive::InspectionAdmission::Accept
     );
-}
-
-#[tokio::test]
-#[ignore = "trace_ledger no longer drives sustaining recovery state machine"]
-async fn sustaining_recovery_reject_restarts_recovery_keyframe_request() {
-    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-    source
-        .trace_ledger
-        .on_clean_anchor_ingress(9_000, now_ms_f64());
-    source.trace_ledger.on_clean_anchor_submitted();
-
-    assert!(source.trace_ledger.in_sustaining_recovery());
-    assert!(!source.is_blocking_non_keyframe_admission());
-
-    let non_idr = bootstrap_non_idr_nalu();
-    tx.send(make_video_rtp_packet(100, 9_001, true, &non_idr))
-        .await
-        .expect("non-idr packet should enqueue");
-    tx.send(make_video_rtp_packet(101, 9_017, true, &non_idr))
-        .await
-        .expect("follow-up packet should flush previous sample");
-    drop(tx);
-
-    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
-        .await
-        .expect("reader should finish after rx closes");
-    assert!(frame.is_none());
-
-    let observation =
-        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
-            .await
-            .expect("sustaining reject should request a new recovery keyframe")
-            .expect("observation should exist");
-    assert_eq!(
-        observation,
-        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
-    );
-    assert!(transport_observation_rx.try_recv().is_err());
-    assert!(source.is_blocking_non_keyframe_admission());
-    assert!(!source.trace_ledger.in_sustaining_recovery());
 }
 
 #[test]
@@ -866,9 +822,6 @@ async fn assembled_frame_carries_current_transport_recovery_epoch_tag() {
 async fn invalid_keyframe_does_not_arm_clean_anchor_ingress() {
     let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source
-        .trace_ledger
-        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
 
     tx.send(make_video_rtp_packet(
         100,
@@ -893,13 +846,6 @@ async fn invalid_keyframe_does_not_arm_clean_anchor_ingress() {
         .expect("reader should finish after invalid keyframe and rx close");
 
     assert!(frame.is_none());
-    assert!(!source.trace_ledger.in_sustaining_recovery());
-    assert_eq!(
-        source
-            .trace_ledger
-            .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, now_ms_f64()),
-        None
-    );
 }
 
 #[tokio::test]
@@ -912,10 +858,6 @@ async fn clean_anchor_waits_for_decode_before_committing_stats() {
         stats.video_decoder_stalled = Some(false);
         stats.video_renderer_stalled = Some(false);
     });
-    source
-        .trace_ledger
-        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
-
     send_bootstrap_access_unit(&tx, 100, 9_000).await;
     tx.send(make_video_rtp_packet(
         103,
@@ -950,10 +892,9 @@ async fn clean_anchor_waits_for_decode_before_committing_stats() {
 }
 
 #[test]
-fn clean_anchor_ack_survives_latest_anchor_ledger_overwrite() {
+fn clean_anchor_ack_consumes_submission_epoch() {
     let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.trace_ledger.on_clean_anchor_ingress(9_000, 110.0);
 
     source
         .runtime_stats
@@ -975,19 +916,13 @@ fn clean_anchor_ack_survives_latest_anchor_ledger_overwrite() {
 
     source.maybe_ack_clean_anchor_commit_from_runtime_stats();
 
-    assert_eq!(
-        source
-            .trace_ledger
-            .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, 122.0),
-        None
-    );
+    assert_eq!(source.last_consumed_clean_anchor_epoch, 1);
 }
 
 #[test]
-fn clean_anchor_ack_survives_recovery_epoch_advance_after_submission() {
+fn clean_anchor_ack_consumes_epoch_after_recovery_advance() {
     let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.trace_ledger.on_clean_anchor_ingress(9_000, 110.0);
 
     source
         .runtime_stats
@@ -1004,12 +939,7 @@ fn clean_anchor_ack_survives_recovery_epoch_advance_after_submission() {
 
     source.maybe_ack_clean_anchor_commit_from_runtime_stats();
 
-    assert_eq!(
-        source
-            .trace_ledger
-            .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, 132.0),
-        None
-    );
+    assert_eq!(source.last_consumed_clean_anchor_epoch, 1);
 }
 
 #[tokio::test]
@@ -1017,11 +947,7 @@ async fn clean_anchor_then_consecutive_non_idr_continuation_does_not_fall_back_t
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
     source
         .trace_ledger
-        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
-    source
-        .trace_ledger
         .mark_gap_reorder_pending(&[401], 0.5, Some(8_900), "supply", "supply");
-    assert!(!source.trace_ledger.chain_requires_recovery_anchor());
     assert!(source.trace_ledger.has_hard_recovery_risk_for_test());
 
     send_bootstrap_access_unit(&tx, 100, 9_000).await;
@@ -1046,7 +972,6 @@ async fn clean_anchor_then_consecutive_non_idr_continuation_does_not_fall_back_t
             .expect("bootstrap frame should assemble")
             .expect("bootstrap frame should be emitted");
     assert!(bootstrap_frame.is_keyframe);
-    assert!(!source.trace_ledger.chain_requires_recovery_anchor());
 
     for _ in 0..3 {
         let _ = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner()).await;
@@ -1076,11 +1001,6 @@ async fn stale_wait_after_clean_anchor_still_submits_delta_continuation() {
         stats.latest_video_decode_ok_time_ms = Some(1.0);
         stats.latest_video_host_present_time_ms = Some(1.0);
     });
-    source
-        .trace_ledger
-        .on_clean_anchor_ingress(bootstrap_frame.rtp_timestamp, now_ms_f64());
-    source.trace_ledger.on_clean_anchor_submitted();
-
     source.runtime_stats.update(|stats| {
         let now_ms = now_ms_f64();
         stats.latest_video_decode_ok_time_ms = Some(now_ms);

@@ -113,6 +113,51 @@ fn make_test_source(
 }
 
 #[tokio::test]
+async fn cloud_sample_loss_observation_includes_rtt_merged_deadline() {
+    use xbxengine_protocol::XbxEngineTargetTypeDto;
+
+    let transport_capability = Arc::new(CaptureTransportCapability {
+        port: Arc::new(CaptureRtcpPort::default()),
+    });
+    let mut source = make_test_source(transport_capability);
+    source.current_media_ssrc = Some(0x1234_5678);
+    source.local_rtcp_sender_ssrc = 0x1122_3344;
+    source.runtime_stats.update(|stats| {
+        stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+        stats.video_rtt_ms = Some(90.0);
+        stats.transport_policy_profile = Some("cloudGaming".to_string());
+    });
+    source
+        .receive_core_mut()
+        .receive_engine
+        .observe_rtp_sequence(100, 0.0);
+    source
+        .receive_core_mut()
+        .receive_engine
+        .observe_rtp_sequence(103, 1.0);
+
+    let before_ms = crate::transport::rtc::receive::now_ms_f64();
+    let started = source
+        .observe_sample_loss_and_nack(90_001, 2, false, "supply")
+        .await;
+    assert!(
+        started,
+        "cloud sample-loss should register nack like non-cloud path"
+    );
+    let observation = source
+        .runtime_stats
+        .read(|stats| stats.latest_video_nack_observation.clone())
+        .expect("stats lock");
+    let deadline_at_ms = observation
+        .and_then(|o| o.deadline_at_ms)
+        .expect("cloud sample-loss nack should carry admission deadline");
+    assert!(
+        deadline_at_ms >= before_ms + 150.0,
+        "cloud 路径应合并 RTT margin 与动态 NACK 超时，deadline={deadline_at_ms} before={before_ms}"
+    );
+}
+
+#[tokio::test]
 async fn sample_loss_registers_pending_nack_without_chain_broken_escalation() {
     let transport_capability = Arc::new(CaptureTransportCapability {
         port: Arc::new(CaptureRtcpPort::default()),

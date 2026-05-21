@@ -18,7 +18,7 @@ pub struct ReceiveEngine {
     pub keyframe_requester: KeyframeRequester,
     pub bootstrap: H264BootstrapTracker,
     pub frame_assembler: RtpFrameAssembler,
-    pub timing: ReceiveTimingProfile,
+    pub _timing: ReceiveTimingProfile,
 }
 
 impl ReceiveEngine {
@@ -33,7 +33,7 @@ impl ReceiveEngine {
             keyframe_requester: KeyframeRequester::new(timing),
             bootstrap: H264BootstrapTracker::default(),
             frame_assembler: RtpFrameAssembler::new(max_late_packets, max_time_delay),
-            timing,
+            _timing: timing,
         }
     }
 
@@ -60,11 +60,6 @@ impl ReceiveEngine {
 
     pub fn pending_nack_count(&self) -> usize {
         self.nack_requester.pending_count()
-    }
-
-    pub fn prune_pending_nack_in_range(&mut self, start: u16, end_exclusive: u16) -> Vec<u16> {
-        self.nack_requester
-            .prune_pending_in_range(start, end_exclusive)
     }
 
     pub fn has_active_gap(&self) -> bool {

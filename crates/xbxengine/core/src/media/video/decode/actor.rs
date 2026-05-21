@@ -729,7 +729,7 @@ where
                     .unwrap_or("none"),
             ));
         });
-        crate::xbx_log_warn!(
+        crate::xbx_log_playback_flow!(
             "[playback-flow][decode] event=pacerSubmit result={} frameSeq={} rtpTimestamp={} cleanAnchorEpoch={} recoveryOwnerRtp={} pendingOutputQueueDepth={}",
             submit_result.label(),
             frame_seq,

@@ -7,6 +7,7 @@ pub enum PacketRecoveryDisposition {
     Attempted,
     SkippedTooLate,
     SkippedLowValue,
+    #[allow(dead_code)]
     SkippedChainBroken,
 }
 
@@ -22,6 +23,7 @@ impl PacketRecoveryDisposition {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct NackSchedulerConfig {
     pub max_age_ms: u64,
     pub frame_deadline_ms: u64,
@@ -80,6 +82,7 @@ pub struct SkippedNackBatch {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub struct NackObservePolicy {
     pub source: &'static str,
     pub deadline_at_ms: Option<f64>,

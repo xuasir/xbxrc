@@ -4,6 +4,7 @@ use xbxengine_protocol::XbxEngineStatsDto;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 
 const DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS: f64 = 1_000.0;
+const MEDIA_DIAGNOSTIC_TRACE_BUCKET_MS: f64 = 2_000.0;
 const HOST_PRESENT_STATE_SAMPLE_EPOCH_INTERVAL: u64 = 60;
 const VIDEO_TRACK_STATE_SAMPLE_INTERVAL_MS: f64 = 1_000.0;
 const DISPLAYED_FRAME_STALE_THRESHOLD_MS: f64 = 300.0;
@@ -32,7 +33,16 @@ pub(super) struct RuntimeTraceObservationState {
     frame_recovery_observation_id: Option<u64>,
     nack_observation_id: Option<u64>,
     escalation_observation_id: Option<u64>,
-    recovery_decision_ledger_signature: Option<(u64, Option<String>, Option<String>)>,
+    recovery_decision_ledger_signature: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )>,
     bwe_observation_id: Option<u64>,
     twcc_observation_id: Option<u64>,
     rtc_builder_observation_id: Option<u64>,
@@ -42,9 +52,9 @@ pub(super) struct RuntimeTraceObservationState {
     data_channel_catalog_observation_id: Option<u64>,
     timeline_observation_id: Option<u64>,
     anchor_candidate_observation: Option<(u64, Option<u32>, String, Option<String>, f64)>,
-    h264_inspection_observation: Option<xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
+    h264_inspection_trace_signature: Option<(bool, Option<String>, u64)>,
     picture_recovery_transition_observation_id: Option<u64>,
-    picture_recovery_blocker_observation_id: Option<u64>,
+    picture_recovery_blocker_trace_signature: Option<(String, String, String, u64)>,
     video_ingress_termination_observation_id: Option<u64>,
     first_frame_latency_observation_id: Option<u64>,
     decoder_probe_observation_id: Option<u64>,
@@ -99,14 +109,11 @@ pub(super) struct RuntimeTraceObservationState {
     )>,
     recovery_salvage_signature: Option<(Option<bool>, Option<String>)>,
     remote_profile_bitrate_band: Option<String>,
-    runtime_summary: Option<String>,
     primary_issue_chain: Option<String>,
-    latest_decision_summary: Option<String>,
     recovery_owner_state: Option<String>,
     recovery_owner_reason: Option<String>,
     video_owner_source: Option<String>,
     video_owner_observed_at_ms: Option<f64>,
-    video_owner_observed_at_bucket: Option<u64>,
     unified_lifecycle: Option<String>,
     video_health: Option<String>,
     chain_health: Option<String>,
@@ -492,6 +499,7 @@ pub(super) fn record_runtime_trace_observations(
     session_id: Option<&str>,
     stats: &XbxEngineStatsDto,
 ) {
+    let trace_mode = runtime_trace.trace_mode();
     let latest_rtcp_send_failure = latest_rtcp_send_failure_from_stats(stats);
     let latest_rtcp_send_failure_signature = latest_rtcp_send_failure
         .as_ref()
@@ -700,7 +708,11 @@ pub(super) fn record_runtime_trace_observations(
     }
 
     if let Some(observation) = stats.latest_decode_output_path_observation.as_ref() {
-        if observation_state.decode_output_path_observation_id != Some(observation.observation_id) {
+        let material_in_minimal = trace_mode != "minimal" || observation.verdict != "decoded-frame";
+        if material_in_minimal
+            && observation_state.decode_output_path_observation_id
+                != Some(observation.observation_id)
+        {
             observation_state.decode_output_path_observation_id = Some(observation.observation_id);
             runtime_trace.record_event(
                 "xbxengine",
@@ -957,9 +969,14 @@ pub(super) fn record_runtime_trace_observations(
 
     if let Some(ledger) = stats.latest_recovery_decision_ledger.as_ref() {
         let signature = (
-            ledger.decision_id,
+            ledger.state_before.clone(),
+            ledger.state_after.clone(),
+            ledger.input_signal.clone(),
+            ledger.gate_result.clone(),
+            ledger.action_selected.clone(),
             ledger.command_result.clone(),
             ledger.command_detail.clone(),
+            ledger.gap_severity.clone(),
         );
         if observation_state
             .recovery_decision_ledger_signature
@@ -1253,25 +1270,43 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
-    if observation_state.h264_inspection_observation != stats.latest_h264_inspection_observation {
-        observation_state.h264_inspection_observation =
-            stats.latest_h264_inspection_observation.clone();
-        if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
-            let payload = h264_inspection_payload(Some(inspection), stats);
-            runtime_trace.record_state("xbxengine", "h264Inspection", session_id, payload.clone());
-            let event_name = if inspection.admission_accepted {
-                "h264InspectionObserved"
-            } else {
-                "h264InspectionRejected"
-            };
-            runtime_trace.record_event("xbxengine", event_name, session_id, payload.clone());
-            if inspection.bootstrap_reject_reason.is_some() {
-                runtime_trace.record_event(
+    if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
+        let signature = (
+            inspection.admission_accepted,
+            inspection.reject_classification.clone(),
+            sample_bucket_ms(
+                Some(inspection.observed_at_ms),
+                MEDIA_DIAGNOSTIC_TRACE_BUCKET_MS,
+            )
+            .unwrap_or(0),
+        );
+        if observation_state.h264_inspection_trace_signature.as_ref() != Some(&signature) {
+            observation_state.h264_inspection_trace_signature = Some(signature);
+            let material = inspection.bootstrap_reject_reason.is_some()
+                || !inspection.admission_accepted
+                || trace_mode != "minimal";
+            if material {
+                let payload = h264_inspection_payload(Some(inspection), stats);
+                runtime_trace.record_state(
                     "xbxengine",
-                    "bootstrapRejectObserved",
+                    "h264Inspection",
                     session_id,
-                    payload,
+                    payload.clone(),
                 );
+                let event_name = if inspection.admission_accepted {
+                    "h264InspectionObserved"
+                } else {
+                    "h264InspectionRejected"
+                };
+                runtime_trace.record_event("xbxengine", event_name, session_id, payload.clone());
+                if inspection.bootstrap_reject_reason.is_some() {
+                    runtime_trace.record_event(
+                        "xbxengine",
+                        "bootstrapRejectObserved",
+                        session_id,
+                        payload,
+                    );
+                }
             }
         }
     }
@@ -1299,17 +1334,23 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
-    if observation_state.picture_recovery_blocker_observation_id
-        != stats
-            .latest_picture_recovery_blocker_observation
+    if let Some(observation) = stats.latest_picture_recovery_blocker_observation.as_ref() {
+        let signature = (
+            observation.gate.clone(),
+            observation.blocker_kind.clone(),
+            observation.severity.clone(),
+            sample_bucket_ms(
+                Some(observation.observed_at_ms),
+                MEDIA_DIAGNOSTIC_TRACE_BUCKET_MS,
+            )
+            .unwrap_or(0),
+        );
+        if observation_state
+            .picture_recovery_blocker_trace_signature
             .as_ref()
-            .map(|observation| observation.observation_id)
-    {
-        observation_state.picture_recovery_blocker_observation_id = stats
-            .latest_picture_recovery_blocker_observation
-            .as_ref()
-            .map(|observation| observation.observation_id);
-        if let Some(observation) = stats.latest_picture_recovery_blocker_observation.as_ref() {
+            != Some(&signature)
+        {
+            observation_state.picture_recovery_blocker_trace_signature = Some(signature);
             runtime_trace.record_event(
                 "xbxengine",
                 "pictureRecoveryBlockerObserved",
@@ -1359,10 +1400,6 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
-    let current_video_owner_observed_at_bucket = sample_bucket_ms(
-        stats.video_owner_observed_at_ms,
-        DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS,
-    );
     let recovery_effective_rtt_ms = stats
         .recovery_effective_rtt_ms
         .map(|value| format!("{value:.1}"));
@@ -1408,14 +1445,10 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.recovery_salvage_signature.as_ref()
             != Some(&recovery_salvage_signature)
         || observation_state.remote_profile_bitrate_band != stats.direct_gaming_bitrate_band
-        || observation_state.runtime_summary != stats.runtime_summary
         || observation_state.primary_issue_chain != stats.primary_issue_chain
-        || observation_state.latest_decision_summary != stats.latest_decision_summary
         || observation_state.recovery_owner_state != stats.recovery_owner_state
         || observation_state.recovery_owner_reason != stats.recovery_owner_reason
         || observation_state.video_owner_source != stats.video_owner_source
-        || observation_state.video_owner_observed_at_bucket
-            != current_video_owner_observed_at_bucket
         || observation_state.unified_lifecycle.as_deref() != Some(resolve_unified_lifecycle(stats))
         || observation_state.video_health != stats.video_health
         || observation_state.chain_health != stats.chain_health
@@ -1437,14 +1470,11 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.recovery_timing_signature = Some(recovery_timing_signature);
         observation_state.recovery_salvage_signature = Some(recovery_salvage_signature);
         observation_state.remote_profile_bitrate_band = stats.direct_gaming_bitrate_band.clone();
-        observation_state.runtime_summary = stats.runtime_summary.clone();
         observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
-        observation_state.latest_decision_summary = stats.latest_decision_summary.clone();
         observation_state.recovery_owner_state = stats.recovery_owner_state.clone();
         observation_state.recovery_owner_reason = stats.recovery_owner_reason.clone();
         observation_state.video_owner_source = stats.video_owner_source.clone();
         observation_state.video_owner_observed_at_ms = stats.video_owner_observed_at_ms;
-        observation_state.video_owner_observed_at_bucket = current_video_owner_observed_at_bucket;
         observation_state.unified_lifecycle = Some(resolve_unified_lifecycle(stats).to_string());
         observation_state.video_health = stats.video_health.clone();
         observation_state.chain_health = stats.chain_health.clone();

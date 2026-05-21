@@ -97,14 +97,14 @@ fn viewport_reattach_only_happens_when_attach_inputs_change() {
 }
 
 #[test]
-fn host_timing_record_policy_keeps_submit_and_present_path_always_on() {
+fn host_timing_record_policy_samples_high_frequency_present_path() {
     assert_eq!(
         resolve_host_timing_record_policy("hostMailboxAccepted"),
-        HostTimingRecordPolicy::Always
+        HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
         resolve_host_timing_record_policy("hostMailboxRetainedDisplayed"),
-        HostTimingRecordPolicy::Always
+        HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
         resolve_host_timing_record_policy("hostMailboxIdle"),
@@ -112,11 +112,11 @@ fn host_timing_record_policy_keeps_submit_and_present_path_always_on() {
     );
     assert_eq!(
         resolve_host_timing_record_policy("prepare_sample_ready"),
-        HostTimingRecordPolicy::Always
+        HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
         resolve_host_timing_record_policy("hostFramePresented"),
-        HostTimingRecordPolicy::Always
+        HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
         resolve_host_timing_record_policy("tick_total"),

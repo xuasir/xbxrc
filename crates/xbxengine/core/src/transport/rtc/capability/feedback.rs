@@ -8,6 +8,7 @@ pub enum VideoFeedbackState {
 }
 
 impl VideoFeedbackState {
+    #[allow(dead_code)]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Warming => "warming",
@@ -19,9 +20,17 @@ impl VideoFeedbackState {
 
 #[derive(Clone, Debug)]
 pub enum TransportCapabilityError {
-    FeedbackUnavailable { detail: String },
-    TransportNotReady { detail: String },
-    SendFailed { detail: String },
+    #[allow(dead_code)]
+    FeedbackUnavailable {
+        detail: String,
+    },
+    #[allow(dead_code)]
+    TransportNotReady {
+        detail: String,
+    },
+    SendFailed {
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for TransportCapabilityError {

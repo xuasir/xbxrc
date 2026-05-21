@@ -19,7 +19,7 @@ use xbxengine_protocol::{
 
 use crate::error::{AppError, AppResult};
 use crate::mods::native_video::{NativeVideoDisplayState, NativeVideoRegistryRef};
-use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
+use crate::mods::runtime_trace::{trace_observation_tick_interval, RuntimeTraceRecorderRef};
 use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
     StreamingSubmitIceParams,
@@ -120,6 +120,7 @@ pub struct XbxEngineRuntimeState {
     /// `statsSnapshot` / `observabilitySnapshot` 最小间隔（毫秒），可由设置 `runtime_trace_mode` 运行时更新。
     stats_snapshot_interval_ms: Arc<AtomicU64>,
     last_stats_trace_at: StdMutex<Option<Instant>>,
+    last_trace_observation_at: StdMutex<Option<Instant>>,
     last_trace_observation: StdMutex<RuntimeTraceObservationState>,
     active_session_id: StdMutex<Option<String>>,
     cancellation_epoch: Arc<AtomicU64>,
@@ -180,6 +181,7 @@ impl XbxEngineRuntimeState {
                 stats_snapshot_interval.as_millis() as u64,
             )),
             last_stats_trace_at: StdMutex::new(None),
+            last_trace_observation_at: StdMutex::new(None),
             last_trace_observation: StdMutex::new(RuntimeTraceObservationState::default()),
             active_session_id: StdMutex::new(None),
             cancellation_epoch,
@@ -278,7 +280,26 @@ impl XbxEngineRuntimeState {
         if should_skip_trace_tick(session_id.as_deref(), &stats_snapshot) {
             return Ok(());
         }
-        self.record_runtime_trace_observations(session_id.as_deref(), &stats_snapshot);
+        let trace_mode = self.runtime_trace.trace_mode();
+        let observation_interval = trace_observation_tick_interval(&trace_mode);
+        let should_project = self
+            .last_trace_observation_at
+            .lock()
+            .ok()
+            .map(|mut last| {
+                let now = Instant::now();
+                let due = last
+                    .map(|previous| now.duration_since(previous) >= observation_interval)
+                    .unwrap_or(true);
+                if due {
+                    *last = Some(now);
+                }
+                due
+            })
+            .unwrap_or(true);
+        if should_project {
+            self.record_runtime_trace_observations(session_id.as_deref(), &stats_snapshot);
+        }
         let Ok(mut last_stats_trace_at) = self.last_stats_trace_at.lock() else {
             return Ok(());
         };

@@ -289,7 +289,7 @@ fn log_renderer_flow(
     related_frame_seq: Option<u64>,
     overwritten_pending_frame: bool,
 ) {
-    crate::xbx_log_warn!(
+    crate::xbx_log_playback_flow!(
         "[playback-flow][renderer] event={} reason={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} overwrittenPendingFrame={} overwrittenFrameSeq={} hostTickEpoch={} hostFramePresentEpoch={}",
         event,
         reason.unwrap_or("-"),

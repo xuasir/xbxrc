@@ -26,11 +26,13 @@ pub(crate) use candidate_helpers::{
 };
 #[cfg(test)]
 pub(crate) use data_channel::build_control_decoder_reset_payload;
+
+#[cfg(test)]
+#[path = "data_channel.test.rs"]
+mod data_channel_tests;
 pub(crate) use fact_mapping::{map_connection_lifecycle_state_fact, map_data_channel_label_fact};
 pub(crate) use sdp_candidate::{
     extract_local_candidates_from_offer_sdp, is_end_of_candidates_marker,
 };
-pub(crate) use service::{
-    RtcConnectionService, VideoRecoveryRequestOutcome, VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON,
-};
+pub(crate) use service::{RtcConnectionService, VideoRecoveryRequestOutcome};
 pub(crate) use text_preview::short_text_preview;

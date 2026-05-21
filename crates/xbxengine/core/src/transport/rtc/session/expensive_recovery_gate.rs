@@ -180,8 +180,15 @@ impl<'a> ExpensiveRecoveryGate<'a> {
                 observed_at_ms,
             )
             || (snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Recovering
-                && snapshot.recovery.latest_diagnosis_label.as_deref()
-                    == Some("rtcConnectionRecovering")
+                && RuntimeStatsSink::read_shared(&self.runtime_stats, |stats| {
+                    crate::transport::rtc::recovery::escalation_label::effective_recovery_control_label(
+                        snapshot.recovery.latest_diagnosis_label.as_deref(),
+                        stats,
+                    )
+                })
+                .flatten()
+                .as_deref()
+                == Some("rtcConnectionRecovering")
                 && has_connected_connectivity_failure_evidence)
             || snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected;
         if !(no_progress && hard_evidence) {

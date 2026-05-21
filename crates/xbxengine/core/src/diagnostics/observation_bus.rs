@@ -66,10 +66,6 @@ pub(crate) enum ObservationEvent {
     InboundVideoPacketLossEstimate {
         packet_count: u16,
     },
-    #[allow(dead_code)]
-    VideoLossFinalized {
-        packet_count: usize,
-    },
     VideoPendingMissingPackets {
         pending_count: usize,
     },
@@ -277,10 +273,6 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
             label: "packetLossEstimate".to_string(),
             summary: format!("+{packet_count}"),
         },
-        ObservationEvent::VideoLossFinalized { packet_count } => ObservationPublication {
-            label: "videoLossFinalized".to_string(),
-            summary: format!("+{packet_count}"),
-        },
         ObservationEvent::VideoPendingMissingPackets { pending_count } => ObservationPublication {
             label: "pendingMissingPackets".to_string(),
             summary: format!("count={pending_count}"),
@@ -477,11 +469,6 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.inbound_video_packet_loss_estimate_total = stats
                 .inbound_video_packet_loss_estimate_total
                 .saturating_add(u64::from(packet_count));
-        }
-        ObservationEvent::VideoLossFinalized { packet_count } => {
-            stats.video_loss_finalized_count_total = stats
-                .video_loss_finalized_count_total
-                .saturating_add(packet_count as u64);
         }
         ObservationEvent::VideoPendingMissingPackets { pending_count } => {
             stats.video_pending_missing_packets = pending_count;

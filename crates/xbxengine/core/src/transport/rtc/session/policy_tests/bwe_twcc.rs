@@ -375,7 +375,7 @@ fn cloud_builder_configured_warmup_does_not_block_lifecycle_reconnect() {
             observed_at_ms: 100.0,
         });
     }
-    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let mut connection = ConnectionProjection::default();
     connection.lifecycle_state = ConnectionLifecycleStateFact::Connecting;
     let recovery = RecoveryProjection {
@@ -396,6 +396,9 @@ fn cloud_builder_configured_warmup_does_not_block_lifecycle_reconnect() {
         DiagnosticsProjection::default(),
     );
     let _ = transport_commands(policy.on_snapshot(&first));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.recovery_active_escalation_reason = Some("rtcConnectionRecovering".to_string());
+    }
     let mut connection_second = connection;
     connection_second.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
     let second = TransportSnapshot::new(

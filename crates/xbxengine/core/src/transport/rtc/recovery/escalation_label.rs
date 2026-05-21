@@ -18,3 +18,29 @@ pub(crate) fn escalation_structured_label(stats: &XbxEngineMediaRuntimeStats) ->
         })
         .or_else(|| stats.video_owner_reason.as_deref())
 }
+
+/// 控制面标签：结构化字段优先，`latest_diagnosis_label`（事实流）仅作回退。
+pub(crate) fn effective_recovery_control_label(
+    snapshot_diagnosis: Option<&str>,
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<String> {
+    escalation_structured_label(stats)
+        .map(str::to_string)
+        .or_else(|| snapshot_diagnosis.map(str::to_string))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::XbxEngineMediaRuntimeStats;
+
+    #[test]
+    fn structured_label_prefers_active_escalation_over_legacy_diagnosis() {
+        let stats = XbxEngineMediaRuntimeStats {
+            recovery_active_escalation_reason: Some("receiverWaitingKeyframe".to_string()),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+        let label = effective_recovery_control_label(Some("adapterIdleTimeout"), &stats);
+        assert_eq!(label.as_deref(), Some("receiverWaitingKeyframe"));
+    }
+}

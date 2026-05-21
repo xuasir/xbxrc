@@ -745,7 +745,7 @@ fn log_pacer_flow(
     let related_frame_seq = related_frame_seq
         .map(|seq| seq.to_string())
         .unwrap_or_else(|| "-".to_string());
-    crate::xbx_log_warn!(
+    crate::xbx_log_playback_flow!(
         "[playback-flow][pacer] event={} reason={} detail={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} pacingQueueDepth={} renderQueueDepth={} hostTickEpoch={} hostFramePresentEpoch={} hostCadencePhase={} relatedFrameSeq={}",
         event,
         reason,

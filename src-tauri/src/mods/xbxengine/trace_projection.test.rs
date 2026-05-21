@@ -3420,3 +3420,129 @@ fn h264_inspection_time_window_skips_retired_keyframe_episode() {
     assert_eq!(h264["linkedEpisodeId"], json!(null));
     assert_eq!(h264["isRecoveryKeyframeResponseContext"], false);
 }
+
+#[test]
+fn recovery_decision_ledger_trace_ignores_monotonic_decision_id_only_changes() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("minimal").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_recovery_decision_ledger": {
+            "decision_id": 1,
+            "state_before": "observing",
+            "state_after": "observing",
+            "input_signal": "none",
+            "gate_result": "no-signal",
+            "action_selected": "none",
+            "observed_at_ms": 100.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let stats_second = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_recovery_decision_ledger": {
+            "decision_id": 2,
+            "state_before": "observing",
+            "state_after": "observing",
+            "input_signal": "none",
+            "gate_result": "no-signal",
+            "action_selected": "none",
+            "observed_at_ms": 116.0
+        }
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_second);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| entry["event"] == "recoveryDecisionLedger")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn minimal_trace_skips_accepted_h264_inspection_spam() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("minimal").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats_a = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_h264_inspection_observation": {
+            "observation_id": 1,
+            "nal_types": [],
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": true,
+            "admission_accepted": true,
+            "observed_at_ms": 100.0
+        }
+    }));
+    let stats_b = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_h264_inspection_observation": {
+            "observation_id": 2,
+            "nal_types": [],
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": true,
+            "admission_accepted": true,
+            "observed_at_ms": 150.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_a);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_b);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    assert!(entries
+        .iter()
+        .all(|entry| entry["event"] != "h264InspectionObserved"));
+}

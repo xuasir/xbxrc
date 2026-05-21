@@ -1,27 +1,15 @@
 //! 动态 RTT 恢复时序合同测试：NACK 首发窗与 survival、profile 静态回退、FIR 仅 Cloud、H264 参数集缓存 bootstrap。
 //! 对应设计说明见 `docs/rfcs/2026-05-14-dynamic-rtt-aware-recovery-timing.md`。
 
-use std::sync::{Arc, Mutex};
-
 use hex_literal::hex;
-use xbxengine_protocol::XbxEngineTargetTypeDto;
 
-use crate::api::backend::XbxEngineMediaRuntimeStats;
-use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
-use crate::media::video::ingress::budget::FrameBudgetContext;
-use crate::media::video::types::FrameValue;
-use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
-use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{
     RecoveryTimingRttParams, ScenarioPolicyProfileKind, ScenarioPolicyResolver,
 };
 use crate::transport::rtc::recovery::timing::{
     merge_nack_admission_deadline_with_dynamic_timeout, resolve_recovery_dynamic_timing_with_rtt,
 };
-use crate::transport::rtc::session::policy::RecoveryAction;
-use crate::transport::rtc::session::policy::RtcSessionPolicy;
 #[test]
 fn home_wan_supply_gap_does_not_escalate_before_dynamic_first_attempt_timeout() {
     let merged = merge_nack_admission_deadline_with_dynamic_timeout(
@@ -69,87 +57,6 @@ fn recovery_profile_enables_dynamic_pli_and_fir_timing_dimensions() {
     let t200 = resolve_recovery_dynamic_timing_with_rtt(200.0, profile);
     assert!(t200.pli_refresh_interval_ms > t100.pli_refresh_interval_ms);
     assert!(t200.fir_retry_interval_ms > t100.fir_retry_interval_ms);
-}
-
-#[test]
-fn fir_is_cloud_only_and_requires_failed_pli_progress() {
-    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
-    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
-    let policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
-    let owner_signal = crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal {
-        reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-        reason_label: "receiverWaitingKeyframe".to_string(),
-        observed_at_ms: 12_180.0,
-        gap_severity: None,
-        repairability: None,
-    };
-    let proposal = crate::transport::rtc::recovery::coordinator::CoordinatorProposal {
-        decision: crate::transport::rtc::recovery::escalation::VideoEscalationDecision {
-            observation_id: 1,
-            action: RecoveryAction::CoalescedKeyframeInFlight,
-        },
-        coalescing_mode: None,
-        unlock_reason: None,
-        preempt_reason: None,
-        budget_before: crate::transport::rtc::recovery::escalation::RecoveryActionBudgetState {
-            recovery_epoch: 45,
-            keyframe_budget_used: 1,
-            keyframe_budget_limit: 2,
-            decoder_reset_budget_used: 0,
-            decoder_reset_budget_limit: 2,
-            reconnect_budget_used: 0,
-            reconnect_budget_limit: 1,
-        },
-        budget_after: crate::transport::rtc::recovery::escalation::RecoveryActionBudgetState {
-            recovery_epoch: 45,
-            keyframe_budget_used: 1,
-            keyframe_budget_limit: 2,
-            decoder_reset_budget_used: 0,
-            decoder_reset_budget_limit: 2,
-            reconnect_budget_used: 0,
-            reconnect_budget_limit: 1,
-        },
-    };
-    RuntimeStatsSink::update_shared(runtime_stats.as_ref(), |stats| {
-        stats.session_target_type = Some(XbxEngineTargetTypeDto::Home);
-        stats.video_rtt_ms = Some(50.0);
-        stats.session_phase = Some("steady".to_string());
-        stats.transport_recovery_epoch = 45;
-        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-        stats.latest_keyframe_request_episode =
-            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
-                episode_id: 45,
-                request_reason: Some("receiverWaitingKeyframe".to_string()),
-                request_kind: Some("pli".to_string()),
-                status: "packet-seen".to_string(),
-                status_detail: None,
-                requested_at_ms: 12_000.0,
-                sent_at_ms: Some(12_010.0),
-                deadline_at_ms: Some(12_900.0),
-                transport_detail: None,
-                first_video_packet_at_ms: Some(12_070.0),
-                first_video_packet_rtp_timestamp: Some(0x5566_7788),
-                first_video_packet_is_keyframe: Some(true),
-                first_keyframe_packet_at_ms: Some(12_070.0),
-                first_keyframe_decoded_at_ms: None,
-                response_rtp_timestamp: Some(0x5566_7788),
-                response_frame_seq: Some(45),
-                response_verdict: Some("pending".to_string()),
-                lifecycle_phase: Some("packetSeen".to_string()),
-                retired_at_ms: None,
-            });
-    });
-    assert!(
-        policy
-            .should_upgrade_transport_await_refresh_to_fir(
-                VideoSchedulingOwnerState::RebuildingSupply,
-                &proposal,
-                &owner_signal,
-                12_180.0,
-            )
-            .is_none(),
-        "非 Cloud 会话不得升级到 FIR"
-    );
 }
 
 #[test]

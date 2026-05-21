@@ -44,18 +44,6 @@ impl NackRequester {
         self.pending.len()
     }
 
-    pub fn prune_pending_in_range(&mut self, start: u16, end_exclusive: u16) -> Vec<u16> {
-        let mut removed = Vec::new();
-        let mut cursor = start;
-        while cursor != end_exclusive {
-            if self.pending.remove(&cursor).is_some() {
-                removed.push(cursor);
-            }
-            cursor = cursor.wrapping_add(1);
-        }
-        removed
-    }
-
     pub fn poll_ready_sequences(&mut self, now: Instant) -> (Vec<u16>, bool) {
         let reorder_wait = Duration::from_millis(self.timing.reorder_wait_ms);
         let first_nack = Duration::from_millis(self.timing.first_nack_ms);

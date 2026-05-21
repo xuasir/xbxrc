@@ -1,5 +1,4 @@
-//! RTC 传输子系统。接收侧环正在按 RFC 重构，重构完成前允许保留暂未接线的恢复/观测 API。
-#![allow(dead_code)]
+//! RTC 传输子系统（接收侧 trace 与 `ReceiverState` 裁决已分离；观测写入经 `RuntimeStatsSink`）。
 
 pub mod bwe;
 pub mod capability;

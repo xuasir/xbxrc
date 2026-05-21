@@ -11,26 +11,21 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum GapState {
-    #[allow(dead_code)]
-    Idle,
     Observed,
     ReorderPending,
     NackCandidate,
     RepairInFlight,
     Resolved,
-    Expired,
 }
 
 impl GapState {
     fn as_str(self) -> &'static str {
         match self {
-            Self::Idle => "idle",
             Self::Observed => "observed",
             Self::ReorderPending => "reorder-pending",
             Self::NackCandidate => "nack-candidate",
             Self::RepairInFlight => "repair-in-flight",
             Self::Resolved => "resolved",
-            Self::Expired => "expired",
         }
     }
 }
@@ -134,9 +129,6 @@ pub(crate) struct ReceiverTraceLedger {
     last_chain_break_evidence: Option<String>,
 }
 
-#[allow(dead_code)] // 兼容旧测试名；新代码用 ReceiverTraceLedger
-pub(crate) type VideoTimelineState = ReceiverTraceLedger;
-
 impl ReceiverTraceLedger {
     pub(crate) fn new() -> Self {
         Self {
@@ -149,34 +141,11 @@ impl ReceiverTraceLedger {
         }
     }
 
-    /// RFC：pre-decode 裁决只用 [`ReceiverState`]；保留供旧 trace 测试编译。
-    pub(crate) fn chain_requires_recovery_anchor(&self) -> bool {
-        false
-    }
-
-    pub(crate) fn has_active_gap(&self) -> bool {
-        self.gaps.values().any(|gap| {
-            !matches!(
-                gap.state,
-                GapState::Resolved | GapState::Expired | GapState::Idle
-            )
-        })
-    }
-
-    pub(crate) fn in_sustaining_recovery(&self) -> bool {
-        false
-    }
-
-    pub(crate) fn apply_wait_keyframe_gate(&mut self, _waiting: bool) {}
-
-    pub(crate) fn on_admission_await_recovery_keyframe(&mut self, _reason: Option<&'static str>) {}
-
-    pub(crate) fn on_sustaining_recovery_failed(&mut self, _reason: &'static str) {}
-
+    #[cfg(test)]
     pub(crate) fn has_hard_recovery_gap_risk(&self) -> bool {
         if self.gaps.values().any(|entry| {
             entry.severity == TimelineGapHardness::Hard
-                && !matches!(entry.state, GapState::Resolved | GapState::Expired)
+                && !matches!(entry.state, GapState::Resolved)
         }) {
             return true;
         }
@@ -186,42 +155,6 @@ impl ReceiverTraceLedger {
                 FrameRecoveryDisposition::UnrecoverableReferenceChain
             )
         })
-    }
-
-    pub(crate) fn on_recovery_keyframe_requested(&mut self) {}
-
-    pub(crate) fn on_recovery_keyframe_requested_soft(&mut self) {}
-
-    pub(crate) fn on_chain_broken(&mut self) {
-        self.last_chain_break_evidence
-            .get_or_insert_with(|| "externalChainBroken".to_string());
-    }
-
-    pub(crate) fn on_clean_anchor_ingress(
-        &mut self,
-        _anchor_rtp_timestamp: u32,
-        _observed_at_ms: f64,
-    ) {
-    }
-
-    pub(crate) fn on_clean_anchor_stats_committed(&mut self) {}
-
-    pub(crate) fn on_clean_anchor_submitted(&mut self) {}
-
-    pub(crate) fn peek_clean_anchor_stats_commit_candidate_if_stable(
-        &mut self,
-        _complete_candidate_rtp_ts: u32,
-        _now_ms: f64,
-    ) -> Option<u32> {
-        None
-    }
-
-    pub(crate) fn ack_clean_anchor_stats_committed(&mut self, _committed_rtp_ts: u32) -> bool {
-        false
-    }
-
-    pub(crate) fn ack_pending_clean_anchor_stats_committed(&mut self) -> bool {
-        false
     }
 
     pub(crate) fn apply_media_evidence_to_gaps_for_frame(
@@ -250,9 +183,6 @@ impl ReceiverTraceLedger {
             entry.severity = severity;
         }
     }
-
-    #[allow(dead_code)]
-    pub(crate) fn abandon_clean_anchor_pipeline_pending(&mut self) {}
 
     pub(crate) fn on_timeout_detected(&mut self) {}
 
@@ -393,7 +323,7 @@ impl ReceiverTraceLedger {
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
             let has_pending_gap = self.gaps.values().any(|entry| {
                 entry.frame_rtp_timestamp == Some(frame_rtp_timestamp)
-                    && !matches!(entry.state, GapState::Resolved | GapState::Expired)
+                    && !matches!(entry.state, GapState::Resolved)
             });
             self.update_frame(
                 frame_rtp_timestamp,
@@ -409,63 +339,6 @@ impl ReceiverTraceLedger {
                 None,
             );
         }
-    }
-
-    pub(crate) fn mark_gap_expired(
-        &mut self,
-        sequences: &[u16],
-        now_ms: f64,
-        frame_rtp_timestamp: Option<u32>,
-        budget_importance: &'static str,
-        evidence_importance: &'static str,
-        close_reason: Option<&'static str>,
-    ) -> bool {
-        let soft_reentry = can_soften_expired_delta_reentry(close_reason);
-        for sequence in sequences {
-            self.update_gap(
-                *sequence,
-                GapState::Expired,
-                now_ms,
-                frame_rtp_timestamp,
-                budget_importance,
-                evidence_importance,
-                close_reason,
-            );
-        }
-        if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
-            self.update_frame(
-                frame_rtp_timestamp,
-                FrameReceiveState::Closed,
-                now_ms,
-                None,
-                budget_importance,
-                evidence_importance,
-                close_reason,
-            );
-        }
-        let chain_broken = self.should_expired_gap_break_chain(
-            frame_rtp_timestamp,
-            budget_importance,
-            evidence_importance,
-            close_reason,
-            soft_reentry,
-        );
-        if chain_broken {
-            self.last_chain_break_evidence = Some(
-                if self.frame_rtp_has_unrecoverable_reference_ledger(frame_rtp_timestamp) {
-                    "frameLedgerUnrecoverableReferenceChain".to_string()
-                } else {
-                    expired_gap_chain_break_evidence(
-                        frame_rtp_timestamp,
-                        budget_importance,
-                        evidence_importance,
-                        close_reason,
-                    )
-                    .to_string()
-                },
-            );
-        }
-        chain_broken
     }
 
     pub(crate) fn observe_frame(
@@ -623,24 +496,6 @@ impl ReceiverTraceLedger {
         self.frame_recovery_ledger.remove(&frame_rtp_timestamp)
     }
 
-    pub(crate) fn snapshot_for_observation(
-        &self,
-        observation_id: u64,
-        source_event: &str,
-        gap_sequence: Option<u16>,
-        frame_rtp_timestamp: Option<u32>,
-        now_ms: f64,
-    ) -> XbxEngineVideoTimelineObservation {
-        self.snapshot_for_observation_with_receiver_state(
-            super::receiver_state::ReceiverState::Receiving,
-            observation_id,
-            source_event,
-            gap_sequence,
-            frame_rtp_timestamp,
-            now_ms,
-        )
-    }
-
     pub(crate) fn snapshot_for_observation_with_receiver_state(
         &self,
         receiver_state: super::receiver_state::ReceiverState,
@@ -787,56 +642,12 @@ impl ReceiverTraceLedger {
             gap,
             frame,
             chain: XbxEngineVideoTimelineChainSnapshot {
-                state: trace_chain_state_placeholder(self).to_string(),
-                reason: self.trace_chain_reason(frame_rtp_timestamp),
+                state: "receiving".to_string(),
+                reason: None,
                 chain_break_evidence: self.last_chain_break_evidence.clone(),
                 observed_at_ms: now_ms,
             },
         }
-    }
-
-    fn frame_rtp_has_unrecoverable_reference_ledger(
-        &self,
-        frame_rtp_timestamp: Option<u32>,
-    ) -> bool {
-        frame_rtp_timestamp.is_some_and(|ts| {
-            self.frame_recovery_ledger.get(&ts).is_some_and(|entry| {
-                matches!(
-                    entry.frame_recovery_disposition,
-                    FrameRecoveryDisposition::UnrecoverableReferenceChain
-                )
-            })
-        })
-    }
-
-    fn should_expired_gap_break_chain(
-        &self,
-        frame_rtp_timestamp: Option<u32>,
-        budget_importance: &'static str,
-        evidence_importance: &'static str,
-        close_reason: Option<&'static str>,
-        soft_reentry: bool,
-    ) -> bool {
-        if self.frame_rtp_has_unrecoverable_reference_ledger(frame_rtp_timestamp) {
-            return true;
-        }
-        let media = effective_media_importance_for_gap(
-            budget_importance,
-            evidence_importance,
-            frame_rtp_timestamp,
-        );
-        if matches!(media, "supply" | "anchor") {
-            return true;
-        }
-        if matches!(close_reason, Some(reason) if is_local_low_value_gap_reason(reason)) {
-            return false;
-        }
-        if soft_reentry {
-            return false;
-        }
-        frame_rtp_timestamp.is_none()
-            && media == "disposable"
-            && matches!(close_reason, Some("awaitingRecoveryAnchor"))
     }
 
     fn resolve_gap_snapshot(
@@ -900,38 +711,6 @@ impl ReceiverTraceLedger {
             }
         })
     }
-
-    /// 未传入 `ReceiverState` 时的 trace-only 占位；生产观测由 `snapshot_for_observation_with_receiver_state` 覆盖。
-    fn trace_chain_reason(&self, frame_rtp_timestamp: Option<u32>) -> Option<String> {
-        if let Some(frame_ts) = frame_rtp_timestamp {
-            if let Some(entry) = self.frames.get(&frame_ts) {
-                if let Some(reason) = entry.close_reason {
-                    return Some(reason.to_string());
-                }
-            }
-        }
-        if let Some(reason) = self.timeout_reason {
-            return Some(reason.to_string());
-        }
-        if self.has_active_gap() {
-            return Some("gapRepairInFlight".to_string());
-        }
-        None
-    }
-}
-
-fn trace_chain_state_placeholder(ledger: &ReceiverTraceLedger) -> &'static str {
-    if ledger.has_hard_recovery_gap_risk() {
-        "waiting-keyframe"
-    } else if ledger.has_active_gap() {
-        "repairing"
-    } else {
-        "receiving"
-    }
-}
-
-fn can_soften_expired_delta_reentry(close_reason: Option<&'static str>) -> bool {
-    matches!(close_reason, Some("awaitingRecoveryAnchor"))
 }
 
 fn merge_importance_lane(prev: &'static str, incoming: &'static str) -> &'static str {
@@ -956,29 +735,6 @@ fn effective_media_importance_for_gap(
     } else {
         budget
     }
-}
-
-fn expired_gap_chain_break_evidence(
-    frame_rtp_timestamp: Option<u32>,
-    budget_importance: &'static str,
-    evidence_importance: &'static str,
-    close_reason: Option<&'static str>,
-) -> &'static str {
-    let media = effective_media_importance_for_gap(
-        budget_importance,
-        evidence_importance,
-        frame_rtp_timestamp,
-    );
-    if frame_rtp_timestamp.is_none()
-        && media == "disposable"
-        && matches!(close_reason, Some("awaitingRecoveryAnchor"))
-    {
-        return "anonymousAwaitingKeyframeDelta";
-    }
-    if matches!(media, "supply" | "anchor") {
-        return "boundMediaLikeGapExpired";
-    }
-    "genericGapExpired"
 }
 
 fn classify_gap(
@@ -1054,15 +810,11 @@ mod inline_recovery_tests {
     }
 
     #[test]
-    fn clean_anchor_ingress_does_not_mutate_trace_chain_debt() {
+    fn hard_gap_risk_persists_after_gap_observation() {
         let mut state = ReceiverTraceLedger::new();
-        state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
         state.mark_gap_reorder_pending(&[601], 1.0, Some(90_001), "supply", "supply");
         assert!(state.has_hard_recovery_risk_for_test());
-
-        state.on_clean_anchor_ingress(90_050, 2.0);
-
-        assert!(!state.chain_requires_recovery_anchor());
-        assert!(state.has_hard_recovery_risk_for_test());
+        state.mark_gap_resolved(601, 2.0, Some(90_001), "supply", "supply");
+        assert!(!state.has_hard_recovery_risk_for_test());
     }
 }

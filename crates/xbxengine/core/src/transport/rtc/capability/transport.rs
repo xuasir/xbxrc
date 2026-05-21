@@ -29,7 +29,9 @@ pub trait RtcTransportCapability: Send + Sync {
     fn video_feedback_state(&self) -> VideoFeedbackState;
     fn send_nack_rtcp(&self, payload: &[u8]) -> Result<(), TransportCapabilityError>;
     fn send_keyframe(&self, kind: KeyframeRequestKind) -> KeyframeSendOutcome;
+    #[allow(dead_code)]
     fn send_remb(&self, kbps: u32) -> Result<(), TransportCapabilityError>;
+    #[allow(dead_code)]
     fn latest_rtt_ms(&self) -> Option<u32>;
 }
 

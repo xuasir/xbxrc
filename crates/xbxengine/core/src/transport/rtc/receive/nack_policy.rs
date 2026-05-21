@@ -1,9 +1,12 @@
+//! 解码前 **sample-loss** 路径的 NACK admission 策略与 cloud RTT 窗辅助函数。
+//!
+//! RTP 序号 gap 不走本模块：由 [`super::nack_requester::NackRequester`] +
+//! [`super::timing::ReceiveTimingProfile`] 统一调度，trace 见 [`super::trace_ledger`]。
+
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameValue;
 use crate::transport::rtc::recovery::timing::nack_retry_interval_u64_from_rtt_ms;
 use crate::transport::rtc::stream::nack_contract::{NackObservePolicy, PacketRecoveryDisposition};
-// 传输层 NACK 预算仍以媒体 `FrameValue` 为输入；与恢复合同 `recovery::contract::FrameValue` 的映射集中在
-// `contract::media_frame_value_from_recovery_semantics` 与 `nack.rs` 的 timeline 融合路径，避免在此处并行定义语义。
 
 pub(super) const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
 pub(super) const CLOUD_NACK_RTT_MARGIN_MS: f64 = 80.0;
@@ -159,166 +162,6 @@ pub(super) fn sample_loss_nack_policy(
         first_attempt_survival_window_ms: None,
         repairability_schedule: None,
         admission_deadline_floor_at_ms: None,
-    }
-}
-
-pub(super) fn rtp_window_nack_policy(
-    frame_value: FrameValue,
-    budget_context: FrameBudgetContext,
-    deadline_at_ms: f64,
-    cloud_mode: bool,
-    startup_mode: bool,
-    cloud_rtt_floor_ms: Option<f64>,
-) -> NackObservePolicy {
-    let (frame_importance, frame_is_keyframe, base_retry_interval_ms, burst_count, priority) =
-        transport_policy_tuple(frame_value, budget_context, cloud_mode, startup_mode);
-    let retry_interval_ms = match cloud_rtt_floor_ms {
-        Some(rtt) => nack_retry_interval_u64_from_rtt_ms(rtt).max(base_retry_interval_ms),
-        None => base_retry_interval_ms,
-    };
-    NackObservePolicy {
-        source: "rtpWindow",
-        deadline_at_ms: Some(deadline_at_ms),
-        max_age_ms: Some(cloud_nack_max_age_ms(
-            match (cloud_mode, startup_mode) {
-                (true, true) => 300,
-                (true, false) => 180,
-                (false, _) => 26,
-            },
-            cloud_mode,
-            startup_mode,
-            cloud_rtt_floor_ms,
-        )),
-        retry_interval_ms: Some(if cloud_mode {
-            retry_interval_ms
-        } else {
-            retry_interval_ms.saturating_sub(1).max(4)
-        }),
-        burst_count: Some(burst_count),
-        max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
-            (true, true, "anchor") => 20,
-            (true, true, "supply") => 14,
-            (true, true, _) => 10,
-            (true, false, "anchor") => 14,
-            (true, false, "supply") => 10,
-            (true, false, _) => 6,
-            (false, _, "anchor") => 10,
-            (false, _, "supply") => 6,
-            (false, _, _) => 4,
-        }),
-        frame_rtp_timestamp: None,
-        frame_is_keyframe: Some(frame_is_keyframe),
-        frame_importance,
-        priority,
-        budget_context,
-        estimated_recovery_arrival_ms: None,
-        frame_playout_deadline_at_ms: Some(deadline_at_ms),
-        nack_disposition: PacketRecoveryDisposition::Attempted,
-        frame_unrecoverable_reason: None,
-        max_retry_count_override: None,
-        first_attempt_survival_window_ms: None,
-        repairability_schedule: None,
-        admission_deadline_floor_at_ms: None,
-    }
-}
-
-pub(super) fn rtp_gap_nack_policy(
-    frame_value: FrameValue,
-    budget_context: FrameBudgetContext,
-    deadline_at_ms: f64,
-    cloud_mode: bool,
-    startup_mode: bool,
-    cloud_rtt_floor_ms: Option<f64>,
-) -> NackObservePolicy {
-    let (frame_importance, frame_is_keyframe, base_retry_interval_ms, burst_count, priority) =
-        transport_policy_tuple(frame_value, budget_context, cloud_mode, startup_mode);
-    let retry_interval_ms = match cloud_rtt_floor_ms {
-        Some(rtt) => nack_retry_interval_u64_from_rtt_ms(rtt).max(base_retry_interval_ms),
-        None => base_retry_interval_ms,
-    };
-    NackObservePolicy {
-        source: "rtpGap",
-        deadline_at_ms: Some(deadline_at_ms),
-        max_age_ms: Some(cloud_nack_max_age_ms(
-            match (cloud_mode, startup_mode) {
-                (true, true) => 260,
-                (true, false) => 160,
-                (false, _) => 22,
-            },
-            cloud_mode,
-            startup_mode,
-            cloud_rtt_floor_ms,
-        )),
-        retry_interval_ms: Some(if cloud_mode {
-            retry_interval_ms
-        } else {
-            retry_interval_ms.saturating_sub(1).max(4)
-        }),
-        burst_count: Some(burst_count.saturating_add(1)),
-        max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
-            (true, true, "anchor") => 22,
-            (true, true, "supply") => 16,
-            (true, true, _) => 12,
-            (true, false, "anchor") => 16,
-            (true, false, "supply") => 12,
-            (true, false, _) => 8,
-            (false, _, "anchor") => 12,
-            (false, _, "supply") => 8,
-            (false, _, _) => 4,
-        }),
-        frame_rtp_timestamp: None,
-        frame_is_keyframe: Some(frame_is_keyframe),
-        frame_importance,
-        priority,
-        budget_context,
-        estimated_recovery_arrival_ms: None,
-        frame_playout_deadline_at_ms: Some(deadline_at_ms),
-        nack_disposition: PacketRecoveryDisposition::Attempted,
-        frame_unrecoverable_reason: None,
-        max_retry_count_override: None,
-        first_attempt_survival_window_ms: None,
-        repairability_schedule: None,
-        admission_deadline_floor_at_ms: None,
-    }
-}
-
-fn transport_policy_tuple(
-    frame_value: FrameValue,
-    budget_context: FrameBudgetContext,
-    cloud_mode: bool,
-    startup_mode: bool,
-) -> (&'static str, bool, u64, u16, u8) {
-    let frame_importance = budget_context.recovery_value_tier();
-    let frame_is_keyframe = matches!(frame_importance, "anchor") || frame_value.is_sync_point();
-    let (retry_interval_ms, burst_count) = match (cloud_mode, startup_mode, frame_importance) {
-        (true, true, "anchor") => (30, 8),
-        (true, true, "supply") => (26, 7),
-        (true, true, _) => (22, 6),
-        (true, false, "anchor") => (24, 6),
-        (true, false, "supply") => (20, 5),
-        (true, false, _) => (16, 4),
-        (false, _, "anchor") => (8, 4),
-        (false, _, "supply") => (7, 3),
-        (false, _, _) => (6, 2),
-    };
-    let priority = budget_context.repair_priority(frame_value);
-    (
-        frame_importance,
-        frame_is_keyframe,
-        retry_interval_ms,
-        burst_count,
-        priority,
-    )
-}
-
-/// 将媒体语义标签转换为恢复语义标签
-/// media_type_label (H.264 inspection) -> recovery_label (budget tier)
-pub(super) fn recovery_label_for_media_label(media_label: &'static str) -> &'static str {
-    match media_label {
-        "keyframe" => "anchor",
-        "reference" => "supply",
-        "delta" => "disposable",
-        _ => "disposable",
     }
 }
 

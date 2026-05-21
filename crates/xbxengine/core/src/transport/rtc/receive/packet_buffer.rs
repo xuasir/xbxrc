@@ -6,13 +6,7 @@ const UINT16SIZE_HALF: u16 = 1 << 15;
 #[derive(Debug, Default)]
 pub struct PacketBuffer {
     highest_sequence: Option<u16>,
-    gaps: BTreeMap<u16, GapRecord>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct GapRecord {
-    first_seen_at_ms: f64,
-    last_updated_at_ms: f64,
+    gaps: BTreeMap<u16, ()>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -26,7 +20,7 @@ pub struct SequenceObserveOutcome {
 }
 
 impl PacketBuffer {
-    pub fn observe_sequence(&mut self, sequence: u16, now_ms: f64) -> SequenceObserveOutcome {
+    pub fn observe_sequence(&mut self, sequence: u16, _now_ms: f64) -> SequenceObserveOutcome {
         let mut outcome = SequenceObserveOutcome {
             sequence,
             ..Default::default()
@@ -44,13 +38,7 @@ impl PacketBuffer {
             let mut expected = highest.wrapping_add(1);
             while expected != sequence {
                 if !self.gaps.contains_key(&expected) {
-                    self.gaps.insert(
-                        expected,
-                        GapRecord {
-                            first_seen_at_ms: now_ms,
-                            last_updated_at_ms: now_ms,
-                        },
-                    );
+                    self.gaps.insert(expected, ());
                     outcome.newly_opened_gaps.push(expected);
                 }
                 expected = expected.wrapping_add(1);
@@ -61,13 +49,7 @@ impl PacketBuffer {
         outcome.is_reorder = true;
         outcome.reorder_distance_from_highest = Some(highest.wrapping_sub(sequence));
         if !self.gaps.contains_key(&sequence) {
-            self.gaps.insert(
-                sequence,
-                GapRecord {
-                    first_seen_at_ms: now_ms,
-                    last_updated_at_ms: now_ms,
-                },
-            );
+            self.gaps.insert(sequence, ());
             outcome.newly_opened_gaps.push(sequence);
         }
         outcome
@@ -98,10 +80,6 @@ impl PacketBuffer {
 
     pub fn has_active_gap(&self) -> bool {
         !self.gaps.is_empty()
-    }
-
-    pub fn highest_sequence(&self) -> Option<u16> {
-        self.highest_sequence
     }
 }
 

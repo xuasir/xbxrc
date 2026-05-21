@@ -18,6 +18,7 @@ pub struct NackDeadlineExpiredContext {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransportAdmissionObservation {
+    #[allow(dead_code)]
     AwaitRecoveryKeyframe,
 }
 
@@ -31,10 +32,12 @@ pub enum TransportLossObservation {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransportObservation {
+    #[allow(dead_code)]
     Admission(TransportAdmissionObservation),
     Loss(TransportLossObservation),
     StreamIdleTimeout,
     StreamThinStall,
+    #[allow(dead_code)]
     NackDeadlineExpired(NackDeadlineExpiredContext),
     NackRecoveredLate,
 }

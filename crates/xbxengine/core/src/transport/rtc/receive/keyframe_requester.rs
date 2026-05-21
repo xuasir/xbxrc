@@ -8,7 +8,7 @@ use super::timing::ReceiveTimingProfile;
 
 /// receiver-local PLI/FIR 调度：失败只更新本地退避，不进入全局 recovery。
 pub struct KeyframeRequester {
-    timing: ReceiveTimingProfile,
+    _timing: ReceiveTimingProfile,
     last_pli_at: Option<Instant>,
     consecutive_pli_without_idr: u8,
     pli_retry_interval: Duration,
@@ -18,7 +18,7 @@ pub struct KeyframeRequester {
 impl KeyframeRequester {
     pub fn new(timing: ReceiveTimingProfile) -> Self {
         Self {
-            timing,
+            _timing: timing,
             last_pli_at: None,
             consecutive_pli_without_idr: 0,
             pli_retry_interval: Duration::from_millis(timing.keyframe_fallback_ms / 2),

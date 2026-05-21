@@ -34,6 +34,10 @@ mod ingress_loop_tests;
 #[path = "rtx_sink.test.rs"]
 mod rtx_sink_tests;
 
+#[cfg(test)]
+#[path = "timeline_projection.test.rs"]
+mod timeline_projection_tests;
+
 pub(crate) use core::receiver_state_from_runtime;
 pub(crate) use core_body::ReceiveCoreBody;
 pub(crate) use core_runtime::RtcReceiveCore;

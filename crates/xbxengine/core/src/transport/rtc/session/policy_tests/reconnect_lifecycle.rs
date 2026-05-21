@@ -12,14 +12,17 @@ use crate::transport::rtc::session::actor::SessionPolicyHook;
 use std::sync::{Arc, Mutex};
 
 use super::harness::{
-    assert_recovery_family_hold_semantics, build_snapshot, transport_commands,
-    RecoveryIntegrationHarness,
+    assert_recovery_family_hold_semantics, build_snapshot, seed_pre_first_frame_acquisition_stats,
+    seed_structured_recovery_label, transport_commands, RecoveryIntegrationHarness,
 };
 
 #[test]
 fn reconnect_command_is_throttled_and_re_emitted_during_continuous_recovering() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        seed_structured_recovery_label(&mut stats, "rtcPeerConnectionFailed");
+    }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let mut connection = ConnectionProjection::default();
     let mut recovery = RecoveryProjection::default();
@@ -82,6 +85,7 @@ fn cloud_lifecycle_reconnect_interval_is_more_relaxed_than_non_cloud() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         if let Ok(mut stats) = runtime_stats.lock() {
             stats.session_target_type = session_target_type;
+            seed_structured_recovery_label(&mut stats, "rtcPeerConnectionFailed");
         }
         let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
         let mut connection = ConnectionProjection::default();
@@ -258,37 +262,48 @@ fn disconnected_surface_emits_lifecycle_reconnect_without_waiting_no_progress_ti
 fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
-    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+    if let Ok(mut stats) = runtime_stats.lock() {
+        seed_pre_first_frame_acquisition_stats(&mut stats, "receiverWaitingKeyframe", 100.0);
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let snapshot = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
         "receiverWaitingKeyframe",
         100.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
-    assert!(commands.iter().any(|command| matches!(
-        command,
-        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
-    )));
+    assert!(
+        commands.iter().all(|command| !matches!(
+            command,
+            TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+        )),
+        "session policy 不再下发 PLI/FIR；关键帧由 RtcReceiveCore 本地执行: {commands:?}"
+    );
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let ledger = stats
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .expect("coordinator 合同应写入 recovery decision ledger");
+    assert_eq!(
+        ledger.input_signal, "waitKeyframe:receiverWaitingKeyframe",
+        "fallback 诊断经 map_label 进入 WaitKeyframe，仍应到达 coordinator 并写 ledger"
+    );
+    assert!(
+        matches!(
+            ledger.action_selected.as_str(),
+            "cooldownSuppressed" | "coalesced:keyframeInFlight"
+        ),
+        "unexpected action_selected: {}",
+        ledger.action_selected
+    );
 }
 
 #[test]
-fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
+fn pre_first_frame_bootstrap_missing_sps_records_local_keyframe_probe_in_ledger() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     if let Ok(mut stats) = runtime_stats.lock() {
-        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-        stats.session_phase = Some("priming".to_string());
-        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
-            state: "remoteTrackAttached".to_string(),
-            video_width: Some(1920),
-            video_height: Some(1080),
-            mime_type: Some("video/H264".to_string()),
-            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
-            video_bytes_total: 128_000,
-            video_packet_count_total: 96,
-            audio_bytes_total: 16_000,
-            observed_at_ms: 100.0,
-        });
+        seed_pre_first_frame_acquisition_stats(&mut stats, "bootstrapMissingSps", 100.0);
         stats.latest_video_decode_ok_time_ms = None;
         stats.latest_video_host_present_time_ms = None;
         stats.first_video_packet_arrival_time_ms = Some(10.0);
@@ -300,9 +315,13 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
         100.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
-    assert!(commands.iter().any(
-        |command| matches!(command, TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "bootstrapMissingSps")
-    ));
+    assert!(
+        commands.iter().all(|command| !matches!(
+            command,
+            TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+        )),
+        "PLI/FIR 由接收侧本地 picture recovery 执行，不经 session transport command: {commands:?}"
+    );
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
@@ -313,7 +332,14 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
         ledger.input_signal,
         "receiverWaitingKeyframe:bootstrapMissingSps"
     );
-    assert_eq!(ledger.action_selected, "requestPli");
+    assert!(
+        matches!(
+            ledger.action_selected.as_str(),
+            "cooldownSuppressed" | "coalesced:keyframeInFlight"
+        ),
+        "unexpected action_selected: {}",
+        ledger.action_selected
+    );
 }
 
 #[test]
@@ -321,19 +347,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     if let Ok(mut stats) = runtime_stats.lock() {
-        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-        stats.session_phase = Some("priming".to_string());
-        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
-            state: "remoteTrackAttached".to_string(),
-            video_width: Some(1920),
-            video_height: Some(1080),
-            mime_type: Some("video/H264".to_string()),
-            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
-            video_bytes_total: 128_000,
-            video_packet_count_total: 96,
-            audio_bytes_total: 16_000,
-            observed_at_ms: 100.0,
-        });
+        seed_pre_first_frame_acquisition_stats(&mut stats, "bootstrapMissingSps", 100.0);
         stats.first_video_packet_arrival_time_ms = Some(10.0);
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {

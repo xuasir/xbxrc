@@ -41,10 +41,9 @@ use crate::transport::rtc::recovery::coordinator::{
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::policy::ScenarioPolicyProfileKind;
 use crate::transport::rtc::recovery::runtime_state::{
-    has_fresh_media_output, resolve_recovery_profile, resolve_runtime_recovery_profile,
+    has_fresh_media_output, resolve_recovery_profile,
 };
 use crate::transport::rtc::recovery::startup::SessionPhase;
-use crate::transport::rtc::recovery::timing::resolve_recovery_dynamic_timing;
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use crate::transport::rtc::session::connectivity_reason::{
     map_label_to_escalation_reason, parse_session_phase, resolve_connectivity_fallback_reason,
@@ -67,6 +66,22 @@ use crate::transport::rtc::session::startup_compat::{
     first_frame_acquisition_priority_active, should_hold_pre_first_frame_connected_idle_timeout,
     should_hold_pre_first_frame_display_supply_degraded,
 };
+
+/// 控制面恢复标签：结构化 escalation / owner reason 优先，legacy diagnosis 仅作展示回退。
+fn effective_recovery_control_label(
+    snapshot: &TransportSnapshot,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) -> Option<String> {
+    use crate::transport::rtc::recovery::escalation_label;
+
+    RuntimeStatsSink::read_shared(runtime_stats.as_ref(), |stats| {
+        escalation_label::effective_recovery_control_label(
+            snapshot.recovery.latest_diagnosis_label.as_deref(),
+            stats,
+        )
+    })
+    .flatten()
+}
 use crate::transport::rtc::session::suspect_anchor_gate::{
     recovery_anchor_evidence_trace_code, upgrade_local_supply_suspect_signal_if_ready,
 };
@@ -96,7 +111,6 @@ const RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS: f64 = 1_200.0;
 const RECOVERY_OBSERVATION_KEYFRAME_WINDOW_MS: f64 = 900.0;
 /// receiver-local 等待关键帧诊断链；避免同 epoch 内其它 keyframe/decoder 自愈污染 reconnect 门控。
 const TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS: &str = "receiverWaitingKeyframe";
-const TRANSPORT_AWAIT_CONTINUATION_REFRESH_PACKET_AGE_MS: f64 = 220.0;
 
 fn recovery_decision_ledger_recovery_epoch(
     ledger: &XbxEngineRecoveryDecisionLedgerObservation,
@@ -203,129 +217,6 @@ fn is_transport_await_picture_recovery_episode(
     episode: &XbxEnginePictureRecoveryEpisodeObservation,
 ) -> bool {
     episode.request_reason.as_deref() == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
-}
-
-fn current_transport_await_keyframe_episode(
-    stats: &XbxEngineMediaRuntimeStats,
-) -> Option<XbxEnginePictureRecoveryEpisodeObservation> {
-    stats
-        .recent_keyframe_request_episodes
-        .iter()
-        .chain(stats.latest_keyframe_request_episode.iter())
-        .filter(|episode| {
-            episode.retired_at_ms.is_none() && is_transport_await_picture_recovery_episode(episode)
-        })
-        .max_by(|left, right| {
-            left.first_keyframe_decoded_at_ms
-                .is_some()
-                .cmp(&right.first_keyframe_decoded_at_ms.is_some())
-                .then_with(|| {
-                    left.first_keyframe_packet_at_ms
-                        .is_some()
-                        .cmp(&right.first_keyframe_packet_at_ms.is_some())
-                })
-                .then_with(|| {
-                    left.first_video_packet_at_ms
-                        .is_some()
-                        .cmp(&right.first_video_packet_at_ms.is_some())
-                })
-                .then_with(|| left.sent_at_ms.is_some().cmp(&right.sent_at_ms.is_some()))
-                .then_with(|| left.requested_at_ms.total_cmp(&right.requested_at_ms))
-                .then_with(|| left.episode_id.cmp(&right.episode_id))
-        })
-        .cloned()
-}
-
-/// RFC 2026-05-13：`Stalled` 档释放 `coalesced:keyframeInFlight` 占位，避免 continuation-only 长期挂死。
-fn coalesced_transport_await_should_unlock_for_stall(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    observed_at_ms: f64,
-) -> bool {
-    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let profile = resolve_runtime_recovery_profile(stats);
-        let timing = resolve_recovery_dynamic_timing(stats, profile);
-        if has_current_clean_anchor_from_stats(stats) {
-            return false;
-        }
-        let Some(episode) = current_transport_await_keyframe_episode(stats) else {
-            return false;
-        };
-        let age = (observed_at_ms - episode.requested_at_ms).max(0.0);
-        let unlock_patience_ms = if episode.status == "decoded" {
-            timing.clean_anchor_commit_patience_window_ms
-        } else {
-            timing.decoded_pending_commit_hold_ms
-        };
-        if age < unlock_patience_ms {
-            return false;
-        }
-        let decode_advanced = stats.latest_video_decode_ok_time_ms.is_some_and(|t| {
-            t > episode.requested_at_ms
-                && (observed_at_ms - t).max(0.0)
-                    <= profile.playback_recovered_decode_progress_fresh_ms
-        });
-        let present_advanced = stats.latest_video_host_present_time_ms.is_some_and(|t| {
-            t > episode.requested_at_ms
-                && (observed_at_ms - t).max(0.0) <= profile.playback_recovered_host_present_fresh_ms
-        });
-        if decode_advanced || present_advanced {
-            return false;
-        }
-        let packets_recent = stats.latest_video_packet_arrival_time_ms.is_some_and(|t| {
-            (observed_at_ms - t).max(0.0) <= TRANSPORT_AWAIT_CONTINUATION_REFRESH_PACKET_AGE_MS
-        });
-        !packets_recent || age >= timing.fir_retry_interval_ms
-    })
-    .unwrap_or(false)
-}
-
-fn transport_await_anchor_candidate_stalled(
-    stats: &XbxEngineMediaRuntimeStats,
-    episode: &XbxEnginePictureRecoveryEpisodeObservation,
-    observed_at_ms: f64,
-    freshness_window_ms: f64,
-) -> bool {
-    let continuation_only_anchor_missing = stats
-        .latest_h264_inspection_observation
-        .as_ref()
-        .is_some_and(|inspection| {
-            inspection.bound_episode_id == Some(episode.episode_id)
-                && inspection.observed_at_ms >= episode.requested_at_ms
-                && (observed_at_ms - inspection.observed_at_ms).max(0.0) <= freshness_window_ms
-                && inspection.admission_accepted
-                && inspection.committed_sps_present
-                && inspection.committed_pps_present
-                && inspection.delta_continuation_ready
-                && !inspection.bootstrap_ready
-                && matches!(
-                    inspection.bootstrap_reject_reason.as_deref(),
-                    Some("bootstrapMissingIdr" | "NonIdrVcl")
-                )
-                && inspection.continuation_verdict.as_deref() == Some("receiverLocalContinuation")
-        });
-    if continuation_only_anchor_missing {
-        return false;
-    }
-    let Some(candidate) = stats.latest_anchor_candidate_ledger.as_ref() else {
-        return false;
-    };
-    if candidate.recovery_epoch != stats.transport_recovery_epoch {
-        return false;
-    }
-    if (observed_at_ms - candidate.observed_at_ms).max(0.0) > freshness_window_ms {
-        return false;
-    }
-    if candidate.observed_at_ms < episode.requested_at_ms {
-        return false;
-    }
-    matches!(
-        candidate.source_event.as_str(),
-        "frame-await-recovery-anchor" | "gap-repair-in-flight" | "gap-resolved"
-    ) && matches!(
-        candidate.state,
-        crate::XbxEngineAnchorCandidateState::AwaitingRecovery
-            | crate::XbxEngineAnchorCandidateState::Repaired
-    )
 }
 
 /// 取当前 stats 下最近一条 transport-await keyframe episode 的请求/解码时间（用于 reconnect fallback 门控）。
@@ -969,9 +860,9 @@ impl RtcSessionPolicy {
             snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Disconnected;
         let lifecycle_recovering =
             snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Recovering;
+        let control_label = effective_recovery_control_label(snapshot, &self.runtime_stats);
         let recovering_connectivity_failure = lifecycle_recovering
-            && snapshot.recovery.latest_diagnosis_label.as_deref()
-                == Some("rtcConnectionRecovering")
+            && control_label.as_deref() == Some("rtcConnectionRecovering")
             && self.has_connected_connectivity_failure_evidence(snapshot, observed_at_ms);
         let force_lifecycle_reconnect = recovering_connectivity_failure
             || (!has_media_recovery_surface
@@ -985,9 +876,7 @@ impl RtcSessionPolicy {
             lifecycle_recovering && has_media_recovery_surface && !recovering_connectivity_failure;
         let allow_periodic_lifecycle_reconnect =
             lifecycle_recovering && snapshot.media.frame_count > 0 && !has_media_recovery_surface;
-        let fallback_connectivity_reason = snapshot
-            .recovery
-            .latest_diagnosis_label
+        let fallback_connectivity_reason = control_label
             .as_deref()
             .and_then(resolve_connectivity_fallback_reason);
         let owner_signal = if force_lifecycle_reconnect || allow_periodic_lifecycle_reconnect {
@@ -1038,9 +927,7 @@ impl RtcSessionPolicy {
             if let Some(reason) = fallback_connectivity_reason {
                 RecoveryOwnerSignal {
                     reason,
-                    reason_label: snapshot
-                        .recovery
-                        .latest_diagnosis_label
+                    reason_label: control_label
                         .clone()
                         .unwrap_or_else(|| reason.label().to_string()),
                     observed_at_ms,
@@ -1086,8 +973,7 @@ impl RtcSessionPolicy {
                 self.clear_local_supply_suspect();
                 return None;
             } else {
-                let Some(fallback_label) = snapshot.recovery.latest_diagnosis_label.as_deref()
-                else {
+                let Some(fallback_label) = control_label.as_deref() else {
                     self.clear_local_supply_suspect();
                     return None;
                 };
@@ -1162,7 +1048,7 @@ impl RtcSessionPolicy {
         // intent 路径可能把 transport-await 表面映射成 `WaitKeyframe` 等枚举，但仍携带同一诊断标签；
         // 吸收 stale replay 必须以 snapshot 诊断为准，而不能只看 `owner_signal.reason`。
         let stale_transport_await_diag =
-            snapshot.recovery.latest_diagnosis_label.as_deref() == Some("receiverWaitingKeyframe");
+            control_label.as_deref() == Some("receiverWaitingKeyframe");
         let stale_transport_await_absorb = stale_transport_await_diag
             && self.should_absorb_stale_transport_await_replay(
                 snapshot,
@@ -1533,7 +1419,8 @@ impl RtcSessionPolicy {
         observed_at_ms: f64,
     ) -> bool {
         const STALE_TRANSPORT_AWAIT_REPLAY_MAX_AGE_MS: f64 = 220.0;
-        let transport_await_replay_active = snapshot.recovery.latest_diagnosis_label.as_deref()
+        let replay_control_label = effective_recovery_control_label(snapshot, &self.runtime_stats);
+        let transport_await_replay_active = replay_control_label.as_deref()
             == Some("receiverWaitingKeyframe")
             || diagnosis_label == "receiverWaitingKeyframe";
         if !transport_await_replay_active {
@@ -1689,37 +1576,6 @@ impl RtcSessionPolicy {
             self.runtime_stats.as_ref(),
             self.pre_first_frame_reconnect_fallback_ms(),
         )
-    }
-
-    fn should_reenter_transport_await_local_probe(
-        &self,
-        _snapshot: &TransportSnapshot,
-        _owner_state: VideoSchedulingOwnerState,
-        _proposal: &CoordinatorProposal,
-        _owner_signal: &RecoveryOwnerSignal,
-        _observed_at_ms: f64,
-    ) -> bool {
-        false
-    }
-
-    fn should_refresh_transport_await_continuation_only_pli(
-        &self,
-        _owner_state: VideoSchedulingOwnerState,
-        _proposal: &CoordinatorProposal,
-        _owner_signal: &RecoveryOwnerSignal,
-        _observed_at_ms: f64,
-    ) -> bool {
-        false
-    }
-
-    fn should_upgrade_transport_await_refresh_to_fir(
-        &self,
-        _owner_state: VideoSchedulingOwnerState,
-        _proposal: &CoordinatorProposal,
-        _owner_signal: &RecoveryOwnerSignal,
-        _observed_at_ms: f64,
-    ) -> Option<&'static str> {
-        None
     }
 
     fn should_suppress_adapter_idle_timeout_with_render_slack(

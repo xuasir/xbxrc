@@ -243,17 +243,6 @@ pub(crate) fn publish_recovery_timing_to_stats(
         Some(timing.clean_anchor_commit_patience_window_ms);
 }
 
-pub(crate) fn transport_await_patience_window_ms(
-    episode_status: &str,
-    timing: &RecoveryDynamicTiming,
-) -> f64 {
-    if episode_status == "decoded" {
-        timing.clean_anchor_commit_patience_window_ms
-    } else {
-        timing.continuation_patience_window_ms
-    }
-}
-
 /// RFC：高价值首发 admission deadline 至少覆盖一轮动态 NACK 超时；不超过可选 playout 上限。
 pub(crate) fn merge_nack_admission_deadline_with_dynamic_timeout(
     now_ms: f64,
