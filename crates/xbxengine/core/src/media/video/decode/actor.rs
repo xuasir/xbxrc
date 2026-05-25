@@ -643,6 +643,8 @@ fn run_decode_loop(
 #[derive(Debug)]
 enum PendingDecodedSubmitResult {
     Submitted,
+    /// pacer 队列满时在显示边界丢弃；解码线程继续拉 ingress，不 requeue 阻塞。
+    Coalesced(crate::media::video::types::DecodedFrame),
     Backpressure(crate::media::video::types::DecodedFrame),
     Disconnected(crate::media::video::types::DecodedFrame),
 }
@@ -651,6 +653,7 @@ impl PendingDecodedSubmitResult {
     fn label(&self) -> &'static str {
         match self {
             Self::Submitted => "submitted",
+            Self::Coalesced(_) => "coalesced",
             Self::Backpressure(_) => "backpressure",
             Self::Disconnected(_) => "disconnected",
         }
@@ -703,8 +706,8 @@ where
                 frame.rtp_timestamp,
                 frame.surface.frame_seq,
             );
+            runtime_stats.record_pending_displayed_idr_rtp(frame.rtp_timestamp);
         }
-        let clean_anchor_commit_recovery_epoch = frame.clean_anchor_commit_recovery_epoch;
         let frame_rtp_timestamp = frame.rtp_timestamp;
         let recovery_owner_rtp_timestamp = frame.recovery_owner_rtp_timestamp;
         let frame_seq = frame.surface.frame_seq;
@@ -712,13 +715,10 @@ where
         runtime_stats.update(|stats| {
             stats.latest_observation_label = Some("decodePacerSubmit".to_string());
             stats.latest_observation_summary = Some(format!(
-                "result={} frameSeq={} rtpTimestamp={} cleanAnchorEpoch={} recoveryOwnerRtp={} pendingOutputQueueDepth={} candidateDetail={}",
+                "result={} frameSeq={} rtpTimestamp={} recoveryOwnerRtp={} pendingOutputQueueDepth={} candidateDetail={}",
                 submit_result.label(),
                 frame_seq,
                 frame_rtp_timestamp,
-                clean_anchor_commit_recovery_epoch
-                    .map(|epoch| epoch.to_string())
-                    .unwrap_or_else(|| "-".to_string()),
                 recovery_owner_rtp_timestamp
                     .map(|rtp| rtp.to_string())
                     .unwrap_or_else(|| "-".to_string()),
@@ -730,178 +730,31 @@ where
             ));
         });
         crate::xbx_log_playback_flow!(
-            "[playback-flow][decode] event=pacerSubmit result={} frameSeq={} rtpTimestamp={} cleanAnchorEpoch={} recoveryOwnerRtp={} pendingOutputQueueDepth={}",
+            "[playback-flow][decode] event=pacerSubmit result={} frameSeq={} rtpTimestamp={} recoveryOwnerRtp={} pendingOutputQueueDepth={}",
             submit_result.label(),
             frame_seq,
             frame_rtp_timestamp,
-            clean_anchor_commit_recovery_epoch
-                .map(|epoch| epoch.to_string())
-                .unwrap_or_else(|| "-".to_string()),
             recovery_owner_rtp_timestamp
                 .map(|rtp| rtp.to_string())
                 .unwrap_or_else(|| "-".to_string()),
             decode_state.decoded_frame_queue_len(),
         );
         match submit_result {
-            PendingDecodedSubmitResult::Submitted => {
-                if let Some(recovery_epoch) = clean_anchor_commit_recovery_epoch {
-                    let (
-                        transport_recovery_epoch,
-                        clean_anchor_epoch,
-                        submission_episode_id,
-                        owner_accepts_submission,
-                    ) = runtime_stats
-                        .read(|stats| {
-                            let owner_rtp_timestamp =
-                                recovery_owner_rtp_timestamp.or(Some(frame_rtp_timestamp));
-                            let current_owner_episode = stats
-                                .latest_keyframe_request_episode
-                                .as_ref()
-                                .filter(|episode| {
-                                    episode.request_reason.as_deref()
-                                        == Some("receiverWaitingKeyframe")
-                                });
-                            let inspection_bound_episode_id = stats
-                                .latest_h264_inspection_observation
-                                .as_ref()
-                                .and_then(|inspection| {
-                                    (inspection.frame_rtp_timestamp == Some(frame_rtp_timestamp)
-                                        && inspection.admission_accepted
-                                        && inspection.bound_recovery_epoch
-                                            == Some(stats.transport_recovery_epoch))
-                                    .then_some(inspection.bound_episode_id)
-                                    .flatten()
-                                });
-                            let bound_episode_id = current_owner_episode
-                                .filter(|episode| {
-                                    owner_rtp_timestamp.is_some_and(|owner_rtp_timestamp| {
-                                        episode.response_rtp_timestamp == Some(owner_rtp_timestamp)
-                                            || episode.first_video_packet_rtp_timestamp
-                                                == Some(owner_rtp_timestamp)
-                                    }) || episode.response_rtp_timestamp
-                                        == Some(frame_rtp_timestamp)
-                                        || episode.first_video_packet_rtp_timestamp
-                                            == Some(frame_rtp_timestamp)
-                                })
-                                .map(|episode| episode.episode_id)
-                                .or_else(|| {
-                                    stats.recent_keyframe_request_episodes.iter().find_map(
-                                        |episode| {
-                                            (episode.request_reason.as_deref()
-                                                == Some("receiverWaitingKeyframe")
-                                                && (owner_rtp_timestamp.is_some_and(
-                                                    |owner_rtp_timestamp| {
-                                                        episode.response_rtp_timestamp
-                                                            == Some(owner_rtp_timestamp)
-                                                            || episode
-                                                                .first_video_packet_rtp_timestamp
-                                                                == Some(owner_rtp_timestamp)
-                                                    },
-                                                ) || episode.response_rtp_timestamp
-                                                    == Some(frame_rtp_timestamp)
-                                                    || episode.first_video_packet_rtp_timestamp
-                                                        == Some(frame_rtp_timestamp)))
-                                            .then_some(episode.episode_id)
-                                        },
-                                    )
-                                });
-                            let current_owner_episode_id =
-                                current_owner_episode.map(|episode| episode.episode_id);
-                            (
-                                stats.transport_recovery_epoch,
-                                stats.video_anchor_clean_epoch,
-                                bound_episode_id
-                                    .or(inspection_bound_episode_id)
-                                    .or(current_owner_episode_id),
-                                current_owner_episode_id.is_none()
-                                    || current_owner_episode_id
-                                        == bound_episode_id.or(inspection_bound_episode_id),
-                            )
-                        })
-                        .unwrap_or((0, None, None, false));
-                    let should_commit_clean_anchor = transport_recovery_epoch == recovery_epoch
-                        && clean_anchor_epoch != Some(recovery_epoch)
-                        && submission_episode_id.is_some()
-                        && owner_accepts_submission;
-                    if should_commit_clean_anchor {
-                        runtime_stats.record_anchor_candidate_ledger(
-                            recovery_epoch,
-                            Some(frame_rtp_timestamp),
-                            crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
-                            "chain-clean-anchor-submitted",
-                            None,
-                            now_ms,
-                        );
-                        runtime_stats.record_transport_clean_anchor_submission(
-                            recovery_epoch,
-                            submission_episode_id.unwrap_or_default(),
-                            frame_rtp_timestamp,
-                            now_ms,
-                            "chain-clean-anchor-submitted",
-                        );
-                    } else if transport_recovery_epoch == recovery_epoch
-                        && clean_anchor_epoch != Some(recovery_epoch)
-                        && submission_episode_id.is_none()
-                    {
-                        runtime_stats.record_picture_recovery_blocker(
-                            now_ms,
-                            "media",
-                            "cleanAnchorEpisodeUnbound",
-                            "warning",
-                            Some(frame_rtp_timestamp),
-                            Some(frame_seq),
-                        );
-                    } else if transport_recovery_epoch == recovery_epoch
-                        && clean_anchor_epoch != Some(recovery_epoch)
-                        && !owner_accepts_submission
-                    {
-                        runtime_stats.record_picture_recovery_blocker(
-                            now_ms,
-                            "media",
-                            "cleanAnchorOwnerAdvanced",
-                            "warning",
-                            Some(frame_rtp_timestamp),
-                            Some(frame_seq),
-                        );
-                    } else if transport_recovery_epoch != recovery_epoch
-                        && clean_anchor_epoch != Some(recovery_epoch)
-                    {
-                        runtime_stats.record_picture_recovery_blocker(
-                            now_ms,
-                            "media",
-                            "cleanAnchorCommitEpochAdvanced",
-                            "warning",
-                            Some(frame_rtp_timestamp),
-                            Some(frame_seq),
-                        );
-                    }
-                }
+            PendingDecodedSubmitResult::Submitted => {}
+            PendingDecodedSubmitResult::Coalesced(frame) => {
+                runtime_stats.update(|stats| {
+                    stats.latest_observation_label = Some("decodePacerSubmitCoalesced".to_string());
+                    stats.latest_observation_summary = Some(format!(
+                        "frameSeq={} rtpTimestamp={}",
+                        frame.surface.frame_seq, frame.rtp_timestamp,
+                    ));
+                });
             }
             PendingDecodedSubmitResult::Backpressure(frame) => {
-                if clean_anchor_commit_recovery_epoch.is_some() {
-                    runtime_stats.record_picture_recovery_blocker(
-                        now_ms,
-                        "media",
-                        "cleanAnchorSubmitBackpressure",
-                        "warning",
-                        Some(frame_rtp_timestamp),
-                        Some(frame.surface.frame_seq),
-                    );
-                }
                 decode_state.requeue_decoded_frame_front(frame);
                 return None;
             }
             PendingDecodedSubmitResult::Disconnected(frame) => {
-                if clean_anchor_commit_recovery_epoch.is_some() {
-                    runtime_stats.record_picture_recovery_blocker(
-                        now_ms,
-                        "media",
-                        "cleanAnchorSubmitDisconnected",
-                        "critical",
-                        Some(frame_rtp_timestamp),
-                        Some(frame.surface.frame_seq),
-                    );
-                }
                 return Some(frame);
             }
         }
@@ -916,7 +769,13 @@ fn submit_pending_decoded_output(
     match pacer.submit(frame) {
         Ok(_) => PendingDecodedSubmitResult::Submitted,
         Err(TrySendError::Full(crate::media::video::pacer::actor::PacerMsg::Frame(frame))) => {
-            PendingDecodedSubmitResult::Backpressure(frame)
+            // 显示域队列满：在边界丢弃，不让 decode actor 睡眠等待 pacer。
+            crate::xbx_log_playback_flow!(
+                "[playback-flow][decode] event=pacerSubmit result=coalesced frameSeq={} rtpTimestamp={}",
+                frame.surface.frame_seq,
+                frame.rtp_timestamp,
+            );
+            PendingDecodedSubmitResult::Coalesced(frame)
         }
         Err(TrySendError::Disconnected(crate::media::video::pacer::actor::PacerMsg::Frame(
             frame,
@@ -1352,7 +1211,7 @@ mod tests {
     }
 
     #[test]
-    fn decoded_keyframe_commits_clean_anchor_only_after_decode() {
+    fn decoded_keyframe_records_pending_displayed_idr_after_decode() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1387,18 +1246,7 @@ mod tests {
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(1));
-        let ledger = stats
-            .latest_anchor_candidate_ledger
-            .as_ref()
-            .expect("submitted clean-anchor ledger");
-        assert_eq!(ledger.recovery_epoch, 1);
-        assert_eq!(ledger.frame_rtp_timestamp, Some(1));
-        assert_eq!(
-            ledger.state,
-            XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-        );
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
     }
 
     #[test]
@@ -1460,7 +1308,7 @@ mod tests {
     }
 
     #[test]
-    fn clean_anchor_commit_waits_until_submit_succeeds_after_backpressure() {
+    fn pending_displayed_idr_waits_until_submit_succeeds_after_backpressure() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1503,12 +1351,11 @@ mod tests {
         assert!(second.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(1));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
     }
 
     #[test]
-    fn clean_anchor_commit_does_not_satisfy_new_epoch_after_epoch_advances() {
+    fn pending_displayed_idr_does_not_commit_fresh_anchor_after_epoch_advances() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1527,17 +1374,11 @@ mod tests {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.transport_recovery_epoch, 2);
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, None);
-        let blocker = stats
-            .latest_picture_recovery_blocker_observation
-            .as_ref()
-            .expect("epoch advanced blocker");
-        assert_eq!(blocker.blocker_kind, "cleanAnchorCommitEpochAdvanced");
-        assert_eq!(blocker.gate, "media");
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
     }
 
     #[test]
-    fn clean_anchor_commit_is_not_recorded_when_submit_disconnects() {
+    fn pending_displayed_idr_is_not_recorded_when_submit_disconnects() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1557,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    fn clean_anchor_commit_survives_stale_after_decode_drop() {
+    fn pending_displayed_idr_survives_stale_after_decode_drop() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_and_pts_for_test(
             make_render_frame(1),
@@ -1588,8 +1429,6 @@ mod tests {
             false,
             false,
         );
-        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
-
         let first = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
             PendingDecodedSubmitResult::Submitted
         });
@@ -1598,10 +1437,24 @@ mod tests {
             let stats = runtime_stats.lock().expect("runtime stats lock");
             assert_eq!(stats.video_anchor_clean_epoch, None);
             assert!(stats.latest_anchor_candidate_ledger.is_none());
+            assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
         }
+
+        sink.record_picture_recovery_episode_response_observed(
+            190.0,
+            Some(2),
+            true,
+            "ownerFrameAdvanced",
+            Some(12),
+            None,
+            false,
+            false,
+        );
 
         let mut continuation = make_render_frame(2);
         continuation.recovery_owner_rtp_timestamp = Some(1);
+        continuation.is_keyframe = true;
+        continuation.rtp_timestamp = Some(2);
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(continuation, Some(1));
         let second = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
             PendingDecodedSubmitResult::Submitted
@@ -1610,25 +1463,11 @@ mod tests {
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(2));
-        assert_eq!(
-            stats.latest_clean_anchor_submission_source_event.as_deref(),
-            Some("chain-clean-anchor-submitted")
-        );
-        let ledger = stats
-            .latest_anchor_candidate_ledger
-            .as_ref()
-            .expect("submitted clean-anchor ledger");
-        assert_eq!(ledger.frame_rtp_timestamp, Some(2));
-        assert_eq!(
-            ledger.state,
-            XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-        );
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(2));
     }
 
     #[test]
-    fn clean_anchor_epoch_advance_records_blocker_without_committing() {
+    fn pending_displayed_idr_does_not_commit_when_recovery_epoch_advanced() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1650,16 +1489,11 @@ mod tests {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.transport_recovery_epoch, 2);
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        let blocker = stats
-            .latest_picture_recovery_blocker_observation
-            .as_ref()
-            .expect("epoch advanced blocker");
-        assert_eq!(blocker.blocker_kind, "cleanAnchorCommitEpochAdvanced");
-        assert_eq!(blocker.gate, "media");
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
     }
 
     #[test]
-    fn stale_owner_frame_does_not_submit_clean_anchor_before_new_episode_binds_response() {
+    fn stale_owner_frame_does_not_record_pending_idr_before_new_episode_binds_response() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1703,17 +1537,11 @@ mod tests {
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, None);
-        let blocker = stats
-            .latest_picture_recovery_blocker_observation
-            .as_ref()
-            .expect("owner advanced blocker");
-        assert_eq!(blocker.blocker_kind, "cleanAnchorOwnerAdvanced");
-        assert_eq!(blocker.frame_rtp_timestamp, Some(1));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
-    fn same_episode_owner_advance_keeps_clean_anchor_submission_pending() {
+    fn same_episode_owner_advance_does_not_record_pending_for_stale_idr() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1757,19 +1585,11 @@ mod tests {
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-        assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(1001));
-        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(1));
-        let transition = stats
-            .latest_picture_recovery_transition_observation
-            .as_ref()
-            .expect("clean anchor submission transition");
-        assert_eq!(transition.phase, "CleanAnchorSubmitted");
-        assert_eq!(transition.rtp_timestamp, Some(1));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
-    fn continuation_submission_reuses_h264_bound_episode_when_latest_owner_slot_is_unavailable() {
+    fn continuation_decode_does_not_record_pending_without_matching_idr_episode() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(2), Some(1));
 
@@ -1830,13 +1650,11 @@ mod tests {
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-        assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(1001));
-        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(2));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
-    fn continuation_submission_uses_recovery_owner_rtp_timestamp_when_frame_rtp_drifts() {
+    fn continuation_decode_without_h264_binding_does_not_record_pending_idr() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         let mut frame = make_render_frame(2);
         frame.rtp_timestamp = Some(2);
@@ -1885,16 +1703,14 @@ mod tests {
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-        assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(1001));
-        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(2));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
-    fn clean_anchor_submission_without_bound_episode_records_blocker_instead_of_episode_zero() {
+    fn keyframe_without_bound_episode_still_records_pending_displayed_idr() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         let mut frame = make_render_frame(2);
-        frame.rtp_timestamp = Some(2);
+        frame.is_keyframe = true;
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(frame, Some(1));
 
         let runtime_stats = Arc::new(std::sync::Mutex::new(
@@ -1909,13 +1725,7 @@ mod tests {
 
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.latest_clean_anchor_submission_epoch, None);
-        assert_eq!(stats.latest_clean_anchor_submission_episode_id, None);
-        let blocker = stats
-            .latest_picture_recovery_blocker_observation
-            .as_ref()
-            .expect("clean anchor unbound blocker");
-        assert_eq!(blocker.blocker_kind, "cleanAnchorEpisodeUnbound");
-        assert_eq!(blocker.frame_rtp_timestamp, Some(2));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(2));
+        assert_eq!(stats.video_anchor_clean_epoch, None);
     }
 }

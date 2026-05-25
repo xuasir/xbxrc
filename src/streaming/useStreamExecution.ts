@@ -24,7 +24,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
-import { buildStreamDiagnosticsSnapshot } from './diagnostics'
+import { buildStreamDiagnosticsSnapshot, resetDiagnosticsNoticeLatch } from './diagnostics'
 import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
 import {
   reduceViewState,
@@ -620,6 +620,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   }
 
   async function closeExecution(input?: { navigateBack?: boolean, reason?: string }): Promise<void> {
+    resetDiagnosticsNoticeLatch()
     resetExecutionWarning()
     await recordExecutionTraceEvent('closeExecutionRequested', {
       source: 'stream-execution',
@@ -797,6 +798,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   })
 
   onBeforeUnmount(() => {
+    resetDiagnosticsNoticeLatch()
     resetExecutionWarning()
     runtimeHost.setExperienceMetricsEnabled(false)
     runtimeHost.setBrowserDiagnosticsEnabled(false)

@@ -33,9 +33,46 @@ pub(crate) struct SchedulingDemandSignal {
     pub(crate) pacer_drop_count_total: Option<u64>,
     pub(crate) renderer_submit_count_total: Option<u64>,
     pub(crate) renderer_drop_count_total: Option<u64>,
+    pub(crate) smoothed_present_fps: Option<f64>,
+    pub(crate) smoothed_decode_fps: Option<f64>,
 }
 
+const PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS: f64 = 18.0;
+const PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS: f64 = 14.0;
+const PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP: f64 = 8.0;
+const PRESENT_PIPELINE_PRESENT_AGE_OVER_DECODE_RATIO: f64 = 1.35;
+
 impl SchedulingDemandSignal {
+    /// decode 仍新鲜但 present 明显落后：主瓶颈在显示链，不应再抬传输 anchor 恢复。
+    pub(crate) fn present_pipeline_stressed(&self, thresholds: &DisplaySupplyThresholds) -> bool {
+        if self.host_is_priming_without_present() {
+            return false;
+        }
+        let decode_fresh = self
+            .decode_age_ms
+            .is_some_and(|age| age <= thresholds.degraded_decode_age_ms);
+        if !decode_fresh {
+            return false;
+        }
+        let decode_fps = self.smoothed_decode_fps.unwrap_or(0.0);
+        let present_fps = self.smoothed_present_fps.unwrap_or(0.0);
+        let fps_gap_stressed = self.smoothed_decode_fps.is_some()
+            && self.smoothed_present_fps.is_some()
+            && decode_fps >= PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS
+            && present_fps > 0.0
+            && present_fps <= PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS
+            && (decode_fps - present_fps) >= PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP;
+        let present_lagging = self.smoothed_decode_fps.is_some()
+            && self.smoothed_present_fps.is_some()
+            && self.present_age_ms.zip(self.decode_age_ms).is_some_and(
+                |(present_age, decode_age)| {
+                    present_age >= thresholds.degraded_present_age_ms
+                        && present_age > decode_age * PRESENT_PIPELINE_PRESENT_AGE_OVER_DECODE_RATIO
+                },
+            );
+        fps_gap_stressed || present_lagging
+    }
+
     pub(crate) fn host_is_priming_without_present(&self) -> bool {
         matches!(self.host_cadence_phase.as_deref(), Some("priming"))
             && self.host_display_tick_epoch.unwrap_or_default() > 0
@@ -213,6 +250,18 @@ mod tests {
     }
 
     #[test]
+    fn present_pipeline_stressed_when_decode_fps_outruns_present() {
+        let demand = SchedulingDemandSignal {
+            present_age_ms: Some(40.0),
+            decode_age_ms: Some(20.0),
+            smoothed_present_fps: Some(10.0),
+            smoothed_decode_fps: Some(31.0),
+            ..SchedulingDemandSignal::default()
+        };
+        assert!(demand.present_pipeline_stressed(&cloud_thresholds()));
+    }
+
+    #[test]
     fn high_no_pending_without_age_pressure_is_not_forced() {
         let demand = SchedulingDemandSignal {
             no_pending_pressure_level: Some("high".to_string()),
@@ -230,6 +279,7 @@ mod tests {
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
             renderer_drop_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
         };
         assert_eq!(
             demand.classify_display_supply_state(&cloud_thresholds()),
@@ -255,6 +305,7 @@ mod tests {
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
             renderer_drop_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
         };
         assert_eq!(
             demand.classify_display_supply_state(&cloud_thresholds()),
@@ -280,6 +331,7 @@ mod tests {
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
             renderer_drop_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
         };
 
         assert_eq!(
@@ -310,6 +362,7 @@ mod tests {
             pacer_drop_count_total: Some(3),
             renderer_submit_count_total: Some(1000),
             renderer_drop_count_total: Some(1),
+            ..SchedulingDemandSignal::default()
         };
         assert_eq!(
             demand.classify_display_supply_state(&cloud_thresholds()),
@@ -339,6 +392,7 @@ mod tests {
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
             renderer_drop_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
         };
         assert_eq!(
             demand.critical_signal(&cloud_thresholds()),
@@ -364,6 +418,7 @@ mod tests {
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
             renderer_drop_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
         };
         assert_eq!(
             demand.critical_signal(&cloud_thresholds()),
@@ -389,6 +444,7 @@ mod tests {
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
             renderer_drop_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
         };
         assert_eq!(
             demand.critical_signal(&cloud_thresholds()),

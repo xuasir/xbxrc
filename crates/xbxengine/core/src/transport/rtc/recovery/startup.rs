@@ -6,7 +6,8 @@ use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
 use crate::transport::rtc::recovery::runtime_state::{
-    renderer_shadow_blocks_serviceability, resolve_runtime_recovery_profile,
+    displayed_idr_output_pipeline_active, renderer_shadow_blocks_serviceability,
+    resolve_runtime_recovery_profile,
 };
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -175,11 +176,45 @@ fn resolve_session_phase_from_stats(
     let degraded_output = effective_bitrate > 0.0
         && effective_bitrate < profile.startup_low_quality_recovered_kbps
         && stats.video_present_fps < RECOVERING_PRESENT_FPS;
-    if active_recovery_escalation || stalled_output || degraded_output {
+    if (active_recovery_escalation || stalled_output || degraded_output)
+        && !should_hold_steady_session_phase_during_displayed_idr_serving(stats)
+    {
         SessionPhase::Recovering
     } else {
         SessionPhase::Steady
     }
+}
+
+fn should_hold_steady_session_phase_during_displayed_idr_serving(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> bool {
+    if stats.recovery_displayed_idr_at_ms.is_none() {
+        return false;
+    }
+    let host_steady_cadence = matches!(stats.host_cadence_phase.as_deref(), Some("steady"));
+    let escalation = escalation_structured_label(stats);
+    let waiting_keyframe_escalation = matches!(
+        escalation,
+        Some("receiverWaitingKeyframe" | "ingressWaitKeyframe")
+    );
+    if host_steady_cadence && waiting_keyframe_escalation {
+        return true;
+    }
+    if !displayed_idr_output_pipeline_active(stats, now_ms_f64()) {
+        return false;
+    }
+    matches!(
+        escalation,
+        Some(
+            "receiverWaitingKeyframe"
+                | "ingressWaitKeyframe"
+                | "localSupplySuspect"
+                | "rebuildingSupplySuspect"
+        )
+    ) || matches!(
+        stats.video_owner_state.as_deref(),
+        Some("stable-serving" | "degraded-serving")
+    )
 }
 
 pub fn should_suppress_startup_escalation(
@@ -247,7 +282,7 @@ fn resolve_recovery_profile(stats: &XbxEngineMediaRuntimeStats) -> RecoveryScena
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_startup_recovery_bitrate_kbps, resolve_session_phase_from_stats,
+        extract_startup_recovery_bitrate_kbps, now_ms_f64, resolve_session_phase_from_stats,
         should_fast_reset_startup_recovery, should_suppress_startup_escalation, SessionPhase,
         StartupRecoveryProbe,
     };
@@ -502,6 +537,47 @@ mod tests {
                 Duration::from_secs(2),
             ),
             SessionPhase::Recovering
+        );
+    }
+
+    #[test]
+    fn session_phase_holds_steady_on_waiting_keyframe_when_displayed_idr_and_host_steady_cadence() {
+        let stream_started_at = Instant::now() - Duration::from_secs(5);
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(now_ms_f64());
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.recovery_active_escalation_reason = Some("receiverWaitingKeyframe".to_string());
+        stats.inbound_video_bitrate_kbps = Some(14_000.0);
+        stats.video_present_fps = 18.0;
+        assert_eq!(
+            resolve_session_phase_from_stats(
+                Some(&stats),
+                stream_started_at,
+                Duration::from_secs(2),
+            ),
+            SessionPhase::Steady
+        );
+    }
+
+    #[test]
+    fn session_phase_holds_steady_when_displayed_idr_pipeline_active() {
+        let stream_started_at = Instant::now() - Duration::from_secs(5);
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        let now_ms = now_ms_f64();
+        stats.recovery_displayed_idr_at_ms = Some(now_ms);
+        stats.latest_video_decode_ok_time_ms = Some(now_ms);
+        stats.latest_video_host_present_time_ms = Some(now_ms);
+        stats.video_owner_state = Some("stable-serving".to_string());
+        stats.recovery_active_escalation_reason = Some("receiverWaitingKeyframe".to_string());
+        stats.inbound_video_bitrate_kbps = Some(14_000.0);
+        stats.video_present_fps = 18.0;
+        assert_eq!(
+            resolve_session_phase_from_stats(
+                Some(&stats),
+                stream_started_at,
+                Duration::from_secs(2),
+            ),
+            SessionPhase::Steady
         );
     }
 

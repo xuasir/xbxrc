@@ -67,7 +67,8 @@ export function buildStreamExperienceMetricsViewModel(input: {
     connectedElapsed: connectedElapsed === '' ? undefined : connectedElapsed,
     mediaReadyElapsed: mediaReadyElapsed === '' ? undefined : mediaReadyElapsed,
     relayNotice: diagnostics.isRelayPath,
-    recoveringNotice: diagnostics.isRecovering,
+    recoveringNotice: diagnostics.isRecovering && !diagnostics.isDisplaySupplyLimited,
+    displaySupplyNotice: diagnostics.isDisplaySupplyLimited,
     noVideoNotice: diagnostics.hasNoVideoWarning,
   }
 }

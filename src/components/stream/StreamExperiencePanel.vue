@@ -37,7 +37,10 @@ const notices = computed(() => {
   if (vm.relayNotice) {
     items.push({ id: 'relay', text: t('streamPage.experience.notices.relay') })
   }
-  if (vm.recoveringNotice) {
+  if (vm.displaySupplyNotice) {
+    items.push({ id: 'displaySupply', text: t('streamPage.experience.notices.displaySupplyLimited') })
+  }
+  else if (vm.recoveringNotice) {
     items.push({ id: 'recovering', text: t('streamPage.experience.notices.recovering') })
   }
   if (vm.noVideoNotice) {

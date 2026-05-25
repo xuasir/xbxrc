@@ -68,8 +68,10 @@ mod tests {
         let stats = XbxEngineMediaRuntimeStats {
             transport_recovery_epoch: 1,
             video_anchor_clean_observed_at_ms: Some(1000.0), // 4秒前
+            recovery_displayed_idr_at_ms: Some(1000.0),      // 4秒前
+            recovery_fresh_anchor_recovered_at_ms: Some(1000.0), // 4秒前
             video_anchor_clean_epoch: Some(1),
-            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            video_anchor_clean_source_event: Some("displayed-idr".to_string()),
             ..Default::default()
         };
 
@@ -128,8 +130,10 @@ mod tests {
         );
 
         stats.video_anchor_clean_epoch = Some(9);
-        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("displayed-idr".to_string());
         stats.video_anchor_clean_observed_at_ms = Some(1350.0);
+        stats.recovery_displayed_idr_at_ms = Some(1350.0);
+        stats.recovery_fresh_anchor_recovered_at_ms = Some(1350.0);
         let facts = compute_recovery_facts(&timeline, &stats);
         assert_eq!(
             facts.recovery_progress_level,

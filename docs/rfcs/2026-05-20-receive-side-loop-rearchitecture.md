@@ -427,6 +427,12 @@
 - [x] Step 5: Report 见 [`reports/2026-05-20-receive-side-loop-rearchitecture.md`](../reports/2026-05-20-receive-side-loop-rearchitecture.md)
 - [x] Step 6: `stream/video_source/` 物理迁入 `receive/`；`trace_ledger.rs`；生产路径剔除 cloud NACK admission / pre-decode clean-anchor 状态机；`cargo build -p xbxengine --lib` 绿
 
+## Implementation Notes (WebRTC 三步对齐)
+
+- Date: 2026-05-25 | **解码/bootstrap**：`resolve_inspection_admission` 在 `WaitingKeyframe` / `bootstrapMissingIdr` 下禁止 `receiverLocalContinuation`；decode 侧禁止对 missing-IDR continuation 开窗；硬件 nominal no-output 先 VT reset 再 software fallback。
+- Date: 2026-05-25 | **关键帧恢复**：NACK escalation / blocking admission 强制 PLI（`bootstrapMissingIdr` 不再走 soft）；trace 增加 `keyframeRequestSent`。
+- Date: 2026-05-25 | **呈现合同**：macOS `resolve_video_pipeline_plan` 按 surface 路由——`MacOsCvPixelBuffer` → NativeDirect，CPU 面 → GpuDirect/wgpu。
+
 ## Execution Notes
 
 - Date: 2026-05-20 | Status: Phase B + 目录对齐完成；`ingress_loop`/`nack_maintenance` 仍 >500 行，巨石拆分与分层测试 follow-up

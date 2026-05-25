@@ -540,6 +540,25 @@ pub(super) fn collect_keyframe_episode_candidates(
     out
 }
 
+pub(super) fn host_display_rtp_qualifies_for_fresh_anchor(
+    stats: &XbxEngineMediaRuntimeStats,
+    displayed_rtp: u32,
+) -> bool {
+    if stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|observation| {
+            observation.frame_rtp_timestamp == Some(displayed_rtp)
+                && observation.is_idr
+                && observation.bootstrap_ready
+                && observation.admission_accepted
+        })
+    {
+        return true;
+    }
+    stats.recovery_pending_displayed_idr_rtp == Some(displayed_rtp)
+}
+
 pub(super) fn find_transport_await_episode_candidate_by_id(
     stats: &XbxEngineMediaRuntimeStats,
     episode_id: u64,
@@ -742,9 +761,6 @@ pub(super) fn classify_h264_reject(
     if observation.continuation_verdict.as_deref() == Some("receiverLocalContinuation") {
         return Some("receiverLocalContinuation".to_string());
     }
-    if observation.continuation_verdict.as_deref() == Some("receiverLocalContinuation") {
-        return Some("receiverLocalContinuation".to_string());
-    }
     if !matches!(
         observation.bootstrap_reject_reason.as_deref(),
         Some("bootstrapMissingIdr" | "NonIdrVcl")
@@ -762,6 +778,23 @@ pub(super) fn classify_h264_reject(
     }
     if observation.bound_episode_id.is_some() {
         return Some("remoteNoIdrYet".to_string());
+    }
+    if observation.admission_accepted
+        && observation.delta_continuation_ready
+        && observation.committed_sps_present
+        && observation.committed_pps_present
+    {
+        return Some("receiverLocalContinuation".to_string());
+    }
+    if observation.delta_continuation_ready
+        && observation.committed_sps_present
+        && observation.committed_pps_present
+        && matches!(
+            observation.bootstrap_reject_reason.as_deref(),
+            Some("bootstrapMissingIdr" | "NonIdrVcl")
+        )
+    {
+        return Some("receiverLocalContinuation".to_string());
     }
     Some("outOfRecoveryContextContinuation".to_string())
 }

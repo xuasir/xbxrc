@@ -540,6 +540,11 @@ pub struct XbxEngineMediaRuntimeStats {
     pub recovery_playback_recovered_at_ms: Option<f64>,
     pub recovery_playback_recovered_phase: Option<String>,
     pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
+    /// Host 已显示 bootstrap IDR 的 RTP（控制面 fresh-anchor 唯一事实源之一）。
+    pub recovery_displayed_idr_rtp: Option<u32>,
+    pub recovery_displayed_idr_at_ms: Option<f64>,
+    /// Decode 已产出 config-change IDR、待 host 显示的 RTP 提示。
+    pub recovery_pending_displayed_idr_rtp: Option<u32>,
     pub recovery_hard_fallback_timer_ms: Option<f64>,
     pub recovery_hard_fallback_trigger_reason: Option<String>,
     pub recovery_hard_fallback_timer_reset_reason: Option<String>,
@@ -547,6 +552,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub dynamic_remote_subprofile: Option<String>,
     pub effective_remote_profile_label: Option<String>,
     pub video_owner_state: Option<String>,
+    /// 对外四态合同：starting / playing / waitingKeyframe / displayStalled。
+    pub video_owner_contract_state: Option<String>,
     pub video_owner_reason: Option<String>,
     pub video_owner_source: Option<String>,
     pub video_owner_observed_at_ms: Option<f64>,
@@ -779,6 +786,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             recovery_playback_recovered_at_ms: None,
             recovery_playback_recovered_phase: None,
             recovery_fresh_anchor_recovered_at_ms: None,
+            recovery_displayed_idr_rtp: None,
+            recovery_displayed_idr_at_ms: None,
+            recovery_pending_displayed_idr_rtp: None,
             recovery_hard_fallback_timer_ms: None,
             recovery_hard_fallback_trigger_reason: None,
             recovery_hard_fallback_timer_reset_reason: None,
@@ -786,6 +796,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             dynamic_remote_subprofile: None,
             effective_remote_profile_label: None,
             video_owner_state: None,
+            video_owner_contract_state: None,
             video_owner_reason: None,
             video_owner_source: None,
             video_owner_observed_at_ms: None,

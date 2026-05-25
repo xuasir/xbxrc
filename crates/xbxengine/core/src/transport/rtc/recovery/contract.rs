@@ -324,13 +324,17 @@ pub(crate) fn is_receiver_state_waiting_keyframe(receiver_state: Option<&str>) -
     matches!(receiver_state, Some("waiting-keyframe"))
 }
 
+pub(crate) fn is_receiver_state_repairing(receiver_state: Option<&str>) -> bool {
+    matches!(receiver_state, Some("repairing"))
+}
+
 pub(crate) fn is_ingress_waiting_keyframe(
     receiver_state: Option<&str>,
     chain_state: Option<&str>,
     chain_reason: Option<&str>,
     source_event: Option<&str>,
 ) -> bool {
-    if is_receiver_state_receiving(receiver_state) {
+    if is_receiver_state_receiving(receiver_state) || is_receiver_state_repairing(receiver_state) {
         return false;
     }
     if is_receiver_state_waiting_keyframe(receiver_state) {
@@ -341,7 +345,7 @@ pub(crate) fn is_ingress_waiting_keyframe(
     }
     let probe_event_waiting = is_transport_await_probe_source_event(source_event)
         && !matches!(chain_state, Some("receiving" | "priming"));
-    matches!(chain_state, Some("waiting-keyframe" | "repairing"))
+    matches!(chain_state, Some("waiting-keyframe"))
         || chain_reason.is_some_and(is_transport_await_unresolved_reason)
         || probe_event_waiting
 }
@@ -385,7 +389,7 @@ pub(crate) fn current_clean_anchor_observed_at_ms(
     recovery_epoch: u64,
 ) -> Option<f64> {
     if clean_anchor_epoch == Some(recovery_epoch)
-        && clean_anchor_source_event == Some("chain-clean-anchor-submitted")
+        && clean_anchor_source_event == Some("displayed-idr")
     {
         clean_anchor_observed_at_ms
     } else {
@@ -408,6 +412,30 @@ pub(crate) fn current_clean_anchor_bridge_observed_at_ms(
     }
 }
 
+/// Post-decode 恢复显示事实（host present 单点写入）；控制面读路径统一经此投影。
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RecoveryDisplayFacts {
+    pub displayed_idr_rtp: Option<u32>,
+    pub displayed_idr_at_ms: Option<f64>,
+    pub playback_recovered_at_ms: Option<f64>,
+    pub fresh_anchor_recovered_at_ms: Option<f64>,
+}
+
+impl RecoveryDisplayFacts {
+    pub(crate) fn from_stats(stats: &XbxEngineMediaRuntimeStats) -> Self {
+        Self {
+            displayed_idr_rtp: stats.recovery_displayed_idr_rtp,
+            displayed_idr_at_ms: stats.recovery_displayed_idr_at_ms,
+            playback_recovered_at_ms: stats.recovery_playback_recovered_at_ms,
+            fresh_anchor_recovered_at_ms: stats.recovery_fresh_anchor_recovered_at_ms,
+        }
+    }
+
+    pub(crate) fn has_established_displayed_idr(self) -> bool {
+        self.displayed_idr_at_ms.is_some()
+    }
+}
+
 pub(crate) fn current_clean_anchor_observed_at_ms_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> Option<f64> {
@@ -420,7 +448,40 @@ pub(crate) fn current_clean_anchor_observed_at_ms_from_stats(
 }
 
 pub(crate) fn has_current_clean_anchor_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    current_clean_anchor_observed_at_ms_from_stats(stats).is_some()
+    let display = RecoveryDisplayFacts::from_stats(stats);
+    display.fresh_anchor_recovered_at_ms.is_some() || display.has_established_displayed_idr()
+}
+
+const TRANSPORT_AWAIT_HARD_BOOTSTRAP_FRESH_MS: f64 = 1_500.0;
+
+/// transport-await 硬证据：仅 receiver/inspection/display 事实，不读 keyframe episode terminal。
+pub(crate) fn transport_await_has_hard_bootstrap_evidence_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let Some(inspection) = stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .filter(|inspection| {
+            (now_ms - inspection.observed_at_ms).max(0.0) <= TRANSPORT_AWAIT_HARD_BOOTSTRAP_FRESH_MS
+        })
+    else {
+        return false;
+    };
+    if inspection_has_invalid_recovery_bootstrap(inspection) {
+        return true;
+    }
+    !inspection.bootstrap_ready
+        && matches!(
+            inspection.bootstrap_reject_reason.as_deref(),
+            Some(
+                "bootstrapMissingSps"
+                    | "bootstrapMissingPps"
+                    | "bootstrapInvalidSliceHeader"
+                    | "bootstrapMissingIdr"
+                    | "NonIdrVcl"
+            )
+        )
 }
 
 pub(crate) fn has_current_transport_await_issue_from_observation(
@@ -656,7 +717,9 @@ mod derive_gap_observation_tests {
         stats.transport_recovery_epoch = 7;
         stats.video_anchor_clean_epoch = Some(7);
         stats.video_anchor_clean_observed_at_ms = Some(100.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".into());
+        stats.video_anchor_clean_source_event = Some("displayed-idr".into());
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
         stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
             observation_id: 1,
             source_event: "frame-complete-candidate-decode-feedback-blocked".into(),
@@ -712,7 +775,9 @@ mod derive_gap_observation_tests {
         stats.transport_recovery_epoch = 7;
         stats.video_anchor_clean_epoch = Some(7);
         stats.video_anchor_clean_observed_at_ms = Some(100.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".into());
+        stats.video_anchor_clean_source_event = Some("displayed-idr".into());
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
         stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
             observation_id: 1,
             source_event: "frame-complete-candidate-decode-feedback-blocked".into(),
@@ -860,5 +925,66 @@ mod derive_gap_observation_tests {
         assert!(!recovery_progress_allows_decoder_reset(Some(
             RecoveryProgressLevel::ContinuationSeen
         )));
+    }
+
+    #[test]
+    fn recovery_display_facts_projects_from_stats() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_rtp = Some(77_001);
+        stats.recovery_displayed_idr_at_ms = Some(120.0);
+        stats.recovery_playback_recovered_at_ms = Some(130.0);
+        stats.recovery_fresh_anchor_recovered_at_ms = Some(120.0);
+        let display = RecoveryDisplayFacts::from_stats(&stats);
+        assert_eq!(display.displayed_idr_rtp, Some(77_001));
+        assert!(display.has_established_displayed_idr());
+        assert!(has_current_clean_anchor_from_stats(&stats));
+    }
+
+    #[test]
+    fn transport_await_hard_bootstrap_evidence_uses_non_idr_reject() {
+        let now_ms = 2_000.0;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 41,
+            latest_video_timeline_observation: Some(XbxEngineVideoTimelineObservation {
+                observation_id: 1,
+                source_event: "frame-await-recovery-anchor".into(),
+                gap: None,
+                frame: None,
+                chain: XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".into(),
+                    reason: Some("receiverWaitingKeyframe".into()),
+                    chain_break_evidence: None,
+                    observed_at_ms: now_ms - 8.0,
+                },
+                observed_at_ms: now_ms - 8.0,
+            }),
+            latest_h264_inspection_observation: Some(XbxEngineH264InspectionObservation {
+                observation_id: 2,
+                frame_rtp_timestamp: Some(3_333),
+                nal_types: vec![],
+                nal_count: 0,
+                vcl_nal_count: 0,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: false,
+                sample_width: None,
+                sample_height: None,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("NonIdrVcl".into()),
+                admission_accepted: true,
+                observed_at_ms: now_ms - 6.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(transport_await_has_hard_bootstrap_evidence_from_stats(
+            &stats, now_ms
+        ));
     }
 }

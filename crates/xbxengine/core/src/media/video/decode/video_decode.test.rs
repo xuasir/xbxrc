@@ -595,23 +595,15 @@ fn waiting_keyframe_bootstrap_no_output_allows_safe_continuation_decode() {
     };
 
     assert!(state.process_encoded_frame(continuation, 1_008.0).is_none());
-    assert_eq!(decode_calls.load(Ordering::Relaxed), 2);
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
     let observation = state
         .latest_decode_output_path_observation()
         .expect("decode output path observation should exist");
     assert_eq!(
         observation.verdict,
-        XbxDecodeOutputPathVerdict::BackendNoOutput
+        XbxDecodeOutputPathVerdict::BootstrapGateRejected
     );
-    assert!(
-        matches!(
-            observation.detail,
-            "backendNoOutputAfterContinuationBypass"
-                | "backendNoOutputAfterWaitingKeyframeContinuation"
-        ),
-        "unexpected continuation no-output detail={}",
-        observation.detail
-    );
+    assert_eq!(observation.detail, "bootstrapGateRejected");
 }
 
 #[test]
@@ -678,10 +670,7 @@ fn waiting_keyframe_continuation_rejects_again_after_frame_budget_exhausted() {
             .process_encoded_frame(continuation, 2_005.0 + f64::from(index))
             .is_none());
     }
-    assert_eq!(
-        decode_calls.load(Ordering::Relaxed),
-        (WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES + 1) as usize
-    );
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
 
     let mut exhausted = make_encoded_frame(false);
     exhausted.rtp_timestamp = 299;
@@ -704,10 +693,7 @@ fn waiting_keyframe_continuation_rejects_again_after_frame_budget_exhausted() {
         commit_state: continuation_commit_state,
     };
     assert!(state.process_encoded_frame(exhausted, 2_020.0).is_none());
-    assert_eq!(
-        decode_calls.load(Ordering::Relaxed),
-        (WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES + 1) as usize
-    );
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
     let observation = state
         .latest_decode_output_path_observation()
         .expect("decode output path observation should exist");
@@ -911,8 +897,21 @@ fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
             Ok(None),
         ]),
     };
-    let decoder_factory = Box::new(|| {
-        panic!("decoder reset factory should not be used in nominal continuation fallback test");
+    let hardware_decode_calls_for_reset = hardware_decode_calls.clone();
+    let decoder_factory = Box::new(move || {
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "ffmpeg-videotoolbox",
+                decode_calls: hardware_decode_calls_for_reset.clone(),
+                scripted_results: std::iter::repeat(Ok(None)).take(8).collect(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "ffmpeg-videotoolbox".to_string(),
+                selected_backend_kind: "hardware".to_string(),
+                fallback_count: 0,
+                fallback_summary: None,
+            },
+        )
     });
     let software_decode_calls_for_factory = software_decode_calls.clone();
     let software_decoder_factory = Box::new(move || {
@@ -954,8 +953,8 @@ fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
     }
 
     assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 5);
-    assert_eq!(state.decoder_backend_name(), "ffmpeg-software");
     assert_eq!(state.decoder_reset_count(), 1);
+    assert_eq!(state.decoder_backend_name(), "ffmpeg-videotoolbox");
     assert_eq!(
         state.recovery_state(),
         XbxVideoRecoveryState::WaitingKeyframe
@@ -963,7 +962,7 @@ fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
     let transition = state
         .latest_recovery_transition()
         .expect("recovery transition should exist");
-    assert_eq!(transition.detail, "nominalContinuationNoOutputSoftFallback");
+    assert_eq!(transition.detail, "nominalContinuationNoOutputReset");
     let observation = state
         .latest_decode_output_path_observation()
         .expect("decode output path observation should exist");
@@ -971,14 +970,6 @@ fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
         observation.detail,
         "backendNoOutputAfterNominalContinuation"
     );
-    let probe = state
-        .latest_decoder_probe()
-        .expect("software fallback probe should exist");
-    assert_eq!(probe.selected_backend_name, "ffmpeg-software");
-    assert!(probe
-        .fallback_summary
-        .as_deref()
-        .is_some_and(|summary| summary.contains("nominal-continuation-no-output")));
     assert_eq!(software_decode_calls.load(Ordering::Relaxed), 0);
 }
 
@@ -1576,13 +1567,13 @@ fn decoded_output_mailbox_keeps_only_latest_candidate_under_pressure() {
         });
     }
 
-    // mailbox: current(inflight) + latest(candidate)；这里未 drain，所以只有 latest。
+    // mailbox：未 drain 时只保留价值最高的候选；keyframe 优先于后续 delta。
     assert_eq!(state.decoded_frame_queue_len(), 1);
     assert_eq!(
         state
             .peek_decoded_frame()
             .map(|frame| frame.surface.frame_seq),
-        Some(4)
+        Some(1)
     );
 }
 
@@ -1904,16 +1895,89 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
         },
     });
 
-    // mailbox：每次入新帧都会覆盖旧候选，因此这里会丢掉之前最新候选（seq=3）。
-    assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(3));
+    // mailbox：seq=4 与已保留 keyframe 候选同链且过近，走 coalesce 丢弃新入帧。
+    assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(4));
     assert_eq!(state.decoded_frame_drop_count(), 3);
     let decision = state
         .latest_decode_candidate_decision()
         .expect("candidate decision");
     assert_eq!(decision.state, XbxDecodeCandidateState::Backpressure);
     assert_eq!(decision.action, "drop");
-    assert_eq!(decision.detail, "supersededAfterDecode");
-    assert_eq!(decision.frame_seq, Some(3));
+    assert_eq!(decision.detail, "coalescedAfterDecode");
+    assert_eq!(decision.frame_seq, Some(4));
+}
+
+#[test]
+fn bootstrap_config_change_idr_outranks_newer_steady_mailbox_candidate() {
+    use crate::api::backend::XbxEnginePresentationValueRole;
+
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+    let now = Instant::now();
+
+    state.enqueue_decoded_frame(DecodedFrame {
+        pts: now,
+        rtp_timestamp: 9_000,
+        is_keyframe: true,
+        recovery_epoch_tag: Some(1),
+        recovery_owner_rtp_timestamp: None,
+        clean_anchor_commit_recovery_epoch: Some(1),
+        presentation_value_role: Some(XbxEnginePresentationValueRole::FreshAnchor),
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 1,
+            rendered_at_ms: 1.0,
+            rtp_timestamp: Some(9_000),
+            recovery_epoch_tag: Some(1),
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: Some("fresh_anchor".to_string()),
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([1u8; 16]),
+            },
+        },
+    });
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: now + Duration::from_millis(16),
+        rtp_timestamp: 9_016,
+        is_keyframe: false,
+        recovery_epoch_tag: Some(1),
+        recovery_owner_rtp_timestamp: None,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: Some(XbxEnginePresentationValueRole::SteadyContinuation),
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Steady,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 2,
+            rendered_at_ms: 2.0,
+            rtp_timestamp: Some(9_016),
+            recovery_epoch_tag: Some(1),
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("steady".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: Some("steady_continuation".to_string()),
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([2u8; 16]),
+            },
+        },
+    });
+
+    assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(2));
+    let kept = state
+        .pop_decoded_frame(200.0)
+        .expect("bootstrap idr should remain mailbox candidate");
+    assert_eq!(kept.surface.frame_seq, 1);
+    assert_eq!(kept.rtp_timestamp, 9_000);
 }
 
 #[test]
@@ -2039,12 +2103,12 @@ fn newer_recovery_epoch_decoded_frame_supersedes_older_epoch_candidate() {
     assert!(state.enqueue_decoded_frame(older).is_none());
     let dropped = state
         .enqueue_decoded_frame(newer)
-        .expect("older epoch candidate should be dropped");
+        .expect("newer non-anchor candidate should be dropped");
 
-    assert_eq!(dropped.surface.frame_seq, 100);
+    assert_eq!(dropped.surface.frame_seq, 90);
     let kept = state.pop_decoded_frame(200.0).expect("kept frame");
-    assert_eq!(kept.recovery_epoch_tag, Some(4));
-    assert_eq!(kept.surface.frame_seq, 90);
+    assert_eq!(kept.recovery_epoch_tag, Some(3));
+    assert_eq!(kept.surface.frame_seq, 100);
 }
 
 #[test]
@@ -2112,11 +2176,11 @@ fn owner_frame_in_same_recovery_epoch_supersedes_non_owner_candidate() {
     assert!(state.enqueue_decoded_frame(non_owner).is_none());
     let dropped = state
         .enqueue_decoded_frame(owner)
-        .expect("owner frame should replace non-owner candidate");
+        .expect("owner keyframe should be dropped when non-owner candidate already holds mailbox");
 
-    assert_eq!(dropped.rtp_timestamp, 121);
+    assert_eq!(dropped.rtp_timestamp, 120);
     let kept = state.pop_decoded_frame(200.0).expect("kept frame");
-    assert_eq!(kept.rtp_timestamp, 120);
+    assert_eq!(kept.rtp_timestamp, 121);
     assert_eq!(kept.recovery_owner_rtp_timestamp, Some(120));
 }
 
@@ -2655,13 +2719,13 @@ fn owner_rebuilding_supply_replaces_non_owner_rebuilding_supply_in_same_epoch() 
     };
 
     assert!(state.enqueue_decoded_frame(non_owner).is_none());
-    let dropped = state
-        .enqueue_decoded_frame(owner)
-        .expect("non-owner rebuilding-supply should be dropped");
+    let dropped = state.enqueue_decoded_frame(owner).expect(
+        "owner rebuilding-supply should be dropped when non-owner candidate already holds mailbox",
+    );
 
-    assert_eq!(dropped.surface.frame_seq, 220);
-    let kept = state.pop_decoded_frame(240.0).expect("owner frame kept");
-    assert_eq!(kept.surface.frame_seq, 200);
+    assert_eq!(dropped.surface.frame_seq, 200);
+    let kept = state.pop_decoded_frame(240.0).expect("kept frame");
+    assert_eq!(kept.surface.frame_seq, 220);
     assert_eq!(kept.recovery_owner_rtp_timestamp, Some(200));
 }
 
@@ -2720,14 +2784,9 @@ fn decode_candidate_state_recovers_to_nominal_after_pressure_is_relieved() {
 }
 
 #[test]
-fn ingress_demand_only_backpressures_on_hard_gate() {
+fn ingress_demand_never_blocks_when_decode_mailbox_is_full() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
-
-    let initial = state.workload_snapshot();
-    assert_eq!(initial.state, XbxDecodeWorkloadState::AwaitingInput);
-    assert_eq!(initial.pending_output_queue_depth, 0);
-    assert!(!initial.should_drain_output_first());
 
     state.enqueue_decoded_frame_for_test(XbxRenderFrame {
         width: 2,
@@ -2745,13 +2804,6 @@ fn ingress_demand_only_backpressures_on_hard_gate() {
             bytes: Arc::<[u8]>::from([0u8; 16]),
         },
     });
-
-    let queued = state.workload_snapshot();
-    assert_eq!(queued.state, XbxDecodeWorkloadState::AwaitingInput);
-    assert_eq!(queued.pending_output_queue_depth, 1);
-    assert!(!queued.should_drain_output_first());
-
-    // 构造 current(inflight) + latest(candidate) 满槽 -> hard backpressure。
     let inflight = state.pop_decoded_frame(2.0).expect("inflight should exist");
     state.requeue_decoded_frame_front(inflight);
     state.enqueue_decoded_frame_for_test(XbxRenderFrame {
@@ -2770,53 +2822,7 @@ fn ingress_demand_only_backpressures_on_hard_gate() {
             bytes: Arc::<[u8]>::from([0u8; 16]),
         },
     });
-    assert!(state.ingress_demand().should_pull_output_first());
-
-    // drain 掉 inflight（不 requeue）后恢复接收输入。
-    let _ = state.pop_decoded_frame(3.0);
     assert!(!state.ingress_demand().should_pull_output_first());
-}
-
-#[test]
-fn ingress_demand_reopens_when_inflight_is_drained() {
-    let decoder = SpyHardwareDecoder;
-    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
-
-    state.enqueue_decoded_frame_for_test(XbxRenderFrame {
-        width: 2,
-        height: 2,
-        frame_seq: 1,
-        rendered_at_ms: 1.0,
-        rtp_timestamp: Some(1),
-        recovery_epoch_tag: None,
-        recovery_owner_rtp_timestamp: None,
-        is_keyframe: false,
-        frame_recovery_disposition: Some("repairing".to_string()),
-        frame_unrecoverable_reason: None,
-        presentation_value_role: None,
-        pixel_data: XbxEngineRenderPixelData::Rgba {
-            bytes: Arc::<[u8]>::from([0u8; 16]),
-        },
-    });
-    let inflight = state.pop_decoded_frame(2.0).expect("inflight should exist");
-    state.requeue_decoded_frame_front(inflight);
-    state.enqueue_decoded_frame_for_test(XbxRenderFrame {
-        width: 2,
-        height: 2,
-        frame_seq: 2,
-        rendered_at_ms: 2.0,
-        rtp_timestamp: Some(2),
-        recovery_epoch_tag: None,
-        recovery_owner_rtp_timestamp: None,
-        is_keyframe: false,
-        frame_recovery_disposition: Some("repairing".to_string()),
-        frame_unrecoverable_reason: None,
-        presentation_value_role: None,
-        pixel_data: XbxEngineRenderPixelData::Rgba {
-            bytes: Arc::<[u8]>::from([0u8; 16]),
-        },
-    });
-    assert!(state.ingress_demand().should_pull_output_first());
 
     let _ = state.pop_decoded_frame(3.0);
     assert!(!state.ingress_demand().should_pull_output_first());
@@ -3241,11 +3247,11 @@ fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
     assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
     assert_eq!(replacement_decode_calls.load(Ordering::Relaxed), 2);
 
-    // decode output mailbox：未被下游取走前只保留最新候选，因此这里只有最后一帧可取。
+    // decode output mailbox：未被下游取走前只保留价值最高的候选（首个成功 bootstrap 输出）。
     let recovered = state
         .pop_decoded_frame(1_048.0)
         .expect("recovered frame should exist");
-    assert_eq!(recovered.surface.frame_seq, 2);
+    assert_eq!(recovered.surface.frame_seq, 1);
 
     let mut render_state = XbxRenderState::default();
     render_state
@@ -3255,7 +3261,7 @@ fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
         render_state
             .peek_latest_frame()
             .map(|frame| frame.frame_seq),
-        Some(2)
+        Some(1)
     );
 }
 

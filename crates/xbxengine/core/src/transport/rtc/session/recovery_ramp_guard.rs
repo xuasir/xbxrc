@@ -153,7 +153,9 @@ mod tests {
             transport_recovery_epoch: 3,
             video_anchor_clean_epoch: Some(3),
             video_anchor_clean_observed_at_ms: Some(2_590.0),
-            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            recovery_displayed_idr_at_ms: Some(2_590.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(2_590.0),
+            video_anchor_clean_source_event: Some("displayed-idr".to_string()),
             ..Default::default()
         });
 
@@ -177,7 +179,9 @@ mod tests {
             transport_recovery_epoch: 3,
             video_anchor_clean_epoch: Some(3),
             video_anchor_clean_observed_at_ms: Some(1_000.0),
-            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("displayed-idr".to_string()),
             ..Default::default()
         });
 
@@ -201,7 +205,9 @@ mod tests {
             transport_recovery_epoch: 3,
             video_anchor_clean_epoch: Some(3),
             video_anchor_clean_observed_at_ms: Some(1_000.0),
-            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("displayed-idr".to_string()),
             ..Default::default()
         });
 

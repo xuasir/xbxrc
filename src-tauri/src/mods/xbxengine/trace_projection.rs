@@ -21,7 +21,11 @@ fn retained_old_frame_risk(
     present_age_ms: Option<f64>,
     last_displayed_frame_seq: Option<u64>,
     no_pending_streak: Option<u32>,
+    host_cadence_phase: Option<&str>,
 ) -> bool {
+    if matches!(host_cadence_phase, Some("steady" | "priming")) {
+        return false;
+    }
     displayed_frame_stale(present_age_ms, last_displayed_frame_seq)
         && no_pending_streak.unwrap_or(0) > 0
 }
@@ -53,6 +57,7 @@ pub(super) struct RuntimeTraceObservationState {
     timeline_observation_id: Option<u64>,
     anchor_candidate_observation: Option<(u64, Option<u32>, String, Option<String>, f64)>,
     h264_inspection_trace_signature: Option<(bool, Option<String>, u64)>,
+    h264_idr_trace_signature: Option<(Option<u32>, bool, bool)>,
     picture_recovery_transition_observation_id: Option<u64>,
     picture_recovery_blocker_trace_signature: Option<(String, String, String, u64)>,
     video_ingress_termination_observation_id: Option<u64>,
@@ -111,6 +116,7 @@ pub(super) struct RuntimeTraceObservationState {
     remote_profile_bitrate_band: Option<String>,
     primary_issue_chain: Option<String>,
     recovery_owner_state: Option<String>,
+    recovery_owner_contract_state: Option<String>,
     recovery_owner_reason: Option<String>,
     video_owner_source: Option<String>,
     video_owner_observed_at_ms: Option<f64>,
@@ -148,6 +154,9 @@ pub(super) struct RuntimeTraceObservationState {
     latest_target_remb_summary: Option<String>,
     timeline_chain_state: Option<String>,
     timeline_chain_reason: Option<String>,
+    receiver_state_signature: Option<(String, Option<String>, f64)>,
+    displayed_idr_signature: Option<(Option<u32>, Option<f64>)>,
+    playback_recovered_signature: Option<(Option<f64>, Option<String>)>,
     video_decoder_stalled: Option<bool>,
     video_renderer_stalled: Option<bool>,
     video_track_state_signature: Option<(
@@ -178,6 +187,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
         "latestDecisionSummary": stats.latest_decision_summary,
         "videoOwner": {
             "state": stats.recovery_owner_state,
+            "contractState": stats.recovery_owner_contract_state,
             "reason": stats.recovery_owner_reason,
             "source": stats.video_owner_source,
             "observedAtMs": stats.video_owner_observed_at_ms,
@@ -216,6 +226,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "playbackRecoveredAtMs": stats.recovery_playback_recovered_at_ms,
             "playbackRecoveredPhase": stats.recovery_playback_recovered_phase,
             "freshAnchorRecoveredAtMs": stats.recovery_fresh_anchor_recovered_at_ms,
+            "displayedIdrRtp": stats.recovery_displayed_idr_rtp,
+            "displayedIdrAtMs": stats.recovery_displayed_idr_at_ms,
             "effectiveRttMs": stats.recovery_effective_rtt_ms,
             "timing": {
                 "nackTimeoutMs": stats.recovery_dynamic_nack_timeout_ms,
@@ -241,6 +253,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "chainHealth": stats.chain_health,
             "presentationHealth": stats.presentation_health,
             "videoOwnerState": stats.recovery_owner_state,
+            "videoOwnerContractState": stats.recovery_owner_contract_state,
             "videoOwnerReason": stats.recovery_owner_reason,
             "videoOwnerSource": stats.video_owner_source,
             "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
@@ -346,6 +359,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
                 stats.present_age_ms,
                 stats.last_displayed_frame_seq,
                 stats.host_no_pending_streak,
+                stats.host_cadence_phase.as_deref(),
             ),
             "lastDisplayedFrameSeq": stats.last_displayed_frame_seq,
             "lastDisplayedFrameRtpTimestamp": stats.last_displayed_frame_rtp_timestamp,
@@ -1270,7 +1284,86 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    if let Some(receiver) = stats.latest_video_receiver_observation.as_ref() {
+        let signature = (
+            receiver.receiver_state.clone(),
+            receiver.bootstrap_reject_reason.clone(),
+            receiver.observed_at_ms,
+        );
+        if observation_state.receiver_state_signature.as_ref() != Some(&signature) {
+            observation_state.receiver_state_signature = Some(signature);
+            runtime_trace.record_event(
+                "xbxengine",
+                "receiverStateChanged",
+                session_id,
+                json!({
+                    "receiverState": receiver.receiver_state,
+                    "bootstrapRejectReason": receiver.bootstrap_reject_reason,
+                    "keyframeRequestPending": receiver.keyframe_request_pending,
+                    "observedAtMs": receiver.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    let displayed_idr_signature = (
+        stats.recovery_displayed_idr_rtp,
+        stats.recovery_displayed_idr_at_ms,
+    );
+    if observation_state.displayed_idr_signature.as_ref() != Some(&displayed_idr_signature)
+        && stats.recovery_displayed_idr_at_ms.is_some()
+    {
+        observation_state.displayed_idr_signature = Some(displayed_idr_signature);
+        runtime_trace.record_event(
+            "xbxengine",
+            "displayedIdrObserved",
+            session_id,
+            json!({
+                "rtpTimestamp": stats.recovery_displayed_idr_rtp,
+                "observedAtMs": stats.recovery_displayed_idr_at_ms,
+                "freshAnchorRecoveredAtMs": stats.recovery_fresh_anchor_recovered_at_ms,
+            }),
+        );
+    }
+
+    let playback_recovered_signature = (
+        stats.recovery_playback_recovered_at_ms,
+        stats.recovery_playback_recovered_phase.clone(),
+    );
+    if observation_state.playback_recovered_signature.as_ref()
+        != Some(&playback_recovered_signature)
+        && stats.recovery_playback_recovered_at_ms.is_some()
+    {
+        observation_state.playback_recovered_signature = Some(playback_recovered_signature);
+        runtime_trace.record_event(
+            "xbxengine",
+            "playbackRecovered",
+            session_id,
+            json!({
+                "observedAtMs": stats.recovery_playback_recovered_at_ms,
+                "phase": stats.recovery_playback_recovered_phase,
+                "presentFps": stats.present_fps,
+            }),
+        );
+    }
+
     if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
+        if inspection.is_idr && inspection.admission_accepted {
+            let idr_signature = (
+                inspection.frame_rtp_timestamp,
+                inspection.admission_accepted,
+                inspection.bootstrap_ready,
+            );
+            if observation_state.h264_idr_trace_signature.as_ref() != Some(&idr_signature) {
+                observation_state.h264_idr_trace_signature = Some(idr_signature);
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "h264IdrAccessUnitObserved",
+                    session_id,
+                    h264_inspection_payload(Some(inspection), stats),
+                );
+            }
+        }
         let signature = (
             inspection.admission_accepted,
             inspection.reject_classification.clone(),
@@ -1325,12 +1418,21 @@ pub(super) fn record_runtime_trace_observations(
             .latest_picture_recovery_transition_observation
             .as_ref()
         {
+            let payload = picture_recovery_transition_payload(observation);
             runtime_trace.record_event(
                 "xbxengine",
                 "pictureRecoveryTransition",
                 session_id,
-                picture_recovery_transition_payload(observation),
+                payload.clone(),
             );
+            if observation.phase == "FreshAnchorRecovered" {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "freshAnchorRecovered",
+                    session_id,
+                    payload,
+                );
+            }
         }
     }
 
@@ -1447,6 +1549,7 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.remote_profile_bitrate_band != stats.direct_gaming_bitrate_band
         || observation_state.primary_issue_chain != stats.primary_issue_chain
         || observation_state.recovery_owner_state != stats.recovery_owner_state
+        || observation_state.recovery_owner_contract_state != stats.recovery_owner_contract_state
         || observation_state.recovery_owner_reason != stats.recovery_owner_reason
         || observation_state.video_owner_source != stats.video_owner_source
         || observation_state.unified_lifecycle.as_deref() != Some(resolve_unified_lifecycle(stats))
@@ -1472,6 +1575,8 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.remote_profile_bitrate_band = stats.direct_gaming_bitrate_band.clone();
         observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
         observation_state.recovery_owner_state = stats.recovery_owner_state.clone();
+        observation_state.recovery_owner_contract_state =
+            stats.recovery_owner_contract_state.clone();
         observation_state.recovery_owner_reason = stats.recovery_owner_reason.clone();
         observation_state.video_owner_source = stats.video_owner_source.clone();
         observation_state.video_owner_observed_at_ms = stats.video_owner_observed_at_ms;
@@ -1523,6 +1628,7 @@ pub(super) fn record_runtime_trace_observations(
                 "primaryIssueChain": stats.primary_issue_chain,
                 "latestDecisionSummary": stats.latest_decision_summary,
                 "videoOwnerState": stats.recovery_owner_state,
+                "videoOwnerContractState": stats.recovery_owner_contract_state,
                 "videoOwnerReason": stats.recovery_owner_reason,
                 "videoOwnerSource": stats.video_owner_source,
                 "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
@@ -1680,6 +1786,7 @@ pub(super) fn record_runtime_trace_observations(
                     stats.present_age_ms,
                     stats.last_displayed_frame_seq,
                     stats.host_no_pending_streak,
+                    stats.host_cadence_phase.as_deref(),
                 ),
                 "lastDisplayedFrameSeq": stats.last_displayed_frame_seq,
                 "lastDisplayedFrameRtpTimestamp": stats.last_displayed_frame_rtp_timestamp,
@@ -1869,6 +1976,26 @@ pub(super) fn record_runtime_trace_observations(
             );
         }
         match stats.latest_observation_label.as_deref() {
+            Some("keyframeRequestSent") => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "keyframeRequestSent",
+                    session_id,
+                    json!({
+                        "summary": stats.latest_observation_summary,
+                    }),
+                );
+            }
+            Some("keyframeRequestOutcome") => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "keyframeRequestOutcome",
+                    session_id,
+                    json!({
+                        "summary": stats.latest_observation_summary,
+                    }),
+                );
+            }
             Some("twccReceiverMappingMissing") => {
                 runtime_trace.record_event(
                     "xbxengine",
@@ -2077,7 +2204,6 @@ fn clean_anchor_funnel_event_name(source_event: &str) -> Option<&'static str> {
         "frame-complete-candidate-decode-feedback-blocked" => {
             Some("cleanAnchorCompleteCandidateBlocked")
         }
-        "chain-clean-anchor-submitted" => Some("cleanAnchorSubmitted"),
         _ => None,
     }
 }

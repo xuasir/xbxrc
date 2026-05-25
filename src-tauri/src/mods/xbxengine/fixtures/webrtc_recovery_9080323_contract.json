@@ -1,0 +1,29 @@
+{
+  "scenario": "9080323-class recovery hard convergence",
+  "description": "Automated contract matrix for sessions like 9080323; replace with runtime-logs golden when captured on device.",
+  "validationRows": [
+    {
+      "id": "first-idr-displayed",
+      "expectEvents": ["displayedIdrObserved", "freshAnchorRecovered"],
+      "forbidEvents": ["cleanAnchorSubmitted"]
+    },
+    {
+      "id": "legacy-submission-inert",
+      "forbidEvents": ["cleanAnchorSubmitted"],
+      "note": "chain-clean-anchor-submitted timeline must not project"
+    },
+    {
+      "id": "displayed-idr-survives-present-gap",
+      "requireStats": ["recovery_displayed_idr_at_ms"],
+      "ownerContractMustNot": "invalidate-on-bootstrapMissingIdr"
+    },
+    {
+      "id": "pli-complete-without-legacy-submission",
+      "coordinatorRule": "check_idr_completed uses displayed-idr or receiver receiving"
+    },
+    {
+      "id": "owner-contract-four-state",
+      "contractStates": ["starting", "playing", "waitingKeyframe", "displayStalled"]
+    }
+  ]
+}

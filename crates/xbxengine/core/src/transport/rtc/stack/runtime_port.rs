@@ -203,10 +203,17 @@ impl<'a> RtcStackRuntimePort<'a> {
                         .latest_host_present_time_ms
                         .is_none_or(|present_at_ms| present_at_ms < created_at_ms)
                 });
-        let host_visibility_stalled = metrics
-            .latest_host_present_time_ms
-            .map(|present_at_ms| (now_ms - present_at_ms).max(0.0) >= 1_500.0)
-            .unwrap_or(false)
+        let host_display_hold = metrics.host_frame_present_epoch > 0
+            && metrics.cadence_phase.as_deref() == Some("steady")
+            && metrics.no_pending_streak == 0
+            && metrics
+                .latest_host_present_time_ms
+                .is_some_and(|present_at_ms| (now_ms - present_at_ms).max(0.0) <= 600.0);
+        let host_visibility_stalled = !host_display_hold
+            && metrics
+                .latest_host_present_time_ms
+                .map(|present_at_ms| (now_ms - present_at_ms).max(0.0) >= 1_500.0)
+                .unwrap_or(false)
             && (metrics.host_mailbox_enqueue_count_total > metrics.host_frame_present_epoch
                 || metrics.latest_host_submit_rtp_timestamp
                     != metrics.last_displayed_frame_rtp_timestamp
@@ -250,59 +257,16 @@ impl<'a> RtcStackRuntimePort<'a> {
                 Some(stats.video_renderer_stalled.unwrap_or(false) || host_visibility_stalled);
         });
 
-        if host_visibility_stalled {
-            // Scripted unit tests use small absolute media clocks for `latest_host_present_time_ms`
-            // while `now_ms_f64` is wall time; do not treat that combination as a real host stall for
-            // clean-anchor invalidation (see `host_present_of_serviceable_continuation_*` tests).
-            let present_time_wall_like = metrics
-                .latest_host_present_time_ms
-                .is_some_and(|present_at_ms| present_at_ms >= 1_000_000_000_000.0);
-            let mut awaiting_idr = false;
-            if present_time_wall_like {
-                runtime_stats.update(|stats| {
-                    awaiting_idr = stats
-                        .latest_h264_inspection_observation
-                        .as_ref()
-                        .is_some_and(|observation| {
-                            observation.continuation_verdict.as_deref()
-                                == Some("receiverLocalContinuation")
-                                || observation.bootstrap_reject_reason.as_deref()
-                                    == Some("bootstrapMissingIdr")
-                        });
-                });
-            }
-            if present_time_wall_like && awaiting_idr {
-                let invalidated = runtime_stats
-                    .invalidate_current_transport_clean_anchor(now_ms, "awaitingIdrHostStall");
-                if invalidated {
-                    runtime_stats.record_picture_recovery_blocker(
-                        now_ms,
-                        "hostPresent",
-                        "cleanAnchorInvalidatedAwaitingIdrHostStall",
-                        "warning",
-                        None,
-                        None,
-                    );
-                }
-            }
-        }
-
         if let (Some(observed_at_ms), Some(displayed_rtp_timestamp)) = (
             metrics.last_displayed_at_ms,
             metrics.last_displayed_frame_rtp_timestamp,
         ) {
-            runtime_stats.record_transport_clean_anchor_bridge_with_rtp(
+            runtime_stats.record_displayed_idr_fact(
                 observed_at_ms,
-                "hostVisibleAnchorPending",
-                Some(displayed_rtp_timestamp),
+                displayed_rtp_timestamp,
                 metrics.last_displayed_frame_seq,
             );
-            runtime_stats.record_transport_clean_anchor_with_rtp(
-                observed_at_ms,
-                "chain-clean-anchor-submitted",
-                Some(displayed_rtp_timestamp),
-                metrics.last_displayed_frame_seq,
-            );
+            runtime_stats.record_playback_recovered_fact(observed_at_ms, metrics.present_fps);
         }
     }
 
@@ -513,18 +477,13 @@ mod tests {
                 false,
             );
             sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
-            sink.record_transport_clean_anchor_submission(
-                1,
-                88,
-                77_001,
-                190.0,
-                "chain-clean-anchor-submitted",
-            );
+            sink.record_pending_displayed_idr_rtp(77_001);
         }
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
             host_frame_present_epoch: 1,
+            present_fps: 30.0,
             last_displayed_frame_seq: Some(55),
             last_displayed_frame_rtp_timestamp: Some(77_001),
             last_displayed_at_ms: Some(210.0),
@@ -536,18 +495,14 @@ mod tests {
         assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(210.0));
         assert_eq!(
             snapshot.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-anchor-submitted")
+            Some("displayed-idr")
         );
-        assert_eq!(snapshot.video_anchor_bridge_epoch, Some(1));
-        assert_eq!(snapshot.video_anchor_bridge_observed_at_ms, Some(210.0));
-        assert_eq!(
-            snapshot.video_anchor_bridge_source_event.as_deref(),
-            Some("hostVisibleAnchorPending")
-        );
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(210.0));
     }
 
     #[test]
-    fn host_present_of_serviceable_continuation_commits_clean_anchor_via_bridge() {
+    fn host_present_of_serviceable_continuation_does_not_establish_fresh_anchor_without_idr() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -586,18 +541,13 @@ mod tests {
                 false,
             );
             sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
-            sink.record_transport_clean_anchor_submission(
-                1,
-                88,
-                77_001,
-                190.0,
-                "chain-clean-anchor-submitted",
-            );
+            sink.record_pending_displayed_idr_rtp(77_001);
         }
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
             host_frame_present_epoch: 1,
+            present_fps: 30.0,
             last_displayed_frame_seq: Some(56),
             last_displayed_frame_rtp_timestamp: Some(77_002),
             last_displayed_at_ms: Some(210.0),
@@ -605,21 +555,9 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_bridge_epoch, Some(1));
-        assert_eq!(snapshot.video_anchor_bridge_rtp_timestamp, Some(77_002));
-        assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(210.0));
-        assert_eq!(
-            snapshot.latest_clean_anchor_submission_rtp_timestamp,
-            Some(77_002)
-        );
-        let episode = snapshot
-            .latest_keyframe_request_episode
-            .expect("latest keyframe request episode should exist");
-        assert_eq!(
-            episode.response_verdict.as_deref(),
-            Some("cleanAnchorCommitted")
-        );
+        assert_eq!(snapshot.video_anchor_clean_epoch, None);
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, None);
+        assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(210.0));
     }
 
     #[test]
@@ -662,13 +600,7 @@ mod tests {
                 false,
             );
             sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
-            sink.record_transport_clean_anchor_submission(
-                1,
-                188,
-                77_001,
-                195.0,
-                "chain-clean-anchor-submitted",
-            );
+            sink.record_pending_displayed_idr_rtp(77_001);
             sink.update(|stats| {
                 if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                     episode.response_frame_seq = None;
@@ -695,6 +627,7 @@ mod tests {
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
             host_frame_present_epoch: 1,
+            present_fps: 30.0,
             last_displayed_frame_seq: Some(56),
             last_displayed_frame_rtp_timestamp: Some(77_002),
             last_displayed_at_ms: Some(210.0),
@@ -702,19 +635,8 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_bridge_epoch, Some(1));
-        assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(
-            snapshot.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-anchor-submitted")
-        );
-        let episode = snapshot
-            .latest_keyframe_request_episode
-            .expect("latest keyframe request episode should exist");
-        assert_eq!(
-            episode.response_verdict.as_deref(),
-            Some("cleanAnchorCommitted")
-        );
+        assert_eq!(snapshot.video_anchor_clean_epoch, None);
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, None);
     }
 
     #[test]
@@ -767,18 +689,13 @@ mod tests {
                 false,
                 false,
             );
-            sink.record_transport_clean_anchor_submission(
-                1,
-                188,
-                77_001,
-                195.0,
-                "chain-clean-anchor-submitted",
-            );
+            sink.record_pending_displayed_idr_rtp(77_001);
         }
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
             host_frame_present_epoch: 1,
+            present_fps: 30.0,
             last_displayed_frame_seq: Some(55),
             last_displayed_frame_rtp_timestamp: Some(77_001),
             last_displayed_at_ms: Some(210.0),
@@ -786,20 +703,12 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_bridge_epoch, Some(1));
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(
-            snapshot.latest_clean_anchor_submission_episode_id,
-            Some(188)
-        );
-        assert_eq!(
-            snapshot.latest_clean_anchor_submission_rtp_timestamp,
-            Some(77_001)
-        );
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
     }
 
     #[test]
-    fn host_present_does_not_commit_clean_anchor_after_latest_episode_advances() {
+    fn host_present_without_pending_idr_does_not_establish_fresh_anchor_after_episode_advances() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -838,13 +747,6 @@ mod tests {
                 false,
             );
             sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
-            sink.record_transport_clean_anchor_submission(
-                1,
-                88,
-                77_001,
-                190.0,
-                "chain-clean-anchor-submitted",
-            );
             sink.update(|stats| {
                 stats.latest_keyframe_request_episode =
                     Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
@@ -860,6 +762,7 @@ mod tests {
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
             host_frame_present_epoch: 1,
+            present_fps: 30.0,
             last_displayed_frame_seq: Some(55),
             last_displayed_frame_rtp_timestamp: Some(77_001),
             last_displayed_at_ms: Some(210.0),
@@ -868,7 +771,6 @@ mod tests {
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, None);
-        assert_eq!(snapshot.latest_clean_anchor_submission_episode_id, Some(88));
         let latest_episode = snapshot
             .latest_keyframe_request_episode
             .expect("latest keyframe request episode should exist");
@@ -921,6 +823,7 @@ mod tests {
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
             host_frame_present_epoch: 1,
+            present_fps: 30.0,
             last_displayed_frame_seq: Some(66),
             last_displayed_frame_rtp_timestamp: Some(88_001),
             last_displayed_at_ms: Some(210.0),
@@ -930,8 +833,7 @@ mod tests {
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, None);
         assert_eq!(snapshot.video_anchor_clean_observed_at_ms, None);
-        assert_eq!(snapshot.latest_clean_anchor_submission_epoch, None);
-        assert_eq!(snapshot.latest_clean_anchor_submission_rtp_timestamp, None);
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, None);
         assert_eq!(snapshot.video_anchor_clean_source_event, None);
         let episode = snapshot
             .latest_keyframe_request_episode
@@ -986,7 +888,7 @@ mod tests {
     }
 
     #[test]
-    fn host_visibility_stall_invalidates_stale_clean_anchor_when_codec_is_waiting_idr() {
+    fn host_visibility_stall_preserves_displayed_idr_clean_anchor() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -1010,21 +912,10 @@ mod tests {
             stats.transport_recovery_epoch = 7;
             stats.video_anchor_clean_epoch = Some(7);
             stats.video_anchor_clean_observed_at_ms = Some(now_ms - 2_000.0);
-            stats.video_anchor_clean_source_event =
-                Some("chain-clean-anchor-submitted".to_string());
-            stats.latest_clean_anchor_submission_epoch = Some(7);
-            stats.latest_clean_anchor_submission_rtp_timestamp = Some(77_001);
-            stats.latest_clean_anchor_submission_observed_at_ms = Some(now_ms - 2_010.0);
-            stats.latest_clean_anchor_submission_source_event =
-                Some("chain-clean-anchor-submitted".to_string());
-            stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
-                recovery_epoch: 7,
-                frame_rtp_timestamp: Some(77_001),
-                state: crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
-                source_event: "chain-clean-anchor-submitted".to_string(),
-                failure_reason: None,
-                observed_at_ms: now_ms - 2_010.0,
-            });
+            stats.video_anchor_clean_source_event = Some("displayed-idr".to_string());
+            stats.recovery_displayed_idr_rtp = Some(77_001);
+            stats.recovery_displayed_idr_at_ms = Some(now_ms - 2_000.0);
+            stats.recovery_fresh_anchor_recovered_at_ms = Some(now_ms - 2_000.0);
             stats.latest_keyframe_request_episode =
                 Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                     episode_id: 11,
@@ -1077,24 +968,12 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_clean_epoch, None);
-        assert_eq!(snapshot.latest_clean_anchor_submission_epoch, None);
-        assert!(snapshot.latest_anchor_candidate_ledger.is_none());
-        let episode = snapshot
-            .latest_keyframe_request_episode
-            .expect("latest keyframe episode");
-        assert_eq!(episode.status.as_str(), "decoded");
-        assert_eq!(episode.response_verdict.as_deref(), Some("on-time"));
+        assert_eq!(snapshot.video_anchor_clean_epoch, Some(7));
         assert_eq!(
-            snapshot.latest_observation_label.as_deref(),
-            Some("cleanAnchorInvalidated")
+            snapshot.video_anchor_clean_source_event.as_deref(),
+            Some("displayed-idr")
         );
-        assert_eq!(
-            snapshot
-                .latest_picture_recovery_blocker_observation
-                .as_ref()
-                .map(|observation| observation.blocker_kind.as_str()),
-            Some("cleanAnchorInvalidatedAwaitingIdrHostStall")
-        );
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.video_renderer_stalled, Some(true));
     }
 }

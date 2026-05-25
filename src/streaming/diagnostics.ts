@@ -6,6 +6,23 @@ import type {
 } from './types'
 import { NO_FRAME_RECENT_ACTIVITY_MS } from './no-frame-warning'
 
+const DIAGNOSTICS_NOTICE_LATCH_MS = 2_000
+
+type DiagnosticsNoticeLatchMode = 'displaySupply' | 'recovering'
+
+let diagnosticsNoticeLatch: {
+  mode: DiagnosticsNoticeLatchMode | null
+  untilMs: number
+} = {
+  mode: null,
+  untilMs: 0,
+}
+
+/** 会话结束时清掉通知滞回，避免下一场串台。 */
+export function resetDiagnosticsNoticeLatch(): void {
+  diagnosticsNoticeLatch = { mode: null, untilMs: 0 }
+}
+
 function hasRecentHostPresentFrame(lastHostFrameAtMs: number | null | undefined): boolean {
   if (lastHostFrameAtMs === null || lastHostFrameAtMs === undefined) {
     return false
@@ -150,34 +167,85 @@ export function buildStreamDiagnosticsSnapshot(input: {
         || videoHealth === 'waitingKeyframe'
         || videoHealth === 'stalled'
         || stallKind === 'idleTimeout')
-  const isDisplaySupplyLimited
+  const rawDisplaySupplyLimited
     = videoHealth === 'displaySupplyStarved'
       || recoveryOwnerState === 'supply-starved'
 
+  const supplySideEpisode = isSupplySideRecoveryEpisode(
+    diagnosis,
+    videoHealth,
+    stallKind,
+    recoveryOwnerReason,
+  )
+  const transportAnchorRecovering = isTransportAnchorRecovering(
+    recoveryOwnerState,
+    diagnosis,
+    recoveryOwnerReason,
+    stallKind,
+    input.runtimeSnapshot?.presentationHealth,
+  )
+
   const canonicalRecovering = unifiedLifecyclePhase !== undefined
-    ? isCanonicalRecoveryLifecycle(unifiedLifecyclePhase)
+    ? isCanonicalRecoveryLifecycle(unifiedLifecyclePhase) && !supplySideEpisode
     : (
         input.lifecyclePhase === 'recovering'
         || sessionPhase === 'recovering'
         || sessionPhase === 'observing'
         || sessionPhase === 'local-self-healing'
-        || sessionPhase === 'recovery-eligible'
+        || (sessionPhase === 'recovery-eligible' && !supplySideEpisode)
         || sessionPhase === 'active-recovery'
         || sessionPhase === 'recovery-blocked'
-        || videoHealth === 'recovering'
+        || (videoHealth === 'recovering' && transportAnchorRecovering)
         || isDecoderRecovering(videoDecoderRecoveryState)
-        || isOwnerTransportRecovering(recoveryOwnerState)
+        || transportAnchorRecovering
       )
-  const displaySupplyDominates
-    = isDisplaySupplyLimited
-      && hasVideoOutputEvidence
+  const presentFps = input.runtimeSnapshot?.presentFps ?? 0
+  const decodeFps = input.runtimeSnapshot?.decodeFps ?? 0
+  // 与 runtime trace 一致：recovery-eligible + 有画面但 present≈7–10 时，主瓶颈在显示链而非传输恢复。
+  const decodeAheadOfPresent
+    = hasVideoOutputEvidence
+      && decodeFps >= 18
+      && presentFps > 0
+      && presentFps < 14
+      && decodeFps - presentFps >= 8
+  const chronicDisplaySupplyStress
+    = hasVideoOutputEvidence
+      && presentFps > 0
+      && presentFps < 12
       && (
-        videoRendererStalled === true
-        || stallKind === 'hostPresentStalled'
-        || stallKind === 'displaySupplyStarved'
-        || stallKind === 'displaySupplyCritical'
-        || stallKind === 'displaySupplyDegraded'
+        unifiedLifecyclePhase === 'recovery-eligible'
+        || sessionPhase === 'recovery-eligible'
+        || canonicalRecovering
       )
+  const rawPreferDisplaySupplyOverRecovering
+    = rawDisplaySupplyLimited
+      || chronicDisplaySupplyStress
+      || decodeAheadOfPresent
+      || (supplySideEpisode && hasVideoOutputEvidence)
+  const rawIsRecovering
+    = canonicalRecovering
+      && !rawPreferDisplaySupplyOverRecovering
+      && !(
+        hasServiceablePresentation
+        && (
+          unifiedLifecyclePhase === 'steady'
+          || sessionPhase === 'steady'
+          || unifiedLifecyclePhase === 'recovery-eligible'
+          || sessionPhase === 'recovery-eligible'
+        )
+      )
+  const latchedNotice = resolveLatchedDiagnosticsNotice({
+    preferDisplaySupply: rawPreferDisplaySupplyOverRecovering,
+    isRecovering: rawIsRecovering,
+    transportAnchorRecovering,
+  })
+  const preferDisplaySupplyOverRecovering = latchedNotice.preferDisplaySupply
+  const isDisplaySupplyLimited
+    = rawDisplaySupplyLimited
+      || (preferDisplaySupplyOverRecovering && hasVideoOutputEvidence)
+  const displaySupplyDominates
+    = preferDisplaySupplyOverRecovering
+      && hasVideoOutputEvidence
   const stablePresentationSuppressesRecovery
     = hasServiceablePresentation
       && (
@@ -185,10 +253,18 @@ export function buildStreamDiagnosticsSnapshot(input: {
         || sessionPhase === 'steady'
         || unifiedLifecyclePhase === 'recovery-eligible'
         || sessionPhase === 'recovery-eligible'
+        || (
+          (sessionPhase === 'recovering' || unifiedLifecyclePhase === 'active-recovery')
+          && isDisplayedIdrServingRelease(
+            input.runtimeSnapshot?.presentationHealth,
+            recoveryOwnerState,
+            diagnosis,
+            recoveryOwnerReason,
+          )
+        )
       )
   const isRecovering
-    = canonicalRecovering
-      && !displaySupplyDominates
+    = latchedNotice.isRecovering
       && !stablePresentationSuppressesRecovery
   const isActive = unifiedLifecyclePhase !== undefined
     ? isCanonicalActiveLifecycle(unifiedLifecyclePhase)
@@ -518,16 +594,141 @@ function resolveRecoveryInputProfile(snapshot: StreamPerformanceSnapshot | null)
   return undefined
 }
 
-/** 仅将「传输/锚点/启动」类 owner 视作恢复中；supply-starved 归为显示供给，不在此列 */
-function isOwnerTransportRecovering(ownerState?: string): boolean {
+/** 显示供给/宿主 present 类 episode：不算传输恢复，避免「恢复中」遮罩卡死 */
+function resolveLatchedDiagnosticsNotice(input: {
+  preferDisplaySupply: boolean
+  isRecovering: boolean
+  transportAnchorRecovering: boolean
+}): { preferDisplaySupply: boolean, isRecovering: boolean } {
+  const now = Date.now()
+  let targetMode: DiagnosticsNoticeLatchMode | null = null
+  if (input.preferDisplaySupply) {
+    targetMode = 'displaySupply'
+  }
+  else if (input.isRecovering) {
+    targetMode = 'recovering'
+  }
+
+  if (diagnosticsNoticeLatch.mode !== null && now < diagnosticsNoticeLatch.untilMs) {
+    if (
+      targetMode === 'recovering'
+      && diagnosticsNoticeLatch.mode === 'displaySupply'
+      && !input.transportAnchorRecovering
+    ) {
+      return { preferDisplaySupply: true, isRecovering: false }
+    }
+    if (
+      targetMode === 'displaySupply'
+      && diagnosticsNoticeLatch.mode === 'recovering'
+      && input.transportAnchorRecovering
+    ) {
+      return { preferDisplaySupply: false, isRecovering: true }
+    }
+    if (targetMode === null) {
+      return {
+        preferDisplaySupply: diagnosticsNoticeLatch.mode === 'displaySupply',
+        isRecovering: diagnosticsNoticeLatch.mode === 'recovering',
+      }
+    }
+  }
+
+  if (targetMode !== null) {
+    diagnosticsNoticeLatch = {
+      mode: targetMode,
+      untilMs: now + DIAGNOSTICS_NOTICE_LATCH_MS,
+    }
+  }
+  else {
+    diagnosticsNoticeLatch = { mode: null, untilMs: 0 }
+  }
+  return {
+    preferDisplaySupply: input.preferDisplaySupply,
+    isRecovering: input.isRecovering,
+  }
+}
+
+function isSupplySideRecoveryEpisode(
+  diagnosis?: string,
+  videoHealth?: string,
+  stallKind?: string,
+  ownerReason?: string,
+): boolean {
+  if (
+    diagnosis === 'supplyStarved'
+    || diagnosis === 'displaySupplyCritical'
+    || diagnosis === 'displaySupplyDegraded'
+    || diagnosis === 'hostPresentStalled'
+    || diagnosis === 'rebuildingSupplySuspect'
+  ) {
+    return true
+  }
+  if (videoHealth === 'displaySupplyStarved' || videoHealth === 'hostPresentStalled') {
+    return true
+  }
+  if (ownerReason === 'degradedSteady') {
+    return true
+  }
+  if (
+    stallKind === 'displaySupplyStarved'
+    || stallKind === 'displaySupplyCritical'
+    || stallKind === 'displaySupplyDegraded'
+    || stallKind === 'hostPresentStalled'
+  ) {
+    return true
+  }
+  return ownerReason === 'supplyStarved'
+    || ownerReason === 'displaySupplyCritical'
+    || ownerReason === 'displaySupplyDegraded'
+    || ownerReason === 'hostPresentStalled'
+    || ownerReason === 'rebuildingSupplySuspect'
+}
+
+/**
+ * 仅「真·等关键帧 / 启动锚点」算传输恢复；rebuilding-supply + rebuildingSupplySuspect 不算。
+ */
+function isDisplayedIdrServingRelease(
+  presentationHealth?: string,
+  recoveryOwnerState?: string,
+  diagnosis?: string,
+  recoveryOwnerReason?: string,
+): boolean {
+  if (presentationHealth?.trim().toLowerCase() !== 'healthy') {
+    return false
+  }
+  if (recoveryOwnerState?.trim().toLowerCase() !== 'rebuilding-supply') {
+    return false
+  }
+  return diagnosis === 'receiverWaitingKeyframe'
+    || recoveryOwnerReason === 'receiverWaitingKeyframe'
+}
+
+function isTransportAnchorRecovering(
+  ownerState?: string,
+  diagnosis?: string,
+  ownerReason?: string,
+  stallKind?: string,
+  presentationHealth?: string,
+): boolean {
   if (ownerState === undefined || ownerState.trim() === '') {
     return false
   }
   const normalized = ownerState.toLowerCase().replaceAll('-', '')
-  if (normalized === 'stableserving' || normalized === 'supplystarved') {
+  if (
+    normalized === 'stableserving'
+    || normalized === 'supplystarved'
+    || normalized === 'degradedserving'
+  ) {
     return false
   }
-  return true
+  if (normalized === 'rebuildingsupply') {
+    if (isDisplayedIdrServingRelease(presentationHealth, ownerState, diagnosis, ownerReason)) {
+      return false
+    }
+    return diagnosis === 'receiverWaitingKeyframe'
+      || ownerReason === 'receiverWaitingKeyframe'
+      || stallKind === 'waitingKeyframe'
+  }
+  return normalized === 'seekinganchor' || normalized === 'priming'
 }
 
 function isDecoderRecovering(state?: string): boolean {

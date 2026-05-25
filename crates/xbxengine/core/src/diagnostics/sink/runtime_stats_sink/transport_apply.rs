@@ -23,6 +23,9 @@ impl RuntimeStatsSink {
         stats.recovery_playback_recovered_at_ms = None;
         stats.recovery_playback_recovered_phase = None;
         stats.recovery_fresh_anchor_recovered_at_ms = None;
+        stats.recovery_displayed_idr_rtp = None;
+        stats.recovery_displayed_idr_at_ms = None;
+        stats.recovery_pending_displayed_idr_rtp = None;
         Self::apply_clear_transport_clean_anchor(stats);
         stats.keyframe_consecutive_sent_failures = 0;
         stats.keyframe_sent_failure_last_counted_episode_id = None;
@@ -42,6 +45,9 @@ impl RuntimeStatsSink {
         stats.recovery_playback_recovered_at_ms = None;
         stats.recovery_playback_recovered_phase = None;
         stats.recovery_fresh_anchor_recovered_at_ms = None;
+        stats.recovery_displayed_idr_rtp = None;
+        stats.recovery_displayed_idr_at_ms = None;
+        stats.recovery_pending_displayed_idr_rtp = None;
         Self::apply_clear_transport_clean_anchor(stats);
         stats.keyframe_consecutive_sent_failures = 0;
         stats.keyframe_sent_failure_last_counted_episode_id = None;
@@ -75,14 +81,7 @@ impl RuntimeStatsSink {
         let transport_recovery_epoch = stats.transport_recovery_epoch;
         let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
         let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
-        let submission_episode_id = stats.latest_clean_anchor_submission_episode_id;
-        if let Some(episode) = stats
-            .latest_keyframe_request_episode
-            .as_mut()
-            .filter(|episode| {
-                submission_episode_id.is_none_or(|episode_id| episode.episode_id == episode_id)
-            })
-        {
+        if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
             episode.status = "succeeded".to_string();
             episode.response_verdict = Some("cleanAnchorCommitted".to_string());
             episode.status_detail = None;
@@ -134,6 +133,10 @@ impl RuntimeStatsSink {
         stats.video_anchor_bridge_observed_at_ms = None;
         stats.video_anchor_bridge_source_event = None;
         stats.video_anchor_bridge_rtp_timestamp = None;
+        stats.recovery_displayed_idr_rtp = None;
+        stats.recovery_displayed_idr_at_ms = None;
+        stats.recovery_pending_displayed_idr_rtp = None;
+        stats.recovery_fresh_anchor_recovered_at_ms = None;
     }
 
     pub(super) fn apply_invalidate_current_transport_clean_anchor(

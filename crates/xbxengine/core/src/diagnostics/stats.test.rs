@@ -49,6 +49,26 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
 }
 
 #[test]
+fn panel_fps_prefers_present_then_decode_over_legacy_frame_fps() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.latest_video_frame = Some(crate::XbxEngineVideoFrameStats {
+        width: 1920,
+        height: 1080,
+        frame_seq: 1,
+        fps: 0.0,
+        rendered_at_ms: 0.0,
+    });
+    stats.video_present_fps = 28.5;
+    stats.video_decode_fps = 31.0;
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert!((dto.fps - 28.5).abs() < f64::EPSILON);
+
+    stats.video_present_fps = 0.0;
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert!((dto.fps - 31.0).abs() < f64::EPSILON);
+}
+
+#[test]
 fn stats_project_presentation_milestone_and_elapsed_ms() {
     let mut snapshot = test_snapshot();
     snapshot.presentation_milestone = Some(XbxEnginePresentationMilestoneDto::MediaReady);

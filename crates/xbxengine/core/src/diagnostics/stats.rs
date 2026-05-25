@@ -16,6 +16,23 @@ use crate::{
     XbxEngineRuntimeSnapshot, XbxEngineVideoIngressTerminationObservation,
 };
 
+fn resolve_panel_fps(stats: &XbxEngineMediaRuntimeStats) -> f64 {
+    if stats.video_present_fps > 0.0 {
+        return stats.video_present_fps;
+    }
+    if stats.video_decode_fps > 0.0 {
+        return stats.video_decode_fps;
+    }
+    if stats.inbound_video_frame_rate_fps > 0.0 {
+        return stats.inbound_video_frame_rate_fps;
+    }
+    stats
+        .latest_video_frame
+        .as_ref()
+        .map(|frame| frame.fps)
+        .unwrap_or(0.0)
+}
+
 fn keyframe_request_episode_to_protocol_dto(
     episode: &XbxEngineKeyframeRequestEpisodeObservation,
 ) -> xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto {
@@ -128,6 +145,19 @@ fn should_project_recent_nack_owner_fallback(
         source: Some("nack".to_string()),
         observed_at_ms: Some(nack_obs.observed_at_ms),
     })
+}
+
+fn map_internal_owner_state_to_contract_state(internal_state: &str) -> Option<String> {
+    Some(
+        match internal_state {
+            "stable-serving" | "degraded-serving" => "playing",
+            "rebuilding-supply" => "waitingKeyframe",
+            "supply-starved" => "displayStalled",
+            "seeking-anchor" | "priming" => "starting",
+            _ => return None,
+        }
+        .to_string(),
+    )
 }
 
 fn project_video_owner_contract(
@@ -693,10 +723,7 @@ pub fn build_xbxengine_stats(
             })
         })
         .unwrap_or_default();
-    let fps = runtime_stats
-        .and_then(|stats| stats.latest_video_frame.as_ref())
-        .map(|frame| frame.fps)
-        .unwrap_or_default();
+    let fps = runtime_stats.map(resolve_panel_fps).unwrap_or_default();
     let packet_loss = runtime_stats
         .map(|stats| format!("{:.2}%", stats.inbound_video_loss_ratio_5s * 100.0))
         .unwrap_or_default();
@@ -824,6 +851,13 @@ pub fn build_xbxengine_stats(
         runtime_stats.and_then(|stats| stats.transport_policy_profile.clone());
     let remote_profile_dynamic = runtime_remote_profile.dynamic;
     let recovery_owner_state = video_owner.map(|owner| owner.state.clone());
+    let recovery_owner_contract_state = runtime_stats
+        .and_then(|stats| stats.video_owner_contract_state.clone())
+        .or_else(|| {
+            video_owner
+                .as_ref()
+                .and_then(|owner| map_internal_owner_state_to_contract_state(owner.state.as_str()))
+        });
     let recovery_owner_reason = video_owner.and_then(|owner| owner.reason.clone());
 
     XbxEngineStatsDto {
@@ -854,6 +888,10 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.recovery_playback_recovered_phase.clone()),
         recovery_fresh_anchor_recovered_at_ms: runtime_stats
             .and_then(|stats| stats.recovery_fresh_anchor_recovered_at_ms),
+        recovery_displayed_idr_rtp: runtime_stats
+            .and_then(|stats| stats.recovery_displayed_idr_rtp),
+        recovery_displayed_idr_at_ms: runtime_stats
+            .and_then(|stats| stats.recovery_displayed_idr_at_ms),
         recovery_effective_rtt_ms: runtime_stats.and_then(|stats| stats.recovery_effective_rtt_ms),
         recovery_dynamic_nack_timeout_ms: runtime_stats
             .and_then(|stats| stats.recovery_dynamic_nack_timeout_ms),
@@ -886,6 +924,7 @@ pub fn build_xbxengine_stats(
         direct_gaming_bitrate_band: runtime_stats
             .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
         recovery_owner_state,
+        recovery_owner_contract_state,
         recovery_owner_reason,
         video_owner_source: video_owner.and_then(|owner| owner.source.clone()),
         video_owner_observed_at_ms: video_owner.and_then(|owner| owner.observed_at_ms),

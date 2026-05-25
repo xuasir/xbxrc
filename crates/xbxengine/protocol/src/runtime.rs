@@ -755,6 +755,10 @@ pub struct XbxEngineStatsDto {
     #[serde(default)]
     pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
     #[serde(default)]
+    pub recovery_displayed_idr_rtp: Option<u32>,
+    #[serde(default)]
+    pub recovery_displayed_idr_at_ms: Option<f64>,
+    #[serde(default)]
     pub recovery_effective_rtt_ms: Option<f64>,
     #[serde(default)]
     pub recovery_dynamic_nack_timeout_ms: Option<f64>,
@@ -786,6 +790,8 @@ pub struct XbxEngineStatsDto {
     pub recovery_nack_retry_suppressed_reason: Option<String>,
     pub direct_gaming_bitrate_band: Option<String>,
     pub recovery_owner_state: Option<String>,
+    #[serde(default)]
+    pub recovery_owner_contract_state: Option<String>,
     pub recovery_owner_reason: Option<String>,
     pub video_owner_source: Option<String>,
     pub video_owner_observed_at_ms: Option<f64>,

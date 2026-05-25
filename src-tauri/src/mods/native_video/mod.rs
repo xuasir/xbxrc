@@ -133,6 +133,7 @@ fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
         // 高频阶段在 present/pre-present 主链上会逐帧触发，按窗口采样降级。
         "hostMailboxIdle"
         | "hostMailboxRetainedDisplayed"
+        | "hostMailboxTakeDecision"
         | "hostMailboxAccepted"
         | "prepare_sample_ready"
         | "hostFramePresented"
@@ -337,14 +338,23 @@ impl NativeVideoRegistry {
         self.viewports.remove(viewport_id);
     }
 
-    /// Host present 停滞自愈：仅拆掉 presenter，保留 viewport 元数据，下一帧 `present_frame` 会重建。
+    /// Host present 停滞自愈：优先重置 presenter 邮箱；wgpu 保留 host view/renderer，下一帧继续 present。
     pub fn reset_presenter_for_host_stall_recovery(&mut self, viewport_id: &str) {
-        if let Some(mut presenter) = self.presenters.remove(viewport_id) {
-            presenter.detach();
+        let soft_reset = self
+            .presenters
+            .get_mut(viewport_id)
+            .is_some_and(|presenter| presenter.reset_mailbox_for_host_stall_recovery());
+        if !soft_reset {
+            if let Some(mut presenter) = self.presenters.remove(viewport_id) {
+                presenter.detach();
+            }
         }
         record_native_video_trace(
             "presenterResetForHostStall",
-            serde_json::json!({ "viewportId": viewport_id }),
+            serde_json::json!({
+                "viewportId": viewport_id,
+                "softReset": soft_reset,
+            }),
         );
     }
 
@@ -874,7 +884,7 @@ pub(super) fn run_wgpu_render_tick(
         }
 
         let now_ms = now_ms_f64();
-        let take_outcome = {
+        let (take_outcome, take_slot_diag, take_telemetry_diag) = {
             let Ok(mut telemetry) = telemetry.lock() else {
                 return;
             };
@@ -885,8 +895,34 @@ pub(super) fn run_wgpu_render_tick(
             if host_view_generation_changed {
                 frame_slot.begin_view_epoch();
             }
-            frame_slot.take_ready_frame(now_ms, &mut telemetry)
+            let outcome = frame_slot.take_ready_frame(now_ms, &mut telemetry);
+            let slot_diag = frame_slot.diagnostics_snapshot();
+            let telemetry_diag = telemetry.diagnostics_snapshot();
+            (outcome, slot_diag, telemetry_diag)
         };
+        record_native_video_timing_event_lazy(
+            runtime_trace.as_ref(),
+            "wgpu",
+            "hostMailboxTakeDecision",
+            viewport_id,
+            window.label(),
+            || {
+                json!({
+                    "decision": take_outcome.mailbox_take_decision(),
+                    "displayedFrameSeq": take_slot_diag.displayed_frame_seq,
+                    "pendingFrameSeq": take_slot_diag.pending_frame_seqs.first().copied(),
+                    "hasPendingFrame": take_slot_diag.pending_queue_depth > 0,
+                    "pendingFrameSeqs": take_slot_diag.pending_frame_seqs,
+                    "lastPresentedFrameSeq": take_slot_diag.last_presented_frame_seq,
+                    "queueDepth": take_slot_diag.queue_depth,
+                    "pendingQueueDepth": take_slot_diag.pending_queue_depth,
+                    "hostDisplayTickEpoch": take_telemetry_diag.display_tick_epoch,
+                    "hostFramePresentEpoch": take_telemetry_diag.present_epoch,
+                    "hostCadencePhase": take_telemetry_diag.cadence_phase.as_str(),
+                    "noPendingStreak": take_telemetry_diag.no_pending_streak,
+                })
+            },
+        );
         if size_changed {
             state.last_surface_size = Some((surface_width, surface_height));
         }
@@ -1735,7 +1771,6 @@ pub(super) fn ensure_display_layer(
             let bounds: NSRect = msg_send![view, bounds];
             let bounds_key = ns_rect_to_key(bounds);
             let bounds_changed = state.last_layer_bounds != Some(bounds_key);
-            let layout_dirty = state.layout_dirty;
             let ns_window: *mut AnyObject = msg_send![view, window];
             let mut scale_changed = false;
             if !ns_window.is_null() {
@@ -1753,14 +1788,13 @@ pub(super) fn ensure_display_layer(
                 state.last_layer_bounds = Some(bounds_key);
             }
             apply_display_layer_layout(ptr, state.backing_layer_ptr, state, bounds);
-            if scale_changed || bounds_changed || layout_dirty {
+            if scale_changed || bounds_changed {
                 let _: () = msg_send![ptr, setNeedsLayout];
                 record_native_video_trace(
                     "layout_updated",
                     json!({
                         "scaleChanged": scale_changed,
                         "boundsChanged": bounds_changed,
-                        "layoutDirty": layout_dirty,
                         "videoFormat": state.display_state.video_format.clone(),
                         "windowLabel": window.label(),
                     }),

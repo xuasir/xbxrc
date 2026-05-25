@@ -58,6 +58,15 @@ impl ReceiveEngine {
         outcome
     }
 
+    pub fn mark_sequence_recovered(
+        &mut self,
+        sequence: u16,
+        source: super::nack_requester::RecoveredPacketSource,
+    ) -> bool {
+        self.packet_buffer.resolve_sequence(sequence);
+        self.nack_requester.mark_recovered(sequence, source)
+    }
+
     pub fn pending_nack_count(&self) -> usize {
         self.nack_requester.pending_count()
     }
@@ -66,9 +75,14 @@ impl ReceiveEngine {
         self.packet_buffer.has_active_gap()
     }
 
-    pub fn poll_nack_maintenance(&mut self, now: Instant) -> (Vec<u16>, bool) {
+    pub fn poll_nack_maintenance(
+        &mut self,
+        now: Instant,
+        effective_rtt_ms: f64,
+    ) -> super::nack_requester::NackPollResult {
+        let params = self._timing.nack_scheduling_params(effective_rtt_ms);
         self.nack_requester.sync_from_buffer(&self.packet_buffer);
-        self.nack_requester.poll_ready_sequences(now)
+        self.nack_requester.poll(&params, now)
     }
 }
 

@@ -1,8 +1,75 @@
 use std::sync::{Arc, Mutex};
 
-use crate::XbxEngineMediaRuntimeStats;
+use crate::{XbxEngineH264InspectionObservation, XbxEngineMediaRuntimeStats};
 
 use super::RuntimeStatsSink;
+
+#[test]
+fn unsolicited_bootstrap_idr_records_response_without_sent_episode() {
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(10.0);
+    sink.update(|stats| {
+        stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
+            frame_rtp_timestamp: Some(9_000),
+            is_idr: true,
+            bootstrap_ready: true,
+            admission_accepted: true,
+            parameter_sets_changed: true,
+            config_changed: true,
+            observed_at_ms: 100.0,
+            ..Default::default()
+        });
+    });
+    sink.record_picture_recovery_episode_response_observed(
+        120.0,
+        Some(9_000),
+        true,
+        "firstKeyframeAccepted",
+        Some(2),
+        None,
+        false,
+        false,
+    );
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let transition = stats
+        .latest_picture_recovery_transition_observation
+        .as_ref()
+        .expect("unsolicited bootstrap transition");
+    assert_eq!(transition.phase, "ResponseObserved");
+    assert_eq!(transition.episode_id, None);
+    assert_eq!(transition.rtp_timestamp, Some(9_000));
+    assert_eq!(
+        transition.from_phase.as_deref(),
+        Some("BootstrapUnsolicited")
+    );
+}
+
+#[test]
+fn displayed_idr_fact_commits_fresh_anchor_on_host_visible() {
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(10.0);
+    sink.record_pending_displayed_idr_rtp(9_000);
+    sink.record_displayed_idr_fact(160.0, 9_000, Some(42));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+    assert_eq!(
+        stats.video_anchor_clean_source_event.as_deref(),
+        Some("displayed-idr")
+    );
+    assert_eq!(stats.recovery_displayed_idr_rtp, Some(9_000));
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(160.0));
+    let transition = stats
+        .latest_picture_recovery_transition_observation
+        .as_ref()
+        .expect("fresh anchor transition");
+    assert_eq!(transition.phase, "FreshAnchorRecovered");
+}
 
 #[test]
 fn repeated_begin_transport_recovery_episode_is_idempotent() {
@@ -31,7 +98,7 @@ fn clean_anchor_keeps_transport_recovery_episode_open_until_stable_settle() {
     assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(20.0));
     assert_eq!(
         stats.video_anchor_clean_source_event.as_deref(),
-        Some("test-clean-anchor")
+        Some("displayed-idr")
     );
     assert!(stats.transport_recovery_episode_active);
     assert_eq!(stats.transport_recovery_episode_closed_at_ms, None);
@@ -61,27 +128,12 @@ fn clean_anchor_sets_retired_at_ms_on_latest_keyframe_episode() {
         false,
         false,
     );
-    sink.record_transport_clean_anchor_submission(
-        1,
-        7,
-        77_001,
-        18.0,
-        "chain-clean-anchor-submitted",
-    );
-    sink.record_transport_clean_anchor_with_rtp(
-        20.0,
-        "chain-clean-anchor-submitted",
-        Some(77_001),
-        None,
-    );
+    sink.record_pending_displayed_idr_rtp(77_001);
+    sink.record_displayed_idr_fact(20.0, 77_001, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
-    let episode = stats
-        .latest_keyframe_request_episode
-        .as_ref()
-        .expect("keyframe episode");
-    assert_eq!(episode.retired_at_ms, Some(20.0));
-    assert_eq!(episode.status, "succeeded");
+    assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(20.0));
 }
 
 #[test]
@@ -90,19 +142,8 @@ fn advancing_transport_recovery_episode_clears_stale_anchor() {
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
     sink.begin_transport_recovery_episode(10.0);
-    sink.record_transport_clean_anchor_submission(
-        1,
-        7001,
-        77_001,
-        18.0,
-        "chain-clean-anchor-submitted",
-    );
-    sink.record_transport_clean_anchor_with_rtp(
-        20.0,
-        "chain-clean-anchor-submitted",
-        Some(77_001),
-        None,
-    );
+    sink.record_pending_displayed_idr_rtp(77_001);
+    sink.record_displayed_idr_fact(20.0, 77_001, None);
     assert_eq!(sink.advance_transport_recovery_episode(30.0), 2);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -160,22 +201,14 @@ fn stale_epoch_clean_anchor_submission_does_not_promote_current_transport_recove
 
     sink.begin_transport_recovery_episode(10.0);
     sink.advance_transport_recovery_episode(20.0);
-    sink.record_transport_clean_anchor_submission(
-        1,
-        7001,
-        9_000,
-        30.0,
-        "chain-clean-anchor-submitted",
-    );
+    sink.record_displayed_idr_fact(30.0, 9_000, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.transport_recovery_epoch, 2);
     assert_eq!(stats.video_anchor_clean_epoch, None);
-    assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-    assert_eq!(
-        stats.latest_clean_anchor_submission_rtp_timestamp,
-        Some(9_000)
-    );
+    assert_eq!(stats.recovery_displayed_idr_rtp, None);
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, None);
+    assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
 }
 
 #[test]
@@ -516,7 +549,7 @@ fn stale_owner_decoded_does_not_update_current_transport_await_episode() {
 }
 
 #[test]
-fn stale_owner_clean_anchor_submission_stays_pending_within_same_episode() {
+fn stale_owner_frame_does_not_establish_fresh_anchor_until_displayed_pending_idr() {
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
@@ -548,32 +581,23 @@ fn stale_owner_clean_anchor_submission_stays_pending_within_same_episode() {
         false,
         false,
     );
-    sink.record_transport_clean_anchor_submission(
-        1,
-        9012,
-        10_001,
-        220.0,
-        "chain-clean-anchor-submitted",
-    );
+    sink.record_pending_displayed_idr_rtp(10_001);
 
+    {
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(10_001));
+        assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, None);
+    }
+
+    sink.record_displayed_idr_fact(250.0, 10_001, None);
     let stats = runtime_stats.lock().expect("runtime stats lock");
-    assert_eq!(stats.video_anchor_clean_epoch, None);
-    assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-    assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(9012));
-    assert_eq!(
-        stats.latest_clean_anchor_submission_rtp_timestamp,
-        Some(10_001)
-    );
-    let transition = stats
-        .latest_picture_recovery_transition_observation
-        .as_ref()
-        .expect("clean anchor submission transition");
-    assert_eq!(transition.phase, "CleanAnchorSubmitted");
-    assert_eq!(transition.rtp_timestamp, Some(10_001));
+    assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(250.0));
 }
 
 #[test]
-fn clean_anchor_submission_waits_for_visible_fact_before_commit() {
+fn displayed_idr_fact_waits_for_host_qualifying_rtp() {
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
@@ -596,31 +620,16 @@ fn clean_anchor_submission_waits_for_visible_fact_before_commit() {
         false,
     );
     sink.record_picture_recovery_episode_decoded(180.0, 10_201, 77);
-    sink.record_transport_clean_anchor_submission(
-        1,
-        9013,
-        10_201,
-        220.0,
-        "chain-clean-anchor-submitted",
-    );
+    sink.record_pending_displayed_idr_rtp(10_201);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, None);
-    assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
-    assert_eq!(
-        stats.latest_clean_anchor_submission_rtp_timestamp,
-        Some(10_201)
-    );
-    let transition = stats
-        .latest_picture_recovery_transition_observation
-        .as_ref()
-        .expect("clean anchor submission transition");
-    assert_eq!(transition.phase, "CleanAnchorSubmitted");
-    assert_eq!(transition.detail.as_deref(), Some("hostVisibilityPending"));
+    assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(10_201));
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, None);
 }
 
 #[test]
-fn visible_fact_does_not_commit_submission_for_advanced_episode() {
+fn displayed_idr_fact_does_not_commit_after_recovery_epoch_advances() {
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
@@ -643,40 +652,15 @@ fn visible_fact_does_not_commit_submission_for_advanced_episode() {
         false,
     );
     sink.record_picture_recovery_episode_decoded(180.0, 10_301, 77);
-    sink.record_transport_clean_anchor_submission(
-        1,
-        9014,
-        10_301,
-        220.0,
-        "chain-clean-anchor-submitted",
-    );
-    sink.update(|stats| {
-        stats.latest_keyframe_request_episode =
-            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
-                episode_id: 9015,
-                request_reason: Some("receiverWaitingKeyframe".to_string()),
-                status: "waiting-response".to_string(),
-                requested_at_ms: 230.0,
-                ..Default::default()
-            });
-    });
+    sink.record_pending_displayed_idr_rtp(10_301);
+    assert_eq!(sink.advance_transport_recovery_episode(230.0), 2);
 
-    sink.record_transport_clean_anchor_with_rtp(
-        240.0,
-        "chain-clean-anchor-submitted",
-        Some(10_301),
-        None,
-    );
+    sink.record_displayed_idr_fact(240.0, 10_301, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.transport_recovery_epoch, 2);
     assert_eq!(stats.video_anchor_clean_epoch, None);
-    assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(9014));
-    let latest_episode = stats
-        .latest_keyframe_request_episode
-        .as_ref()
-        .expect("latest episode should exist");
-    assert_eq!(latest_episode.episode_id, 9015);
-    assert_eq!(latest_episode.response_verdict, None);
+    assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
 }
 
 #[test]
@@ -791,19 +775,8 @@ fn first_frame_latency_observation_records_complete_stage_breakdown() {
     sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
     sink.record_picture_recovery_episode_packet_seen(150.0, Some(456_789), true, Some(322));
     sink.record_picture_recovery_episode_decoded(165.0, 456_789, 43);
-    sink.record_transport_clean_anchor_submission(
-        1,
-        904,
-        456_789,
-        170.0,
-        "chain-clean-anchor-submitted",
-    );
-    sink.record_transport_clean_anchor_with_rtp(
-        180.0,
-        "chain-clean-anchor-submitted",
-        Some(456_789),
-        None,
-    );
+    sink.record_pending_displayed_idr_rtp(456_789);
+    sink.record_displayed_idr_fact(180.0, 456_789, None);
     sink.complete_transport_recovery_after_stable_settle(210.0);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");

@@ -96,6 +96,9 @@ pub fn should_record_trace_event(trace_mode: &str, domain: &str, event: &str, no
             ("xbxengine", "channelMessageCatalog") => {
                 should_emit_sampled_trace_event(now_ms, "xbxengine:channelMessageCatalog", 2_000.0)
             }
+            ("native_video", "layout_updated") => {
+                should_emit_sampled_trace_event(now_ms, "native_video:layout_updated", 2_000.0)
+            }
             _ => true,
         },
         "standard" => match (domain, event) {

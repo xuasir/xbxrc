@@ -577,15 +577,30 @@ impl RuntimeStatsSink {
             let latest_h264_observation = stats.latest_h264_inspection_observation.clone();
             let latest_clean_anchor_submission_episode_id =
                 stats.latest_clean_anchor_submission_episode_id;
-            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
-                if episode.sent_at_ms.is_none()
-                    || matches!(
-                        episode.response_verdict.as_deref(),
-                        Some("transportDeferred" | "transportFailed")
-                    )
-                {
+            let unsolicited_bootstrap_idr = is_keyframe
+                && detail == "firstKeyframeAccepted"
+                && latest_h264_observation.as_ref().is_some_and(|observation| {
+                    observation.is_idr
+                        && observation.bootstrap_ready
+                        && observation.admission_accepted
+                        && (observation.parameter_sets_changed || observation.config_changed)
+                        && rtp_timestamp
+                            .is_some_and(|rtp| observation.frame_rtp_timestamp == Some(rtp))
+                });
+            let episode_ready_for_binding = stats
+                .latest_keyframe_request_episode
+                .as_ref()
+                .is_some_and(|episode| {
+                    episode.sent_at_ms.is_some()
+                        && !matches!(
+                            episode.response_verdict.as_deref(),
+                            Some("transportDeferred" | "transportFailed")
+                        )
+                });
+            if episode_ready_for_binding {
+                let Some(episode) = stats.latest_keyframe_request_episode.as_mut() else {
                     return;
-                }
+                };
                 if matches!(episode.response_verdict.as_deref(), Some("missed")) && !is_keyframe {
                     return;
                 }
@@ -678,6 +693,22 @@ impl RuntimeStatsSink {
                 ));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
+            } else if stats.latest_keyframe_request_episode.is_some() && !unsolicited_bootstrap_idr
+            {
+                return;
+            } else if unsolicited_bootstrap_idr {
+                stats.latest_observation_label =
+                    Some("unsolicitedBootstrapIdrResponseObserved".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "rtpTimestamp={} detail={} observedAtMs={:.1}",
+                    rtp_timestamp
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "none".to_string()),
+                    detail,
+                    observed_at_ms
+                ));
+                pending_transition = Some((0, rtp_timestamp, is_keyframe, detail.to_string()));
+                should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
@@ -685,10 +716,14 @@ impl RuntimeStatsSink {
             if let Some((episode_id, rtp_timestamp, is_keyframe, detail)) = pending_transition {
                 let observation = XbxEnginePictureRecoveryTransitionObservation {
                     observation_id: Self::next_picture_recovery_transition_observation_id(stats),
-                    episode_id: Some(episode_id),
+                    episode_id: (episode_id > 0).then_some(episode_id),
                     recovery_epoch: Some(stats.transport_recovery_epoch),
                     phase: "ResponseObserved".to_string(),
-                    from_phase: Some("PliSent".to_string()),
+                    from_phase: if episode_id > 0 {
+                        Some("PliSent".to_string())
+                    } else {
+                        Some("BootstrapUnsolicited".to_string())
+                    },
                     to_phase: "ResponseObserved".to_string(),
                     cause: Some(detail),
                     detail: Some(if is_keyframe {

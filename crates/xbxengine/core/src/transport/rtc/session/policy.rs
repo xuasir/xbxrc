@@ -1042,8 +1042,15 @@ impl RtcSessionPolicy {
         let owner_signal =
             self.apply_local_supply_suspect_anchor_gate(owner_signal, observed_at_ms);
         if owner_signal.reason_label == "receiverWaitingKeyframe" && !owner_signal_missing_anchor {
-            self.clear_local_supply_suspect();
-            return None;
+            let decoder_waiting_keyframe =
+                RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                    stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+                })
+                .unwrap_or(false);
+            if !decoder_waiting_keyframe {
+                self.clear_local_supply_suspect();
+                return None;
+            }
         }
         // intent 路径可能把 transport-await 表面映射成 `WaitKeyframe` 等枚举，但仍携带同一诊断标签；
         // 吸收 stale replay 必须以 snapshot 诊断为准，而不能只看 `owner_signal.reason`。
@@ -1431,9 +1438,7 @@ impl RtcSessionPolicy {
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
-            let clean_anchor_pipeline_evidence = stats.video_anchor_clean_source_event.as_deref()
-                == Some("chain-clean-anchor-submitted")
-                && stats.video_anchor_clean_observed_at_ms.is_some();
+            let clean_anchor_pipeline_evidence = current_clean_anchor;
             let terminal_deferred_transport_await =
                 Self::has_terminal_deferred_transport_await_issue(
                     stats,
@@ -2299,6 +2304,8 @@ impl RtcSessionPolicy {
             stats.recovery_policy_profile =
                 Some(orchestration.recovery_profile_kind.as_str().to_string());
             stats.video_owner_state = Some(owner_output.state.as_str().to_string());
+            stats.video_owner_contract_state =
+                Some(owner_output.contract_state.as_str().to_string());
             stats.video_owner_reason = Some(owner_output.diagnostics.reason_label.clone());
             // 已在 sink.update 持锁中，禁止再经 PostDecodeLatencyController 二次 lock 同一 Mutex。
             stats.host_present_stall_decode_throttle =
@@ -2635,10 +2642,25 @@ impl RtcSessionPolicy {
         proposal: &CoordinatorProposal,
         owner_signal: &RecoveryOwnerSignal,
     ) -> bool {
-        matches!(
+        if !matches!(
             proposal.decision.action,
             RecoveryAction::RequestPli | RecoveryAction::RequestFir
-        ) && resolve_session_fault_domain(owner_signal.reason) == SessionFaultDomain::DisplaySupply
+        ) {
+            return false;
+        }
+        if matches!(
+            owner_signal.reason_label.as_str(),
+            "receiverWaitingKeyframe" | "waitKeyframe" | "ingressWaitKeyframe"
+        ) {
+            return false;
+        }
+        if matches!(
+            resolve_session_fault_domain(owner_signal.reason),
+            SessionFaultDomain::ReferenceChain | SessionFaultDomain::DecodePipeline
+        ) {
+            return false;
+        }
+        resolve_session_fault_domain(owner_signal.reason) == SessionFaultDomain::DisplaySupply
     }
 
     fn should_force_first_frame_acquisition_local_action(

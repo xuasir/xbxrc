@@ -111,6 +111,7 @@ export interface XbxEngineStatsDto {
   recovery_rfc_ceiling?: string
   direct_gaming_bitrate_band?: string
   recovery_owner_state?: string
+  recovery_owner_contract_state?: string
   recovery_owner_reason?: string
   video_owner_source?: string
   video_owner_observed_at_ms?: number

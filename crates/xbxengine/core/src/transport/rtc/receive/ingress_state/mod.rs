@@ -18,6 +18,7 @@ use crate::transport::rtc::stream::packet_types::RtcVideoRtpPacket;
 use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use xbxengine_protocol::XbxEngineTransportStateDto;
 
+use crate::transport::rtc::recovery::contract::has_current_transport_await_issue_from_stats;
 use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;
 pub(crate) use crate::transport::rtc::stream::nack_contract::NackSchedulerConfig;
 
@@ -477,15 +478,35 @@ impl RtcVideoFrameSource {
         allow_non_anchor_soft_request: bool,
         allow_anchor_soft_request: bool,
     ) -> bool {
-        let _ = (
-            stats,
-            now_ms,
-            invalid_bootstrap_reason,
-            invalid_bootstrap_metadata_ready,
-            allow_non_anchor_soft_request,
-            allow_anchor_soft_request,
-        );
-        // RFC 2026-05-20：pre-decode 不再用 decode/host 价值判断驱动 soft PLI。
+        let _ = now_ms;
+        if stats.transport_state != XbxEngineTransportStateDto::Connected {
+            return false;
+        }
+        if !Self::first_frame_acquired(stats) {
+            return false;
+        }
+        if has_current_transport_await_issue_from_stats(stats) {
+            return false;
+        }
+        if allow_anchor_soft_request {
+            let hard_keyframe_bootstrap = matches!(
+                invalid_bootstrap_reason,
+                Some("bootstrapMissingIdr" | "mixedIdrWithTrailingDelta")
+            );
+            if hard_keyframe_bootstrap {
+                return false;
+            }
+            let soft_invalid_bootstrap = matches!(
+                invalid_bootstrap_reason,
+                Some("bootstrapMissingSps" | "bootstrapMissingPps")
+            );
+            if soft_invalid_bootstrap && invalid_bootstrap_metadata_ready {
+                return true;
+            }
+        }
+        if allow_non_anchor_soft_request {
+            return true;
+        }
         false
     }
 
@@ -544,6 +565,13 @@ impl RtcVideoFrameSource {
             .receive_engine
             .keyframe_requester
             .request_if_due(capability.as_ref(), !soft);
+        let outcome_name = match outcome {
+            Some(KeyframeSendOutcome::Sent) => "sent",
+            Some(KeyframeSendOutcome::FeedbackWarming) => "feedbackWarming",
+            Some(KeyframeSendOutcome::FeedbackUnavailable) => "feedbackUnavailable",
+            Some(KeyframeSendOutcome::TransportNotReady) => "transportNotReady",
+            None => "throttled",
+        };
         if matches!(outcome, Some(KeyframeSendOutcome::Sent)) {
             if self.waiting_recovery_keyframe_since_ms.is_none() {
                 self.waiting_recovery_keyframe_since_ms = Some(now_ms);
@@ -552,6 +580,12 @@ impl RtcVideoFrameSource {
                 TransportLossObservation::RecoveryKeyframeRequested,
             ));
         }
+        self.runtime_stats.update(|stats| {
+            stats.latest_observation_label = Some("keyframeRequestOutcome".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "source={source_event} soft={soft} outcome={outcome_name}"
+            ));
+        });
         self.publish_receiver_observation(now_ms, None);
     }
 

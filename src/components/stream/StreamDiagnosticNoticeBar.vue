@@ -24,18 +24,18 @@ const { t } = useI18n()
 const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
   const items: StreamDiagnosticNoticeViewModel[] = []
 
-  if (props.diagnostics.isRecovering) {
-    items.push({
-      id: 'recovering',
-      severity: 'info',
-      text: t('streamPage.diagnostics.notices.recovering'),
-    })
-  }
-  else if (props.diagnostics.isDisplaySupplyLimited) {
+  if (props.diagnostics.isDisplaySupplyLimited) {
     items.push({
       id: 'displaySupply',
       severity: 'info',
       text: t('streamPage.diagnostics.notices.displaySupplyLimited'),
+    })
+  }
+  else if (props.diagnostics.isRecovering) {
+    items.push({
+      id: 'recovering',
+      severity: 'info',
+      text: t('streamPage.diagnostics.notices.recovering'),
     })
   }
 

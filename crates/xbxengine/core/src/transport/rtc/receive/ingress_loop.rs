@@ -355,6 +355,14 @@ impl RtcVideoFrameSource {
                     );
                     let seq = rtp.header.sequence_number;
                     let now_ms = now_ms_f64();
+                    if matches!(ingress_kind, RtcVideoIngressKind::RtxReinject { .. }) {
+                        self.receive_core_mut()
+                            .receive_engine
+                            .mark_sequence_recovered(
+                                seq,
+                                crate::transport::rtc::receive::nack_requester::RecoveredPacketSource::Rtx,
+                            );
+                    }
                     let observe_outcome = self
                         .receive_core_mut()
                         .receive_engine
@@ -579,8 +587,7 @@ pub(crate) fn should_absorb_idle_timeout_for_steady_gap(
         return false;
     }
     let has_current_clean_anchor = clean_anchor_epoch.is_some_and(|epoch| {
-        epoch == current_recovery_epoch
-            && clean_anchor_source_event == Some("chain-clean-anchor-submitted")
+        epoch == current_recovery_epoch && clean_anchor_source_event == Some("displayed-idr")
     });
     if !has_current_clean_anchor {
         return false;

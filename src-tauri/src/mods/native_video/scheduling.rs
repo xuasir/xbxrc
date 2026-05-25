@@ -12,6 +12,10 @@ const HOST_RENDER_RECOVERY_STREAK_THRESHOLD: u32 = 8;
 const HOST_RENDER_RECOVERY_KEYFRAME_MIN_FRAME_AGE_MS: f64 = 48.0;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
 const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
+/// submit 侧额外宽限：decode→render 排队不应在进 host mailbox 前被误杀。
+const HOST_MAILBOX_SUBMIT_PIPELINE_SLACK_MS: f64 = 96.0;
+const HOST_MAILBOX_ADAPTIVE_BUDGET_MIN_INTERVAL_MS: f64 = 20.0;
+const HOST_MAILBOX_ADAPTIVE_BUDGET_MAX_INTERVAL_MS: f64 = 90.0;
 fn format_optional_seq(value: Option<u64>) -> String {
     value
         .map(|seq| seq.to_string())
@@ -202,6 +206,22 @@ impl HostCadenceTelemetry {
         }
     }
 
+    /// 已有 displayed 帧、等待下一帧 pending：持帧不是断供，不应累计 no_pending 或进入 starved。
+    pub fn record_display_hold(&mut self) {
+        self.no_pending_streak = 0;
+        if self.present_epoch > 0 {
+            self.cadence_phase = HostCadencePhase::Steady;
+        } else if self.display_tick_epoch > 0 {
+            self.cadence_phase = HostCadencePhase::Priming;
+        }
+    }
+
+    /// 刷新 present 时钟但不增加 present_epoch（持帧重绘 / 同帧维持可见）。
+    /// 不计入 `present_fps`：否则 display tick 会把呈现帧率抬到 120+ 而误导性能面板。
+    pub fn record_present_refresh(&mut self, now_ms: f64) {
+        self.latest_present_time_ms = Some(now_ms);
+    }
+
     pub fn clear_no_pending_streak(&mut self) {
         self.no_pending_streak = 0;
         self.cadence_phase = if self.present_epoch > 0 {
@@ -218,6 +238,18 @@ impl HostCadenceTelemetry {
     }
 
     pub fn present_fps(&self) -> f64 {
+        if self.recent_present_times_ms.len() < PRESENT_FPS_MIN_SAMPLES {
+            return 0.0;
+        }
+        let Some(first) = self.recent_present_times_ms.front().copied() else {
+            return 0.0;
+        };
+        let Some(last) = self.recent_present_times_ms.back().copied() else {
+            return 0.0;
+        };
+        if (last - first) < PRESENT_FPS_MIN_WINDOW_MS {
+            return 0.0;
+        }
         calculate_recent_fps(&self.recent_present_times_ms)
     }
 
@@ -240,13 +272,51 @@ impl HostCadenceTelemetry {
         }
     }
 
+    fn adaptive_interval_budget_ms(interval_ms: f64) -> f64 {
+        (interval_ms * HOST_RENDER_FRAME_AGE_MULTIPLIER).clamp(
+            HOST_MAILBOX_ADAPTIVE_BUDGET_MIN_INTERVAL_MS,
+            HOST_MAILBOX_ADAPTIVE_BUDGET_MAX_INTERVAL_MS,
+        )
+    }
+
+    fn submit_driven_frame_age_budget_ms(&self) -> Option<f64> {
+        self.submit_interval_ms()
+            .map(Self::adaptive_interval_budget_ms)
+    }
+
     pub fn frame_age_budget_ms(&self) -> f64 {
-        self.effective_frame_interval_ms()
-            .map(|interval_ms| {
-                (interval_ms * HOST_RENDER_FRAME_AGE_MULTIPLIER)
-                    .clamp(HOST_RENDER_MIN_FRAME_AGE_MS, HOST_RENDER_MAX_FRAME_AGE_MS)
-            })
-            .unwrap_or(HOST_RENDER_MAX_FRAME_AGE_MS)
+        let effective_budget = self
+            .effective_frame_interval_ms()
+            .map(Self::adaptive_interval_budget_ms);
+        match (effective_budget, self.submit_driven_frame_age_budget_ms()) {
+            (Some(left), Some(right)) => left.max(right),
+            (Some(value), None) | (None, Some(value)) => value,
+            (None, None) => HOST_RENDER_MAX_FRAME_AGE_MS,
+        }
+    }
+
+    pub fn host_mailbox_submit_stale_budget_ms(&self, frame: &XbxEngineRenderFrame) -> f64 {
+        self.stale_frame_age_budget_for_frame(frame) + HOST_MAILBOX_SUBMIT_PIPELINE_SLACK_MS
+    }
+
+    pub fn host_mailbox_take_stale_budget_ms(&self, frame: &XbxEngineRenderFrame) -> f64 {
+        let base = self.stale_frame_age_budget_for_frame(frame);
+        self.submit_driven_frame_age_budget_ms()
+            .map(|submit_budget| base.max(submit_budget))
+            .unwrap_or(base)
+    }
+
+    fn holding_displayed_awaiting_next_frame(&self) -> bool {
+        self.present_epoch > 0
+            && matches!(self.cadence_phase, HostCadencePhase::Steady)
+            && self.no_pending_streak == 0
+    }
+
+    fn recovery_frame_age_budget_ms(&self, base_budget_ms: f64) -> f64 {
+        (base_budget_ms * 8.0).clamp(
+            HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS,
+            HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS,
+        )
     }
 
     pub fn stale_frame_age_budget_ms(&self) -> f64 {
@@ -256,11 +326,9 @@ impl HostCadenceTelemetry {
         }
         if matches!(self.cadence_phase, HostCadencePhase::Starved)
             || self.no_pending_streak >= HOST_RENDER_RECOVERY_STREAK_THRESHOLD
+            || self.holding_displayed_awaiting_next_frame()
         {
-            return (base_budget_ms * 8.0).clamp(
-                HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS,
-                HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS,
-            );
+            return self.recovery_frame_age_budget_ms(base_budget_ms);
         }
         base_budget_ms
     }
@@ -403,6 +471,8 @@ impl HostCadenceTelemetry {
 pub struct ScheduledFrameSlot {
     displayed_frame: Option<XbxEngineRenderFrame>,
     pending_frame: Option<XbxEngineRenderFrame>,
+    /// pending 进入 host mailbox 的时刻；take 时用其计龄而非 render 时间戳。
+    pending_accepted_at_ms: Option<f64>,
     last_presented_frame_seq: Option<u64>,
     view_epoch: u64,
     displayed_view_epoch: u64,
@@ -456,6 +526,17 @@ pub enum ScheduledFrameTakeOutcome {
         frame_age_ms: f64,
         frame_age_budget_ms: f64,
     },
+}
+
+impl ScheduledFrameTakeOutcome {
+    pub fn mailbox_take_decision(&self) -> &'static str {
+        match self {
+            Self::Ready(_) => "ready",
+            Self::RetainedDisplayedFrame => "retainedDisplayed",
+            Self::NoPendingFrame => "noPending",
+            Self::DroppedStale { .. } => "droppedStale",
+        }
+    }
 }
 
 impl ScheduledFrameSlot {
@@ -515,6 +596,41 @@ impl ScheduledFrameSlot {
         self.displayed_frame.is_some() && self.frame_opens_recovery_media_epoch(frame)
     }
 
+    fn host_mailbox_pending_age_ms(
+        pending_accepted_at_ms: Option<f64>,
+        frame: &XbxEngineRenderFrame,
+        now_ms: f64,
+    ) -> f64 {
+        pending_accepted_at_ms
+            .map(|accepted_at_ms| (now_ms - accepted_at_ms).max(0.0))
+            .unwrap_or_else(|| (now_ms - frame.rendered_at_ms).max(0.0))
+    }
+
+    fn should_discard_stale_pending_at_take(
+        &self,
+        pending: &XbxEngineRenderFrame,
+        now_ms: f64,
+        telemetry: &HostCadenceTelemetry,
+    ) -> bool {
+        let frame_age_budget_ms = telemetry.host_mailbox_take_stale_budget_ms(pending);
+        let frame_age_ms =
+            Self::host_mailbox_pending_age_ms(self.pending_accepted_at_ms, pending, now_ms);
+        frame_age_ms > frame_age_budget_ms
+    }
+
+    fn should_discard_duplicate_pending_at_take(&self, pending: &XbxEngineRenderFrame) -> bool {
+        self.last_presented_frame_seq.is_some_and(|last_presented| {
+            pending.frame_seq <= last_presented
+                && !Self::frame_is_recovery_valued(pending)
+                && !frame_confirms_recovery_owner(pending)
+        })
+    }
+
+    fn discard_pending_without_present(&mut self) {
+        self.pending_frame = None;
+        self.pending_accepted_at_ms = None;
+    }
+
     pub fn submit_frame(
         &mut self,
         frame: &XbxEngineRenderFrame,
@@ -527,7 +643,7 @@ impl ScheduledFrameSlot {
             self.begin_media_epoch();
         }
         let frame_seq = frame.frame_seq;
-        let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(frame);
+        let frame_age_budget_ms = telemetry.host_mailbox_submit_stale_budget_ms(frame);
         let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
         if frame_age_ms > frame_age_budget_ms {
             telemetry.record_stale_frame_drop(frame, now_ms, "scheduledFrameStale", 1);
@@ -547,10 +663,11 @@ impl ScheduledFrameSlot {
                 frame_age_budget_ms,
             };
         }
-        if self
-            .last_presented_frame_seq
-            .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
-        {
+        if self.last_presented_frame_seq.is_some_and(|last_presented| {
+            frame.frame_seq <= last_presented
+                && !Self::frame_is_recovery_valued(frame)
+                && !frame_confirms_recovery_owner(frame)
+        }) {
             self.log_host_flow(
                 "submit",
                 Some(frame_seq),
@@ -589,6 +706,7 @@ impl ScheduledFrameSlot {
             .replace(frame.clone())
             .map(|frame| frame.frame_seq);
         let overwrote_pending = replaced_frame_seq.is_some();
+        self.pending_accepted_at_ms = Some(now_ms);
         if overwrote_pending {
             telemetry.record_overwrite();
         }
@@ -616,14 +734,13 @@ impl ScheduledFrameSlot {
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameTakeOutcome {
-        if let Some(frame) = self.pending_frame.take() {
-            if self
-                .last_presented_frame_seq
-                .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
-            {
+        if let Some(pending) = self.pending_frame.as_ref() {
+            if self.should_discard_duplicate_pending_at_take(pending) {
+                let frame_seq = pending.frame_seq;
+                self.discard_pending_without_present();
                 self.log_host_flow(
                     "take",
-                    Some(frame.frame_seq),
+                    Some(frame_seq),
                     "RejectedAlreadyPresented",
                     None,
                     false,
@@ -631,50 +748,56 @@ impl ScheduledFrameSlot {
                     0.0,
                     telemetry,
                 );
-            } else {
-                let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(&frame);
-                let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
-                if frame_age_ms > frame_age_budget_ms {
-                    telemetry.record_stale_frame_drop(
-                        &frame,
-                        now_ms,
-                        "scheduledFrameStale",
-                        self.queue_depth(),
-                    );
-                    self.log_host_flow(
-                        "take",
-                        Some(frame.frame_seq),
-                        "DroppedStale",
-                        None,
-                        false,
+            } else if self.should_discard_stale_pending_at_take(pending, now_ms, telemetry) {
+                let frame = pending.clone();
+                let frame_age_budget_ms = telemetry.host_mailbox_take_stale_budget_ms(&frame);
+                let frame_age_ms =
+                    Self::host_mailbox_pending_age_ms(self.pending_accepted_at_ms, &frame, now_ms);
+                self.discard_pending_without_present();
+                telemetry.record_stale_frame_drop(
+                    &frame,
+                    now_ms,
+                    "scheduledFrameStale",
+                    self.queue_depth(),
+                );
+                self.log_host_flow(
+                    "take",
+                    Some(frame.frame_seq),
+                    "DroppedStale",
+                    None,
+                    false,
+                    frame_age_ms,
+                    frame_age_budget_ms,
+                    telemetry,
+                );
+                if self.displayed_frame.is_none() {
+                    return ScheduledFrameTakeOutcome::DroppedStale {
+                        frame,
                         frame_age_ms,
                         frame_age_budget_ms,
-                        telemetry,
-                    );
-                    if self.displayed_frame.is_none() {
-                        return ScheduledFrameTakeOutcome::DroppedStale {
-                            frame,
-                            frame_age_ms,
-                            frame_age_budget_ms,
-                        };
-                    }
-                } else {
-                    self.last_presented_frame_seq = Some(frame.frame_seq);
-                    self.displayed_frame = Some(frame.clone());
-                    self.displayed_view_epoch = self.view_epoch;
-                    telemetry.clear_no_pending_streak();
-                    self.log_host_flow(
-                        "take",
-                        Some(frame.frame_seq),
-                        "Ready",
-                        None,
-                        false,
-                        frame_age_ms,
-                        frame_age_budget_ms,
-                        telemetry,
-                    );
-                    return ScheduledFrameTakeOutcome::Ready(frame);
+                    };
                 }
+            } else {
+                let frame_age_budget_ms = telemetry.host_mailbox_take_stale_budget_ms(pending);
+                let frame_age_ms =
+                    Self::host_mailbox_pending_age_ms(self.pending_accepted_at_ms, pending, now_ms);
+                let frame = self.pending_frame.take().expect("pending frame exists");
+                self.pending_accepted_at_ms = None;
+                self.last_presented_frame_seq = Some(frame.frame_seq);
+                self.displayed_frame = Some(frame.clone());
+                self.displayed_view_epoch = self.view_epoch;
+                telemetry.clear_no_pending_streak();
+                self.log_host_flow(
+                    "take",
+                    Some(frame.frame_seq),
+                    "Ready",
+                    None,
+                    false,
+                    frame_age_ms,
+                    frame_age_budget_ms,
+                    telemetry,
+                );
+                return ScheduledFrameTakeOutcome::Ready(frame);
             }
         }
         if self.displayed_frame.is_some() && self.displayed_view_epoch != self.view_epoch {
@@ -699,7 +822,8 @@ impl ScheduledFrameSlot {
             return ScheduledFrameTakeOutcome::Ready(frame);
         }
         if self.displayed_frame.is_some() {
-            telemetry.record_no_pending_take();
+            telemetry.record_display_hold();
+            telemetry.record_present_refresh(now_ms);
             self.log_host_flow(
                 "take",
                 self.displayed_frame.as_ref().map(|frame| frame.frame_seq),
@@ -729,6 +853,7 @@ impl ScheduledFrameSlot {
     pub fn reset(&mut self) {
         self.displayed_frame = None;
         self.pending_frame = None;
+        self.pending_accepted_at_ms = None;
         self.last_presented_frame_seq = None;
         self.view_epoch = 0;
         self.displayed_view_epoch = 0;
@@ -737,6 +862,7 @@ impl ScheduledFrameSlot {
 
     pub fn begin_media_epoch(&mut self) {
         self.pending_frame = None;
+        self.pending_accepted_at_ms = None;
         self.last_presented_frame_seq = None;
         // 媒体 epoch 刷新时保留已显示帧，直到新 epoch 的恢复锚点或最新帧真正接管。
         // 这样 host 末端仍有替换基准，stale recovery anchor 不会因为 displayed 被提前清空而落成 drop。
@@ -784,6 +910,16 @@ impl ScheduledFrameSlot {
 
     fn queue_depth(&self) -> usize {
         usize::from(self.pending_frame.is_some()) + usize::from(self.displayed_frame.is_some())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_pending_for_test(
+        &mut self,
+        frame: XbxEngineRenderFrame,
+        accepted_at_ms: f64,
+    ) {
+        self.pending_frame = Some(frame);
+        self.pending_accepted_at_ms = Some(accepted_at_ms);
     }
 
     fn log_host_flow(
@@ -863,6 +999,9 @@ fn incoming_frame_is_newer_than_pending(
 #[cfg(test)]
 #[path = "scheduling.test.rs"]
 mod tests;
+
+const PRESENT_FPS_MIN_SAMPLES: usize = 3;
+const PRESENT_FPS_MIN_WINDOW_MS: f64 = 150.0;
 
 fn calculate_recent_fps(recent_times_ms: &VecDeque<f64>) -> f64 {
     if recent_times_ms.len() < 2 {

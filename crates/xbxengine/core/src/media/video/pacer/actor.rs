@@ -45,7 +45,8 @@ impl PacerActorHandle {
         refresh_interval_ms: u64,
     ) -> Self {
         let runtime_stats = RuntimeStatsSink::new(runtime_stats);
-        let (tx, rx) = mpsc::sync_channel(2);
+        // 深队列 + pacer 内 latest-only；避免 sync_channel(2) 把 decode 线程顶在 PullOutputFirst。
+        let (tx, rx) = mpsc::sync_channel(32);
 
         thread::Builder::new()
             .name("XbxPacerActor".into())

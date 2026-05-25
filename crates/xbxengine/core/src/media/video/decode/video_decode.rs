@@ -35,6 +35,7 @@ const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 48;
 const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 72;
 const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 48;
 const DECODE_QUEUE_STALE_SLACK_GUARD_MS: u64 = 2;
+const DECODE_LATEST_REPLACE_MIN_INTERVAL_MS: f64 = 20.0;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -105,11 +106,9 @@ impl XbxVideoRecoveryState {
 
 fn recovery_chain_unsettled(
     recovery_epoch_tag: Option<u64>,
-    clean_anchor_commit_recovery_epoch: Option<u64>,
     frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition,
 ) -> bool {
     recovery_epoch_tag.is_some()
-        && clean_anchor_commit_recovery_epoch.is_none()
         && !matches!(
             frame_recovery_disposition,
             crate::media::video::types::FrameRecoveryDisposition::Steady
@@ -285,6 +284,8 @@ pub(crate) struct XbxVideoDecodeState {
     latest_decode_candidate_decision: Option<XbxDecodeCandidateDecisionSnapshot>,
     decode_candidate_decision_id: u64,
     d3d11va_no_output_rebuild_attempts: u32,
+    nominal_continuation_hw_no_output_resets: u32,
+    last_decode_latest_replace_at_ms: Option<f64>,
 }
 
 impl XbxVideoDecodeState {
@@ -337,7 +338,33 @@ impl XbxVideoDecodeState {
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
             d3d11va_no_output_rebuild_attempts: 0,
+            nominal_continuation_hw_no_output_resets: 0,
+            last_decode_latest_replace_at_ms: None,
         })
+    }
+
+    fn should_coalesce_decoded_latest_replace(
+        &self,
+        incoming: &DecodedFrame,
+        existing: &DecodedFrame,
+        observed_at_ms: f64,
+    ) -> bool {
+        let Some(last_replace_at_ms) = self.last_decode_latest_replace_at_ms else {
+            return false;
+        };
+        if observed_at_ms - last_replace_at_ms >= DECODE_LATEST_REPLACE_MIN_INTERVAL_MS {
+            return false;
+        }
+        if Self::compare_decoded_candidate_value(incoming, existing) < 0 {
+            return false;
+        }
+        matches!(
+            (
+                incoming.budget.recovery_value_tier(),
+                existing.budget.recovery_value_tier()
+            ),
+            ("supply", "supply") | ("disposable", "disposable")
+        )
     }
 
     /**
@@ -398,6 +425,20 @@ impl XbxVideoDecodeState {
             && !waiting_keyframe_continuation_allowed
             && !continuation_gate_bypassed
         {
+            if self.nominal_continuation_hw_no_output_resets > 0
+                && self.decoder_backend_is_hardware()
+                && self.should_recover_nominal_continuation_no_output(
+                    XbxVideoRecoveryState::Nominal,
+                    encoded_frame.h264.bootstrap_reject_reason,
+                )
+            {
+                let _ = self.fallback_hardware_backend_to_software(
+                    now_ms,
+                    "nominal-continuation-no-output",
+                    "nominalContinuationNoOutputSoftFallback",
+                    None,
+                );
+            }
             let bootstrap_reject_reason = encoded_frame
                 .h264
                 .bootstrap_reject_reason
@@ -446,6 +487,9 @@ impl XbxVideoDecodeState {
         let frame_has_inband_pps = encoded_frame.h264.has_inband_pps;
         let frame_parameter_sets_changed = encoded_frame.h264.parameter_sets_changed;
         let frame_config_changed = encoded_frame.h264.config_changed;
+        let bootstrap_config_change_idr = frame_is_keyframe
+            && frame_bootstrap_ready
+            && (frame_parameter_sets_changed || frame_config_changed);
         let frame_slice_headers_valid = encoded_frame.h264.slice_headers_valid;
         let frame_width = encoded_frame.width;
         let frame_height = encoded_frame.height;
@@ -672,7 +716,16 @@ impl XbxVideoDecodeState {
                 recovery_state_before_decode,
                 frame_bootstrap_reject_reason_kind,
             ) {
-                if self.decoder_backend_is_hardware() {
+                if self.decoder_backend_is_hardware()
+                    && self.nominal_continuation_hw_no_output_resets == 0
+                {
+                    self.nominal_continuation_hw_no_output_resets = 1;
+                    let _ = self.reset_decoder_with_failure_detail(
+                        None,
+                        now_ms,
+                        "nominalContinuationNoOutputReset",
+                    );
+                } else if self.decoder_backend_is_hardware() {
                     let _ = self.fallback_hardware_backend_to_software(
                         now_ms,
                         "nominal-continuation-no-output",
@@ -745,11 +798,7 @@ impl XbxVideoDecodeState {
                 now_ms,
             ),
             XbxVideoRecoveryState::Recovering => {
-                if !recovery_chain_unsettled(
-                    recovery_epoch_tag,
-                    clean_anchor_commit_recovery_epoch,
-                    frame_recovery_disposition,
-                ) {
+                if !recovery_chain_unsettled(recovery_epoch_tag, frame_recovery_disposition) {
                     self.transition_recovery_state(
                         XbxVideoRecoveryState::Nominal,
                         XbxVideoRecoveryEvent::RecoverySettled,
@@ -766,6 +815,7 @@ impl XbxVideoDecodeState {
         self.backend_no_output_streak = 0;
         self.first_hardware_no_output_at_ms = None;
         self.d3d11va_no_output_rebuild_attempts = 0;
+        self.nominal_continuation_hw_no_output_resets = 0;
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
         self.record_decode_output_path_observation(
@@ -823,14 +873,18 @@ impl XbxVideoDecodeState {
             .render_label()
             .map(str::to_string);
         render_frame.frame_unrecoverable_reason = frame_unrecoverable_reason.clone();
-        let presentation_value_role = derive_presentation_value_role(
-            clean_anchor_commit_recovery_epoch,
-            recovery_epoch_tag,
-            recovery_owner_rtp_timestamp,
-            frame_recovery_disposition,
-            frame_unrecoverable_reason.as_deref(),
-            budget,
-        );
+        let presentation_value_role = if bootstrap_config_change_idr {
+            crate::api::backend::XbxEnginePresentationValueRole::FreshAnchor
+        } else {
+            derive_presentation_value_role(
+                clean_anchor_commit_recovery_epoch,
+                recovery_epoch_tag,
+                recovery_owner_rtp_timestamp,
+                frame_recovery_disposition,
+                frame_unrecoverable_reason.as_deref(),
+                budget,
+            )
+        };
         render_frame.presentation_value_role = Some(presentation_value_role.as_str().to_string());
         let dropped_from_primary = self.enqueue_decoded_frame(DecodedFrame {
             pts: target_time,
@@ -980,8 +1034,10 @@ impl XbxVideoDecodeState {
         }
     }
 
+    /// 解码输出邮箱已是 latest-only（`enqueue_decoded_frame` 会 supersede），不应再阻塞 ingress。
+    /// 显示链背压只在 pacer/renderer/native 边界丢帧，避免「decode 30fps、present 10fps」时拖死解码。
     fn should_enable_hard_backpressure(&self) -> bool {
-        self.decoded_inflight_current.is_some() && self.decoded_latest_candidate.is_some()
+        false
     }
 
     #[cfg(test)]
@@ -1037,6 +1093,7 @@ impl XbxVideoDecodeState {
 
         let Some(existing) = self.decoded_latest_candidate.take() else {
             self.decoded_latest_candidate = Some(frame);
+            self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
             if matches!(
                 self.decode_candidate_state,
                 XbxDecodeCandidateState::Backpressure
@@ -1052,6 +1109,20 @@ impl XbxVideoDecodeState {
             }
             return None;
         };
+
+        if self.should_coalesce_decoded_latest_replace(&frame, &existing, observed_at_ms) {
+            self.decoded_latest_candidate = Some(existing);
+            self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
+            self.record_decode_candidate_decision(
+                XbxDecodeCandidateState::Backpressure,
+                "drop",
+                "coalescedAfterDecode",
+                Some(incoming_frame_seq),
+                None,
+                observed_at_ms,
+            );
+            return Some(frame);
+        }
 
         let (keep, drop) = if Self::compare_decoded_candidate_value(&frame, &existing) >= 0 {
             (frame, existing)
@@ -1079,6 +1150,7 @@ impl XbxVideoDecodeState {
             },
         );
         self.decoded_latest_candidate = Some(keep);
+        self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
         self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
         self.record_decode_candidate_decision(
             XbxDecodeCandidateState::Backpressure,
@@ -1323,11 +1395,7 @@ impl XbxVideoDecodeState {
             recovery_state_before_decode,
             XbxVideoRecoveryState::Recovering
         ) && self.latest_decoded_seq > 0
-            && recovery_chain_unsettled(
-                recovery_epoch_tag,
-                clean_anchor_commit_recovery_epoch,
-                frame_recovery_disposition,
-            )
+            && recovery_chain_unsettled(recovery_epoch_tag, frame_recovery_disposition)
             && matches!(
                 frame_bootstrap_reject_reason,
                 Some(
@@ -1614,17 +1682,15 @@ impl XbxVideoDecodeState {
         } else if matches!(
             recovery_state_before_decode,
             XbxVideoRecoveryState::Recovering
-        ) && recovery_chain_unsettled(
-            recovery_epoch_tag,
-            clean_anchor_commit_recovery_epoch,
-            frame_recovery_disposition,
-        ) && matches!(
-            frame_bootstrap_reject_reason,
-            Some(
-                H264BootstrapRejectReason::BootstrapMissingIdr
-                    | H264BootstrapRejectReason::NonIdrVcl
+        ) && recovery_chain_unsettled(recovery_epoch_tag, frame_recovery_disposition)
+            && matches!(
+                frame_bootstrap_reject_reason,
+                Some(
+                    H264BootstrapRejectReason::BootstrapMissingIdr
+                        | H264BootstrapRejectReason::NonIdrVcl
+                )
             )
-        ) {
+        {
             "backendNoOutputAfterRecoveringContinuation"
         } else if matches!(recovery_state_before_decode, XbxVideoRecoveryState::Nominal)
             && self.latest_decoded_seq > 0
@@ -1726,6 +1792,17 @@ impl XbxVideoDecodeState {
         encoded_frame: &EncodedFrame,
         now_ms: f64,
     ) -> bool {
+        if !encoded_frame.is_keyframe
+            && matches!(
+                encoded_frame.h264.bootstrap_reject_reason,
+                Some(
+                    H264BootstrapRejectReason::BootstrapMissingIdr
+                        | H264BootstrapRejectReason::NonIdrVcl
+                )
+            )
+        {
+            return false;
+        }
         let within_window = self
             .waiting_keyframe_continuation_deadline_ms
             .is_some_and(|deadline_ms| now_ms <= deadline_ms);
@@ -1833,6 +1910,8 @@ impl XbxVideoDecodeState {
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
             d3d11va_no_output_rebuild_attempts: 0,
+            nominal_continuation_hw_no_output_resets: 0,
+            last_decode_latest_replace_at_ms: None,
         }
     }
 

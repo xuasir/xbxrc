@@ -91,7 +91,7 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
             negotiation.local_candidates.len(),
             negotiation.surface_id,
         );
-        negotiation.surface_id = format!("wgpu:{}", request.viewport.viewport_id);
+        negotiation.surface_id = host_surface_id_for_viewport(&request.viewport.viewport_id);
         negotiation.video_width = self.negotiation_config.target_resolution_width;
         negotiation.video_height = self.negotiation_config.target_resolution_height;
         // 首帧统计必须等真实 RTP/解码完成后再更新，避免协商阶段伪造 readiness。
@@ -246,5 +246,18 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
     fn stop(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.stop_peer_connection();
         self.inner.stop()
+    }
+}
+
+/// 协商阶段 surface id：macOS 用 `surface:`（系统层直通），Windows 用 `wgpu:`（GPU 路径）。
+fn host_surface_id_for_viewport(viewport_id: &str) -> String {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = viewport_id;
+        format!("surface:{viewport_id}")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        format!("wgpu:{viewport_id}")
     }
 }

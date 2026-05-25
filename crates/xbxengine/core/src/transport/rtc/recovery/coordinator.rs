@@ -132,17 +132,6 @@ impl RecoveryCoordinator {
         {
             return proposal;
         }
-        if signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe {
-            let budget = self.snapshot_budget_state();
-            return self.convert_escalation_decision_to_proposal(
-                VideoEscalationDecision {
-                    observation_id: 0,
-                    action: RecoveryAction::CooldownSuppressed,
-                },
-                budget,
-                budget,
-            );
-        }
         if Self::uses_policy_controlled_escalation(signal.reason) {
             let budget_before = self.snapshot_budget_state();
             let mut decision = self.escalation_controller.on_reason_with_epoch_policy(
@@ -273,17 +262,25 @@ impl RecoveryCoordinator {
                     }
                 }
 
-                if let Some(decoded_at_ms) = Self::latest_transport_await_decoded_at_ms(stats) {
-                    if self
-                        .last_keyframe_decoded_at_ms
-                        .map_or(true, |last| decoded_at_ms > last)
-                    {
-                        self.coordinator.on_idr_decoded();
-                        self.last_keyframe_decoded_at_ms = Some(decoded_at_ms);
-                        self.last_keyframe_response_observed_at_ms = Some(
-                            self.last_keyframe_response_observed_at_ms
-                                .map_or(decoded_at_ms, |last| last.max(decoded_at_ms)),
-                        );
+                if Self::check_idr_completed(stats) {
+                    let completion_at_ms = stats.recovery_displayed_idr_at_ms.or_else(|| {
+                        stats
+                            .latest_video_receiver_observation
+                            .as_ref()
+                            .map(|observation| observation.observed_at_ms)
+                    });
+                    if let Some(completion_at_ms) = completion_at_ms {
+                        if self
+                            .last_keyframe_decoded_at_ms
+                            .map_or(true, |last| completion_at_ms > last)
+                        {
+                            self.coordinator.on_idr_decoded();
+                            self.last_keyframe_decoded_at_ms = Some(completion_at_ms);
+                            self.last_keyframe_response_observed_at_ms = Some(
+                                self.last_keyframe_response_observed_at_ms
+                                    .map_or(completion_at_ms, |last| last.max(completion_at_ms)),
+                            );
+                        }
                     }
                 }
             }
@@ -319,23 +316,19 @@ impl RecoveryCoordinator {
         });
     }
 
-    /// 检查IDR是否完成（基于执行事实）
-    #[cfg(test)]
-    fn check_idr_completed(
-        stats: &XbxEngineMediaRuntimeStats,
-        last_checked_at_ms: Option<f64>,
-    ) -> bool {
-        // 证据1：当前 epoch 已有 clean anchor（最强证据）
-        let has_clean_anchor = stats
-            .video_anchor_clean_epoch
-            .is_some_and(|epoch| epoch == stats.transport_recovery_epoch);
-
-        if has_clean_anchor {
+    /// PLI / transport-await 完成：只认 host 已显示 IDR 或 receive 已离开 WaitingKeyframe。
+    pub(crate) fn check_idr_completed(stats: &XbxEngineMediaRuntimeStats) -> bool {
+        if stats.recovery_displayed_idr_at_ms.is_some() {
             return true;
         }
-
-        Self::latest_transport_await_decoded_at_ms(stats)
-            .is_some_and(|decoded_at| last_checked_at_ms.map_or(true, |last| decoded_at > last))
+        stats
+            .latest_video_receiver_observation
+            .as_ref()
+            .is_some_and(|observation| {
+                !crate::transport::rtc::recovery::contract::is_receiver_state_waiting_keyframe(
+                    Some(observation.receiver_state.as_str()),
+                )
+            })
     }
 
     fn latest_transport_await_response_observed_at_ms(
@@ -403,12 +396,7 @@ impl RecoveryCoordinator {
             return true;
         }
 
-        // 证据3：有clean anchor
-        let has_clean_anchor = stats
-            .video_anchor_clean_epoch
-            .is_some_and(|epoch| epoch == stats.transport_recovery_epoch);
-
-        if has_clean_anchor {
+        if crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats(stats) {
             return true;
         }
 
@@ -618,78 +606,19 @@ impl RecoveryCoordinator {
     ) -> bool {
         use crate::transport::rtc::recovery::contract::{
             has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
-            recovery_progress_level_from_episode, recovery_progress_missing_anchor,
+            transport_await_has_hard_bootstrap_evidence_from_stats,
         };
 
-        // 1. 必须有未解决的 transport await 问题
         if !has_current_transport_await_issue_from_stats(stats) {
             return false;
         }
-
-        // 2. 缺少当前 epoch 的 clean anchor
         if has_current_clean_anchor_from_stats(stats) {
             return false;
         }
         if Self::transport_await_decoded_pending_commit_expired(stats, now_ms) {
             return true;
         }
-        let progress = stats
-            .latest_keyframe_request_episode
-            .as_ref()
-            .and_then(|episode| {
-                recovery_progress_level_from_episode(
-                    episode.status.as_str(),
-                    episode.response_verdict.as_deref(),
-                    episode.first_video_packet_is_keyframe,
-                    episode.first_keyframe_packet_at_ms,
-                    episode.first_keyframe_decoded_at_ms,
-                    false,
-                    false,
-                )
-            });
-        if !recovery_progress_missing_anchor(progress) {
-            return false;
-        }
-        // 3. transport-await 对齐的 keyframe episode 已明确失败/过期，属于硬证据
-        let terminal_keyframe_failure = stats
-            .latest_keyframe_request_episode
-            .as_ref()
-            .filter(|episode| episode.request_reason.as_deref() == Some("receiverWaitingKeyframe"))
-            .is_some_and(|episode| {
-                matches!(
-                    episode.status.as_str(),
-                    "deferred" | "failed" | "missed" | "expired-unsent" | "late"
-                ) || matches!(
-                    episode.response_verdict.as_deref(),
-                    Some(
-                        "transportDeferred"
-                            | "transportFailed"
-                            | "missed"
-                            | "unsentExpired"
-                            | "late"
-                    )
-                )
-            });
-        if terminal_keyframe_failure {
-            return true;
-        }
-
-        // 4. keyframe 响应已经明确进入 invalid bootstrap，说明 local recovery 已得到负面证据
-        stats
-            .latest_h264_inspection_observation
-            .as_ref()
-            .filter(|inspection| (now_ms - inspection.observed_at_ms).max(0.0) <= 1_500.0)
-            .is_some_and(|inspection| {
-                !inspection.bootstrap_ready
-                    && matches!(
-                        inspection.bootstrap_reject_reason.as_deref(),
-                        Some(
-                            "bootstrapMissingSps"
-                                | "bootstrapMissingPps"
-                                | "bootstrapInvalidSliceHeader"
-                        )
-                    )
-            })
+        transport_await_has_hard_bootstrap_evidence_from_stats(stats, now_ms)
     }
 
     /// 检查本地恢复（NACK）是否活跃
@@ -724,17 +653,30 @@ impl RecoveryCoordinator {
         stats: &XbxEngineMediaRuntimeStats,
         now_ms: f64,
     ) -> bool {
-        let has_current_clean_anchor = stats.video_anchor_clean_epoch
-            == Some(stats.transport_recovery_epoch)
-            && stats.video_anchor_clean_source_event.as_deref()
-                == Some("chain-clean-anchor-submitted")
-            && stats.video_anchor_clean_observed_at_ms.is_some();
-        if has_current_clean_anchor {
+        use crate::transport::rtc::recovery::contract::{
+            has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
+            RecoveryDisplayFacts,
+        };
+
+        if has_current_clean_anchor_from_stats(stats) {
             return false;
         }
 
         let profile = resolve_runtime_recovery_profile(stats);
         let timing = resolve_recovery_dynamic_timing(stats, profile);
+        let patience_ms = timing.clean_anchor_commit_patience_window_ms;
+        let display = RecoveryDisplayFacts::from_stats(stats);
+
+        if display.displayed_idr_at_ms.is_none() {
+            if has_current_transport_await_issue_from_stats(stats) {
+                if let Some(decode_at_ms) = stats.latest_video_decode_ok_time_ms {
+                    if (now_ms - decode_at_ms).max(0.0) >= patience_ms {
+                        return true;
+                    }
+                }
+            }
+        }
+
         stats
             .recent_keyframe_request_episodes
             .iter()
@@ -764,9 +706,7 @@ impl RecoveryCoordinator {
                 .then_some(episode)
             })
             .and_then(|episode| episode.first_keyframe_decoded_at_ms)
-            .is_some_and(|decoded_at_ms| {
-                (now_ms - decoded_at_ms).max(0.0) >= timing.clean_anchor_commit_patience_window_ms
-            })
+            .is_some_and(|decoded_at_ms| (now_ms - decoded_at_ms).max(0.0) >= patience_ms)
     }
 }
 
@@ -1157,7 +1097,59 @@ mod tests {
     }
 
     #[test]
-    fn non_idr_during_rfi_grace_window_does_not_count_as_hard_recovery_evidence() {
+    fn deferred_episode_without_bootstrap_inspection_is_not_hard_evidence() {
+        let now_ms = 2_000.0;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 40,
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 910,
+                source_event: "frame-await-recovery-anchor".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("receiverWaitingKeyframe".to_string()),
+                    chain_break_evidence: None,
+                    observed_at_ms: now_ms - 8.0,
+                },
+                observed_at_ms: now_ms - 8.0,
+            }),
+            latest_keyframe_request_episode: Some(
+                crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 911,
+                    request_reason: Some("receiverWaitingKeyframe".to_string()),
+                    request_kind: Some("pli".to_string()),
+                    status: "deferred".to_string(),
+                    status_detail: Some("sameFamilyCoalesced:transportStageSuppressed".to_string()),
+                    requested_at_ms: now_ms - 25.0,
+                    sent_at_ms: None,
+                    deadline_at_ms: Some(now_ms + 600.0),
+                    transport_detail: Some(
+                        "sameFamilyCoalesced:transportStageSuppressed".to_string(),
+                    ),
+                    first_video_packet_at_ms: None,
+                    first_video_packet_rtp_timestamp: None,
+                    first_video_packet_is_keyframe: None,
+                    first_keyframe_packet_at_ms: None,
+                    first_keyframe_decoded_at_ms: None,
+                    response_rtp_timestamp: None,
+                    response_frame_seq: None,
+                    response_verdict: Some("transportDeferred".to_string()),
+                    lifecycle_phase: None,
+                    retired_at_ms: None,
+                },
+            ),
+            ..Default::default()
+        };
+        assert!(
+            !RecoveryCoordinator::transport_await_has_hard_recovery_evidence_from_stats(
+                &stats, now_ms
+            )
+        );
+    }
+
+    #[test]
+    fn non_idr_during_rfi_grace_window_counts_as_hard_recovery_evidence_via_bootstrap() {
         let now_ms = 2_000.0;
         let stats = XbxEngineMediaRuntimeStats {
             transport_recovery_epoch: 33,
@@ -1264,8 +1256,8 @@ mod tests {
         };
 
         assert!(
-            !RecoveryCoordinator::check_idr_completed(&stats, Some(160.0)),
-            "旧 decoded 状态不应在没有新响应进展时清掉当前 PLI in-flight"
+            !RecoveryCoordinator::check_idr_completed(&stats),
+            "旧 decoded 状态不应在没有 displayed IDR 或 receiver 进展时清掉当前 PLI in-flight"
         );
     }
 
@@ -1305,9 +1297,60 @@ mod tests {
             "当前 transport-await episode 的新 keyframe 响应应进入 response-observed 层"
         );
         assert!(
-            !RecoveryCoordinator::check_idr_completed(&stats, Some(150.0)),
-            "packet-seen 只表示远端已响应，decode 完成需要单独证据"
+            !RecoveryCoordinator::check_idr_completed(&stats),
+            "packet-seen 只表示远端已响应；完成仍需 displayed IDR 或 receiver 离开 waiting-keyframe"
         );
+    }
+
+    #[test]
+    fn check_idr_completed_when_displayed_idr_fact_established() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 3,
+            recovery_displayed_idr_at_ms: Some(500.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(500.0),
+            video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_source_event: Some("displayed-idr".to_string()),
+            ..Default::default()
+        };
+        assert!(RecoveryCoordinator::check_idr_completed(&stats));
+    }
+
+    #[test]
+    fn check_idr_completed_when_receiver_leaves_waiting_keyframe() {
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_receiver_observation: Some(crate::XbxEngineVideoReceiverObservation {
+                observation_id: 1,
+                receiver_state: "receiving".to_string(),
+                gap_sequence: None,
+                gap_span: None,
+                nack_in_flight: false,
+                keyframe_request_pending: false,
+                bootstrap_reject_reason: None,
+                observed_at_ms: 420.0,
+            }),
+            ..Default::default()
+        };
+        assert!(RecoveryCoordinator::check_idr_completed(&stats));
+    }
+
+    #[test]
+    fn legacy_chain_clean_anchor_submission_does_not_complete_idr() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 3,
+            video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_observed_at_ms: Some(100.0),
+            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            latest_keyframe_request_episode: Some(
+                crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 1,
+                    request_reason: Some("receiverWaitingKeyframe".to_string()),
+                    first_keyframe_decoded_at_ms: Some(150.0),
+                    ..Default::default()
+                },
+            ),
+            ..Default::default()
+        };
+        assert!(!RecoveryCoordinator::check_idr_completed(&stats));
     }
 
     #[test]

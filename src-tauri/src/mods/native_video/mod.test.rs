@@ -107,6 +107,10 @@ fn host_timing_record_policy_samples_high_frequency_present_path() {
         HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
+        resolve_host_timing_record_policy("hostMailboxTakeDecision"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
         resolve_host_timing_record_policy("hostMailboxIdle"),
         HostTimingRecordPolicy::Sampled
     );
@@ -148,7 +152,7 @@ fn host_timing_record_policy_samples_high_frequency_present_path() {
 fn sampled_host_timing_requires_min_interval() {
     assert!(should_emit_sampled_host_timing(None, 1_000.0));
     assert!(!should_emit_sampled_host_timing(Some(1_000.0), 1_500.0));
-    assert!(should_emit_sampled_host_timing(Some(1_000.0), 2_000.0));
+    assert!(should_emit_sampled_host_timing(Some(1_000.0), 3_000.0));
 }
 
 #[test]

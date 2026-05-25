@@ -20,6 +20,11 @@ use crate::XbxEngineMediaRuntimeStats;
 const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
 const HARD_STALL_RECONNECT_MS: f64 = 3_000.0;
 const AUDIO_ONLY_RECOVERY_LABEL_WINDOW_MS: f64 = HARD_STALL_RECONNECT_MS;
+const PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS: f64 = 18.0;
+const PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS: f64 = 14.0;
+const PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP: f64 = 8.0;
+const PRESENT_PIPELINE_DECODE_FRESH_WINDOW_MS: f64 = 300.0;
+const PRESENT_PIPELINE_PRESENT_LAG_WINDOW_MS: f64 = 180.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RecoveryOwnerMode {
@@ -380,6 +385,9 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         return "observe-anomaly";
     }
     if matches!(stats.session_phase.as_deref(), Some("recovery-eligible")) {
+        if decode_present_pipeline_stressed(stats, unix_now_ms()) {
+            return "display-constrained";
+        }
         return "recovery-eligible";
     }
     if matches!(stats.session_phase.as_deref(), Some("active-recovery")) {
@@ -402,6 +410,14 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         && !renderer_shadow_blocks_serviceability(stats, unix_now_ms())
     {
         return "steady";
+    }
+    if decode_present_pipeline_stressed(stats, unix_now_ms())
+        && matches!(
+            stats.video_owner_state.as_deref(),
+            Some("degraded-serving" | "stable-serving" | "supply-starved")
+        )
+    {
+        return "display-constrained";
     }
     if matches!(
         stats.video_owner_state.as_deref(),
@@ -509,6 +525,18 @@ fn resolve_effective_diagnosis_label_from_stats(
     diagnosis_label: &str,
     now_ms: f64,
 ) -> String {
+    if decode_present_pipeline_stressed(stats, now_ms)
+        && matches!(
+            diagnosis_label,
+            "receiverWaitingKeyframe" | "rebuildingSupplySuspect"
+        )
+        && owner_state_has_steady_output_semantics(stats)
+        && has_fresh_media_output(stats, now_ms)
+        && !stats.video_decoder_stalled.unwrap_or(false)
+        && !renderer_shadow_blocks_serviceability(stats, now_ms)
+    {
+        return "displaySupplyDegraded".to_string();
+    }
     if should_absorb_stale_recovery_diagnosis(stats, diagnosis_label, now_ms) {
         return "healthy".to_string();
     }
@@ -630,6 +658,49 @@ pub(crate) fn unix_now_ms() -> f64 {
         .unwrap_or(0.0)
 }
 
+pub(crate) fn decode_present_pipeline_stressed(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let decode_fresh = stats
+        .latest_video_decode_ok_time_ms
+        .map(|at_ms| (now_ms - at_ms).max(0.0) <= PRESENT_PIPELINE_DECODE_FRESH_WINDOW_MS)
+        .unwrap_or(false);
+    if !decode_fresh {
+        return false;
+    }
+    let decode_fps = stats.video_decode_fps;
+    let present_fps = stats.video_present_fps;
+    let fps_gap_stressed = decode_fps >= PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS
+        && present_fps > 0.0
+        && present_fps <= PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS
+        && (decode_fps - present_fps) >= PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP;
+    let present_lagging = present_fps > 0.0
+        && decode_fps > 0.0
+        && stats
+            .latest_video_host_present_time_ms
+            .zip(stats.latest_video_decode_ok_time_ms)
+            .map(|(present_at, decode_at)| {
+                let present_age = (now_ms - present_at).max(0.0);
+                let decode_age = (now_ms - decode_at).max(0.0);
+                present_age >= PRESENT_PIPELINE_PRESENT_LAG_WINDOW_MS
+                    && present_age > decode_age * 1.35
+            })
+            .unwrap_or(false);
+    fps_gap_stressed || present_lagging
+}
+
+/// displayed-idr 已建立且 decode/present 仍新鲜：控制面不应再被 stale transport-await 拉回。
+pub(crate) fn displayed_idr_output_pipeline_active(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    stats.recovery_displayed_idr_at_ms.is_some()
+        && has_fresh_media_output(stats, now_ms)
+        && !stats.video_decoder_stalled.unwrap_or(false)
+        && !renderer_shadow_blocks_serviceability(stats, now_ms)
+}
+
 pub(crate) fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
     const FRESH_MEDIA_OUTPUT_WINDOW_MS: f64 = 300.0;
     const FUTURE_TIMESTAMP_CLOCK_SKEW_GUARD_MS: f64 = 10_000.0;
@@ -692,6 +763,13 @@ fn should_absorb_stale_recovery_diagnosis(
     diagnosis_label: &str,
     now_ms: f64,
 ) -> bool {
+    if matches!(diagnosis_label, "rebuildingSupplySuspect") {
+        return decode_present_pipeline_stressed(stats, now_ms)
+            && owner_state_has_steady_output_semantics(stats)
+            && has_fresh_media_output(stats, now_ms)
+            && !stats.video_decoder_stalled.unwrap_or(false)
+            && !renderer_shadow_blocks_serviceability(stats, now_ms);
+    }
     if !matches!(
         diagnosis_label,
         "receiverWaitingKeyframe"
@@ -701,10 +779,17 @@ fn should_absorb_stale_recovery_diagnosis(
     ) {
         return false;
     }
-    owner_state_has_steady_output_semantics(stats)
-        && has_fresh_media_output(stats, now_ms)
-        && !stats.video_decoder_stalled.unwrap_or(false)
-        && !renderer_shadow_blocks_serviceability(stats, now_ms)
+    let fresh_output = has_fresh_media_output(stats, now_ms);
+    let pipeline_serviceable = !stats.video_decoder_stalled.unwrap_or(false)
+        && !renderer_shadow_blocks_serviceability(stats, now_ms);
+    if stats.recovery_displayed_idr_at_ms.is_some()
+        && fresh_output
+        && pipeline_serviceable
+        && host_presentation_serviceable(stats, now_ms)
+    {
+        return true;
+    }
+    owner_state_has_steady_output_semantics(stats) && fresh_output && pipeline_serviceable
 }
 
 pub(crate) fn decoder_backend_failure_signal_is_active(
@@ -886,6 +971,29 @@ mod tests {
             "healthy"
         );
         assert_eq!(recovery_stage_label(&stats), "steady");
+    }
+
+    #[test]
+    fn display_pipeline_stress_maps_stale_receiver_wait_to_display_supply_degraded() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovery-eligible".to_string()),
+            recovery_active_escalation_reason: Some("receiverWaitingKeyframe".to_string()),
+            video_owner_state: Some("degraded-serving".to_string()),
+            latest_video_host_present_time_ms: Some(now_ms - 220.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 24.0),
+            video_present_fps: 10.0,
+            video_decode_fps: 31.0,
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(false),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            resolve_effective_diagnosis_label_from_stats(&stats, "receiverWaitingKeyframe", now_ms),
+            "displaySupplyDegraded"
+        );
+        assert_eq!(recovery_stage_label(&stats), "display-constrained");
     }
 
     #[test]

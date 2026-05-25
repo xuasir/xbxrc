@@ -332,6 +332,7 @@ where
             owner_reason,
             Some("displaySupplyCritical" | "displaySupplyDegraded")
         ) && !self.has_fresh_post_decode_display_recovery_evidence(runtime_stats, now)
+            && !Self::decoder_blocked_display_recovery(runtime_stats)
         {
             self.snapshot.last_recovery_reason =
                 Some("displayRecoverySkipped:stalePostDecodeEvidence".to_string());
@@ -390,6 +391,15 @@ where
         }
         self.health.last_renderer_submit_count_total =
             runtime_stats.video_renderer_submit_count_total;
+    }
+
+    /// decode 已卡住等 IDR 时，显示域仍应允许本地 presenter 自愈，不能只看 renderer submit 新鲜度。
+    fn decoder_blocked_display_recovery(runtime_stats: &crate::XbxEngineMediaRuntimeStats) -> bool {
+        runtime_stats.video_decoder_stalled.unwrap_or(false)
+            || runtime_stats
+                .video_decoder_recovery_state
+                .as_deref()
+                .is_some_and(|state| state == "waiting-keyframe")
     }
 
     fn has_fresh_post_decode_display_recovery_evidence(

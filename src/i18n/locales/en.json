@@ -159,6 +159,7 @@
       "notices": {
         "relay": "Using a relay connection",
         "recovering": "Recovering stream",
+        "displaySupplyLimited": "Display supply limited",
         "noVideo": "No video signal"
       },
       "metrics": {

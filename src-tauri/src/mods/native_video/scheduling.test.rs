@@ -3,7 +3,7 @@ use std::sync::Arc;
 use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
 use super::{
-    HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome,
+    HostCadencePhase, HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome,
     ScheduledFrameTakeOutcome,
 };
 
@@ -196,6 +196,159 @@ fn stale_pending_frame_drops_when_no_displayed_frame_exists() {
         }
         other => panic!("expected stale frame drop, got {other:?}"),
     }
+}
+
+#[test]
+fn retained_displayed_frame_does_not_enter_starved_or_no_pending_streak() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let _ = slot.submit_frame(&mk_frame(30, 1_000.0), 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            assert_eq!(frame.frame_seq, 30);
+            telemetry.record_present(1_020.0);
+        }
+        other => panic!("expected initial present, got {other:?}"),
+    }
+    assert_eq!(telemetry.present_epoch(), 1);
+    assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
+
+    for offset in [0.0, 50.0, 100.0, 150.0] {
+        match slot.take_ready_frame(1_030.0 + offset, &mut telemetry) {
+            ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+            other => panic!("expected retained displayed frame, got {other:?}"),
+        }
+    }
+    assert_eq!(telemetry.no_pending_streak, 0);
+    assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
+    assert!(
+        telemetry
+            .latest_present_time_ms
+            .is_some_and(|t| t >= 1_180.0),
+        "present refresh should advance latest_present_time_ms"
+    );
+    assert!(
+        telemetry.present_fps() < 30.0,
+        "display hold refresh must not inflate present_fps toward display tick rate"
+    );
+}
+
+#[test]
+fn present_refresh_does_not_inflate_present_fps() {
+    let mut telemetry = HostCadenceTelemetry::default();
+    telemetry.record_present(1_000.0);
+    telemetry.record_present(1_080.0);
+    telemetry.record_present(1_180.0);
+    let baseline = telemetry.present_fps();
+    assert!(baseline > 0.0, "baseline present_fps should be measurable");
+    for i in 0..12 {
+        telemetry.record_present_refresh(1_190.0 + (i as f64) * 8.0);
+    }
+    let after_refresh = telemetry.present_fps();
+    assert!(
+        (after_refresh - baseline).abs() < 5.0,
+        "baseline={baseline} after_refresh={after_refresh}"
+    );
+}
+
+#[test]
+fn present_fps_requires_minimum_sample_window() {
+    let mut telemetry = HostCadenceTelemetry::default();
+    assert_eq!(telemetry.present_fps(), 0.0);
+    telemetry.record_present(1_000.0);
+    telemetry.record_present(1_006.0);
+    assert_eq!(
+        telemetry.present_fps(),
+        0.0,
+        "two tight samples must not produce inflated present_fps"
+    );
+    telemetry.record_present(1_200.0);
+    assert!(
+        telemetry.present_fps() > 0.0 && telemetry.present_fps() < 90.0,
+        "present_fps={}",
+        telemetry.present_fps()
+    );
+}
+
+#[test]
+fn submit_allows_render_pipeline_slack_before_mailbox_stale_drop() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let frame = mk_frame(70, 1_000.0);
+    match slot.submit_frame(&frame, 1_090.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_age_ms, .. } => {
+            assert!(
+                frame_age_ms > telemetry.stale_frame_age_budget_for_frame(&frame),
+                "render-side age should exceed steady stale budget"
+            );
+        }
+        other => panic!("expected frame accepted with submit pipeline slack, got {other:?}"),
+    }
+    let snapshot = slot.diagnostics_snapshot();
+    assert_eq!(snapshot.pending_frame_seqs, vec![70]);
+}
+
+#[test]
+fn take_discards_duplicate_pending_without_presenting_it() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let _ = slot.submit_frame(&mk_frame(80, 1_000.0), 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 80),
+        other => panic!("expected initial present, got {other:?}"),
+    }
+
+    let stale_duplicate = XbxEngineRenderFrame {
+        frame_seq: 75,
+        is_keyframe: false,
+        frame_recovery_disposition: Some("steady".to_string()),
+        ..mk_frame(75, 1_005.0)
+    };
+    slot.set_pending_for_test(stale_duplicate, 1_032.0);
+    match slot.take_ready_frame(1_040.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+        other => panic!("expected duplicate pending discard with displayed hold, got {other:?}"),
+    }
+    assert!(
+        slot.diagnostics_snapshot().pending_frame_seqs.is_empty(),
+        "duplicate pending must be removed without a bogus present"
+    );
+
+    let _ = slot.submit_frame(&mk_frame(95, 1_040.0), 1_041.0, &mut telemetry);
+    match slot.take_ready_frame(1_050.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 95),
+        other => panic!("expected next pending frame after duplicate discard, got {other:?}"),
+    }
+}
+
+#[test]
+fn take_uses_mailbox_accepted_age_not_render_timestamp() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    slot.set_pending_for_test(mk_frame(90, 1_000.0), 1_050.0);
+    match slot.take_ready_frame(1_110.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 90),
+        other => panic!(
+            "expected pending accepted 60ms ago to present despite 110ms render age, got {other:?}"
+        ),
+    }
+}
+
+#[test]
+fn frame_age_budget_tracks_submit_interval_when_display_ticks_are_sparse() {
+    let mut telemetry = HostCadenceTelemetry::default();
+    telemetry.record_submit(1_000.0);
+    telemetry.record_submit(1_050.0);
+    telemetry.record_submit(1_100.0);
+    let effective_budget = telemetry.frame_age_budget_ms();
+    assert!(
+        effective_budget >= 20.0 && effective_budget <= 90.0,
+        "effective_budget={effective_budget}"
+    );
 }
 
 #[test]

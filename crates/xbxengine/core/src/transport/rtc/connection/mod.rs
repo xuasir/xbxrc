@@ -34,5 +34,7 @@ pub(crate) use fact_mapping::{map_connection_lifecycle_state_fact, map_data_chan
 pub(crate) use sdp_candidate::{
     extract_local_candidates_from_offer_sdp, is_end_of_candidates_marker,
 };
+#[cfg(test)]
+pub(crate) use service::VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON;
 pub(crate) use service::{RtcConnectionService, VideoRecoveryRequestOutcome};
 pub(crate) use text_preview::short_text_preview;

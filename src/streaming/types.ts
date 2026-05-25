@@ -444,6 +444,7 @@ export interface StreamExperienceMetricsViewModel {
   mediaReadyElapsed?: string
   relayNotice: boolean
   recoveringNotice: boolean
+  displaySupplyNotice: boolean
   noVideoNotice: boolean
 }
 

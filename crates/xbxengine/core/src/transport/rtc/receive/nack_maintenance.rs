@@ -52,11 +52,24 @@ impl RtcVideoFrameSource {
         use crate::media::video::types::FrameValue;
 
         let now = std::time::Instant::now();
-        let (sequences, keyframe_fallback) = self
+        let effective_rtt_ms = self
+            .runtime_stats
+            .read(|stats| {
+                resolve_effective_rtt_ms(
+                    stats,
+                    ScenarioPolicyResolver::resolve_kind(
+                        stats.session_target_type.as_ref(),
+                        stats.transport_path.as_deref(),
+                    ),
+                )
+            })
+            .unwrap_or(100.0);
+        let poll = self
             .receive_core_mut()
             .receive_engine
-            .poll_nack_maintenance(now);
-        if !sequences.is_empty() {
+            .poll_nack_maintenance(now, effective_rtt_ms);
+        if !poll.sequences.is_empty() {
+            let max_retry = poll.retry_counts.iter().copied().max().unwrap_or(0);
             let frame_value = FrameValue::new(false, false, 12 * 1024);
             let budget_context = FrameBudgetContext::for_transport(
                 frame_value,
@@ -68,8 +81,8 @@ impl RtcVideoFrameSource {
                 FrameBudgetWindowSource::Transport,
             );
             let batch = NackBatch {
-                sequences,
-                retry_count: 0,
+                sequences: poll.sequences,
+                retry_count: max_retry,
                 source: "receiverLocal",
                 frame_rtp_timestamp: None,
                 frame_is_keyframe: None,
@@ -83,13 +96,17 @@ impl RtcVideoFrameSource {
             };
             let _ = self.send_nack_batch("sent", &batch, now_ms).await;
         }
-        if keyframe_fallback {
+        if poll.keyframe_escalation_due {
             self.request_receiver_local_keyframe(
-                "receiver-local-nack-fallback",
+                "receiver-local-nack-escalation",
                 None,
                 now_ms,
                 false,
             );
+            self.receive_core_mut()
+                .receive_engine
+                .nack_requester
+                .on_keyframe_escalation_sent();
         }
         if self.is_blocking_non_keyframe_admission() {
             let capability = self.receive_core().transport_capability.clone();
@@ -97,7 +114,7 @@ impl RtcVideoFrameSource {
                 .receive_core_mut()
                 .receive_engine
                 .keyframe_requester
-                .request_if_due(capability.as_ref(), false);
+                .request_if_due(capability.as_ref(), true);
         }
     }
 

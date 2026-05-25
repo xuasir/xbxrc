@@ -148,6 +148,12 @@ pub(crate) fn upgrade_local_supply_suspect_signal_if_ready(
 pub(crate) fn recovery_anchor_evidence_trace_code(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> Option<String> {
+    if stats.recovery_displayed_idr_at_ms.is_some() {
+        return Some("displayedIdr".to_string());
+    }
+    if stats.recovery_playback_recovered_at_ms.is_some() {
+        return Some("playbackRecovered".to_string());
+    }
     if stats
         .latest_h264_inspection_observation
         .as_ref()

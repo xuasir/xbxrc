@@ -84,6 +84,10 @@ pub(super) trait NativeVideoPresenter: Send {
     fn attach(&mut self, surface_id: Option<&str>);
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool;
     fn detach(&mut self);
+    /// Host present 停滞时优先走邮箱重置，避免拆掉 wgpu host view / renderer 引发主线程重初始化卡死。
+    fn reset_mailbox_for_host_stall_recovery(&mut self) -> bool {
+        false
+    }
     fn begin_media_epoch(&mut self) {}
     fn apply_display_state(&mut self, _state: &NativeVideoDisplayState) {}
     fn apply_viewport_diagnostics(&self, _viewport: &mut NativeVideoViewportState) {}
@@ -333,6 +337,17 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
             telemetry.reset_frame_slot();
         }
         self.render_loop_pending.store(false, Ordering::Relaxed);
+    }
+
+    fn reset_mailbox_for_host_stall_recovery(&mut self) -> bool {
+        self.begin_media_epoch();
+        clear_host_present_tick_dispatch(
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+        );
+        self.render_loop_stop.store(false, Ordering::Relaxed);
+        self.ensure_render_loop();
+        true
     }
 
     fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {
@@ -971,6 +986,13 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         );
     }
 
+    fn reset_mailbox_for_host_stall_recovery(&mut self) -> bool {
+        self.begin_media_epoch();
+        self.render_loop_stop.store(false, Ordering::Relaxed);
+        self.ensure_render_loop();
+        true
+    }
+
     fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {
         self.display_state = state.clone();
     }
@@ -1476,6 +1498,13 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             telemetry.reset_frame_slot();
         }
         self.render_loop_pending.store(false, Ordering::Relaxed);
+    }
+
+    fn reset_mailbox_for_host_stall_recovery(&mut self) -> bool {
+        self.begin_media_epoch();
+        self.render_loop_stop.store(false, Ordering::Relaxed);
+        self.ensure_render_loop();
+        true
     }
 
     fn apply_display_state(&mut self, state: &NativeVideoDisplayState) {

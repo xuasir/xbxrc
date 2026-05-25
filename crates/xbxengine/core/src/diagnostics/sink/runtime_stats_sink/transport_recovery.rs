@@ -6,6 +6,30 @@ use crate::{XbxEnginePictureRecoveryTransitionObservation, XbxEngineVideoEscalat
 use super::support::*;
 use super::RuntimeStatsSink;
 
+const PLAYBACK_RECOVERED_MIN_PRESENT_FPS: f64 = 12.0;
+const PLAYBACK_RECOVERED_MAX_PRESENT_FPS: f64 = 90.0;
+
+fn sanitize_playback_recovered_present_fps(
+    stats: &crate::XbxEngineMediaRuntimeStats,
+    present_fps: f64,
+) -> Option<f64> {
+    if present_fps >= PLAYBACK_RECOVERED_MIN_PRESENT_FPS
+        && present_fps <= PLAYBACK_RECOVERED_MAX_PRESENT_FPS
+    {
+        return Some(present_fps);
+    }
+    let decode_fps = stats.video_decode_fps;
+    if decode_fps >= PLAYBACK_RECOVERED_MIN_PRESENT_FPS
+        && decode_fps <= PLAYBACK_RECOVERED_MAX_PRESENT_FPS
+    {
+        return Some(decode_fps);
+    }
+    if present_fps > 0.0 && present_fps < PLAYBACK_RECOVERED_MIN_PRESENT_FPS {
+        return None;
+    }
+    None
+}
+
 impl RuntimeStatsSink {
     pub(crate) fn begin_transport_recovery_episode(&self, observed_at_ms: f64) -> u64 {
         let mut next_epoch = 0u64;
@@ -53,77 +77,39 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_transport_clean_anchor_with_rtp(
+    pub(crate) fn record_pending_displayed_idr_rtp(&self, rtp_timestamp: u32) {
+        self.update(|stats| {
+            stats.recovery_pending_displayed_idr_rtp = Some(rtp_timestamp);
+        });
+    }
+
+    pub(crate) fn record_displayed_idr_fact(
         &self,
         observed_at_ms: f64,
-        source_event: &str,
-        rtp_timestamp: Option<u32>,
+        rtp_timestamp: u32,
         frame_seq: Option<u64>,
     ) {
         self.update(|stats| {
-            if source_event == "chain-clean-anchor-submitted" {
-                let Some(submission_epoch) = stats.latest_clean_anchor_submission_epoch else {
-                    return;
-                };
-                let Some(submission_episode_id) = stats.latest_clean_anchor_submission_episode_id
-                else {
-                    return;
-                };
-                let Some(submission_rtp_timestamp) =
-                    stats.latest_clean_anchor_submission_rtp_timestamp
-                else {
-                    return;
-                };
-                let Some(submission_episode) =
-                    find_transport_await_episode_candidate_by_id(stats, submission_episode_id)
-                else {
-                    return;
-                };
-                let current_owner_matches_submission =
-                    latest_transport_recovery_keyframe_episode_id(stats).is_none_or(
-                        |current_episode_id| current_episode_id == submission_episode_id,
-                    );
-                let fallback_commit_allowed = stats.video_anchor_bridge_epoch
-                    == Some(submission_epoch)
-                    && stats.video_anchor_bridge_source_event.as_deref()
-                        == Some("hostVisibleAnchorPending")
-                    && (frame_seq
-                        .zip(submission_episode.response_frame_seq)
-                        .is_some_and(|(displayed_frame_seq, response_frame_seq)| {
-                            displayed_frame_seq >= response_frame_seq
-                        })
-                        || has_serviceable_continuation_visible_for_submission(
-                            stats,
-                            &submission_episode,
-                            observed_at_ms,
-                        ));
-                if submission_epoch != stats.transport_recovery_epoch
-                    || stats.video_anchor_clean_epoch == Some(submission_epoch)
-                    || !current_owner_matches_submission
-                    || (rtp_timestamp != Some(submission_rtp_timestamp) && !fallback_commit_allowed)
-                {
-                    return;
-                }
+            if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch) {
+                return;
             }
-            Self::apply_clean_anchor_submission_fact(
-                stats,
-                stats.transport_recovery_epoch,
-                stats.latest_clean_anchor_submission_episode_id,
-                rtp_timestamp,
-                observed_at_ms,
-                source_event,
-            );
-            Self::apply_transport_clean_anchor(stats, observed_at_ms, source_event);
+            if !host_display_rtp_qualifies_for_fresh_anchor(stats, rtp_timestamp) {
+                return;
+            }
+            stats.recovery_displayed_idr_rtp = Some(rtp_timestamp);
+            stats.recovery_displayed_idr_at_ms = Some(observed_at_ms);
+            stats.recovery_pending_displayed_idr_rtp = None;
+            Self::apply_transport_clean_anchor(stats, observed_at_ms, "displayed-idr");
             let observation = XbxEnginePictureRecoveryTransitionObservation {
                 observation_id: Self::next_picture_recovery_transition_observation_id(stats),
-                episode_id: stats.latest_clean_anchor_submission_episode_id,
+                episode_id: None,
                 recovery_epoch: Some(stats.transport_recovery_epoch),
-                phase: "CleanAnchorCommitted".to_string(),
+                phase: "FreshAnchorRecovered".to_string(),
                 from_phase: Some("Decoded".to_string()),
-                to_phase: "CleanAnchorCommitted".to_string(),
-                cause: Some(source_event.to_string()),
-                detail: Some("mediaGate".to_string()),
-                rtp_timestamp,
+                to_phase: "FreshAnchorRecovered".to_string(),
+                cause: Some("displayed-idr".to_string()),
+                detail: Some("hostVisible".to_string()),
+                rtp_timestamp: Some(rtp_timestamp),
                 frame_seq,
                 owner_state: stats.video_owner_state.clone(),
                 transport_state: Some(format!("{:?}", stats.transport_state)),
@@ -141,61 +127,54 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_transport_clean_anchor_bridge_with_rtp(
+    pub(crate) fn record_playback_recovered_fact(&self, observed_at_ms: f64, present_fps: f64) {
+        self.update(|stats| {
+            if stats.recovery_playback_recovered_at_ms.is_some() {
+                return;
+            }
+            let effective_fps = sanitize_playback_recovered_present_fps(stats, present_fps);
+            let Some(effective_fps) = effective_fps else {
+                return;
+            };
+            stats.recovery_playback_recovered_at_ms = Some(observed_at_ms);
+            stats.recovery_playback_recovered_phase = Some("hostPresent".to_string());
+            let observation = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: None,
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "PlaybackRecovered".to_string(),
+                from_phase: Some("Decoded".to_string()),
+                to_phase: "PlaybackRecovered".to_string(),
+                cause: Some("hostPresent".to_string()),
+                detail: Some(format!("presentFps={effective_fps:.1}")),
+                rtp_timestamp: stats.recovery_displayed_idr_rtp,
+                frame_seq: stats.last_displayed_frame_seq,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(observation);
+        });
+    }
+
+    /// 测试与遗留调用入口：内部转到 `record_displayed_idr_fact`。
+    pub(crate) fn record_transport_clean_anchor_with_rtp(
         &self,
         observed_at_ms: f64,
         source_event: &str,
         rtp_timestamp: Option<u32>,
         frame_seq: Option<u64>,
     ) {
-        self.update(|stats| {
-            let Some(submission_epoch) = stats.latest_clean_anchor_submission_epoch else {
-                return;
-            };
-            let Some(submission_episode_id) = stats.latest_clean_anchor_submission_episode_id
-            else {
-                return;
-            };
-            let Some(submission_rtp_timestamp) = stats.latest_clean_anchor_submission_rtp_timestamp
-            else {
-                return;
-            };
-            if submission_epoch != stats.transport_recovery_epoch
-                || stats.video_anchor_clean_epoch == Some(submission_epoch)
-            {
-                return;
-            }
-            if latest_transport_recovery_keyframe_episode_id(stats)
-                .is_some_and(|current_episode_id| current_episode_id != submission_episode_id)
-            {
-                return;
-            }
-            let Some(episode) =
-                find_transport_await_episode_candidate_by_id(stats, submission_episode_id)
-            else {
-                return;
-            };
-            let displayed_submission_rtp = rtp_timestamp == Some(submission_rtp_timestamp);
-            let displayed_serviceable_continuation = frame_seq
-                .zip(episode.response_frame_seq)
-                .is_some_and(|(displayed_frame_seq, response_frame_seq)| {
-                    displayed_frame_seq >= response_frame_seq
-                })
-                || has_serviceable_continuation_visible_for_submission(
-                    stats,
-                    &episode,
-                    observed_at_ms,
-                );
-            if !displayed_submission_rtp && !displayed_serviceable_continuation {
-                return;
-            }
-            Self::apply_transport_clean_anchor_bridge(
-                stats,
-                observed_at_ms,
-                source_event,
-                rtp_timestamp,
-            );
-        });
+        if source_event == "test-clean-anchor" {
+            let rtp_timestamp = rtp_timestamp.unwrap_or(1);
+            self.record_pending_displayed_idr_rtp(rtp_timestamp);
+            self.record_displayed_idr_fact(observed_at_ms, rtp_timestamp, frame_seq);
+            return;
+        }
+        let Some(rtp_timestamp) = rtp_timestamp else {
+            return;
+        };
+        self.record_displayed_idr_fact(observed_at_ms, rtp_timestamp, frame_seq);
     }
 
     pub(crate) fn invalidate_current_transport_clean_anchor(
@@ -214,70 +193,6 @@ impl RuntimeStatsSink {
         invalidated
     }
 
-    pub(crate) fn record_transport_clean_anchor_submission(
-        &self,
-        submission_epoch: u64,
-        submission_episode_id: u64,
-        rtp_timestamp: u32,
-        observed_at_ms: f64,
-        source_event: &str,
-    ) {
-        self.update(|stats| {
-            let submission_episode =
-                find_transport_await_episode_candidate_by_id(stats, submission_episode_id);
-            let episode_still_active = submission_episode.is_some();
-            let current_owner_episode_id = latest_transport_recovery_keyframe_episode_id(stats);
-            let current_owner_matches_submission = current_owner_episode_id
-                .is_none_or(|current_episode_id| current_episode_id == submission_episode_id);
-            if stats.transport_recovery_epoch == submission_epoch
-                && current_owner_episode_id.is_some()
-                && (!episode_still_active || !current_owner_matches_submission)
-            {
-                stats.latest_observation_label = Some("cleanAnchorSubmissionIgnored".to_string());
-                stats.latest_observation_summary = Some(format!(
-                    "reason=ownerFrameAdvanced submissionEpoch={} submissionEpisodeId={} rtpTimestamp={} observedAtMs={:.1}",
-                    submission_epoch,
-                    submission_episode_id,
-                    rtp_timestamp,
-                    observed_at_ms
-                ));
-                return;
-            }
-            Self::apply_clean_anchor_submission_fact(
-                stats,
-                submission_epoch,
-                Some(submission_episode_id),
-                Some(rtp_timestamp),
-                observed_at_ms,
-                source_event,
-            );
-            let observation = XbxEnginePictureRecoveryTransitionObservation {
-                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
-                episode_id: Some(submission_episode_id),
-                recovery_epoch: Some(stats.transport_recovery_epoch),
-                phase: "CleanAnchorSubmitted".to_string(),
-                from_phase: Some("Decoded".to_string()),
-                to_phase: "CleanAnchorSubmitted".to_string(),
-                cause: Some(source_event.to_string()),
-                detail: Some("hostVisibilityPending".to_string()),
-                rtp_timestamp: Some(rtp_timestamp),
-                frame_seq: None,
-                owner_state: stats.video_owner_state.clone(),
-                transport_state: Some(format!("{:?}", stats.transport_state)),
-                observed_at_ms,
-            };
-            stats.latest_picture_recovery_transition_observation = Some(observation);
-            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
-            emit_picture_recovery_closure_probe(
-                &*stats,
-                "clean-anchor",
-                observed_at_ms,
-                stats.latest_keyframe_request_episode.as_ref(),
-                stats.latest_anchor_candidate_ledger.as_ref(),
-            );
-        });
-    }
-
     pub(crate) fn complete_transport_recovery_after_stable_settle(&self, observed_at_ms: f64) {
         self.update(|stats| {
             Self::apply_complete_transport_recovery_episode(
@@ -293,7 +208,7 @@ impl RuntimeStatsSink {
                     .map(|episode| episode.episode_id),
                 recovery_epoch: Some(stats.transport_recovery_epoch),
                 phase: "DisplayStable".to_string(),
-                from_phase: Some("CleanAnchorCommitted".to_string()),
+                from_phase: Some("FreshAnchorRecovered".to_string()),
                 to_phase: "DisplayStable".to_string(),
                 cause: Some("stableServingSettled".to_string()),
                 detail: Some("displayGate".to_string()),

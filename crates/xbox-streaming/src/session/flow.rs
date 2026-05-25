@@ -1809,6 +1809,11 @@ fn decide_home_session_ready_recreate_retry(
         || latest_error_message.is_some_and(is_server_registration_retry_signal)
     {
         let reason = SessionReadyRecreateRetryReason::WaitingForServerRegistration;
+        if matches!(latest_phase, Some(SessionPhase::Failed))
+            && latest_error_code.is_some_and(is_server_registration_retry_signal)
+        {
+            return Some(SessionReadyRetryDecision::Exhausted(reason));
+        }
         if retry_count < HOME_SESSION_READY_RETRY_LIMIT {
             return Some(SessionReadyRetryDecision::Retry(reason));
         }

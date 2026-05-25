@@ -4,19 +4,21 @@ import { waitForPadNeutral } from './wait-pad-neutral'
 
 const listenerMap = new Map<string, Set<(payload: unknown) => void>>()
 let disposeCount = 0
-const getRuntimeSnapshot = vi.fn(async () => ({
-  slots: [
-    {
-      slot: 'p1',
-      state: {
-        buttons: { south: 1 },
-        leftStick: { x: 0, y: 0 },
-        rightStick: { x: 0, y: 0 },
-        leftTrigger: 0,
-        rightTrigger: 0,
+const { getRuntimeSnapshot } = vi.hoisted(() => ({
+  getRuntimeSnapshot: vi.fn(async () => ({
+    slots: [
+      {
+        slot: 'p1',
+        state: {
+          buttons: { south: 1 },
+          leftStick: { x: 0, y: 0 },
+          rightStick: { x: 0, y: 0 },
+          leftTrigger: 0,
+          rightTrigger: 0,
+        },
       },
-    },
-  ],
+    ],
+  })),
 }))
 
 vi.mock('../../services/events', () => ({
@@ -60,7 +62,8 @@ describe('waitForPadNeutral', () => {
     const controller = new AbortController()
     const pending = waitForPadNeutral({ signal: controller.signal })
 
-    await vi.runAllTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
     controller.abort()
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })

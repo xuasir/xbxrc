@@ -7,6 +7,7 @@ mod engine;
 mod h264_bootstrap_tracker;
 mod ingress_loop;
 mod ingress_state;
+mod keyframe_escalation_queue;
 mod keyframe_requester;
 mod nack_maintenance;
 mod nack_policy;
@@ -42,9 +43,11 @@ pub(crate) use core::receiver_state_from_runtime;
 pub(crate) use core_body::ReceiveCoreBody;
 pub(crate) use core_runtime::RtcReceiveCore;
 pub use decode_gate::{
-    inspection_bootstrap_reason, keyframe_episode_response_detail,
-    prior_output_continuation_allowed, resolve_inspection_admission, DecodeGate,
-    DecodeGateDecision, InspectionAdmission,
+    inspection_bootstrap_blocks_delta_continuation, inspection_bootstrap_reason,
+    keyframe_episode_response_detail, prior_output_continuation_allowed,
+    receiver_state_blocks_delta_continuation, resolve_inspection_admission,
+    should_block_non_keyframe_admission, DecodeCorruptionPolicy, DecodeGate, DecodeGateDecision,
+    InspectionAdmission, ReceiverDecodeContext,
 };
 pub(crate) use engine::ReceiveEngine;
 pub use observation::ReceiverObservation;

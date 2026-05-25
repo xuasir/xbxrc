@@ -9,15 +9,20 @@ pub fn resolve_video_pipeline_plan(
     capabilities: VideoPlatformCapabilities,
 ) -> VideoPipelinePlan {
     match capabilities.platform {
-        // macOS 现阶段默认优先系统视频层，保证清晰度和稳定性；
-        // 后续只有在显式增强模式下再切到 GPU path。
-        VideoPlatformKind::MacOs
-            if capabilities.supports_native_direct
-                && surface.native_kind == VideoNativeSurfaceKind::MacOsCvPixelBuffer =>
-        {
-            VideoPipelinePlan {
-                presenter_mode: VideoPresenterMode::NativeDirect,
-                effect_pipeline: VideoEffectPipelineKind::Noop,
+        // macOS：CVPixelBuffer 走 CALayer；CPU/软件解码面走 wgpu，避免 layer 拒收。
+        VideoPlatformKind::MacOs if capabilities.supports_native_direct => {
+            if surface.native_kind == VideoNativeSurfaceKind::MacOsCvPixelBuffer {
+                VideoPipelinePlan {
+                    presenter_mode: VideoPresenterMode::NativeDirect,
+                    effect_pipeline: VideoEffectPipelineKind::Noop,
+                }
+            } else if capabilities.supports_gpu_direct {
+                resolve_gpu_plan(requested_surface_id, capabilities)
+            } else {
+                VideoPipelinePlan {
+                    presenter_mode: VideoPresenterMode::NativeDirect,
+                    effect_pipeline: VideoEffectPipelineKind::Noop,
+                }
             }
         }
         // Windows 现阶段先把 GPU direct 定成默认方向；
@@ -141,6 +146,51 @@ mod tests {
             access_kind: VideoSurfaceAccessKind::NativeHandle,
             native_kind: VideoNativeSurfaceKind::WindowsD3d11Texture,
         }
+    }
+
+    fn macos_cv_surface() -> DecodedVideoSurface {
+        DecodedVideoSurface {
+            width: 1280,
+            height: 720,
+            pixel_format: VideoSurfacePixelFormat::MacOsCvPixelBuffer,
+            color: VideoColorMetadata::default(),
+            access_kind: VideoSurfaceAccessKind::NativeHandle,
+            native_kind: VideoNativeSurfaceKind::MacOsCvPixelBuffer,
+        }
+    }
+
+    #[test]
+    fn macos_cv_surface_uses_native_direct() {
+        let plan = resolve_video_pipeline_plan(
+            &macos_cv_surface(),
+            Some("stream-page-video"),
+            VideoPlatformCapabilities {
+                platform: VideoPlatformKind::MacOs,
+                supports_native_direct: true,
+                supports_gpu_direct: true,
+                supports_wgpu_effects: true,
+            },
+        );
+
+        assert_eq!(plan.presenter_mode, VideoPresenterMode::NativeDirect);
+        assert_eq!(plan.effect_pipeline, VideoEffectPipelineKind::Noop);
+    }
+
+    #[test]
+    fn macos_cpu_surface_uses_gpu_direct() {
+        let plan = resolve_video_pipeline_plan(
+            &cpu_surface(),
+            Some("wgpu:stream-page-video"),
+            VideoPlatformCapabilities {
+                platform: VideoPlatformKind::MacOs,
+                supports_native_direct: true,
+                supports_gpu_direct: true,
+                supports_wgpu_effects: true,
+            },
+        );
+
+        assert_eq!(plan.presenter_mode, VideoPresenterMode::GpuDirect);
+        assert_eq!(plan.effect_pipeline, VideoEffectPipelineKind::Wgpu);
     }
 
     #[test]

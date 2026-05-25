@@ -1978,7 +1978,7 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
     }));
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &blocked_stats);
 
-    let submitted_stats = test_stats(json!({
+    let displayed_stats = test_stats(json!({
         "resolution": "",
         "rtt": "",
         "fps": 0.0,
@@ -1987,35 +1987,14 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
         "jit": "",
         "br": "",
         "decode": "",
-        "latest_anchor_candidate_ledger": {
-            "recovery_epoch": 12,
-            "frame_rtp_timestamp": 4001,
-            "state": "submitted-clean-anchor",
-            "source_event": "chain-clean-anchor-submitted",
-            "failure_reason": null,
-            "observed_at_ms": 1520.0
-        },
-        "latest_video_timeline_observation": {
-            "observation_id": 403,
-            "source_event": "chain-clean-anchor-submitted",
-            "gap": null,
-            "frame": {
-                "state": "complete-candidate",
-                "frame_rtp_timestamp": 4001,
-                "is_keyframe": true,
-                "frame_importance": "anchor",
-                "close_reason": null,
-                "observed_at_ms": 1520.0
-            },
-            "chain": {
-                "state": "steady",
-                "reason": "cleanAnchorCommitted",
-                "observed_at_ms": 1520.0
-            },
-            "observed_at_ms": 1520.0
-        }
+        "recovery_displayed_idr_rtp": 4001,
+        "recovery_displayed_idr_at_ms": 1520.0,
+        "recovery_fresh_anchor_recovered_at_ms": 1520.0,
+        "video_anchor_clean_epoch": 12,
+        "video_anchor_clean_observed_at_ms": 1520.0,
+        "video_anchor_clean_source_event": "displayed-idr"
     }));
-    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &submitted_stats);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &displayed_stats);
 
     let entries = read_trace_lines(recorder.as_ref());
 
@@ -2032,10 +2011,54 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
         "frame-complete-candidate-decode-feedback-blocked"
     );
 
-    let submitted_payload = find_event_payload(&entries, "cleanAnchorSubmitted");
-    assert_eq!(submitted_payload["frameRtpTimestamp"], 4001);
-    assert_eq!(submitted_payload["chainState"], "steady");
-    assert_eq!(submitted_payload["anchorState"], "submitted-clean-anchor");
+    let displayed_payload = find_event_payload(&entries, "displayedIdrObserved");
+    assert_eq!(displayed_payload["rtpTimestamp"], 4001);
+    assert_eq!(displayed_payload["observedAtMs"], 1520.0);
+    assert_eq!(displayed_payload["freshAnchorRecoveredAtMs"], 1520.0);
+    assert!(
+        !has_event(&entries, "cleanAnchorSubmitted"),
+        "legacy chain-clean-anchor-submitted 不应再投影为 cleanAnchorSubmitted"
+    );
+}
+
+#[test]
+fn legacy_chain_clean_anchor_submitted_timeline_does_not_emit_clean_anchor_submitted() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_video_timeline_observation": {
+            "observation_id": 501,
+            "source_event": "chain-clean-anchor-submitted",
+            "gap": null,
+            "frame": {
+                "state": "complete-candidate",
+                "frame_rtp_timestamp": 5001,
+                "is_keyframe": true,
+                "frame_importance": "anchor",
+                "close_reason": null,
+                "observed_at_ms": 1600.0
+            },
+            "chain": {
+                "state": "steady",
+                "reason": "cleanAnchorCommitted",
+                "observed_at_ms": 1600.0
+            },
+            "observed_at_ms": 1600.0
+        }
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    assert!(!has_event(&entries, "cleanAnchorSubmitted"));
 }
 
 #[test]
@@ -2979,8 +3002,42 @@ fn host_mailbox_state_projects_retained_old_frame_risk() {
     let payload = find_event_payload(&entries, "hostMailboxState");
     assert_eq!(payload["displayedAgeMs"], 486.0);
     assert_eq!(payload["displayedFrameStale"], true);
-    assert_eq!(payload["retainedOldFrameRisk"], true);
+    assert_eq!(
+        payload["retainedOldFrameRisk"], true,
+        "starved cadence should still flag retained-old-frame risk"
+    );
     assert_eq!(payload["lastDisplayedFrameSeq"], 91);
+}
+
+#[test]
+fn host_mailbox_state_steady_cadence_does_not_project_retained_old_frame_risk() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "present_fps": 12.0,
+        "host_mailbox_enqueue_count_total": 12,
+        "host_no_pending_streak": 0,
+        "host_cadence_phase": "steady",
+        "present_age_ms": 486.0,
+        "last_displayed_frame_seq": 91,
+        "last_displayed_frame_rtp_timestamp": 9988u32,
+        "last_displayed_at_ms": 1514.0
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "hostMailboxState");
+    assert_eq!(payload["retainedOldFrameRisk"], false);
 }
 
 #[test]
@@ -3545,4 +3602,84 @@ fn minimal_trace_skips_accepted_h264_inspection_spam() {
     assert!(entries
         .iter()
         .all(|entry| entry["event"] != "h264InspectionObserved"));
+}
+
+#[test]
+fn webrtc_recovery_9080323_contract_validation_matrix() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "fixtures/webrtc_recovery_9080323_contract.json"
+    ))
+    .expect("fixture json");
+    let rows = fixture["validationRows"]
+        .as_array()
+        .expect("validation rows");
+    assert_eq!(rows.len(), 5);
+
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let displayed_stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "recovery_displayed_idr_rtp": 9080323,
+        "recovery_displayed_idr_at_ms": 1520.0,
+        "recovery_fresh_anchor_recovered_at_ms": 1520.0,
+        "recovery_owner_state": "stable-serving",
+        "recovery_owner_contract_state": "playing",
+        "video_anchor_clean_source_event": "displayed-idr"
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("9080323"), &displayed_stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    assert!(has_event(&entries, "displayedIdrObserved"));
+    assert!(!has_event(&entries, "cleanAnchorSubmitted"));
+
+    let snapshot = build_observability_snapshot(&displayed_stats);
+    assert_eq!(snapshot["videoOwner"]["contractState"], "playing");
+    assert_eq!(snapshot["recovery"]["displayedIdrRtp"], 9080323);
+
+    let legacy_stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_video_timeline_observation": {
+            "observation_id": 9080323,
+            "source_event": "chain-clean-anchor-submitted",
+            "gap": null,
+            "frame": null,
+            "chain": {
+                "state": "steady",
+                "reason": "cleanAnchorCommitted",
+                "observed_at_ms": 1600.0
+            },
+            "observed_at_ms": 1600.0
+        }
+    }));
+    let mut legacy_state = RuntimeTraceObservationState::default();
+    record_runtime_trace_observations(
+        &recorder,
+        &mut legacy_state,
+        Some("9080323-legacy"),
+        &legacy_stats,
+    );
+    let legacy_entries = read_trace_lines(recorder.as_ref());
+    assert!(!has_event(&legacy_entries, "cleanAnchorSubmitted"));
+
+    let contract_states = rows[4]["contractStates"]
+        .as_array()
+        .expect("contract states");
+    assert!(contract_states
+        .iter()
+        .any(|value| value == "waitingKeyframe"));
 }

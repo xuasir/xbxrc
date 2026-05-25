@@ -1,6 +1,6 @@
 import type { StreamPerformanceSnapshot } from './types'
 import { describe, expect, it, vi } from 'vitest'
-import { buildStreamDiagnosticsSnapshot } from './diagnostics'
+import { buildStreamDiagnosticsSnapshot, resetDiagnosticsNoticeLatch } from './diagnostics'
 
 describe('buildStreamDiagnosticsSnapshot', () => {
   it('projects browser runtime key fields for diagnostics panel', () => {
@@ -272,6 +272,35 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.videoRendererStallBlocksPresentation).toBe(true)
   })
 
+  it('suppresses recovering overlay after displayed-idr with healthy presentation in recovering session', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(130_000)
+    const snapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'active-recovery',
+      sessionPhase: 'recovering',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'recovering',
+      presentationHealth: 'healthy',
+      recoveryOwnerState: 'rebuilding-supply',
+      diagnosis: 'receiverWaitingKeyframe',
+      recoveryOwnerReason: 'receiverWaitingKeyframe',
+      stallKind: 'waitingKeyframe',
+      inboundVideoFps: 30,
+      decodeFps: 31,
+      presentFps: 0,
+    }
+
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 129_950,
+    })
+
+    expect(diagnostics.isRecovering).toBe(false)
+    expect(diagnostics.statusCode).toBe('stable')
+  })
+
   it('keeps stable panel status when recovery-eligible still has healthy presentation', () => {
     vi.spyOn(Date, 'now').mockReturnValue(120_000)
     const snapshot: StreamPerformanceSnapshot = {
@@ -308,7 +337,9 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       videoHealth: 'recovering',
       presentationHealth: 'displaySupplyStarved',
       recoveryOwnerState: 'rebuilding-supply',
-      stallKind: 'hostPresentStalled',
+      diagnosis: 'receiverWaitingKeyframe',
+      recoveryOwnerReason: 'receiverWaitingKeyframe',
+      stallKind: 'waitingKeyframe',
       inboundVideoFps: 60,
       decodeFps: 60,
       presentFps: 0,
@@ -324,5 +355,136 @@ describe('buildStreamDiagnosticsSnapshot', () => {
 
     expect(diagnostics.isRecovering).toBe(true)
     expect(diagnostics.statusCode).toBe('recovering')
+  })
+
+  it('recovery-eligible with display supply starvation does not stick recovering overlay', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(200_000)
+    const snapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'recovery-eligible',
+      sessionPhase: 'recovery-eligible',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'displaySupplyStarved',
+      presentationHealth: 'displaySupplyStarved',
+      recoveryOwnerState: 'rebuilding-supply',
+      diagnosis: 'rebuildingSupplySuspect',
+      recoveryOwnerReason: 'rebuildingSupplySuspect',
+      stallKind: 'displaySupplyStarved',
+      inboundVideoFps: 30,
+      decodeFps: 30,
+      presentFps: 8,
+    }
+
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 199_950,
+    })
+
+    expect(diagnostics.isRecovering).toBe(false)
+    expect(diagnostics.isDisplaySupplyLimited).toBe(true)
+    expect(diagnostics.statusCode).not.toBe('recovering')
+  })
+
+  it('display supply wins when owner starved but diagnosis still waiting keyframe', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(210_000)
+    const snapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'recovery-eligible',
+      sessionPhase: 'recovery-eligible',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'recovering',
+      presentationHealth: 'healthy',
+      recoveryOwnerState: 'supply-starved',
+      diagnosis: 'receiverWaitingKeyframe',
+      recoveryOwnerReason: 'receiverWaitingKeyframe',
+      stallKind: 'none',
+      inboundVideoFps: 30,
+      decodeFps: 30,
+      presentFps: 8,
+    }
+
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 209_950,
+    })
+
+    expect(diagnostics.isRecovering).toBe(false)
+    expect(diagnostics.isDisplaySupplyLimited).toBe(true)
+  })
+
+  it('decode-ahead-of-present without transport anchor prefers display supply', () => {
+    resetDiagnosticsNoticeLatch()
+    vi.spyOn(Date, 'now').mockReturnValue(220_000)
+    const snapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'recovery-eligible',
+      sessionPhase: 'recovery-eligible',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'recovering',
+      presentationHealth: 'healthy',
+      recoveryOwnerState: 'rebuilding-supply',
+      diagnosis: 'rebuildingSupplySuspect',
+      recoveryOwnerReason: 'rebuildingSupplySuspect',
+      stallKind: 'none',
+      inboundVideoFps: 30,
+      decodeFps: 31,
+      presentFps: 10,
+    }
+
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 219_950,
+    })
+
+    expect(diagnostics.isRecovering).toBe(false)
+    expect(diagnostics.isDisplaySupplyLimited).toBe(true)
+  })
+
+  it('notice latch holds display supply over brief recovering flip', () => {
+    resetDiagnosticsNoticeLatch()
+    vi.spyOn(Date, 'now').mockReturnValue(300_000)
+    const supplySnapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'recovery-eligible',
+      sessionPhase: 'recovery-eligible',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'displaySupplyStarved',
+      recoveryOwnerState: 'supply-starved',
+      diagnosis: 'rebuildingSupplySuspect',
+      recoveryOwnerReason: 'rebuildingSupplySuspect',
+      presentFps: 8,
+      decodeFps: 30,
+    }
+    buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: supplySnapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 299_950,
+    })
+
+    vi.spyOn(Date, 'now').mockReturnValue(300_500)
+    const flipSnapshot: StreamPerformanceSnapshot = {
+      ...supplySnapshot,
+      videoHealth: 'recovering',
+      recoveryOwnerState: 'rebuilding-supply',
+      diagnosis: 'receiverWaitingKeyframe',
+      recoveryOwnerReason: 'receiverWaitingKeyframe',
+    }
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: flipSnapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 300_450,
+    })
+
+    expect(diagnostics.isRecovering).toBe(false)
+    expect(diagnostics.isDisplaySupplyLimited).toBe(true)
   })
 })

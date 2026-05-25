@@ -43,6 +43,7 @@ pub(crate) fn resolve_recovery_keyframe_action(
     first_frame_acquired: bool,
     is_blocking_non_keyframe_admission: bool,
     sustaining_recovery_active: bool,
+    receiver_repairing: bool,
     hard_recovery_gap_risk: bool,
     _sample_loss_burst_count: u8,
     media_dropped_packets: u16,
@@ -72,9 +73,7 @@ pub(crate) fn resolve_recovery_keyframe_action(
         if !first_frame_acquired {
             return (true, RecoveryKeyframeAction::WaitKeyframe);
         }
-        if sustaining_recovery_active {
-            // 正式恢复保活阶段的目标是先维持连续输出，而不是再次掉回 wait-keyframe。
-            // 只要当前帧仍是健康 continuation，就继续提交，真正的稳定退出交给 timeline gate。
+        if sustaining_recovery_active || receiver_repairing {
             return (false, RecoveryKeyframeAction::Submit);
         }
         if !hard_recovery_gap_risk {

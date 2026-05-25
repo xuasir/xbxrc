@@ -7,12 +7,14 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerInput;
 use crate::transport::rtc::projection::TransportSnapshot;
+use crate::transport::rtc::recovery::contract::RecoveryDisplayFacts;
 use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms,
     current_clean_anchor_observed_at_ms_from_stats, derive_gap_severity_from_timeline_observation,
     derive_gap_severity_with_episode_stall, frame_value_from_gap_severity,
-    has_current_transport_await_issue_from_observation, is_transport_await_probe_source_event,
-    recovery_episode_stage_from_status, recovery_progress_level_from_episode,
+    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_observation,
+    is_transport_await_probe_source_event, recovery_episode_stage_from_status,
+    recovery_progress_level_from_episode,
 };
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
@@ -104,6 +106,9 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
     pub(crate) latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
     pub(crate) latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
+    pub(crate) recovery_displayed_idr_at_ms: Option<f64>,
+    pub(crate) recovery_playback_recovered_at_ms: Option<f64>,
+    pub(crate) recovery_fresh_anchor_recovered_at_ms: Option<f64>,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -125,6 +130,8 @@ pub(crate) fn build_scheduling_demand_signal(
         pacer_drop_count_total,
         renderer_submit_count_total,
         renderer_drop_count_total,
+        smoothed_present_fps,
+        smoothed_decode_fps,
     ) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
         (
@@ -149,10 +156,13 @@ pub(crate) fn build_scheduling_demand_signal(
             Some(stats.video_pacer_drop_count_total),
             Some(stats.video_renderer_submit_count_total),
             Some(stats.video_renderer_drop_count_total),
+            Some(stats.video_present_fps),
+            Some(stats.video_decode_fps),
         )
     })
     .unwrap_or((
         None, None, None, None, false, None, None, None, None, None, None, None, None, None, None,
+        None, None,
     ));
     SchedulingDemandSignal {
         no_pending_pressure_level,
@@ -170,6 +180,8 @@ pub(crate) fn build_scheduling_demand_signal(
         pacer_drop_count_total,
         renderer_submit_count_total,
         renderer_drop_count_total,
+        smoothed_present_fps,
+        smoothed_decode_fps,
     }
 }
 
@@ -189,6 +201,18 @@ pub(crate) fn read_owner_runtime_facts(
         latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
         latest_video_track_status: stats.latest_video_track_status.clone(),
         latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
+        recovery_displayed_idr_at_ms: {
+            let display = RecoveryDisplayFacts::from_stats(stats);
+            display.displayed_idr_at_ms
+        },
+        recovery_playback_recovered_at_ms: {
+            let display = RecoveryDisplayFacts::from_stats(stats);
+            display.playback_recovered_at_ms
+        },
+        recovery_fresh_anchor_recovered_at_ms: {
+            let display = RecoveryDisplayFacts::from_stats(stats);
+            display.fresh_anchor_recovered_at_ms
+        },
     })
     .unwrap_or_default()
 }
@@ -271,6 +295,9 @@ pub(crate) fn build_owner_input(
             .latest_h264_inspection_observation
             .as_ref()
             .map(|inspection| inspection.observed_at_ms),
+        recovery_displayed_idr_at_ms: owner_facts.recovery_displayed_idr_at_ms,
+        recovery_playback_recovered_at_ms: owner_facts.recovery_playback_recovered_at_ms,
+        recovery_fresh_anchor_recovered_at_ms: owner_facts.recovery_fresh_anchor_recovered_at_ms,
         display_supply_thresholds,
         observed_at_ms,
     }
@@ -280,36 +307,14 @@ fn resolve_anchor_reason_label(
     owner_facts: &OwnerRuntimeFacts,
     absorb_first_frame_acquisition_anchor_issue: bool,
 ) -> Option<String> {
-    owner_facts
-        .latest_video_timeline_observation
-        .as_ref()
-        .and_then(|timeline| {
-            if absorb_first_frame_acquisition_anchor_issue {
-                return None;
-            }
-            resolve_anchor_reason_label_from_timeline(owner_facts, timeline)
-        })
-}
-
-fn resolve_anchor_reason_label_from_timeline(
-    owner_facts: &OwnerRuntimeFacts,
-    timeline: &XbxEngineVideoTimelineObservation,
-) -> Option<String> {
-    let current_transport_await_probe = is_current_transport_await_probe(owner_facts, timeline);
-    let label = match (
-        has_current_transport_await_issue(owner_facts, timeline),
-        current_transport_await_probe,
-        timeline.chain.state.as_str(),
-        timeline.chain.reason.as_deref(),
-        timeline.source_event.as_str(),
-    ) {
-        (true, _, "broken", Some(reason), _) | (true, _, "recovering", Some(reason), _) => reason,
-        (_, true, _, _, "frame-await-recovery-anchor") => "receiverWaitingKeyframe",
-        (_, true, _, _, "frame-inspection-rejected-await-anchor") => "receiverWaitingKeyframe",
+    if absorb_first_frame_acquisition_anchor_issue {
+        return None;
+    }
+    let receiver = owner_facts.latest_video_receiver_observation.as_ref()?;
+    let label = match receiver.receiver_state.as_str() {
+        "waiting-keyframe" => "receiverWaitingKeyframe",
         _ => return None,
     };
-    // 时间线分支已给出结构化上下文；此处仅校验 `reason` 字符串是否为已知 wire 标签（与 `escalation` 单点映射一致），
-    // 禁止把任意 `recovery_diagnosis` 反推成恢复语义。
     VideoEscalationReason::from_recovery_reason_label(label).map(|_| label.to_string())
 }
 
@@ -355,13 +360,24 @@ fn is_current_transport_await_probe(
 mod tests {
     use super::*;
 
+    fn receiver_observation(state: &str) -> crate::XbxEngineVideoReceiverObservation {
+        crate::XbxEngineVideoReceiverObservation {
+            observation_id: 1,
+            receiver_state: state.to_string(),
+            gap_sequence: None,
+            gap_span: None,
+            nack_in_flight: false,
+            keyframe_request_pending: false,
+            bootstrap_reject_reason: None,
+            observed_at_ms: 100.0,
+        }
+    }
+
     #[test]
-    fn stale_transport_await_timeline_after_clean_anchor_does_not_raise_anchor_reason() {
+    fn stale_timeline_without_receiver_waiting_does_not_raise_anchor_reason() {
         let facts = OwnerRuntimeFacts {
             recovery_epoch: 7,
-            clean_anchor_epoch: Some(7),
-            clean_anchor_observed_at_ms: Some(120.0),
-            clean_anchor_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            latest_video_receiver_observation: Some(receiver_observation("repairing")),
             latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
                 observation_id: 1,
                 source_event: "frame-await-recovery-anchor".to_string(),
@@ -371,7 +387,6 @@ mod tests {
                     state: "waiting-keyframe".to_string(),
                     reason: Some("receiverWaitingKeyframe".to_string()),
                     chain_break_evidence: None,
-
                     observed_at_ms: 110.0,
                 },
                 observed_at_ms: 110.0,
@@ -383,26 +398,10 @@ mod tests {
     }
 
     #[test]
-    fn fresh_transport_await_timeline_still_raises_anchor_reason() {
+    fn receiver_waiting_keyframe_raises_anchor_reason() {
         let facts = OwnerRuntimeFacts {
             recovery_epoch: 7,
-            clean_anchor_epoch: Some(7),
-            clean_anchor_observed_at_ms: Some(120.0),
-            clean_anchor_source_event: Some("chain-clean-anchor-submitted".to_string()),
-            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 2,
-                source_event: "frame-await-recovery-anchor".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "waiting-keyframe".to_string(),
-                    reason: Some("receiverWaitingKeyframe".to_string()),
-                    chain_break_evidence: None,
-
-                    observed_at_ms: 130.0,
-                },
-                observed_at_ms: 130.0,
-            }),
+            latest_video_receiver_observation: Some(receiver_observation("waiting-keyframe")),
             ..OwnerRuntimeFacts::default()
         };
 
@@ -477,7 +476,7 @@ pub(crate) fn compute_recovery_facts(
     let recovery_episode = select_relevant_picture_recovery_episode_for_progress(stats);
     let recovery_episode_stage =
         recovery_episode.and_then(|ep| recovery_episode_stage_from_status(ep.status.as_str()));
-    let has_current_clean_anchor = current_clean_anchor_observed_at_ms_from_stats(stats).is_some();
+    let has_current_clean_anchor = has_current_clean_anchor_from_stats(stats);
     let has_display_stable = matches!(stats.video_owner_state.as_deref(), Some("stable-serving"));
     let base_recovery_progress_level = recovery_episode
         .and_then(|ep| {
@@ -677,7 +676,28 @@ fn reconcile_recovery_progress_from_current_bootstrap(
     profile: &crate::transport::rtc::recovery::policy::RecoveryScenarioProfile,
 ) -> (Option<RecoveryProgressLevel>, Option<f64>) {
     if has_current_clean_anchor {
-        return (progress, None);
+        let fresh_at_ms = stats
+            .recovery_fresh_anchor_recovered_at_ms
+            .or(stats.recovery_displayed_idr_at_ms);
+        return (
+            Some(RecoveryProgressLevel::CleanAnchorCommitted),
+            fresh_at_ms,
+        );
+    }
+    if stats.recovery_playback_recovered_at_ms.is_some()
+        && matches!(
+            progress,
+            Some(
+                RecoveryProgressLevel::Decoded
+                    | RecoveryProgressLevel::ContinuationSeen
+                    | RecoveryProgressLevel::AnchorSeen
+            )
+        )
+    {
+        return (
+            Some(RecoveryProgressLevel::PlaybackRecovered),
+            stats.recovery_playback_recovered_at_ms,
+        );
     }
     let Some(episode) = recovery_episode else {
         return (progress, None);

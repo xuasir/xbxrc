@@ -159,6 +159,7 @@
       "notices": {
         "relay": "当前使用中继",
         "recovering": "当前处于恢复中",
+        "displaySupplyLimited": "显示供给受限",
         "noVideo": "当前无画面"
       },
       "metrics": {
