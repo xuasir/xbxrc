@@ -3,6 +3,7 @@ pub mod frame_buffer;
 pub mod h264;
 pub mod ingress;
 pub mod pacer;
+pub mod present_cadence;
 
 pub mod render;
 pub mod types;

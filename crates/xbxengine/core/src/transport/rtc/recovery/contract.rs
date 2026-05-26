@@ -179,7 +179,6 @@ pub(crate) fn recovery_progress_missing_anchor(progress: Option<RecoveryProgress
     )
 }
 
-#[allow(dead_code)]
 pub(crate) fn recovery_progress_allows_decoder_reset(
     progress: Option<RecoveryProgressLevel>,
 ) -> bool {
@@ -192,6 +191,169 @@ pub(crate) fn recovery_progress_allows_decoder_reset(
                 | RecoveryProgressLevel::CleanAnchorCommitted
                 | RecoveryProgressLevel::DisplayStable
         )
+    )
+}
+
+const FRESH_H264_IDR_ADMISSION_MS: f64 = 3_000.0;
+/// 与 owner TimedFallback 对齐：尽早结束 transport-await 焊死并触发续播窄路径。
+const RECOVERY_EXIT_TIMED_FALLBACK_SUBMIT_AGE_MS: f64 = 1_500.0;
+const GAP_KEYFRAME_ONLY_MAX_AGE_MS: f64 = 2_400.0;
+const GAP_ABANDON_KEYFRAME_ONLY_MS: f64 = 5_000.0;
+
+/// 近期 inspection 已接纳 IDR（trace `h264IdrAccessUnitObserved` 同源条件）。
+pub(crate) fn fresh_h264_idr_admission_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|inspection| {
+            inspection.is_idr
+                && inspection.admission_accepted
+                && (now_ms - inspection.observed_at_ms).max(0.0) <= FRESH_H264_IDR_ADMISSION_MS
+        })
+}
+
+/// waiting-keyframe 且无 IDR 进展时禁止本地 decoder reset（Reconfigure 等显式路径除外）。
+pub(crate) fn decoder_reset_permitted_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    progress: Option<RecoveryProgressLevel>,
+    now_ms: f64,
+    allow_waiting_keyframe_bypass: bool,
+) -> bool {
+    if allow_waiting_keyframe_bypass {
+        return true;
+    }
+    if stats.video_decoder_recovery_state.as_deref() != Some("waiting-keyframe") {
+        return true;
+    }
+    if fresh_h264_idr_admission_from_stats(stats, now_ms) {
+        return true;
+    }
+    recovery_progress_allows_decoder_reset(progress)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum RecoveryExitPath {
+    HostIdr,
+    DecodeOutput,
+    TimedFallback,
+    #[default]
+    AwaitingAnchor,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RecoveryExitThresholds {
+    pub(crate) degraded_decode_age_ms: f64,
+    pub(crate) timed_fallback_submit_age_ms: f64,
+}
+
+impl Default for RecoveryExitThresholds {
+    fn default() -> Self {
+        Self {
+            degraded_decode_age_ms: 1_200.0,
+            timed_fallback_submit_age_ms: RECOVERY_EXIT_TIMED_FALLBACK_SUBMIT_AGE_MS,
+        }
+    }
+}
+
+/// 恢复退出用的 host IDR 证据：不接受「历史上屏过」的 stale displayed-idr 单独挡 TimedFallback。
+fn recovery_exit_host_idr_path_active(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    if fresh_h264_idr_admission_from_stats(stats, now_ms) {
+        return true;
+    }
+    let display = RecoveryDisplayFacts::from_stats(stats);
+    if display.fresh_anchor_recovered_at_ms.is_some() {
+        return true;
+    }
+    stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
+        && stats.video_anchor_clean_observed_at_ms.is_some()
+}
+
+/// 恢复会话退出 `receiverWaitingKeyframe` 焊死：新鲜 IDR/锚点 → decode 输出 → 超时降级。
+pub(crate) fn recovery_exit_path_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+    thresholds: RecoveryExitThresholds,
+) -> RecoveryExitPath {
+    let waiting_keyframe =
+        stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
+    let submit_stalled = stats
+        .submit_age_ms
+        .is_some_and(|age| age >= thresholds.timed_fallback_submit_age_ms);
+    if waiting_keyframe && submit_stalled && twcc_healthy_for_recovery_fallback(stats) {
+        return RecoveryExitPath::TimedFallback;
+    }
+    if recovery_exit_host_idr_path_active(stats, now_ms) {
+        return RecoveryExitPath::HostIdr;
+    }
+    let decode_fresh = stats
+        .latest_video_decode_ok_time_ms
+        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= thresholds.degraded_decode_age_ms);
+    let host_output_advancing =
+        stats.host_frame_present_epoch > 0 && stats.recovery_playback_recovered_at_ms.is_some();
+    let submit_pipeline_active = stats
+        .submit_age_ms
+        .map(|age| age < thresholds.timed_fallback_submit_age_ms)
+        .unwrap_or(true);
+    if decode_fresh && host_output_advancing && submit_pipeline_active {
+        return RecoveryExitPath::DecodeOutput;
+    }
+    RecoveryExitPath::AwaitingAnchor
+}
+
+pub(crate) fn recovery_exit_trace_await_suffix(path: RecoveryExitPath) -> &'static str {
+    match path {
+        RecoveryExitPath::HostIdr => "hostIdrOrCleanAnchor",
+        RecoveryExitPath::DecodeOutput => "decodeOutput",
+        RecoveryExitPath::TimedFallback => "timedFallback",
+        RecoveryExitPath::AwaitingAnchor => "hostIdrOrCleanAnchor",
+    }
+}
+
+fn twcc_healthy_for_recovery_fallback(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.latest_video_twcc_observation.as_ref().map_or(
+        stats.transport_state == xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+        |twcc| {
+            twcc.twcc_sample_valid && twcc.packet_loss_ratio <= 0.08 && twcc.delivery_ratio >= 0.92
+        },
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GapVsKeyframeMode {
+    RepairFirst,
+    KeyframeOnly,
+    AbandonGap,
+}
+
+pub(crate) fn resolve_gap_vs_keyframe_mode(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+    effective_rtt_ms: f64,
+) -> GapVsKeyframeMode {
+    let decoder_waiting = stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
+    let gap_age_ms = stats
+        .latest_video_timeline_observation
+        .as_ref()
+        .and_then(|timeline| timeline.gap.as_ref())
+        .map(|gap| (now_ms - gap.observed_at_ms).max(0.0));
+    let gap_stale = gap_age_ms
+        .is_some_and(|age| age >= GAP_KEYFRAME_ONLY_MAX_AGE_MS.max(effective_rtt_ms * 2.0));
+    if decoder_waiting || gap_stale {
+        if gap_age_ms.is_some_and(|age| age >= GAP_ABANDON_KEYFRAME_ONLY_MS) {
+            return GapVsKeyframeMode::AbandonGap;
+        }
+        return GapVsKeyframeMode::KeyframeOnly;
+    }
+    GapVsKeyframeMode::RepairFirst
+}
+
+pub(crate) fn gap_keyframe_only_mode_active(mode: GapVsKeyframeMode) -> bool {
+    matches!(
+        mode,
+        GapVsKeyframeMode::KeyframeOnly | GapVsKeyframeMode::AbandonGap
     )
 }
 
@@ -452,6 +614,121 @@ pub(crate) fn has_current_clean_anchor_from_stats(stats: &XbxEngineMediaRuntimeS
     display.fresh_anchor_recovered_at_ms.is_some() || display.has_established_displayed_idr()
 }
 
+/// latest-only mailbox 上屏帧常已是 IDR 之后的 delta；pending IDR + host 已 present 即视为 serving。
+pub(crate) fn displayed_idr_serving_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.recovery_displayed_idr_at_ms.is_some()
+        || (stats.recovery_pending_displayed_idr_rtp.is_some()
+            && stats.host_frame_present_epoch > 0)
+}
+
+/// host present 提交 displayed-idr 事实时优先用 decode 侧 pending IDR，而非当前 displayed delta RTP。
+pub(crate) fn resolve_host_display_idr_anchor_rtp(
+    stats: &XbxEngineMediaRuntimeStats,
+    last_displayed_rtp: Option<u32>,
+) -> Option<u32> {
+    stats
+        .recovery_pending_displayed_idr_rtp
+        .or(last_displayed_rtp)
+}
+
+const DISPLAYED_IDR_SERVING_DECODER_BOOTSTRAP_FRESH_MS: f64 = 1_500.0;
+pub(crate) const DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS: f64 = 1_000.0;
+
+/// steady continuation 的 codec 元数据拒因；displayed-idr 已 serving 时不应切断窄路径放松。
+pub(crate) fn is_soft_missing_idr_bootstrap_reject_reason(reason: Option<&str>) -> bool {
+    matches!(reason, Some("bootstrapMissingIdr" | "NonIdrVcl"))
+}
+
+/// TimedFallback：submit 已停滞但 TWCC 健康，允许 displayed-idr 续播窄路径（不等新 IDR AU）。
+pub(crate) fn recovery_timed_fallback_active_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    recovery_exit_path_from_stats(stats, now_ms, RecoveryExitThresholds::default())
+        == RecoveryExitPath::TimedFallback
+}
+
+/// decoder 要 IDR / bootstrap 硬拒 / submit 管线停滞时，禁用 P1 放松（collapse、强制 Submit、抑制 recovery-wait）。
+pub(crate) fn displayed_idr_serving_relaxation_blocked_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe") {
+        if recovery_timed_fallback_active_from_stats(stats, now_ms)
+            && displayed_idr_serving_from_stats(stats)
+        {
+            return false;
+        }
+        return true;
+    }
+    if transport_await_has_hard_bootstrap_evidence_from_stats(stats, now_ms) {
+        return true;
+    }
+    if decoder_bootstrap_blocks_displayed_idr_relaxation(stats, now_ms) {
+        return true;
+    }
+    stale_submit_pipeline_breaks_displayed_idr_relaxation(stats)
+}
+
+/// displayed IDR 已上屏且允许 P1 放松控制（短脉冲抑制，不含供给断裂长尾）。
+pub(crate) fn displayed_idr_serving_allows_relaxed_controls_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    displayed_idr_serving_from_stats(stats)
+        && !displayed_idr_serving_relaxation_blocked_from_stats(stats, now_ms)
+}
+
+fn decoder_bootstrap_blocks_displayed_idr_relaxation(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let Some(observation) = stats
+        .latest_video_decoder_bootstrap_gate_observation
+        .as_ref()
+        .filter(|observation| {
+            (now_ms - observation.observed_at_ms).max(0.0)
+                <= DISPLAYED_IDR_SERVING_DECODER_BOOTSTRAP_FRESH_MS
+        })
+    else {
+        return false;
+    };
+    if !observation.bootstrap_ready
+        && is_soft_missing_idr_bootstrap_reject_reason(
+            observation.bootstrap_reject_reason.as_deref(),
+        )
+        && displayed_idr_serving_from_stats(stats)
+    {
+        return false;
+    }
+    !observation.bootstrap_ready
+        && is_soft_missing_idr_bootstrap_reject_reason(
+            observation.bootstrap_reject_reason.as_deref(),
+        )
+}
+
+fn stale_submit_pipeline_breaks_displayed_idr_relaxation(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> bool {
+    stats
+        .submit_age_ms
+        .is_some_and(|age_ms| age_ms >= DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS)
+        && (stats.video_renderer_stalled.unwrap_or(false)
+            || stats.video_decoder_stalled.unwrap_or(false))
+}
+
+/// displayed IDR 已上屏且仍在 gap repair：不把 receiver 投影成 waiting-keyframe，避免 supply 短脉冲。
+pub(crate) fn should_collapse_receiver_waiting_keyframe_to_repairing(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+    has_active_gap: bool,
+    assembled_frame_count: u64,
+) -> bool {
+    displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms)
+        && has_active_gap
+        && assembled_frame_count > 0
+}
+
 const TRANSPORT_AWAIT_HARD_BOOTSTRAP_FRESH_MS: f64 = 1_500.0;
 
 /// transport-await 硬证据：仅 receiver/inspection/display 事实，不读 keyframe episode terminal。
@@ -471,17 +748,16 @@ pub(crate) fn transport_await_has_hard_bootstrap_evidence_from_stats(
     if inspection_has_invalid_recovery_bootstrap(inspection) {
         return true;
     }
-    !inspection.bootstrap_ready
-        && matches!(
-            inspection.bootstrap_reject_reason.as_deref(),
-            Some(
-                "bootstrapMissingSps"
-                    | "bootstrapMissingPps"
-                    | "bootstrapInvalidSliceHeader"
-                    | "bootstrapMissingIdr"
-                    | "NonIdrVcl"
-            )
-        )
+    if !inspection.bootstrap_ready {
+        return match inspection.bootstrap_reject_reason.as_deref() {
+            Some("bootstrapMissingSps" | "bootstrapMissingPps" | "bootstrapInvalidSliceHeader") => {
+                true
+            }
+            Some("bootstrapMissingIdr" | "NonIdrVcl") => !displayed_idr_serving_from_stats(stats),
+            _ => false,
+        };
+    }
+    false
 }
 
 pub(crate) fn has_current_transport_await_issue_from_observation(
@@ -985,6 +1261,170 @@ mod derive_gap_observation_tests {
         };
         assert!(transport_await_has_hard_bootstrap_evidence_from_stats(
             &stats, now_ms
+        ));
+    }
+
+    #[test]
+    fn displayed_idr_serving_true_when_pending_idr_and_host_has_presented() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_pending_displayed_idr_rtp = Some(77_001);
+        stats.host_frame_present_epoch = 1;
+        assert!(displayed_idr_serving_from_stats(&stats));
+        assert_eq!(
+            resolve_host_display_idr_anchor_rtp(&stats, Some(77_002)),
+            Some(77_001)
+        );
+    }
+
+    #[test]
+    fn displayed_idr_serving_false_without_host_present_epoch() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_pending_displayed_idr_rtp = Some(77_001);
+        stats.host_frame_present_epoch = 0;
+        assert!(!displayed_idr_serving_from_stats(&stats));
+    }
+
+    #[test]
+    fn collapse_waiting_keyframe_when_displayed_idr_serving_with_gap() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        assert!(should_collapse_receiver_waiting_keyframe_to_repairing(
+            &stats, 200.0, true, 10
+        ));
+        assert!(!should_collapse_receiver_waiting_keyframe_to_repairing(
+            &stats, 200.0, false, 10
+        ));
+    }
+
+    #[test]
+    fn collapse_disabled_when_decoder_waiting_keyframe() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        assert!(!should_collapse_receiver_waiting_keyframe_to_repairing(
+            &stats, 200.0, true, 10
+        ));
+    }
+
+    #[test]
+    fn relaxation_blocked_when_submit_stale_and_renderer_stalled() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.submit_age_ms = Some(1_500.0);
+        stats.video_renderer_stalled = Some(true);
+        assert!(displayed_idr_serving_relaxation_blocked_from_stats(
+            &stats, 200.0
+        ));
+        assert!(!displayed_idr_serving_allows_relaxed_controls_from_stats(
+            &stats, 200.0
+        ));
+    }
+
+    #[test]
+    fn relaxation_not_blocked_by_soft_bootstrap_missing_idr_when_displayed_idr_serving() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
+            observed_at_ms: 180.0,
+            admission_accepted: false,
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+            ..Default::default()
+        });
+        assert!(!transport_await_has_hard_bootstrap_evidence_from_stats(
+            &stats, 200.0
+        ));
+        assert!(displayed_idr_serving_allows_relaxed_controls_from_stats(
+            &stats, 200.0
+        ));
+    }
+
+    #[test]
+    fn waiting_keyframe_without_idr_progress_blocks_decoder_reset() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        assert!(!decoder_reset_permitted_from_stats(
+            &stats, None, 1_000.0, false
+        ));
+        stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
+            observed_at_ms: 990.0,
+            is_idr: true,
+            admission_accepted: true,
+            ..Default::default()
+        });
+        assert!(decoder_reset_permitted_from_stats(
+            &stats, None, 1_000.0, false
+        ));
+    }
+
+    #[test]
+    fn recovery_exit_timed_fallback_when_submit_stalled_without_anchor() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        stats.submit_age_ms = Some(2_000.0);
+        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+        assert_eq!(
+            recovery_exit_path_from_stats(&stats, 5_000.0, RecoveryExitThresholds::default()),
+            RecoveryExitPath::TimedFallback
+        );
+    }
+
+    #[test]
+    fn displayed_idr_relaxation_unblocked_under_timed_fallback() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        stats.submit_age_ms = Some(2_000.0);
+        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+        assert!(!displayed_idr_serving_relaxation_blocked_from_stats(
+            &stats, 5_000.0
+        ));
+    }
+
+    #[test]
+    fn recovery_exit_timed_fallback_over_stale_displayed_idr_fact() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.recovery_playback_recovered_at_ms = Some(100.0);
+        stats.latest_video_decode_ok_time_ms = Some(4_900.0);
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        stats.submit_age_ms = Some(2_000.0);
+        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+        assert_eq!(
+            recovery_exit_path_from_stats(&stats, 5_000.0, RecoveryExitThresholds::default()),
+            RecoveryExitPath::TimedFallback
+        );
+    }
+
+    #[test]
+    fn recovery_exit_decode_output_when_decode_and_host_output_fresh() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.latest_video_decode_ok_time_ms = Some(4_900.0);
+        stats.host_frame_present_epoch = 3;
+        stats.recovery_playback_recovered_at_ms = Some(100.0);
+        stats.submit_age_ms = Some(400.0);
+        assert_eq!(
+            recovery_exit_path_from_stats(&stats, 5_000.0, RecoveryExitThresholds::default()),
+            RecoveryExitPath::DecodeOutput
+        );
+    }
+
+    #[test]
+    fn relaxation_still_blocked_by_invalid_bootstrap_when_displayed_idr_serving() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(100.0);
+        stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
+            observed_at_ms: 180.0,
+            admission_accepted: false,
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+            ..Default::default()
+        });
+        assert!(transport_await_has_hard_bootstrap_evidence_from_stats(
+            &stats, 200.0
+        ));
+        assert!(!displayed_idr_serving_allows_relaxed_controls_from_stats(
+            &stats, 200.0
         ));
     }
 }

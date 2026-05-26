@@ -16,17 +16,19 @@ use xbxengine::{
 #[cfg(target_os = "windows")]
 use super::scheduling::ScheduledFrameTakeOutcome;
 use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics};
+use super::{
+    clear_host_present_tick_dispatch, now_ms_f64, record_native_video_timing_event_lazy,
+    record_native_video_trace, request_host_present_tick_dispatch, NativeVideoDisplayState,
+    NativeVideoViewportState,
+};
 #[cfg(target_os = "macos")]
 use super::{
-    clear_host_present_tick_dispatch, dispatch_wgpu_render_tick_on_main_thread, drop_display_layer,
-    drop_wgpu_host_view, ensure_display_layer, request_host_present_tick_dispatch,
-    run_layer_present_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
-    MacOsWgpuState,
+    dispatch_wgpu_render_tick_on_main_thread, drop_display_layer, drop_wgpu_host_view,
+    ensure_display_layer, run_layer_present_tick, MacOsDisplayLinkHandle,
+    MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState,
 };
-use super::{
-    now_ms_f64, record_native_video_timing_event_lazy, record_native_video_trace,
-    NativeVideoDisplayState, NativeVideoViewportState,
-};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use super::{record_host_mailbox_take_decision, HostPresentTickGuard};
 #[cfg(target_os = "windows")]
 use super::{HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS};
 
@@ -159,25 +161,6 @@ struct WindowsWgpuState {
 }
 
 #[cfg(target_os = "windows")]
-struct WindowsPendingGuard {
-    pending: Arc<std::sync::atomic::AtomicBool>,
-}
-
-#[cfg(target_os = "windows")]
-impl WindowsPendingGuard {
-    fn new(pending: Arc<std::sync::atomic::AtomicBool>) -> Self {
-        Self { pending }
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for WindowsPendingGuard {
-    fn drop(&mut self) {
-        self.pending.store(false, Ordering::Relaxed);
-    }
-}
-
-#[cfg(target_os = "windows")]
 pub(super) struct WindowsWgpuPresenter {
     viewport_id: String,
     window_label: String,
@@ -188,6 +171,7 @@ pub(super) struct WindowsWgpuPresenter {
     telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
+    render_loop_rerun_requested: Arc<std::sync::atomic::AtomicBool>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
     display_state: NativeVideoDisplayState,
 }
@@ -210,6 +194,7 @@ impl WindowsWgpuPresenter {
             telemetry: Arc::new(Mutex::new(HostCadenceTelemetry::default())),
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            render_loop_rerun_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runtime_trace,
             display_state: NativeVideoDisplayState::default(),
         }
@@ -233,24 +218,35 @@ impl WindowsWgpuPresenter {
         let telemetry = self.telemetry.clone();
         let render_loop_stop = self.render_loop_stop.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let render_loop_rerun_requested = self.render_loop_rerun_requested.clone();
         let runtime_trace = self.runtime_trace.clone();
         thread::Builder::new()
             .name(format!("XbxWindowsWgpuRenderLoop-{viewport_id}"))
             .spawn(move || {
-                let tick = Duration::from_millis(16);
                 while !render_loop_stop.load(Ordering::Relaxed) {
+                    let tick = telemetry
+                        .lock()
+                        .map(|state| state.present_tick_sleep_duration())
+                        .unwrap_or(Duration::from_millis(16));
                     thread::sleep(tick);
-                    if render_loop_pending.swap(true, Ordering::Relaxed) {
+                    if !request_host_present_tick_dispatch(
+                        &render_loop_pending,
+                        &render_loop_rerun_requested,
+                    ) {
                         continue;
                     }
                     let Some(window) = app_handle.get_window(&window_label) else {
-                        render_loop_pending.store(false, Ordering::Relaxed);
+                        clear_host_present_tick_dispatch(
+                            &render_loop_pending,
+                            &render_loop_rerun_requested,
+                        );
                         continue;
                     };
                     let renderer_state = renderer_state.clone();
                     let frame_slot = frame_slot.clone();
                     let telemetry = telemetry.clone();
                     let render_loop_pending = render_loop_pending.clone();
+                    let render_loop_rerun_requested = render_loop_rerun_requested.clone();
                     let viewport_id = viewport_id.clone();
                     let runtime_trace_for_task = runtime_trace.clone();
                     let dispatch_requested_at_ms = now_ms_f64();
@@ -263,6 +259,7 @@ impl WindowsWgpuPresenter {
                             &frame_slot,
                             &telemetry,
                             &render_loop_pending,
+                            &render_loop_rerun_requested,
                             Some(dispatch_requested_at_ms),
                             runtime_trace_for_task,
                         );
@@ -273,17 +270,24 @@ impl WindowsWgpuPresenter {
     }
 
     fn request_immediate_render_tick(&self) {
-        if self.render_loop_pending.swap(true, Ordering::Relaxed) {
+        if !request_host_present_tick_dispatch(
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+        ) {
             return;
         }
         let Some(window) = self.app_handle.get_window(&self.window_label) else {
-            self.render_loop_pending.store(false, Ordering::Relaxed);
+            clear_host_present_tick_dispatch(
+                &self.render_loop_pending,
+                &self.render_loop_rerun_requested,
+            );
             return;
         };
         let renderer_state = self.renderer_state.clone();
         let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let render_loop_rerun_requested = self.render_loop_rerun_requested.clone();
         let viewport_id = self.viewport_id.clone();
         let runtime_trace = self.runtime_trace.clone();
         let window_for_task = window.clone();
@@ -296,6 +300,7 @@ impl WindowsWgpuPresenter {
                 &frame_slot,
                 &telemetry,
                 &render_loop_pending,
+                &render_loop_rerun_requested,
                 Some(dispatch_requested_at_ms),
                 runtime_trace,
             );
@@ -368,7 +373,7 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
             }
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
-                "wgpu",
+                "wgpu-windows",
                 "hostMailboxRejected",
                 &self.viewport_id,
                 &self.window_label,
@@ -643,11 +648,15 @@ fn run_windows_wgpu_render_tick(
     frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<std::sync::atomic::AtomicBool>,
+    render_loop_rerun_requested: &Arc<std::sync::atomic::AtomicBool>,
     dispatch_requested_at_ms: Option<f64>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
     let tick_started_at_ms = now_ms_f64();
-    let _pending_guard = WindowsPendingGuard::new(render_loop_pending.clone());
+    let mut tick_dispatch_guard = HostPresentTickGuard::new(
+        render_loop_pending.clone(),
+        render_loop_rerun_requested.clone(),
+    );
     if let Some(dispatch_ms) = dispatch_requested_at_ms {
         let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
         if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
@@ -706,7 +715,7 @@ fn run_windows_wgpu_render_tick(
     let view_generation_changed = state.view_generation != view_generation_before_tick;
 
     let now_ms = now_ms_f64();
-    let take_outcome = {
+    let (take_outcome, take_slot_diag, take_telemetry_diag) = {
         let Ok(mut telemetry) = telemetry.lock() else {
             return;
         };
@@ -717,8 +726,20 @@ fn run_windows_wgpu_render_tick(
         if view_generation_changed {
             frame_slot.begin_view_epoch();
         }
-        frame_slot.take_ready_frame(now_ms, &mut telemetry)
+        let outcome = frame_slot.take_ready_frame(now_ms, &mut telemetry);
+        let slot_diag = frame_slot.diagnostics_snapshot();
+        let telemetry_diag = telemetry.diagnostics_snapshot();
+        (outcome, slot_diag, telemetry_diag)
     };
+    record_host_mailbox_take_decision(
+        runtime_trace.as_ref(),
+        "wgpu-windows",
+        viewport_id,
+        window.label(),
+        &take_outcome,
+        &take_slot_diag,
+        &take_telemetry_diag,
+    );
     if size_changed {
         state.last_surface_size = Some((surface_width, surface_height));
     }
@@ -771,11 +792,24 @@ fn run_windows_wgpu_render_tick(
     if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
         record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
-            "wgpu",
+            "wgpu-windows",
             "tick_total",
             viewport_id,
             window.label(),
             || serde_json::json!({ "totalMs": tick_total_ms }),
+        );
+    }
+    if tick_dispatch_guard.finish_dispatch() {
+        run_windows_wgpu_render_tick(
+            window,
+            viewport_id,
+            renderer_state,
+            frame_slot,
+            telemetry,
+            render_loop_pending,
+            render_loop_rerun_requested,
+            None,
+            runtime_trace,
         );
     }
 }
@@ -872,8 +906,11 @@ impl MacOsWgpuPresenter {
         thread::Builder::new()
             .name(format!("XbxWgpuRenderLoop-{viewport_id}"))
             .spawn(move || {
-                let tick = Duration::from_millis(16);
                 while !render_loop_stop.load(Ordering::Relaxed) {
+                    let tick = telemetry
+                        .lock()
+                        .map(|state| state.present_tick_sleep_duration())
+                        .unwrap_or(Duration::from_millis(16));
                     thread::sleep(tick);
                     if !request_host_present_tick_dispatch(
                         &render_loop_pending,
@@ -1306,6 +1343,7 @@ pub(super) struct MacOsVideoPresenter {
     telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
+    render_loop_rerun_requested: Arc<std::sync::atomic::AtomicBool>,
     display_link: Option<MacOsLayerDisplayLinkHandle>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
     display_state: NativeVideoDisplayState,
@@ -1329,6 +1367,7 @@ impl MacOsVideoPresenter {
             telemetry: Arc::new(Mutex::new(HostCadenceTelemetry::default())),
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            render_loop_rerun_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             display_link: None,
             runtime_trace,
             display_state: NativeVideoDisplayState::default(),
@@ -1393,6 +1432,7 @@ impl MacOsVideoPresenter {
                 self.frame_slot.clone(),
                 self.telemetry.clone(),
                 self.render_loop_pending.clone(),
+                self.render_loop_rerun_requested.clone(),
                 self.runtime_trace.clone(),
             ) {
                 self.display_link = Some(display_link);
@@ -1418,14 +1458,21 @@ impl MacOsVideoPresenter {
         let telemetry = self.telemetry.clone();
         let render_loop_stop = self.render_loop_stop.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let render_loop_rerun_requested = self.render_loop_rerun_requested.clone();
         let runtime_trace = self.runtime_trace.clone();
         thread::Builder::new()
             .name(format!("XbxLayerRenderLoop-{viewport_id}"))
             .spawn(move || {
-                let tick = Duration::from_millis(16);
                 while !render_loop_stop.load(Ordering::Relaxed) {
+                    let tick = telemetry
+                        .lock()
+                        .map(|state| state.present_tick_sleep_duration())
+                        .unwrap_or(Duration::from_millis(16));
                     thread::sleep(tick);
-                    if render_loop_pending.swap(true, Ordering::Relaxed) {
+                    if !request_host_present_tick_dispatch(
+                        &render_loop_pending,
+                        &render_loop_rerun_requested,
+                    ) {
                         continue;
                     }
                     run_layer_present_tick(
@@ -1435,6 +1482,7 @@ impl MacOsVideoPresenter {
                         &frame_slot,
                         &telemetry,
                         &render_loop_pending,
+                        &render_loop_rerun_requested,
                         runtime_trace.clone(),
                     );
                 }
@@ -1450,11 +1498,17 @@ impl MacOsVideoPresenter {
     }
 
     fn request_immediate_present_tick(&self) {
-        if self.render_loop_pending.swap(true, Ordering::Relaxed) {
+        if !request_host_present_tick_dispatch(
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+        ) {
             return;
         }
         let Some(window) = self.app_handle.get_window(&self.window_label) else {
-            self.render_loop_pending.store(false, Ordering::Relaxed);
+            clear_host_present_tick_dispatch(
+                &self.render_loop_pending,
+                &self.render_loop_rerun_requested,
+            );
             return;
         };
         let viewport_id = self.viewport_id.clone();
@@ -1463,6 +1517,7 @@ impl MacOsVideoPresenter {
         let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let render_loop_rerun_requested = self.render_loop_rerun_requested.clone();
         let runtime_trace = self.runtime_trace.clone();
         let _ = window.run_on_main_thread(move || {
             run_layer_present_tick(
@@ -1472,6 +1527,7 @@ impl MacOsVideoPresenter {
                 &frame_slot,
                 &telemetry,
                 &render_loop_pending,
+                &render_loop_rerun_requested,
                 runtime_trace,
             );
         });
@@ -1497,7 +1553,10 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         if let Ok(mut telemetry) = self.telemetry.lock() {
             telemetry.reset_frame_slot();
         }
-        self.render_loop_pending.store(false, Ordering::Relaxed);
+        clear_host_present_tick_dispatch(
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+        );
     }
 
     fn reset_mailbox_for_host_stall_recovery(&mut self) -> bool {

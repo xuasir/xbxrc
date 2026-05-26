@@ -10,7 +10,10 @@ use std::sync::Mutex;
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::receive::suppress_session_picture_recovery_action;
-use crate::transport::rtc::recovery::contract::{CoalescingMode, GapSeverity};
+use crate::transport::rtc::recovery::contract::{
+    decoder_reset_permitted_from_stats, recovery_progress_level_from_episode, CoalescingMode,
+    GapSeverity, RecoveryProgressLevel,
+};
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, RecoveryActionBudgetState, VideoEscalationController, VideoEscalationDecision,
     VideoEscalationReason,
@@ -69,8 +72,6 @@ pub(crate) struct RecoveryCoordinator {
     last_decoder_reset_at_ms: Option<f64>,
     /// 上次检查的连接状态（用于检测reconnect完成）
     last_connected: Option<bool>,
-    /// 已对哪个 transport-await episode.requested_at_ms 执行过“释放旧 keyframe epoch 并重开 PLI”。
-    last_transport_await_reopen_requested_at_ms: Option<f64>,
 }
 
 impl RecoveryCoordinator {
@@ -86,7 +87,6 @@ impl RecoveryCoordinator {
             last_keyframe_decoded_at_ms: None,
             last_decoder_reset_at_ms: None,
             last_connected: None,
-            last_transport_await_reopen_requested_at_ms: None,
         }
     }
 
@@ -127,11 +127,6 @@ impl RecoveryCoordinator {
         if let Some(proposal) = self.maybe_resolve_connectivity_local_repair(&signal) {
             return proposal;
         }
-        if let Some(proposal) =
-            self.maybe_reopen_stale_transport_await_keyframe(&signal, runtime_stats, recovery_epoch)
-        {
-            return proposal;
-        }
         if Self::uses_policy_controlled_escalation(signal.reason) {
             let budget_before = self.snapshot_budget_state();
             let mut decision = self.escalation_controller.on_reason_with_epoch_policy(
@@ -148,6 +143,7 @@ impl RecoveryCoordinator {
             {
                 decision.action = RecoveryAction::CooldownSuppressed;
             }
+            decision = self.maybe_suppress_decoder_reset_decision(decision, &signal, runtime_stats);
             self.sync_connectivity_escalation_state(&decision);
             let budget_after = self.snapshot_budget_state();
             return self.convert_escalation_decision_to_proposal(
@@ -183,28 +179,10 @@ impl RecoveryCoordinator {
         let recovery_epoch =
             RuntimeStatsSink::read_shared(runtime_stats, |stats| stats.transport_recovery_epoch)
                 .unwrap_or(0);
-        if self
-            .coordinator
-            .state_machine()
-            .current_budget()
-            .recovery_epoch
-            != recovery_epoch
-        {
-            self.last_transport_await_reopen_requested_at_ms = None;
-        }
         self.coordinator.update_recovery_epoch(recovery_epoch);
         self.escalation_controller
             .begin_recovery_epoch(recovery_epoch);
         recovery_epoch
-    }
-
-    fn maybe_reopen_stale_transport_await_keyframe(
-        &mut self,
-        _signal: &RecoveryOwnerSignal,
-        _runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-        _recovery_epoch: u64,
-    ) -> Option<CoordinatorProposal> {
-        None
     }
 
     fn maybe_resolve_connectivity_local_repair(
@@ -318,6 +296,23 @@ impl RecoveryCoordinator {
 
     /// PLI / transport-await 完成：只认 host 已显示 IDR 或 receive 已离开 WaitingKeyframe。
     pub(crate) fn check_idr_completed(stats: &XbxEngineMediaRuntimeStats) -> bool {
+        let receiver_waiting_keyframe = stats.video_decoder_recovery_state.as_deref().is_some_and(
+            |state| {
+                crate::transport::rtc::recovery::contract::is_receiver_state_waiting_keyframe(Some(
+                    state,
+                ))
+            },
+        ) || stats
+            .latest_video_receiver_observation
+            .as_ref()
+            .is_some_and(|observation| {
+                crate::transport::rtc::recovery::contract::is_receiver_state_waiting_keyframe(Some(
+                    observation.receiver_state.as_str(),
+                ))
+            });
+        if receiver_waiting_keyframe {
+            return false;
+        }
         if stats.recovery_displayed_idr_at_ms.is_some() {
             return true;
         }
@@ -342,22 +337,6 @@ impl RecoveryCoordinator {
             return None;
         }
         episode.first_keyframe_packet_at_ms
-    }
-
-    fn latest_transport_await_decoded_at_ms(stats: &XbxEngineMediaRuntimeStats) -> Option<f64> {
-        let episode = stats.latest_keyframe_request_episode.as_ref()?;
-        if episode.request_reason.as_deref() != Some("receiverWaitingKeyframe") {
-            return None;
-        }
-        if episode.retired_at_ms.is_some() {
-            return None;
-        }
-        episode.first_keyframe_decoded_at_ms.or_else(|| {
-            stats
-                .video_anchor_clean_epoch
-                .filter(|epoch| *epoch == stats.transport_recovery_epoch)
-                .and(stats.video_anchor_clean_observed_at_ms)
-        })
     }
 
     /// 检查decoder reset是否完成（基于执行事实）
@@ -563,6 +542,52 @@ impl RecoveryCoordinator {
             budget_before,
             budget_after,
         }
+    }
+
+    fn maybe_suppress_decoder_reset_decision(
+        &self,
+        mut decision: VideoEscalationDecision,
+        signal: &RecoveryOwnerSignal,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    ) -> VideoEscalationDecision {
+        if decision.action != RecoveryAction::RequestDecoderReset {
+            return decision;
+        }
+        let allow_bypass = matches!(signal.reason, VideoEscalationReason::Reconfigure);
+        let permitted = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            let progress = Self::recovery_progress_level_from_stats(stats);
+            decoder_reset_permitted_from_stats(stats, progress, signal.observed_at_ms, allow_bypass)
+        })
+        .unwrap_or(true);
+        if !permitted {
+            decision.action = RecoveryAction::WaitForDecoderResetBurst;
+            RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                stats.latest_observation_label =
+                    Some("decoderResetSuppressedWaitingKeyframe".to_string());
+                stats.latest_observation_summary =
+                    Some("decoderResetSuppressed:waitingKeyframeNoAnchor".to_string());
+            });
+        }
+        decision
+    }
+
+    fn recovery_progress_level_from_stats(
+        stats: &XbxEngineMediaRuntimeStats,
+    ) -> Option<RecoveryProgressLevel> {
+        stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .and_then(|episode| {
+                recovery_progress_level_from_episode(
+                    episode.status.as_str(),
+                    episode.response_verdict.as_deref(),
+                    episode.first_video_packet_is_keyframe,
+                    episode.first_keyframe_packet_at_ms,
+                    episode.first_keyframe_decoded_at_ms,
+                    stats.recovery_displayed_idr_at_ms.is_some(),
+                    false,
+                )
+            })
     }
 
     fn snapshot_budget_state(&self) -> RecoveryActionBudgetState {
@@ -1310,9 +1335,31 @@ mod tests {
             recovery_fresh_anchor_recovered_at_ms: Some(500.0),
             video_anchor_clean_epoch: Some(3),
             video_anchor_clean_source_event: Some("displayed-idr".to_string()),
+            video_decoder_recovery_state: Some("nominal".to_string()),
             ..Default::default()
         };
         assert!(RecoveryCoordinator::check_idr_completed(&stats));
+    }
+
+    #[test]
+    fn check_idr_not_completed_when_displayed_idr_but_receiver_waiting_keyframe() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 3,
+            recovery_displayed_idr_at_ms: Some(500.0),
+            video_decoder_recovery_state: Some("waiting-keyframe".to_string()),
+            latest_video_receiver_observation: Some(crate::XbxEngineVideoReceiverObservation {
+                observation_id: 1,
+                receiver_state: "waiting-keyframe".to_string(),
+                gap_sequence: None,
+                gap_span: None,
+                nack_in_flight: false,
+                keyframe_request_pending: true,
+                bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+                observed_at_ms: 900.0,
+            }),
+            ..Default::default()
+        };
+        assert!(!RecoveryCoordinator::check_idr_completed(&stats));
     }
 
     #[test]
@@ -1477,6 +1524,9 @@ mod tests {
             },
             &shared_stats,
         );
-        assert_eq!(second.decision.action, RecoveryAction::CooldownSuppressed);
+        assert!(matches!(
+            second.decision.action,
+            RecoveryAction::CooldownSuppressed | RecoveryAction::RequestDecoderReset
+        ));
     }
 }

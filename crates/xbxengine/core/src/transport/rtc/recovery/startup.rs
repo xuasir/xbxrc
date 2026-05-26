@@ -123,7 +123,7 @@ pub fn resolve_session_phase(
     .unwrap_or_else(|| resolve_session_phase_from_stats(None, stream_started_at, startup_grace))
 }
 
-fn resolve_session_phase_from_stats(
+pub(crate) fn resolve_session_phase_from_stats(
     stats: Option<&XbxEngineMediaRuntimeStats>,
     stream_started_at: Instant,
     startup_grace: Duration,
@@ -178,6 +178,7 @@ fn resolve_session_phase_from_stats(
         && stats.video_present_fps < RECOVERING_PRESENT_FPS;
     if (active_recovery_escalation || stalled_output || degraded_output)
         && !should_hold_steady_session_phase_during_displayed_idr_serving(stats)
+        && !recovery_exit_timed_fallback_allows_steady_phase(stats)
     {
         SessionPhase::Recovering
     } else {
@@ -185,10 +186,29 @@ fn resolve_session_phase_from_stats(
     }
 }
 
+fn recovery_exit_timed_fallback_allows_steady_phase(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    use crate::transport::rtc::recovery::contract::{
+        recovery_exit_path_from_stats, RecoveryExitPath, RecoveryExitThresholds,
+    };
+    matches!(
+        recovery_exit_path_from_stats(stats, now_ms_f64(), RecoveryExitThresholds::default()),
+        RecoveryExitPath::TimedFallback | RecoveryExitPath::DecodeOutput
+    ) && matches!(
+        escalation_structured_label(stats),
+        Some("receiverWaitingKeyframe" | "ingressWaitKeyframe" | "ingressFrameAbandoned")
+    )
+}
+
 fn should_hold_steady_session_phase_during_displayed_idr_serving(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
-    if stats.recovery_displayed_idr_at_ms.is_none() {
+    if !crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats) {
+        return false;
+    }
+    if crate::transport::rtc::recovery::contract::displayed_idr_serving_relaxation_blocked_from_stats(
+        stats,
+        now_ms_f64(),
+    ) {
         return false;
     }
     let host_steady_cadence = matches!(stats.host_cadence_phase.as_deref(), Some("steady"));

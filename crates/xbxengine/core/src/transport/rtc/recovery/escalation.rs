@@ -390,34 +390,6 @@ impl VideoEscalationController {
         )
     }
 
-    pub fn reopen_transport_await_keyframe(
-        &mut self,
-        recovery_epoch: u64,
-    ) -> VideoEscalationDecision {
-        self.begin_recovery_epoch(recovery_epoch);
-        self.next_observation_id = self.next_observation_id.saturating_add(1);
-        let now = Instant::now();
-        self.pending_keyframe_signals = 0;
-        self.pending_decoder_reset_signals = 0;
-        self.reconnect_candidate_signals = 0;
-        self.wait_keyframe_started_at = None;
-        self.transport_await_recovery_started_at = Some(now);
-        self.last_keyframe_signal_at = Some(now);
-        self.last_keyframe_reason_class = Some(KeyframeReasonClass::TransportAwaitRecoveryKeyframe);
-        self.clear_keyframe_epoch();
-        self.keyframe_budget_reservation_active = false;
-        let action = if self.can_allocate_keyframe_attempt() {
-            self.last_keyframe_request_at = Some(now);
-            RecoveryAction::RequestPli
-        } else {
-            RecoveryAction::CooldownSuppressed
-        };
-        VideoEscalationDecision {
-            observation_id: self.next_observation_id,
-            action,
-        }
-    }
-
     pub fn budget_state(&self) -> RecoveryActionBudgetState {
         RecoveryActionBudgetState {
             recovery_epoch: self.recovery_epoch,
@@ -517,6 +489,7 @@ impl VideoEscalationController {
         self.decoder_reset_budget_used = self.decoder_reset_budget_used.saturating_add(1);
         self.last_decoder_reset_at = Some(now);
         self.last_keyframe_request_at = Some(now);
+        self.last_keyframe_signal_at = Some(now);
         self.clear_keyframe_epoch();
         self.keyframe_budget_reservation_active = false;
     }
@@ -596,12 +569,79 @@ impl VideoEscalationController {
                 RecoveryAction::CooldownSuppressed
             }
             VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
-                // RFC 2026-05-20：关键帧由 RtcReceiveCore + capability 本地执行，session 不再走 PLI/FIR 预算环。
+                // RFC 2026-05-20：PLI/FIR 由 RtcReceiveCore 本地执行；session 仍须推进 decoder reset 梯子，避免 owner 永久 rebuilding-supply。
                 self.wait_keyframe_started_at = None;
-                self.transport_await_recovery_started_at = None;
-                self.pending_keyframe_signals = 0;
+                self.transport_await_recovery_started_at.get_or_insert(now);
+                self.pending_keyframe_signals = self.pending_keyframe_signals.saturating_add(1);
                 self.pending_decoder_reset_signals = 0;
-                RecoveryAction::CooldownSuppressed
+                self.last_keyframe_signal_at = Some(now);
+                self.last_keyframe_reason_class =
+                    Some(KeyframeReasonClass::TransportAwaitRecoveryKeyframe);
+                let hard_stuck_transport_await_recovery_keyframe = self
+                    .transport_await_recovery_started_at
+                    .map_or(false, |started_at| {
+                        now.duration_since(started_at)
+                            >= (self.escalation_window + self.cooldown.mul_f32(2.0))
+                    });
+                let persistent_transport_await_recovery_keyframe = self
+                    .transport_await_recovery_started_at
+                    .map_or(false, |started_at| {
+                        now.duration_since(started_at)
+                            >= self.escalation_window.max(self.keyframe_upgrade_min_delay)
+                    });
+                if hard_stuck_transport_await_recovery_keyframe
+                    && allow_transport_await_stage_escalation
+                {
+                    self.pending_keyframe_signals = 0;
+                    self.clear_keyframe_epoch();
+                    self.resolve_reconnect_or_decoder_reset_fallback(
+                        now,
+                        false,
+                        VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                    )
+                } else if persistent_transport_await_recovery_keyframe
+                    && allow_transport_await_stage_escalation
+                {
+                    if self
+                        .last_keyframe_request_at
+                        .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
+                        && self.try_enter_keyframe_epoch(
+                            KeyframeReasonClass::TransportAwaitRecoveryKeyframe,
+                            now,
+                        )
+                    {
+                        self.last_keyframe_request_at = Some(now);
+                        self.pending_keyframe_signals = 0;
+                        self.reconnect_candidate_signals = 0;
+                        if self.can_allocate_keyframe_attempt() {
+                            RecoveryAction::RequestPli
+                        } else {
+                            self.coalesced_keyframe_in_flight()
+                        }
+                    } else if self
+                        .last_decoder_reset_at
+                        .map_or(true, |last| last.elapsed() >= self.cooldown)
+                        && self
+                            .transport_await_recovery_started_at
+                            .map_or(false, |started_at| {
+                                now.duration_since(started_at)
+                                    >= self.escalation_window + self.cooldown
+                            })
+                    {
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.clear_keyframe_epoch();
+                        self.resolve_reconnect_or_decoder_reset_fallback(
+                            now,
+                            false,
+                            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                        )
+                    } else {
+                        RecoveryAction::CooldownSuppressed
+                    }
+                } else {
+                    RecoveryAction::CooldownSuppressed
+                }
             }
             VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::DisplaySupplyCritical
@@ -691,24 +731,6 @@ impl VideoEscalationController {
                                         .mul_f32(2.0)
                                         .max(self.keyframe_upgrade_min_delay)
                             });
-                    let persistent_transport_await_recovery_keyframe = matches!(
-                        reason,
-                        VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                    ) && self
-                        .transport_await_recovery_started_at
-                        .map_or(false, |started_at| {
-                            now.duration_since(started_at)
-                                >= self.escalation_window.max(self.keyframe_upgrade_min_delay)
-                        });
-                    let hard_stuck_transport_await_recovery_keyframe = matches!(
-                        reason,
-                        VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                    ) && self
-                        .transport_await_recovery_started_at
-                        .map_or(false, |started_at| {
-                            now.duration_since(started_at)
-                                >= (self.escalation_window + self.cooldown.mul_f32(2.0))
-                        });
                     if matches!(reason, VideoEscalationReason::TransportExpiredDeadline) {
                         let reset_deadline_windows = self
                             .transport_deadline_window_started_at
@@ -776,52 +798,9 @@ impl VideoEscalationController {
                         }
                     } else if persistent_wait_keyframe && allow_wait_keyframe_stage_escalation {
                         self.coalesced_keyframe_in_flight()
-                    } else if hard_stuck_transport_await_recovery_keyframe
-                        && allow_transport_await_stage_escalation
-                        && self.reconnect_candidate_signals
-                            >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
-                    {
-                        self.pending_keyframe_signals = 0;
-                        self.pending_decoder_reset_signals = 0;
-                        self.reconnect_candidate_signals =
-                            self.reconnect_candidate_signals.saturating_add(1);
-                        self.clear_keyframe_epoch();
-                        self.resolve_reconnect_or_decoder_reset_fallback(
-                            now,
-                            allow_reconnect,
-                            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-                        )
-                    } else if persistent_transport_await_recovery_keyframe
-                        && allow_transport_await_stage_escalation
-                        && self
-                            .last_keyframe_request_at
-                            .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
-                    {
-                        self.clear_keyframe_epoch();
-                        self.try_enter_keyframe_epoch(reason_class, now);
-                        self.last_keyframe_request_at = Some(now);
-                        self.pending_keyframe_signals = 0;
-                        self.pending_decoder_reset_signals = 0;
-                        self.reconnect_candidate_signals =
-                            self.reconnect_candidate_signals.saturating_add(1);
-                        if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestFir
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
-                    } else if persistent_transport_await_recovery_keyframe
-                        && allow_transport_await_stage_escalation
-                    {
-                        self.coalesced_keyframe_in_flight()
                     } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         RecoveryAction::WaitForBurst
                     } else if self.try_release_keyframe_epoch_for_same_reason(reason_class, now) {
-                        if matches!(
-                            reason,
-                            VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                        ) {
-                            self.transport_await_recovery_started_at = Some(now);
-                        }
                         self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;

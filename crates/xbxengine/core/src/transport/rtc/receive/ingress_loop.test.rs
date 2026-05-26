@@ -225,7 +225,7 @@ fn no_render_slack_or_no_fresh_output_still_emits_idle_timeout_observation() {
 #[test]
 fn recovery_wait_without_hard_risk_allows_healthy_delta_to_submit() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 0, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -342,7 +342,7 @@ fn unresolved_transport_await_without_current_clean_anchor_rearms_clean_anchor()
 #[test]
 fn recovery_wait_does_not_override_loss_semantics() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 1, false);
+        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 1, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -351,7 +351,7 @@ fn recovery_wait_does_not_override_loss_semantics() {
 #[test]
 fn lossy_keyframe_defers_to_nack_recovery_admission() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, false, true, 0, 2, false);
+        resolve_recovery_keyframe_action(true, false, false, false, true, 0, 2, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -360,7 +360,7 @@ fn lossy_keyframe_defers_to_nack_recovery_admission() {
 #[test]
 fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, false, false, 2, 1, false);
+        resolve_recovery_keyframe_action(true, false, false, false, false, 2, 1, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -369,7 +369,7 @@ fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
 #[test]
 fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, false, false, 3, 1, false);
+        resolve_recovery_keyframe_action(true, false, false, false, false, 3, 1, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -378,7 +378,7 @@ fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
 #[test]
 fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 0, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -387,7 +387,7 @@ fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
 #[test]
 fn pre_first_frame_wait_does_not_absorb_non_keyframe_delta() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(false, true, false, false, false, 0, 0, false);
+        resolve_recovery_keyframe_action(false, true, false, false, false, 0, 0, false, false);
 
     assert!(next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
@@ -429,7 +429,7 @@ fn current_epoch_clean_anchor_counts_as_first_frame_acquired() {
 #[test]
 fn sustaining_recovery_prefers_keepalive_over_reenter_wait_keyframe() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, true, true, true, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, true, true, true, 0, 0, false, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -438,7 +438,7 @@ fn sustaining_recovery_prefers_keepalive_over_reenter_wait_keyframe() {
 #[test]
 fn hard_recovery_wait_without_building_phase_still_reenters_wait_keyframe() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false, false);
 
     assert!(next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
@@ -447,7 +447,7 @@ fn hard_recovery_wait_without_building_phase_still_reenters_wait_keyframe() {
 #[test]
 fn clean_anchor_building_phase_allows_stale_wait_continuation_to_submit() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, true);
+        resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, true, true);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -456,7 +456,7 @@ fn clean_anchor_building_phase_allows_stale_wait_continuation_to_submit() {
 #[test]
 fn drop_and_request_action_contract_keeps_resolver_stateless() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, true, 3, 2, false);
+        resolve_recovery_keyframe_action(true, true, false, false, true, 3, 2, false, false);
 
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
     // resolve 层只给出动作，等待态由 action 分支显式处理，避免隐式耦合。

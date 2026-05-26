@@ -68,6 +68,10 @@ impl VideoIngress {
         self.queue.len()
     }
 
+    pub fn is_awaiting_bootstrap(&self) -> bool {
+        self.ingress_awaiting_bootstrap
+    }
+
     pub fn peek_front(&self) -> Option<&EncodedFrame> {
         self.queue.front()
     }
@@ -166,6 +170,29 @@ impl VideoIngress {
             Duration::from_millis(33),
         );
         now > frame.target_playout_instant + frame_late_threshold
+    }
+
+    fn lowest_backlog_eviction_candidate(&self) -> Option<(usize, u32)> {
+        self.queue
+            .iter()
+            .enumerate()
+            .filter(|(_, queued)| !queued.is_keyframe)
+            .map(|(idx, queued)| {
+                let queued_context = if self.committed_codec.as_ref() != Some(&queued.codec)
+                    || self.committed_width != queued.width
+                    || self.committed_height != queued.height
+                {
+                    FrameBudgetContext::for_ingress_admission(queued, false, true)
+                } else {
+                    queued.budget
+                };
+                (idx, queued_context.backlog_priority_score(queued.value))
+            })
+            .min_by_key(|(_, score)| *score)
+    }
+
+    fn lowest_backlog_eviction_index(&self) -> Option<usize> {
+        self.lowest_backlog_eviction_candidate().map(|(idx, _)| idx)
     }
 
     fn can_exit_waiting_keyframe_with_recovery_continuation(
@@ -311,24 +338,17 @@ impl FrameScheduler for VideoIngress {
 
         // Rule 3: Backlog 控制
         if self.queue.len() >= self.max_size {
+            if frame.is_keyframe {
+                if let Some(lowest_idx) = self.lowest_backlog_eviction_index() {
+                    self.queue.remove(lowest_idx);
+                    frame.h264.commit();
+                    self.queue.push_back(frame);
+                    return IngressDecision::DropBacklogEvictQueued;
+                }
+                return IngressDecision::DropBacklogIncoming;
+            }
             // backlog 时基于帧价值模型做替换，避免低价值旧帧继续堵塞队列。
-            if let Some((lowest_idx, lowest_score)) = self
-                .queue
-                .iter()
-                .enumerate()
-                .map(|(idx, queued)| {
-                    let queued_context = if self.committed_codec.as_ref() != Some(&queued.codec)
-                        || self.committed_width != queued.width
-                        || self.committed_height != queued.height
-                    {
-                        FrameBudgetContext::for_ingress_admission(queued, false, true)
-                    } else {
-                        queued.budget
-                    };
-                    (idx, queued_context.backlog_priority_score(queued.value))
-                })
-                .min_by_key(|(_, score)| *score)
-            {
+            if let Some((lowest_idx, lowest_score)) = self.lowest_backlog_eviction_candidate() {
                 let incoming_score = context.backlog_priority_score(frame.value);
                 if incoming_score <= lowest_score {
                     return IngressDecision::DropBacklogIncoming;

@@ -5,12 +5,16 @@ use super::keyframe_escalation_queue::KeyframeEscalationQueue;
 use super::packet_buffer::PacketBuffer;
 use super::timing::{NackSchedulingParams, ReceiveTimingProfile};
 
+/// 单 seq 累计发送次数超过该阈值仍无恢复时，强制关键帧升级（不再重开 NACK 周期）。
+const STUCK_SEQUENCE_SEND_THRESHOLD: u8 = 12;
+
 #[derive(Debug)]
 struct PendingNack {
     first_seen: Instant,
     first_sent: Option<Instant>,
     last_sent_at: Option<Instant>,
     retry_count: u8,
+    total_send_count: u8,
     exhausted: bool,
 }
 
@@ -29,17 +33,13 @@ pub struct NackPollResult {
     pub keyframe_escalation_due: bool,
 }
 
-impl NackPollResult {
-    pub fn is_empty(&self) -> bool {
-        self.sequences.is_empty() && !self.keyframe_escalation_due
-    }
-}
-
 /// receiver-local NACK：seq gap + RTT 感知时序；RTX/FEC 恢复 seq 不再进入 NACK。
 pub struct NackRequester {
     _timing: ReceiveTimingProfile,
     pending: BTreeMap<u16, PendingNack>,
     recovered: BTreeSet<u16>,
+    /// 已耗尽重试的 seq；在关键帧升级前禁止重新入队，避免对同一洞无限 NACK。
+    exhausted_sequences: BTreeSet<u16>,
     keyframe_escalation: KeyframeEscalationQueue,
 }
 
@@ -49,6 +49,7 @@ impl NackRequester {
             _timing: timing,
             pending: BTreeMap::new(),
             recovered: BTreeSet::new(),
+            exhausted_sequences: BTreeSet::new(),
             keyframe_escalation: KeyframeEscalationQueue::default(),
         }
     }
@@ -59,11 +60,16 @@ impl NackRequester {
             if self.recovered.contains(&seq) {
                 continue;
             }
+            if self.exhausted_sequences.contains(&seq) {
+                self.keyframe_escalation.arm_immediate(now);
+                continue;
+            }
             self.pending.entry(seq).or_insert(PendingNack {
                 first_seen: now,
                 first_sent: None,
                 last_sent_at: None,
                 retry_count: 0,
+                total_send_count: 0,
                 exhausted: false,
             });
         }
@@ -101,12 +107,14 @@ impl NackRequester {
 
     pub fn on_keyframe_escalation_sent(&mut self) {
         self.keyframe_escalation.clear();
+        self.exhausted_sequences.clear();
         for entry in self.pending.values_mut() {
             if entry.exhausted {
                 entry.exhausted = false;
                 entry.first_sent = None;
                 entry.last_sent_at = None;
                 entry.retry_count = 0;
+                entry.total_send_count = 0;
             }
         }
     }
@@ -131,8 +139,12 @@ impl NackRequester {
                 if age >= params.first_nack {
                     entry.first_sent = Some(now);
                     entry.last_sent_at = Some(now);
+                    entry.total_send_count = entry.total_send_count.saturating_add(1);
                     result.sequences.push(*seq);
                     result.retry_counts.push(entry.retry_count);
+                    if entry.total_send_count >= STUCK_SEQUENCE_SEND_THRESHOLD {
+                        should_arm_escalation = true;
+                    }
                 }
                 continue;
             }
@@ -145,8 +157,12 @@ impl NackRequester {
             if entry.retry_count < params.max_retries && since_last >= params.retry_interval {
                 entry.retry_count = entry.retry_count.saturating_add(1);
                 entry.last_sent_at = Some(now);
+                entry.total_send_count = entry.total_send_count.saturating_add(1);
                 result.sequences.push(*seq);
                 result.retry_counts.push(entry.retry_count);
+                if entry.total_send_count >= STUCK_SEQUENCE_SEND_THRESHOLD {
+                    should_arm_escalation = true;
+                }
                 continue;
             }
 
@@ -154,13 +170,23 @@ impl NackRequester {
             let retries_exhausted = entry.retry_count >= params.max_retries;
             if timed_out || retries_exhausted {
                 entry.exhausted = true;
+                self.exhausted_sequences.insert(*seq);
                 should_arm_escalation = true;
             }
         }
 
         if should_arm_escalation {
-            self.keyframe_escalation
-                .arm(params.keyframe_escalation_dwell, now);
+            if self
+                .pending
+                .values()
+                .any(|entry| entry.total_send_count >= STUCK_SEQUENCE_SEND_THRESHOLD)
+                || !self.exhausted_sequences.is_empty()
+            {
+                self.keyframe_escalation.arm_immediate(now);
+            } else {
+                self.keyframe_escalation
+                    .arm(params.keyframe_escalation_dwell, now);
+            }
         }
 
         result.keyframe_escalation_due = self.keyframe_escalation.poll_due(now);
@@ -169,13 +195,6 @@ impl NackRequester {
 
     pub fn sync_from_buffer(&mut self, buffer: &PacketBuffer) {
         self.register_gaps(buffer.all_missing());
-    }
-
-    /// 兼容旧调用：返回序列列表与是否应关键帧升级（无 per-seq retry 时取 0）。
-    pub fn poll_ready_sequences(&mut self, now: Instant) -> (Vec<u16>, bool) {
-        let params = self._timing.nack_scheduling_params(100.0);
-        let result = self.poll(&params, now);
-        (result.sequences, result.keyframe_escalation_due)
     }
 }
 
@@ -209,7 +228,54 @@ mod tests {
     }
 
     #[test]
-    fn exhaustion_arms_keyframe_queue_before_due() {
+    fn exhausted_sequence_reregistration_arms_immediate_keyframe() {
+        let mut requester = NackRequester::new(cloud_timing());
+        requester.register_gaps([42_u16]);
+        let start = Instant::now();
+        let mut params = cloud_timing().nack_scheduling_params(10.0);
+        params.first_nack = Duration::from_millis(1);
+        params.retry_interval = Duration::from_millis(1);
+        params.max_retries = 0;
+        params.nack_timeout = Duration::from_millis(5);
+        params.reorder_wait = Duration::from_millis(1);
+
+        let t1 = start + Duration::from_millis(3);
+        let _ = requester.poll(&params, t1);
+        let _ = requester.poll(&params, t1 + Duration::from_millis(2));
+        assert!(requester.has_exhausted_gaps());
+
+        requester.register_gaps([42_u16]);
+        assert!(requester.keyframe_escalation_armed());
+        let r = requester.poll(&params, t1 + Duration::from_millis(3));
+        assert!(r.keyframe_escalation_due);
+    }
+
+    #[test]
+    fn repeated_sends_on_same_sequence_force_immediate_keyframe() {
+        let mut requester = NackRequester::new(cloud_timing());
+        requester.register_gaps([99_u16]);
+        let start = Instant::now();
+        let mut params = cloud_timing().nack_scheduling_params(10.0);
+        params.first_nack = Duration::from_millis(1);
+        params.retry_interval = Duration::from_millis(1);
+        params.max_retries = 20;
+        params.nack_timeout = Duration::from_secs(60);
+        params.reorder_wait = Duration::from_millis(1);
+
+        let mut armed = false;
+        for step in 0..20 {
+            let now = start + Duration::from_millis(2 + step * 3);
+            let result = requester.poll(&params, now);
+            if result.keyframe_escalation_due {
+                armed = true;
+                break;
+            }
+        }
+        assert!(armed, "stuck sequence should escalate to keyframe");
+    }
+
+    #[test]
+    fn exhaustion_arms_keyframe_escalation_when_gap_times_out() {
         let mut requester = NackRequester::new(cloud_timing());
         requester.register_gaps([42_u16]);
         let start = Instant::now();
@@ -224,12 +290,12 @@ mod tests {
         let t1 = start + Duration::from_millis(3);
         let r1 = requester.poll(&params, t1);
         assert!(!r1.sequences.is_empty());
-        let r2 = requester.poll(&params, t1 + Duration::from_millis(2));
-        assert!(r2.sequences.is_empty());
-        assert!(!r2.keyframe_escalation_due);
-        assert!(requester.keyframe_escalation_armed());
+        assert!(!requester.keyframe_escalation_armed());
 
-        let r3 = requester.poll(&params, t1 + Duration::from_millis(60));
-        assert!(r3.keyframe_escalation_due);
+        let t_exhaust = t1 + params.nack_timeout + Duration::from_millis(2);
+        let r2 = requester.poll(&params, t_exhaust);
+        assert!(r2.sequences.is_empty());
+        assert!(r2.keyframe_escalation_due);
+        assert!(!requester.keyframe_escalation_armed());
     }
 }

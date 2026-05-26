@@ -1,6 +1,11 @@
 use std::collections::VecDeque;
+use std::time::Duration;
 
 use xbxengine::{XbxEngineHostVideoFrameDropEvent, XbxEngineRenderFrame};
+
+const HOST_PRESENT_TICK_SLEEP_DEFAULT_MS: u64 = 16;
+const HOST_PRESENT_TICK_SLEEP_MIN_MS: u64 = 8;
+const HOST_PRESENT_TICK_SLEEP_MAX_MS: u64 = 50;
 
 const HOST_RENDER_FPS_WINDOW_MS: f64 = 1_000.0;
 const HOST_RENDER_MIN_FRAME_AGE_MS: f64 = 24.0;
@@ -222,6 +227,18 @@ impl HostCadenceTelemetry {
         self.latest_present_time_ms = Some(now_ms);
     }
 
+    /// DisplayLink 不可用时的 fallback 轮询间隔：有实测 tick 间隔后跟随真刷新率。
+    pub fn present_tick_sleep_duration(&self) -> Duration {
+        let interval_ms = self
+            .display_interval_ms()
+            .map(|ms| ms.round() as u64)
+            .filter(|ms| {
+                (*ms >= HOST_PRESENT_TICK_SLEEP_MIN_MS) && (*ms <= HOST_PRESENT_TICK_SLEEP_MAX_MS)
+            })
+            .unwrap_or(HOST_PRESENT_TICK_SLEEP_DEFAULT_MS);
+        Duration::from_millis(interval_ms)
+    }
+
     pub fn clear_no_pending_streak(&mut self) {
         self.no_pending_streak = 0;
         self.cadence_phase = if self.present_epoch > 0 {
@@ -254,7 +271,10 @@ impl HostCadenceTelemetry {
     }
 
     pub fn display_interval_ms(&self) -> Option<f64> {
-        calculate_recent_interval_ms(&self.recent_display_tick_times_ms)
+        calculate_recent_interval_ms(&self.recent_display_tick_times_ms).or_else(|| {
+            // priming：display tick 样本不足时，用 present 间隔托底 sleep / frame_age_budget。
+            calculate_recent_interval_ms(&self.recent_present_times_ms)
+        })
     }
 
     pub fn submit_interval_ms(&self) -> Option<f64> {
@@ -288,11 +308,19 @@ impl HostCadenceTelemetry {
         let effective_budget = self
             .effective_frame_interval_ms()
             .map(Self::adaptive_interval_budget_ms);
-        match (effective_budget, self.submit_driven_frame_age_budget_ms()) {
+        let mut budget = match (effective_budget, self.submit_driven_frame_age_budget_ms()) {
             (Some(left), Some(right)) => left.max(right),
             (Some(value), None) | (None, Some(value)) => value,
             (None, None) => HOST_RENDER_MAX_FRAME_AGE_MS,
+        };
+        // steady 下 present 节拍常低于 decode；用 display/submit 实测间隔托底，避免 pending 被过短阈值误杀。
+        if matches!(self.cadence_phase, HostCadencePhase::Steady) && self.present_epoch > 0 {
+            if let Some(interval_ms) = self.effective_frame_interval_ms() {
+                let cadence_floor = Self::adaptive_interval_budget_ms(interval_ms.max(1.0));
+                budget = budget.max(cadence_floor);
+            }
         }
+        budget
     }
 
     pub fn host_mailbox_submit_stale_budget_ms(&self, frame: &XbxEngineRenderFrame) -> f64 {
@@ -823,7 +851,10 @@ impl ScheduledFrameSlot {
         }
         if self.displayed_frame.is_some() {
             telemetry.record_display_hold();
-            telemetry.record_present_refresh(now_ms);
+            // pending 已在上面的 take 分支消费；此处仅持帧，不刷新 present 时钟以免压过下一帧 submit。
+            if self.pending_frame.is_none() {
+                telemetry.record_present_refresh(now_ms);
+            }
             self.log_host_flow(
                 "take",
                 self.displayed_frame.as_ref().map(|frame| frame.frame_seq),

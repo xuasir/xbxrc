@@ -341,7 +341,7 @@ fn run_decode_loop(
     let mut input_closed = false;
     let mut pending_output_backpressure_active = false;
     let mut stale_recovery_bridge = StaleRecoveryBridge::default();
-    sync_decode_runtime_stats(&runtime_stats, &decode_state, 0.0);
+    sync_decode_runtime_stats(&runtime_stats, &mut decode_state, 0.0);
 
     loop {
         if let Some(dropped_frame) =
@@ -437,6 +437,9 @@ fn run_decode_loop(
                 DecodeMsg::Frame(frame) => {
                     release_decode_slot(&available_slots, &demand_epoch, &demand_notify);
                     let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
+                    runtime_stats.read(|stats| {
+                        decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
+                    });
                     let frame_rtp_timestamp = frame.rtp_timestamp;
                     let frame_class = EncodedFrameRecoveryClass::from_frame(&frame);
                     let current_recovery_epoch = runtime_stats
@@ -477,7 +480,7 @@ fn run_decode_loop(
                                 frame_class.rtp_timestamp,
                             ));
                         });
-                        sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);
+                        sync_decode_runtime_stats(&runtime_stats, &mut decode_state, now_ms);
                         continue;
                     }
 
@@ -589,7 +592,7 @@ fn run_decode_loop(
                             });
                         }
                     }
-                    sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);
+                    sync_decode_runtime_stats(&runtime_stats, &mut decode_state, now_ms);
                 }
                 DecodeMsg::LocalDecoderReset {
                     reason,
@@ -628,7 +631,7 @@ fn run_decode_loop(
                     }
                     sync_decode_runtime_stats(
                         &runtime_stats,
-                        &decode_state,
+                        &mut decode_state,
                         crate::media::video::decode::video_decode::now_ms_f64(),
                     );
                 }
@@ -841,10 +844,22 @@ fn format_decode_backpressure_summary(
 
 fn sync_decode_runtime_stats(
     runtime_stats: &RuntimeStatsSink,
-    decode_state: &XbxVideoDecodeState,
+    decode_state: &mut XbxVideoDecodeState,
     now_ms: f64,
 ) {
     let video_decoder_stalled = derive_decoder_stalled(runtime_stats, now_ms);
+    let present_cadence_interval_ms = runtime_stats
+        .read(|stats| {
+            crate::media::video::present_cadence::resolve_present_cadence_interval_ms(
+                stats,
+                crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            )
+        })
+        .unwrap_or(crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS);
+    decode_state.set_mailbox_present_cadence(present_cadence_interval_ms);
+    runtime_stats.read(|stats| {
+        decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
+    });
     runtime_stats.update(|stats| {
         stats.video_decoder_backend_name = Some(decode_state.decoder_backend_name().to_string());
         stats.video_decoder_reset_count = decode_state.decoder_reset_count();

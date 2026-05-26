@@ -38,6 +38,9 @@ use crate::transport::rtc::recovery::contract::{
 use crate::transport::rtc::recovery::coordinator::{
     CoordinatorProposal, RecoveryCoordinator, RecoveryOwnerSignal,
 };
+use crate::transport::rtc::recovery::displayed_idr_fast_path::{
+    DisplayedIdrFastPathKind, DisplayedIdrFastPathWindow,
+};
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::policy::ScenarioPolicyProfileKind;
 use crate::transport::rtc::recovery::runtime_state::{
@@ -411,6 +414,7 @@ pub struct RtcSessionPolicy {
     next_recovery_decision_ledger_id: u64,
     /// `LocalSupplySuspect` 进入时刻，用于 dwell 升级到 `TransportAwaitRecoveryKeyframe`。
     local_supply_suspect_since_ms: Option<f64>,
+    displayed_idr_fast_path: DisplayedIdrFastPathWindow,
 }
 
 impl RtcSessionPolicy {
@@ -480,6 +484,7 @@ impl RtcSessionPolicy {
             last_recovery_state: None,
             next_recovery_decision_ledger_id: 0,
             local_supply_suspect_since_ms: None,
+            displayed_idr_fast_path: DisplayedIdrFastPathWindow::default(),
         }
     }
 }
@@ -667,6 +672,7 @@ impl RtcSessionPolicy {
             self.recovery_coordinator = RecoveryCoordinator::new(state_coordinator);
             self.scheduling_engine = SchedulingPolicyEngine::new();
             self.scheduling_owner = VideoSchedulingOwner::new();
+            self.displayed_idr_fast_path = DisplayedIdrFastPathWindow::default();
             self.escalation_profile_kind = profile.kind;
             self.last_lifecycle_reconnect_proposal_at_ms = None;
             self.recovery_no_progress_since_ms = None;
@@ -722,6 +728,7 @@ impl RtcSessionPolicy {
         // recovery epoch 变化只更新游标，coordinator 内部会在每次 proposal
         // 时通过 begin_recovery_epoch 切换预算；这里不重建对象，避免清空短时连击状态。
         self.last_recovery_epoch = recovery_epoch;
+        self.displayed_idr_fast_path = DisplayedIdrFastPathWindow::default();
     }
 
     /// 首帧前 bootstrap reject 仍需要尽快发 PLI：在尚无 decode/present 边沿时保留 `TransportAwait` 语义。
@@ -879,7 +886,15 @@ impl RtcSessionPolicy {
         let fallback_connectivity_reason = control_label
             .as_deref()
             .and_then(resolve_connectivity_fallback_reason);
-        let owner_signal = if force_lifecycle_reconnect || allow_periodic_lifecycle_reconnect {
+        let fast_path_kind = self.evaluate_displayed_idr_fast_path(observed_at_ms);
+        let owner_signal = if let Some(kind) = fast_path_kind {
+            self.displayed_idr_fast_path_owner_signal(
+                kind,
+                observed_at_ms,
+                owner_signal_gap_severity,
+                owner_signal_repairability,
+            )
+        } else if force_lifecycle_reconnect || allow_periodic_lifecycle_reconnect {
             let has_current_clean_anchor = RuntimeStatsSink::read_shared(
                 self.runtime_stats.as_ref(),
                 has_current_clean_anchor_from_stats,
@@ -1039,7 +1054,7 @@ impl RtcSessionPolicy {
                 }
             }
         };
-        let owner_signal =
+        let mut owner_signal =
             self.apply_local_supply_suspect_anchor_gate(owner_signal, observed_at_ms);
         if owner_signal.reason_label == "receiverWaitingKeyframe" && !owner_signal_missing_anchor {
             let decoder_waiting_keyframe =
@@ -2638,6 +2653,53 @@ impl RtcSessionPolicy {
             )
     }
 
+    fn recovery_startup_grace(&self) -> Duration {
+        let grace_ms = self
+            .runtime_config
+            .lock()
+            .ok()
+            .map(|config| config.webrtc.recovery.first_frame_grace_ms)
+            .unwrap_or(RECOVERY_STARTUP_GRACE_MS);
+        Duration::from_millis(grace_ms)
+    }
+
+    fn evaluate_displayed_idr_fast_path(
+        &mut self,
+        observed_at_ms: f64,
+    ) -> Option<DisplayedIdrFastPathKind> {
+        let startup_grace = self.recovery_startup_grace();
+        let _ = RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            self.displayed_idr_fast_path
+                .sync_from_stats(stats, observed_at_ms);
+            Some(())
+        });
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            self.displayed_idr_fast_path.evaluate(
+                stats,
+                observed_at_ms,
+                self.stream_started_at,
+                startup_grace,
+            )
+        })
+        .flatten()
+    }
+
+    fn displayed_idr_fast_path_owner_signal(
+        &self,
+        kind: DisplayedIdrFastPathKind,
+        observed_at_ms: f64,
+        gap_severity: Option<GapSeverity>,
+        repairability: Option<f64>,
+    ) -> RecoveryOwnerSignal {
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::WaitKeyframe,
+            reason_label: kind.reason_label().to_string(),
+            observed_at_ms,
+            gap_severity,
+            repairability,
+        }
+    }
+
     fn should_suppress_display_picture_recovery_action(
         proposal: &CoordinatorProposal,
         owner_signal: &RecoveryOwnerSignal,
@@ -2650,7 +2712,13 @@ impl RtcSessionPolicy {
         }
         if matches!(
             owner_signal.reason_label.as_str(),
-            "receiverWaitingKeyframe" | "waitKeyframe" | "ingressWaitKeyframe"
+            "receiverWaitingKeyframe"
+                | "waitKeyframe"
+                | "ingressWaitKeyframe"
+                | "displayedIdrFastPathPathA"
+                | "displayedIdrFastPathPathB"
+                | "displayedIdrFastPathPathC"
+                | "displayedIdrFastPathPathD"
         ) {
             return false;
         }

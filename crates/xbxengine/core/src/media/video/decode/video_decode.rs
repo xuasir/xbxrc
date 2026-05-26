@@ -30,12 +30,15 @@ const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS: f64 = 80.0;
 const LOCAL_DECODER_RESET_REPLAY_BARRIER_MS: f64 = 900.0;
 const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
 const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
+const TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_WINDOW_MS: f64 = 4_000.0;
+const TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_MAX_FRAMES: u32 = 120;
 const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 24;
 const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 48;
 const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 72;
 const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 48;
 const DECODE_QUEUE_STALE_SLACK_GUARD_MS: u64 = 2;
-const DECODE_LATEST_REPLACE_MIN_INTERVAL_MS: f64 = 20.0;
+const DECODE_MAILBOX_REPLACE_MIN_INTERVAL_FLOOR_MS: f64 = 12.0;
+const DECODE_MAILBOX_REPLACE_MIN_INTERVAL_CEILING_MS: f64 = 100.0;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -286,6 +289,10 @@ pub(crate) struct XbxVideoDecodeState {
     d3d11va_no_output_rebuild_attempts: u32,
     nominal_continuation_hw_no_output_resets: u32,
     last_decode_latest_replace_at_ms: Option<f64>,
+    /// 与 pacer 共用的呈现节拍尺（host 刷新与流帧率取较慢侧）。
+    mailbox_present_cadence_interval_ms: f64,
+    /// TimedFallback + displayed-idr：允许 bootstrapMissingIdr 的 delta 进入解码器续播。
+    timed_fallback_displayed_idr_bypass: bool,
 }
 
 impl XbxVideoDecodeState {
@@ -340,10 +347,45 @@ impl XbxVideoDecodeState {
             d3d11va_no_output_rebuild_attempts: 0,
             nominal_continuation_hw_no_output_resets: 0,
             last_decode_latest_replace_at_ms: None,
+            mailbox_present_cadence_interval_ms:
+                crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            timed_fallback_displayed_idr_bypass: false,
         })
     }
 
-    fn should_coalesce_decoded_latest_replace(
+    /// 与 recovery 合同同步：TimedFallback 时打通 displayed-idr delta 解码续播。
+    pub(crate) fn sync_recovery_exit_policy_from_stats(
+        &mut self,
+        stats: &crate::XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) {
+        use crate::transport::rtc::recovery::contract::{
+            displayed_idr_serving_from_stats, recovery_timed_fallback_active_from_stats,
+        };
+        let bypass = recovery_timed_fallback_active_from_stats(stats, now_ms)
+            && displayed_idr_serving_from_stats(stats);
+        if bypass && !self.timed_fallback_displayed_idr_bypass {
+            self.waiting_keyframe_continuation_deadline_ms =
+                Some(now_ms + TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_WINDOW_MS);
+            self.waiting_keyframe_continuation_frames_left =
+                TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_MAX_FRAMES;
+        }
+        self.timed_fallback_displayed_idr_bypass = bypass;
+    }
+
+    pub(crate) fn set_mailbox_present_cadence(&mut self, present_cadence_interval_ms: f64) {
+        self.mailbox_present_cadence_interval_ms = present_cadence_interval_ms.clamp(
+            DECODE_MAILBOX_REPLACE_MIN_INTERVAL_FLOOR_MS,
+            DECODE_MAILBOX_REPLACE_MIN_INTERVAL_CEILING_MS,
+        );
+    }
+
+    fn resolve_decode_mailbox_replace_min_interval_ms(&self) -> f64 {
+        self.mailbox_present_cadence_interval_ms
+    }
+
+    /// 仅在保护已提交的 anchor 候选、抵御恢复窗内 continuation 突发时使用；steady supply 走 value supersede。
+    fn should_protect_anchor_candidate_from_incoming_burst(
         &self,
         incoming: &DecodedFrame,
         existing: &DecodedFrame,
@@ -352,19 +394,35 @@ impl XbxVideoDecodeState {
         let Some(last_replace_at_ms) = self.last_decode_latest_replace_at_ms else {
             return false;
         };
-        if observed_at_ms - last_replace_at_ms >= DECODE_LATEST_REPLACE_MIN_INTERVAL_MS {
+        if observed_at_ms - last_replace_at_ms
+            >= self.resolve_decode_mailbox_replace_min_interval_ms()
+        {
             return false;
         }
-        if Self::compare_decoded_candidate_value(incoming, existing) < 0 {
+        if incoming.is_keyframe {
             return false;
         }
-        matches!(
-            (
-                incoming.budget.recovery_value_tier(),
-                existing.budget.recovery_value_tier()
-            ),
-            ("supply", "supply") | ("disposable", "disposable")
-        )
+        if existing.is_keyframe && !incoming.is_keyframe {
+            let incoming_can_upgrade_anchor =
+                matches!(
+                    decoded_presentation_value_role(incoming),
+                    crate::api::backend::XbxEnginePresentationValueRole::FreshAnchor
+                        | crate::api::backend::XbxEnginePresentationValueRole::RecoveryContinuation
+                ) && Self::compare_decoded_candidate_value(incoming, existing) > 0;
+            if incoming_can_upgrade_anchor {
+                return false;
+            }
+            return true;
+        }
+        if Self::compare_decoded_candidate_value(incoming, existing) > 0 {
+            return false;
+        }
+        matches!(existing.budget.recovery_value_tier(), "anchor")
+            || matches!(
+                decoded_presentation_value_role(existing),
+                crate::api::backend::XbxEnginePresentationValueRole::FreshAnchor
+                    | crate::api::backend::XbxEnginePresentationValueRole::RecoveryContinuation
+            )
     }
 
     /**
@@ -373,6 +431,9 @@ impl XbxVideoDecodeState {
      */
     pub(crate) fn request_local_decoder_reset(&mut self) -> Result<bool, XbxEngineRuntimeError> {
         let now_ms = now_ms_f64();
+        if self.should_suppress_repeat_waiting_keyframe_decoder_reset(now_ms) {
+            return Ok(false);
+        }
         if self
             .latest_decoder_reset_time_ms
             .is_some_and(|last_reset_at_ms| {
@@ -415,11 +476,20 @@ impl XbxVideoDecodeState {
         self.last_encoded_frame_time_ms = Some(now_ms);
         let frame_rtp_timestamp = encoded_frame.rtp_timestamp;
         let frame_is_keyframe = encoded_frame.is_keyframe;
+        let timed_fallback_bypass = self.timed_fallback_displayed_idr_bypass
+            && !encoded_frame.h264.bootstrap_ready
+            && encoded_frame.h264.delta_continuation_ready()
+            && encoded_frame.h264.committed_sps_present()
+            && encoded_frame.h264.committed_pps_present();
         let waiting_keyframe_continuation_allowed =
             matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
                 && !encoded_frame.h264.bootstrap_ready
-                && self.try_consume_waiting_keyframe_continuation_allowance(&encoded_frame, now_ms);
-        let continuation_gate_bypassed = false;
+                && (timed_fallback_bypass
+                    || self.try_consume_waiting_keyframe_continuation_allowance(
+                        &encoded_frame,
+                        now_ms,
+                    ));
+        let continuation_gate_bypassed = timed_fallback_bypass;
         if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
             && !encoded_frame.h264.bootstrap_ready
             && !waiting_keyframe_continuation_allowed
@@ -949,6 +1019,10 @@ impl XbxVideoDecodeState {
         self.decoded_frame_drop_count
     }
 
+    fn record_decode_output_drop(&mut self, _detail: &'static str) {
+        self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
+    }
+
     pub(crate) fn hardware_decode_failure_streak(&self) -> u32 {
         self.hardware_decode_failure_streak
     }
@@ -1079,7 +1153,7 @@ impl XbxVideoDecodeState {
         let incoming_frame_seq = frame.surface.frame_seq;
         let observed_at_ms = frame.surface.rendered_at_ms;
         if self.decoded_frame_is_stale(&frame, Instant::now()) {
-            self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
+            self.record_decode_output_drop("staleAfterDecode");
             self.record_decode_candidate_decision(
                 XbxDecodeCandidateState::Backpressure,
                 "drop",
@@ -1110,9 +1184,13 @@ impl XbxVideoDecodeState {
             return None;
         };
 
-        if self.should_coalesce_decoded_latest_replace(&frame, &existing, observed_at_ms) {
+        if self.should_protect_anchor_candidate_from_incoming_burst(
+            &frame,
+            &existing,
+            observed_at_ms,
+        ) {
             self.decoded_latest_candidate = Some(existing);
-            self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
+            self.record_decode_output_drop("coalescedAfterDecode");
             self.record_decode_candidate_decision(
                 XbxDecodeCandidateState::Backpressure,
                 "drop",
@@ -1151,7 +1229,7 @@ impl XbxVideoDecodeState {
         );
         self.decoded_latest_candidate = Some(keep);
         self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
-        self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
+        self.record_decode_output_drop("supersededAfterDecode");
         self.record_decode_candidate_decision(
             XbxDecodeCandidateState::Backpressure,
             "drop",
@@ -1364,11 +1442,34 @@ impl XbxVideoDecodeState {
                 ))
     }
 
+    fn should_suppress_repeat_waiting_keyframe_decoder_reset(&self, now_ms: f64) -> bool {
+        if !matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe) {
+            return false;
+        }
+        let Some(reset_at_ms) = self.latest_decoder_reset_time_ms else {
+            return false;
+        };
+        if self
+            .last_decoder_reset_success_edge_at_ms
+            .is_some_and(|success_at_ms| success_at_ms > reset_at_ms)
+            || self
+                .last_decode_ok_time_ms
+                .is_some_and(|ok_at_ms| ok_at_ms > reset_at_ms)
+        {
+            return false;
+        }
+        let _ = now_ms;
+        true
+    }
+
     fn should_recover_nominal_continuation_no_output(
         &self,
         recovery_state_before_decode: XbxVideoRecoveryState,
         frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
     ) -> bool {
+        if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe) {
+            return false;
+        }
         matches!(recovery_state_before_decode, XbxVideoRecoveryState::Nominal)
             && self.latest_decoded_seq > 0
             && matches!(
@@ -1422,6 +1523,11 @@ impl XbxVideoDecodeState {
         now_ms: f64,
         transition_detail: &'static str,
     ) -> Result<(), XbxEngineRuntimeError> {
+        if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
+            && self.should_suppress_repeat_waiting_keyframe_decoder_reset(now_ms)
+        {
+            return Ok(());
+        }
         self.clear_decoded_output_mailbox();
         self.last_decode_ok_time_ms = None;
         self.reset_decoder_backend(now_ms);
@@ -1912,6 +2018,9 @@ impl XbxVideoDecodeState {
             d3d11va_no_output_rebuild_attempts: 0,
             nominal_continuation_hw_no_output_resets: 0,
             last_decode_latest_replace_at_ms: None,
+            mailbox_present_cadence_interval_ms:
+                crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            timed_fallback_displayed_idr_bypass: false,
         }
     }
 

@@ -366,6 +366,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "lastDisplayedAtMs": stats.last_displayed_at_ms,
             "packetToDecodeMs": stats.packet_to_decode_ms,
             "decodeToPresentMs": stats.decode_to_present_ms,
+            "submitToPresentMs": stats.submit_to_present_ms,
+            "inspectionPulseActive": stats.inspection_pulse_active,
             "packetToPresentMs": stats.packet_to_present_ms,
             "decoderStalled": stats.video_decoder_stalled,
             "rendererStalled": stats.video_renderer_stalled,
@@ -1392,7 +1394,7 @@ pub(super) fn record_runtime_trace_observations(
                     "h264InspectionRejected"
                 };
                 runtime_trace.record_event("xbxengine", event_name, session_id, payload.clone());
-                if inspection.bootstrap_reject_reason.is_some() {
+                if inspection.bootstrap_reject_reason.is_some() && !inspection.admission_accepted {
                     runtime_trace.record_event(
                         "xbxengine",
                         "bootstrapRejectObserved",

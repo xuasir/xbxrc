@@ -14,7 +14,8 @@ use crate::transport::rtc::recovery::contract::{
     derive_gap_severity_with_episode_stall, frame_value_from_gap_severity,
     has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_observation,
     is_transport_await_probe_source_event, recovery_episode_stage_from_status,
-    recovery_progress_level_from_episode,
+    recovery_exit_path_from_stats, recovery_progress_level_from_episode, RecoveryExitPath,
+    RecoveryExitThresholds,
 };
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
@@ -109,6 +110,7 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) recovery_displayed_idr_at_ms: Option<f64>,
     pub(crate) recovery_playback_recovered_at_ms: Option<f64>,
     pub(crate) recovery_fresh_anchor_recovered_at_ms: Option<f64>,
+    pub(crate) recovery_exit_path: RecoveryExitPath,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -132,6 +134,7 @@ pub(crate) fn build_scheduling_demand_signal(
         renderer_drop_count_total,
         smoothed_present_fps,
         smoothed_decode_fps,
+        submit_age_ms,
     ) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
         (
@@ -158,11 +161,12 @@ pub(crate) fn build_scheduling_demand_signal(
             Some(stats.video_renderer_drop_count_total),
             Some(stats.video_present_fps),
             Some(stats.video_decode_fps),
+            stats.submit_age_ms,
         )
     })
     .unwrap_or((
         None, None, None, None, false, None, None, None, None, None, None, None, None, None, None,
-        None, None,
+        None, None, None,
     ));
     SchedulingDemandSignal {
         no_pending_pressure_level,
@@ -182,37 +186,52 @@ pub(crate) fn build_scheduling_demand_signal(
         renderer_drop_count_total,
         smoothed_present_fps,
         smoothed_decode_fps,
+        submit_age_ms,
     }
 }
 
 pub(crate) fn read_owner_runtime_facts(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
 ) -> OwnerRuntimeFacts {
-    RuntimeStatsSink::read_shared(runtime_stats, |stats| OwnerRuntimeFacts {
-        recovery_epoch: stats.transport_recovery_epoch,
-        latest_video_receiver_observation: stats.latest_video_receiver_observation.clone(),
-        latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
-        clean_anchor_epoch: stats.video_anchor_clean_epoch,
-        clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
-        clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
-        clean_anchor_bridge_epoch: stats.video_anchor_bridge_epoch,
-        clean_anchor_bridge_observed_at_ms: stats.video_anchor_bridge_observed_at_ms,
-        clean_anchor_bridge_source_event: stats.video_anchor_bridge_source_event.clone(),
-        latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
-        latest_video_track_status: stats.latest_video_track_status.clone(),
-        latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
-        recovery_displayed_idr_at_ms: {
-            let display = RecoveryDisplayFacts::from_stats(stats);
-            display.displayed_idr_at_ms
-        },
-        recovery_playback_recovered_at_ms: {
-            let display = RecoveryDisplayFacts::from_stats(stats);
-            display.playback_recovered_at_ms
-        },
-        recovery_fresh_anchor_recovered_at_ms: {
-            let display = RecoveryDisplayFacts::from_stats(stats);
-            display.fresh_anchor_recovered_at_ms
-        },
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let profile = resolve_runtime_recovery_profile(stats);
+        OwnerRuntimeFacts {
+            recovery_epoch: stats.transport_recovery_epoch,
+            latest_video_receiver_observation: stats.latest_video_receiver_observation.clone(),
+            latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
+            clean_anchor_epoch: stats.video_anchor_clean_epoch,
+            clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
+            clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
+            clean_anchor_bridge_epoch: stats.video_anchor_bridge_epoch,
+            clean_anchor_bridge_observed_at_ms: stats.video_anchor_bridge_observed_at_ms,
+            clean_anchor_bridge_source_event: stats.video_anchor_bridge_source_event.clone(),
+            latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
+            latest_video_track_status: stats.latest_video_track_status.clone(),
+            latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
+            recovery_displayed_idr_at_ms: {
+                let display = RecoveryDisplayFacts::from_stats(stats);
+                display.displayed_idr_at_ms
+            },
+            recovery_playback_recovered_at_ms: {
+                let display = RecoveryDisplayFacts::from_stats(stats);
+                display.playback_recovered_at_ms
+            },
+            recovery_fresh_anchor_recovered_at_ms: {
+                let display = RecoveryDisplayFacts::from_stats(stats);
+                display.fresh_anchor_recovered_at_ms
+            },
+            recovery_exit_path: recovery_exit_path_from_stats(
+                stats,
+                now_ms,
+                RecoveryExitThresholds {
+                    degraded_decode_age_ms: profile
+                        .display_supply_thresholds
+                        .degraded_decode_age_ms,
+                    ..RecoveryExitThresholds::default()
+                },
+            ),
+        }
     })
     .unwrap_or_default()
 }
@@ -298,6 +317,7 @@ pub(crate) fn build_owner_input(
         recovery_displayed_idr_at_ms: owner_facts.recovery_displayed_idr_at_ms,
         recovery_playback_recovered_at_ms: owner_facts.recovery_playback_recovered_at_ms,
         recovery_fresh_anchor_recovered_at_ms: owner_facts.recovery_fresh_anchor_recovered_at_ms,
+        recovery_exit_path: owner_facts.recovery_exit_path,
         display_supply_thresholds,
         observed_at_ms,
     }

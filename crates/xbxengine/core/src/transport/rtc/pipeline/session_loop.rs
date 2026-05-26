@@ -150,6 +150,15 @@ impl MediaSessionLoop {
     }
 
     fn drive_decode_pull(&mut self) {
+        if self.ingress.is_awaiting_bootstrap() {
+            let discarded = self.ingress.discard_non_keyframe_prefix_for_host_stall(8);
+            if discarded > 0 {
+                crate::xbx_log_debug!(
+                    "[MediaSession] discarded non-keyframe ingress prefix while awaiting bootstrap count={}",
+                    discarded
+                );
+            }
+        }
         self.decode_adapter.drain_to_decode(
             &mut self.ingress,
             self.observation.total_frame_count(),

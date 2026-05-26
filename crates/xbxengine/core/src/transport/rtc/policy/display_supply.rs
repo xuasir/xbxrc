@@ -35,6 +35,7 @@ pub(crate) struct SchedulingDemandSignal {
     pub(crate) renderer_drop_count_total: Option<u64>,
     pub(crate) smoothed_present_fps: Option<f64>,
     pub(crate) smoothed_decode_fps: Option<f64>,
+    pub(crate) submit_age_ms: Option<f64>,
 }
 
 const PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS: f64 = 18.0;

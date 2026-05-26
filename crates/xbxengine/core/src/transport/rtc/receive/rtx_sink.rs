@@ -163,6 +163,34 @@ impl RtcVideoSourceSink {
         self.next_flush_due_at = Some(Instant::now());
     }
 
+    /// priority 队列满时先挤占 best-effort，避免 IDR/SPS/PPS 在 priority 队列里被 drop-oldest。
+    fn try_evict_best_effort_for_priority_packet(&mut self, incoming: &RtcVideoRtpPacket) -> bool {
+        if self.pending_best_effort.is_empty() {
+            return false;
+        }
+        let mut oldest_idx = 0usize;
+        let mut oldest = &self.pending_best_effort[0];
+        for (idx, candidate) in self.pending_best_effort.iter().enumerate().skip(1) {
+            if !is_packet_newer(oldest, candidate) {
+                oldest = candidate;
+                oldest_idx = idx;
+            }
+        }
+        if is_packet_newer(incoming, oldest) {
+            let evicted = self
+                .pending_best_effort
+                .remove(oldest_idx)
+                .expect("best-effort idx");
+            self.record_local_backpressure_drop(
+                &evicted,
+                "localBackpressureBestEffortOverflow",
+                "bestEffortEvictedForPriority",
+            );
+            return true;
+        }
+        false
+    }
+
     fn enqueue_local_backpressure(
         &mut self,
         packet: RtcVideoRtpPacket,
@@ -171,10 +199,21 @@ impl RtcVideoSourceSink {
         match class {
             IngressBackpressureClass::PriorityPrimary => {
                 if self.pending_priority_primary.len() >= self.priority_backlog_limit {
+                    if self.try_evict_best_effort_for_priority_packet(&packet) {
+                        self.pending_priority_primary.push_back(packet);
+                        return;
+                    }
                     // 统一策略：基于 timestamp 判断新旧，优先保留当前帧
                     if let Some(oldest) = self.pending_priority_primary.front() {
                         if is_packet_newer(&packet, oldest) {
-                            // 新包的 timestamp 更新，丢弃最旧的包
+                            if is_priority_primary_packet(&oldest) {
+                                self.record_local_backpressure_drop(
+                                    &packet,
+                                    "localBackpressurePriorityOverflow",
+                                    "priorityQueueDropStaleProtected",
+                                );
+                                return;
+                            }
                             if let Some(evicted) = self.pending_priority_primary.pop_front() {
                                 self.record_local_backpressure_drop(
                                     &evicted,
@@ -183,7 +222,6 @@ impl RtcVideoSourceSink {
                                 );
                             }
                         } else {
-                            // 新包的 timestamp 更旧，丢弃新包
                             self.record_local_backpressure_drop(
                                 &packet,
                                 "localBackpressurePriorityOverflow",
@@ -192,7 +230,6 @@ impl RtcVideoSourceSink {
                             return;
                         }
                     } else {
-                        // 队列为空但长度达到限制（不应该发生）
                         self.record_local_backpressure_drop(
                             &packet,
                             "localBackpressurePriorityOverflow",

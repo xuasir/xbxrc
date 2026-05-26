@@ -261,11 +261,21 @@ impl<'a> RtcStackRuntimePort<'a> {
             metrics.last_displayed_at_ms,
             metrics.last_displayed_frame_rtp_timestamp,
         ) {
-            runtime_stats.record_displayed_idr_fact(
-                observed_at_ms,
-                displayed_rtp_timestamp,
-                metrics.last_displayed_frame_seq,
-            );
+            let anchor_rtp = runtime_stats
+                .read(|stats| {
+                    crate::transport::rtc::recovery::contract::resolve_host_display_idr_anchor_rtp(
+                        stats,
+                        Some(displayed_rtp_timestamp),
+                    )
+                })
+                .unwrap_or(Some(displayed_rtp_timestamp));
+            if let Some(anchor_rtp) = anchor_rtp {
+                runtime_stats.record_displayed_idr_fact(
+                    observed_at_ms,
+                    anchor_rtp,
+                    metrics.last_displayed_frame_seq,
+                );
+            }
             runtime_stats.record_playback_recovered_fact(observed_at_ms, metrics.present_fps);
         }
     }
@@ -502,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn host_present_of_serviceable_continuation_does_not_establish_fresh_anchor_without_idr() {
+    fn host_present_with_pending_idr_establishes_anchor_when_displayed_delta_is_latest_only() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -555,8 +565,10 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_clean_epoch, None);
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, None);
+        assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.recovery_displayed_idr_at_ms, Some(210.0));
         assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(210.0));
     }
 
@@ -635,8 +647,10 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_clean_epoch, None);
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, None);
+        assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.recovery_displayed_idr_at_ms, Some(210.0));
     }
 
     #[test]

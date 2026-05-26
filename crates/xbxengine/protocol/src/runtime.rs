@@ -866,7 +866,11 @@ pub struct XbxEngineStatsDto {
     pub present_age_ms: Option<f64>,
     pub packet_to_decode_ms: Option<f64>,
     pub decode_to_present_ms: Option<f64>,
+    #[serde(default)]
+    pub submit_to_present_ms: Option<f64>,
     pub packet_to_present_ms: Option<f64>,
+    #[serde(default)]
+    pub inspection_pulse_active: Option<bool>,
     pub video_decode_input_drop_count_total: Option<u64>,
     pub video_decode_output_drop_count_total: Option<u64>,
     pub video_pacer_submit_count_total: Option<u64>,

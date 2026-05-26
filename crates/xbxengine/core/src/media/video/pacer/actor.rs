@@ -11,6 +11,7 @@ use crate::api::backend::{
     XbxEnginePresentationValueRole, XbxEngineReplacementDecisionObservation,
 };
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
+use crate::media::video::present_cadence::resolve_pacer_release_interval_ms;
 use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::render::pacer::{
     FramePacingAction, FramePacingPolicy, HostCadencePhaseHint, HostPacingPressure,
@@ -813,19 +814,13 @@ fn resolve_host_pacing_context(
 ) -> HostPacingContext {
     runtime_stats
         .read(|stats| {
-            // 获取真实host刷新间隔（路况反馈）
             let host_refresh_interval_ms = stats
                 .host_display_interval_ms
                 .map(|interval_ms| interval_ms.round() as u64)
                 .filter(|interval_ms| *interval_ms > 0)
                 .unwrap_or(fallback_refresh_interval_ms);
-
-            // 检测视频流实际帧率，计算帧间隔（油门上限）
-            let video_frame_interval_ms = detect_video_frame_interval(stats);
-
-            // release限速间隔：优先使用视频流帧间隔，避免高刷新率屏幕造成过度消费
-            // 如果视频流是60fps（16.67ms），即使屏幕是144Hz（6.94ms），也按60fps节拍消费
-            let release_interval_ms = video_frame_interval_ms.unwrap_or(host_refresh_interval_ms);
+            let release_interval_ms =
+                resolve_pacer_release_interval_ms(stats, fallback_refresh_interval_ms);
 
             HostPacingContext {
                 release_interval_ms,
@@ -860,31 +855,6 @@ fn resolve_host_pacing_context(
             video_rtt_ms: None,
             video_nack_recovery_rtt_ms: None,
         })
-}
-
-/// 检测视频流实际帧间隔（基于inbound帧率或decode帧率）
-fn detect_video_frame_interval(
-    stats: &crate::api::backend::XbxEngineMediaRuntimeStats,
-) -> Option<u64> {
-    // 优先使用inbound帧率（更准确反映视频流特性）
-    // 注意：字段名是 inbound_video_frame_rate_fps 和 video_decode_fps（Rust结构体）
-    let video_fps = if stats.inbound_video_frame_rate_fps > 0.0 {
-        stats.inbound_video_frame_rate_fps
-    } else if stats.video_decode_fps > 0.0 {
-        stats.video_decode_fps
-    } else {
-        return None;
-    };
-
-    // 计算帧间隔（毫秒）
-    let frame_interval_ms = (1_000.0 / video_fps).round() as u64;
-
-    // 合理性检查：帧间隔应在 8ms-100ms 之间（对应 10fps-120fps）
-    if frame_interval_ms >= 8 && frame_interval_ms <= 100 {
-        Some(frame_interval_ms)
-    } else {
-        None
-    }
 }
 
 fn resolve_cadence_sleep_guard_override_ms(host_context: &HostPacingContext) -> Option<u64> {

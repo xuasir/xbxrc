@@ -15,6 +15,9 @@ use crate::transport::rtc::receive::nack_policy::{
     cloud_nack_rtt_margin_ms, cloud_startup_head_hole_deadline_at_ms, sample_loss_nack_policy,
     OOS_REPAIRABILITY_PENALTY,
 };
+use crate::transport::rtc::recovery::contract::{
+    gap_keyframe_only_mode_active, resolve_gap_vs_keyframe_mode, GapVsKeyframeMode,
+};
 use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
 use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
 use crate::transport::rtc::recovery::timing::{
@@ -561,6 +564,18 @@ impl RtcVideoFrameSource {
             );
             return false;
         }
+        let gap_mode = self
+            .runtime_stats
+            .read(|stats| resolve_gap_vs_keyframe_mode(stats, now_ms, cloud_rtt_ms.unwrap_or(40.0)))
+            .unwrap_or(GapVsKeyframeMode::RepairFirst);
+        if gap_keyframe_only_mode_active(gap_mode) {
+            self.request_receiver_local_keyframe(
+                "gap-keyframe-only-mode",
+                Some(sample_rtp_timestamp),
+                now_ms,
+                false,
+            );
+        }
         let batch = NackBatch {
             sequences: missing_sequences.clone(),
             retry_count: 0,
@@ -581,28 +596,30 @@ impl RtcVideoFrameSource {
             frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
             budget_context,
         };
-        self.trace_ledger.mark_gap_repair_in_flight(
-            &batch.sequences,
-            now_ms,
-            batch.frame_rtp_timestamp,
-            batch.frame_importance,
-            gap_transport_evidence(batch.frame_is_keyframe),
-        );
-        if let Some(sequence) = batch.sequences.first().copied() {
-            self.record_video_timeline_observation(
-                "gap-repair-in-flight",
-                Some(sequence),
+        if matches!(gap_mode, GapVsKeyframeMode::RepairFirst) {
+            self.trace_ledger.mark_gap_repair_in_flight(
+                &batch.sequences,
+                now_ms,
                 batch.frame_rtp_timestamp,
+                batch.frame_importance,
+                gap_transport_evidence(batch.frame_is_keyframe),
+            );
+            if let Some(sequence) = batch.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-repair-in-flight",
+                    Some(sequence),
+                    batch.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
+            self.record_anchor_candidate_ledger(
+                batch.frame_rtp_timestamp,
+                "gap-repair-in-flight",
+                XbxEngineAnchorCandidateState::AwaitingRecovery,
+                Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
                 now_ms,
             );
         }
-        self.record_anchor_candidate_ledger(
-            batch.frame_rtp_timestamp,
-            "gap-repair-in-flight",
-            XbxEngineAnchorCandidateState::AwaitingRecovery,
-            Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
-            now_ms,
-        );
         let inserted_count = self
             .receive_core_mut()
             .receive_engine

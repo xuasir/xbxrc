@@ -3,8 +3,8 @@ use super::{
     request_host_present_tick_dispatch, reset_viewport_present_runtime_state,
     resolve_display_layer_layout, resolve_host_timing_record_policy,
     should_emit_sampled_host_timing, should_reattach_viewport, should_update_scale,
-    HostTimingRecordPolicy, MacOsDisplayLayerGravity, MacOsWgpuTelemetry, NativeVideoDisplayState,
-    NativeVideoRegistry, NativeVideoViewportState,
+    HostPresentTickGuard, HostTimingRecordPolicy, MacOsDisplayLayerGravity, MacOsWgpuTelemetry,
+    NativeVideoDisplayState, NativeVideoRegistry, NativeVideoViewportState,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -240,6 +240,19 @@ fn host_stall_presenter_reset_preserves_viewport_present_metrics() {
     assert_eq!(viewport.host_cadence_phase.as_deref(), Some("starved"));
     assert_eq!(viewport.last_displayed_frame_seq, Some(6));
     assert_eq!(viewport.last_displayed_at_ms, Some(1_211.0));
+}
+
+#[test]
+fn host_present_tick_guard_releases_pending_on_early_exit() {
+    let pending = Arc::new(AtomicBool::new(true));
+    let rerun_requested = Arc::new(AtomicBool::new(false));
+
+    {
+        let _guard = HostPresentTickGuard::new(pending.clone(), rerun_requested.clone());
+    }
+
+    assert!(!pending.load(Ordering::Relaxed));
+    assert!(!rerun_requested.load(Ordering::Relaxed));
 }
 
 #[test]

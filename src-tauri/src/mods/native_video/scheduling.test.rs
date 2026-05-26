@@ -352,6 +352,35 @@ fn frame_age_budget_tracks_submit_interval_when_display_ticks_are_sparse() {
 }
 
 #[test]
+fn display_interval_falls_back_to_present_cadence_before_display_ticks() {
+    let mut telemetry = HostCadenceTelemetry::default();
+    assert!(telemetry.display_interval_ms().is_none());
+    telemetry.record_present(1_000.0);
+    telemetry.record_present(1_033.0);
+    let interval = telemetry
+        .display_interval_ms()
+        .expect("present cadence should bootstrap display interval");
+    assert!((interval - 33.0).abs() < 1.0, "interval={interval}");
+}
+
+#[test]
+fn steady_frame_age_budget_uses_display_interval_floor() {
+    let mut telemetry = HostCadenceTelemetry::default();
+    telemetry.present_epoch = 4;
+    telemetry.cadence_phase = HostCadencePhase::Steady;
+    for tick in 0..8 {
+        let at_ms = 1_000.0 + tick as f64 * 33.0;
+        telemetry.record_display_tick(at_ms);
+        telemetry.record_present(at_ms);
+    }
+    let budget = telemetry.frame_age_budget_ms();
+    assert!(
+        budget >= 45.0,
+        "steady budget should track display interval floor, got {budget}"
+    );
+}
+
+#[test]
 fn begin_view_epoch_replays_displayed_frame_once() {
     let mut slot = ScheduledFrameSlot::default();
     let mut telemetry = HostCadenceTelemetry::default();

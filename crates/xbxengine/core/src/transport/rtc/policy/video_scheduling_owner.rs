@@ -8,7 +8,7 @@ use crate::transport::rtc::recovery::contract::{
     has_current_transport_await_issue_from_observation, is_ingress_waiting_keyframe,
     is_invalid_recovery_bootstrap_reject_reason, is_media_healthy_baseline,
     is_receiver_state_waiting_keyframe, is_transport_await_probe_source_event, FrameValue,
-    GapSeverity,
+    GapSeverity, RecoveryExitPath, DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 use crate::transport::rtc::session::control_model::SessionFaultDomain;
@@ -155,6 +155,7 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) recovery_displayed_idr_at_ms: Option<f64>,
     pub(crate) recovery_playback_recovered_at_ms: Option<f64>,
     pub(crate) recovery_fresh_anchor_recovered_at_ms: Option<f64>,
+    pub(crate) recovery_exit_path: RecoveryExitPath,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
     pub(crate) observed_at_ms: f64,
 }
@@ -385,6 +386,7 @@ impl VideoSchedulingOwner {
             self.host_present_stall_tracker
                 .observe(tick_epoch, present_epoch);
         }
+        let host_present_stall_streak = self.host_present_stall_tracker.streak();
         let host_present_stall_active =
             Self::host_present_stall_signal_active(input, &self.host_present_stall_tracker);
         let classified_supply_state = input
@@ -395,7 +397,7 @@ impl VideoSchedulingOwner {
             .critical_signal(&input.display_supply_thresholds);
         let has_clean_anchor_evidence = Self::has_current_clean_anchor_release_evidence(input);
         let displayed_idr_serving_release_active =
-            Self::displayed_idr_serving_release_active(input);
+            Self::displayed_idr_serving_release_active(input, host_present_stall_streak);
         let chain_healthy = matches!(input.effective_chain_state(), Some("receiving"))
             || (has_clean_anchor_evidence
                 && matches!(input.effective_chain_state(), Some("repairing")))
@@ -486,6 +488,7 @@ impl VideoSchedulingOwner {
             classified_supply_state,
             has_anchor_issue,
             ingress_waiting_keyframe,
+            host_present_stall_streak,
         );
         let supply_absent = Self::supply_is_absent(input);
         let hold_supply_starved_transition = self.should_hold_supply_starved_transition(
@@ -526,8 +529,9 @@ impl VideoSchedulingOwner {
             completion_evidence,
             ingress_waiting_keyframe,
             host_present_stall_active,
+            host_present_stall_streak,
         );
-        let (reason_label, reason_source) = if let Some(intent) = recovery_intent.as_ref() {
+        let (mut reason_label, reason_source) = if let Some(intent) = recovery_intent.as_ref() {
             (
                 intent.reason_label.clone(),
                 intent.source.as_contract_source(),
@@ -552,6 +556,16 @@ impl VideoSchedulingOwner {
                 VideoSchedulingOwnerContractSource::Steady,
             )
         };
+        if matches!(input.recovery_exit_path, RecoveryExitPath::TimedFallback)
+            && ingress_waiting_keyframe
+            && matches!(
+                next,
+                VideoSchedulingOwnerState::RebuildingSupply
+                    | VideoSchedulingOwnerState::DegradedServing
+            )
+        {
+            reason_label = "recoverySustaining".to_string();
+        }
         let temporary_diagnostic_summary = Self::build_temporary_diagnostic_summary(
             current_state,
             next,
@@ -842,21 +856,30 @@ impl VideoSchedulingOwner {
             return false;
         }
         stall_tracker.streak() >= HOST_PRESENT_STALL_TICK_STREAK_MIN
-            && Self::host_present_stall_pipeline_supply_active(input)
+            && Self::host_present_stall_pipeline_supply_active(input, stall_tracker)
     }
 
-    fn host_present_stall_pipeline_supply_active(input: &VideoSchedulingOwnerInput) -> bool {
-        let decode_ok = input
-            .demand
-            .decode_age_ms
-            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms * 1.5);
+    fn host_present_stall_pipeline_supply_active(
+        input: &VideoSchedulingOwnerInput,
+        stall_tracker: &HostPresentStallTracker,
+    ) -> bool {
         let track_ok = matches!(
             input.latest_track_state.as_deref(),
             Some("remoteTrackAttached")
         ) && input
             .latest_track_video_bytes_total
             .is_some_and(|bytes| bytes > 0);
-        decode_ok && track_ok
+        if !track_ok {
+            return false;
+        }
+        // display tick 前进而 present epoch 停滞：不等 decode 仍新鲜（冻屏时 decode 往往已停）。
+        if stall_tracker.streak() >= HOST_PRESENT_STALL_TICK_STREAK_MIN {
+            return true;
+        }
+        input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms * 1.5)
     }
 
     fn resolve_recovery_completion_evidence(
@@ -866,6 +889,7 @@ impl VideoSchedulingOwner {
         classified_supply_state: DisplaySupplyState,
         has_anchor_issue: bool,
         ingress_waiting_keyframe: bool,
+        host_present_stall_streak: u32,
     ) -> RecoveryCompletionEvidence {
         let has_clean_anchor_evidence = Self::has_current_clean_anchor_release_evidence(input);
         let transient_anchor_noise_settled =
@@ -912,11 +936,25 @@ impl VideoSchedulingOwner {
         if ingress_waiting_keyframe
             && !transport_await_waiting_released
             && !terminal_invalid_bootstrap_serving_ready
-            && !Self::displayed_idr_serving_release_active(input)
+            && !Self::displayed_idr_serving_release_active(input, host_present_stall_streak)
         {
+            match input.recovery_exit_path {
+                RecoveryExitPath::DecodeOutput | RecoveryExitPath::TimedFallback => {
+                    if matches!(
+                        effective_supply_state,
+                        DisplaySupplyState::Healthy | DisplaySupplyState::Degraded
+                    ) {
+                        return RecoveryCompletionEvidence::ServingReady;
+                    }
+                    if input.recovery_exit_path == RecoveryExitPath::TimedFallback {
+                        return RecoveryCompletionEvidence::ServingReady;
+                    }
+                }
+                _ => {}
+            }
             return RecoveryCompletionEvidence::NotReady;
         }
-        if Self::displayed_idr_serving_release_active(input) {
+        if Self::displayed_idr_serving_release_active(input, host_present_stall_streak) {
             if matches!(classified_supply_state, DisplaySupplyState::Healthy) {
                 return RecoveryCompletionEvidence::Ready;
             }
@@ -2117,10 +2155,11 @@ impl VideoSchedulingOwner {
         completion_evidence: RecoveryCompletionEvidence,
         ingress_waiting_keyframe: bool,
         host_present_stall_active: bool,
+        host_present_stall_streak: u32,
     ) -> Option<RecoveryIntentContract> {
         let contract = match state {
             VideoSchedulingOwnerState::RebuildingSupply => {
-                if Self::displayed_idr_serving_release_active(input) {
+                if Self::displayed_idr_serving_release_active(input, host_present_stall_streak) {
                     self.last_intent = None;
                     return None;
                 }
@@ -2148,7 +2187,7 @@ impl VideoSchedulingOwner {
                 })
             }
             VideoSchedulingOwnerState::SupplyStarved => {
-                if Self::displayed_idr_serving_release_active(input) {
+                if Self::displayed_idr_serving_release_active(input, host_present_stall_streak) {
                     self.last_intent = None;
                     return None;
                 }
@@ -2161,6 +2200,12 @@ impl VideoSchedulingOwner {
                         reason,
                         reason_label: label.to_string(),
                     });
+                }
+                if ingress_waiting_keyframe
+                    && !Self::timeline_indicates_anchor_issue(input)
+                    && input.anchor_reason_label.is_none()
+                {
+                    return Self::recovery_intent_for_ingress_waiting_keyframe(self, input, state);
                 }
                 if ingress_waiting_keyframe
                     || Self::timeline_indicates_anchor_issue(input)
@@ -2191,10 +2236,27 @@ impl VideoSchedulingOwner {
                     reason_label: reason.as_reason_label().to_string(),
                 })
             }
-            VideoSchedulingOwnerState::SeekingAnchor
-            | VideoSchedulingOwnerState::Priming
-            | VideoSchedulingOwnerState::StableServing
+            VideoSchedulingOwnerState::StableServing
             | VideoSchedulingOwnerState::DegradedServing => {
+                if host_present_stall_active {
+                    let reason = OwnerRecoveryReason::HostPresentStalled;
+                    let label = reason.as_reason_label();
+                    return Some(RecoveryIntentContract {
+                        emit: self.should_emit_intent(reason.source(), label, input.observed_at_ms),
+                        source: reason.source(),
+                        reason,
+                        reason_label: label.to_string(),
+                    });
+                }
+                if ingress_waiting_keyframe
+                    && !Self::displayed_idr_serving_release_active(input, host_present_stall_streak)
+                {
+                    return Self::recovery_intent_for_ingress_waiting_keyframe(self, input, state);
+                }
+                self.last_intent = None;
+                None
+            }
+            VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming => {
                 self.last_intent = None;
                 None
             }
@@ -2202,10 +2264,60 @@ impl VideoSchedulingOwner {
         contract
     }
 
+    fn recovery_intent_for_ingress_waiting_keyframe(
+        &mut self,
+        input: &VideoSchedulingOwnerInput,
+        state: VideoSchedulingOwnerState,
+    ) -> Option<RecoveryIntentContract> {
+        match input.recovery_exit_path {
+            RecoveryExitPath::TimedFallback => {
+                let reason = match state {
+                    VideoSchedulingOwnerState::DegradedServing
+                    | VideoSchedulingOwnerState::StableServing => {
+                        OwnerRecoveryReason::DisplaySupplyDegraded
+                    }
+                    _ => OwnerRecoveryReason::LocalSupplySuspect,
+                };
+                let label = if Self::has_recovery_sustaining_phase_evidence(input)
+                    || input.has_established_displayed_idr_fact()
+                {
+                    "recoverySustaining".to_string()
+                } else {
+                    reason.as_reason_label().to_string()
+                };
+                Some(RecoveryIntentContract {
+                    emit: self.should_emit_intent(reason.source(), &label, input.observed_at_ms),
+                    source: reason.source(),
+                    reason,
+                    reason_label: label,
+                })
+            }
+            RecoveryExitPath::DecodeOutput => {
+                self.last_intent = None;
+                None
+            }
+            _ => {
+                let reason = OwnerRecoveryReason::TransportAwaitRecoveryKeyframe;
+                let label = reason.as_reason_label();
+                Some(RecoveryIntentContract {
+                    emit: self.should_emit_intent(reason.source(), label, input.observed_at_ms),
+                    source: reason.source(),
+                    reason,
+                    reason_label: label.to_string(),
+                })
+            }
+        }
+    }
+
     fn recovery_sustaining_phase_active(
         input: &VideoSchedulingOwnerInput,
         completion_evidence: RecoveryCompletionEvidence,
     ) -> bool {
+        if matches!(input.recovery_exit_path, RecoveryExitPath::TimedFallback)
+            && input.has_established_displayed_idr_fact()
+        {
+            return true;
+        }
         completion_evidence == RecoveryCompletionEvidence::NotReady
             && Self::has_recovery_sustaining_phase_evidence(input)
     }
@@ -2231,12 +2343,36 @@ impl VideoSchedulingOwner {
     }
 
     /// displayed-idr 已落地且 host/decode 持续新鲜：不应再挂 transport-await / rebuilding-supply。
-    fn displayed_idr_serving_release_active(input: &VideoSchedulingOwnerInput) -> bool {
+    fn displayed_idr_serving_release_active(
+        input: &VideoSchedulingOwnerInput,
+        host_present_stall_streak: u32,
+    ) -> bool {
         if !input.has_established_displayed_idr_fact() {
+            return false;
+        }
+        if input
+            .demand
+            .submit_age_ms
+            .is_some_and(|age| age >= DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS)
+        {
+            return false;
+        }
+        if matches!(input.recovery_exit_path, RecoveryExitPath::TimedFallback) {
             return false;
         }
         if input.connection_state != ConnectionLifecycleStateFact::Connected {
             return false;
+        }
+        if is_receiver_state_waiting_keyframe(input.effective_receiver_state()) {
+            if host_present_stall_streak >= HOST_PRESENT_STALL_TICK_STREAK_MIN {
+                return false;
+            }
+            let decode_stale = input.demand.decode_age_ms.is_some_and(|age| {
+                age > input.display_supply_thresholds.degraded_decode_age_ms * 2.0
+            });
+            if decode_stale {
+                return false;
+            }
         }
         if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;

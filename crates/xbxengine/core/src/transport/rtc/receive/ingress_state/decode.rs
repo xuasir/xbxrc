@@ -503,10 +503,15 @@ impl RtcVideoFrameSource {
 
     fn receiver_decode_context(&self) -> ReceiverDecodeContext {
         let engine = &self.receive_core().receive_engine;
+        let now_ms = now_ms_f64();
         let (prior_output_established, displayed_idr_serving) = self
             .runtime_stats
             .read(|stats| {
-                let displayed_idr_serving = stats.recovery_displayed_idr_at_ms.is_some();
+                let displayed_idr_serving =
+                    crate::transport::rtc::recovery::contract::displayed_idr_serving_allows_relaxed_controls_from_stats(
+                        stats,
+                        now_ms,
+                    );
                 let prior_output_established =
                     crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats(
                         stats,
@@ -663,9 +668,14 @@ impl RtcVideoFrameSource {
         inspection: &H264AccessUnitInspection,
         _now_ms: f64,
     ) -> bool {
+        let now_ms = now_ms_f64();
         let displayed_idr_serving = self
             .runtime_stats
-            .read(|stats| stats.recovery_displayed_idr_at_ms.is_some())
+            .read(|stats| {
+                crate::transport::rtc::recovery::contract::displayed_idr_serving_allows_relaxed_controls_from_stats(
+                    stats, now_ms,
+                )
+            })
             .unwrap_or(false);
         if !displayed_idr_serving {
             return false;
@@ -714,6 +724,49 @@ impl RtcVideoFrameSource {
                 frame_rtp_timestamp,
                 now_ms,
             );
+            self.record_anchor_candidate_ledger(
+                frame_rtp_timestamp,
+                source_event,
+                candidate_state,
+                failure_reason,
+                now_ms,
+            );
+            return;
+        }
+        let has_gap = self.receive_core().receive_engine.has_active_gap();
+        if self
+            .runtime_stats
+            .read(|stats| {
+                let effective_rtt_ms = crate::transport::rtc::recovery::timing::resolve_effective_rtt_ms(
+                    stats,
+                    crate::transport::rtc::recovery::policy::ScenarioPolicyResolver::resolve_kind(
+                        stats.session_target_type.as_ref(),
+                        stats.transport_path.as_deref(),
+                    ),
+                );
+                matches!(
+                    crate::transport::rtc::recovery::contract::resolve_gap_vs_keyframe_mode(
+                        stats, now_ms, effective_rtt_ms
+                    ),
+                    crate::transport::rtc::recovery::contract::GapVsKeyframeMode::RepairFirst
+                ) && crate::transport::rtc::recovery::contract::should_collapse_receiver_waiting_keyframe_to_repairing(
+                    stats,
+                    now_ms,
+                    has_gap,
+                    self.receive_core()
+                        .receive_engine
+                        .frame_assembler
+                        .assembled_count(),
+                )
+            })
+            .unwrap_or(false)
+            && matches!(
+                timeline_reason,
+                "bootstrapMissingIdr"
+                    | "mixedIdrWithTrailingDelta"
+                    | "awaitingRecoveryAnchor"
+            )
+        {
             self.record_anchor_candidate_ledger(
                 frame_rtp_timestamp,
                 source_event,
@@ -1250,6 +1303,7 @@ impl RtcVideoFrameSource {
                 self.sample_loss_burst_count,
                 media_dropped_packets,
                 is_keyframe,
+                decode_ctx.displayed_idr_serving,
             );
 
         if media_dropped_packets > 0 {

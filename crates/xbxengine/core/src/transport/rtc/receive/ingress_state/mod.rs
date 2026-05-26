@@ -408,14 +408,36 @@ impl RtcVideoFrameSource {
         (None, FrameRecoveryDisposition::Steady, None, None)
     }
 
+    fn collapse_receiver_waiting_keyframe_to_repairing(&self) -> bool {
+        let has_gap = self.receive_core().receive_engine.has_active_gap();
+        let assembled_count = self
+            .receive_core()
+            .receive_engine
+            .frame_assembler
+            .assembled_count();
+        let now_ms = now_ms_f64();
+        self.runtime_stats
+            .read(|stats| {
+                crate::transport::rtc::recovery::contract::should_collapse_receiver_waiting_keyframe_to_repairing(
+                    stats,
+                    now_ms,
+                    has_gap,
+                    assembled_count,
+                )
+            })
+            .unwrap_or(false)
+    }
+
     pub(crate) fn receiver_local_state(&self) -> ReceiverState {
+        let has_gap = self.receive_core().receive_engine.has_active_gap();
         receiver_state_from_runtime(
             self.waiting_recovery_keyframe_since_ms.is_some(),
-            self.receive_core().receive_engine.has_active_gap(),
+            has_gap,
             self.receive_core()
                 .receive_engine
                 .frame_assembler
                 .assembled_count(),
+            self.collapse_receiver_waiting_keyframe_to_repairing(),
         )
     }
 
@@ -521,6 +543,7 @@ impl RtcVideoFrameSource {
                 .receive_engine
                 .frame_assembler
                 .assembled_count(),
+            self.collapse_receiver_waiting_keyframe_to_repairing(),
         );
         let gap_sequence = self
             .runtime_stats

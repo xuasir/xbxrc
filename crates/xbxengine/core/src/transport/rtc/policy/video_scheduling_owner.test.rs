@@ -83,6 +83,8 @@ fn input(
         recovery_displayed_idr_at_ms: None,
         recovery_playback_recovered_at_ms: None,
         recovery_fresh_anchor_recovered_at_ms: None,
+        recovery_exit_path:
+            crate::transport::rtc::recovery::contract::RecoveryExitPath::AwaitingAnchor,
         display_supply_thresholds: thresholds(),
         observed_at_ms,
         latest_anchor_candidate_ledger: None,
@@ -651,6 +653,92 @@ fn rebuilding_supply_with_clean_anchor_and_host_present_stall_switches_to_host_s
     assert_eq!(output.health, VideoHealthContract::Starved);
     let intent = output.recovery_intent.expect("host stall intent");
     assert_eq!(intent.source, RecoveryIntentSource::Supply);
+    assert_eq!(intent.reason_label, "hostPresentStalled");
+}
+
+#[test]
+fn stable_serving_with_frozen_present_epoch_and_stale_decode_surfaces_host_present_stall() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("receiverWaitingKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-anchor"),
+        Some("remoteTrackAttached"),
+        Some(10_000),
+        300.0,
+        1,
+    ));
+
+    let mut base = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(1),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(9.0),
+            video_renderer_stalled: false,
+            host_display_tick_epoch: Some(10),
+            host_frame_present_epoch: Some(3),
+            host_cadence_phase: Some("steady".to_string()),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("receiving"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        4_000.0,
+        1,
+    );
+    base.clean_anchor_epoch = Some(1);
+    base.clean_anchor_observed_at_ms = Some(3_900.0);
+    base.clean_anchor_source_event = Some("displayed-idr".to_string());
+    base.recovery_displayed_idr_at_ms = base.clean_anchor_observed_at_ms;
+    base.recovery_fresh_anchor_recovered_at_ms = base.clean_anchor_observed_at_ms;
+    base.latest_h264_bootstrap_ready = Some(false);
+    base.latest_h264_bootstrap_reject_reason = Some("bootstrapMissingIdr".to_string());
+    base.latest_h264_committed_sps_present = Some(true);
+    base.latest_h264_committed_pps_present = Some(true);
+    base.latest_h264_delta_continuation_ready = Some(true);
+    base.latest_h264_observed_at_ms = Some(3_950.0);
+    base.receiver_state = Some("waiting-keyframe".to_string());
+    assert_eq!(
+        owner.evaluate(&base).state,
+        VideoSchedulingOwnerState::StableServing
+    );
+
+    let mut final_output = None;
+    for step in 0..10 {
+        let mut stalled = base.clone();
+        stalled.demand = SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(1),
+            // 高于 degraded_present_age_ms，避免 host_display_hold 清零 stall streak。
+            present_age_ms: Some(250.0),
+            decode_age_ms: Some(2_800.0),
+            video_renderer_stalled: true,
+            host_display_tick_epoch: Some(20 + step),
+            host_frame_present_epoch: Some(3),
+            host_cadence_phase: Some("steady".to_string()),
+            ..SchedulingDemandSignal::default()
+        };
+        stalled.observed_at_ms = 4_100.0 + step as f64 * 100.0;
+        let output = owner.evaluate(&stalled);
+        if output
+            .recovery_intent
+            .as_ref()
+            .is_some_and(|intent| intent.reason_label == "hostPresentStalled")
+        {
+            final_output = Some(output);
+            break;
+        }
+    }
+    let output = final_output.expect("stable serving should surface host present stall");
+    let intent = output
+        .recovery_intent
+        .expect("host stall intent from stable serving");
     assert_eq!(intent.reason_label, "hostPresentStalled");
 }
 

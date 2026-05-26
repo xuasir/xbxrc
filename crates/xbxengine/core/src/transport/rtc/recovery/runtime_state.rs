@@ -525,6 +525,29 @@ fn resolve_effective_diagnosis_label_from_stats(
     diagnosis_label: &str,
     now_ms: f64,
 ) -> String {
+    use crate::transport::rtc::recovery::contract::{
+        recovery_exit_path_from_stats, RecoveryExitPath, RecoveryExitThresholds,
+    };
+    if diagnosis_label == "receiverWaitingKeyframe" {
+        match recovery_exit_path_from_stats(stats, now_ms, RecoveryExitThresholds::default()) {
+            RecoveryExitPath::TimedFallback => {
+                if stats.recovery_playback_recovered_at_ms.is_some()
+                    || stats.recovery_displayed_idr_at_ms.is_some()
+                {
+                    return "recoverySustaining".to_string();
+                }
+                return "displaySupplyDegraded".to_string();
+            }
+            RecoveryExitPath::DecodeOutput => {
+                if owner_state_has_steady_output_semantics(stats)
+                    && has_fresh_media_output(stats, now_ms)
+                {
+                    return "displaySupplyDegraded".to_string();
+                }
+            }
+            _ => {}
+        }
+    }
     if decode_present_pipeline_stressed(stats, now_ms)
         && matches!(
             diagnosis_label,
@@ -695,7 +718,7 @@ pub(crate) fn displayed_idr_output_pipeline_active(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    stats.recovery_displayed_idr_at_ms.is_some()
+    crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats)
         && has_fresh_media_output(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
         && !renderer_shadow_blocks_serviceability(stats, now_ms)
@@ -782,7 +805,7 @@ fn should_absorb_stale_recovery_diagnosis(
     let fresh_output = has_fresh_media_output(stats, now_ms);
     let pipeline_serviceable = !stats.video_decoder_stalled.unwrap_or(false)
         && !renderer_shadow_blocks_serviceability(stats, now_ms);
-    if stats.recovery_displayed_idr_at_ms.is_some()
+    if crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats)
         && fresh_output
         && pipeline_serviceable
         && host_presentation_serviceable(stats, now_ms)

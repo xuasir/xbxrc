@@ -293,6 +293,19 @@ fn recovery_progress_is_still_serviceable(stats: &XbxEngineMediaRuntimeStats, no
             })
 }
 
+/// inspection reject 簇与 submit 尾延迟尖峰同现，便于 trace 归因控制面脉冲。
+fn resolve_inspection_pulse_active(
+    stats: &crate::XbxEngineMediaRuntimeStats,
+    submit_age_ms: Option<f64>,
+) -> bool {
+    let inspection_pulse = stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|observation| !observation.admission_accepted);
+    let submit_spike = submit_age_ms.is_some_and(|age_ms| age_ms >= 200.0);
+    inspection_pulse && submit_spike
+}
+
 fn merge_video_health(
     chain_health: Option<&str>,
     presentation_health: Option<&str>,
@@ -690,6 +703,18 @@ pub fn build_xbxengine_stats(
                     .map(|(decode_at_ms, present_at_ms)| (present_at_ms - decode_at_ms).max(0.0))
             })
     });
+    let submit_to_present_ms = runtime_stats.and_then(|stats| {
+        stats
+            .latest_host_mailbox_submit_time_ms
+            .zip(
+                stats
+                    .last_displayed_at_ms
+                    .or(stats.latest_video_host_present_time_ms),
+            )
+            .map(|(submit_at_ms, present_at_ms)| (present_at_ms - submit_at_ms).max(0.0))
+    });
+    let inspection_pulse_active =
+        runtime_stats.map(|stats| resolve_inspection_pulse_active(stats, submit_age_ms));
     let packet_to_present_ms = runtime_stats.and_then(|stats| {
         stats
             .latest_video_packet_arrival_rtp_timestamp
@@ -1119,7 +1144,9 @@ pub fn build_xbxengine_stats(
         present_age_ms,
         packet_to_decode_ms,
         decode_to_present_ms,
+        submit_to_present_ms,
         packet_to_present_ms,
+        inspection_pulse_active,
         video_decode_input_drop_count_total: runtime_stats
             .map(|stats| stats.video_decode_input_drop_count_total),
         video_decode_output_drop_count_total: runtime_stats
@@ -1999,7 +2026,13 @@ fn now_ms_f64() -> f64 {
 fn build_transport_recovery_note(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
 ) -> Option<String> {
+    use crate::transport::rtc::recovery::contract::{
+        recovery_exit_path_from_stats, recovery_exit_trace_await_suffix, RecoveryExitPath,
+        RecoveryExitThresholds,
+    };
+
     let stats = runtime_stats?;
+    let now_ms = now_ms_f64();
     let mut parts: Vec<String> = Vec::new();
     if stats.transport_recovery_epoch > 0 {
         if stats.transport_recovery_episode_active {
@@ -2009,18 +2042,28 @@ fn build_transport_recovery_note(
         }
     }
     // 便于 trace/面板对齐：transport-await 长窗时标明关注点（主机 IDR / 本端干净锚）。
+    let exit_path = recovery_exit_path_from_stats(stats, now_ms, RecoveryExitThresholds::default());
+    let waiting_keyframe_stall = stats
+        .video_decoder_recovery_state
+        .as_deref()
+        .is_some_and(|state| state == "waiting-keyframe");
     if stats
         .video_owner_reason
         .as_deref()
         .is_some_and(|r| r == "receiverWaitingKeyframe")
+        || waiting_keyframe_stall
     {
-        parts.push("awaitKeyframe:hostIdrOrCleanAnchor".to_string());
+        let suffix = recovery_exit_trace_await_suffix(exit_path);
+        parts.push(format!("awaitKeyframe:{suffix}"));
     } else if stats
         .video_owner_reason
         .as_deref()
         .is_some_and(|r| r == "recoverySustaining")
     {
         parts.push("recoverySustaining:cleanAnchorHolding".to_string());
+        if exit_path == RecoveryExitPath::TimedFallback {
+            parts.push("awaitKeyframe:timedFallback".to_string());
+        }
     }
     if parts.is_empty() {
         None

@@ -186,6 +186,7 @@ pub(super) fn build_demand_for_stats(
         renderer_drop_count_total: Some(stats.video_renderer_drop_count_total),
         smoothed_present_fps: Some(stats.video_present_fps),
         smoothed_decode_fps: Some(stats.video_decode_fps),
+        submit_age_ms: stats.submit_age_ms,
     }
 }
 

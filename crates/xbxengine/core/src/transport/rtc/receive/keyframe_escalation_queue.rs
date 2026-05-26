@@ -15,6 +15,11 @@ impl KeyframeEscalationQueue {
         }
     }
 
+    /// 同一 seq 反复 NACK 仍无解码进展时，跳过 dwell 立即升级关键帧。
+    pub fn arm_immediate(&mut self, now: Instant) {
+        self.due_at = Some(now);
+    }
+
     pub fn is_armed(&self) -> bool {
         self.due_at.is_some()
     }
@@ -38,6 +43,14 @@ impl KeyframeEscalationQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn arm_immediate_makes_keyframe_due_on_next_poll() {
+        let mut queue = KeyframeEscalationQueue::default();
+        let start = Instant::now();
+        queue.arm_immediate(start);
+        assert!(queue.poll_due(start));
+    }
 
     #[test]
     fn dwell_delays_keyframe_until_due() {

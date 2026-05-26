@@ -32,8 +32,10 @@ use self::presenters::{
 use self::presenters::{MacOsVideoPresenter, MacOsWgpuPresenter};
 #[cfg(all(test, not(target_os = "macos")))]
 use self::scheduling::HostCadenceTelemetry;
-#[cfg(target_os = "macos")]
-use self::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameTakeOutcome};
+use self::scheduling::{
+    HostCadenceTelemetry, HostCadenceTelemetryDiagnostics, ScheduledFrameSlot,
+    ScheduledFrameTakeOutcome,
+};
 pub(crate) use self::types::NativeVideoDisplayState;
 use self::types::{
     DecodedVideoSurface, VideoEffectPipelineKind, VideoPlatformCapabilities, VideoPresenterMode,
@@ -742,8 +744,7 @@ pub(super) struct MacOsWgpuState {
 #[cfg(test)]
 pub(super) type MacOsWgpuTelemetry = HostCadenceTelemetry;
 
-#[cfg(target_os = "macos")]
-fn request_host_present_tick_dispatch(
+pub(super) fn request_host_present_tick_dispatch(
     render_loop_pending: &Arc<AtomicBool>,
     rerun_requested: &Arc<AtomicBool>,
 ) -> bool {
@@ -754,8 +755,7 @@ fn request_host_present_tick_dispatch(
     true
 }
 
-#[cfg(target_os = "macos")]
-fn finish_host_present_tick_dispatch(
+pub(super) fn finish_host_present_tick_dispatch(
     render_loop_pending: &Arc<AtomicBool>,
     rerun_requested: &Arc<AtomicBool>,
 ) -> bool {
@@ -766,13 +766,77 @@ fn finish_host_present_tick_dispatch(
     false
 }
 
-#[cfg(target_os = "macos")]
-fn clear_host_present_tick_dispatch(
+pub(super) fn clear_host_present_tick_dispatch(
     render_loop_pending: &Arc<AtomicBool>,
     rerun_requested: &Arc<AtomicBool>,
 ) {
     rerun_requested.store(false, Ordering::Relaxed);
     render_loop_pending.store(false, Ordering::Relaxed);
+}
+
+/// 保证 tick 任意出口都会释放 pending；否则 display link / render loop 会永久不再调度。
+pub(super) struct HostPresentTickGuard {
+    render_loop_pending: Arc<AtomicBool>,
+    rerun_requested: Arc<AtomicBool>,
+    dispatch_finished: bool,
+}
+
+impl HostPresentTickGuard {
+    fn new(render_loop_pending: Arc<AtomicBool>, rerun_requested: Arc<AtomicBool>) -> Self {
+        Self {
+            render_loop_pending,
+            rerun_requested,
+            dispatch_finished: false,
+        }
+    }
+
+    fn finish_dispatch(&mut self) -> bool {
+        self.dispatch_finished = true;
+        finish_host_present_tick_dispatch(&self.render_loop_pending, &self.rerun_requested)
+    }
+}
+
+impl Drop for HostPresentTickGuard {
+    fn drop(&mut self) {
+        if !self.dispatch_finished {
+            let _ =
+                finish_host_present_tick_dispatch(&self.render_loop_pending, &self.rerun_requested);
+        }
+    }
+}
+
+pub(super) fn record_host_mailbox_take_decision(
+    runtime_trace: Option<&RuntimeTraceRecorderRef>,
+    pipeline: &str,
+    viewport_id: &str,
+    window_label: &str,
+    take_outcome: &ScheduledFrameTakeOutcome,
+    slot_diag: &scheduling::ScheduledFrameSlotDiagnostics,
+    telemetry_diag: &HostCadenceTelemetryDiagnostics,
+) {
+    record_native_video_timing_event_lazy(
+        runtime_trace,
+        pipeline,
+        "hostMailboxTakeDecision",
+        viewport_id,
+        window_label,
+        || {
+            json!({
+                "decision": take_outcome.mailbox_take_decision(),
+                "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                "pendingFrameSeq": slot_diag.pending_frame_seqs.first().copied(),
+                "hasPendingFrame": slot_diag.pending_queue_depth > 0,
+                "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
+                "queueDepth": slot_diag.queue_depth,
+                "pendingQueueDepth": slot_diag.pending_queue_depth,
+                "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                "noPendingStreak": telemetry_diag.no_pending_streak,
+            })
+        },
+    );
 }
 
 #[cfg(target_os = "macos")]
@@ -827,6 +891,8 @@ pub(super) fn run_wgpu_render_tick(
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
     let tick_started_at_ms = now_ms_f64();
+    let mut tick_dispatch_guard =
+        HostPresentTickGuard::new(render_loop_pending.clone(), rerun_requested.clone());
     let run_tick = || {
         if let Some(dispatch_ms) = dispatch_requested_at_ms {
             let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
@@ -900,28 +966,14 @@ pub(super) fn run_wgpu_render_tick(
             let telemetry_diag = telemetry.diagnostics_snapshot();
             (outcome, slot_diag, telemetry_diag)
         };
-        record_native_video_timing_event_lazy(
+        record_host_mailbox_take_decision(
             runtime_trace.as_ref(),
             "wgpu",
-            "hostMailboxTakeDecision",
             viewport_id,
             window.label(),
-            || {
-                json!({
-                    "decision": take_outcome.mailbox_take_decision(),
-                    "displayedFrameSeq": take_slot_diag.displayed_frame_seq,
-                    "pendingFrameSeq": take_slot_diag.pending_frame_seqs.first().copied(),
-                    "hasPendingFrame": take_slot_diag.pending_queue_depth > 0,
-                    "pendingFrameSeqs": take_slot_diag.pending_frame_seqs,
-                    "lastPresentedFrameSeq": take_slot_diag.last_presented_frame_seq,
-                    "queueDepth": take_slot_diag.queue_depth,
-                    "pendingQueueDepth": take_slot_diag.pending_queue_depth,
-                    "hostDisplayTickEpoch": take_telemetry_diag.display_tick_epoch,
-                    "hostFramePresentEpoch": take_telemetry_diag.present_epoch,
-                    "hostCadencePhase": take_telemetry_diag.cadence_phase.as_str(),
-                    "noPendingStreak": take_telemetry_diag.no_pending_streak,
-                })
-            },
+            &take_outcome,
+            &take_slot_diag,
+            &take_telemetry_diag,
         );
         if size_changed {
             state.last_surface_size = Some((surface_width, surface_height));
@@ -990,7 +1042,7 @@ pub(super) fn run_wgpu_render_tick(
 
     run_tick();
 
-    if finish_host_present_tick_dispatch(render_loop_pending, rerun_requested) {
+    if tick_dispatch_guard.finish_dispatch() {
         if let Err(error) = dispatch_wgpu_render_tick_on_main_thread(
             window,
             app_handle,
@@ -1400,6 +1452,7 @@ struct MacOsLayerDisplayLinkContext {
     frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: Arc<AtomicBool>,
+    rerun_requested: Arc<AtomicBool>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
 
@@ -1421,6 +1474,7 @@ impl MacOsLayerDisplayLinkHandle {
         frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
         telemetry: Arc<Mutex<HostCadenceTelemetry>>,
         render_loop_pending: Arc<AtomicBool>,
+        rerun_requested: Arc<AtomicBool>,
         runtime_trace: Option<RuntimeTraceRecorderRef>,
     ) -> Result<Self, String> {
         let context = Box::new(MacOsLayerDisplayLinkContext {
@@ -1430,6 +1484,7 @@ impl MacOsLayerDisplayLinkHandle {
             frame_slot,
             telemetry,
             render_loop_pending,
+            rerun_requested,
             runtime_trace,
         });
         let context_ptr = Box::into_raw(context);
@@ -1538,7 +1593,7 @@ unsafe extern "C" fn macos_layer_display_link_callback(
     let Some(context) = (display_link_context as *mut MacOsLayerDisplayLinkContext).as_ref() else {
         return 0;
     };
-    if context.render_loop_pending.swap(true, Ordering::Relaxed) {
+    if !request_host_present_tick_dispatch(&context.render_loop_pending, &context.rerun_requested) {
         return 0;
     }
     run_layer_present_tick(
@@ -1548,6 +1603,7 @@ unsafe extern "C" fn macos_layer_display_link_callback(
         &context.frame_slot,
         &context.telemetry,
         &context.render_loop_pending,
+        &context.rerun_requested,
         context.runtime_trace.clone(),
     );
     0
@@ -1598,10 +1654,12 @@ pub(super) fn run_layer_present_tick(
     frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
     let tick_started_at_ms = now_ms_f64();
-    let _pending_guard = PendingFlagGuard::new(render_loop_pending.clone());
+    let mut tick_dispatch_guard =
+        HostPresentTickGuard::new(render_loop_pending.clone(), rerun_requested.clone());
     let prepare_outcome = prepare_layer_sample_for_present(
         layer_state,
         frame_slot,
@@ -1748,6 +1806,18 @@ pub(super) fn run_layer_present_tick(
                     "totalMs": tick_total_ms,
                 })
             },
+        );
+    }
+    if tick_dispatch_guard.finish_dispatch() {
+        run_layer_present_tick(
+            viewport_id,
+            window_label,
+            layer_state,
+            frame_slot,
+            telemetry,
+            render_loop_pending,
+            rerun_requested,
+            runtime_trace,
         );
     }
 }
@@ -1972,6 +2042,15 @@ pub(super) fn prepare_layer_sample_for_present(
         let diagnostics = frame_slot_state.diagnostics_snapshot();
         (outcome, diagnostics)
     };
+    record_host_mailbox_take_decision(
+        runtime_trace,
+        "layer",
+        viewport_id,
+        window_label,
+        &frame_take_outcome,
+        &frame_slot_diag,
+        &telemetry_diag,
+    );
     let frame = match frame_take_outcome {
         ScheduledFrameTakeOutcome::Ready(frame) => frame,
         ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {

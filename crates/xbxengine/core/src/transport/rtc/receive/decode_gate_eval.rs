@@ -48,6 +48,7 @@ pub(crate) fn resolve_recovery_keyframe_action(
     _sample_loss_burst_count: u8,
     media_dropped_packets: u16,
     is_keyframe: bool,
+    displayed_idr_serving: bool,
 ) -> (bool, RecoveryKeyframeAction) {
     // 带丢包的 keyframe/reference 不能继续喂给解码器，否则很容易把本地参考链喂脏，
     // 在 macOS 上会直接放大成 VideoToolbox 连续 bad-data 回调。
@@ -70,6 +71,10 @@ pub(crate) fn resolve_recovery_keyframe_action(
     }
 
     if is_blocking_non_keyframe_admission {
+        // `displayed_idr_serving` 在 ingress 侧已收紧为 allows_relaxed_controls（供给断裂时不强制 Submit）。
+        if displayed_idr_serving && first_frame_acquired {
+            return (false, RecoveryKeyframeAction::Submit);
+        }
         if !first_frame_acquired {
             return (true, RecoveryKeyframeAction::WaitKeyframe);
         }
@@ -83,6 +88,27 @@ pub(crate) fn resolve_recovery_keyframe_action(
     }
 
     (false, RecoveryKeyframeAction::Submit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn displayed_idr_serving_avoids_wait_keyframe_while_blocking() {
+        let (blocking, action) =
+            resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false, true);
+        assert!(!blocking);
+        assert_eq!(action, RecoveryKeyframeAction::Submit);
+    }
+
+    #[test]
+    fn displayed_idr_serving_off_while_blocking_waits_for_keyframe_on_hard_gap() {
+        let (blocking, action) =
+            resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false, false);
+        assert!(blocking);
+        assert_eq!(action, RecoveryKeyframeAction::WaitKeyframe);
+    }
 }
 
 pub(crate) fn detect_forward_gap(

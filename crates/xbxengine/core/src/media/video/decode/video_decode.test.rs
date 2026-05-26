@@ -1557,7 +1557,7 @@ fn decoded_output_mailbox_keeps_only_latest_candidate_under_pressure() {
             rtp_timestamp: Some(seq as u32),
             recovery_epoch_tag: None,
             recovery_owner_rtp_timestamp: None,
-            is_keyframe: seq == 1,
+            is_keyframe: false,
             frame_recovery_disposition: Some("repairing".to_string()),
             frame_unrecoverable_reason: None,
             presentation_value_role: None,
@@ -1567,13 +1567,13 @@ fn decoded_output_mailbox_keeps_only_latest_candidate_under_pressure() {
         });
     }
 
-    // mailbox：未 drain 时只保留价值最高的候选；keyframe 优先于后续 delta。
+    // mailbox：未 drain 时只保留 latest-only 价值最高候选（steady delta 会 supersede 早期 keyframe）。
     assert_eq!(state.decoded_frame_queue_len(), 1);
     assert_eq!(
         state
             .peek_decoded_frame()
             .map(|frame| frame.surface.frame_seq),
-        Some(1)
+        Some(4)
     );
 }
 
@@ -1895,7 +1895,7 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
         },
     });
 
-    // mailbox：seq=4 与已保留 keyframe 候选同链且过近，走 coalesce 丢弃新入帧。
+    // mailbox：anchor 候选在 host 节拍窗内抵御 continuation 突发，丢弃新入帧。
     assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(4));
     assert_eq!(state.decoded_frame_drop_count(), 3);
     let decision = state
@@ -1905,6 +1905,93 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
     assert_eq!(decision.action, "drop");
     assert_eq!(decision.detail, "coalescedAfterDecode");
     assert_eq!(decision.frame_seq, Some(4));
+}
+
+#[test]
+fn steady_supply_rapid_updates_supersede_to_latest_not_coalesce_incoming() {
+    use crate::media::video::ingress::budget::{FrameBudgetContext, FrameBudgetLinkValue};
+
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+    state.set_mailbox_present_cadence(16.0);
+    let budget = FrameBudgetContext {
+        link_value: FrameBudgetLinkValue::Supply,
+        ..FrameBudgetContext::default()
+    };
+    let now = Instant::now();
+
+    assert!(state
+        .enqueue_decoded_frame(DecodedFrame {
+            pts: now,
+            rtp_timestamp: 100,
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            clean_anchor_commit_recovery_epoch: None,
+            presentation_value_role: None,
+            budget,
+            frame_recovery_disposition: FrameRecoveryDisposition::Steady,
+            frame_unrecoverable_reason: None,
+            surface: XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: 10,
+                rendered_at_ms: 1_000.0,
+                rtp_timestamp: Some(100),
+                recovery_epoch_tag: None,
+                recovery_owner_rtp_timestamp: None,
+                is_keyframe: false,
+                frame_recovery_disposition: Some("steady".to_string()),
+                frame_unrecoverable_reason: None,
+                presentation_value_role: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([0u8; 16]),
+                },
+            },
+        })
+        .is_none());
+
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: now + Duration::from_millis(5),
+        rtp_timestamp: 101,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
+        budget,
+        frame_recovery_disposition: FrameRecoveryDisposition::Steady,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 11,
+            rendered_at_ms: 1_005.0,
+            rtp_timestamp: Some(101),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("steady".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([1u8; 16]),
+            },
+        },
+    });
+
+    assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(10));
+    assert_eq!(
+        state
+            .peek_decoded_frame()
+            .map(|frame| frame.surface.frame_seq),
+        Some(11)
+    );
+    let decision = state
+        .latest_decode_candidate_decision()
+        .expect("candidate decision");
+    assert_eq!(decision.detail, "supersededAfterDecode");
+    assert_eq!(decision.frame_seq, Some(10));
 }
 
 #[test]
@@ -2103,12 +2190,12 @@ fn newer_recovery_epoch_decoded_frame_supersedes_older_epoch_candidate() {
     assert!(state.enqueue_decoded_frame(older).is_none());
     let dropped = state
         .enqueue_decoded_frame(newer)
-        .expect("newer non-anchor candidate should be dropped");
+        .expect("older keyframe should be superseded by higher recovery epoch");
 
-    assert_eq!(dropped.surface.frame_seq, 90);
+    assert_eq!(dropped.surface.frame_seq, 100);
     let kept = state.pop_decoded_frame(200.0).expect("kept frame");
-    assert_eq!(kept.recovery_epoch_tag, Some(3));
-    assert_eq!(kept.surface.frame_seq, 100);
+    assert_eq!(kept.recovery_epoch_tag, Some(4));
+    assert_eq!(kept.surface.frame_seq, 90);
 }
 
 #[test]
@@ -2176,11 +2263,11 @@ fn owner_frame_in_same_recovery_epoch_supersedes_non_owner_candidate() {
     assert!(state.enqueue_decoded_frame(non_owner).is_none());
     let dropped = state
         .enqueue_decoded_frame(owner)
-        .expect("owner keyframe should be dropped when non-owner candidate already holds mailbox");
+        .expect("non-owner candidate should be superseded by owner keyframe");
 
-    assert_eq!(dropped.rtp_timestamp, 120);
+    assert_eq!(dropped.rtp_timestamp, 121);
     let kept = state.pop_decoded_frame(200.0).expect("kept frame");
-    assert_eq!(kept.rtp_timestamp, 121);
+    assert_eq!(kept.rtp_timestamp, 120);
     assert_eq!(kept.recovery_owner_rtp_timestamp, Some(120));
 }
 
@@ -2719,13 +2806,13 @@ fn owner_rebuilding_supply_replaces_non_owner_rebuilding_supply_in_same_epoch() 
     };
 
     assert!(state.enqueue_decoded_frame(non_owner).is_none());
-    let dropped = state.enqueue_decoded_frame(owner).expect(
-        "owner rebuilding-supply should be dropped when non-owner candidate already holds mailbox",
-    );
+    let dropped = state
+        .enqueue_decoded_frame(owner)
+        .expect("non-owner rebuilding-supply should be superseded by owner-matched candidate");
 
-    assert_eq!(dropped.surface.frame_seq, 200);
+    assert_eq!(dropped.surface.frame_seq, 220);
     let kept = state.pop_decoded_frame(240.0).expect("kept frame");
-    assert_eq!(kept.surface.frame_seq, 220);
+    assert_eq!(kept.surface.frame_seq, 200);
     assert_eq!(kept.recovery_owner_rtp_timestamp, Some(200));
 }
 
@@ -3247,11 +3334,11 @@ fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
     assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
     assert_eq!(replacement_decode_calls.load(Ordering::Relaxed), 2);
 
-    // decode output mailbox：未被下游取走前只保留价值最高的候选（首个成功 bootstrap 输出）。
+    // decode output mailbox：未被下游取走前只保留 value-aware latest 候选。
     let recovered = state
         .pop_decoded_frame(1_048.0)
         .expect("recovered frame should exist");
-    assert_eq!(recovered.surface.frame_seq, 1);
+    assert_eq!(recovered.surface.frame_seq, 2);
 
     let mut render_state = XbxRenderState::default();
     render_state
@@ -3261,7 +3348,7 @@ fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
         render_state
             .peek_latest_frame()
             .map(|frame| frame.frame_seq),
-        Some(1)
+        Some(2)
     );
 }
 
