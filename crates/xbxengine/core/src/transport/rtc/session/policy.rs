@@ -26,14 +26,16 @@ use crate::transport::rtc::policy::video_scheduling_owner::{
     RecoveryIntentContract, RecoveryIntentSource, VideoSchedulingOwner, VideoSchedulingOwnerState,
 };
 use crate::transport::rtc::projection::TransportSnapshot;
-use crate::transport::rtc::receive::suppress_session_picture_recovery_action;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_observed_at_ms, has_current_clean_anchor_from_stats,
-    has_current_transport_await_issue_from_observation,
+    current_clean_anchor_observed_at_ms,
+    derived_decoder_health_indicates_await_idr_or_supply_stall,
+    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_observation,
     has_current_transport_await_issue_from_stats, is_ingress_waiting_keyframe,
     is_media_healthy_baseline, is_terminal_transport_await_deferred_episode,
     is_timeline_chain_receiving_from_stats, recovery_progress_level_from_str,
-    recovery_progress_missing_anchor, GapSeverity, RecoveryProgressLevel,
+    recovery_progress_missing_anchor, recovery_supply_break_active_from_stats,
+    sync_derived_recovery_contract_fields, timed_fallback_decoder_unstick_required_from_stats,
+    GapSeverity, RecoveryProgressLevel,
 };
 use crate::transport::rtc::recovery::coordinator::{
     CoordinatorProposal, RecoveryCoordinator, RecoveryOwnerSignal,
@@ -47,6 +49,7 @@ use crate::transport::rtc::recovery::runtime_state::{
     has_fresh_media_output, resolve_recovery_profile,
 };
 use crate::transport::rtc::recovery::startup::SessionPhase;
+use crate::transport::rtc::recovery::suppress::finalize_session_picture_recovery_action;
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use crate::transport::rtc::session::connectivity_reason::{
     map_label_to_escalation_reason, parse_session_phase, resolve_connectivity_fallback_reason,
@@ -887,6 +890,11 @@ impl RtcSessionPolicy {
             .as_deref()
             .and_then(resolve_connectivity_fallback_reason);
         let fast_path_kind = self.evaluate_displayed_idr_fast_path(observed_at_ms);
+        if fast_path_kind.is_some() {
+            RuntimeStatsSink::update_shared(self.runtime_stats.as_ref(), |stats| {
+                stats.recovery_receive_keyframe_hint_at_ms = Some(observed_at_ms);
+            });
+        }
         let owner_signal = if let Some(kind) = fast_path_kind {
             self.displayed_idr_fast_path_owner_signal(
                 kind,
@@ -1054,12 +1062,12 @@ impl RtcSessionPolicy {
                 }
             }
         };
-        let mut owner_signal =
+        let owner_signal =
             self.apply_local_supply_suspect_anchor_gate(owner_signal, observed_at_ms);
         if owner_signal.reason_label == "receiverWaitingKeyframe" && !owner_signal_missing_anchor {
             let decoder_waiting_keyframe =
                 RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-                    stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+                    derived_decoder_health_indicates_await_idr_or_supply_stall(stats)
                 })
                 .unwrap_or(false);
             if !decoder_waiting_keyframe {
@@ -1109,8 +1117,8 @@ impl RtcSessionPolicy {
             proposal.decision.action =
                 self.resolve_first_frame_acquisition_local_action(&proposal, observed_at_ms);
         }
-        if Self::should_suppress_display_picture_recovery_action(&proposal, &owner_signal) {
-            proposal.decision.action = RecoveryAction::CooldownSuppressed;
+        if self.should_force_timed_fallback_decoder_unstick(observed_at_ms) {
+            proposal.decision.action = RecoveryAction::RequestDecoderReset;
         }
         if proposal.decision.action == RecoveryAction::RequestPli
             && first_frame_acquisition_priority_active(
@@ -1154,20 +1162,29 @@ impl RtcSessionPolicy {
             &mut proposal,
             &owner_signal,
         );
-        if Self::should_suppress_display_picture_recovery_action(&proposal, &owner_signal) {
-            proposal.decision.action = RecoveryAction::CooldownSuppressed;
-        }
         let transport_await_diagnosis_is_short = snapshot
             .recovery
             .last_observed_at_ms
             .is_some_and(|last| (observed_at_ms - last).max(0.0) <= 220.0);
 
+        let (supply_break_active, decoder_unstick_required) =
+            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                (
+                    recovery_supply_break_active_from_stats(stats, observed_at_ms),
+                    timed_fallback_decoder_unstick_required_from_stats(stats, observed_at_ms),
+                )
+            })
+            .unwrap_or((false, false));
+        let recovery_escalation_bypass = supply_break_active || decoder_unstick_required;
+
         // Fresh output 抑制检查：对于某些信号类型，如果有新鲜输出则说明不是真正的问题
         // 只针对 WaitKeyframe 和 DisplaySupplyCritical 这类可能误报的信号
-        if matches!(
-            owner_signal.reason,
-            VideoEscalationReason::WaitKeyframe | VideoEscalationReason::DisplaySupplyCritical
-        ) && snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
+        if !recovery_escalation_bypass
+            && matches!(
+                owner_signal.reason,
+                VideoEscalationReason::WaitKeyframe | VideoEscalationReason::DisplaySupplyCritical
+            )
+            && snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
         {
             let display_thresholds =
                 resolve_recovery_profile(self.runtime_stats.as_ref()).display_supply_thresholds;
@@ -1188,12 +1205,24 @@ impl RtcSessionPolicy {
                 })
                 .unwrap_or((false, false));
 
-            let should_suppress_for_fresh_output = match owner_signal.reason {
-                VideoEscalationReason::WaitKeyframe => has_fresh_output,
-                VideoEscalationReason::DisplaySupplyCritical => {
-                    has_fresh_output && has_fresh_present_output
+            let media_supply_bypass_fresh_suppress =
+                RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                    matches!(
+                        stats.media_supply_phase.as_deref(),
+                        Some("priming" | "must-idr" | "repairing")
+                    )
+                })
+                .unwrap_or(false);
+            let should_suppress_for_fresh_output = if media_supply_bypass_fresh_suppress {
+                false
+            } else {
+                match owner_signal.reason {
+                    VideoEscalationReason::WaitKeyframe => has_fresh_output,
+                    VideoEscalationReason::DisplaySupplyCritical => {
+                        has_fresh_output && has_fresh_present_output
+                    }
+                    _ => false,
                 }
-                _ => false,
             };
 
             if should_suppress_for_fresh_output {
@@ -1203,7 +1232,8 @@ impl RtcSessionPolicy {
             }
         }
 
-        if snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
+        if !recovery_escalation_bypass
+            && snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
             && should_absorb_light_recovery_signal_during_ramp_up(
                 self.runtime_stats.as_ref(),
                 owner_state,
@@ -1246,8 +1276,10 @@ impl RtcSessionPolicy {
             // 否则 ledger 会记成 terminal，但执行层仍收到 reconnect，造成合同分裂。
             return None;
         }
+        let mut decision = proposal.decision;
+        decision.action = finalize_session_picture_recovery_action(decision.action, &owner_signal);
         let mut proposal = RecoveryPolicyProposal {
-            decision: proposal.decision,
+            decision,
             reason: owner_signal.reason,
             reason_label: owner_signal.reason_label,
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
@@ -1263,8 +1295,6 @@ impl RtcSessionPolicy {
             self.recovery_coordinator.on_reconnect_candidate_accepted();
             proposal.budget_after = self.recovery_coordinator.current_budget_state();
         }
-        proposal.decision.action =
-            suppress_session_picture_recovery_action(proposal.decision.action);
         Some(proposal)
     }
 
@@ -2240,38 +2270,18 @@ impl RtcSessionPolicy {
         let owner_facts = &orchestration.owner_facts;
         let owner_input = &orchestration.owner_input;
         let owner_output = self.scheduling_owner.evaluate(owner_input);
-        let owner_current_clean_anchor_observed_at_ms = current_clean_anchor_observed_at_ms(
-            owner_facts.clean_anchor_epoch,
-            owner_facts.clean_anchor_observed_at_ms,
-            owner_facts.clean_anchor_source_event.as_deref(),
-            owner_facts.recovery_epoch,
-        );
-        let recovery_transport_await_unresolved = owner_facts
-            .latest_video_timeline_observation
+        let recovery_transport_await_unresolved =
+            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                stats.recovery_transport_await_unresolved.unwrap_or(false)
+            })
+            .unwrap_or(false);
+        let recovery_ingress_waiting = matches!(
+            owner_input.recovery_surface_phase,
+            crate::transport::rtc::recovery::contract::RecoverySurfacePhase::AwaitIdr
+        ) && owner_facts
+            .latest_video_receiver_observation
             .as_ref()
-            .is_some_and(|timeline| {
-                has_current_transport_await_issue_from_observation(
-                    timeline,
-                    owner_current_clean_anchor_observed_at_ms,
-                )
-            });
-        let recovery_ingress_waiting = owner_facts
-            .latest_video_timeline_observation
-            .as_ref()
-            .is_some_and(|timeline| {
-                has_current_transport_await_issue_from_observation(
-                    timeline,
-                    owner_current_clean_anchor_observed_at_ms,
-                ) && is_ingress_waiting_keyframe(
-                    owner_facts
-                        .latest_video_receiver_observation
-                        .as_ref()
-                        .map(|obs| obs.receiver_state.as_str()),
-                    Some(timeline.chain.state.as_str()),
-                    timeline.chain.reason.as_deref(),
-                    Some(timeline.source_event.as_str()),
-                )
-            });
+            .is_some_and(|obs| obs.receiver_state == "waiting-keyframe");
         let recovery_phase = match owner_output.state {
             VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming => {
                 "priming"
@@ -2332,6 +2342,15 @@ impl RtcSessionPolicy {
             stats.recovery_exit_gate = Some(recovery_exit_gate.to_string());
             stats.recovery_ingress_waiting = Some(recovery_ingress_waiting);
             stats.recovery_transport_await_unresolved = Some(recovery_transport_await_unresolved);
+            // orchestration 入口已 sync；此处刷新 owner 写入后的派生合同字段（幂等）。
+            sync_derived_recovery_contract_fields(stats, observed_at_ms);
+            if recovery_supply_break_active_from_stats(stats, observed_at_ms) {
+                stats.recovery_receive_keyframe_hint_at_ms = Some(
+                    stats
+                        .recovery_receive_keyframe_hint_at_ms
+                        .unwrap_or(observed_at_ms),
+                );
+            }
         });
         let has_unresolved_transport_await_issue =
             RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
@@ -2441,6 +2460,14 @@ impl RtcSessionPolicy {
         });
         let escalation_basis =
             proposal.map(|p| recovery_escalation_basis_for_reason(p.reason).to_string());
+        let (supply_break_active, decoder_unstick_required) =
+            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                (
+                    recovery_supply_break_active_from_stats(stats, observed_at_ms),
+                    timed_fallback_decoder_unstick_required_from_stats(stats, observed_at_ms),
+                )
+            })
+            .unwrap_or((false, false));
         let ledger = XbxEngineRecoveryDecisionLedgerObservation {
             decision_id,
             state_before: state_before.as_str().to_string(),
@@ -2458,20 +2485,11 @@ impl RtcSessionPolicy {
             unlock_reason: proposal.and_then(|p| p.unlock_reason.clone()),
             preempt_reason: proposal.and_then(|p| p.preempt_reason.clone()),
             recovery_primary_action: proposal.map(|p| {
-                {
-                    match p.decision.action {
-                        RecoveryAction::RequestPli => "requestPli",
-                        RecoveryAction::RequestFir => "requestFir",
-                        RecoveryAction::RequestDecoderReset => "requestDecoderReset",
-                        RecoveryAction::RequestReconnectCandidate => "requestReconnect",
-                        RecoveryAction::WaitForBurst
-                        | RecoveryAction::WaitForDecoderResetBurst
-                        | RecoveryAction::CooldownSuppressed
-                        | RecoveryAction::CoalescedKeyframeInFlight
-                        | RecoveryAction::CoalescedDecoderResetInFlight
-                        | RecoveryAction::StartupGraceSuppressed => "suppress",
-                    }
-                }
+                map_recovery_primary_action_ledger_label(
+                    p.decision.action,
+                    supply_break_active,
+                    decoder_unstick_required,
+                )
                 .to_string()
             }),
             owner_surface_state,
@@ -2700,35 +2718,18 @@ impl RtcSessionPolicy {
         }
     }
 
-    fn should_suppress_display_picture_recovery_action(
-        proposal: &CoordinatorProposal,
-        owner_signal: &RecoveryOwnerSignal,
-    ) -> bool {
-        if !matches!(
-            proposal.decision.action,
-            RecoveryAction::RequestPli | RecoveryAction::RequestFir
-        ) {
-            return false;
-        }
-        if matches!(
-            owner_signal.reason_label.as_str(),
-            "receiverWaitingKeyframe"
-                | "waitKeyframe"
-                | "ingressWaitKeyframe"
-                | "displayedIdrFastPathPathA"
-                | "displayedIdrFastPathPathB"
-                | "displayedIdrFastPathPathC"
-                | "displayedIdrFastPathPathD"
-        ) {
-            return false;
-        }
-        if matches!(
-            resolve_session_fault_domain(owner_signal.reason),
-            SessionFaultDomain::ReferenceChain | SessionFaultDomain::DecodePipeline
-        ) {
-            return false;
-        }
-        resolve_session_fault_domain(owner_signal.reason) == SessionFaultDomain::DisplaySupply
+    fn should_force_timed_fallback_decoder_unstick(&self, observed_at_ms: f64) -> bool {
+        const MIN_RESET_INTERVAL_MS: f64 = 8_000.0;
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if !timed_fallback_decoder_unstick_required_from_stats(stats, observed_at_ms) {
+                return false;
+            }
+            stats
+                .latest_video_decoder_reset_time_ms
+                .map(|last| (observed_at_ms - last).max(0.0) >= MIN_RESET_INTERVAL_MS)
+                .unwrap_or(true)
+        })
+        .unwrap_or(false)
     }
 
     fn should_force_first_frame_acquisition_local_action(
@@ -2830,6 +2831,41 @@ impl RtcSessionPolicy {
             .filter(|ts| ts.is_finite())
             .map(|ts| ts.max(snapshot.now_ms))
             .unwrap_or(snapshot.now_ms)
+    }
+}
+
+fn map_recovery_primary_action_ledger_label(
+    action: RecoveryAction,
+    supply_break_active: bool,
+    decoder_unstick_required: bool,
+) -> &'static str {
+    if supply_break_active {
+        return match action {
+            RecoveryAction::RequestPli => "requestPli",
+            RecoveryAction::RequestFir => "requestFir",
+            RecoveryAction::RequestDecoderReset => "requestDecoderReset",
+            RecoveryAction::WaitForBurst | RecoveryAction::WaitForDecoderResetBurst => {
+                if decoder_unstick_required {
+                    "requestDecoderReset"
+                } else {
+                    "requestPli"
+                }
+            }
+            RecoveryAction::RequestReconnectCandidate => "requestReconnect",
+            _ => "suppress",
+        };
+    }
+    match action {
+        RecoveryAction::RequestPli => "requestPli",
+        RecoveryAction::RequestFir => "requestFir",
+        RecoveryAction::RequestDecoderReset => "requestDecoderReset",
+        RecoveryAction::RequestReconnectCandidate => "requestReconnect",
+        RecoveryAction::WaitForBurst
+        | RecoveryAction::WaitForDecoderResetBurst
+        | RecoveryAction::CooldownSuppressed
+        | RecoveryAction::CoalescedKeyframeInFlight
+        | RecoveryAction::CoalescedDecoderResetInFlight
+        | RecoveryAction::StartupGraceSuppressed => "suppress",
     }
 }
 

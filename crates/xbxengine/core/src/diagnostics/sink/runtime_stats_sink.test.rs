@@ -91,7 +91,8 @@ fn clean_anchor_keeps_transport_recovery_episode_open_until_stable_settle() {
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
     sink.begin_transport_recovery_episode(10.0);
-    sink.record_transport_clean_anchor_with_rtp(20.0, "test-clean-anchor", None, None);
+    sink.record_pending_displayed_idr_rtp(1);
+    sink.record_displayed_idr_fact(20.0, 1, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, Some(1));
@@ -181,7 +182,8 @@ fn stable_settle_completes_active_episode_after_clean_anchor() {
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
     sink.begin_transport_recovery_episode(10.0);
-    sink.record_transport_clean_anchor_with_rtp(20.0, "test-clean-anchor", None, None);
+    sink.record_pending_displayed_idr_rtp(1);
+    sink.record_displayed_idr_fact(20.0, 1, None);
     sink.complete_transport_recovery_after_stable_settle(40.0);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -711,7 +713,8 @@ fn keyframe_request_episode_timeout_skipped_when_transport_clean_anchor_already_
         None,
     );
     sink.record_picture_recovery_episode_sent("pli", 120.0, Some(500.0));
-    sink.record_transport_clean_anchor_with_rtp(180.0, "test-clean-anchor", None, None);
+    sink.record_pending_displayed_idr_rtp(1);
+    sink.record_displayed_idr_fact(180.0, 1, None);
 
     sink.record_picture_recovery_episode_timeout(600.0);
 
@@ -1514,12 +1517,10 @@ fn transport_recovery_family_continuation_follows_latest_decoded_transport_expir
     assert_eq!(h264.bound_episode_status.as_deref(), Some("decoded"));
     assert_eq!(h264.bound_response_rtp_timestamp, Some(2_441_661_257));
     assert!(h264.bound_as_recovery_response.unwrap_or(false));
-    let blocker = stats
-        .latest_picture_recovery_blocker_observation
-        .as_ref()
-        .expect("blocker observation");
-    assert_eq!(blocker.episode_id, Some(3593));
-    assert_eq!(blocker.blocker_kind.as_str(), "receiverLocalContinuation");
+    assert!(
+        stats.latest_picture_recovery_blocker_observation.is_none(),
+        "admitted soft continuation must not record picture blocker"
+    );
 }
 
 #[test]

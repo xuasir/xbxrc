@@ -5,7 +5,7 @@ use crate::api::backend::{
 };
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::connection::{RtcConnectionService, VideoRecoveryRequestOutcome};
+use crate::transport::rtc::connection::RtcConnectionService;
 use crate::transport::rtc::executor::peer::{
     stage_reconnect_candidate, StageReconnectCandidateOutcome,
 };
@@ -23,16 +23,8 @@ use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stream::RtcMediaService;
 use crate::XbxEngineRuntimeError;
 
-const RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_CONTROL_PENDING: &str =
-    "familyInFlight:controlChannelPending";
-/// 视频 RTCP 反馈目标（TWCC/SSRC）尚未就绪，与「控制通道未就绪」同属可重试窗口，避免记 transportFailed。
-const RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY: &str =
-    "familyDeferred:videoRtcpFeedbackTransportNotReady";
-const CAPABILITY_FEEDBACK_WARMING_REASON: &str = "capability:videoFeedbackWarming";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryCommandKind {
-    RequestPli,
-    RequestFir,
     RequestDecoderReset,
 }
 
@@ -419,177 +411,9 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     };
                     self.record_transport_command_status(command.clone(), command_result);
                 }
-                TransportCommand::RequestPli {
-                    observation_id,
-                    reason,
-                } => {
-                    let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
-                    let (family_decision, family_semantics, family_semantic_detail) = self
-                        .resolve_recovery_command_family_decision(
-                            RecoveryCommandKind::RequestPli,
-                            Some(reason.as_str()),
-                            *observation_id, // 传入 observation_id 作为 decision_id
-                            requested_at_ms,
-                        );
-                    if let Some(reason) = family_decision {
-                        if let Some(fields) = family_semantics.as_ref() {
-                            self.update_recovery_decision_semantic_fields(
-                                *observation_id,
-                                fields,
-                                requested_at_ms,
-                            );
-                        }
-                        self.record_transport_command_status(
-                            command.clone(),
-                            CommandResultStatus::Deferred { reason },
-                        );
-                        return;
-                    }
-                    RuntimeStatsSink::new(self.runtime_stats.clone())
-                        .record_picture_recovery_episode_requested(
-                            *observation_id,
-                            Some(reason.clone()),
-                            requested_at_ms,
-                            None,
-                        );
-                    let result = self
-                        .connection
-                        .lock()
-                        .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
-                        .and_then(|mut connection| {
-                            connection.request_video_pli_with_outcome(self.runtime_stats)
-                        });
-                    let (command_status, semantic_detail) =
-                        self.resolve_keyframe_command_status_from_result(&result);
-                    if matches!(command_status, CommandResultStatus::Succeeded) {
-                        if let Ok(outcome) = &result {
-                            if let Some(action) = outcome.escalation_action_label() {
-                                self.record_recovery_escalation_observation(
-                                    *observation_id,
-                                    reason.clone(),
-                                    action,
-                                    RecoveryAction::RequestPli,
-                                );
-                            }
-                        }
-                    }
-                    match &command_status {
-                        CommandResultStatus::Deferred { reason } => {
-                            RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_picture_recovery_episode_deferred(requested_at_ms, reason);
-                        }
-                        CommandResultStatus::Failed { error } => {
-                            RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_picture_recovery_episode_failed(requested_at_ms, error);
-                        }
-                        CommandResultStatus::Succeeded => {}
-                    }
-                    if let Some(fields) = family_semantics.as_ref() {
-                        self.update_recovery_decision_semantic_fields(
-                            *observation_id,
-                            fields,
-                            requested_at_ms,
-                        );
-                    }
-                    self.record_transport_command_status_with_semantic(
-                        command.clone(),
-                        command_status,
-                        match (family_semantic_detail.as_deref(), semantic_detail) {
-                            (Some(family), Some(mut tail)) => {
-                                tail.push_str(" | family=");
-                                tail.push_str(family);
-                                Some(tail)
-                            }
-                            (Some(family), None) => Some(format!("family={family}")),
-                            (None, some) => some,
-                        },
-                    );
-                }
-                TransportCommand::RequestFir {
-                    observation_id,
-                    reason,
-                } => {
-                    let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
-                    let (family_decision, family_semantics, family_semantic_detail) = self
-                        .resolve_recovery_command_family_decision(
-                            RecoveryCommandKind::RequestFir,
-                            Some(reason.as_str()),
-                            *observation_id,
-                            requested_at_ms,
-                        );
-                    if let Some(reason) = family_decision {
-                        if let Some(fields) = family_semantics.as_ref() {
-                            self.update_recovery_decision_semantic_fields(
-                                *observation_id,
-                                fields,
-                                requested_at_ms,
-                            );
-                        }
-                        self.record_transport_command_status(
-                            command.clone(),
-                            CommandResultStatus::Deferred { reason },
-                        );
-                        return;
-                    }
-                    RuntimeStatsSink::new(self.runtime_stats.clone())
-                        .record_picture_recovery_episode_requested(
-                            *observation_id,
-                            Some(reason.clone()),
-                            requested_at_ms,
-                            None,
-                        );
-                    let result = self
-                        .connection
-                        .lock()
-                        .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
-                        .and_then(|mut connection| {
-                            connection.request_video_fir_with_outcome(self.runtime_stats)
-                        });
-                    let (command_status, semantic_detail) =
-                        self.resolve_keyframe_command_status_from_result(&result);
-                    if matches!(command_status, CommandResultStatus::Succeeded) {
-                        if let Ok(outcome) = &result {
-                            if let Some(action) = outcome.escalation_action_label() {
-                                self.record_recovery_escalation_observation(
-                                    *observation_id,
-                                    reason.clone(),
-                                    action,
-                                    RecoveryAction::RequestFir,
-                                );
-                            }
-                        }
-                    }
-                    match &command_status {
-                        CommandResultStatus::Deferred { reason } => {
-                            RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_picture_recovery_episode_deferred(requested_at_ms, reason);
-                        }
-                        CommandResultStatus::Failed { error } => {
-                            RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_picture_recovery_episode_failed(requested_at_ms, error);
-                        }
-                        CommandResultStatus::Succeeded => {}
-                    }
-                    if let Some(fields) = family_semantics.as_ref() {
-                        self.update_recovery_decision_semantic_fields(
-                            *observation_id,
-                            fields,
-                            requested_at_ms,
-                        );
-                    }
-                    self.record_transport_command_status_with_semantic(
-                        command.clone(),
-                        command_status,
-                        match (family_semantic_detail.as_deref(), semantic_detail) {
-                            (Some(family), Some(mut tail)) => {
-                                tail.push_str(" | family=");
-                                tail.push_str(family);
-                                Some(tail)
-                            }
-                            (Some(family), None) => Some(format!("family={family}")),
-                            (None, some) => some,
-                        },
-                    );
+                TransportCommand::RequestPli { reason, .. }
+                | TransportCommand::RequestFir { reason, .. } => {
+                    self.defer_receive_only_picture_recovery_command(command.clone(), reason);
                 }
                 TransportCommand::RequestDecoderReset {
                     observation_id,
@@ -901,78 +725,17 @@ impl<'a> RtcTransportSessionBridge<'a> {
         );
     }
 
-    fn resolve_keyframe_command_status_from_result(
-        &self,
-        result: &Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError>,
-    ) -> (CommandResultStatus, Option<String>) {
-        match result {
-            Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => (
-                CommandResultStatus::Deferred {
-                    reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY
-                        .to_string(),
-                },
-                None,
-            ),
-            Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => (
-                CommandResultStatus::Deferred {
-                    reason: CAPABILITY_FEEDBACK_WARMING_REASON.to_string(),
-                },
-                None,
-            ),
-            Ok(
-                VideoRecoveryRequestOutcome::RequestedPli
-                | VideoRecoveryRequestOutcome::RequestedFir,
-            ) => (CommandResultStatus::Succeeded, None),
-            Err(error) => {
-                let error_text = error.to_string();
-                if self.is_control_channel_not_ready_error(
-                    RecoveryCommandKind::RequestPli,
-                    &error_text,
-                ) {
-                    return (
-                        CommandResultStatus::Deferred {
-                            reason: RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_CONTROL_PENDING
-                                .to_string(),
-                        },
-                        None,
-                    );
-                }
-                if Self::is_keyframe_video_rtcp_feedback_target_pending_error(&error_text) {
-                    return (
-                        CommandResultStatus::Deferred {
-                            reason: CAPABILITY_FEEDBACK_WARMING_REASON.to_string(),
-                        },
-                        None,
-                    );
-                }
-                (CommandResultStatus::Failed { error: error_text }, None)
-            }
-        }
-    }
-
-    fn is_control_channel_not_ready_error(
-        &self,
-        command_kind: RecoveryCommandKind,
-        error: &str,
-    ) -> bool {
-        match command_kind {
-            RecoveryCommandKind::RequestPli => {
-                error.contains("xbxEngineRtcControlChannelNotReadyForKeyframe")
-            }
-            RecoveryCommandKind::RequestFir => {
-                error.contains("xbxEngineRtcControlChannelNotReadyForKeyframe")
-            }
-            RecoveryCommandKind::RequestDecoderReset => {
-                error.contains("xbxEngineRtcControlChannelNotReadyForDecoderReset")
-            }
-        }
-    }
-
-    fn is_keyframe_video_rtcp_feedback_target_pending_error(error: &str) -> bool {
-        error.contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable")
-            || error.contains("xbxEngineRtcVideoPliMediaSsrcUnavailable")
-            || error.contains("xbxEngineRtcVideoFirFeedbackTargetUnavailable")
-            || error.contains("xbxEngineRtcVideoFirMediaSsrcUnavailable")
+    fn defer_receive_only_picture_recovery_command(&self, command: TransportCommand, reason: &str) {
+        let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
+        let defer_reason = format!("receiveOnlyPictureRecovery:reason={}", reason);
+        RuntimeStatsSink::new(self.runtime_stats.clone())
+            .record_picture_recovery_episode_deferred(requested_at_ms, &defer_reason);
+        self.record_transport_command_status(
+            command,
+            CommandResultStatus::Deferred {
+                reason: defer_reason,
+            },
+        );
     }
 
     fn resolve_recovery_command_family_decision(
@@ -1088,6 +851,9 @@ impl<'a> RtcTransportSessionBridge<'a> {
             == Some(stats.transport_recovery_epoch)
             && stats.video_anchor_clean_observed_at_ms.is_some();
         if has_current_clean_anchor {
+            return None;
+        }
+        if crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats) {
             return None;
         }
         if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {

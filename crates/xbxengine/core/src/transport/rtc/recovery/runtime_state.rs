@@ -531,11 +531,6 @@ fn resolve_effective_diagnosis_label_from_stats(
     if diagnosis_label == "receiverWaitingKeyframe" {
         match recovery_exit_path_from_stats(stats, now_ms, RecoveryExitThresholds::default()) {
             RecoveryExitPath::TimedFallback => {
-                if stats.recovery_playback_recovered_at_ms.is_some()
-                    || stats.recovery_displayed_idr_at_ms.is_some()
-                {
-                    return "recoverySustaining".to_string();
-                }
                 return "displaySupplyDegraded".to_string();
             }
             RecoveryExitPath::DecodeOutput => {

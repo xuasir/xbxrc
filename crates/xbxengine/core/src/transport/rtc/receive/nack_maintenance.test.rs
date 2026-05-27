@@ -9,7 +9,6 @@ use crate::transport::rtc::receive::nack_policy::{
     cloud_nack_max_age_ms, cloud_startup_head_hole_deadline_at_ms,
 };
 use crate::transport::rtc::stream::nack_contract::{NackBatch, PacketRecoveryDisposition};
-use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use bytes::Bytes;
 use rtc_rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 #[test]
@@ -96,12 +95,10 @@ fn make_test_source(
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (transport_observation_tx, _transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
-    let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
     let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
     RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        rtcp_port,
         runtime_stats,
         16,
         std::time::Duration::from_millis(10),
@@ -202,7 +199,7 @@ struct CaptureRtcpPort {
     payloads: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
-impl RtcRtcpSendPort for CaptureRtcpPort {
+impl CaptureRtcpPort {
     fn send_rtcp(&self, payload: &[u8]) -> Result<(), String> {
         self.payloads
             .lock()

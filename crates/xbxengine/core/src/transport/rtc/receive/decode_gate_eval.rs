@@ -39,60 +39,50 @@ impl FirstFrameAcquisitionRuntimeContext {
     }
 }
 
-pub(crate) fn resolve_recovery_keyframe_action(
-    first_frame_acquired: bool,
-    is_blocking_non_keyframe_admission: bool,
-    sustaining_recovery_active: bool,
-    receiver_repairing: bool,
-    hard_recovery_gap_risk: bool,
-    _sample_loss_burst_count: u8,
-    media_dropped_packets: u16,
-    is_keyframe: bool,
-    displayed_idr_serving: bool,
-) -> (bool, RecoveryKeyframeAction) {
-    // 带丢包的 keyframe/reference 不能继续喂给解码器，否则很容易把本地参考链喂脏，
-    // 在 macOS 上会直接放大成 VideoToolbox 连续 bad-data 回调。
-    if is_keyframe && media_dropped_packets > 0 {
-        // 这里仍只保留 decoder safety：丢弃坏 keyframe，但恢复升级交给统一 NACK/recovery admission。
-        return (false, RecoveryKeyframeAction::DropAndRequestPli);
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    if is_keyframe {
-        return (false, RecoveryKeyframeAction::Submit);
-    }
-
-    if !first_frame_acquired {
-        return (true, RecoveryKeyframeAction::WaitKeyframe);
-    }
-
-    if media_dropped_packets > 0 {
-        // sample loss 的升级门交给统一 NACK/recovery admission；source 这里只保留解码安全职责。
-        return (false, RecoveryKeyframeAction::DropAndRequestPli);
-    }
-
-    if is_blocking_non_keyframe_admission {
-        // `displayed_idr_serving` 在 ingress 侧已收紧为 allows_relaxed_controls（供给断裂时不强制 Submit）。
-        if displayed_idr_serving && first_frame_acquired {
+    fn resolve_recovery_keyframe_action(
+        first_frame_acquired: bool,
+        is_blocking_non_keyframe_admission: bool,
+        sustaining_recovery_active: bool,
+        receiver_repairing: bool,
+        hard_recovery_gap_risk: bool,
+        _sample_loss_burst_count: u8,
+        media_dropped_packets: u16,
+        is_keyframe: bool,
+        displayed_idr_serving: bool,
+    ) -> (bool, RecoveryKeyframeAction) {
+        if is_keyframe && media_dropped_packets > 0 {
+            return (false, RecoveryKeyframeAction::DropAndRequestPli);
+        }
+        if is_keyframe {
             return (false, RecoveryKeyframeAction::Submit);
         }
         if !first_frame_acquired {
             return (true, RecoveryKeyframeAction::WaitKeyframe);
         }
-        if sustaining_recovery_active || receiver_repairing {
-            return (false, RecoveryKeyframeAction::Submit);
+        if media_dropped_packets > 0 {
+            return (false, RecoveryKeyframeAction::DropAndRequestPli);
         }
-        if !hard_recovery_gap_risk {
-            return (false, RecoveryKeyframeAction::Submit);
+        if is_blocking_non_keyframe_admission {
+            if displayed_idr_serving && first_frame_acquired {
+                return (false, RecoveryKeyframeAction::Submit);
+            }
+            if !first_frame_acquired {
+                return (true, RecoveryKeyframeAction::WaitKeyframe);
+            }
+            if sustaining_recovery_active || receiver_repairing {
+                return (false, RecoveryKeyframeAction::Submit);
+            }
+            if !hard_recovery_gap_risk {
+                return (false, RecoveryKeyframeAction::Submit);
+            }
+            return (true, RecoveryKeyframeAction::WaitKeyframe);
         }
-        return (true, RecoveryKeyframeAction::WaitKeyframe);
+        (false, RecoveryKeyframeAction::Submit)
     }
-
-    (false, RecoveryKeyframeAction::Submit)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn displayed_idr_serving_avoids_wait_keyframe_while_blocking() {

@@ -537,6 +537,18 @@ pub struct XbxEngineMediaRuntimeStats {
     pub recovery_exit_gate: Option<String>,
     pub recovery_ingress_waiting: Option<bool>,
     pub recovery_transport_await_unresolved: Option<bool>,
+    /// 派生恢复表面：`steady` / `repairing` / `await-idr` / `supply-break`。
+    pub recovery_surface_phase: Option<String>,
+    /// 媒体供给主相位：`priming` / `steady` / `repairing` / `must-idr` / `supply-break`。
+    pub media_supply_phase: Option<String>,
+    /// 首次 host 可见 present 时间（`host_frame_present_epoch` 从 0→正），供 L0 acquisition 窗。
+    pub media_supply_host_first_present_at_ms: Option<f64>,
+    /// receive-local keyframe 尝试序号；trace 按序发 `keyframeRequestOutcome`。
+    pub keyframe_request_outcome_seq: u64,
+    /// 派生解码健康（owner 决策用，非裸 `video_decoder_recovery_state`）。
+    pub derived_decoder_health: Option<String>,
+    /// receive 侧待发送 keyframe 提示（session fast-path / supply-break 写入）。
+    pub recovery_receive_keyframe_hint_at_ms: Option<f64>,
     pub recovery_playback_recovered_at_ms: Option<f64>,
     pub recovery_playback_recovered_phase: Option<String>,
     pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
@@ -584,6 +596,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_rtcp_send_failure_time_ms: Option<f64>,
     pub latest_video_rtcp_send_failure_reason: Option<String>,
     pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservation>,
+    /// 最近一次 IDR 上 `parameter_sets_changed` / `config_changed` 的观测时刻（修洞后严进窗口）。
+    pub video_parameter_sets_changed_at_ms: Option<f64>,
     pub latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
     pub latest_picture_recovery_transition_observation:
         Option<XbxEnginePictureRecoveryTransitionObservation>,
@@ -783,6 +797,12 @@ impl Default for XbxEngineMediaRuntimeStats {
             recovery_exit_gate: None,
             recovery_ingress_waiting: None,
             recovery_transport_await_unresolved: None,
+            recovery_surface_phase: None,
+            media_supply_phase: None,
+            media_supply_host_first_present_at_ms: None,
+            keyframe_request_outcome_seq: 0,
+            derived_decoder_health: None,
+            recovery_receive_keyframe_hint_at_ms: None,
             recovery_playback_recovered_at_ms: None,
             recovery_playback_recovered_phase: None,
             recovery_fresh_anchor_recovered_at_ms: None,
@@ -827,6 +847,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_rtcp_send_failure_time_ms: None,
             latest_video_rtcp_send_failure_reason: None,
             latest_keyframe_request_episode: None,
+            video_parameter_sets_changed_at_ms: None,
             latest_h264_inspection_observation: None,
             latest_picture_recovery_transition_observation: None,
             latest_picture_recovery_blocker_observation: None,
@@ -1418,7 +1439,22 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
             metrics.latest_host_present_time_ms;
         self.last_runtime_stats.host_mailbox_submit_epoch = metrics.host_mailbox_submit_epoch;
         self.last_runtime_stats.host_display_tick_epoch = metrics.host_display_tick_epoch;
+        let prev_present_epoch = self.last_runtime_stats.host_frame_present_epoch;
         self.last_runtime_stats.host_frame_present_epoch = metrics.host_frame_present_epoch;
+        if metrics.host_frame_present_epoch == 0 {
+            self.last_runtime_stats
+                .media_supply_host_first_present_at_ms = None;
+        } else if prev_present_epoch == 0
+            && self
+                .last_runtime_stats
+                .media_supply_host_first_present_at_ms
+                .is_none()
+        {
+            self.last_runtime_stats
+                .media_supply_host_first_present_at_ms = metrics
+                .latest_host_present_time_ms
+                .or_else(|| metrics.latest_host_submit_time_ms);
+        }
         self.last_runtime_stats.host_cadence_phase = metrics.cadence_phase;
         self.last_runtime_stats.video_present_fps = metrics.present_fps;
         self.last_runtime_stats.host_mailbox_enqueue_count_total =

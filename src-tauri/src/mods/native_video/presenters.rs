@@ -27,8 +27,6 @@ use super::{
     ensure_display_layer, run_layer_present_tick, MacOsDisplayLinkHandle,
     MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState,
 };
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-use super::{record_host_mailbox_take_decision, HostPresentTickGuard};
 #[cfg(target_os = "windows")]
 use super::{HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS};
 
@@ -672,10 +670,36 @@ fn run_windows_wgpu_render_tick(
     }
 
     let Ok(mut state) = renderer_state.lock() else {
+        finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+            run_windows_wgpu_render_tick(
+                window,
+                viewport_id,
+                renderer_state,
+                frame_slot,
+                telemetry,
+                render_loop_pending,
+                render_loop_rerun_requested,
+                dispatch_requested_at_ms,
+                runtime_trace.clone(),
+            );
+        });
         return;
     };
     let view_generation_before_tick = state.view_generation;
     let Ok(surface_size) = window.inner_size() else {
+        finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+            run_windows_wgpu_render_tick(
+                window,
+                viewport_id,
+                renderer_state,
+                frame_slot,
+                telemetry,
+                render_loop_pending,
+                render_loop_rerun_requested,
+                dispatch_requested_at_ms,
+                runtime_trace.clone(),
+            );
+        });
         return;
     };
     let surface_width = surface_size.width.max(1);
@@ -708,6 +732,19 @@ fn run_windows_wgpu_render_tick(
                         error
                     );
                 }
+                finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+                    run_windows_wgpu_render_tick(
+                        window,
+                        viewport_id,
+                        renderer_state,
+                        frame_slot,
+                        telemetry,
+                        render_loop_pending,
+                        render_loop_rerun_requested,
+                        dispatch_requested_at_ms,
+                        runtime_trace.clone(),
+                    );
+                });
                 return;
             }
         }
@@ -717,10 +754,36 @@ fn run_windows_wgpu_render_tick(
     let now_ms = now_ms_f64();
     let (take_outcome, take_slot_diag, take_telemetry_diag) = {
         let Ok(mut telemetry) = telemetry.lock() else {
+            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+                run_windows_wgpu_render_tick(
+                    window,
+                    viewport_id,
+                    renderer_state,
+                    frame_slot,
+                    telemetry,
+                    render_loop_pending,
+                    render_loop_rerun_requested,
+                    dispatch_requested_at_ms,
+                    runtime_trace.clone(),
+                );
+            });
             return;
         };
         telemetry.record_display_tick(now_ms);
         let Ok(mut frame_slot) = frame_slot.lock() else {
+            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+                run_windows_wgpu_render_tick(
+                    window,
+                    viewport_id,
+                    renderer_state,
+                    frame_slot,
+                    telemetry,
+                    render_loop_pending,
+                    render_loop_rerun_requested,
+                    dispatch_requested_at_ms,
+                    runtime_trace.clone(),
+                );
+            });
             return;
         };
         if view_generation_changed {
@@ -746,6 +809,19 @@ fn run_windows_wgpu_render_tick(
     let cached_frame_for_repaint = state.latest_frame.clone();
     let has_cached_frame = cached_frame_for_repaint.is_some();
     let Some(renderer) = state.renderer.as_mut() else {
+        finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+            run_windows_wgpu_render_tick(
+                window,
+                viewport_id,
+                renderer_state,
+                frame_slot,
+                telemetry,
+                render_loop_pending,
+                render_loop_rerun_requested,
+                dispatch_requested_at_ms,
+                runtime_trace.clone(),
+            );
+        });
         return;
     };
     if size_changed {
@@ -799,7 +875,7 @@ fn run_windows_wgpu_render_tick(
             || serde_json::json!({ "totalMs": tick_total_ms }),
         );
     }
-    if tick_dispatch_guard.finish_dispatch() {
+    finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
         run_windows_wgpu_render_tick(
             window,
             viewport_id,
@@ -808,10 +884,10 @@ fn run_windows_wgpu_render_tick(
             telemetry,
             render_loop_pending,
             render_loop_rerun_requested,
-            None,
+            dispatch_requested_at_ms,
             runtime_trace,
         );
-    }
+    });
 }
 
 #[cfg(target_os = "macos")]

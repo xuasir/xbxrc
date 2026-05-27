@@ -6,7 +6,20 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::facts::ConnectionLifecycleStateFact;
 use crate::transport::rtc::policy::video_scheduling_owner::RecoveryIntentSource;
 use crate::transport::rtc::projection::TransportSnapshot;
+use crate::transport::rtc::recovery::contract::{
+    derive_recovery_surface_phase_from_stats, RecoverySurfacePhase,
+};
 use crate::XbxEngineMediaRuntimeStats;
+
+fn recovery_surface_blocks_startup_compat(
+    stats: &XbxEngineMediaRuntimeStats,
+    observed_at_ms: f64,
+) -> bool {
+    matches!(
+        derive_recovery_surface_phase_from_stats(stats, observed_at_ms),
+        RecoverySurfacePhase::SupplyBreak | RecoverySurfacePhase::AwaitIdr
+    )
+}
 
 pub(crate) fn should_absorb_first_frame_acquisition_anchor_issue(
     snapshot: &TransportSnapshot,
@@ -90,6 +103,9 @@ pub(crate) fn should_hold_pre_first_frame_display_supply_degraded(
         if stats.transport_state != XbxEngineTransportStateDto::Connected {
             return false;
         }
+        if recovery_surface_blocks_startup_compat(stats, observed_at_ms) {
+            return false;
+        }
         let Some(track) = stats.latest_video_track_status.as_ref() else {
             return false;
         };
@@ -117,6 +133,9 @@ fn first_frame_acquisition_window_active(
 ) -> bool {
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         if stats.transport_state != XbxEngineTransportStateDto::Connected {
+            return false;
+        }
+        if recovery_surface_blocks_startup_compat(stats, observed_at_ms) {
             return false;
         }
         let Some(track) = stats.latest_video_track_status.as_ref() else {
@@ -171,7 +190,6 @@ fn is_first_frame_acquisition_reason_label(value: &str) -> bool {
         value,
         "bootstrapMissingSps"
             | "bootstrapMissingPps"
-            | "recoverySustaining"
             | "inspectionRejectInvalidSliceHeader"
             | "bootstrapMissingIdr"
             | "mixedIdrWithTrailingDelta"

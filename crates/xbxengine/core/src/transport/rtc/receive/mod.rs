@@ -7,6 +7,7 @@ mod engine;
 mod h264_bootstrap_tracker;
 mod ingress_loop;
 mod ingress_state;
+mod insert_gate;
 mod keyframe_escalation_queue;
 mod keyframe_requester;
 mod nack_maintenance;
@@ -14,7 +15,6 @@ mod nack_policy;
 mod nack_requester;
 mod observation;
 mod packet_buffer;
-mod picture_recovery;
 pub mod pipeline;
 mod receiver_state;
 mod trace_ledger;
@@ -42,17 +42,21 @@ mod timeline_projection_tests;
 pub(crate) use core::receiver_state_from_runtime;
 pub(crate) use core_body::ReceiveCoreBody;
 pub(crate) use core_runtime::RtcReceiveCore;
+pub(crate) use decode_gate::receiver_decode_context_from_stats;
 pub use decode_gate::{
     inspection_bootstrap_blocks_delta_continuation, inspection_bootstrap_reason,
-    keyframe_episode_response_detail, prior_output_continuation_allowed,
-    receiver_state_blocks_delta_continuation, resolve_inspection_admission,
+    keyframe_episode_response_detail, receiver_state_blocks_delta_continuation,
     should_block_non_keyframe_admission, DecodeCorruptionPolicy, DecodeGate, DecodeGateDecision,
     InspectionAdmission, ReceiverDecodeContext,
 };
 pub(crate) use engine::ReceiveEngine;
+pub(crate) use insert_gate::{
+    insert_decision_to_inspection_admission, insert_emit_permits_decode_without_bootstrap_ready,
+    recovery_keyframe_action_for_insert_decision, resolve_insert_decision, InsertContext,
+    InsertDecision,
+};
 pub use observation::ReceiverObservation;
 pub use packet_buffer::SequenceObserveOutcome;
-pub(crate) use picture_recovery::suppress_session_picture_recovery_action;
 pub(crate) use pipeline::build_rtc_receive_pipeline;
 pub(crate) use receiver_state::ReceiverState;
 pub use rtp_frame_assembler::{RtpAccessUnit, SyntheticMarkerBoundary};

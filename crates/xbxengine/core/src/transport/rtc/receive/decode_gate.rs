@@ -94,6 +94,7 @@ pub fn steady_displayed_idr_delta_admits(
         && is_recovery_delta_continuation_ready(inspection)
 }
 
+/// 单元测试与无 InsertContext 的调用方（ingress 主线用 `resolve_insert_decision`）。
 pub fn resolve_inspection_admission(
     inspection: &H264AccessUnitInspection,
     ctx: &ReceiverDecodeContext,
@@ -118,8 +119,6 @@ pub fn resolve_inspection_admission(
     if receiver_state_blocks_delta_continuation(ctx)
         || inspection_bootstrap_blocks_delta_continuation(inspection)
     {
-        // 已有 decode/displayed-idr 输出事实后，codec 元数据齐备的 delta 应本地接纳；
-        // receiver 仍标 WaitingKeyframe 时不应把整个 ingress 打进 await-anchor。
         if ctx.prior_output_established
             && !ctx.hard_gap_blocks_delta()
             && is_recovery_delta_continuation_ready(inspection)
@@ -144,11 +143,53 @@ pub fn resolve_inspection_admission(
     InspectionAdmission::AwaitRecoveryKeyframe
 }
 
-pub fn prior_output_continuation_allowed(
-    first_frame_acquired: bool,
-    is_blocking_non_keyframe_admission: bool,
-) -> bool {
-    first_frame_acquired && !is_blocking_non_keyframe_admission
+/// decode actor：由 runtime stats 重建 ingress 侧等价的 `ReceiverDecodeContext`。
+pub(crate) fn receiver_decode_context_from_stats(
+    stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> ReceiverDecodeContext {
+    use crate::transport::rtc::recovery::contract::{
+        displayed_idr_serving_from_stats, has_current_clean_anchor_from_stats,
+    };
+    let receiver_state = stats
+        .latest_video_receiver_observation
+        .as_ref()
+        .map(|obs| match obs.receiver_state.as_str() {
+            "waiting-keyframe" => ReceiverState::WaitingKeyframe,
+            "repairing" => ReceiverState::Repairing,
+            _ => ReceiverState::Receiving,
+        })
+        .unwrap_or(ReceiverState::Receiving);
+    let has_active_gap = stats
+        .latest_video_timeline_observation
+        .as_ref()
+        .and_then(|timeline| timeline.gap.as_ref())
+        .is_some();
+    let nack_exhausted = stats
+        .latest_video_receiver_observation
+        .as_ref()
+        .is_some_and(|obs| {
+            obs.nack_in_flight
+                && has_active_gap
+                && !matches!(receiver_state, ReceiverState::Repairing)
+        });
+    let first_frame_acquired = has_current_clean_anchor_from_stats(stats)
+        || stats.recovery_playback_recovered_at_ms.is_some()
+        || stats.latest_video_decode_ok_time_ms.is_some();
+    let displayed_idr_serving = displayed_idr_serving_from_stats(stats);
+    let prior_output_established = has_current_clean_anchor_from_stats(stats)
+        || displayed_idr_serving
+        || stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(|decode_ok_ms| (now_ms - decode_ok_ms).max(0.0) <= 2_000.0);
+    ReceiverDecodeContext {
+        receiver_state,
+        has_active_gap,
+        nack_exhausted,
+        first_frame_acquired,
+        prior_output_established,
+        displayed_idr_serving,
+    }
 }
 
 pub fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'static str {

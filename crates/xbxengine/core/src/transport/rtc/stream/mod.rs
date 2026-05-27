@@ -19,4 +19,4 @@ pub(crate) use packet_types::{
 pub(crate) use runtime_state::RtcMediaIngressSnapshot;
 pub(crate) use service::RtcMediaService;
 #[allow(unused_imports)]
-pub(crate) use sink::{RtcMediaSink, RtcRtcpSendPort};
+pub(crate) use sink::RtcMediaSink;

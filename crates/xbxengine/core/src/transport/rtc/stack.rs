@@ -45,9 +45,7 @@ fn map_video_recovery_request_result_to_command_status(
     result: &Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError>,
 ) -> CommandResultStatus {
     match result {
-        Ok(
-            VideoRecoveryRequestOutcome::RequestedPli | VideoRecoveryRequestOutcome::RequestedFir,
-        ) => CommandResultStatus::Succeeded,
+        Ok(VideoRecoveryRequestOutcome::RequestedPli) => CommandResultStatus::Succeeded,
         Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => {
             CommandResultStatus::Deferred {
                 reason: "familyDeferred:videoRtcpFeedbackTransportNotReady".to_string(),
@@ -405,7 +403,6 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         );
         match result {
             Ok(VideoRecoveryRequestOutcome::RequestedPli) => Ok(()),
-            Ok(VideoRecoveryRequestOutcome::RequestedFir) => Ok(()),
             Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => {
                 Err(XbxEngineRuntimeError::new(
                     "xbxEngineRtcVideoKeyframeDeferred:videoRtcpFeedbackTransportNotReady",

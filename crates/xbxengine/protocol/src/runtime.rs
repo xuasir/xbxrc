@@ -795,6 +795,18 @@ pub struct XbxEngineStatsDto {
     pub recovery_owner_reason: Option<String>,
     pub video_owner_source: Option<String>,
     pub video_owner_observed_at_ms: Option<f64>,
+    /// 派生恢复表面：`steady` / `repairing` / `await-idr` / `supply-break`。
+    #[serde(default)]
+    pub recovery_surface_phase: Option<String>,
+    /// 媒体供给主相位（L0 单轨）。
+    #[serde(default)]
+    pub media_supply_phase: Option<String>,
+    /// receive-local keyframe 尝试序号（trace `keyframeRequestOutcome`）。
+    #[serde(default)]
+    pub keyframe_request_outcome_seq: u64,
+    /// 派生解码健康（owner 决策用）。
+    #[serde(default)]
+    pub derived_decoder_health: Option<String>,
     pub video_health: Option<String>,
     #[serde(default)]
     pub chain_health: Option<String>,

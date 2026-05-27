@@ -20,11 +20,12 @@ use crate::{
 
 const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
-const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 4;
+const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 2;
 const D3D11VA_NO_OUTPUT_REBUILD_THRESHOLD: u32 = 2;
 const D3D11VA_NO_OUTPUT_MAX_REBUILD_ATTEMPTS: u32 = 1;
-const NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD: u32 = 4;
+const NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD: u32 = 2;
 const RECOVERING_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD: u32 = 2;
+const CONTINUATION_NO_OUTPUT_KEYFRAME_HINT_THRESHOLD: u32 = 1;
 // 首帧阶段硬解不出帧：不要死等（以毫秒窗作为上限）。
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS: f64 = 80.0;
 const LOCAL_DECODER_RESET_REPLAY_BARRIER_MS: f64 = 900.0;
@@ -293,6 +294,10 @@ pub(crate) struct XbxVideoDecodeState {
     mailbox_present_cadence_interval_ms: f64,
     /// TimedFallback + displayed-idr：允许 bootstrapMissingIdr 的 delta 进入解码器续播。
     timed_fallback_displayed_idr_bypass: bool,
+    /// 与 InsertGate Emit 对齐：ingress 已裁决可提交的 soft continuation。
+    insert_emit_bootstrap_bypass: bool,
+    /// nominal/recovering continuation 无输出 reset 后由 actor 写入 receive PLI hint。
+    pending_receive_keyframe_hint_at_ms: Option<f64>,
 }
 
 impl XbxVideoDecodeState {
@@ -350,7 +355,17 @@ impl XbxVideoDecodeState {
             mailbox_present_cadence_interval_ms:
                 crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
             timed_fallback_displayed_idr_bypass: false,
+            insert_emit_bootstrap_bypass: false,
+            pending_receive_keyframe_hint_at_ms: None,
         })
+    }
+
+    pub(crate) fn set_insert_emit_bootstrap_bypass(&mut self, bypass: bool) {
+        self.insert_emit_bootstrap_bypass = bypass;
+    }
+
+    pub(crate) fn take_pending_receive_keyframe_hint_at_ms(&mut self) -> Option<f64> {
+        self.pending_receive_keyframe_hint_at_ms.take()
     }
 
     /// 与 recovery 合同同步：TimedFallback 时打通 displayed-idr delta 解码续播。
@@ -360,10 +375,13 @@ impl XbxVideoDecodeState {
         now_ms: f64,
     ) {
         use crate::transport::rtc::recovery::contract::{
-            displayed_idr_serving_from_stats, recovery_timed_fallback_active_from_stats,
+            displayed_idr_serving_from_stats, has_current_clean_anchor_from_stats,
+            recovery_supply_break_active_from_stats, recovery_timed_fallback_active_from_stats,
         };
-        let bypass = recovery_timed_fallback_active_from_stats(stats, now_ms)
-            && displayed_idr_serving_from_stats(stats);
+        let bypass = displayed_idr_serving_from_stats(stats)
+            && (recovery_timed_fallback_active_from_stats(stats, now_ms)
+                || (has_current_clean_anchor_from_stats(stats)
+                    && recovery_supply_break_active_from_stats(stats, now_ms)));
         if bypass && !self.timed_fallback_displayed_idr_bypass {
             self.waiting_keyframe_continuation_deadline_ms =
                 Some(now_ms + TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_WINDOW_MS);
@@ -489,12 +507,23 @@ impl XbxVideoDecodeState {
                         &encoded_frame,
                         now_ms,
                     ));
-        let continuation_gate_bypassed = timed_fallback_bypass;
+        let continuation_gate_bypassed = timed_fallback_bypass || self.insert_emit_bootstrap_bypass;
         if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
             && !encoded_frame.h264.bootstrap_ready
             && !waiting_keyframe_continuation_allowed
             && !continuation_gate_bypassed
         {
+            debug_assert!(
+                !self.insert_emit_bootstrap_bypass,
+                "insertDecodeContractViolation: InsertGate Emit but decode bootstrap gate rejected"
+            );
+            if self.insert_emit_bootstrap_bypass {
+                crate::xbx_log_warn!(
+                    "[xbxengine][rtc] insertDecodeContractViolation rtpTs={} bootstrapReject={:?}",
+                    frame_rtp_timestamp,
+                    encoded_frame.h264.bootstrap_reject_reason
+                );
+            }
             if self.nominal_continuation_hw_no_output_resets > 0
                 && self.decoder_backend_is_hardware()
                 && self.should_recover_nominal_continuation_no_output(
@@ -665,6 +694,17 @@ impl XbxVideoDecodeState {
                 self.arm_waiting_keyframe_continuation(now_ms);
             }
             self.backend_no_output_streak = self.backend_no_output_streak.saturating_add(1);
+            if self.backend_no_output_streak >= CONTINUATION_NO_OUTPUT_KEYFRAME_HINT_THRESHOLD
+                && matches!(
+                    frame_bootstrap_reject_reason_kind,
+                    Some(
+                        H264BootstrapRejectReason::BootstrapMissingIdr
+                            | H264BootstrapRejectReason::NonIdrVcl
+                    )
+                )
+            {
+                self.pending_receive_keyframe_hint_at_ms = Some(now_ms);
+            }
             if self.decoder_backend_is_hardware() && self.latest_decoded_seq == 0 {
                 self.first_hardware_no_output_at_ms.get_or_insert(now_ms);
             }
@@ -1137,6 +1177,7 @@ impl XbxVideoDecodeState {
         self.decoded_output_mailbox_len() >= DECODE_OUTPUT_MAILBOX_CAPACITY
     }
 
+    #[cfg(test)]
     pub(crate) fn requeue_decoded_frame_front(&mut self, frame: DecodedFrame) {
         if self.decoded_inflight_current.is_none() {
             self.decoded_inflight_current = Some(frame);
@@ -1489,7 +1530,7 @@ impl XbxVideoDecodeState {
         recovery_state_before_decode: XbxVideoRecoveryState,
         frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
         recovery_epoch_tag: Option<u64>,
-        clean_anchor_commit_recovery_epoch: Option<u64>,
+        _clean_anchor_commit_recovery_epoch: Option<u64>,
         frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition,
     ) -> bool {
         matches!(
@@ -1539,8 +1580,26 @@ impl XbxVideoDecodeState {
         self.first_hardware_no_output_at_ms = None;
         self.d3d11va_no_output_rebuild_attempts = 0;
         self.clear_waiting_keyframe_continuation();
+        let continuation_unstick =
+            self.timed_fallback_displayed_idr_bypass || self.insert_emit_bootstrap_bypass;
+        if matches!(
+            transition_detail,
+            "nominalContinuationNoOutputReset" | "recoveringContinuationNoOutputReset"
+        ) && !continuation_unstick
+        {
+            self.pending_receive_keyframe_hint_at_ms = Some(now_ms);
+        }
+        let next_state = if continuation_unstick {
+            self.waiting_keyframe_continuation_deadline_ms =
+                Some(now_ms + TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_WINDOW_MS);
+            self.waiting_keyframe_continuation_frames_left =
+                TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_MAX_FRAMES;
+            XbxVideoRecoveryState::Recovering
+        } else {
+            XbxVideoRecoveryState::WaitingKeyframe
+        };
         self.transition_recovery_state(
-            XbxVideoRecoveryState::WaitingKeyframe,
+            next_state,
             XbxVideoRecoveryEvent::BackendFailureEscalated,
             transition_detail,
             None,
@@ -1768,7 +1827,7 @@ impl XbxVideoDecodeState {
         frame_parameter_sets_changed: bool,
         frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
         recovery_epoch_tag: Option<u64>,
-        clean_anchor_commit_recovery_epoch: Option<u64>,
+        _clean_anchor_commit_recovery_epoch: Option<u64>,
         frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition,
     ) -> &'static str {
         if continuation_gate_bypassed {
@@ -2021,6 +2080,8 @@ impl XbxVideoDecodeState {
             mailbox_present_cadence_interval_ms:
                 crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
             timed_fallback_displayed_idr_bypass: false,
+            insert_emit_bootstrap_bypass: false,
+            pending_receive_keyframe_hint_at_ms: None,
         }
     }
 

@@ -21,8 +21,8 @@ impl KeyframeRequester {
             _timing: timing,
             last_pli_at: None,
             consecutive_pli_without_idr: 0,
-            pli_retry_interval: Duration::from_millis(timing.keyframe_fallback_ms / 2),
-            fir_after_pli_count: 3,
+            pli_retry_interval: Duration::from_millis((timing.keyframe_fallback_ms / 4).max(24)),
+            fir_after_pli_count: 2,
         }
     }
 

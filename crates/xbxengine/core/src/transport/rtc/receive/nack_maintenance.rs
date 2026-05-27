@@ -71,8 +71,38 @@ impl RtcVideoFrameSource {
             .receive_core_mut()
             .receive_engine
             .poll_nack_maintenance(now, effective_rtt_ms);
+        const MAX_RECEIVER_LOCAL_NACK_BATCH: usize = 32;
+        const NACK_SPAN_KEYFRAME_ESCALATION_PACKETS: u32 = 96;
+        if poll.sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH {
+            let span_too_large = poll
+                .sequences
+                .first()
+                .zip(poll.sequences.last())
+                .is_some_and(|(first, last)| {
+                    last.wrapping_sub(*first) as u32 >= NACK_SPAN_KEYFRAME_ESCALATION_PACKETS
+                });
+            if span_too_large || poll.sequences.len() > 128 {
+                self.request_receiver_local_keyframe(
+                    "receiver-local-nack-gap-too-large",
+                    None,
+                    now_ms,
+                    false,
+                );
+                self.receive_core_mut()
+                    .receive_engine
+                    .nack_requester
+                    .on_keyframe_escalation_sent();
+                return;
+            }
+        }
         if !poll.sequences.is_empty() {
-            let max_retry = poll.retry_counts.iter().copied().max().unwrap_or(0);
+            let mut sequences = poll.sequences;
+            let mut retry_counts = poll.retry_counts;
+            if sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH {
+                sequences.truncate(MAX_RECEIVER_LOCAL_NACK_BATCH);
+                retry_counts.truncate(MAX_RECEIVER_LOCAL_NACK_BATCH);
+            }
+            let max_retry = retry_counts.iter().copied().max().unwrap_or(0);
             let frame_value = FrameValue::new(false, false, 12 * 1024);
             let budget_context = FrameBudgetContext::for_transport(
                 frame_value,
@@ -84,7 +114,7 @@ impl RtcVideoFrameSource {
                 FrameBudgetWindowSource::Transport,
             );
             let batch = NackBatch {
-                sequences: poll.sequences,
+                sequences,
                 retry_count: max_retry,
                 source: "receiverLocal",
                 frame_rtp_timestamp: None,

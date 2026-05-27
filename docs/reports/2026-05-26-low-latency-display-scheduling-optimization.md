@@ -104,8 +104,42 @@ python3 .agents/skills/analyze-runtime-logs/scripts/trace_midsegment_report.py r
 
 **验收**：合入后复采同场景；`trace_midsegment_report.py` 增加 recovering 连续 >5s、waiting-keyframe 下 reset 爆发门禁。
 
+## Steady Supply Present 收敛（2026-05-26）
+
+**目标**：在 latest-only + 低延迟不变前提下，仅当 **steady + decode≈28–32** 供给健康时，提高 present 兑现率（`decode_fps - present_fps` ≤5–6），并保持 `submit_to_present_ms` P95 <80ms。
+
+### 代码
+
+| 区域 | 变更 |
+|------|------|
+| `present_cadence.rs` | `present_pipeline_stressed_from_stats`、`resolve_stressed_release_interval_ms` |
+| `pacer/actor.rs` | stressed 时缩短 `release_interval_ms`（仍 latest-only） |
+| `native_video/mod.rs` | `finish_host_present_tick_guard_and_maybe_rerun`；layer / macOS wgpu tick **早退路径**补 rerun 链 |
+| `native_video/presenters.rs` | Windows wgpu tick 早退路径同样补 rerun |
+| `scheduling.test.rs` | `take_ready_frame_with_pending_never_returns_retained` |
+| `scripts/trace_midsegment_report.py` | `GLOBAL_LATENCY_GATE` + `STEADY_SUPPLY_GATE`（PASS/FAIL/SKIPPED）；minimal 下解析 `hostTiming` |
+
+### Phase 4（条件项）结论
+
+`render/actor.rs` 已在 renderer accept 后 **push** `push_render_frame_for_host_present`；`src-tauri` 不调用 `take_latest_render_frame` pull。**无需**本轮再改 runtime pull。
+
+### 基线脚本（改前 log）
+
+| trace | STEADY_SUPPLY | 备注 |
+|-------|---------------|------|
+| `1779781188198` | FAIL（gap/ready） | mid steady 100%；`submit_to_present` P95 54ms 已达标；主因 render overwrite + decode supersede |
+| `1779783888031` | SKIPPED | recovering 主导 |
+
+```bash
+python3 scripts/trace_midsegment_report.py runtime-logs/runtime-trace-<new>.jsonl
+cargo test -p xbxengine present_cadence --lib
+cargo test -p xbxrc --lib native_video::scheduling
+```
+
+**待办**：同场景复采 **`traceMode=normal`**、≥120s，目标 `STEADY_SUPPLY_GATE: PASS`。
+
 ## 后续
 
-1. 同场景复采 ≥120s trace（非 minimal），确认 Phase 0+1+6 门禁通过。
+1. 同场景复采 ≥120s trace（**normal**），确认 `STEADY_SUPPLY_GATE` + Phase 6 门禁通过。
 2. 若 submit 尖峰仍与 inspection 对齐，用 `inspectionPulseActive` 对照 `h264InspectionRejected` 时间线。
 3. Open Q2：面板区分 decode 供给 / present 节拍（可单独 UI 任务）。

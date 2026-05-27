@@ -2,7 +2,9 @@
 //! 仅依赖 `XbxEngineMediaRuntimeStats` 与 `RecoveryScenarioProfile` 既有字段，不引入平行时钟。
 
 use crate::api::backend::{XbxEngineAnchorCandidateState, XbxEngineMediaRuntimeStats};
-use crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats;
+use crate::transport::rtc::recovery::contract::{
+    derived_decoder_health_indicates_await_idr_or_supply_stall, has_current_clean_anchor_from_stats,
+};
 use crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal;
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
@@ -49,7 +51,7 @@ pub(crate) fn anchor_evidence_fresh_for_await_anchor(
     if continuation_only_anchor_missing_observation(stats, now_ms, fresh_ms, floor_at_ms) {
         return true;
     }
-    if stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+    if derived_decoder_health_indicates_await_idr_or_supply_stall(stats)
         && event_fresh(
             stats.video_decoder_recovery_state_changed_at_ms,
             now_ms,
@@ -172,12 +174,8 @@ pub(crate) fn recovery_anchor_evidence_trace_code(
     {
         return Some("receiverLocalContinuation".to_string());
     }
-    if stats
-        .video_decoder_recovery_state
-        .as_deref()
-        .is_some_and(|s| s == "waiting-keyframe")
-    {
-        return Some("decoderWaitingKeyframe".to_string());
+    if derived_decoder_health_indicates_await_idr_or_supply_stall(stats) {
+        return Some("decoderAwaitIdr".to_string());
     }
     if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
         if !inspection.bootstrap_ready {

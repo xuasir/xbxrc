@@ -309,7 +309,7 @@ fn repeated_hardware_backend_no_output_falls_back_to_software_decoder() {
     let decoder = ScriptedHardwareDecoder {
         backend_name: "ffmpeg-videotoolbox",
         decode_calls: Arc::new(AtomicUsize::new(0)),
-        scripted_results: VecDeque::from([Ok(None), Ok(None), Ok(None), Ok(None)]),
+        scripted_results: VecDeque::from([Ok(None), Ok(None)]),
     };
     let software_decode_calls_for_factory = software_decode_calls.clone();
     let software_decoder_factory = Box::new(move || {
@@ -354,7 +354,7 @@ fn repeated_hardware_backend_no_output_falls_back_to_software_decoder() {
         software_decoder_factory,
     );
 
-    for observed_at_ms in [1_000.0, 1_016.0, 1_032.0, 1_048.0] {
+    for observed_at_ms in [1_000.0, 1_016.0] {
         assert!(state
             .process_encoded_frame(make_encoded_frame(true), observed_at_ms)
             .is_none());
@@ -469,7 +469,7 @@ fn d3d11va_backend_no_output_rebuild_path_is_disabled_off_windows() {
     let decoder = ScriptedHardwareDecoder {
         backend_name: "ffmpeg-d3d11va",
         decode_calls: Arc::new(AtomicUsize::new(0)),
-        scripted_results: VecDeque::from([Ok(None), Ok(None), Ok(None), Ok(None)]),
+        scripted_results: VecDeque::from([Ok(None), Ok(None)]),
     };
     let reset_calls_for_factory = reset_calls.clone();
     let decoder_factory = Box::new(move || {
@@ -512,7 +512,7 @@ fn d3d11va_backend_no_output_rebuild_path_is_disabled_off_windows() {
         software_decoder_factory,
     );
 
-    for observed_at_ms in [10_000.0, 10_016.0, 10_032.0, 10_048.0] {
+    for observed_at_ms in [10_000.0, 10_016.0] {
         assert!(state
             .process_encoded_frame(make_encoded_frame(true), observed_at_ms)
             .is_none());
@@ -737,13 +737,13 @@ fn waiting_keyframe_after_software_fallback_does_not_allow_unarmed_continuation_
         software_decoder_factory,
     );
 
-    for step in 0..4 {
+    for step in 0..2 {
         assert!(state
             .process_encoded_frame(make_encoded_frame(true), 3_000.0 + f64::from(step))
             .is_none());
     }
 
-    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 4);
+    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 2);
     assert_eq!(software_decode_calls.load(Ordering::Relaxed), 0);
     assert_eq!(
         state.recovery_state(),
@@ -839,13 +839,13 @@ fn hardware_backend_no_output_before_first_frame_falls_back_to_software_decoder(
         software_decoder_factory,
     );
 
-    for step in 0..4 {
+    for step in 0..2 {
         assert!(state
             .process_encoded_frame(make_encoded_frame(true), 4_000.0 + f64::from(step))
             .is_none());
     }
 
-    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 4);
+    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 2);
     assert_eq!(state.decoder_backend_name(), "ffmpeg-software");
     assert_eq!(state.decoder_reset_count(), 1);
     let probe = state
@@ -943,7 +943,7 @@ fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
     assert_eq!(state.decoded_frame_queue_len(), 1);
     assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
 
-    for step in 0..4 {
+    for step in 0..2 {
         assert!(state
             .process_encoded_frame(
                 make_non_idr_continuation_frame(5_100 + step),
@@ -952,7 +952,7 @@ fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
             .is_none());
     }
 
-    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 5);
+    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 3);
     assert_eq!(state.decoder_reset_count(), 1);
     assert_eq!(state.decoder_backend_name(), "ffmpeg-videotoolbox");
     assert_eq!(
@@ -999,8 +999,6 @@ fn software_nominal_continuation_no_output_resets_decoder() {
             })),
             Ok(None),
             Ok(None),
-            Ok(None),
-            Ok(None),
         ]),
     };
     let reset_calls_for_factory = reset_calls.clone();
@@ -1029,7 +1027,7 @@ fn software_nominal_continuation_no_output_resets_decoder() {
     assert_eq!(state.decoded_frame_queue_len(), 1);
     assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
 
-    for step in 0..4 {
+    for step in 0..2 {
         assert!(state
             .process_encoded_frame(
                 make_non_idr_continuation_frame(6_100 + step),
@@ -1038,7 +1036,7 @@ fn software_nominal_continuation_no_output_resets_decoder() {
             .is_none());
     }
 
-    assert_eq!(decode_calls.load(Ordering::Relaxed), 5);
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 3);
     assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
     assert_eq!(state.decoder_backend_name(), "replacement");
     assert_eq!(state.decoder_reset_count(), 1);
@@ -3363,7 +3361,6 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
     let mut source = crate::transport::rtc::receive::RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        Arc::new(crate::media::video::test_fixtures::NoopRtcpPort),
         source_runtime_stats.clone(),
         16,
         Duration::from_millis(10),

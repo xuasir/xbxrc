@@ -139,8 +139,9 @@ fn runtime_summary_uses_remote_profile_input_and_owner_state_as_main_view() {
 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     let summary = dto.runtime_summary.expect("runtime summary");
-    assert!(summary
-        .starts_with("cloudGaming+cloudHighRtt/recovering/steady/rebuilding-supply/recovering"));
+    assert!(summary.starts_with(
+        "cloudGaming+cloudHighRtt/recovering/steady/rebuilding-supply/recovering/-/-"
+    ));
 }
 
 #[test]
@@ -386,7 +387,7 @@ fn runtime_summary_and_issue_chain_use_local_self_healing_lifecycle_when_present
 
     assert_eq!(
         dto.runtime_summary.as_deref(),
-        Some("cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | awaitKeyframe:hostIdrOrCleanAnchor")
+        Some("cloudGaming/local-self-healing/steady/rebuilding-supply/recovering/-/- | awaitKeyframe:hostIdrOrCleanAnchor")
     );
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
@@ -395,6 +396,31 @@ fn runtime_summary_and_issue_chain_use_local_self_healing_lifecycle_when_present
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
         Some("phase:local-self-healing:receiverWaitingKeyframe")
+    );
+}
+
+#[test]
+fn runtime_summary_prefers_recovery_surface_phase_in_notes() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        baseline_remote_profile: Some("cloudGaming".to_string()),
+        effective_remote_profile_label: Some("cloudGaming".to_string()),
+        session_phase: Some("local-self-healing".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        video_owner_state: Some("supply-starved".to_string()),
+        recovery_surface_phase: Some("supply-break".to_string()),
+        derived_decoder_health: Some("supply-stalled".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(
+        dto.runtime_summary.as_deref(),
+        Some(
+            "cloudGaming/local-self-healing/steady/supply-starved/displaySupplyStarved/supply-break/supply-stalled | surface:supply-break | decoderHealth:supply-stalled"
+        )
     );
 }
 
@@ -417,7 +443,7 @@ fn runtime_summary_surfaces_bootstrap_in_flight_note() {
     assert_eq!(
         dto.runtime_summary.as_deref(),
         Some(
-            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | recoverySustaining:cleanAnchorHolding"
+            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering/-/- | recoverySustaining:cleanAnchorHolding"
         )
     );
     assert_eq!(
@@ -445,7 +471,7 @@ fn runtime_summary_surfaces_recovery_sustaining_note() {
     assert_eq!(
         dto.runtime_summary.as_deref(),
         Some(
-            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | recoverySustaining:cleanAnchorHolding"
+            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering/-/- | recoverySustaining:cleanAnchorHolding"
         )
     );
     assert_eq!(
@@ -1406,7 +1432,7 @@ fn runtime_summary_profile_slot_prefers_runtime_profile_over_transport_policy() 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.runtime_summary.as_deref(),
-        Some("relayGaming+steady/steady/steady/stable-serving/displaySupplyStarved")
+        Some("relayGaming+steady/steady/steady/stable-serving/displaySupplyStarved/-/-")
     );
 }
 
@@ -1429,7 +1455,7 @@ fn runtime_summary_profile_slot_does_not_fallback_to_transport_policy_only() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.runtime_summary.as_deref(),
-        Some("homeLanGaming+steady/steady/steady/stable-serving/displaySupplyStarved")
+        Some("homeLanGaming+steady/steady/steady/stable-serving/displaySupplyStarved/-/-")
     );
 }
 

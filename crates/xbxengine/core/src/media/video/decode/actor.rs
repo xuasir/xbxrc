@@ -439,6 +439,24 @@ fn run_decode_loop(
                     let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
                     runtime_stats.read(|stats| {
                         decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
+                        let decode_ctx = crate::transport::rtc::receive::receiver_decode_context_from_stats(
+                            stats, now_ms,
+                        );
+                        let effective_rtt_ms = stats.recovery_effective_rtt_ms.unwrap_or(200.0);
+                        let insert_ctx =
+                            crate::transport::rtc::receive::InsertContext::from_runtime(
+                                decode_ctx,
+                                stats,
+                                now_ms,
+                                effective_rtt_ms,
+                            );
+                        let bypass =
+                            crate::transport::rtc::receive::insert_emit_permits_decode_without_bootstrap_ready(
+                                &frame.h264,
+                                &insert_ctx,
+                                crate::transport::rtc::receive::DecodeCorruptionPolicy::StandardWebRtc,
+                            );
+                        decode_state.set_insert_emit_bootstrap_bypass(bypass);
                     });
                     let frame_rtp_timestamp = frame.rtp_timestamp;
                     let frame_class = EncodedFrameRecoveryClass::from_frame(&frame);
@@ -484,7 +502,20 @@ fn run_decode_loop(
                         continue;
                     }
 
-                    if let Some(dropped_frame) = decode_state.process_encoded_frame(frame, now_ms) {
+                    let superseded_after_decode = decode_state.process_encoded_frame(frame, now_ms);
+                    if let Some(hint_at_ms) =
+                        decode_state.take_pending_receive_keyframe_hint_at_ms()
+                    {
+                        runtime_stats.update(|stats| {
+                            stats.recovery_receive_keyframe_hint_at_ms = Some(
+                                hint_at_ms
+                                    .max(stats.recovery_receive_keyframe_hint_at_ms.unwrap_or(0.0)),
+                            );
+                            stats.latest_observation_label =
+                                Some("nominalContinuationReceiveKeyframeHint".to_string());
+                        });
+                    }
+                    if let Some(dropped_frame) = superseded_after_decode {
                         let output_queue_depth = decode_state.decoded_frame_queue_len();
                         record_pipeline_frame_drop(
                             &runtime_stats,
@@ -648,7 +679,6 @@ enum PendingDecodedSubmitResult {
     Submitted,
     /// pacer 队列满时在显示边界丢弃；解码线程继续拉 ingress，不 requeue 阻塞。
     Coalesced(crate::media::video::types::DecodedFrame),
-    Backpressure(crate::media::video::types::DecodedFrame),
     Disconnected(crate::media::video::types::DecodedFrame),
 }
 
@@ -657,7 +687,6 @@ impl PendingDecodedSubmitResult {
         match self {
             Self::Submitted => "submitted",
             Self::Coalesced(_) => "coalesced",
-            Self::Backpressure(_) => "backpressure",
             Self::Disconnected(_) => "disconnected",
         }
     }
@@ -752,10 +781,6 @@ where
                         frame.surface.frame_seq, frame.rtp_timestamp,
                     ));
                 });
-            }
-            PendingDecodedSubmitResult::Backpressure(frame) => {
-                decode_state.requeue_decoded_frame_front(frame);
-                return None;
             }
             PendingDecodedSubmitResult::Disconnected(frame) => {
                 return Some(frame);
@@ -1125,59 +1150,6 @@ mod tests {
     }
 
     #[test]
-    fn pending_decoded_output_keeps_frame_on_backpressure_until_retry_succeeds() {
-        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
-        // mailbox: 先让 frame=1 进入 inflight，然后再放入 latest candidate=2
-        state.enqueue_decoded_frame_for_test(make_render_frame(1));
-        let inflight = state.pop_decoded_frame(0.0).expect("inflight should exist");
-        state.requeue_decoded_frame_front(inflight);
-        state.enqueue_decoded_frame_for_test(make_render_frame(2));
-
-        let mut submit_calls = 0usize;
-        let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
-            crate::XbxEngineMediaRuntimeStats::default(),
-        )));
-        let first_pass =
-            drain_pending_decoded_output_with_submit(&mut state, &runtime_stats, |frame| {
-                submit_calls += 1;
-                // 第一次必须先尝试提交 inflight=1
-                if submit_calls == 1 {
-                    assert_eq!(frame.surface.frame_seq, 1);
-                }
-                if submit_calls == 1 {
-                    PendingDecodedSubmitResult::Backpressure(frame)
-                } else {
-                    PendingDecodedSubmitResult::Submitted
-                }
-            });
-
-        assert!(first_pass.is_none());
-        assert_eq!(submit_calls, 1);
-        assert!(state.has_decoded_frame());
-        assert_eq!(
-            state
-                .peek_decoded_frame()
-                .map(|frame| frame.surface.frame_seq),
-            Some(1)
-        );
-
-        let second_pass =
-            drain_pending_decoded_output_with_submit(&mut state, &runtime_stats, |frame| {
-                submit_calls += 1;
-                if submit_calls == 2 {
-                    assert_eq!(frame.surface.frame_seq, 1);
-                } else {
-                    assert_eq!(frame.surface.frame_seq, 2);
-                }
-                PendingDecodedSubmitResult::Submitted
-            });
-
-        assert!(second_pass.is_none());
-        assert_eq!(submit_calls, 3);
-        assert!(!state.has_decoded_frame());
-    }
-
-    #[test]
     fn pending_decoded_output_reports_disconnect_without_silently_requeueing() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         // mailbox: 先让 2 进入 inflight，然后再放入 latest=3
@@ -1278,7 +1250,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_pacer_submit_observation_records_backpressure_and_submit() {
+    fn decode_pacer_submit_observation_records_coalesced_drop() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_for_test(make_render_frame(7));
 
@@ -1288,85 +1260,15 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         let first = drain_pending_decoded_output_with_submit(&mut state, &sink, |frame| {
-            PendingDecodedSubmitResult::Backpressure(frame)
+            PendingDecodedSubmitResult::Coalesced(frame)
         });
         assert!(first.is_none());
-        {
-            let stats = runtime_stats.lock().expect("runtime stats lock");
-            assert_eq!(
-                stats.latest_observation_label.as_deref(),
-                Some("decodePacerSubmit")
-            );
-            let summary = stats
-                .latest_observation_summary
-                .as_deref()
-                .expect("backpressure summary");
-            assert!(summary.contains("result=backpressure"));
-            assert!(summary.contains("frameSeq=7"));
-        }
-
-        let second = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
-            PendingDecodedSubmitResult::Submitted
-        });
-        assert!(second.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(
             stats.latest_observation_label.as_deref(),
-            Some("decodePacerSubmit")
+            Some("decodePacerSubmitCoalesced")
         );
-        let summary = stats
-            .latest_observation_summary
-            .as_deref()
-            .expect("submit summary");
-        assert!(summary.contains("result=submitted"));
-        assert!(summary.contains("frameSeq=7"));
-    }
-
-    #[test]
-    fn pending_displayed_idr_waits_until_submit_succeeds_after_backpressure() {
-        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
-        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
-
-        let runtime_stats = Arc::new(std::sync::Mutex::new(
-            crate::XbxEngineMediaRuntimeStats::default(),
-        ));
-        let sink = RuntimeStatsSink::new(runtime_stats.clone());
-        sink.begin_transport_recovery_episode(10.0);
-        sink.record_picture_recovery_episode_requested(
-            1001,
-            Some("receiverWaitingKeyframe".to_string()),
-            100.0,
-            None,
-        );
-        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
-        sink.record_picture_recovery_episode_response_observed(
-            150.0,
-            Some(1),
-            true,
-            "firstAcceptedIdr",
-            Some(11),
-            None,
-            false,
-            false,
-        );
-        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
-
-        let first = drain_pending_decoded_output_with_submit(&mut state, &sink, |frame| {
-            PendingDecodedSubmitResult::Backpressure(frame)
-        });
-        assert!(first.is_none());
-        let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert!(stats.latest_anchor_candidate_ledger.is_none());
-        drop(stats);
-
-        let second = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
-            PendingDecodedSubmitResult::Submitted
-        });
-        assert!(second.is_none());
-        let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
+        assert!(!state.has_decoded_frame());
     }
 
     #[test]

@@ -1,5 +1,4 @@
 use crate::api::runtime::XbxEngineRuntimeConfig;
-use crate::media::video::test_fixtures::NoopRtcpPort;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::facts::{
     ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
@@ -22,7 +21,7 @@ use crate::transport::rtc::stream::packet_types::{
     MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
     RtcVideoRtpPacket,
 };
-use crate::transport::rtc::stream::sink::{RtcMediaSink, RtcRtcpSendPort};
+use crate::transport::rtc::stream::sink::RtcMediaSink;
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoTrackStatus};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -51,11 +50,9 @@ pub(crate) fn build_source_with_runtime_stats(
     rx: tokio::sync::mpsc::Receiver<RtcVideoRtpPacket>,
     transport_observation_tx: tokio::sync::mpsc::UnboundedSender<TransportObservation>,
 ) -> RtcVideoFrameSource {
-    let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort);
     let source = RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        rtcp_port,
         runtime_stats,
         16,
         Duration::from_millis(10),

@@ -15,7 +15,6 @@ use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
 };
 use crate::transport::rtc::stream::packet_types::RtcVideoRtpPacket;
-use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use xbxengine_protocol::XbxEngineTransportStateDto;
 
 use crate::transport::rtc::recovery::contract::has_current_transport_await_issue_from_stats;
@@ -41,7 +40,6 @@ use crate::transport::rtc::stream::adapter_types::{
 pub struct RtcVideoFrameSource {
     pub(crate) rx: tokio::sync::mpsc::Receiver<RtcVideoRtpPacket>,
     pub(crate) transport_observation_tx: tokio::sync::mpsc::UnboundedSender<TransportObservation>,
-    pub(crate) _rtcp_port: Arc<dyn RtcRtcpSendPort>,
     pub(crate) runtime_stats: RuntimeStatsSink,
     pub(crate) _max_late_packets: u16,
     pub(crate) _jitter_buffer_max_delay: Duration,
@@ -128,7 +126,6 @@ impl RtcVideoFrameSource {
     pub fn new(
         rx: tokio::sync::mpsc::Receiver<RtcVideoRtpPacket>,
         transport_observation_tx: tokio::sync::mpsc::UnboundedSender<TransportObservation>,
-        rtcp_port: Arc<dyn RtcRtcpSendPort>,
         runtime_stats: Arc<std::sync::Mutex<XbxEngineMediaRuntimeStats>>,
         max_late_packets: u16,
         jitter_buffer_min_delay: Duration,
@@ -149,7 +146,6 @@ impl RtcVideoFrameSource {
         let source = Self {
             rx,
             transport_observation_tx,
-            _rtcp_port: rtcp_port,
             runtime_stats: RuntimeStatsSink::new(runtime_stats),
             _max_late_packets: max_late_packets,
             _jitter_buffer_max_delay: jitter_buffer_max_delay,
@@ -604,9 +600,12 @@ impl RtcVideoFrameSource {
             ));
         }
         self.runtime_stats.update(|stats| {
+            stats.keyframe_request_outcome_seq =
+                stats.keyframe_request_outcome_seq.saturating_add(1);
             stats.latest_observation_label = Some("keyframeRequestOutcome".to_string());
             stats.latest_observation_summary = Some(format!(
-                "source={source_event} soft={soft} outcome={outcome_name}"
+                "seq={} source={source_event} soft={soft} outcome={outcome_name}",
+                stats.keyframe_request_outcome_seq
             ));
         });
         self.publish_receiver_observation(now_ms, None);
@@ -875,7 +874,6 @@ pub(crate) const UINT16SIZE_HALF: u16 = 1 << 15;
 
 pub(crate) fn build_rtc_video_frame_source(
     ingress_capacity: usize,
-    rtcp_port: Arc<dyn RtcRtcpSendPort>,
     runtime_stats: Arc<std::sync::Mutex<XbxEngineMediaRuntimeStats>>,
     max_late_packets: u16,
     jitter_buffer_min_delay: Duration,
@@ -894,7 +892,6 @@ pub(crate) fn build_rtc_video_frame_source(
     let mut source = RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        rtcp_port,
         runtime_stats.clone(),
         max_late_packets,
         jitter_buffer_min_delay,

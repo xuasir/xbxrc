@@ -5,7 +5,6 @@ use tokio::time::Duration;
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::capability::ConnectionRtcpCapability;
 use crate::transport::rtc::connection::RtcConnectionService;
 use crate::transport::rtc::receive::build_rtc_receive_pipeline;
 use crate::transport::rtc::stream::audio::{
@@ -110,10 +109,6 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         let video_pipeline = webrtc.video_pipeline;
         let (video_sink, frame_sources) = build_rtc_receive_pipeline(
             8192,
-            Arc::new(ConnectionRtcpCapability::new(
-                self.connection.clone(),
-                self.runtime_stats.clone(),
-            )),
             self.runtime_stats.clone(),
             self.connection.clone(),
             video_pipeline.jitter_buffer_max_packets.max(64),

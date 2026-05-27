@@ -104,14 +104,16 @@ impl DisplayedIdrFastPathWindow {
             self.path_c_prior_bucket_host_zero = false;
             return None;
         }
-        if self
-            .last_trigger_at_ms
-            .is_some_and(|at| (now_ms - at).max(0.0) < DISPLAYED_IDR_FAST_PATH_COOLDOWN_MS)
+        let bucket = self.bucket(stats);
+        let timed_fallback_active = recovery_timed_fallback_active_from_stats(stats, now_ms);
+        if !timed_fallback_active
+            && self
+                .last_trigger_at_ms
+                .is_some_and(|at| (now_ms - at).max(0.0) < DISPLAYED_IDR_FAST_PATH_COOLDOWN_MS)
         {
             return None;
         }
 
-        let bucket = self.bucket(stats);
         if path_d(stats, &bucket, now_ms) {
             self.last_trigger_at_ms = Some(now_ms);
             return Some(DisplayedIdrFastPathKind::PathD);
@@ -208,7 +210,10 @@ impl DisplayedIdrFastPathWindow {
     }
 
     fn sync_decoder_waiting(&mut self, stats: &XbxEngineMediaRuntimeStats, now_ms: f64) {
-        let waiting = stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
+        let waiting = crate::transport::rtc::recovery::contract::derived_decoder_health_indicates_await_idr_or_supply_stall(
+            stats,
+        );
+        let _ = now_ms;
         if waiting && !self.edges.last_decoder_waiting {
             self.wkf_events.push_back(now_ms);
         }
@@ -235,21 +240,6 @@ impl DisplayedIdrFastPathWindow {
             .gap_max_in_window
             .max(estimate_gap_rtp_delta_from_stats(stats));
     }
-}
-
-pub(crate) fn resolve_displayed_idr_fast_path_kind(
-    bucket: &DisplayedIdrFastPathBucket,
-) -> Option<DisplayedIdrFastPathKind> {
-    if hard_exclude_fast_path(bucket) {
-        return None;
-    }
-    if path_a(bucket) {
-        return Some(DisplayedIdrFastPathKind::PathA);
-    }
-    if path_b(bucket) {
-        return Some(DisplayedIdrFastPathKind::PathB);
-    }
-    None
 }
 
 pub(crate) fn resolve_displayed_idr_fast_path_kind_with_path_c_prior(
@@ -317,7 +307,9 @@ fn path_d(
     if recovery_timed_fallback_active_from_stats(stats, now_ms) {
         return true;
     }
-    if stats.video_decoder_recovery_state.as_deref() != Some("waiting-keyframe") {
+    if !crate::transport::rtc::recovery::contract::derived_decoder_health_indicates_await_idr_or_supply_stall(
+        stats,
+    ) {
         return false;
     }
     if bucket.submit_max < DISPLAYED_IDR_FAST_PATH_PATH_D_SUBMIT_AGE_MS {
@@ -404,7 +396,10 @@ mod tests {
     #[test]
     fn path_b_hits_freeze_onset_bucket() {
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(0, 5, 8, 6, 110, 0, 4_238.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(0, 5, 8, 6, 110, 0, 4_238.0),
+                false,
+            ),
             Some(DisplayedIdrFastPathKind::PathB)
         );
     }
@@ -412,7 +407,10 @@ mod tests {
     #[test]
     fn path_b_hits_second_freeze_with_lower_nack() {
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(0, 5, 6, 8, 46, 0, 2_000.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(0, 5, 6, 8, 46, 0, 2_000.0),
+                false,
+            ),
             Some(DisplayedIdrFastPathKind::PathB)
         );
     }
@@ -420,11 +418,17 @@ mod tests {
     #[test]
     fn spike_and_precursor_do_not_hit() {
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(2, 1, 0, 0, 44, 0, 305.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(2, 1, 0, 0, 44, 0, 305.0),
+                false,
+            ),
             None
         );
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(2, 0, 1, 0, 97, 0, 50.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(2, 0, 1, 0, 97, 0, 50.0),
+                false,
+            ),
             None
         );
     }
@@ -432,11 +436,17 @@ mod tests {
     #[test]
     fn path_a_requires_host_stop_and_submit() {
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(0, 4, 8, 6, 50, 65_529, 14_000.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(0, 4, 8, 6, 50, 65_529, 14_000.0),
+                false,
+            ),
             Some(DisplayedIdrFastPathKind::PathA)
         );
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(2, 1, 0, 0, 46, 65_529, 50.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(2, 1, 0, 0, 46, 65_529, 50.0),
+                false,
+            ),
             None
         );
     }
@@ -455,7 +465,10 @@ mod tests {
     #[test]
     fn healthy_bucket_excluded() {
         assert_eq!(
-            resolve_displayed_idr_fast_path_kind(&bucket(2, 0, 0, 0, 6, 0, 105.0)),
+            resolve_displayed_idr_fast_path_kind_with_path_c_prior(
+                &bucket(2, 0, 0, 0, 6, 0, 105.0),
+                false,
+            ),
             None
         );
     }

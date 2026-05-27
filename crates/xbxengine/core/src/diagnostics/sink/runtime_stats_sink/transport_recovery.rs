@@ -157,42 +157,6 @@ impl RuntimeStatsSink {
         });
     }
 
-    /// 测试与遗留调用入口：内部转到 `record_displayed_idr_fact`。
-    pub(crate) fn record_transport_clean_anchor_with_rtp(
-        &self,
-        observed_at_ms: f64,
-        source_event: &str,
-        rtp_timestamp: Option<u32>,
-        frame_seq: Option<u64>,
-    ) {
-        if source_event == "test-clean-anchor" {
-            let rtp_timestamp = rtp_timestamp.unwrap_or(1);
-            self.record_pending_displayed_idr_rtp(rtp_timestamp);
-            self.record_displayed_idr_fact(observed_at_ms, rtp_timestamp, frame_seq);
-            return;
-        }
-        let Some(rtp_timestamp) = rtp_timestamp else {
-            return;
-        };
-        self.record_displayed_idr_fact(observed_at_ms, rtp_timestamp, frame_seq);
-    }
-
-    pub(crate) fn invalidate_current_transport_clean_anchor(
-        &self,
-        observed_at_ms: f64,
-        reason: &str,
-    ) -> bool {
-        let mut invalidated = false;
-        self.update(|stats| {
-            invalidated = Self::apply_invalidate_current_transport_clean_anchor(
-                stats,
-                observed_at_ms,
-                reason,
-            );
-        });
-        invalidated
-    }
-
     pub(crate) fn complete_transport_recovery_after_stable_settle(&self, observed_at_ms: f64) {
         self.update(|stats| {
             Self::apply_complete_transport_recovery_episode(

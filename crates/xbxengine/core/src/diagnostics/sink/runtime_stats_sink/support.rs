@@ -44,6 +44,7 @@ pub(super) fn upsert_picture_recovery_episode(
     episode
 }
 
+#[cfg(test)]
 pub(super) fn reuse_active_transport_recovery_episode_id(
     stats: &XbxEngineMediaRuntimeStats,
     request_reason: Option<&str>,
@@ -559,36 +560,6 @@ pub(super) fn host_display_rtp_qualifies_for_fresh_anchor(
     stats.recovery_pending_displayed_idr_rtp == Some(displayed_rtp)
 }
 
-pub(super) fn find_transport_await_episode_candidate_by_id(
-    stats: &XbxEngineMediaRuntimeStats,
-    episode_id: u64,
-) -> Option<XbxEngineKeyframeRequestEpisodeObservation> {
-    collect_keyframe_episode_candidates(stats)
-        .into_iter()
-        .find(|episode| {
-            episode.episode_id == episode_id
-                && keyframe_episode_observability_active(episode)
-                && request_reason_is_transport_recovery_keyframe_family(
-                    episode.request_reason.as_deref(),
-                )
-        })
-}
-
-pub(super) fn latest_transport_recovery_keyframe_episode_id(
-    stats: &XbxEngineMediaRuntimeStats,
-) -> Option<u64> {
-    stats
-        .latest_keyframe_request_episode
-        .as_ref()
-        .filter(|episode| {
-            keyframe_episode_observability_active(episode)
-                && request_reason_is_transport_recovery_keyframe_family(
-                    episode.request_reason.as_deref(),
-                )
-        })
-        .map(|episode| episode.episode_id)
-}
-
 pub(super) fn current_transport_recovery_keyframe_episode_snapshot(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> Option<XbxEngineKeyframeRequestEpisodeObservation> {
@@ -736,23 +707,6 @@ pub(super) fn inspection_matches_transport_recovery_continuation_family(
         return false;
     }
     transport_recovery_serviceable_continuation(observation)
-}
-
-pub(super) fn has_serviceable_continuation_visible_for_submission(
-    stats: &XbxEngineMediaRuntimeStats,
-    episode: &XbxEngineKeyframeRequestEpisodeObservation,
-    observed_at_ms: f64,
-) -> bool {
-    stats
-        .latest_h264_inspection_observation
-        .as_ref()
-        .is_some_and(|inspection| {
-            inspection.bound_episode_id == Some(episode.episode_id)
-                && inspection.observed_at_ms <= observed_at_ms
-                && transport_await_episode_matches_serviceable_continuation(
-                    stats, episode, inspection,
-                )
-        })
 }
 
 pub(super) fn classify_h264_reject(
@@ -923,46 +877,4 @@ pub(super) fn emit_picture_recovery_closure_probe(
         recovery_has_clean_anchor,
         probe_clean_anchor
     );
-}
-#[cfg(test)]
-pub(crate) fn expire_latest_picture_recovery_episode_if_unsent(
-    stats: &mut XbxEngineMediaRuntimeStats,
-    observed_at_ms: f64,
-) -> bool {
-    let transport_recovery_epoch = stats.transport_recovery_epoch;
-    let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
-    let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
-    let mut updated_episode = None;
-    let mut latest_summary = None;
-    if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
-        if episode.sent_at_ms.is_some()
-            || episode.status != "requested"
-            || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
-        {
-            return false;
-        }
-        episode.status_detail = Some("expiredUnsent".to_string());
-        episode.status = "expired-unsent".to_string();
-        episode.response_verdict = Some("unsentExpired".to_string());
-        apply_keyframe_episode_lifecycle_field(
-            transport_recovery_epoch,
-            video_anchor_clean_epoch,
-            video_anchor_clean_observed_at_ms,
-            episode,
-        );
-        latest_summary = Some(format!(
-            "episodeId={} requestedAtMs={:.1} observedAtMs={:.1}",
-            episode.episode_id, episode.requested_at_ms, observed_at_ms
-        ));
-        updated_episode = Some(episode.clone());
-    }
-    if latest_summary.is_some() {
-        stats.latest_observation_label = Some("keyframeRequestEpisodeUnsentExpired".to_string());
-        stats.latest_observation_summary = latest_summary;
-    }
-    if let Some(episode) = updated_episode {
-        sync_recent_picture_recovery_episode(stats, episode);
-        return true;
-    }
-    false
 }

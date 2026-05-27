@@ -150,6 +150,7 @@ pub(super) struct RuntimeTraceObservationState {
     twcc_observation_state: Option<String>,
     latest_observation_label: Option<String>,
     latest_observation_summary: Option<String>,
+    keyframe_request_outcome_seq: u64,
     latest_target_remb_action: Option<String>,
     latest_target_remb_summary: Option<String>,
     timeline_chain_state: Option<String>,
@@ -268,6 +269,11 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "lastActionAtMs": stats.last_recovery_action_at_ms,
             "lastReason": stats.last_recovery_reason,
             "reconnectTriggerSource": stats.reconnect_trigger_source,
+            "recoverySurface": stats.recovery_surface_phase,
+            "mediaSupplyPhase": stats.media_supply_phase,
+            "derivedDecoderHealth": stats.derived_decoder_health,
+            "submitAgeMs": stats.submit_age_ms,
+            "decodeAgeMs": stats.decode_age_ms,
             "decoderState": stats.video_decoder_recovery_state,
             "decoderEvent": stats.video_decoder_recovery_event,
             "decoderDetail": stats.video_decoder_recovery_detail,
@@ -1962,6 +1968,20 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
+    if stats.keyframe_request_outcome_seq != observation_state.keyframe_request_outcome_seq {
+        observation_state.keyframe_request_outcome_seq = stats.keyframe_request_outcome_seq;
+        runtime_trace.record_event(
+            "xbxengine",
+            "keyframeRequestOutcome",
+            session_id,
+            json!({
+                "seq": stats.keyframe_request_outcome_seq,
+                "summary": stats.latest_observation_summary,
+                "mediaSupplyPhase": stats.media_supply_phase,
+            }),
+        );
+    }
+
     if observation_state.latest_observation_label != stats.latest_observation_label
         || observation_state.latest_observation_summary != stats.latest_observation_summary
     {
@@ -1982,16 +2002,6 @@ pub(super) fn record_runtime_trace_observations(
                 runtime_trace.record_event(
                     "xbxengine",
                     "keyframeRequestSent",
-                    session_id,
-                    json!({
-                        "summary": stats.latest_observation_summary,
-                    }),
-                );
-            }
-            Some("keyframeRequestOutcome") => {
-                runtime_trace.record_event(
-                    "xbxengine",
-                    "keyframeRequestOutcome",
                     session_id,
                     json!({
                         "summary": stats.latest_observation_summary,

@@ -9,13 +9,13 @@ use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerI
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::RecoveryDisplayFacts;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms,
-    current_clean_anchor_observed_at_ms_from_stats, derive_gap_severity_from_timeline_observation,
-    derive_gap_severity_with_episode_stall, frame_value_from_gap_severity,
-    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_observation,
-    is_transport_await_probe_source_event, recovery_episode_stage_from_status,
-    recovery_exit_path_from_stats, recovery_progress_level_from_episode, RecoveryExitPath,
-    RecoveryExitThresholds,
+    current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms_from_stats,
+    derive_gap_severity_from_timeline_observation, derive_gap_severity_with_episode_stall,
+    frame_value_from_gap_severity, has_current_clean_anchor_from_stats,
+    recovery_episode_stage_from_status, recovery_exit_path_from_stats,
+    recovery_progress_level_from_episode, sync_derived_recovery_contract_fields,
+    DerivedDecoderHealth, RecoveryContractSnapshot, RecoveryExitPath, RecoveryExitThresholds,
+    RecoverySurfacePhase,
 };
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
@@ -53,12 +53,15 @@ pub(crate) fn build_rtc_session_policy_orchestration_input(
     observed_at_ms: f64,
     pre_first_frame_reconnect_fallback_ms: f64,
 ) -> RtcSessionPolicyOrchestrationInput {
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        sync_derived_recovery_contract_fields(stats, observed_at_ms);
+    });
     let demand = build_scheduling_demand_signal(runtime_stats.as_ref());
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         persist_runtime_remote_profile_facts(stats, observed_at_ms);
     });
     let profile = resolve_recovery_profile(runtime_stats.as_ref());
-    let owner_facts = read_owner_runtime_facts(runtime_stats.as_ref());
+    let owner_facts = read_owner_runtime_facts(runtime_stats.as_ref(), observed_at_ms);
     let absorb_first_frame_acquisition_anchor_issue = owner_facts
         .latest_video_timeline_observation
         .as_ref()
@@ -108,9 +111,11 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
     pub(crate) latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
     pub(crate) recovery_displayed_idr_at_ms: Option<f64>,
-    pub(crate) recovery_playback_recovered_at_ms: Option<f64>,
     pub(crate) recovery_fresh_anchor_recovered_at_ms: Option<f64>,
     pub(crate) recovery_exit_path: RecoveryExitPath,
+    pub(crate) recovery_surface_phase: RecoverySurfacePhase,
+    pub(crate) derived_decoder_health: DerivedDecoderHealth,
+    pub(crate) contract_snapshot: RecoveryContractSnapshot,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -192,10 +197,16 @@ pub(crate) fn build_scheduling_demand_signal(
 
 pub(crate) fn read_owner_runtime_facts(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    observed_at_ms: f64,
 ) -> OwnerRuntimeFacts {
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let now_ms = crate::transport::rtc::stats::now_ms_f64();
         let profile = resolve_runtime_recovery_profile(stats);
+        let exit_thresholds = RecoveryExitThresholds {
+            degraded_decode_age_ms: profile.display_supply_thresholds.degraded_decode_age_ms,
+            ..RecoveryExitThresholds::default()
+        };
+        let contract_snapshot =
+            RecoveryContractSnapshot::from_stats(stats, observed_at_ms, exit_thresholds);
         OwnerRuntimeFacts {
             recovery_epoch: stats.transport_recovery_epoch,
             latest_video_receiver_observation: stats.latest_video_receiver_observation.clone(),
@@ -213,24 +224,14 @@ pub(crate) fn read_owner_runtime_facts(
                 let display = RecoveryDisplayFacts::from_stats(stats);
                 display.displayed_idr_at_ms
             },
-            recovery_playback_recovered_at_ms: {
-                let display = RecoveryDisplayFacts::from_stats(stats);
-                display.playback_recovered_at_ms
-            },
             recovery_fresh_anchor_recovered_at_ms: {
                 let display = RecoveryDisplayFacts::from_stats(stats);
                 display.fresh_anchor_recovered_at_ms
             },
-            recovery_exit_path: recovery_exit_path_from_stats(
-                stats,
-                now_ms,
-                RecoveryExitThresholds {
-                    degraded_decode_age_ms: profile
-                        .display_supply_thresholds
-                        .degraded_decode_age_ms,
-                    ..RecoveryExitThresholds::default()
-                },
-            ),
+            recovery_exit_path: contract_snapshot.exit_path,
+            recovery_surface_phase: contract_snapshot.surface_phase,
+            derived_decoder_health: contract_snapshot.derived_health,
+            contract_snapshot,
         }
     })
     .unwrap_or_default()
@@ -306,18 +307,17 @@ pub(crate) fn build_owner_input(
             .latest_h264_inspection_observation
             .as_ref()
             .map(|inspection| inspection.delta_continuation_ready),
-        latest_h264_continuation_verdict: owner_facts
-            .latest_h264_inspection_observation
-            .as_ref()
-            .and_then(|inspection| inspection.continuation_verdict.clone()),
         latest_h264_observed_at_ms: owner_facts
             .latest_h264_inspection_observation
             .as_ref()
             .map(|inspection| inspection.observed_at_ms),
         recovery_displayed_idr_at_ms: owner_facts.recovery_displayed_idr_at_ms,
-        recovery_playback_recovered_at_ms: owner_facts.recovery_playback_recovered_at_ms,
         recovery_fresh_anchor_recovered_at_ms: owner_facts.recovery_fresh_anchor_recovered_at_ms,
         recovery_exit_path: owner_facts.recovery_exit_path,
+        recovery_surface_phase: owner_facts.recovery_surface_phase,
+        derived_decoder_health: owner_facts.derived_decoder_health,
+        displayed_idr_serving_wide: owner_facts.contract_snapshot.serving_wide,
+        contract_snapshot: owner_facts.contract_snapshot,
         display_supply_thresholds,
         observed_at_ms,
     }
@@ -336,44 +336,6 @@ fn resolve_anchor_reason_label(
         _ => return None,
     };
     VideoEscalationReason::from_recovery_reason_label(label).map(|_| label.to_string())
-}
-
-fn current_clean_anchor_at_ms(owner_facts: &OwnerRuntimeFacts) -> Option<f64> {
-    current_clean_anchor_observed_at_ms(
-        owner_facts.clean_anchor_epoch,
-        owner_facts.clean_anchor_observed_at_ms,
-        owner_facts.clean_anchor_source_event.as_deref(),
-        owner_facts.recovery_epoch,
-    )
-}
-
-fn current_clean_anchor_bridge_at_ms(owner_facts: &OwnerRuntimeFacts) -> Option<f64> {
-    current_clean_anchor_bridge_observed_at_ms(
-        owner_facts.clean_anchor_bridge_epoch,
-        owner_facts.clean_anchor_bridge_observed_at_ms,
-        owner_facts.clean_anchor_bridge_source_event.as_deref(),
-        owner_facts.recovery_epoch,
-    )
-}
-
-fn has_current_transport_await_issue(
-    owner_facts: &OwnerRuntimeFacts,
-    timeline: &XbxEngineVideoTimelineObservation,
-) -> bool {
-    has_current_transport_await_issue_from_observation(
-        timeline,
-        current_clean_anchor_at_ms(owner_facts),
-    )
-}
-
-fn is_current_transport_await_probe(
-    owner_facts: &OwnerRuntimeFacts,
-    timeline: &XbxEngineVideoTimelineObservation,
-) -> bool {
-    is_transport_await_probe_source_event(Some(timeline.source_event.as_str()))
-        && current_clean_anchor_at_ms(owner_facts)
-            .or_else(|| current_clean_anchor_bridge_at_ms(owner_facts))
-            .is_none_or(|clean_anchor_at_ms| timeline.observed_at_ms > clean_anchor_at_ms)
 }
 
 #[cfg(test)]
@@ -429,6 +391,23 @@ mod tests {
             resolve_anchor_reason_label(&facts, false),
             Some("receiverWaitingKeyframe".to_string())
         );
+    }
+
+    #[test]
+    fn owner_facts_read_supply_break_surface_after_sync() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+            stats.recovery_playback_recovered_at_ms = Some(1.0);
+            stats.submit_age_ms = Some(5_000.0);
+            sync_derived_recovery_contract_fields(stats, 10_000.0);
+        });
+        let facts = read_owner_runtime_facts(runtime_stats.as_ref(), 10_000.0);
+        assert_eq!(
+            facts.recovery_surface_phase,
+            RecoverySurfacePhase::SupplyBreak
+        );
+        assert!(facts.contract_snapshot.supply_break_active);
     }
 }
 

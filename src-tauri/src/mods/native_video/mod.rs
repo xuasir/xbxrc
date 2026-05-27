@@ -805,6 +805,16 @@ impl Drop for HostPresentTickGuard {
     }
 }
 
+/// tick 任意出口释放 pending；若 submit 在 tick 内触发 rerun，立即补跑一拍消费 pending。
+pub(super) fn finish_host_present_tick_guard_and_maybe_rerun(
+    guard: &mut HostPresentTickGuard,
+    rerun: impl FnOnce(),
+) {
+    if guard.finish_dispatch() {
+        rerun();
+    }
+}
+
 pub(super) fn record_host_mailbox_take_decision(
     runtime_trace: Option<&RuntimeTraceRecorderRef>,
     pipeline: &str,
@@ -837,25 +847,6 @@ pub(super) fn record_host_mailbox_take_decision(
             })
         },
     );
-}
-
-#[cfg(target_os = "macos")]
-struct PendingFlagGuard {
-    pending: Arc<AtomicBool>,
-}
-
-#[cfg(target_os = "macos")]
-impl PendingFlagGuard {
-    fn new(pending: Arc<AtomicBool>) -> Self {
-        Self { pending }
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl Drop for PendingFlagGuard {
-    fn drop(&mut self) {
-        self.pending.store(false, Ordering::Relaxed);
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1042,7 +1033,7 @@ pub(super) fn run_wgpu_render_tick(
 
     run_tick();
 
-    if tick_dispatch_guard.finish_dispatch() {
+    finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
         if let Err(error) = dispatch_wgpu_render_tick_on_main_thread(
             window,
             app_handle,
@@ -1067,7 +1058,7 @@ pub(super) fn run_wgpu_render_tick(
             );
             clear_host_present_tick_dispatch(render_loop_pending, rerun_requested);
         }
-    }
+    });
 }
 
 #[cfg(target_os = "macos")]
@@ -1673,6 +1664,18 @@ pub(super) fn run_layer_present_tick(
         LayerSamplePrepareOutcome::RetainedDisplayedFrame
         | LayerSamplePrepareOutcome::SkippedNoReadyFrame
         | LayerSamplePrepareOutcome::Failed => {
+            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+                run_layer_present_tick(
+                    viewport_id,
+                    window_label,
+                    layer_state,
+                    frame_slot,
+                    telemetry,
+                    render_loop_pending,
+                    rerun_requested,
+                    runtime_trace.clone(),
+                );
+            });
             return;
         }
     };
@@ -1690,6 +1693,18 @@ pub(super) fn run_layer_present_tick(
                     })
                 },
             );
+            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+                run_layer_present_tick(
+                    viewport_id,
+                    window_label,
+                    layer_state,
+                    frame_slot,
+                    telemetry,
+                    render_loop_pending,
+                    rerun_requested,
+                    runtime_trace.clone(),
+                );
+            });
             return;
         };
         let Some(layer_ptr) = layer_state_guard.display_layer_ptr else {
@@ -1705,6 +1720,18 @@ pub(super) fn run_layer_present_tick(
                     })
                 },
             );
+            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+                run_layer_present_tick(
+                    viewport_id,
+                    window_label,
+                    layer_state,
+                    frame_slot,
+                    telemetry,
+                    render_loop_pending,
+                    rerun_requested,
+                    runtime_trace.clone(),
+                );
+            });
             return;
         };
         let first_present = !layer_state_guard.first_present_logged;
@@ -1808,7 +1835,7 @@ pub(super) fn run_layer_present_tick(
             },
         );
     }
-    if tick_dispatch_guard.finish_dispatch() {
+    finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
         run_layer_present_tick(
             viewport_id,
             window_label,
@@ -1819,7 +1846,7 @@ pub(super) fn run_layer_present_tick(
             rerun_requested,
             runtime_trace,
         );
-    }
+    });
 }
 
 #[cfg(target_os = "macos")]

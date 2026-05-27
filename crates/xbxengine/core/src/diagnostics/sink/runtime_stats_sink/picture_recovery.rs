@@ -9,149 +9,32 @@ use crate::{
 use super::support::*;
 use super::RuntimeStatsSink;
 
+fn should_record_h264_inspection_as_picture_blocker(
+    observation: &XbxEngineH264InspectionObservation,
+    stats: &crate::XbxEngineMediaRuntimeStats,
+) -> bool {
+    use crate::transport::rtc::recovery::contract::{
+        displayed_idr_serving_from_stats, is_soft_missing_idr_bootstrap_reject_reason,
+    };
+    if observation.admission_accepted
+        && observation.committed_sps_present
+        && observation.committed_pps_present
+        && observation.delta_continuation_ready
+        && is_soft_missing_idr_bootstrap_reject_reason(
+            observation.bootstrap_reject_reason.as_deref(),
+        )
+    {
+        return false;
+    }
+    if displayed_idr_serving_from_stats(stats)
+        && observation.reject_classification.as_deref() == Some("receiverLocalContinuation")
+    {
+        return false;
+    }
+    true
+}
+
 impl RuntimeStatsSink {
-    pub(crate) fn record_picture_recovery_blocker(
-        &self,
-        observed_at_ms: f64,
-        gate: &str,
-        blocker_kind: &str,
-        severity: &str,
-        frame_rtp_timestamp: Option<u32>,
-        frame_seq: Option<u64>,
-    ) {
-        self.update(|stats| {
-            let (first_observed_at_ms, count) = stats
-                .latest_picture_recovery_blocker_observation
-                .as_ref()
-                .filter(|observation| {
-                    observation.episode_id
-                        == stats
-                            .latest_keyframe_request_episode
-                            .as_ref()
-                            .map(|episode| episode.episode_id)
-                        && observation.recovery_epoch == Some(stats.transport_recovery_epoch)
-                        && observation.gate == gate
-                        && observation.blocker_kind == blocker_kind
-                })
-                .map(|observation| {
-                    (
-                        observation.first_observed_at_ms,
-                        observation.count.saturating_add(1),
-                    )
-                })
-                .unwrap_or((observed_at_ms, 1));
-            let observation = XbxEnginePictureRecoveryBlockerObservation {
-                observation_id: Self::next_picture_recovery_blocker_observation_id(stats),
-                episode_id: stats
-                    .latest_keyframe_request_episode
-                    .as_ref()
-                    .map(|episode| episode.episode_id),
-                recovery_epoch: Some(stats.transport_recovery_epoch),
-                gate: gate.to_string(),
-                blocker_kind: blocker_kind.to_string(),
-                severity: severity.to_string(),
-                first_observed_at_ms,
-                observed_at_ms,
-                count,
-                frame_rtp_timestamp,
-                frame_seq,
-                owner_state: stats.video_owner_state.clone(),
-                transport_state: Some(format!("{:?}", stats.transport_state)),
-            };
-            stats.latest_picture_recovery_blocker_observation = Some(observation);
-        });
-    }
-
-    pub(crate) fn record_picture_recovery_episode_requested(
-        &self,
-        episode_id: u64,
-        request_reason: Option<String>,
-        requested_at_ms: f64,
-        deadline_at_ms: Option<f64>,
-    ) {
-        self.update(|stats| {
-            let episode_id =
-                reuse_active_transport_recovery_episode_id(stats, request_reason.as_deref())
-                    .unwrap_or(episode_id);
-            let episode = upsert_picture_recovery_episode(
-                stats,
-                episode_id,
-                |episode| {
-                    if episode.request_reason.is_none() {
-                        episode.request_reason = request_reason.clone();
-                    }
-                    if episode.requested_at_ms == 0.0 {
-                        episode.requested_at_ms = requested_at_ms;
-                    }
-                    if episode.deadline_at_ms.is_none() {
-                        episode.deadline_at_ms = deadline_at_ms;
-                    }
-                    if episode.status != "sent" {
-                        episode.status = "requested".to_string();
-                    }
-                    if episode.response_verdict.is_none() {
-                        episode.response_verdict = Some("pending".to_string());
-                    }
-                },
-                || XbxEngineKeyframeRequestEpisodeObservation {
-                    episode_id,
-                    request_reason: request_reason.clone(),
-                    request_kind: None,
-                    status: "requested".to_string(),
-                    status_detail: None,
-                    requested_at_ms,
-                    sent_at_ms: None,
-                    deadline_at_ms,
-                    transport_detail: None,
-                    first_video_packet_at_ms: None,
-                    first_video_packet_rtp_timestamp: None,
-                    first_video_packet_is_keyframe: None,
-                    first_keyframe_packet_at_ms: None,
-                    first_keyframe_decoded_at_ms: None,
-                    response_rtp_timestamp: None,
-                    response_frame_seq: None,
-                    response_verdict: Some("pending".to_string()),
-                    lifecycle_phase: None,
-                    retired_at_ms: None,
-                },
-            );
-            stats.latest_keyframe_request_episode = Some(episode);
-            stats.latest_observation_label = Some("keyframeRequestEpisodeRequested".to_string());
-            stats.latest_observation_summary = Some(format!(
-                "episodeId={} reason={} deadlineAtMs={}",
-                episode_id,
-                request_reason.as_deref().unwrap_or("none"),
-                deadline_at_ms
-                    .map(|value| format!("{value:.1}"))
-                    .unwrap_or_else(|| "none".to_string())
-            ));
-            let observation = XbxEnginePictureRecoveryTransitionObservation {
-                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
-                episode_id: Some(episode_id),
-                recovery_epoch: Some(stats.transport_recovery_epoch),
-                phase: "PliRequested".to_string(),
-                from_phase: None,
-                to_phase: "PliRequested".to_string(),
-                cause: request_reason.clone(),
-                detail: None,
-                rtp_timestamp: None,
-                frame_seq: None,
-                owner_state: stats.video_owner_state.clone(),
-                transport_state: Some(format!("{:?}", stats.transport_state)),
-                observed_at_ms: requested_at_ms,
-            };
-            stats.latest_picture_recovery_transition_observation = Some(observation);
-            Self::refresh_first_frame_latency_observation(stats, requested_at_ms);
-            emit_picture_recovery_closure_probe(
-                &*stats,
-                "requested",
-                requested_at_ms,
-                stats.latest_keyframe_request_episode.as_ref(),
-                None,
-            );
-        });
-    }
-
     pub(crate) fn record_picture_recovery_episode_sent(
         &self,
         request_kind: &str,
@@ -352,91 +235,6 @@ impl RuntimeStatsSink {
                     None,
                 );
             }
-        });
-    }
-
-    pub(crate) fn record_picture_recovery_episode_failed(&self, observed_at_ms: f64, detail: &str) {
-        self.update(|stats| {
-            let transport_recovery_epoch = stats.transport_recovery_epoch;
-            let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
-            let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
-            let mut updated_episode = None;
-            let mut should_probe = false;
-            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
-                if episode.sent_at_ms.is_some()
-                    || matches!(
-                        episode.response_verdict.as_deref(),
-                        Some("transportDeferred" | "transportFailed" | "missed")
-                    )
-                {
-                    return;
-                }
-                episode.status_detail = Some(detail.to_string());
-                episode.transport_detail = Some(detail.to_string());
-                episode.status = "failed".to_string();
-                episode.response_verdict = Some("transportFailed".to_string());
-                apply_keyframe_episode_lifecycle_field(
-                    transport_recovery_epoch,
-                    video_anchor_clean_epoch,
-                    video_anchor_clean_observed_at_ms,
-                    episode,
-                );
-                stats.latest_observation_label = Some("keyframeRequestEpisodeFailed".to_string());
-                stats.latest_observation_summary = Some(format!(
-                    "episodeId={} observedAtMs={:.1} detail={detail}",
-                    episode.episode_id, observed_at_ms
-                ));
-                updated_episode = Some(episode.clone());
-                should_probe = true;
-            }
-            if let Some(episode) = updated_episode {
-                sync_recent_picture_recovery_episode(stats, episode);
-            }
-            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
-            if should_probe {
-                emit_picture_recovery_closure_probe(
-                    &*stats,
-                    "failed",
-                    observed_at_ms,
-                    stats.latest_keyframe_request_episode.as_ref(),
-                    None,
-                );
-            }
-        });
-    }
-
-    #[cfg(test)]
-    pub(crate) fn record_picture_recovery_episode_unsent_expired(&self, observed_at_ms: f64) {
-        self.update(|stats| {
-            expire_latest_picture_recovery_episode_if_unsent(stats, observed_at_ms);
-        });
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn record_video_rtcp_send_failure(&self, observed_at_ms: f64, reason: &str) {
-        let availability_state = if reason.contains("FeedbackTargetUnavailable")
-            || reason.contains("MediaSsrcUnavailable")
-            || reason.contains("feedback target")
-            || reason.contains("ReceiverLookupMiss")
-        {
-            "unavailable"
-        } else {
-            "degraded"
-        };
-        self.record_feedback_target_availability(
-            observed_at_ms,
-            "videoRtcpFeedback",
-            availability_state,
-            reason,
-        );
-        self.update(|stats| {
-            stats.latest_video_rtcp_send_failure_time_ms = Some(observed_at_ms);
-            stats.latest_video_rtcp_send_failure_reason = Some(reason.to_string());
-            stats.latest_observation_label = Some("rtcVideoRtcpSendFailed".to_string());
-            stats.latest_observation_summary = Some(format!(
-                "video rtcp send failed at {:.1} reason={reason}",
-                observed_at_ms
-            ));
         });
     }
 
@@ -918,43 +716,215 @@ impl RuntimeStatsSink {
                 &observation,
             );
             if let Some(classification) = observation.reject_classification.clone() {
-                let (first_observed_at_ms, count) = stats
-                    .latest_picture_recovery_blocker_observation
-                    .as_ref()
-                    .filter(|blocker| {
-                        blocker.gate == "media"
-                            && blocker.blocker_kind == classification
-                            && blocker.episode_id
-                                == selected.as_ref().map(|episode| episode.episode_id)
-                            && blocker.recovery_epoch == Some(stats.transport_recovery_epoch)
-                    })
-                    .map(|blocker| {
-                        (
-                            blocker.first_observed_at_ms,
-                            blocker.count.saturating_add(1),
-                        )
-                    })
-                    .unwrap_or((observation.observed_at_ms, 1));
-                stats.latest_picture_recovery_blocker_observation =
-                    Some(XbxEnginePictureRecoveryBlockerObservation {
-                        observation_id: Self::next_picture_recovery_blocker_observation_id(stats),
-                        episode_id: selected.as_ref().map(|episode| episode.episode_id),
-                        recovery_epoch: Some(stats.transport_recovery_epoch),
-                        gate: "media".to_string(),
-                        blocker_kind: classification,
-                        severity: "warning".to_string(),
-                        first_observed_at_ms,
-                        observed_at_ms: observation.observed_at_ms,
-                        count,
-                        frame_rtp_timestamp: observation.frame_rtp_timestamp,
-                        frame_seq: None,
-                        owner_state: stats.video_owner_state.clone(),
-                        transport_state: Some(format!("{:?}", stats.transport_state)),
-                    });
+                if !should_record_h264_inspection_as_picture_blocker(&observation, &*stats) {
+                    // Insert 已 Accept 的 soft continuation：保留 reject 分类，不记 picture blocker。
+                } else {
+                    let (first_observed_at_ms, count) = stats
+                        .latest_picture_recovery_blocker_observation
+                        .as_ref()
+                        .filter(|blocker| {
+                            blocker.gate == "media"
+                                && blocker.blocker_kind == classification
+                                && blocker.episode_id
+                                    == selected.as_ref().map(|episode| episode.episode_id)
+                                && blocker.recovery_epoch == Some(stats.transport_recovery_epoch)
+                        })
+                        .map(|blocker| {
+                            (
+                                blocker.first_observed_at_ms,
+                                blocker.count.saturating_add(1),
+                            )
+                        })
+                        .unwrap_or((observation.observed_at_ms, 1));
+                    stats.latest_picture_recovery_blocker_observation =
+                        Some(XbxEnginePictureRecoveryBlockerObservation {
+                            observation_id: Self::next_picture_recovery_blocker_observation_id(
+                                stats,
+                            ),
+                            episode_id: selected.as_ref().map(|episode| episode.episode_id),
+                            recovery_epoch: Some(stats.transport_recovery_epoch),
+                            gate: "media".to_string(),
+                            blocker_kind: classification,
+                            severity: "warning".to_string(),
+                            first_observed_at_ms,
+                            observed_at_ms: observation.observed_at_ms,
+                            count,
+                            frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                            frame_seq: None,
+                            owner_state: stats.video_owner_state.clone(),
+                            transport_state: Some(format!("{:?}", stats.transport_state)),
+                        });
+                }
+            }
+            if observation.is_idr
+                && (observation.parameter_sets_changed || observation.config_changed)
+                && stats.recovery_displayed_idr_at_ms.is_some()
+            {
+                stats.video_parameter_sets_changed_at_ms = Some(observation.observed_at_ms);
             }
             stats.latest_h264_inspection_observation = Some(observation);
             stats.latest_observation_label = Some("h264InspectionObserved".to_string());
             stats.latest_observation_summary = Some(summary);
+        });
+    }
+}
+
+#[cfg(test)]
+impl RuntimeStatsSink {
+    pub(crate) fn record_video_rtcp_send_failure(&self, observed_at_ms: f64, reason: &str) {
+        let availability_state = if reason.contains("FeedbackTargetUnavailable")
+            || reason.contains("MediaSsrcUnavailable")
+            || reason.contains("feedback target")
+            || reason.contains("ReceiverLookupMiss")
+        {
+            "unavailable"
+        } else {
+            "degraded"
+        };
+        self.record_feedback_target_availability(
+            observed_at_ms,
+            "videoRtcpFeedback",
+            availability_state,
+            reason,
+        );
+        self.update(|stats| {
+            stats.latest_video_rtcp_send_failure_time_ms = Some(observed_at_ms);
+            stats.latest_video_rtcp_send_failure_reason = Some(reason.to_string());
+            stats.latest_observation_label = Some("rtcVideoRtcpSendFailed".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "video rtcp send failed at {:.1} reason={reason}",
+                observed_at_ms
+            ));
+        });
+    }
+
+    pub(crate) fn record_picture_recovery_episode_requested(
+        &self,
+        episode_id: u64,
+        request_reason: Option<String>,
+        requested_at_ms: f64,
+        deadline_at_ms: Option<f64>,
+    ) {
+        self.update(|stats| {
+            let episode_id =
+                reuse_active_transport_recovery_episode_id(stats, request_reason.as_deref())
+                    .unwrap_or(episode_id);
+            let episode = upsert_picture_recovery_episode(
+                stats,
+                episode_id,
+                |episode| {
+                    if episode.request_reason.is_none() {
+                        episode.request_reason = request_reason.clone();
+                    }
+                    if episode.requested_at_ms == 0.0 {
+                        episode.requested_at_ms = requested_at_ms;
+                    }
+                    if episode.deadline_at_ms.is_none() {
+                        episode.deadline_at_ms = deadline_at_ms;
+                    }
+                    if episode.status != "sent" {
+                        episode.status = "requested".to_string();
+                    }
+                    if episode.response_verdict.is_none() {
+                        episode.response_verdict = Some("pending".to_string());
+                    }
+                },
+                || XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id,
+                    request_reason: request_reason.clone(),
+                    request_kind: None,
+                    status: "requested".to_string(),
+                    status_detail: None,
+                    requested_at_ms,
+                    sent_at_ms: None,
+                    deadline_at_ms,
+                    transport_detail: None,
+                    first_video_packet_at_ms: None,
+                    first_video_packet_rtp_timestamp: None,
+                    first_video_packet_is_keyframe: None,
+                    first_keyframe_packet_at_ms: None,
+                    first_keyframe_decoded_at_ms: None,
+                    response_rtp_timestamp: None,
+                    response_frame_seq: None,
+                    response_verdict: Some("pending".to_string()),
+                    lifecycle_phase: None,
+                    retired_at_ms: None,
+                },
+            );
+            stats.latest_keyframe_request_episode = Some(episode);
+            stats.latest_observation_label = Some("keyframeRequestEpisodeRequested".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "episodeId={} reason={} deadlineAtMs={}",
+                episode_id,
+                request_reason.as_deref().unwrap_or("none"),
+                deadline_at_ms
+                    .map(|value| format!("{value:.1}"))
+                    .unwrap_or_else(|| "none".to_string())
+            ));
+            let observation = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: Some(episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "PliRequested".to_string(),
+                from_phase: None,
+                to_phase: "PliRequested".to_string(),
+                cause: request_reason.clone(),
+                detail: None,
+                rtp_timestamp: None,
+                frame_seq: None,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms: requested_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(observation);
+            Self::refresh_first_frame_latency_observation(stats, requested_at_ms);
+            emit_picture_recovery_closure_probe(
+                &*stats,
+                "requested",
+                requested_at_ms,
+                stats.latest_keyframe_request_episode.as_ref(),
+                None,
+            );
+        });
+    }
+
+    pub(crate) fn record_picture_recovery_episode_unsent_expired(&self, observed_at_ms: f64) {
+        self.update(|stats| {
+            let transport_recovery_epoch = stats.transport_recovery_epoch;
+            let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+            let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
+            let mut updated_episode = None;
+            let mut latest_summary = None;
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.sent_at_ms.is_some()
+                    || episode.status != "requested"
+                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                {
+                    return;
+                }
+                episode.status_detail = Some("expiredUnsent".to_string());
+                episode.status = "expired-unsent".to_string();
+                episode.response_verdict = Some("unsentExpired".to_string());
+                apply_keyframe_episode_lifecycle_field(
+                    transport_recovery_epoch,
+                    video_anchor_clean_epoch,
+                    video_anchor_clean_observed_at_ms,
+                    episode,
+                );
+                latest_summary = Some(format!(
+                    "episodeId={} requestedAtMs={:.1} observedAtMs={:.1}",
+                    episode.episode_id, episode.requested_at_ms, observed_at_ms
+                ));
+                updated_episode = Some(episode.clone());
+            }
+            if latest_summary.is_some() {
+                stats.latest_observation_label =
+                    Some("keyframeRequestEpisodeUnsentExpired".to_string());
+                stats.latest_observation_summary = latest_summary;
+            }
+            if let Some(episode) = updated_episode {
+                sync_recent_picture_recovery_episode(stats, episode);
+            }
         });
     }
 }

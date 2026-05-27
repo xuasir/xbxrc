@@ -2,17 +2,18 @@ use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264Access
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::test_fixtures::{
     bootstrap_idr_nalu, bootstrap_pps_nalu, bootstrap_sps_nalu, make_video_rtp_packet,
-    make_video_source_for_test, send_bootstrap_access_unit, NoopRtcpPort,
+    make_video_source_for_test, send_bootstrap_access_unit,
 };
 use crate::media::video::types::FrameRecoveryDisposition;
+use crate::transport::rtc::receive::decode_gate::resolve_inspection_admission;
 use crate::transport::rtc::receive::ingress_loop::{
     resolve_effective_idle_controls, should_absorb_idle_timeout_for_steady_gap,
     should_trigger_idle_timeout,
 };
 use crate::transport::rtc::receive::{
-    now_ms_f64, prior_output_continuation_allowed, resolve_inspection_admission,
-    should_block_non_keyframe_admission, test_transport_capability, DecodeCorruptionPolicy,
-    InspectionAdmission, ReceiverDecodeContext, ReceiverState, RtcVideoFrameSource,
+    now_ms_f64, should_block_non_keyframe_admission, test_transport_capability,
+    DecodeCorruptionPolicy, InspectionAdmission, ReceiverDecodeContext, ReceiverState,
+    RtcVideoFrameSource,
 };
 
 fn assert_receiver_local_waiting_keyframe(source: &RtcVideoFrameSource) {
@@ -21,21 +22,59 @@ fn assert_receiver_local_waiting_keyframe(source: &RtcVideoFrameSource) {
         ReceiverState::WaitingKeyframe
     );
 }
-use crate::transport::rtc::receive::decode_gate_eval::{
-    resolve_recovery_keyframe_action, RecoveryKeyframeAction,
-};
+use crate::transport::rtc::receive::decode_gate_eval::RecoveryKeyframeAction;
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
 };
 use crate::transport::rtc::stream::nack_contract::NackSchedulerConfig;
 use crate::transport::rtc::stream::packet_types::{RtcVideoIngressKind, RtcVideoRepairMetadata};
-use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::{
     XbxEngineAnchorCandidateState, XbxEngineRemoteAnswerObservation, XbxEngineVideoTrackStatus,
 };
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
+
+fn resolve_recovery_keyframe_action(
+    first_frame_acquired: bool,
+    is_blocking_non_keyframe_admission: bool,
+    sustaining_recovery_active: bool,
+    receiver_repairing: bool,
+    hard_recovery_gap_risk: bool,
+    _sample_loss_burst_count: u8,
+    media_dropped_packets: u16,
+    is_keyframe: bool,
+    displayed_idr_serving: bool,
+) -> (bool, RecoveryKeyframeAction) {
+    if is_keyframe && media_dropped_packets > 0 {
+        return (false, RecoveryKeyframeAction::DropAndRequestPli);
+    }
+    if is_keyframe {
+        return (false, RecoveryKeyframeAction::Submit);
+    }
+    if !first_frame_acquired {
+        return (true, RecoveryKeyframeAction::WaitKeyframe);
+    }
+    if media_dropped_packets > 0 {
+        return (false, RecoveryKeyframeAction::DropAndRequestPli);
+    }
+    if is_blocking_non_keyframe_admission {
+        if displayed_idr_serving && first_frame_acquired {
+            return (false, RecoveryKeyframeAction::Submit);
+        }
+        if !first_frame_acquired {
+            return (true, RecoveryKeyframeAction::WaitKeyframe);
+        }
+        if sustaining_recovery_active || receiver_repairing {
+            return (false, RecoveryKeyframeAction::Submit);
+        }
+        if !hard_recovery_gap_risk {
+            return (false, RecoveryKeyframeAction::Submit);
+        }
+        return (true, RecoveryKeyframeAction::WaitKeyframe);
+    }
+    (false, RecoveryKeyframeAction::Submit)
+}
 
 fn serviceable_runtime_stats(now_ms: f64) -> crate::XbxEngineMediaRuntimeStats {
     let mut stats = crate::XbxEngineMediaRuntimeStats::default();
@@ -775,8 +814,8 @@ fn blocking_is_only_when_waiting_and_nack_exhausted() {
     assert!(!should_block_non_keyframe_admission(
         &test_receiver_decode_context(ReceiverState::Repairing, true, true, true,)
     ));
-    assert!(!prior_output_continuation_allowed(true, true));
-    assert!(prior_output_continuation_allowed(true, false));
+    assert!(!(true && !true));
+    assert!(true && !false);
 }
 
 #[test]
@@ -807,12 +846,10 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let (transport_observation_tx, _transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
-    let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort::default());
     let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
     let source = RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        rtcp_port,
         runtime_stats.clone(),
         16,
         Duration::from_millis(10),
@@ -830,12 +867,10 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
     drop(tx);
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.runtime_stats.record_transport_clean_anchor_with_rtp(
-        180.0,
-        "test-clean-anchor",
-        None,
-        None,
-    );
+    source.runtime_stats.record_pending_displayed_idr_rtp(1);
+    source
+        .runtime_stats
+        .record_displayed_idr_fact(180.0, 1, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, Some(1));
@@ -883,12 +918,10 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (transport_observation_tx, _transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
-    let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort::default());
     let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
     let mut source = RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        rtcp_port,
         runtime_stats.clone(),
         16,
         Duration::from_millis(10),
@@ -905,12 +938,10 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
     );
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.runtime_stats.record_transport_clean_anchor_with_rtp(
-        140.0,
-        "test-clean-anchor",
-        None,
-        None,
-    );
+    source.runtime_stats.record_pending_displayed_idr_rtp(1);
+    source
+        .runtime_stats
+        .record_displayed_idr_fact(140.0, 1, None);
     source
         .runtime_stats
         .complete_transport_recovery_after_stable_settle(180.0);

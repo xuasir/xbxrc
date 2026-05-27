@@ -113,6 +113,9 @@ export interface XbxEngineStatsDto {
   recovery_owner_state?: string
   recovery_owner_contract_state?: string
   recovery_owner_reason?: string
+  recovery_surface_phase?: string
+  media_supply_phase?: string
+  derived_decoder_health?: string
   video_owner_source?: string
   video_owner_observed_at_ms?: number
   video_health?: string

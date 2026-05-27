@@ -11,7 +11,10 @@ use crate::api::backend::{
     XbxEnginePresentationValueRole, XbxEngineReplacementDecisionObservation,
 };
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
-use crate::media::video::present_cadence::resolve_pacer_release_interval_ms;
+use crate::media::video::present_cadence::{
+    present_pipeline_stressed_from_stats, resolve_pacer_release_interval_ms,
+    resolve_stressed_release_interval_ms,
+};
 use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::render::pacer::{
     FramePacingAction, FramePacingPolicy, HostCadencePhaseHint, HostPacingPressure,
@@ -819,8 +822,14 @@ fn resolve_host_pacing_context(
                 .map(|interval_ms| interval_ms.round() as u64)
                 .filter(|interval_ms| *interval_ms > 0)
                 .unwrap_or(fallback_refresh_interval_ms);
-            let release_interval_ms =
+            let mut release_interval_ms =
                 resolve_pacer_release_interval_ms(stats, fallback_refresh_interval_ms);
+            if present_pipeline_stressed_from_stats(stats) {
+                release_interval_ms = resolve_stressed_release_interval_ms(
+                    release_interval_ms,
+                    host_refresh_interval_ms,
+                );
+            }
 
             HostPacingContext {
                 release_interval_ms,

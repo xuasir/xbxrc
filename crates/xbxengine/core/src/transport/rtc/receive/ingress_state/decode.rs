@@ -11,20 +11,18 @@ use crate::media::video::types::{
     AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
 };
 use crate::transport::rtc::receive::decode_gate_eval::{
-    resolve_recovery_keyframe_action, FirstFrameAcquisitionRequestKind,
-    FirstFrameAcquisitionRuntimeContext, RecoveryKeyframeAction,
+    FirstFrameAcquisitionRequestKind, FirstFrameAcquisitionRuntimeContext, RecoveryKeyframeAction,
 };
 use crate::transport::rtc::receive::nack_policy::RECOVERY_KEYFRAME_RETRY_MAX_COUNT;
 use crate::transport::rtc::receive::{
-    inspection_bootstrap_blocks_delta_continuation, inspection_bootstrap_reason,
-    keyframe_episode_response_detail, now_ms_f64, receiver_state_blocks_delta_continuation,
-    resolve_inspection_admission, should_block_non_keyframe_admission, DecodeCorruptionPolicy,
-    DecodeGateDecision, InspectionAdmission, ReceiverDecodeContext, ReceiverState, RtpAccessUnit,
-    SyntheticMarkerBoundary,
+    insert_decision_to_inspection_admission, inspection_bootstrap_blocks_delta_continuation,
+    inspection_bootstrap_reason, keyframe_episode_response_detail, now_ms_f64,
+    receiver_state_blocks_delta_continuation, recovery_keyframe_action_for_insert_decision,
+    resolve_insert_decision, should_block_non_keyframe_admission, DecodeCorruptionPolicy,
+    DecodeGateDecision, InsertContext, InsertDecision, InspectionAdmission, ReceiverDecodeContext,
+    ReceiverState, RtpAccessUnit, SyntheticMarkerBoundary,
 };
-use crate::transport::rtc::recovery::contract::{
-    is_recovery_delta_continuation_ready, FrameValue as RecoveryFrameValue,
-};
+use crate::transport::rtc::recovery::contract::FrameValue as RecoveryFrameValue;
 use crate::transport::rtc::stream::adapter_types::{
     TransportLossObservation, TransportObservation,
 };
@@ -43,8 +41,6 @@ const IDLE_TIMEOUT_CONFIRMATION_GRACE_MIN_MS: u64 = 120;
 const IDLE_TIMEOUT_CONFIRMATION_GRACE_MAX_MS: u64 = 220;
 const THIN_STREAM_CONFIRMATION_GRACE_MIN_MS: u64 = 90;
 const THIN_STREAM_CONFIRMATION_GRACE_MAX_MS: u64 = 180;
-const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
-const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 const FRAME_OOS_TRACK_CAPACITY: usize = 64;
 const HEAD_MISSING_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
 const FRAME_PLAYOUT_BASE_TRACK_CAPACITY: usize = 96;
@@ -414,48 +410,6 @@ impl RtcVideoFrameSource {
         );
     }
 
-    pub(crate) fn decoder_bootstrap_no_output_continuation_allowed(
-        &self,
-        inspection: &H264AccessUnitInspection,
-        first_frame_acquired: bool,
-        now_ms: f64,
-    ) -> bool {
-        if first_frame_acquired
-            || inspection.is_idr
-            || inspection.bootstrap_ready
-            || !inspection.slice_headers_valid
-            || !inspection.delta_continuation_ready()
-            || !inspection.committed_sps_present()
-            || !inspection.committed_pps_present()
-            || !self.is_blocking_non_keyframe_admission()
-        {
-            return false;
-        }
-
-        self.runtime_stats
-            .read(|stats| {
-                let Some(observation) = stats.latest_decode_output_path_observation.as_ref() else {
-                    return false;
-                };
-                if observation.verdict != "backend-no-output"
-                    || observation.detail != "backendNoOutputAfterBootstrapKeyframe"
-                    || !observation.is_keyframe
-                {
-                    return false;
-                }
-                let age_ms = now_ms - observation.observed_at_ms;
-                if !(0.0..=WAITING_KEYFRAME_CONTINUATION_WINDOW_MS).contains(&age_ms) {
-                    return false;
-                }
-                observation
-                    .input_frames_since_last_decoded
-                    .is_some_and(|count| {
-                        count <= WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES.saturating_add(1)
-                    })
-            })
-            .unwrap_or(false)
-    }
-
     pub(crate) fn clear_pending_timeout_confirmations(&mut self) {
         self.pending_idle_timeout_since = None;
         self.pending_thin_stream_since = None;
@@ -507,10 +461,10 @@ impl RtcVideoFrameSource {
         let (prior_output_established, displayed_idr_serving) = self
             .runtime_stats
             .read(|stats| {
+                // Insert 续播窄路径与 libwebrtc Insert 对齐：用宽 serving 事实，不用 P1 放松门控。
                 let displayed_idr_serving =
-                    crate::transport::rtc::recovery::contract::displayed_idr_serving_allows_relaxed_controls_from_stats(
+                    crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(
                         stats,
-                        now_ms,
                     );
                 let prior_output_established =
                     crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats(
@@ -619,6 +573,27 @@ impl RtcVideoFrameSource {
             )
     }
 
+    /// 消费 session fast-path / supply-break 写入的 receive keyframe 提示。
+    fn maybe_consume_recovery_receive_keyframe_hint(&mut self) {
+        const HINT_TTL_MS: f64 = 2_000.0;
+        let now_ms = now_ms_f64();
+        let hint_at_ms = self
+            .runtime_stats
+            .read(|stats| stats.recovery_receive_keyframe_hint_at_ms)
+            .flatten();
+        let Some(hint_at_ms) = hint_at_ms else {
+            return;
+        };
+        if (now_ms - hint_at_ms).max(0.0) > HINT_TTL_MS {
+            self.runtime_stats
+                .update(|stats| stats.recovery_receive_keyframe_hint_at_ms = None);
+            return;
+        }
+        self.runtime_stats
+            .update(|stats| stats.recovery_receive_keyframe_hint_at_ms = None);
+        self.request_recovery_keyframe_from_source("recovery-receive-keyframe-hint", None, now_ms);
+    }
+
     pub(crate) fn maybe_request_first_frame_acquisition_keyframe(
         &mut self,
         frame_rtp_timestamp: Option<u32>,
@@ -661,30 +636,6 @@ impl RtcVideoFrameSource {
         now_ms: f64,
     ) {
         self.request_receiver_local_keyframe(source_event, frame_rtp_timestamp, now_ms, true);
-    }
-
-    fn should_suppress_inspection_recovery_wait_for_displayed_idr_serving(
-        &self,
-        inspection: &H264AccessUnitInspection,
-        _now_ms: f64,
-    ) -> bool {
-        let now_ms = now_ms_f64();
-        let displayed_idr_serving = self
-            .runtime_stats
-            .read(|stats| {
-                crate::transport::rtc::recovery::contract::displayed_idr_serving_allows_relaxed_controls_from_stats(
-                    stats, now_ms,
-                )
-            })
-            .unwrap_or(false);
-        if !displayed_idr_serving {
-            return false;
-        }
-        is_recovery_delta_continuation_ready(inspection)
-            && inspection.committed_sps_present()
-            && inspection.committed_pps_present()
-            && (inspection_bootstrap_blocks_delta_continuation(inspection)
-                || !inspection.bootstrap_ready)
     }
 
     pub(crate) fn enter_recovery_wait_from_source(
@@ -1034,6 +985,7 @@ impl RtcVideoFrameSource {
             self.pending_marker_boundary = None;
         }
         self.clear_pending_timeout_confirmations();
+        self.maybe_consume_recovery_receive_keyframe_hint();
         self.last_packet_time = std::time::Instant::now();
         let mut payload = sample.payload;
         self.maybe_request_first_frame_acquisition_keyframe(
@@ -1137,16 +1089,129 @@ impl RtcVideoFrameSource {
         }
         let inspection_now_ms = now_ms_f64();
         let decode_ctx = self.receiver_decode_context();
-        let inspection_admission = resolve_inspection_admission(
+        let effective_rtt_ms = self
+            .runtime_stats
+            .read(|stats| stats.recovery_effective_rtt_ms.unwrap_or(200.0))
+            .unwrap_or(200.0);
+        let insert_ctx = self
+            .runtime_stats
+            .read(|stats| {
+                InsertContext::from_runtime(decode_ctx, stats, inspection_now_ms, effective_rtt_ms)
+            })
+            .unwrap_or(InsertContext {
+                decode: decode_ctx,
+                gap_mode: crate::transport::rtc::recovery::contract::GapVsKeyframeMode::RepairFirst,
+                timed_fallback_active: false,
+                fresh_idr_admission: false,
+                post_parameter_sets_change_strict: false,
+                supply_break_continuation: false,
+                media_supply_phase:
+                    crate::transport::rtc::recovery::contract::MediaSupplyPhase::Steady,
+            });
+        let insert_decision = resolve_insert_decision(
             &inspection,
-            &decode_ctx,
+            &insert_ctx,
             DecodeCorruptionPolicy::StandardWebRtc,
+            sample
+                .prev_dropped_packets
+                .saturating_sub(sample.prev_padding_packets),
         );
+        if matches!(insert_decision, InsertDecision::HoldRepair) {
+            let now_ms = now_ms_f64();
+            self.runtime_stats.record_h264_inspection_observation(
+                XbxEngineH264InspectionObservation {
+                    observation_id: u64::from(sample.packet_timestamp),
+                    frame_rtp_timestamp: Some(sample.packet_timestamp),
+                    nal_types: inspection.nal_type_labels(),
+                    nal_count: inspection.nals.len() as u16,
+                    vcl_nal_count: 0,
+                    bootstrap_ready: inspection.bootstrap_ready,
+                    bootstrap_reject_reason: inspection
+                        .bootstrap_reject_reason
+                        .map(|r| r.as_str().to_string()),
+                    admission_accepted: false,
+                    observed_at_ms: inspection_now_ms,
+                    ..Default::default()
+                },
+            );
+            self.trace_ledger
+                .observe_frame(sample.packet_timestamp, now_ms, None, "unknown");
+            self.trace_ledger.mark_frame_closed(
+                sample.packet_timestamp,
+                now_ms,
+                None,
+                "unknown",
+                Some("insertGateHoldRepair"),
+            );
+            let reject_reason = inspection_bootstrap_reason(&inspection);
+            if should_block_non_keyframe_admission(&decode_ctx) {
+                self.set_is_blocking_non_keyframe_admission(true);
+            }
+            self.enter_recovery_wait_from_source(
+                "insert-gate-hold-repair",
+                Some(sample.packet_timestamp),
+                XbxEngineAnchorCandidateState::AwaitingRecovery,
+                None,
+                reject_reason,
+                RecoveryFrameValue::RecoveryAnchor,
+                false,
+                now_ms,
+            );
+            if self.should_request_first_frame_acquisition_followup_keyframe(&inspection) {
+                self.maybe_request_first_frame_acquisition_keyframe(
+                    Some(sample.packet_timestamp),
+                    FirstFrameAcquisitionRequestKind::Followup,
+                );
+            }
+            // HoldRepair 动作不变式：每拍必须尝试 receive-local keyframe（可观测 outcome）。
+            let source_event = if insert_ctx.post_parameter_sets_change_strict {
+                "insert-gate-post-ps-change-strict"
+            } else if matches!(
+                insert_ctx.media_supply_phase,
+                crate::transport::rtc::recovery::contract::MediaSupplyPhase::MustIdr
+            ) {
+                "media-supply-must-idr"
+            } else if matches!(
+                insert_ctx.media_supply_phase,
+                crate::transport::rtc::recovery::contract::MediaSupplyPhase::SupplyBreak
+            ) {
+                "media-supply-supply-break"
+            } else if crate::transport::rtc::recovery::contract::gap_keyframe_only_mode_active(
+                insert_ctx.gap_mode,
+            ) {
+                "insert-gate-keyframe-only"
+            } else {
+                "insert-gate-hold-repair"
+            };
+            self.request_receiver_local_keyframe(
+                source_event,
+                Some(sample.packet_timestamp),
+                now_ms,
+                false,
+            );
+            return DecodeGateDecision::Continue;
+        }
+        if matches!(insert_decision, InsertDecision::DropCorrupt) {
+            self.handle_drop_and_request_keyframe_action(
+                sample.packet_timestamp,
+                sample
+                    .prev_dropped_packets
+                    .saturating_sub(sample.prev_padding_packets),
+                inspection.is_idr,
+                if inspection.is_idr {
+                    "keyframe"
+                } else {
+                    "delta"
+                },
+            )
+            .await;
+            return DecodeGateDecision::Continue;
+        }
+        let inspection_admission = insert_decision_to_inspection_admission(insert_decision);
         let should_block = should_block_non_keyframe_admission(&decode_ctx);
         if should_block != self.is_blocking_non_keyframe_admission() {
             self.set_is_blocking_non_keyframe_admission(should_block);
         }
-        let first_frame_acquired = decode_ctx.first_frame_acquired;
         let is_blocking_non_keyframe_admission = self.is_blocking_non_keyframe_admission();
         let admission_accepted = matches!(inspection_admission, InspectionAdmission::Accept);
         let response_detail =
@@ -1228,12 +1293,6 @@ impl RtcVideoFrameSource {
                     "unknown",
                     Some(reject_reason),
                 );
-                if self.should_suppress_inspection_recovery_wait_for_displayed_idr_serving(
-                    &inspection,
-                    inspection_now_ms,
-                ) {
-                    return DecodeGateDecision::Continue;
-                }
                 let rejection_source_event = "frame-inspection-rejected-await-anchor";
                 let failure_reason = match reject_reason {
                     "bootstrapMissingSps" => {
@@ -1288,23 +1347,12 @@ impl RtcVideoFrameSource {
         } else {
             "delta"
         };
-        let healthy_delta_continuation = !is_keyframe
-            && media_type_label == "delta"
-            && is_recovery_delta_continuation_ready(&inspection);
-        let hard_recovery_gap_risk = self.receive_core_mut().receive_engine.has_active_gap();
-        let receiver_state = self.receiver_local_state();
-        let (next_is_blocking_non_keyframe_admission, recovery_action) =
-            resolve_recovery_keyframe_action(
-                first_frame_acquired,
-                is_blocking_non_keyframe_admission,
-                matches!(receiver_state, ReceiverState::Receiving) && healthy_delta_continuation,
-                matches!(receiver_state, ReceiverState::Repairing),
-                hard_recovery_gap_risk,
-                self.sample_loss_burst_count,
-                media_dropped_packets,
-                is_keyframe,
-                decode_ctx.displayed_idr_serving,
-            );
+        let recovery_action = recovery_keyframe_action_for_insert_decision(insert_decision);
+        let next_is_blocking_non_keyframe_admission = match insert_decision {
+            InsertDecision::Emit => false,
+            InsertDecision::DropCorrupt => is_blocking_non_keyframe_admission,
+            InsertDecision::HoldRepair => should_block_non_keyframe_admission(&decode_ctx),
+        };
 
         if media_dropped_packets > 0 {
             self.runtime_stats

@@ -14,7 +14,7 @@
 - 最近多轮恢复调度修复都能止住某一条明确故障链，但新的真实 trace 仍会从别的入口重新陷入恢复风暴。
 - 现有测试版图以模块级单测和定向黑盒测试为主：
   - `session/policy.test.rs` 覆盖 liveness、pending reconnect、owner contract、局部 recover/reconnect gate。
-  - `recovery/coordinator.test.rs` 覆盖 cooldown、budget、hard fallback、`transportAwaitRecoveryAnchor` 升级。
+  - `recovery/coordinator.rs` 内联 `mod tests` 覆盖 cooldown、budget、hard fallback、`transportAwaitRecoveryAnchor` 升级。
   - `policy/video_scheduling_owner.test.rs` 覆盖 display supply、clean anchor、steady/rebuilding-supply 边界。
   - `stream/video_source/*test.rs` 覆盖 repair/RTX、backpressure、timeline、NACK admission。
 - 这些测试能证明局部规则，但还缺一层统一的“恢复风暴集成矩阵”：

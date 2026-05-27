@@ -16,11 +16,6 @@ pub(crate) trait RtcMediaSink: Send + Sync {
     fn on_tick(&mut self, _now: std::time::Instant) {}
 }
 
-pub(crate) trait RtcRtcpSendPort: Send + Sync {
-    #[allow(dead_code)]
-    fn send_rtcp(&self, _payload: &[u8]) -> Result<(), String>;
-}
-
 #[derive(Default)]
 pub(crate) struct NullRtcMediaSink;
 

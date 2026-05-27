@@ -1532,9 +1532,7 @@ fn video_recovery_requests_fir_explicitly_within_same_epoch() {
         }
     }
 
-    assert!(service
-        .request_video_fir_with_outcome(&runtime_stats)
-        .is_ok());
+    assert!(service.request_video_fir_direct(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
     assert!(service
         .request_video_pli_with_outcome(&runtime_stats)
@@ -1637,9 +1635,7 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         }
     }
 
-    assert!(service
-        .request_video_fir_with_outcome(&runtime_stats)
-        .is_ok());
+    assert!(service.request_video_fir_direct(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
     assert!(service
         .request_video_pli_with_outcome(&runtime_stats)
@@ -2743,9 +2739,7 @@ fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
-    service
-        .request_video_fir_with_outcome(&runtime_stats)
-        .unwrap();
+    service.request_video_fir_direct(&runtime_stats).unwrap();
 
     let now_ms = crate::transport::rtc::stats::now_ms_f64();
     service.video_recovery_transport_state.stage =
@@ -2764,8 +2758,6 @@ fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
         super::VideoRecoveryTransportStage::PictureLossIndication
     );
 
-    service.video_recovery_transport_state.stage =
-        super::VideoRecoveryTransportStage::FullIntraRequest;
     service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 420.0);
     service
         .request_video_pli_with_outcome(&runtime_stats)
@@ -3054,10 +3046,6 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
     answer_io.pump(&mut answer_pc).unwrap();
 
     assert_eq!(outcome, VideoRecoveryRequestOutcome::RequestedPli);
-    assert_eq!(
-        outcome.escalation_action_label().as_deref(),
-        Some("requestPli")
-    );
     let stats = runtime_stats.lock().unwrap();
     assert_eq!(
         stats.latest_observation_label.as_deref(),

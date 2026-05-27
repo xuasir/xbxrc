@@ -19,6 +19,7 @@ pub(crate) mod policy;
 pub(crate) mod remote_profile_runtime;
 pub(crate) mod runtime_state;
 pub mod startup;
+pub(crate) mod suppress;
 
 // 新的简化模块
 pub(crate) mod action_coordinator;

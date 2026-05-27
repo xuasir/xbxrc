@@ -86,7 +86,6 @@ enum VideoRecoveryTransportStage {
     #[default]
     None,
     PictureLossIndication,
-    FullIntraRequest,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,18 +93,6 @@ pub(crate) enum VideoRecoveryRequestOutcome {
     FeedbackTransportNotReady,
     FeedbackTargetPending,
     RequestedPli,
-    RequestedFir,
-}
-
-impl VideoRecoveryRequestOutcome {
-    pub(crate) fn escalation_action_label(self) -> Option<String> {
-        match self {
-            Self::FeedbackTransportNotReady => None,
-            Self::FeedbackTargetPending => None,
-            Self::RequestedPli => Some("requestPli".to_string()),
-            Self::RequestedFir => Some("requestFir".to_string()),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -295,13 +282,6 @@ impl RtcConnectionService {
         self.request_video_recovery_pli(runtime_stats)
     }
 
-    pub(crate) fn request_video_fir_with_outcome(
-        &mut self,
-        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError> {
-        self.request_video_recovery_fir(runtime_stats)
-    }
-
     #[cfg(test)]
     pub(crate) fn request_decoder_reset(
         &mut self,
@@ -362,29 +342,6 @@ impl RtcConnectionService {
         self.video_recovery_transport_state.last_sent_at_ms =
             Some(crate::transport::rtc::stats::now_ms_f64());
         Ok(VideoRecoveryRequestOutcome::RequestedPli)
-    }
-
-    fn request_video_recovery_fir(
-        &mut self,
-        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError> {
-        self.sync_video_recovery_transport_state(runtime_stats);
-        if !video_rtcp_transport_ready(self) {
-            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
-                crate::transport::rtc::stats::now_ms_f64(),
-                "videoRtcpFeedback",
-                "unbound",
-                VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY_REASON,
-            );
-            self.sync_control_replay_runtime_stats(runtime_stats);
-            return Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady);
-        }
-        self.send_video_full_intra_request(runtime_stats)?;
-        self.sync_control_replay_runtime_stats(runtime_stats);
-        self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::FullIntraRequest;
-        self.video_recovery_transport_state.last_sent_at_ms =
-            Some(crate::transport::rtc::stats::now_ms_f64());
-        Ok(VideoRecoveryRequestOutcome::RequestedFir)
     }
 
     fn send_video_picture_loss_indication_direct(
@@ -496,25 +453,6 @@ impl RtcConnectionService {
         );
         RuntimeStatsSink::new(runtime_stats.clone()).record_picture_recovery_episode_sent(
             "pli",
-            sent_at_ms,
-            Some(sent_at_ms + PICTURE_RECOVERY_RESPONSE_WINDOW_MS),
-        );
-        Ok(())
-    }
-
-    fn send_video_full_intra_request(
-        &mut self,
-        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Result<(), XbxEngineRuntimeError> {
-        self.send_video_full_intra_request_direct(runtime_stats)?;
-        let sent_at_ms = crate::transport::rtc::stats::now_ms_f64();
-        self.record_video_recovery_observation(
-            runtime_stats,
-            "rtcVideoFirRequested",
-            "phase1 rtc video FIR requested (legacy recovery path)",
-        );
-        RuntimeStatsSink::new(runtime_stats.clone()).record_picture_recovery_episode_sent(
-            "fir",
             sent_at_ms,
             Some(sent_at_ms + PICTURE_RECOVERY_RESPONSE_WINDOW_MS),
         );

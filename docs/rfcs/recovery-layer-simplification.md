@@ -87,7 +87,7 @@
 - `projection/mod.rs` - 导入recovery模块用于投影类型
 
 **测试文件（8+测试套件）：**
-- `recovery/coordinator_tests/` - 整个目录
+- ~~`recovery/coordinator_tests/`~~ 已删除；测试在 `recovery/coordinator.rs` 内联 `mod tests`
 - `recovery/escalation.test.rs`
 - `session/policy_tests/recovery_integration.rs`
 - `session/policy_tests/bwe_twcc.rs`

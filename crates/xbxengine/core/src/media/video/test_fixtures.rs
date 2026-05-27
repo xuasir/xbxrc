@@ -15,17 +15,6 @@ use crate::transport::rtc::stream::nack_contract::NackSchedulerConfig;
 use crate::transport::rtc::stream::packet_types::{
     RtcRtpPacketMeta, RtcVideoIngressKind, RtcVideoRtpPacket,
 };
-use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
-
-#[derive(Clone, Default)]
-pub(crate) struct NoopRtcpPort;
-
-impl RtcRtcpSendPort for NoopRtcpPort {
-    fn send_rtcp(&self, _payload: &[u8]) -> Result<(), String> {
-        Ok(())
-    }
-}
-
 pub(crate) fn bootstrap_sps_nalu() -> &'static [u8] {
     &hex_literal::hex!(
         "67 64 00 0A AC 72 84 44 26 84 00 00
@@ -138,12 +127,10 @@ pub(crate) fn make_video_source_for_test() -> (
     let (tx, rx) = tokio::sync::mpsc::channel(64);
     let (transport_observation_tx, transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
-    let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort);
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let source = RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
-        rtcp_port,
         runtime_stats,
         16,
         Duration::from_millis(10),

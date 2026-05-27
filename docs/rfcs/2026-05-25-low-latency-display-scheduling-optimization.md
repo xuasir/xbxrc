@@ -267,10 +267,25 @@ cargo test -p xbxrc --lib native_video::mod::tests::host_timing
 | `recovering` + `receiverWaitingKeyframe` | 无周期性簇（<3 次 / 120s） |
 | `submit_age_ms` | P95 <200ms，无 ≥500ms 重复尖峰 |
 | `present_age_ms` | P95 <80ms（相对 60Hz tick 可调） |
-| `decode_fps` - `fps` | 允许 8–15；但 **无 decode 塌方** |
 | `nackExpired` | 0 |
 | `hostMailboxRetainedDisplayed` + `hasPendingFrame=true` | 0 |
 | 体感的「顿一下」 | 主观 + 上述指标同时改善 |
+
+#### Steady Supply Present Contract（仅供给健康窗口）
+
+**适用**：连续 ≥30s、`session_phase=steady` 占比 >95%、`decode_fps∈[28,32]`、`nackExpired=0`、无密集 recovering。  
+**不适用**（`STEADY_SUPPLY_SKIPPED`）：gap repair、decode 塌方、recovering 主导会话（如 `runtime-trace-1779783888031`）。
+
+| KPI | 通过标准 |
+|-----|----------|
+| `decode_fps - present_fps`（steady+decode28–32 子集均值） | ≤ **5–6** |
+| `submit_to_present_ms` P95（恢复期脏值 >5s 剔除） | < **80ms** |
+| `ready / (ready + retainedDisplayed)`（`hostMailboxTakeDecision` 或 minimal 下 `hostTiming`） | > **0.85** |
+| `retainedDisplayed` + `hasPendingFrame=true` | **0** |
+
+全时段仍允许 `decode_fps - fps` 宽 gap；**不以全局 present≈decode 为 KPI**。
+
+门禁脚本：[`scripts/trace_midsegment_report.py`](../../scripts/trace_midsegment_report.py)（输出 `GLOBAL_LATENCY_GATE` + `STEADY_SUPPLY_GATE`）。
 
 ### 失败归因规则
 

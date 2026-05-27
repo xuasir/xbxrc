@@ -951,6 +951,14 @@ pub fn build_xbxengine_stats(
         recovery_owner_state,
         recovery_owner_contract_state,
         recovery_owner_reason,
+        recovery_surface_phase: runtime_stats
+            .and_then(|stats| stats.recovery_surface_phase.clone()),
+        media_supply_phase: runtime_stats.and_then(|stats| stats.media_supply_phase.clone()),
+        keyframe_request_outcome_seq: runtime_stats
+            .map(|stats| stats.keyframe_request_outcome_seq)
+            .unwrap_or(0),
+        derived_decoder_health: runtime_stats
+            .and_then(|stats| stats.derived_decoder_health.clone()),
         video_owner_source: video_owner.and_then(|owner| owner.source.clone()),
         video_owner_observed_at_ms: video_owner.and_then(|owner| owner.observed_at_ms),
         video_health,
@@ -1854,7 +1862,10 @@ fn build_runtime_summary(
         .map(|owner| owner.state.as_str())
         .unwrap_or("unknown");
     let health = video_health.unwrap_or("unknown");
-    let base = format!("{profile}/{phase}/{band}/{owner_state}/{health}");
+    let surface = stats.recovery_surface_phase.as_deref().unwrap_or("-");
+    let decoder_health = stats.derived_decoder_health.as_deref().unwrap_or("-");
+    let base =
+        format!("{profile}/{phase}/{band}/{owner_state}/{health}/{surface}/{decoder_health}");
     Some(append_runtime_notes(
         base,
         observation_note,
@@ -2034,6 +2045,15 @@ fn build_transport_recovery_note(
     let stats = runtime_stats?;
     let now_ms = now_ms_f64();
     let mut parts: Vec<String> = Vec::new();
+    if let Some(surface) = stats.recovery_surface_phase.as_deref() {
+        parts.push(format!("surface:{surface}"));
+    }
+    if let Some(media) = stats.media_supply_phase.as_deref() {
+        parts.push(format!("mediaSupply:{media}"));
+    }
+    if let Some(health) = stats.derived_decoder_health.as_deref() {
+        parts.push(format!("decoderHealth:{health}"));
+    }
     if stats.transport_recovery_epoch > 0 {
         if stats.transport_recovery_episode_active {
             parts.push(format!("repoch:{}:active", stats.transport_recovery_epoch));
@@ -2055,11 +2075,13 @@ fn build_transport_recovery_note(
     {
         let suffix = recovery_exit_trace_await_suffix(exit_path);
         parts.push(format!("awaitKeyframe:{suffix}"));
-    } else if stats
-        .video_owner_reason
-        .as_deref()
-        .is_some_and(|r| r == "recoverySustaining")
+    } else if stats.recovery_surface_phase.is_none()
+        && stats
+            .video_owner_reason
+            .as_deref()
+            .is_some_and(|r| r == "recoverySustaining")
     {
+        // 兼容旧 trace：不再写入 recoverySustaining，仅读取遗留字段。
         parts.push("recoverySustaining:cleanAnchorHolding".to_string());
         if exit_path == RecoveryExitPath::TimedFallback {
             parts.push("awaitKeyframe:timedFallback".to_string());
@@ -2068,7 +2090,7 @@ fn build_transport_recovery_note(
     if parts.is_empty() {
         None
     } else {
-        Some(parts.join("|"))
+        Some(parts.join(" | "))
     }
 }
 

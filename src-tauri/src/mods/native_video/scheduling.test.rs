@@ -55,6 +55,17 @@ fn pending_slot_keeps_latest_arrival() {
 }
 
 #[test]
+fn take_ready_frame_with_pending_never_returns_retained() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+    let _ = slot.submit_frame(&mk_frame(20, 1_000.0), 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(_) => {}
+        other => panic!("expected Ready when pending exists, got {other:?}"),
+    }
+}
+
+#[test]
 fn take_ready_frame_presents_latest_pending_frame() {
     let mut slot = ScheduledFrameSlot::default();
     let mut telemetry = HostCadenceTelemetry::default();
