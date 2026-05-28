@@ -67,10 +67,18 @@ impl RtcVideoFrameSource {
                 )
             })
             .unwrap_or(100.0);
+        let sparse_idr_rhythm = self
+            .runtime_stats
+            .read(|stats| {
+                crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
+                    stats, now_ms,
+                )
+            })
+            .unwrap_or_default();
         let poll = self
             .receive_core_mut()
             .receive_engine
-            .poll_nack_maintenance(now, effective_rtt_ms);
+            .poll_nack_maintenance(now, effective_rtt_ms, sparse_idr_rhythm);
         const MAX_RECEIVER_LOCAL_NACK_BATCH: usize = 32;
         const NACK_SPAN_KEYFRAME_ESCALATION_PACKETS: u32 = 96;
         if poll.sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH {
@@ -142,12 +150,20 @@ impl RtcVideoFrameSource {
                 .on_keyframe_escalation_sent();
         }
         if self.is_blocking_non_keyframe_admission() {
+            let sparse_idr_rhythm = self
+                .runtime_stats
+                .read(|stats| {
+                    crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
+                        stats, now_ms,
+                    )
+                })
+                .unwrap_or_default();
             let capability = self.receive_core().transport_capability.clone();
             let _ = self
                 .receive_core_mut()
                 .receive_engine
                 .keyframe_requester
-                .request_if_due(capability.as_ref(), true);
+                .request_dispatch(capability.as_ref(), true, sparse_idr_rhythm);
         }
     }
 

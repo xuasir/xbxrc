@@ -24,7 +24,7 @@ fn receiver_waiting_keyframe_label_parses_as_wait_keyframe() {
 }
 
 #[test]
-fn wait_keyframe_requests_pli_immediately() {
+fn wait_keyframe_delegates_to_receive_immediately() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 250,
         keyframe_burst_threshold: 2,
@@ -36,12 +36,12 @@ fn wait_keyframe_requests_pli_immediately() {
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
 }
 
 #[test]
-fn idle_timeout_requests_keyframe_immediately() {
+fn idle_timeout_delegates_to_receive_immediately() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 250,
         keyframe_burst_threshold: 2,
@@ -53,7 +53,7 @@ fn idle_timeout_requests_keyframe_immediately() {
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -113,13 +113,13 @@ fn repeated_transport_deadline_failures_are_throttled_within_epoch() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
     // keyframe_min_interval 在控制器内部有最小下限，需跨过窗口后才能再次发 keyframe。
     std::thread::sleep(Duration::from_millis(130));
@@ -127,14 +127,14 @@ fn repeated_transport_deadline_failures_are_throttled_within_epoch() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(130));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -184,14 +184,14 @@ fn transport_deadline_storm_within_same_window_does_not_reconnect() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     for _ in 0..4 {
         assert_eq!(
             controller
                 .on_reason(VideoEscalationReason::TransportExpiredDeadline)
                 .action,
-            RecoveryAction::CoalescedKeyframeInFlight
+            RecoveryAction::DelegatedToReceive
         );
     }
 }
@@ -307,14 +307,14 @@ fn persistent_wait_keyframe_without_failure_evidence_does_not_escalate_to_decode
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(210));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(210));
     assert_eq!(
@@ -328,7 +328,7 @@ fn persistent_wait_keyframe_without_failure_evidence_does_not_escalate_to_decode
                 true,
             )
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -346,26 +346,26 @@ fn persistent_wait_keyframe_with_failure_evidence_escalates_to_fir() {
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(210));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(210));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::RequestFir
+        RecoveryAction::DelegatedToReceive
     );
 }
 
 #[test]
-fn transport_sample_loss_requests_keyframe_immediately() {
+fn transport_sample_loss_delegates_to_receive_immediately() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 250,
         keyframe_burst_threshold: 3,
@@ -377,7 +377,7 @@ fn transport_sample_loss_requests_keyframe_immediately() {
         controller
             .on_reason(VideoEscalationReason::TransportSampleLoss)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -395,7 +395,7 @@ fn repeated_transport_sample_loss_after_keyframe_stays_in_keyframe_family() {
         controller
             .on_reason(VideoEscalationReason::TransportSampleLoss)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(130));
     let second = controller
@@ -403,8 +403,8 @@ fn repeated_transport_sample_loss_after_keyframe_stays_in_keyframe_family() {
         .action;
     assert!(matches!(
         second,
-        RecoveryAction::CoalescedKeyframeInFlight
-            | RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::CooldownSuppressed
     ));
 }
@@ -424,7 +424,7 @@ fn thin_stream_requests_keyframe_but_does_not_directly_upgrade_to_decoder_reset(
         .action;
     assert!(matches!(
         second,
-        RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
+        RecoveryAction::DelegatedToReceive | RecoveryAction::RequestDecoderReset
     ));
     std::thread::sleep(Duration::from_millis(130));
     let third = controller
@@ -448,7 +448,7 @@ fn display_supply_critical_never_promotes_to_reconnect_candidate() {
         controller
             .on_reason_with_policy(VideoEscalationReason::DisplaySupplyCritical, true)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(260));
     let second = controller
@@ -506,7 +506,7 @@ fn persistent_await_recovery_keyframe_escalates_to_decoder_reset_without_session
     assert!(matches!(
         second,
         RecoveryAction::CooldownSuppressed
-            | RecoveryAction::RequestPli
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::RequestDecoderReset
     ));
     std::thread::sleep(Duration::from_millis(240));
@@ -514,7 +514,7 @@ fn persistent_await_recovery_keyframe_escalates_to_decoder_reset_without_session
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
+        RecoveryAction::DelegatedToReceive | RecoveryAction::RequestDecoderReset
     ));
 }
 
@@ -547,7 +547,7 @@ fn keyframe_epoch_resets_on_reason_change() {
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -598,7 +598,7 @@ fn idle_timeout_requests_keyframe_but_does_not_directly_upgrade_to_decoder_reset
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(130));
     let second = controller
@@ -622,21 +622,21 @@ fn idle_timeout_is_throttled_within_window_and_releases_after_window() {
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(180));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(140));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::RequestFir
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -669,7 +669,7 @@ fn await_recovery_keyframe_is_throttled_within_window_and_releases_after_window(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
 }
 
@@ -688,13 +688,13 @@ fn expired_deadline_second_window_can_upgrade_to_reconnect_candidate() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::RequestPli
+        RecoveryAction::DelegatedToReceive
     );
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::DelegatedToReceive
     );
     std::thread::sleep(Duration::from_millis(230));
     assert_eq!(
@@ -721,7 +721,7 @@ fn repeated_thin_stream_outside_keyframe_interval_stays_in_keyframe_family() {
         .action;
     assert!(matches!(
         second,
-        RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
+        RecoveryAction::DelegatedToReceive | RecoveryAction::RequestDecoderReset
     ));
     std::thread::sleep(Duration::from_millis(150));
     let third = controller
@@ -824,7 +824,7 @@ fn media_policy_disallows_reconnect_for_transport_await_hard_stuck() {
     assert!(matches!(
         second,
         RecoveryAction::CooldownSuppressed
-            | RecoveryAction::RequestPli
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::RequestDecoderReset
     ));
     std::thread::sleep(Duration::from_millis(480));
@@ -833,7 +833,7 @@ fn media_policy_disallows_reconnect_for_transport_await_hard_stuck() {
         .action;
     assert!(matches!(
         third,
-        RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
+        RecoveryAction::DelegatedToReceive | RecoveryAction::RequestDecoderReset
     ));
     assert_ne!(third, RecoveryAction::RequestReconnectCandidate);
 }
@@ -862,7 +862,7 @@ fn transport_await_hard_stuck_never_promotes_to_reconnect_even_when_reconnect_al
     assert!(matches!(
         second,
         RecoveryAction::CooldownSuppressed
-            | RecoveryAction::RequestPli
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::RequestDecoderReset
     ));
     std::thread::sleep(Duration::from_millis(480));
@@ -871,7 +871,7 @@ fn transport_await_hard_stuck_never_promotes_to_reconnect_even_when_reconnect_al
         .action;
     assert!(matches!(
         third,
-        RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
+        RecoveryAction::DelegatedToReceive | RecoveryAction::RequestDecoderReset
     ));
     assert_ne!(third, RecoveryAction::RequestReconnectCandidate);
 }
@@ -900,7 +900,7 @@ fn keyframe_budget_resets_after_new_recovery_epoch() {
         .action;
     assert!(matches!(
         second,
-        RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
+        RecoveryAction::DelegatedToReceive | RecoveryAction::RequestDecoderReset
     ));
     controller.reconcile_keyframe_transport_feedback(KeyframeTransportFeedback::SentPending);
     std::thread::sleep(Duration::from_millis(130));
@@ -994,6 +994,10 @@ fn action_contract_defines_owner_and_budget_rules() {
     let keyframe = VideoEscalationController::action_contract(RecoveryAction::RequestPli);
     assert!(keyframe.budget_recorded_on_execution);
     assert_eq!(keyframe.budget_kind, Some(RecoveryBudgetKind::Keyframe));
+
+    let delegated = VideoEscalationController::action_contract(RecoveryAction::DelegatedToReceive);
+    assert!(!delegated.budget_recorded_on_execution);
+    assert!(delegated.budget_kind.is_none());
 
     let reset = VideoEscalationController::action_contract(RecoveryAction::RequestDecoderReset);
     assert!(reset.budget_recorded_on_execution);
@@ -1096,7 +1100,7 @@ fn reconfigure_without_failure_evidence_is_kept_in_wait_stage() {
 fn epoch_advance_rule_is_reason_aware_for_local_decoder_reset_paths() {
     assert!(
         !VideoEscalationController::action_success_advances_transport_recovery_epoch(
-            RecoveryAction::RequestPli,
+            RecoveryAction::DelegatedToReceive,
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe),
         )
     );

@@ -10,6 +10,7 @@ use super::escalation::RecoveryAction;
 use super::observation::{RecoveryObservation, RecoverySeverity};
 use super::policy::RecoveryScenarioProfile;
 use super::state_machine::{RecoveryState, RecoveryStateMachine};
+use super::suppress::suppress_session_picture_recovery_action;
 use super::timing::RecoveryDynamicTiming;
 
 /// 恢复决策结果
@@ -100,13 +101,15 @@ impl ActionCoordinator {
     pub(crate) fn decide(&mut self, observation: RecoveryObservation) -> RecoveryDecision {
         let current_state = self.state_machine.current_state();
 
-        match current_state {
+        let mut decision = match current_state {
             RecoveryState::Healthy => self.decide_from_healthy(observation),
             RecoveryState::LocalRepair => self.decide_from_local_repair(observation),
             RecoveryState::FrameRecovery => self.decide_from_frame_recovery(observation),
             RecoveryState::DecoderRecovery => self.decide_from_decoder_recovery(observation),
             RecoveryState::TransportRecovery => self.decide_from_transport_recovery(observation),
-        }
+        };
+        decision.action = suppress_session_picture_recovery_action(decision.action);
+        decision
     }
 
     /// 从Healthy状态决策
@@ -389,7 +392,7 @@ mod tests {
         );
 
         let decision = coordinator.decide(obs);
-        assert_eq!(decision.action, RecoveryAction::RequestPli);
+        assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
         assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
     }
 
@@ -404,7 +407,7 @@ mod tests {
             1000.0,
         );
         let decision = coordinator.decide(obs.clone());
-        assert_eq!(decision.action, RecoveryAction::RequestPli);
+        assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
 
         // 第二次请求应该被coalesce
         let decision = coordinator.decide(obs);
@@ -421,12 +424,12 @@ mod tests {
             1000.0,
         );
         let first = coordinator.decide(obs.clone());
-        assert_eq!(first.action, RecoveryAction::RequestPli);
+        assert_eq!(first.action, RecoveryAction::DelegatedToReceive);
 
         std::thread::sleep(std::time::Duration::from_millis(120));
 
         let second = coordinator.decide(obs);
-        assert_eq!(second.action, RecoveryAction::RequestPli);
+        assert_eq!(second.action, RecoveryAction::DelegatedToReceive);
         assert_eq!(second.coalescing_mode, Some(CoalescingMode::Refresh));
         assert_eq!(
             second.unlock_reason.as_deref(),

@@ -2,8 +2,8 @@
 //!
 //! 替代原有的Signal + Diagnosis两层架构，直接从事件映射到恢复严重性。
 
-use super::contract::GapSeverity;
 use super::escalation::VideoEscalationReason;
+use crate::transport::rtc::session::facts::GapSeverity;
 
 /// 恢复观察严重性
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

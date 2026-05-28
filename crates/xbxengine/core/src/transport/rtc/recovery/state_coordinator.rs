@@ -146,7 +146,9 @@ impl RecoveryDecision {
     pub(crate) fn is_keyframe_request(&self) -> bool {
         matches!(
             self.action,
-            RecoveryAction::RequestPli | RecoveryAction::RequestFir
+            RecoveryAction::RequestPli
+                | RecoveryAction::RequestFir
+                | RecoveryAction::DelegatedToReceive
         )
     }
 }
@@ -174,7 +176,7 @@ mod tests {
         );
         let decision = coordinator.on_observation(observation);
 
-        assert_eq!(decision.action, RecoveryAction::RequestPli);
+        assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
         assert!(decision.should_execute());
         assert!(decision.is_keyframe_request());
         assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);

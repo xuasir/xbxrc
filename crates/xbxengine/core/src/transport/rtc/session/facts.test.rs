@@ -2,10 +2,8 @@
 mod tests {
     use xbxengine_protocol::XbxEngineTransportStateDto;
 
-    use crate::transport::rtc::recovery::contract::{
-        FrameValue, GapSeverity, RecoveryProgressLevel,
-    };
     use crate::transport::rtc::session::facts::compute_recovery_facts;
+    use crate::transport::rtc::session::facts::{FrameValue, GapSeverity, RecoveryProgressLevel};
     use crate::{
         XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineChainSnapshot,
         XbxEngineVideoTimelineGapSnapshot, XbxEngineVideoTimelineObservation,

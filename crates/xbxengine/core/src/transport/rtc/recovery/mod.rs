@@ -11,7 +11,6 @@
 
 pub(crate) mod contract;
 pub(crate) mod coordinator;
-pub(crate) mod displayed_idr_fast_path;
 pub mod escalation;
 pub(crate) mod escalation_label;
 pub(crate) mod keyframe_lifecycle;

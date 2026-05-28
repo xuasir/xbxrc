@@ -79,10 +79,11 @@ impl ReceiveEngine {
         &mut self,
         now: Instant,
         effective_rtt_ms: f64,
+        sparse_idr_rhythm: crate::transport::rtc::recovery::contract::SparseIdrRhythm,
     ) -> super::nack_requester::NackPollResult {
         let params = self._timing.nack_scheduling_params(effective_rtt_ms);
         self.nack_requester.sync_from_buffer(&self.packet_buffer);
-        self.nack_requester.poll(&params, now)
+        self.nack_requester.poll(&params, now, sparse_idr_rhythm)
     }
 }
 

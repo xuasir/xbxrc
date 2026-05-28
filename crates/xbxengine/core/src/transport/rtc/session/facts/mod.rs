@@ -7,16 +7,16 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerInput;
 use crate::transport::rtc::projection::TransportSnapshot;
-use crate::transport::rtc::recovery::contract::RecoveryDisplayFacts;
 use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms_from_stats,
-    derive_gap_severity_from_timeline_observation, derive_gap_severity_with_episode_stall,
-    frame_value_from_gap_severity, has_current_clean_anchor_from_stats,
-    recovery_episode_stage_from_status, recovery_exit_path_from_stats,
-    recovery_progress_level_from_episode, sync_derived_recovery_contract_fields,
-    DerivedDecoderHealth, RecoveryContractSnapshot, RecoveryExitPath, RecoveryExitThresholds,
-    RecoverySurfacePhase,
+    has_current_clean_anchor_from_stats, recovery_exit_path_from_stats,
+    sync_derived_recovery_contract_fields, DerivedDecoderHealth, RecoveryContractSnapshot,
+    RecoveryDisplayFacts, RecoveryExitPath, RecoveryExitThresholds, RecoverySurfacePhase,
 };
+
+pub(crate) mod gap_severity;
+pub(crate) mod recovery_episode;
+
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
 use crate::transport::rtc::recovery::remote_profile_runtime::persist_runtime_remote_profile_facts;
@@ -30,6 +30,15 @@ use crate::XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecover
 use crate::XbxEngineMediaRuntimeStats;
 use crate::XbxEngineVideoTimelineObservation;
 use crate::XbxEngineVideoTrackStatus;
+pub(crate) use gap_severity::{
+    derive_gap_severity_from_timeline_observation, derive_gap_severity_with_episode_stall,
+    frame_value_from_gap_severity, FrameValue, GapSeverity,
+};
+pub(crate) use recovery_episode::{
+    recovery_episode_stage_from_status, recovery_progress_allows_decoder_reset,
+    recovery_progress_level_from_episode, recovery_progress_level_from_str,
+    recovery_progress_missing_anchor, RecoveryEpisodeStage, RecoveryProgressLevel,
+};
 
 use super::startup_compat::{
     first_frame_acquisition_priority_active, should_absorb_first_frame_acquisition_anchor_issue,
@@ -316,7 +325,6 @@ pub(crate) fn build_owner_input(
         recovery_exit_path: owner_facts.recovery_exit_path,
         recovery_surface_phase: owner_facts.recovery_surface_phase,
         derived_decoder_health: owner_facts.derived_decoder_health,
-        displayed_idr_serving_wide: owner_facts.contract_snapshot.serving_wide,
         contract_snapshot: owner_facts.contract_snapshot,
         display_supply_thresholds,
         observed_at_ms,
@@ -403,10 +411,7 @@ mod tests {
             sync_derived_recovery_contract_fields(stats, 10_000.0);
         });
         let facts = read_owner_runtime_facts(runtime_stats.as_ref(), 10_000.0);
-        assert_eq!(
-            facts.recovery_surface_phase,
-            RecoverySurfacePhase::SupplyBreak
-        );
+        assert_eq!(facts.recovery_surface_phase, RecoverySurfacePhase::AwaitIdr);
         assert!(facts.contract_snapshot.supply_break_active);
     }
 }
@@ -414,10 +419,6 @@ mod tests {
 // ============================================================================
 // 统一恢复模型：事实计算层
 // ============================================================================
-
-use crate::transport::rtc::recovery::contract::{
-    FrameValue, GapSeverity, RecoveryEpisodeStage, RecoveryProgressLevel,
-};
 
 /// 统一恢复事实快照（原始事实归一）
 #[derive(Clone, Debug)]
@@ -831,5 +832,5 @@ fn compute_repairability_score(
 }
 
 #[cfg(test)]
-#[path = "facts.test.rs"]
+#[path = "../facts.test.rs"]
 mod facts_test;

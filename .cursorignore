@@ -5,7 +5,7 @@
 
 # 版本控制与本地工具状态
 .git/
-.agents/
+# .agents/
 .trae/
 .codex-tmp/
 

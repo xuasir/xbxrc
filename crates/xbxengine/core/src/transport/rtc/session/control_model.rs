@@ -143,6 +143,7 @@ pub(crate) fn session_cost_ceiling_for_recovery_action(
         RecoveryAction::WaitForBurst
         | RecoveryAction::WaitForDecoderResetBurst
         | RecoveryAction::CooldownSuppressed
+        | RecoveryAction::DelegatedToReceive
         | RecoveryAction::CoalescedKeyframeInFlight
         | RecoveryAction::CoalescedDecoderResetInFlight
         | RecoveryAction::StartupGraceSuppressed => SessionCostCeiling::Absorb,

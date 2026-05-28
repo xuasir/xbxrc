@@ -870,6 +870,8 @@ pub struct XbxEngineStatsDto {
     #[serde(default)]
     pub latest_video_decode_ok_rtp_timestamp: Option<u32>,
     #[serde(default)]
+    pub latest_video_decode_ok_time_ms: Option<f64>,
+    #[serde(default)]
     pub video_renderer_stalled: Option<bool>,
     #[serde(default)]
     pub video_renderer_stall_blocks_presentation: Option<bool>,
@@ -938,6 +940,39 @@ pub struct XbxEngineStatsDto {
     #[serde(default)]
     pub latest_video_rtcp_send_failure_reason: Option<String>,
     pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservationDto>,
+    /// receive 侧最近一次 keyframe 请求来源（trace `keyframeRequestOutcome`）。
+    #[serde(default)]
+    pub latest_keyframe_request_source: Option<String>,
+    /// receive 侧最近一次 keyframe 请求结果（trace `keyframeRequestOutcome`）。
+    #[serde(default)]
+    pub latest_keyframe_request_outcome: Option<String>,
+    #[serde(default)]
+    pub latest_insert_decision: Option<String>,
+    #[serde(default)]
+    pub latest_insert_decision_reason: Option<String>,
+    #[serde(default)]
+    pub insert_decode_bypass_aligned: Option<bool>,
+    #[serde(default)]
+    pub insert_hold_decode_bypass_mismatch_total: Option<u64>,
+    #[serde(default)]
+    pub recovery_picture_recovery_authority: Option<String>,
+    #[serde(default)]
+    pub recovery_picture_recovery_delegated_total: Option<u64>,
+    #[serde(default)]
+    pub recovery_session_keyframe_in_flight: Option<bool>,
+    #[serde(default)]
+    pub receive_sparse_idr_pli_interval_ms: Option<f64>,
+    #[serde(default)]
+    pub ingress_waiting_rtp_marker_total: Option<u64>,
+    #[serde(default)]
+    pub ingress_waiting_idr_inspection_total: Option<u64>,
+    #[serde(default)]
+    pub ingress_idr_not_admitted_total: Option<u64>,
+    #[serde(default)]
+    pub latest_ingress_idr_not_admitted_reason: Option<String>,
+    /// 解码器参考链与 bootstrap IDR 对齐时刻（ms）。
+    #[serde(default)]
+    pub recovery_decoder_reference_synced_at_ms: Option<f64>,
     /// 近期 keyframe 请求 episode 历史，供诊断与 H264 观测绑定；默认空。
     #[serde(default)]
     pub recent_keyframe_request_episodes: Vec<XbxEngineKeyframeRequestEpisodeObservationDto>,

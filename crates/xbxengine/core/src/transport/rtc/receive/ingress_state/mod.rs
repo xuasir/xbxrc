@@ -29,8 +29,13 @@ use crate::transport::rtc::receive::ReceiverState;
 use crate::transport::rtc::receive::ReceiverTraceLedger;
 
 use crate::transport::rtc::capability::{KeyframeSendOutcome, RtcTransportCapability};
+use crate::transport::rtc::receive::keyframe_requester::KeyframeRequestDispatch;
 use crate::transport::rtc::receive::{
     receiver_state_from_runtime, ReceiveCoreBody, ReceiveEngine, ReceiverObservation,
+};
+use crate::transport::rtc::recovery::contract::{
+    derive_media_supply_phase_from_stats, idr_recovery_active_from_stats, MediaSupplyPhase,
+    SparseIdrRhythm,
 };
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
@@ -441,6 +446,34 @@ impl RtcVideoFrameSource {
         self.waiting_recovery_keyframe_since_ms.is_some()
     }
 
+    pub(super) fn note_ingress_waiting_rtp_marker(&self) {
+        if !self.is_blocking_non_keyframe_admission() {
+            return;
+        }
+        self.runtime_stats.update(|stats| {
+            stats.ingress_waiting_rtp_marker_total =
+                stats.ingress_waiting_rtp_marker_total.saturating_add(1);
+        });
+    }
+
+    pub(super) fn note_ingress_waiting_idr_inspection(&self) {
+        if !self.is_blocking_non_keyframe_admission() {
+            return;
+        }
+        self.runtime_stats.update(|stats| {
+            stats.ingress_waiting_idr_inspection_total =
+                stats.ingress_waiting_idr_inspection_total.saturating_add(1);
+        });
+    }
+
+    pub(super) fn note_ingress_idr_not_admitted(&self, insert_reason: &str) {
+        self.runtime_stats.update(|stats| {
+            stats.ingress_idr_not_admitted_total =
+                stats.ingress_idr_not_admitted_total.saturating_add(1);
+            stats.latest_ingress_idr_not_admitted_reason = Some(insert_reason.to_string());
+        });
+    }
+
     pub(super) fn set_is_blocking_non_keyframe_admission(&mut self, waiting: bool) {
         let now_ms = now_ms_f64();
         if waiting {
@@ -570,6 +603,30 @@ impl RtcVideoFrameSource {
         );
     }
 
+    fn keyframe_request_force_required(
+        &self,
+        soft: bool,
+        now_ms: f64,
+        rhythm: SparseIdrRhythm,
+    ) -> bool {
+        if !soft {
+            return true;
+        }
+        if rhythm.active && rhythm.pli_due {
+            return true;
+        }
+        self.runtime_stats
+            .read(|stats| {
+                stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+                    || idr_recovery_active_from_stats(stats, now_ms)
+                    || matches!(
+                        derive_media_supply_phase_from_stats(stats, now_ms),
+                        MediaSupplyPhase::MustIdr
+                    )
+            })
+            .unwrap_or(false)
+    }
+
     pub(crate) fn request_receiver_local_keyframe(
         &mut self,
         source_event: &'static str,
@@ -579,19 +636,38 @@ impl RtcVideoFrameSource {
     ) {
         self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
         let capability = self.receive_core().transport_capability.clone();
-        let outcome = self
+        let sparse_idr_rhythm = self
+            .runtime_stats
+            .read(|stats| {
+                crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
+                    stats, now_ms,
+                )
+            })
+            .unwrap_or_default();
+        let force = self.keyframe_request_force_required(soft, now_ms, sparse_idr_rhythm);
+        let dispatch = self
             .receive_core_mut()
             .receive_engine
             .keyframe_requester
-            .request_if_due(capability.as_ref(), !soft);
-        let outcome_name = match outcome {
-            Some(KeyframeSendOutcome::Sent) => "sent",
-            Some(KeyframeSendOutcome::FeedbackWarming) => "feedbackWarming",
-            Some(KeyframeSendOutcome::FeedbackUnavailable) => "feedbackUnavailable",
-            Some(KeyframeSendOutcome::TransportNotReady) => "transportNotReady",
-            None => "throttled",
+            .request_dispatch(capability.as_ref(), force, sparse_idr_rhythm);
+        let outcome_name = match dispatch {
+            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent) => "sent",
+            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::FeedbackWarming) => {
+                "feedbackWarming"
+            }
+            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::FeedbackUnavailable) => {
+                "feedbackUnavailable"
+            }
+            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::TransportNotReady) => {
+                "transportNotReady"
+            }
+            KeyframeRequestDispatch::Throttled => "throttled",
+            KeyframeRequestDispatch::Coalesced => "coalesced",
         };
-        if matches!(outcome, Some(KeyframeSendOutcome::Sent)) {
+        if matches!(
+            dispatch,
+            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent)
+        ) {
             if self.waiting_recovery_keyframe_since_ms.is_none() {
                 self.waiting_recovery_keyframe_since_ms = Some(now_ms);
             }
@@ -602,6 +678,17 @@ impl RtcVideoFrameSource {
         self.runtime_stats.update(|stats| {
             stats.keyframe_request_outcome_seq =
                 stats.keyframe_request_outcome_seq.saturating_add(1);
+            stats.latest_keyframe_request_source = Some(source_event.to_string());
+            stats.latest_keyframe_request_outcome = Some(outcome_name.to_string());
+            if sparse_idr_rhythm.active {
+                stats.receive_sparse_idr_pli_interval_ms = Some(sparse_idr_rhythm.pli_interval_ms);
+            }
+            if matches!(
+                dispatch,
+                KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent)
+            ) {
+                stats.receive_keyframe_last_sent_at_ms = Some(now_ms);
+            }
             stats.latest_observation_label = Some("keyframeRequestOutcome".to_string());
             stats.latest_observation_summary = Some(format!(
                 "seq={} source={source_event} soft={soft} outcome={outcome_name}",

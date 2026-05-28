@@ -1,7 +1,11 @@
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use crate::media::video::types::AssembledVideoFrame;
 use crate::transport::rtc::receive::ReceiverState;
-use crate::transport::rtc::recovery::contract::is_recovery_delta_continuation_ready;
+use crate::transport::rtc::recovery::contract::{
+    decodable_to_feed, decoder_reference_synced_from_stats,
+    displayed_idr_decoder_synced_from_stats, is_recovery_delta_continuation_ready,
+    DecodableFeedContext,
+};
 
 /// pre-decode 对单个 RTP access unit 的裁决结果。
 #[derive(Debug)]
@@ -41,8 +45,11 @@ pub struct ReceiverDecodeContext {
     pub first_frame_acquired: bool,
     /// decode/displayed-idr 等输出事实已建立（比 first_frame_acquired 更严，不含仅 assembled）。
     pub prior_output_established: bool,
-    /// 宿主已显示过 IDR：steady 非 IDR continuation 不应再被 bootstrapMissingIdr 打回 await-anchor。
+    /// 宿主已显示过 IDR（宽）：控制面放松；Insert 续播须配合 `displayed_idr_decoder_synced`。
     pub displayed_idr_serving: bool,
+    /// displayed-idr 且解码器参考链已同步（窄，对齐 WebRTC decoder state）。
+    pub displayed_idr_decoder_synced: bool,
+    pub decoder_reference_synced: bool,
 }
 
 impl ReceiverDecodeContext {
@@ -90,11 +97,38 @@ pub fn steady_displayed_idr_delta_admits(
     ctx: &ReceiverDecodeContext,
 ) -> bool {
     !inspection.is_idr
-        && ctx.displayed_idr_serving
+        && ctx.displayed_idr_decoder_synced
         && is_recovery_delta_continuation_ready(inspection)
 }
 
-/// 单元测试与无 InsertContext 的调用方（ingress 主线用 `resolve_insert_decision`）。
+pub(crate) fn decodable_feed_context_from_receiver(
+    ctx: &ReceiverDecodeContext,
+) -> DecodableFeedContext {
+    DecodableFeedContext {
+        decoder_reference_synced: ctx.decoder_reference_synced,
+        displayed_idr_host_hint: ctx.displayed_idr_serving,
+        first_frame_acquired: ctx.first_frame_acquired,
+        hard_gap_blocks_delta: ctx.hard_gap_blocks_delta(),
+        prior_output_established: ctx.prior_output_established,
+        receiver_repairing: matches!(ctx.receiver_state, ReceiverState::Repairing),
+        has_active_gap: ctx.has_active_gap,
+    }
+}
+
+pub(crate) fn insert_decodable_to_feed(
+    inspection: &H264AccessUnitInspection,
+    ctx: &ReceiverDecodeContext,
+    stage: crate::transport::rtc::recovery::contract::PacketRecoveryActionStage,
+) -> bool {
+    decodable_to_feed(
+        inspection,
+        &decodable_feed_context_from_receiver(ctx),
+        stage,
+    )
+}
+
+/// 单元测试专用；生产 Insert 单轨走 `resolve_insert_decision`。
+#[cfg(test)]
 pub fn resolve_inspection_admission(
     inspection: &H264AccessUnitInspection,
     ctx: &ReceiverDecodeContext,
@@ -120,6 +154,7 @@ pub fn resolve_inspection_admission(
         || inspection_bootstrap_blocks_delta_continuation(inspection)
     {
         if ctx.prior_output_established
+            && ctx.decoder_reference_synced
             && !ctx.hard_gap_blocks_delta()
             && is_recovery_delta_continuation_ready(inspection)
             && inspection.committed_sps_present()
@@ -134,7 +169,7 @@ pub fn resolve_inspection_admission(
         && inspection.committed_sps_present()
         && inspection.committed_pps_present()
     {
-        if ctx.hard_gap_blocks_delta() {
+        if ctx.hard_gap_blocks_delta() || !ctx.decoder_reference_synced {
             return InspectionAdmission::AwaitRecoveryKeyframe;
         }
         return InspectionAdmission::Accept;
@@ -149,6 +184,7 @@ pub(crate) fn receiver_decode_context_from_stats(
     now_ms: f64,
 ) -> ReceiverDecodeContext {
     use crate::transport::rtc::recovery::contract::{
+        decoder_reference_synced_from_stats, displayed_idr_decoder_synced_from_stats,
         displayed_idr_serving_from_stats, has_current_clean_anchor_from_stats,
     };
     let receiver_state = stats
@@ -177,6 +213,8 @@ pub(crate) fn receiver_decode_context_from_stats(
         || stats.recovery_playback_recovered_at_ms.is_some()
         || stats.latest_video_decode_ok_time_ms.is_some();
     let displayed_idr_serving = displayed_idr_serving_from_stats(stats);
+    let displayed_idr_decoder_synced = displayed_idr_decoder_synced_from_stats(stats, now_ms);
+    let decoder_reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
     let prior_output_established = has_current_clean_anchor_from_stats(stats)
         || displayed_idr_serving
         || stats
@@ -189,6 +227,8 @@ pub(crate) fn receiver_decode_context_from_stats(
         first_frame_acquired,
         prior_output_established,
         displayed_idr_serving,
+        displayed_idr_decoder_synced,
+        decoder_reference_synced,
     }
 }
 

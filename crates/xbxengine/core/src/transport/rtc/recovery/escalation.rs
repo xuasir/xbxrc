@@ -11,6 +11,8 @@ pub enum RecoveryAction {
     WaitForBurst,
     WaitForDecoderResetBurst,
     CooldownSuppressed,
+    /// Session 将 picture PLI/FIR 委托给 receive-local KeyframeRequester（非抑制）。
+    DelegatedToReceive,
     CoalescedKeyframeInFlight,
     CoalescedDecoderResetInFlight,
     StartupGraceSuppressed,
@@ -26,6 +28,7 @@ impl RecoveryAction {
             Self::WaitForBurst => "waitForBurst",
             Self::WaitForDecoderResetBurst => "waitForDecoderResetBurst",
             Self::CooldownSuppressed => "cooldownSuppressed",
+            Self::DelegatedToReceive => "delegatedToReceive",
             Self::CoalescedKeyframeInFlight => "coalesced:keyframeInFlight",
             Self::CoalescedDecoderResetInFlight => "coalesced:decoderResetInFlight",
             Self::StartupGraceSuppressed => "startupGraceSuppressed",
@@ -431,6 +434,7 @@ impl VideoEscalationController {
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::CoalescedKeyframeInFlight
             | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed => RecoveryActionContract {
@@ -453,6 +457,7 @@ impl VideoEscalationController {
             | RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::CoalescedKeyframeInFlight
             | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed => false,
@@ -469,6 +474,7 @@ impl VideoEscalationController {
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
+            | RecoveryAction::DelegatedToReceive
             | RecoveryAction::CoalescedKeyframeInFlight
             | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed => {}
@@ -605,19 +611,10 @@ impl VideoEscalationController {
                     if self
                         .last_keyframe_request_at
                         .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
-                        && self.try_enter_keyframe_epoch(
-                            KeyframeReasonClass::TransportAwaitRecoveryKeyframe,
-                            now,
-                        )
                     {
-                        self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;
-                        if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestPli
-                        } else {
-                            self.coalesced_keyframe_in_flight()
-                        }
+                        self.delegate_picture_recovery_to_receive()
                     } else if self
                         .last_decoder_reset_at
                         .map_or(true, |last| last.elapsed() >= self.cooldown)
@@ -767,16 +764,10 @@ impl VideoEscalationController {
                         } else if self
                             .last_keyframe_request_at
                             .map_or(true, |last| last.elapsed() >= self.cooldown)
-                            && self.try_enter_keyframe_epoch(reason_class, now)
                         {
-                            self.last_keyframe_request_at = Some(now);
                             self.pending_keyframe_signals = 0;
                             self.reconnect_candidate_signals = 0;
-                            if self.can_allocate_keyframe_attempt() {
-                                RecoveryAction::RequestPli
-                            } else {
-                                self.coalesced_keyframe_in_flight()
-                            }
+                            self.delegate_picture_recovery_to_receive()
                         } else {
                             self.coalesced_keyframe_in_flight()
                         }
@@ -787,41 +778,26 @@ impl VideoEscalationController {
                             .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
                     {
                         self.clear_keyframe_epoch();
-                        self.try_enter_keyframe_epoch(reason_class, now);
-                        self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;
-                        if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestFir
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
+                        self.delegate_picture_recovery_to_receive()
                     } else if persistent_wait_keyframe && allow_wait_keyframe_stage_escalation {
                         self.coalesced_keyframe_in_flight()
                     } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         RecoveryAction::WaitForBurst
                     } else if self.try_release_keyframe_epoch_for_same_reason(reason_class, now) {
-                        self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;
-                        if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestFir
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
+                        self.delegate_picture_recovery_to_receive()
                     } else if self
                         .last_keyframe_request_at
                         .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
-                        && self.try_enter_keyframe_epoch(reason_class, now)
                     {
-                        self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;
-                        if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestPli
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
+                        self.delegate_picture_recovery_to_receive()
+                    } else if immediate_keyframe_reason {
+                        self.delegate_picture_recovery_to_receive()
                     } else {
                         self.coalesced_keyframe_in_flight()
                     }
@@ -1021,8 +997,13 @@ impl VideoEscalationController {
         provisional < self.keyframe_budget_limit
     }
 
+    /// 图片级 PLI/FIR 由 receive-local 执行；session 不 enter keyframe epoch、不占 budget。
+    fn delegate_picture_recovery_to_receive(&self) -> RecoveryAction {
+        RecoveryAction::DelegatedToReceive
+    }
+
     fn coalesced_keyframe_in_flight(&self) -> RecoveryAction {
-        RecoveryAction::CoalescedKeyframeInFlight
+        self.delegate_picture_recovery_to_receive()
     }
 
     fn coalesced_decoder_reset_in_flight(&self) -> RecoveryAction {

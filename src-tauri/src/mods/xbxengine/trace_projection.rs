@@ -151,6 +151,11 @@ pub(super) struct RuntimeTraceObservationState {
     latest_observation_label: Option<String>,
     latest_observation_summary: Option<String>,
     keyframe_request_outcome_seq: u64,
+    ingress_idr_not_admitted_total: u64,
+    insert_gate_signature: Option<(String, String, Option<bool>, u64)>,
+    picture_recovery_authority: Option<String>,
+    picture_recovery_delegated_total: u64,
+    session_keyframe_in_flight: Option<bool>,
     latest_target_remb_action: Option<String>,
     latest_target_remb_summary: Option<String>,
     timeline_chain_state: Option<String>,
@@ -1372,6 +1377,26 @@ pub(super) fn record_runtime_trace_observations(
                 );
             }
         }
+    }
+
+    let ingress_idr_not_admitted = stats.ingress_idr_not_admitted_total.unwrap_or(0);
+    if ingress_idr_not_admitted != observation_state.ingress_idr_not_admitted_total {
+        observation_state.ingress_idr_not_admitted_total = ingress_idr_not_admitted;
+        runtime_trace.record_event(
+            "xbxengine",
+            "h264IdrIngressNotAdmitted",
+            session_id,
+            json!({
+                "total": ingress_idr_not_admitted,
+                "insertReason": stats.latest_ingress_idr_not_admitted_reason,
+                "ingressWaitingIdrInspectionTotal": stats.ingress_waiting_idr_inspection_total,
+                "ingressWaitingRtpMarkerTotal": stats.ingress_waiting_rtp_marker_total,
+                "mediaSupplyPhase": stats.media_supply_phase,
+            }),
+        );
+    }
+
+    if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
         let signature = (
             inspection.admission_accepted,
             inspection.reject_classification.clone(),
@@ -1976,10 +2001,92 @@ pub(super) fn record_runtime_trace_observations(
             session_id,
             json!({
                 "seq": stats.keyframe_request_outcome_seq,
-                "summary": stats.latest_observation_summary,
+                "source": stats.latest_keyframe_request_source,
+                "outcome": stats.latest_keyframe_request_outcome,
                 "mediaSupplyPhase": stats.media_supply_phase,
+                "ingressWaitingRtpMarkerTotal": stats.ingress_waiting_rtp_marker_total,
+                "ingressWaitingIdrInspectionTotal": stats.ingress_waiting_idr_inspection_total,
             }),
         );
+    }
+
+    let insert_gate_signature = (
+        stats.latest_insert_decision.clone().unwrap_or_default(),
+        stats
+            .latest_insert_decision_reason
+            .clone()
+            .unwrap_or_default(),
+        stats.insert_decode_bypass_aligned,
+        stats.insert_hold_decode_bypass_mismatch_total.unwrap_or(0),
+    );
+    if observation_state.insert_gate_signature.as_ref() != Some(&insert_gate_signature) {
+        observation_state.insert_gate_signature = Some(insert_gate_signature.clone());
+        if stats.latest_insert_decision.is_some() {
+            runtime_trace.record_event(
+                "xbxengine",
+                "insertGateDecision",
+                session_id,
+                json!({
+                    "decision": stats.latest_insert_decision,
+                    "reason": stats.latest_insert_decision_reason,
+                    "bypassAligned": stats.insert_decode_bypass_aligned,
+                    "holdDecodeBypassMismatchTotal": stats.insert_hold_decode_bypass_mismatch_total,
+                    "mediaSupplyPhase": stats.media_supply_phase,
+                    "actionStage": stats.recovery_surface_phase,
+                }),
+            );
+        }
+    }
+
+    if observation_state.picture_recovery_authority != stats.recovery_picture_recovery_authority {
+        observation_state.picture_recovery_authority =
+            stats.recovery_picture_recovery_authority.clone();
+        if stats.recovery_picture_recovery_authority.is_some() {
+            runtime_trace.record_event(
+                "xbxengine",
+                "pictureRecoveryAuthority",
+                session_id,
+                json!({
+                    "authority": stats.recovery_picture_recovery_authority,
+                    "delegatedTotal": stats.recovery_picture_recovery_delegated_total,
+                    "sessionKeyframeInFlight": stats.recovery_session_keyframe_in_flight,
+                    "sparseIdrPliIntervalMs": stats.receive_sparse_idr_pli_interval_ms,
+                }),
+            );
+        }
+    }
+
+    let delegated_total = stats.recovery_picture_recovery_delegated_total.unwrap_or(0);
+    if observation_state.picture_recovery_delegated_total != delegated_total {
+        observation_state.picture_recovery_delegated_total = delegated_total;
+        if delegated_total > 0 {
+            runtime_trace.record_event(
+                "xbxengine",
+                "pictureRecoveryDelegated",
+                session_id,
+                json!({
+                    "delegatedTotal": delegated_total,
+                    "summary": stats.latest_observation_summary,
+                    "authority": stats.recovery_picture_recovery_authority,
+                    "sessionKeyframeInFlight": stats.recovery_session_keyframe_in_flight,
+                }),
+            );
+        }
+    }
+
+    if observation_state.session_keyframe_in_flight != stats.recovery_session_keyframe_in_flight {
+        observation_state.session_keyframe_in_flight = stats.recovery_session_keyframe_in_flight;
+        if let Some(in_flight) = stats.recovery_session_keyframe_in_flight {
+            runtime_trace.record_event(
+                "xbxengine",
+                "sessionKeyframeInFlight",
+                session_id,
+                json!({
+                    "inFlight": in_flight,
+                    "pictureRecoveryAuthority": stats.recovery_picture_recovery_authority,
+                }),
+            );
+        }
     }
 
     if observation_state.latest_observation_label != stats.latest_observation_label
@@ -2015,6 +2122,18 @@ pub(super) fn record_runtime_trace_observations(
                     session_id,
                     json!({
                         "summary": stats.latest_observation_summary,
+                    }),
+                );
+            }
+            Some("pictureRecoveryDelegated") => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "pictureRecoveryDelegated",
+                    session_id,
+                    json!({
+                        "summary": stats.latest_observation_summary,
+                        "authority": stats.recovery_picture_recovery_authority,
+                        "sessionKeyframeInFlight": stats.recovery_session_keyframe_in_flight,
                     }),
                 );
             }

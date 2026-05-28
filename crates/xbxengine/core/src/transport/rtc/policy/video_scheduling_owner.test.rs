@@ -5,8 +5,8 @@ use super::{
 use crate::transport::rtc::facts::ConnectionLifecycleStateFact;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::recovery::contract::{
-    DerivedDecoderHealth, MediaSupplyPhase, RecoveryContractSnapshot, RecoveryExitPath,
-    RecoverySurfacePhase,
+    DerivedDecoderHealth, MediaSupplyPhase, PacketRecoveryActionStage, RecoveryContractSnapshot,
+    RecoveryExitPath, RecoverySurfacePhase,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 
@@ -19,6 +19,9 @@ fn default_contract_snapshot() -> RecoveryContractSnapshot {
         serving_wide: false,
         serving_relaxed: false,
         supply_break_active: false,
+        decoder_reference_synced: false,
+        displayed_idr_decoder_synced: false,
+        action_stage: PacketRecoveryActionStage::Drop,
     }
 }
 
@@ -100,7 +103,6 @@ fn input(
         recovery_exit_path: RecoveryExitPath::AwaitingAnchor,
         recovery_surface_phase: RecoverySurfacePhase::Steady,
         derived_decoder_health: DerivedDecoderHealth::Nominal,
-        displayed_idr_serving_wide: false,
         contract_snapshot: default_contract_snapshot(),
         display_supply_thresholds: thresholds(),
         observed_at_ms,
@@ -206,7 +208,6 @@ fn surface_matrix_steady_stable_serving_emits_no_recovery_intent() {
     settled.clean_anchor_source_event = Some("displayed-idr".to_string());
     settled.recovery_displayed_idr_at_ms = settled.clean_anchor_observed_at_ms;
     settled.recovery_fresh_anchor_recovered_at_ms = settled.clean_anchor_observed_at_ms;
-    settled.displayed_idr_serving_wide = true;
     settled.contract_snapshot.serving_wide = true;
     settled.recovery_surface_phase = RecoverySurfacePhase::Steady;
     let output = owner.evaluate(&settled);
@@ -269,7 +270,7 @@ fn surface_matrix_repairing_gap_in_flight_avoids_transport_await_intent() {
         1,
     );
     inp.recovery_surface_phase = RecoverySurfacePhase::Repairing;
-    inp.displayed_idr_serving_wide = true;
+    inp.contract_snapshot.serving_wide = true;
     inp.contract_snapshot.serving_wide = true;
     inp.contract_snapshot.serving_relaxed = true;
     inp.recovery_displayed_idr_at_ms = Some(390.0);
@@ -903,8 +904,10 @@ fn stable_serving_with_frozen_present_epoch_and_stale_decode_surfaces_host_prese
     base.clean_anchor_source_event = Some("displayed-idr".to_string());
     base.recovery_displayed_idr_at_ms = base.clean_anchor_observed_at_ms;
     base.recovery_fresh_anchor_recovered_at_ms = base.clean_anchor_observed_at_ms;
-    base.displayed_idr_serving_wide = true;
     base.contract_snapshot.serving_wide = true;
+    base.contract_snapshot.serving_wide = true;
+    base.contract_snapshot.decoder_reference_synced = true;
+    base.contract_snapshot.displayed_idr_decoder_synced = true;
     base.latest_h264_bootstrap_ready = Some(false);
     base.latest_h264_bootstrap_reject_reason = Some("bootstrapMissingIdr".to_string());
     base.latest_h264_committed_sps_present = Some(true);
@@ -3166,7 +3169,7 @@ fn displayed_idr_with_repairing_chain_and_stale_anchor_label_exits_rebuilding_su
     );
     ready.recovery_displayed_idr_at_ms = Some(2_680.0);
     ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
-    ready.displayed_idr_serving_wide = true;
+    ready.contract_snapshot.serving_wide = true;
     ready.contract_snapshot.serving_wide = true;
 
     let stable = owner.evaluate(&ready);
@@ -3177,6 +3180,7 @@ fn displayed_idr_with_repairing_chain_and_stale_anchor_label_exits_rebuilding_su
 
 #[test]
 fn displayed_idr_with_waiting_keyframe_chain_exits_rebuilding_supply() {
+    // 以下用例要求 decoder 参考链已同步，才允许 displayed-idr release transport-await。
     let mut owner = VideoSchedulingOwner::new();
     let _ = owner.evaluate(&input(
         ConnectionLifecycleStateFact::Connected,
@@ -3212,13 +3216,59 @@ fn displayed_idr_with_waiting_keyframe_chain_exits_rebuilding_supply() {
     );
     ready.recovery_displayed_idr_at_ms = Some(2_680.0);
     ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
-    ready.displayed_idr_serving_wide = true;
     ready.contract_snapshot.serving_wide = true;
+    ready.contract_snapshot.decoder_reference_synced = true;
+    ready.contract_snapshot.displayed_idr_decoder_synced = true;
 
     let stable = owner.evaluate(&ready);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(stable.health, VideoHealthContract::Stable);
     assert!(stable.recovery_intent.is_none());
+}
+
+#[test]
+fn serving_wide_without_decoder_sync_does_not_release_to_stable_serving() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("receiverWaitingKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("waiting-keyframe"),
+        Some("receiverWaitingKeyframe"),
+        Some("remoteTrackAttached"),
+        Some(40_000),
+        2_000.0,
+        10,
+    ));
+
+    let mut ready = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("receiverWaitingKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(24.0),
+            host_cadence_phase: Some("steady".to_string()),
+            host_frame_present_epoch: Some(3_424),
+            host_display_tick_epoch: Some(8_000),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("waiting-keyframe"),
+        Some("frame-inspection-rejected-await-anchor"),
+        Some("remoteTrackAttached"),
+        Some(150_000),
+        2_700.0,
+        10,
+    );
+    ready.recovery_displayed_idr_at_ms = Some(2_680.0);
+    ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
+    ready.contract_snapshot.serving_wide = true;
+    ready.contract_snapshot.decoder_reference_synced = false;
+    ready.contract_snapshot.displayed_idr_decoder_synced = false;
+
+    let output = owner.evaluate(&ready);
+    assert_ne!(output.state, VideoSchedulingOwnerState::StableServing);
 }
 
 #[test]

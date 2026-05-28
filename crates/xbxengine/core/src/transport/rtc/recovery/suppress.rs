@@ -5,12 +5,39 @@ use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalatio
 use crate::transport::rtc::session::control_model::{
     resolve_session_fault_domain, SessionFaultDomain,
 };
+use crate::XbxEngineMediaRuntimeStats;
+
+/// receive 侧已在发 PLI/FIR 时，session 不应再 coalesce 为 keyframeInFlight。
+pub(crate) fn receive_local_keyframe_request_recent(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats
+        .latest_keyframe_request_source
+        .as_ref()
+        .is_some_and(|source| {
+            source.starts_with("insert-gate")
+                || source.starts_with("receiver-local")
+                || source.starts_with("media-supply")
+                || source.starts_with("chain-recovery")
+        })
+}
+
+/// 记录 session 将图片级恢复委托给 receive（sticky authority + 可重复 trace 计数）。
+pub(crate) fn record_picture_recovery_delegation(
+    stats: &mut crate::XbxEngineMediaRuntimeStats,
+    detail: &str,
+) {
+    stats.recovery_picture_recovery_authority = Some("receive".to_string());
+    stats.recovery_picture_recovery_delegated_total = stats
+        .recovery_picture_recovery_delegated_total
+        .saturating_add(1);
+    stats.latest_observation_label = Some("pictureRecoveryDelegated".to_string());
+    stats.latest_observation_summary = Some(detail.to_string());
+}
 
 /// Session / recovery planner 不得再下发 PLI/FIR（receive-only 纪律）。
 pub(crate) fn suppress_session_picture_recovery_action(action: RecoveryAction) -> RecoveryAction {
     match action {
         RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
-            RecoveryAction::CooldownSuppressed
+            RecoveryAction::DelegatedToReceive
         }
         other => other,
     }
@@ -32,10 +59,8 @@ pub(crate) fn should_suppress_display_supply_picture_recovery(
         "receiverWaitingKeyframe"
             | "waitKeyframe"
             | "ingressWaitKeyframe"
-            | "displayedIdrFastPathPathA"
-            | "displayedIdrFastPathPathB"
-            | "displayedIdrFastPathPathC"
-            | "displayedIdrFastPathPathD"
+            | "idrRecoveryActive"
+            | "supplyBreakKeyframeHint"
     ) {
         return false;
     }

@@ -488,6 +488,7 @@ impl RtcVideoFrameSource {
                         rtp.header.sequence_number,
                     );
                     if rtp.header.marker {
+                        self.note_ingress_waiting_rtp_marker();
                         self.jitter_marker_seen_count =
                             self.jitter_marker_seen_count.saturating_add(1);
                         self.pending_marker_boundary = Some(

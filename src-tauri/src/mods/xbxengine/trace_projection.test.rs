@@ -3683,3 +3683,33 @@ fn webrtc_recovery_9080323_contract_validation_matrix() {
         .iter()
         .any(|value| value == "waitingKeyframe"));
 }
+
+#[test]
+fn picture_recovery_delegated_total_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "recovery_picture_recovery_authority": "receive",
+        "recovery_picture_recovery_delegated_total": 1,
+        "recovery_session_keyframe_in_flight": false,
+        "latest_observation_summary": "nativeDelegated:requestPli"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    assert!(has_event(&entries, "pictureRecoveryDelegated"));
+    assert!(has_event(&entries, "pictureRecoveryAuthority"));
+    let payload = find_event_payload(&entries, "pictureRecoveryDelegated");
+    assert_eq!(payload["delegatedTotal"], 1);
+    assert_eq!(payload["authority"], "receive");
+}

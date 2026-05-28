@@ -11,6 +11,11 @@ use crate::media::video::pacer::actor::PacerActorHandle;
 use crate::media::video::types::EncodedFrame;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::pipeline::observation::record_pipeline_frame_drop;
+use crate::transport::rtc::receive::{
+    insert_decodable_to_feed, insert_emit_permits_decode_without_bootstrap_ready,
+    receiver_decode_context_from_stats, resolve_insert_decision_with_reason,
+    DecodeCorruptionPolicy, InsertContext, InsertDecision,
+};
 
 const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
 const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
@@ -437,28 +442,57 @@ fn run_decode_loop(
                 DecodeMsg::Frame(frame) => {
                     release_decode_slot(&available_slots, &demand_epoch, &demand_notify);
                     let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
-                    runtime_stats.read(|stats| {
-                        decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
-                        let decode_ctx = crate::transport::rtc::receive::receiver_decode_context_from_stats(
-                            stats, now_ms,
-                        );
-                        let effective_rtt_ms = stats.recovery_effective_rtt_ms.unwrap_or(200.0);
-                        let insert_ctx =
-                            crate::transport::rtc::receive::InsertContext::from_runtime(
+                    let bootstrap_ready = frame.h264.bootstrap_ready;
+                    let (insert_bypass, insert_decision, emit_without_bootstrap) = runtime_stats
+                        .read(|stats| {
+                            decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
+                            let decode_ctx = receiver_decode_context_from_stats(stats, now_ms);
+                            let effective_rtt_ms = stats.recovery_effective_rtt_ms.unwrap_or(200.0);
+                            let insert_ctx = InsertContext::from_runtime(
                                 decode_ctx,
                                 stats,
                                 now_ms,
                                 effective_rtt_ms,
                             );
-                        let bypass =
-                            crate::transport::rtc::receive::insert_emit_permits_decode_without_bootstrap_ready(
+                            let (decision, _) = resolve_insert_decision_with_reason(
                                 &frame.h264,
                                 &insert_ctx,
-                                crate::transport::rtc::receive::DecodeCorruptionPolicy::StandardWebRtc,
+                                DecodeCorruptionPolicy::StandardWebRtc,
+                                0,
                             );
-                        decode_state.set_insert_emit_bootstrap_bypass(bypass);
+                            let bypass = insert_decodable_to_feed(
+                                &frame.h264,
+                                &insert_ctx.decode,
+                                insert_ctx.action_stage,
+                            );
+                            let emit_without_bootstrap =
+                                insert_emit_permits_decode_without_bootstrap_ready(
+                                    &frame.h264,
+                                    &insert_ctx,
+                                    DecodeCorruptionPolicy::StandardWebRtc,
+                                );
+                            decode_state.set_insert_emit_bootstrap_bypass(bypass);
+                            (bypass, decision, emit_without_bootstrap)
+                        })
+                        .unwrap_or((false, InsertDecision::HoldRepair, false));
+                    runtime_stats.update(|stats| {
+                        let aligned = match insert_decision {
+                            InsertDecision::Emit => {
+                                bootstrap_ready || insert_bypass || emit_without_bootstrap
+                            }
+                            InsertDecision::HoldRepair | InsertDecision::DropCorrupt => {
+                                !insert_bypass
+                            }
+                        };
+                        if insert_decision == InsertDecision::HoldRepair && insert_bypass {
+                            stats.insert_hold_decode_bypass_mismatch_total = stats
+                                .insert_hold_decode_bypass_mismatch_total
+                                .saturating_add(1);
+                        }
+                        stats.insert_decode_bypass_aligned = Some(aligned);
                     });
                     let frame_rtp_timestamp = frame.rtp_timestamp;
+                    let idr_bootstrap_sync = frame.is_keyframe && frame.h264.bootstrap_ready;
                     let frame_class = EncodedFrameRecoveryClass::from_frame(&frame);
                     let current_recovery_epoch = runtime_stats
                         .read(|stats| stats.transport_recovery_epoch)
@@ -572,6 +606,9 @@ fn run_decode_loop(
                             stats.latest_video_decode_ok_time_ms = Some(now_ms);
                             stats.latest_video_decode_ok_rtp_timestamp = Some(frame_rtp_timestamp);
                             stats.video_decode_fps = recent_window_fps(&recent_decode_times_ms);
+                            if idr_bootstrap_sync {
+                                stats.recovery_decoder_reference_synced_at_ms = Some(now_ms);
+                            }
                         });
                     }
                     if let Some(decision) = decode_state.latest_decode_candidate_decision() {

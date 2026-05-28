@@ -352,6 +352,17 @@ mod tests {
 
     use crate::api::backend::XbxEngineHostVideoPresentMetrics;
     use crate::api::backend::XbxEngineMediaRuntimeStats;
+
+    fn seed_decoder_reference_sync_for_pending_idr(
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.recovery_decoder_reference_synced_at_ms = Some(observed_at_ms);
+        stats.latest_video_decode_ok_time_ms = Some(observed_at_ms);
+        stats.latest_video_decode_ok_rtp_timestamp = Some(rtp_timestamp);
+    }
     use crate::media::video::decode::actor::DecodeActorHandle;
     use crate::media::video::render::renderer::XbxRenderState;
     use crate::transport::rtc::stream::RtcMediaService;
@@ -489,6 +500,7 @@ mod tests {
             sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
             sink.record_pending_displayed_idr_rtp(77_001);
         }
+        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, 180.0);
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
@@ -553,6 +565,7 @@ mod tests {
             sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
             sink.record_pending_displayed_idr_rtp(77_001);
         }
+        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, 180.0);
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
@@ -635,6 +648,7 @@ mod tests {
                     });
             });
         }
+        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, 180.0);
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),
@@ -705,6 +719,7 @@ mod tests {
             );
             sink.record_pending_displayed_idr_rtp(77_001);
         }
+        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, 180.0);
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
             latest_host_present_time_ms: Some(210.0),

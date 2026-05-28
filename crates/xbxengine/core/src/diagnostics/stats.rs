@@ -1145,6 +1145,8 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.video_decoder_recovery_state_changed_at_ms),
         latest_video_decode_ok_rtp_timestamp: runtime_stats
             .and_then(|stats| stats.latest_video_decode_ok_rtp_timestamp),
+        latest_video_decode_ok_time_ms: runtime_stats
+            .and_then(|stats| stats.latest_video_decode_ok_time_ms),
         video_renderer_stalled: runtime_stats.and_then(|stats| stats.video_renderer_stalled),
         video_renderer_stall_blocks_presentation: renderer_stall_blocks_presentation,
         packet_age_ms,
@@ -1221,6 +1223,36 @@ pub fn build_xbxengine_stats(
                 .as_ref()
                 .map(keyframe_request_episode_to_protocol_dto)
         }),
+        latest_keyframe_request_source: runtime_stats
+            .and_then(|stats| stats.latest_keyframe_request_source.clone()),
+        latest_keyframe_request_outcome: runtime_stats
+            .and_then(|stats| stats.latest_keyframe_request_outcome.clone()),
+        latest_insert_decision: runtime_stats
+            .and_then(|stats| stats.latest_insert_decision.clone()),
+        latest_insert_decision_reason: runtime_stats
+            .and_then(|stats| stats.latest_insert_decision_reason.clone()),
+        insert_decode_bypass_aligned: runtime_stats
+            .and_then(|stats| stats.insert_decode_bypass_aligned),
+        insert_hold_decode_bypass_mismatch_total: runtime_stats
+            .map(|stats| stats.insert_hold_decode_bypass_mismatch_total),
+        recovery_picture_recovery_authority: runtime_stats
+            .and_then(|stats| stats.recovery_picture_recovery_authority.clone()),
+        recovery_picture_recovery_delegated_total: runtime_stats
+            .map(|stats| stats.recovery_picture_recovery_delegated_total),
+        recovery_session_keyframe_in_flight: runtime_stats
+            .and_then(|stats| stats.recovery_session_keyframe_in_flight),
+        receive_sparse_idr_pli_interval_ms: runtime_stats
+            .and_then(|stats| stats.receive_sparse_idr_pli_interval_ms),
+        ingress_waiting_rtp_marker_total: runtime_stats
+            .map(|stats| stats.ingress_waiting_rtp_marker_total),
+        ingress_waiting_idr_inspection_total: runtime_stats
+            .map(|stats| stats.ingress_waiting_idr_inspection_total),
+        ingress_idr_not_admitted_total: runtime_stats
+            .map(|stats| stats.ingress_idr_not_admitted_total),
+        latest_ingress_idr_not_admitted_reason: runtime_stats
+            .and_then(|stats| stats.latest_ingress_idr_not_admitted_reason.clone()),
+        recovery_decoder_reference_synced_at_ms: runtime_stats
+            .and_then(|stats| stats.recovery_decoder_reference_synced_at_ms),
         recent_keyframe_request_episodes: runtime_stats
             .map(|stats| {
                 stats

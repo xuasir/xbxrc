@@ -4,14 +4,17 @@ use crate::transport::rtc::policy::display_supply::{
 };
 use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms,
-    derive_gap_severity_from_timeline_observation, frame_value_from_gap_severity,
     has_current_transport_await_issue_from_observation, is_ingress_waiting_keyframe,
     is_invalid_recovery_bootstrap_reject_reason, is_media_healthy_baseline,
-    is_receiver_state_waiting_keyframe, is_transport_await_probe_source_event, FrameValue,
-    GapSeverity, MediaSupplyPhase, RecoveryExitPath, DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS,
+    is_receiver_state_waiting_keyframe, is_transport_await_probe_source_event, MediaSupplyPhase,
+    RecoveryExitPath, DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 use crate::transport::rtc::session::control_model::SessionFaultDomain;
+use crate::transport::rtc::session::facts::{
+    derive_gap_severity_from_timeline_observation, frame_value_from_gap_severity, FrameValue,
+    GapSeverity,
+};
 use crate::{
     XbxEngineAnchorCandidateLedger, XbxEngineAnchorCandidateState,
     XbxEngineVideoTimelineObservation,
@@ -158,7 +161,6 @@ pub(crate) struct VideoSchedulingOwnerInput {
         crate::transport::rtc::recovery::contract::RecoverySurfacePhase,
     pub(crate) derived_decoder_health:
         crate::transport::rtc::recovery::contract::DerivedDecoderHealth,
-    pub(crate) displayed_idr_serving_wide: bool,
     pub(crate) contract_snapshot:
         crate::transport::rtc::recovery::contract::RecoveryContractSnapshot,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
@@ -168,7 +170,7 @@ pub(crate) struct VideoSchedulingOwnerInput {
 impl VideoSchedulingOwnerInput {
     /// L3 控制面：宽 serving（Insert/decode）或 relaxed（短脉冲抑制 transport-await）。
     fn displayed_idr_control_plane_active(&self) -> bool {
-        self.displayed_idr_serving_wide || self.contract_snapshot.serving_relaxed
+        self.contract_snapshot.serving_wide || self.contract_snapshot.serving_relaxed
     }
 
     fn has_established_displayed_idr_fact(&self) -> bool {
@@ -2423,7 +2425,10 @@ impl VideoSchedulingOwner {
     fn steady_displayed_idr_bootstrap_continuation_active(
         input: &VideoSchedulingOwnerInput,
     ) -> bool {
-        if !input.displayed_idr_serving_wide || !input.has_established_displayed_idr_fact() {
+        if !input.contract_snapshot.decoder_reference_synced {
+            return false;
+        }
+        if !input.contract_snapshot.serving_wide || !input.has_established_displayed_idr_fact() {
             return false;
         }
         if input.latest_h264_committed_sps_present != Some(true)
@@ -2463,6 +2468,9 @@ impl VideoSchedulingOwner {
             return false;
         }
         if is_receiver_state_waiting_keyframe(input.effective_receiver_state()) {
+            if !input.contract_snapshot.decoder_reference_synced {
+                return false;
+            }
             if input.contract_snapshot.serving_relaxed
                 && host_present_stall_streak < HOST_PRESENT_STALL_TICK_STREAK_MIN
             {

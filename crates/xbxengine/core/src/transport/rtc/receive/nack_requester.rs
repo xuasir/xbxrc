@@ -119,7 +119,12 @@ impl NackRequester {
         }
     }
 
-    pub fn poll(&mut self, params: &NackSchedulingParams, now: Instant) -> NackPollResult {
+    pub fn poll(
+        &mut self,
+        params: &NackSchedulingParams,
+        now: Instant,
+        sparse_idr_rhythm: crate::transport::rtc::recovery::contract::SparseIdrRhythm,
+    ) -> NackPollResult {
         let mut result = NackPollResult::default();
         let mut should_arm_escalation = false;
 
@@ -176,10 +181,11 @@ impl NackRequester {
         }
 
         if should_arm_escalation {
-            if self
-                .pending
-                .values()
-                .any(|entry| entry.total_send_count >= STUCK_SEQUENCE_SEND_THRESHOLD)
+            if sparse_idr_rhythm.nack_escalation_immediate_eligible()
+                || self
+                    .pending
+                    .values()
+                    .any(|entry| entry.total_send_count >= STUCK_SEQUENCE_SEND_THRESHOLD)
                 || !self.exhausted_sequences.is_empty()
             {
                 self.keyframe_escalation.arm_immediate(now);
@@ -223,7 +229,11 @@ mod tests {
         let start = Instant::now();
         let params = cloud_timing().nack_scheduling_params(50.0);
         std::thread::sleep(Duration::from_millis(25));
-        let result = requester.poll(&params, start + Duration::from_millis(25));
+        let result = requester.poll(
+            &params,
+            start + Duration::from_millis(25),
+            Default::default(),
+        );
         assert!(!result.sequences.contains(&10));
     }
 
@@ -240,13 +250,13 @@ mod tests {
         params.reorder_wait = Duration::from_millis(1);
 
         let t1 = start + Duration::from_millis(3);
-        let _ = requester.poll(&params, t1);
-        let _ = requester.poll(&params, t1 + Duration::from_millis(2));
+        let _ = requester.poll(&params, t1, Default::default());
+        let _ = requester.poll(&params, t1 + Duration::from_millis(2), Default::default());
         assert!(requester.has_exhausted_gaps());
 
         requester.register_gaps([42_u16]);
         assert!(requester.keyframe_escalation_armed());
-        let r = requester.poll(&params, t1 + Duration::from_millis(3));
+        let r = requester.poll(&params, t1 + Duration::from_millis(3), Default::default());
         assert!(r.keyframe_escalation_due);
     }
 
@@ -265,7 +275,7 @@ mod tests {
         let mut armed = false;
         for step in 0..20 {
             let now = start + Duration::from_millis(2 + step * 3);
-            let result = requester.poll(&params, now);
+            let result = requester.poll(&params, now, Default::default());
             if result.keyframe_escalation_due {
                 armed = true;
                 break;
@@ -288,12 +298,12 @@ mod tests {
         params.reorder_wait = Duration::from_millis(1);
 
         let t1 = start + Duration::from_millis(3);
-        let r1 = requester.poll(&params, t1);
+        let r1 = requester.poll(&params, t1, Default::default());
         assert!(!r1.sequences.is_empty());
         assert!(!requester.keyframe_escalation_armed());
 
         let t_exhaust = t1 + params.nack_timeout + Duration::from_millis(2);
-        let r2 = requester.poll(&params, t_exhaust);
+        let r2 = requester.poll(&params, t_exhaust, Default::default());
         assert!(r2.sequences.is_empty());
         assert!(r2.keyframe_escalation_due);
         assert!(!requester.keyframe_escalation_armed());

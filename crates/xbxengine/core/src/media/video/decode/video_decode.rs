@@ -40,6 +40,8 @@ const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 48;
 const DECODE_QUEUE_STALE_SLACK_GUARD_MS: u64 = 2;
 const DECODE_MAILBOX_REPLACE_MIN_INTERVAL_FLOOR_MS: f64 = 12.0;
 const DECODE_MAILBOX_REPLACE_MIN_INTERVAL_CEILING_MS: f64 = 100.0;
+/// gap/recovering 上连续 INVALIDDATA 后抑制 nominal continuation decoder reset。
+const TRANSIENT_DECODE_ERROR_RESET_COALESCE_MS: f64 = 800.0;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -298,6 +300,8 @@ pub(crate) struct XbxVideoDecodeState {
     insert_emit_bootstrap_bypass: bool,
     /// nominal/recovering continuation 无输出 reset 后由 actor 写入 receive PLI hint。
     pending_receive_keyframe_hint_at_ms: Option<f64>,
+    /// 近期 delta 上 AVERROR_INVALIDDATA/EAGAIN：抑制 gap 内误触发 decoder reset。
+    last_transient_decode_error_at_ms: Option<f64>,
 }
 
 impl XbxVideoDecodeState {
@@ -357,6 +361,7 @@ impl XbxVideoDecodeState {
             timed_fallback_displayed_idr_bypass: false,
             insert_emit_bootstrap_bypass: false,
             pending_receive_keyframe_hint_at_ms: None,
+            last_transient_decode_error_at_ms: None,
         })
     }
 
@@ -527,6 +532,7 @@ impl XbxVideoDecodeState {
             if self.nominal_continuation_hw_no_output_resets > 0
                 && self.decoder_backend_is_hardware()
                 && self.should_recover_nominal_continuation_no_output(
+                    now_ms,
                     XbxVideoRecoveryState::Nominal,
                     encoded_frame.h264.bootstrap_reject_reason,
                 )
@@ -621,11 +627,22 @@ impl XbxVideoDecodeState {
                     self.clear_waiting_keyframe_continuation();
                 }
                 let status = parse_decoder_status_code(&error);
-                self.record_hardware_decode_failure(now_ms, status);
+                let transient_ffmpeg = is_transient_ffmpeg_decode_status(status);
+                if should_count_toward_hardware_decode_fallback(status, frame_is_keyframe) {
+                    self.record_hardware_decode_failure(now_ms, status);
+                }
                 self.backend_no_output_streak = 0;
+                if transient_ffmpeg && !frame_is_keyframe {
+                    self.last_transient_decode_error_at_ms = Some(now_ms);
+                }
+                let decode_detail = if transient_ffmpeg && !frame_is_keyframe {
+                    "ffmpegInvalidData"
+                } else {
+                    "backendError"
+                };
                 self.record_decode_output_path_observation(
                     XbxDecodeOutputPathVerdict::BackendError,
-                    "backendError",
+                    decode_detail,
                     frame_rtp_timestamp,
                     frame_is_keyframe,
                     status,
@@ -636,15 +653,17 @@ impl XbxVideoDecodeState {
                     None,
                     now_ms,
                 );
-                if self.hardware_decode_failure_streak == 1 {
+                if self.hardware_decode_failure_streak == 1 && !transient_ffmpeg {
                     crate::xbx_log_warn!(
                         "[xbxengine][rtc] hardware decode failed status={:?} err={error}",
                         status
                     );
                 }
-                if should_force_recovery_keyframe(status)
-                    || self.hardware_decode_failure_streak >= 3
-                {
+                if should_escalate_hardware_decode_fallback(
+                    status,
+                    frame_is_keyframe,
+                    self.hardware_decode_failure_streak,
+                ) {
                     self.record_remote_frame_capture_observation(
                         "backend-error",
                         &frame_nal_labels,
@@ -800,6 +819,7 @@ impl XbxVideoDecodeState {
                 return None;
             }
             if self.should_recover_recovering_continuation_no_output(
+                now_ms,
                 recovery_state_before_decode,
                 frame_bootstrap_reject_reason_kind,
                 recovery_epoch_tag,
@@ -823,6 +843,7 @@ impl XbxVideoDecodeState {
                 return None;
             }
             if self.should_recover_nominal_continuation_no_output(
+                now_ms,
                 recovery_state_before_decode,
                 frame_bootstrap_reject_reason_kind,
             ) {
@@ -928,6 +949,7 @@ impl XbxVideoDecodeState {
         self.nominal_continuation_hw_no_output_resets = 0;
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
+        self.last_transient_decode_error_at_ms = None;
         self.record_decode_output_path_observation(
             XbxDecodeOutputPathVerdict::DecodedFrame,
             if continuation_gate_bypassed {
@@ -1505,9 +1527,22 @@ impl XbxVideoDecodeState {
 
     fn should_recover_nominal_continuation_no_output(
         &self,
+        now_ms: f64,
         recovery_state_before_decode: XbxVideoRecoveryState,
         frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
     ) -> bool {
+        if matches!(
+            recovery_state_before_decode,
+            XbxVideoRecoveryState::Recovering | XbxVideoRecoveryState::WaitingKeyframe
+        ) {
+            return false;
+        }
+        if self
+            .last_transient_decode_error_at_ms
+            .is_some_and(|at| (now_ms - at).max(0.0) < TRANSIENT_DECODE_ERROR_RESET_COALESCE_MS)
+        {
+            return false;
+        }
         if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe) {
             return false;
         }
@@ -1527,12 +1562,19 @@ impl XbxVideoDecodeState {
 
     fn should_recover_recovering_continuation_no_output(
         &self,
+        now_ms: f64,
         recovery_state_before_decode: XbxVideoRecoveryState,
         frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
         recovery_epoch_tag: Option<u64>,
         _clean_anchor_commit_recovery_epoch: Option<u64>,
         frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition,
     ) -> bool {
+        if self
+            .last_transient_decode_error_at_ms
+            .is_some_and(|at| (now_ms - at).max(0.0) < TRANSIENT_DECODE_ERROR_RESET_COALESCE_MS)
+        {
+            return false;
+        }
         matches!(
             recovery_state_before_decode,
             XbxVideoRecoveryState::Recovering
@@ -2082,6 +2124,7 @@ impl XbxVideoDecodeState {
             timed_fallback_displayed_idr_bypass: false,
             insert_emit_bootstrap_bypass: false,
             pending_receive_keyframe_hint_at_ms: None,
+            last_transient_decode_error_at_ms: None,
         }
     }
 
@@ -2177,6 +2220,40 @@ fn should_force_recovery_keyframe(status: Option<i32>) -> bool {
         status,
         Some(K_VT_VIDEO_DECODER_BAD_DATA_ERR | K_VT_VIDEO_DECODER_REFERENCE_MISSING_ERR)
     )
+}
+
+/// FFmpeg `AVERROR_INVALIDDATA` / EAGAIN：常见于 PPS 未就绪或 drain 时序，不是 VideoToolbox 硬故障。
+fn is_transient_ffmpeg_decode_status(status: Option<i32>) -> bool {
+    matches!(
+        status,
+        Some(code) if code == super::backend_ffmpeg::av_err_invaliddata()
+            || code == super::backend_ffmpeg::av_err_eagain()
+    )
+}
+
+fn should_count_toward_hardware_decode_fallback(
+    status: Option<i32>,
+    frame_is_keyframe: bool,
+) -> bool {
+    if is_transient_ffmpeg_decode_status(status) && !frame_is_keyframe {
+        return false;
+    }
+    should_force_recovery_keyframe(status) || frame_is_keyframe
+}
+
+/// 禁止在 delta + AVERROR_INVALIDDATA 上误触发硬解→软解 fallback（会焊死 waiting-keyframe）。
+fn should_escalate_hardware_decode_fallback(
+    status: Option<i32>,
+    frame_is_keyframe: bool,
+    hardware_decode_failure_streak: u32,
+) -> bool {
+    if should_force_recovery_keyframe(status) {
+        return true;
+    }
+    if is_transient_ffmpeg_decode_status(status) {
+        return false;
+    }
+    frame_is_keyframe && hardware_decode_failure_streak >= 3
 }
 
 fn payload_fingerprint(payload: &[u8]) -> u64 {

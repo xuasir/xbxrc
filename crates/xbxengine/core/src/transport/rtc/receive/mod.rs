@@ -42,7 +42,7 @@ mod timeline_projection_tests;
 pub(crate) use core::receiver_state_from_runtime;
 pub(crate) use core_body::ReceiveCoreBody;
 pub(crate) use core_runtime::RtcReceiveCore;
-pub(crate) use decode_gate::receiver_decode_context_from_stats;
+pub(crate) use decode_gate::{insert_decodable_to_feed, receiver_decode_context_from_stats};
 pub use decode_gate::{
     inspection_bootstrap_blocks_delta_continuation, inspection_bootstrap_reason,
     keyframe_episode_response_detail, receiver_state_blocks_delta_continuation,
@@ -51,9 +51,10 @@ pub use decode_gate::{
 };
 pub(crate) use engine::ReceiveEngine;
 pub(crate) use insert_gate::{
-    insert_decision_to_inspection_admission, insert_emit_permits_decode_without_bootstrap_ready,
-    recovery_keyframe_action_for_insert_decision, resolve_insert_decision, InsertContext,
-    InsertDecision,
+    insert_decision_label, insert_decision_to_inspection_admission,
+    insert_emit_permits_decode_without_bootstrap_ready,
+    recovery_keyframe_action_for_insert_decision, resolve_insert_decision,
+    resolve_insert_decision_with_reason, InsertContext, InsertDecision,
 };
 pub use observation::ReceiverObservation;
 pub use packet_buffer::SequenceObserveOutcome;

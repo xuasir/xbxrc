@@ -83,6 +83,20 @@ impl RuntimeStatsSink {
         });
     }
 
+    /// 测试/合成路径：pending displayed-idr 须与解码器参考链同步后才可 commit fresh anchor。
+    #[cfg(test)]
+    pub(crate) fn seed_decoder_reference_sync_for_pending_idr(
+        &self,
+        rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) {
+        self.update(|stats| {
+            stats.recovery_decoder_reference_synced_at_ms = Some(observed_at_ms);
+            stats.latest_video_decode_ok_time_ms = Some(observed_at_ms);
+            stats.latest_video_decode_ok_rtp_timestamp = Some(rtp_timestamp);
+        });
+    }
+
     pub(crate) fn record_displayed_idr_fact(
         &self,
         observed_at_ms: f64,
@@ -93,7 +107,7 @@ impl RuntimeStatsSink {
             if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch) {
                 return;
             }
-            if !host_display_rtp_qualifies_for_fresh_anchor(stats, rtp_timestamp) {
+            if !host_display_rtp_qualifies_for_fresh_anchor(stats, rtp_timestamp, observed_at_ms) {
                 return;
             }
             stats.recovery_displayed_idr_rtp = Some(rtp_timestamp);

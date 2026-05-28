@@ -54,6 +54,7 @@ fn displayed_idr_fact_commits_fresh_anchor_on_host_visible() {
 
     sink.begin_transport_recovery_episode(10.0);
     sink.record_pending_displayed_idr_rtp(9_000);
+    sink.seed_decoder_reference_sync_for_pending_idr(9_000, 150.0);
     sink.record_displayed_idr_fact(160.0, 9_000, Some(42));
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -92,6 +93,7 @@ fn clean_anchor_keeps_transport_recovery_episode_open_until_stable_settle() {
 
     sink.begin_transport_recovery_episode(10.0);
     sink.record_pending_displayed_idr_rtp(1);
+    sink.seed_decoder_reference_sync_for_pending_idr(1, 15.0);
     sink.record_displayed_idr_fact(20.0, 1, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -130,6 +132,7 @@ fn clean_anchor_sets_retired_at_ms_on_latest_keyframe_episode() {
         false,
     );
     sink.record_pending_displayed_idr_rtp(77_001);
+    sink.seed_decoder_reference_sync_for_pending_idr(77_001, 15.0);
     sink.record_displayed_idr_fact(20.0, 77_001, None);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -144,6 +147,7 @@ fn advancing_transport_recovery_episode_clears_stale_anchor() {
 
     sink.begin_transport_recovery_episode(10.0);
     sink.record_pending_displayed_idr_rtp(77_001);
+    sink.seed_decoder_reference_sync_for_pending_idr(77_001, 15.0);
     sink.record_displayed_idr_fact(20.0, 77_001, None);
     assert_eq!(sink.advance_transport_recovery_episode(30.0), 2);
 
@@ -183,6 +187,7 @@ fn stable_settle_completes_active_episode_after_clean_anchor() {
 
     sink.begin_transport_recovery_episode(10.0);
     sink.record_pending_displayed_idr_rtp(1);
+    sink.seed_decoder_reference_sync_for_pending_idr(1, 15.0);
     sink.record_displayed_idr_fact(20.0, 1, None);
     sink.complete_transport_recovery_after_stable_settle(40.0);
 
@@ -592,6 +597,7 @@ fn stale_owner_frame_does_not_establish_fresh_anchor_until_displayed_pending_idr
         assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, None);
     }
 
+    sink.seed_decoder_reference_sync_for_pending_idr(10_001, 200.0);
     sink.record_displayed_idr_fact(250.0, 10_001, None);
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, Some(1));
@@ -714,6 +720,7 @@ fn keyframe_request_episode_timeout_skipped_when_transport_clean_anchor_already_
     );
     sink.record_picture_recovery_episode_sent("pli", 120.0, Some(500.0));
     sink.record_pending_displayed_idr_rtp(1);
+    sink.seed_decoder_reference_sync_for_pending_idr(1, 170.0);
     sink.record_displayed_idr_fact(180.0, 1, None);
 
     sink.record_picture_recovery_episode_timeout(600.0);
@@ -779,6 +786,7 @@ fn first_frame_latency_observation_records_complete_stage_breakdown() {
     sink.record_picture_recovery_episode_packet_seen(150.0, Some(456_789), true, Some(322));
     sink.record_picture_recovery_episode_decoded(165.0, 456_789, 43);
     sink.record_pending_displayed_idr_rtp(456_789);
+    sink.seed_decoder_reference_sync_for_pending_idr(456_789, 170.0);
     sink.record_displayed_idr_fact(180.0, 456_789, None);
     sink.complete_transport_recovery_after_stable_settle(210.0);
 

@@ -545,10 +545,41 @@ pub struct XbxEngineMediaRuntimeStats {
     pub media_supply_host_first_present_at_ms: Option<f64>,
     /// receive-local keyframe 尝试序号；trace 按序发 `keyframeRequestOutcome`。
     pub keyframe_request_outcome_seq: u64,
+    /// 解码器参考链已与 bootstrap IDR 同步（decode OK 写入）。
+    pub recovery_decoder_reference_synced_at_ms: Option<f64>,
+    /// 最近一次 receive-local keyframe 请求来源（trace 专用）。
+    pub latest_keyframe_request_source: Option<String>,
+    /// 最近一次 receive-local keyframe 结果：`sent` / `throttled` / `coalesced` / …
+    pub latest_keyframe_request_outcome: Option<String>,
+    /// receive-local PLI/FIR 上次发送时间（稀疏 IDR 节奏）。
+    pub receive_keyframe_last_sent_at_ms: Option<f64>,
+    /// 当前稀疏 IDR PLI 间隔（ms，trace 用）。
+    pub receive_sparse_idr_pli_interval_ms: Option<f64>,
+    /// waiting-keyframe 期间观测到的 RTP marker 帧边界累计（与 inspection IDR 对照）。
+    pub ingress_waiting_rtp_marker_total: u64,
+    /// waiting-keyframe 期间 H264 inspection 判定为 IDR 的 AU 累计（含未准入）。
+    pub ingress_waiting_idr_inspection_total: u64,
+    /// inspection 见 IDR 但 Insert 未准入 decode 的累计（与 `h264IdrAccessUnitObserved` 对照）。
+    pub ingress_idr_not_admitted_total: u64,
+    /// 最近一次 IDR 未准入原因（Insert 裁决 reason）。
+    pub latest_ingress_idr_not_admitted_reason: Option<String>,
+    /// 最近一次 InsertGate 裁决：`emit` / `holdRepair` / `dropCorrupt`。
+    pub latest_insert_decision: Option<String>,
+    pub latest_insert_decision_reason: Option<String>,
+    /// L1 Emit 与 L2 `insert_emit_bootstrap_bypass` 是否同拍一致。
+    pub insert_decode_bypass_aligned: Option<bool>,
+    /// Insert HoldRepair 但 decode 仍 bypass 的累计次数（可证伪）。
+    pub insert_hold_decode_bypass_mismatch_total: u64,
     /// 派生解码健康（owner 决策用，非裸 `video_decoder_recovery_state`）。
     pub derived_decoder_health: Option<String>,
     /// receive 侧待发送 keyframe 提示（session fast-path / supply-break 写入）。
     pub recovery_receive_keyframe_hint_at_ms: Option<f64>,
+    /// 图片级恢复权威：`receive` | `session`（coordinator 委托 receive 时写入）。
+    pub recovery_picture_recovery_authority: Option<String>,
+    /// session 将图片级 PLI/FIR 委托 receive 的累计次数（trace `pictureRecoveryDelegated`）。
+    pub recovery_picture_recovery_delegated_total: u64,
+    /// session state machine 是否标记 keyframe in-flight（与 receive PLI 解耦观测）。
+    pub recovery_session_keyframe_in_flight: Option<bool>,
     pub recovery_playback_recovered_at_ms: Option<f64>,
     pub recovery_playback_recovered_phase: Option<String>,
     pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
@@ -801,8 +832,24 @@ impl Default for XbxEngineMediaRuntimeStats {
             media_supply_phase: None,
             media_supply_host_first_present_at_ms: None,
             keyframe_request_outcome_seq: 0,
+            recovery_decoder_reference_synced_at_ms: None,
+            latest_keyframe_request_source: None,
+            latest_keyframe_request_outcome: None,
+            receive_keyframe_last_sent_at_ms: None,
+            receive_sparse_idr_pli_interval_ms: None,
+            ingress_waiting_rtp_marker_total: 0,
+            ingress_waiting_idr_inspection_total: 0,
+            ingress_idr_not_admitted_total: 0,
+            latest_ingress_idr_not_admitted_reason: None,
+            latest_insert_decision: None,
+            latest_insert_decision_reason: None,
+            insert_decode_bypass_aligned: None,
+            insert_hold_decode_bypass_mismatch_total: 0,
             derived_decoder_health: None,
             recovery_receive_keyframe_hint_at_ms: None,
+            recovery_picture_recovery_authority: None,
+            recovery_picture_recovery_delegated_total: 0,
+            recovery_session_keyframe_in_flight: None,
             recovery_playback_recovered_at_ms: None,
             recovery_playback_recovered_phase: None,
             recovery_fresh_anchor_recovered_at_ms: None,

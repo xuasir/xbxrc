@@ -3534,3 +3534,31 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
     assert_eq!(decision.state, "latest-overwrite");
     assert_eq!(decision.detail, "mailboxOverwrite");
 }
+
+#[test]
+fn invaliddata_on_delta_does_not_trigger_software_fallback() {
+    use crate::media::video::decode::backend_ffmpeg::av_err_invaliddata;
+
+    let invalid = av_err_invaliddata();
+    let decode_calls = Arc::new(AtomicUsize::new(0));
+    let mut scripted_results = VecDeque::new();
+    scripted_results.push_back(Err(crate::XbxEngineRuntimeError::new(format!(
+        "decode failed status={invalid}"
+    ))));
+    let decoder = ScriptedHardwareDecoder {
+        backend_name: "scripted",
+        decode_calls: decode_calls.clone(),
+        scripted_results,
+    };
+    let decoder_factory = Box::new(|| {
+        panic!("software fallback must not run for AVERROR_INVALIDDATA on delta");
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    assert!(state
+        .process_encoded_frame(make_encoded_frame(false), 1_000.0)
+        .is_none());
+    assert_eq!(state.decoder_backend_name(), "scripted");
+    assert_eq!(state.hardware_decode_failure_streak(), 0);
+}

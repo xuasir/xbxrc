@@ -544,6 +544,7 @@ pub(super) fn collect_keyframe_episode_candidates(
 pub(super) fn host_display_rtp_qualifies_for_fresh_anchor(
     stats: &XbxEngineMediaRuntimeStats,
     displayed_rtp: u32,
+    now_ms: f64,
 ) -> bool {
     if stats
         .latest_h264_inspection_observation
@@ -558,6 +559,9 @@ pub(super) fn host_display_rtp_qualifies_for_fresh_anchor(
         return true;
     }
     stats.recovery_pending_displayed_idr_rtp == Some(displayed_rtp)
+        && crate::transport::rtc::recovery::contract::decoder_reference_synced_from_stats(
+            stats, now_ms,
+        )
 }
 
 pub(super) fn current_transport_recovery_keyframe_episode_snapshot(

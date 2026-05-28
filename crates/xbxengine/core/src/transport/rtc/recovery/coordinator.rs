@@ -10,8 +10,7 @@ use std::sync::Mutex;
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::contract::{
-    decoder_reset_permitted_from_stats, recovery_progress_level_from_episode, CoalescingMode,
-    GapSeverity, RecoveryProgressLevel,
+    decoder_reset_permitted_from_stats, CoalescingMode,
 };
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, RecoveryActionBudgetState, VideoEscalationController, VideoEscalationDecision,
@@ -22,9 +21,16 @@ use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_pro
 use crate::transport::rtc::recovery::state_coordinator::{
     RecoveryDecision, StateRecoveryCoordinator,
 };
+use crate::transport::rtc::recovery::suppress::{
+    receive_local_keyframe_request_recent, record_picture_recovery_delegation,
+    suppress_session_picture_recovery_action,
+};
 use crate::transport::rtc::recovery::timing::{
     advance_recovery_rtt_smoothing, publish_recovery_timing_to_stats,
     resolve_recovery_dynamic_timing,
+};
+use crate::transport::rtc::session::facts::{
+    recovery_progress_level_from_episode, GapSeverity, RecoveryProgressLevel,
 };
 
 /// Owner 信号
@@ -143,7 +149,8 @@ impl RecoveryCoordinator {
                 decision.action = RecoveryAction::CooldownSuppressed;
             }
             decision = self.finalize_picture_escalation_decision(decision, &signal, runtime_stats);
-            self.sync_connectivity_escalation_state(&decision);
+            decision = self.apply_session_picture_recovery_authority(decision, runtime_stats);
+            self.sync_connectivity_escalation_state(&decision, runtime_stats);
             let budget_after = self.snapshot_budget_state();
             return self.convert_escalation_decision_to_proposal(
                 decision,
@@ -174,6 +181,9 @@ impl RecoveryCoordinator {
         let mut proposal = self.convert_to_proposal(decision, budget_before, budget_after);
         proposal.decision =
             self.finalize_picture_escalation_decision(proposal.decision, &signal, runtime_stats);
+        proposal.decision =
+            self.apply_session_picture_recovery_authority(proposal.decision, runtime_stats);
+        self.sync_connectivity_escalation_state(&proposal.decision, runtime_stats);
         proposal
     }
 
@@ -459,13 +469,42 @@ impl RecoveryCoordinator {
         )
     }
 
-    fn sync_connectivity_escalation_state(&mut self, decision: &VideoEscalationDecision) {
+    fn apply_session_picture_recovery_authority(
+        &self,
+        mut decision: VideoEscalationDecision,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    ) -> VideoEscalationDecision {
+        let prior = decision.action;
+        decision.action = suppress_session_picture_recovery_action(decision.action);
+        if decision.action == RecoveryAction::DelegatedToReceive {
+            let detail = if prior != decision.action {
+                format!("priorAction={} delegatedToReceive", prior.label())
+            } else {
+                format!("nativeDelegated:{}", prior.label())
+            };
+            RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                record_picture_recovery_delegation(stats, &detail);
+            });
+        }
+        decision
+    }
+
+    fn sync_connectivity_escalation_state(
+        &mut self,
+        decision: &VideoEscalationDecision,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    ) {
+        let receive_owns_keyframe = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            receive_local_keyframe_request_recent(stats)
+        })
+        .unwrap_or(false);
         match decision.action {
             RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
                 let state_machine = self.state_machine_mut();
                 state_machine.transition_to_frame_recovery();
                 state_machine.mark_idr_requested();
             }
+            RecoveryAction::DelegatedToReceive => {}
             RecoveryAction::RequestDecoderReset => {
                 let state_machine = self.state_machine_mut();
                 state_machine.transition_to_decoder_recovery();
@@ -476,6 +515,9 @@ impl RecoveryCoordinator {
                 state_machine.transition_to_transport_recovery();
             }
             RecoveryAction::CoalescedKeyframeInFlight => {
+                if receive_owns_keyframe {
+                    return;
+                }
                 let state_machine = self.state_machine_mut();
                 state_machine.transition_to_frame_recovery();
             }
@@ -488,6 +530,10 @@ impl RecoveryCoordinator {
             | RecoveryAction::CooldownSuppressed
             | RecoveryAction::StartupGraceSuppressed => {}
         }
+        let session_keyframe_in_flight = self.state_machine().is_keyframe_request_in_flight();
+        RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+            stats.recovery_session_keyframe_in_flight = Some(session_keyframe_in_flight);
+        });
     }
 
     /// 确认clean anchor
@@ -551,94 +597,7 @@ impl RecoveryCoordinator {
         signal: &RecoveryOwnerSignal,
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     ) -> VideoEscalationDecision {
-        let decision = self.maybe_suppress_decoder_reset_decision(decision, signal, runtime_stats);
-        let decision =
-            self.maybe_promote_timed_fallback_decoder_unstick(decision, signal, runtime_stats);
-        self.maybe_promote_supply_break_recovery(decision, signal, runtime_stats)
-    }
-
-    fn maybe_promote_supply_break_recovery(
-        &self,
-        mut decision: VideoEscalationDecision,
-        signal: &RecoveryOwnerSignal,
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    ) -> VideoEscalationDecision {
-        use crate::transport::rtc::recovery::contract::{
-            has_current_clean_anchor_from_stats, recovery_supply_break_active_from_stats,
-            timed_fallback_decoder_unstick_required_from_stats,
-            TIMED_FALLBACK_DECODER_UNSTICK_SUBMIT_AGE_MS,
-        };
-        let should_promote = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            recovery_supply_break_active_from_stats(stats, signal.observed_at_ms)
-                || timed_fallback_decoder_unstick_required_from_stats(stats, signal.observed_at_ms)
-                || (has_current_clean_anchor_from_stats(stats)
-                    && stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
-                    && stats
-                        .submit_age_ms
-                        .is_some_and(|age| age >= TIMED_FALLBACK_DECODER_UNSTICK_SUBMIT_AGE_MS))
-        })
-        .unwrap_or(false);
-        if !should_promote {
-            return decision;
-        }
-        match decision.action {
-            RecoveryAction::WaitForDecoderResetBurst
-            | RecoveryAction::CooldownSuppressed
-            | RecoveryAction::CoalescedDecoderResetInFlight => {
-                let promoted_from = decision.action.label();
-                decision.action = RecoveryAction::RequestDecoderReset;
-                RuntimeStatsSink::update_shared(runtime_stats, |stats| {
-                    stats.recovery_receive_keyframe_hint_at_ms = Some(
-                        signal
-                            .observed_at_ms
-                            .max(stats.recovery_receive_keyframe_hint_at_ms.unwrap_or(0.0)),
-                    );
-                    stats.latest_observation_label = Some("supplyBreakDecoderUnstick".to_string());
-                    stats.latest_observation_summary = Some(format!(
-                        "promotedFrom={promoted_from} submitAgeMs={:?} presentStalled={:?}",
-                        stats.submit_age_ms, stats.video_renderer_stalled,
-                    ));
-                });
-            }
-            _ => {}
-        }
-        decision
-    }
-
-    fn maybe_promote_timed_fallback_decoder_unstick(
-        &self,
-        mut decision: VideoEscalationDecision,
-        signal: &RecoveryOwnerSignal,
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    ) -> VideoEscalationDecision {
-        use crate::transport::rtc::recovery::contract::timed_fallback_decoder_unstick_required_from_stats;
-        let required = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            timed_fallback_decoder_unstick_required_from_stats(stats, signal.observed_at_ms)
-        })
-        .unwrap_or(false);
-        if !required {
-            return decision;
-        }
-        match decision.action {
-            RecoveryAction::WaitForDecoderResetBurst
-            | RecoveryAction::CooldownSuppressed
-            | RecoveryAction::CoalescedDecoderResetInFlight => {
-                let promoted_from = decision.action.label();
-                decision.action = RecoveryAction::RequestDecoderReset;
-                RuntimeStatsSink::update_shared(runtime_stats, |stats| {
-                    stats.latest_observation_label =
-                        Some("timedFallbackDecoderUnstick".to_string());
-                    stats.latest_observation_summary = Some(format!(
-                        "promotedFrom={promoted_from} submitAgeMs={:?} decodeOkAtMs={:?} decoderStalled={:?}",
-                        stats.submit_age_ms,
-                        stats.latest_video_decode_ok_time_ms,
-                        stats.video_decoder_stalled,
-                    ));
-                });
-            }
-            _ => {}
-        }
-        decision
+        self.maybe_suppress_decoder_reset_decision(decision, signal, runtime_stats)
     }
 
     fn maybe_suppress_decoder_reset_decision(
@@ -650,12 +609,38 @@ impl RecoveryCoordinator {
         if decision.action != RecoveryAction::RequestDecoderReset {
             return decision;
         }
-        use crate::transport::rtc::recovery::contract::timed_fallback_decoder_unstick_required_from_stats;
-        let allow_bypass = matches!(signal.reason, VideoEscalationReason::Reconfigure)
-            || RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                timed_fallback_decoder_unstick_required_from_stats(stats, signal.observed_at_ms)
+        use crate::transport::rtc::recovery::contract::{
+            idr_recovery_active_from_stats, recovery_supply_break_active_from_stats,
+        };
+        let (idr_recovery_active, supply_break_active) =
+            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+                (
+                    idr_recovery_active_from_stats(stats, signal.observed_at_ms),
+                    recovery_supply_break_active_from_stats(stats, signal.observed_at_ms),
+                )
             })
-            .unwrap_or(false);
+            .unwrap_or((false, false));
+        let backend_failure = signal.reason == VideoEscalationReason::DecoderBackendFailure;
+        let reconfigure = signal.reason == VideoEscalationReason::Reconfigure;
+        if (idr_recovery_active || supply_break_active) && !backend_failure && !reconfigure {
+            decision.action = RecoveryAction::DelegatedToReceive;
+            RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                stats.recovery_receive_keyframe_hint_at_ms = Some(
+                    signal
+                        .observed_at_ms
+                        .max(stats.recovery_receive_keyframe_hint_at_ms.unwrap_or(0.0)),
+                );
+                record_picture_recovery_delegation(
+                    stats,
+                    &format!(
+                        "idrChain:noDecoderReset reason={} supplyBreak={supply_break_active}",
+                        signal.reason_label
+                    ),
+                );
+            });
+            return decision;
+        }
+        let allow_bypass = reconfigure;
         let permitted = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
             let progress = Self::recovery_progress_level_from_stats(stats);
             decoder_reset_permitted_from_stats(stats, progress, signal.observed_at_ms, allow_bypass)
@@ -925,7 +910,11 @@ mod tests {
             },
             &shared_stats,
         );
-        assert_eq!(first.decision.action, RecoveryAction::RequestPli);
+        assert_eq!(first.decision.action, RecoveryAction::DelegatedToReceive);
+        assert!(!coordinator
+            .coordinator
+            .state_machine()
+            .is_keyframe_request_in_flight());
 
         let second = coordinator.propose_from_owner_signal(
             RecoveryOwnerSignal {
@@ -937,10 +926,26 @@ mod tests {
             },
             &shared_stats,
         );
-        assert_eq!(
-            second.decision.action,
-            RecoveryAction::CoalescedKeyframeInFlight
-        );
+        assert_eq!(second.decision.action, RecoveryAction::DelegatedToReceive);
+        assert!(!coordinator
+            .coordinator
+            .state_machine()
+            .is_keyframe_request_in_flight());
+        let session_in_flight = RuntimeStatsSink::read_shared(&shared_stats, |stats| {
+            stats.recovery_session_keyframe_in_flight
+        })
+        .unwrap_or(None);
+        assert_eq!(session_in_flight, Some(false));
+        let delegated_total = RuntimeStatsSink::read_shared(&shared_stats, |stats| {
+            stats.recovery_picture_recovery_delegated_total
+        })
+        .unwrap_or(0);
+        assert!(delegated_total >= 2);
+        let authority = RuntimeStatsSink::read_shared(&shared_stats, |stats| {
+            stats.recovery_picture_recovery_authority.clone()
+        })
+        .unwrap_or(None);
+        assert_eq!(authority.as_deref(), Some("receive"));
     }
 
     #[test]
@@ -1018,7 +1023,7 @@ mod tests {
             &shared_stats,
         );
 
-        assert_eq!(proposal.decision.action, RecoveryAction::RequestPli);
+        assert_eq!(proposal.decision.action, RecoveryAction::DelegatedToReceive);
     }
 
     #[test]

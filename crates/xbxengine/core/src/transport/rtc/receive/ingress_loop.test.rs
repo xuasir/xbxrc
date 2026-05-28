@@ -5,15 +5,19 @@ use crate::media::video::test_fixtures::{
     make_video_source_for_test, send_bootstrap_access_unit,
 };
 use crate::media::video::types::FrameRecoveryDisposition;
-use crate::transport::rtc::receive::decode_gate::resolve_inspection_admission;
 use crate::transport::rtc::receive::ingress_loop::{
     resolve_effective_idle_controls, should_absorb_idle_timeout_for_steady_gap,
     should_trigger_idle_timeout,
 };
+use crate::transport::rtc::receive::insert_gate::{
+    resolve_insert_decision, InsertContext, InsertDecision,
+};
 use crate::transport::rtc::receive::{
     now_ms_f64, should_block_non_keyframe_admission, test_transport_capability,
-    DecodeCorruptionPolicy, InspectionAdmission, ReceiverDecodeContext, ReceiverState,
-    RtcVideoFrameSource,
+    DecodeCorruptionPolicy, ReceiverDecodeContext, ReceiverState, RtcVideoFrameSource,
+};
+use crate::transport::rtc::recovery::contract::{
+    GapVsKeyframeMode, MediaSupplyPhase, PacketRecoveryActionStage,
 };
 
 fn assert_receiver_local_waiting_keyframe(source: &RtcVideoFrameSource) {
@@ -581,7 +585,7 @@ fn test_receiver_decode_context(
         nack_exhausted,
         first_frame_acquired,
         first_frame_acquired,
-        false,
+        first_frame_acquired,
     )
 }
 
@@ -600,81 +604,104 @@ fn test_receiver_decode_context_with_output(
         first_frame_acquired,
         prior_output_established,
         displayed_idr_serving,
+        displayed_idr_decoder_synced: displayed_idr_serving,
+        decoder_reference_synced: displayed_idr_serving && prior_output_established,
     }
 }
 
+fn test_insert_context(
+    decode: ReceiverDecodeContext,
+    gap_mode: GapVsKeyframeMode,
+    action_stage: PacketRecoveryActionStage,
+) -> InsertContext {
+    InsertContext {
+        decode,
+        gap_mode,
+        action_stage,
+        fresh_idr_admission: false,
+        post_parameter_sets_change_strict: false,
+        supply_break_continuation: false,
+        media_supply_phase: MediaSupplyPhase::Steady,
+    }
+}
+
+fn assert_insert_emit(inspection: &H264AccessUnitInspection, ctx: &InsertContext) {
+    assert_eq!(
+        resolve_insert_decision(inspection, ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
+        InsertDecision::Emit
+    );
+}
+
+fn assert_insert_hold(inspection: &H264AccessUnitInspection, ctx: &InsertContext) {
+    assert_eq!(
+        resolve_insert_decision(inspection, ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
+        InsertDecision::HoldRepair
+    );
+}
+
 #[test]
-fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
-    assert_eq!(
-        resolve_inspection_admission(
-            &H264AccessUnitInspection {
-            nals: Vec::new(),
-            parameter_sets: None,
-            width: None,
-            height: None,
-            is_idr: true,
-            has_inband_sps: false,
-            has_inband_pps: false,
-            slice_headers_valid: true,
-            parameter_sets_changed: false,
-            config_changed: false,
-            bootstrap_ready: true,
-            bootstrap_reject_reason: None,
-            commit_state:
-                crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-            },
-            &test_receiver_decode_context(ReceiverState::Receiving, false, false, true),
-            DecodeCorruptionPolicy::StandardWebRtc,
+fn insert_decision_rejects_frames_without_bootstrap_or_continuation() {
+    let bootstrap_idr = H264AccessUnitInspection {
+        nals: Vec::new(),
+        parameter_sets: None,
+        width: None,
+        height: None,
+        is_idr: true,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        slice_headers_valid: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        bootstrap_ready: true,
+        bootstrap_reject_reason: None,
+        commit_state:
+            crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+    };
+    assert_insert_emit(
+        &bootstrap_idr,
+        &test_insert_context(
+            test_receiver_decode_context(ReceiverState::Receiving, false, false, true),
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::Drop,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::Accept
     );
 
-    assert_eq!(
-        resolve_inspection_admission(
-            &H264AccessUnitInspection {
-            nals: Vec::new(),
-            parameter_sets: None,
-            width: None,
-            height: None,
-            is_idr: false,
-            has_inband_sps: false,
-            has_inband_pps: false,
-            slice_headers_valid: true,
-            parameter_sets_changed: false,
-            config_changed: false,
-            bootstrap_ready: false,
-            bootstrap_reject_reason: None,
-            commit_state:
-                crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-            },
-            &test_receiver_decode_context(ReceiverState::Priming, false, false, false),
-            DecodeCorruptionPolicy::StandardWebRtc,
+    let non_idr = H264AccessUnitInspection {
+        nals: Vec::new(),
+        parameter_sets: None,
+        width: None,
+        height: None,
+        is_idr: false,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        slice_headers_valid: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        bootstrap_ready: false,
+        bootstrap_reject_reason: None,
+        commit_state:
+            crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+    };
+    assert_insert_hold(
+        &non_idr,
+        &test_insert_context(
+            test_receiver_decode_context(ReceiverState::Priming, false, false, false),
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::WaitKeyframe,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::AwaitRecoveryKeyframe
     );
 
-    assert_eq!(
-        resolve_inspection_admission(
-            &H264AccessUnitInspection {
-            nals: Vec::new(),
-            parameter_sets: None,
-            width: None,
-            height: None,
-            is_idr: false,
-            has_inband_sps: false,
-            has_inband_pps: false,
-            slice_headers_valid: false,
-            parameter_sets_changed: false,
-            config_changed: false,
-            bootstrap_ready: false,
-            bootstrap_reject_reason: None,
-            commit_state:
-                crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-            },
-            &test_receiver_decode_context(ReceiverState::Receiving, false, false, true),
-            DecodeCorruptionPolicy::StandardWebRtc,
+    let invalid_slice = H264AccessUnitInspection {
+        slice_headers_valid: false,
+        ..non_idr.clone()
+    };
+    assert_insert_hold(
+        &invalid_slice,
+        &test_insert_context(
+            test_receiver_decode_context(ReceiverState::Receiving, false, false, true),
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::Drop,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::AwaitRecoveryKeyframe
     );
 }
 
@@ -691,18 +718,18 @@ fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_eq!(
-        resolve_inspection_admission(
-            &inspection,
-            &test_receiver_decode_context(ReceiverState::Priming, false, false, false),
-            DecodeCorruptionPolicy::StandardWebRtc,
+    assert_insert_hold(
+        &inspection,
+        &test_insert_context(
+            test_receiver_decode_context(ReceiverState::Priming, false, false, false),
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::WaitKeyframe,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::AwaitRecoveryKeyframe
     );
-    assert_eq!(
-        resolve_inspection_admission(
-            &inspection,
-            &test_receiver_decode_context_with_output(
+    assert_insert_hold(
+        &inspection,
+        &test_insert_context(
+            test_receiver_decode_context_with_output(
                 ReceiverState::Receiving,
                 false,
                 false,
@@ -710,9 +737,9 @@ fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
                 false,
                 false,
             ),
-            DecodeCorruptionPolicy::StandardWebRtc,
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::Drop,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::AwaitRecoveryKeyframe
     );
 }
 
@@ -729,25 +756,25 @@ fn waiting_keyframe_accepts_non_idr_continuation_after_first_frame_acquired() {
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_eq!(
-        resolve_inspection_admission(
-            &inspection,
-            &test_receiver_decode_context_with_output(
+    assert_insert_emit(
+        &inspection,
+        &test_insert_context(
+            test_receiver_decode_context_with_output(
                 ReceiverState::WaitingKeyframe,
                 false,
                 true,
                 true,
                 true,
-                false,
+                true,
             ),
-            DecodeCorruptionPolicy::StandardWebRtc,
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::NackPending,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::Accept
     );
 }
 
 #[test]
-fn displayed_idr_serving_accepts_steady_bootstrap_missing_idr_despite_hard_gap() {
+fn displayed_idr_decoder_sync_holds_non_idr_when_hard_gap_blocks_delta() {
     let inspector = H264AccessUnitInspector::new();
     inspector
         .seed_committed_parameter_sets_if_absent(&bootstrap_sps_nalu(), &bootstrap_pps_nalu())
@@ -759,10 +786,10 @@ fn displayed_idr_serving_accepts_steady_bootstrap_missing_idr_despite_hard_gap()
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_eq!(
-        resolve_inspection_admission(
-            &inspection,
-            &test_receiver_decode_context_with_output(
+    assert_insert_hold(
+        &inspection,
+        &test_insert_context(
+            test_receiver_decode_context_with_output(
                 ReceiverState::WaitingKeyframe,
                 true,
                 true,
@@ -770,9 +797,9 @@ fn displayed_idr_serving_accepts_steady_bootstrap_missing_idr_despite_hard_gap()
                 true,
                 true,
             ),
-            DecodeCorruptionPolicy::StandardWebRtc,
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::NackPending,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::Accept
     );
 }
 
@@ -789,10 +816,10 @@ fn waiting_keyframe_rejects_non_idr_continuation_when_hard_gap_blocks_delta() {
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_eq!(
-        resolve_inspection_admission(
-            &inspection,
-            &test_receiver_decode_context_with_output(
+    assert_insert_hold(
+        &inspection,
+        &test_insert_context(
+            test_receiver_decode_context_with_output(
                 ReceiverState::WaitingKeyframe,
                 true,
                 true,
@@ -800,9 +827,9 @@ fn waiting_keyframe_rejects_non_idr_continuation_when_hard_gap_blocks_delta() {
                 true,
                 false,
             ),
-            DecodeCorruptionPolicy::StandardWebRtc,
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::NackPending,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::AwaitRecoveryKeyframe
     );
 }
 
@@ -831,13 +858,13 @@ fn repairing_continuation_is_accepted_during_gap_repair() {
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_eq!(
-        resolve_inspection_admission(
-            &inspection,
-            &test_receiver_decode_context(ReceiverState::Repairing, true, false, true),
-            DecodeCorruptionPolicy::StandardWebRtc,
+    assert_insert_emit(
+        &inspection,
+        &test_insert_context(
+            test_receiver_decode_context(ReceiverState::Repairing, true, false, true),
+            GapVsKeyframeMode::RepairFirst,
+            PacketRecoveryActionStage::NackPending,
         ),
-        crate::transport::rtc::receive::InspectionAdmission::Accept
     );
 }
 
@@ -868,6 +895,9 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
     source.runtime_stats.record_pending_displayed_idr_rtp(1);
+    source
+        .runtime_stats
+        .seed_decoder_reference_sync_for_pending_idr(1, 170.0);
     source
         .runtime_stats
         .record_displayed_idr_fact(180.0, 1, None);
@@ -939,6 +969,9 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
     source.runtime_stats.record_pending_displayed_idr_rtp(1);
+    source
+        .runtime_stats
+        .seed_decoder_reference_sync_for_pending_idr(1, 130.0);
     source
         .runtime_stats
         .record_displayed_idr_fact(140.0, 1, None);
@@ -1098,6 +1131,9 @@ fn clean_anchor_ack_consumes_submission_epoch() {
     source.runtime_stats.record_pending_displayed_idr_rtp(9_000);
     source
         .runtime_stats
+        .seed_decoder_reference_sync_for_pending_idr(9_000, 110.0);
+    source
+        .runtime_stats
         .record_displayed_idr_fact(120.0, 9_000, None);
     source.runtime_stats.record_anchor_candidate_ledger(
         1,
@@ -1194,6 +1230,8 @@ async fn stale_wait_after_clean_anchor_accepts_bootstrap_missing_idr_continuatio
         let now_ms = now_ms_f64();
         stats.latest_video_decode_ok_time_ms = Some(now_ms);
         stats.latest_video_host_present_time_ms = Some(now_ms);
+        stats.recovery_decoder_reference_synced_at_ms = Some(now_ms);
+        stats.recovery_displayed_idr_at_ms = Some(now_ms);
         stats.host_mailbox_enqueue_count_total = 1;
         stats.host_frame_present_epoch = 1;
     });

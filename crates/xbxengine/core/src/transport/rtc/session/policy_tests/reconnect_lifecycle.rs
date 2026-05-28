@@ -291,7 +291,7 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
     assert!(
         matches!(
             ledger.action_selected.as_str(),
-            "cooldownSuppressed" | "coalesced:keyframeInFlight"
+            "cooldownSuppressed" | "delegatedToReceive" | "coalesced:keyframeInFlight"
         ),
         "unexpected action_selected: {}",
         ledger.action_selected

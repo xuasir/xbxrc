@@ -137,7 +137,9 @@ fn map_recovery_action_to_session_commands(
 ) -> Vec<SessionCommand> {
     match action {
         // PLI/FIR 由 RtcReceiveCore + RtcTransportCapability 本地执行，不再经 scheduling 审批。
-        RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
+        RecoveryAction::RequestPli
+        | RecoveryAction::RequestFir
+        | RecoveryAction::DelegatedToReceive => {
             let _ = (reason, observation_id);
             Vec::new()
         }
