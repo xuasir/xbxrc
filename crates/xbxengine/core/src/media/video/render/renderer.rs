@@ -257,11 +257,7 @@ impl XbxRenderState {
         self.render_mailbox_decision_id = 0;
     }
 
-    pub(crate) fn take_latest_renderable_frame(&mut self) -> Option<XbxEngineRenderFrame> {
-        self.renderable_frames.pop_front()
-    }
-
-    /// 当前 mailbox 中待交给 host 的最新帧（与 `take_latest_renderable_frame` 不消费同一语义）。
+    /// 当前 mailbox 中待交给 host 的最新帧。
     pub(crate) fn latest_engine_frame_for_host_push(&self) -> Option<XbxEngineRenderFrame> {
         self.renderable_frames.back().cloned()
     }

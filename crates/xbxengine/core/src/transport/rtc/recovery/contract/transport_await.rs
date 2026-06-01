@@ -250,9 +250,10 @@ pub(crate) fn transport_await_has_hard_bootstrap_evidence_from_stats(
                 true
             }
             Some("bootstrapMissingIdr" | "NonIdrVcl") => {
-                !(stats.recovery_displayed_idr_at_ms.is_some()
-                    || (stats.recovery_pending_displayed_idr_rtp.is_some()
-                        && stats.host_frame_present_epoch > 0))
+                !crate::transport::rtc::recovery::runtime_state::displayed_idr_output_pipeline_active(
+                    stats,
+                    now_ms,
+                )
             }
             _ => false,
         };

@@ -567,6 +567,10 @@ impl ScheduledFrameTakeOutcome {
 }
 
 impl ScheduledFrameSlot {
+    pub fn displayed_frame(&self) -> Option<XbxEngineRenderFrame> {
+        self.displayed_frame.clone()
+    }
+
     fn current_media_epoch_tag(&self) -> Option<u64> {
         self.pending_frame
             .as_ref()

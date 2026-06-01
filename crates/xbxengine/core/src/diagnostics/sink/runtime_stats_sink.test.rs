@@ -158,6 +158,39 @@ fn advancing_transport_recovery_episode_clears_stale_anchor() {
     assert_eq!(stats.video_anchor_clean_epoch, None);
     assert_eq!(stats.video_anchor_clean_observed_at_ms, None);
     assert_eq!(stats.video_anchor_clean_source_event, None);
+    assert_eq!(stats.recovery_displayed_idr_at_ms, None);
+    assert!(stats.receive_display_state.is_none());
+    assert!(stats.receive_keyframe_response_state.is_none());
+    assert!(stats.latest_h264_inspection_observation.is_none());
+    assert!(stats.receive_keyframe_last_sent_at_ms.is_none());
+    assert!(stats.recovery_decoder_reference_synced_at_ms.is_none());
+    assert!(stats.latest_video_decode_ok_time_ms.is_none());
+    assert!(stats.latest_video_decode_ok_rtp_timestamp.is_none());
+}
+
+#[test]
+fn epoch_advance_clears_stale_decode_before_new_round_can_complete() {
+    use crate::transport::rtc::recovery::contract::receive_picture_recovery_complete_from_stats;
+
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(10.0);
+    sink.update(|stats| {
+        stats.recovery_decoder_reference_synced_at_ms = Some(15.0);
+        stats.latest_video_decode_ok_time_ms = Some(15.0);
+        stats.latest_video_decode_ok_rtp_timestamp = Some(77_001);
+    });
+    assert_eq!(sink.advance_transport_recovery_episode(30.0), 2);
+    sink.update(|stats| {
+        stats.receive_keyframe_response_state = Some("usable-idr".to_string());
+        stats.video_anchor_clean_epoch = Some(2);
+        stats.video_anchor_clean_observed_at_ms = Some(35.0);
+    });
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert!(stats.recovery_decoder_reference_synced_at_ms.is_none());
+    assert!(!receive_picture_recovery_complete_from_stats(&stats));
 }
 
 #[test]

@@ -3,6 +3,8 @@ use super::fixtures::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use xbxengine_protocol::{XbxEngineHostRequestDto, XbxEngineTransportStateDto};
@@ -187,6 +189,185 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some("transportReconnectCandidate:receiverWaitingKeyframe")
+    );
+}
+
+#[test]
+fn runtime_reconnects_after_remote_no_usable_idr_terminal_and_keyframe_stall() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let mut runtime_config = XbxEngineRuntimeConfig::default();
+    runtime_config.runtime_name = "default".to_string();
+    runtime_config.webrtc.recovery.keyframe_request_stall_ms = 20;
+    runtime_config.webrtc.recovery.reconnect_stall_ms = 100;
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 1_000.0),
+            inbound_video_packet_count_total: 500,
+            latest_receive_picture_recovery_terminal_reason: Some(
+                "remote-continuation-only".to_string(),
+            ),
+            receive_keyframe_required: Some(true),
+            latest_video_decode_ok_time_ms: Some(now_ms - 1_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 1_000.0),
+            ..Default::default()
+        },
+    );
+    let keyframe_request_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        runtime_config,
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    assert_eq!(
+        *keyframe_request_calls
+            .lock()
+            .expect("lock keyframe request calls"),
+        1,
+        "first tick should still try the local keyframe ladder"
+    );
+    assert!(
+        requests.borrow().iter().all(|request| !matches!(
+            request,
+            XbxEngineHostRequestDto::ExchangeOffer { restart: true, .. }
+        )),
+        "first tick should stay on local recovery"
+    );
+
+    sleep(Duration::from_millis(30));
+    runtime.tick();
+    assert!(
+        requests.borrow().iter().any(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { restart: true, .. }
+            )
+        }),
+        "remote no-usable-IDR terminal should surface a reconnect request after the keyframe stall window"
+    );
+    assert_eq!(
+        runtime
+            .snapshot()
+            .last_recovery_reason
+            .as_deref()
+            .map(|reason| reason.starts_with("reconnect"))
+            .unwrap_or(false),
+        true
+    );
+}
+
+#[test]
+fn runtime_reconnects_after_remote_continuation_only_even_with_stale_clean_anchor() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let mut runtime_config = XbxEngineRuntimeConfig::default();
+    runtime_config.runtime_name = "default".to_string();
+    runtime_config.webrtc.recovery.keyframe_request_stall_ms = 20;
+    runtime_config.webrtc.recovery.reconnect_stall_ms = 100;
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 1_000.0),
+            inbound_video_packet_count_total: 500,
+            latest_receive_picture_recovery_terminal_reason: Some(
+                "remote-continuation-only".to_string(),
+            ),
+            receive_keyframe_required: Some(true),
+            video_anchor_clean_epoch: Some(0),
+            video_anchor_clean_observed_at_ms: Some(now_ms - 1_000.0),
+            recovery_displayed_idr_at_ms: Some(now_ms - 1_000.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 1_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 1_000.0),
+            ..Default::default()
+        },
+    );
+    let keyframe_request_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        runtime_config,
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    assert_eq!(
+        *keyframe_request_calls
+            .lock()
+            .expect("lock keyframe request calls"),
+        1,
+        "first tick should still try the local keyframe ladder"
+    );
+    assert!(
+        requests.borrow().iter().all(|request| !matches!(
+            request,
+            XbxEngineHostRequestDto::ExchangeOffer { restart: true, .. }
+        )),
+        "first tick should stay on local recovery"
+    );
+
+    sleep(Duration::from_millis(30));
+    runtime.tick();
+    assert!(
+        requests.borrow().iter().any(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { restart: true, .. }
+            )
+        }),
+        "stale clean anchor should not block reconnect after remote continuation-only terminal"
+    );
+    assert_eq!(
+        runtime
+            .snapshot()
+            .last_recovery_reason
+            .as_deref()
+            .map(|reason| reason.starts_with("reconnect"))
+            .unwrap_or(false),
+        true
     );
 }
 

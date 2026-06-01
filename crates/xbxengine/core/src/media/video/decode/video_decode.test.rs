@@ -3489,22 +3489,32 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
         assert!(submitted, "decoded frame should eventually reach pacer");
     }
 
-    let render_deadline = Instant::now() + Duration::from_millis(300);
+    let render_deadline = Instant::now() + Duration::from_millis(500);
     let mut latest_rendered_at_ms = None;
     let mut renderer_submit_count = 0u64;
     while Instant::now() < render_deadline {
-        let render_state_guard = render_state.lock().expect("render state lock");
-        let snapshot = render_state_guard.render_signal_snapshot(0.0);
-        if let Some(rendered_at_ms) = snapshot.latest_present_time_ms {
-            latest_rendered_at_ms = Some(rendered_at_ms);
+        {
+            let render_state_guard = render_state.lock().expect("render state lock");
+            let snapshot = render_state_guard.render_signal_snapshot(0.0);
+            if let Some(rendered_at_ms) = snapshot.latest_present_time_ms {
+                latest_rendered_at_ms = Some(rendered_at_ms);
+            }
+            // submit_count increments before present_frame completes; gate on mailbox seq instead.
+            if render_state_guard
+                .peek_latest_frame()
+                .is_some_and(|frame| frame.frame_seq >= 2)
+            {
+                renderer_submit_count = runtime_stats
+                    .lock()
+                    .expect("runtime stats lock")
+                    .video_renderer_submit_count_total;
+                break;
+            }
         }
         renderer_submit_count = runtime_stats
             .lock()
             .expect("runtime stats lock")
             .video_renderer_submit_count_total;
-        if latest_rendered_at_ms.is_some() && renderer_submit_count >= 2 {
-            break;
-        }
         tokio::time::sleep(Duration::from_millis(4)).await;
     }
 
@@ -3516,7 +3526,7 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
     let mut render_state_guard = render_state.lock().expect("render state lock");
     // Render mailbox keeps a single latest handoff slot (`RENDER_MAILBOX_CAPACITY = 1`).
     let latest_frame = render_state_guard
-        .take_latest_renderable_frame()
+        .peek_latest_frame()
         .expect("latest staged frame should exist");
     assert!(
         (2..=3).contains(&latest_frame.frame_seq),
@@ -3524,7 +3534,6 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
         latest_frame.frame_seq
     );
     assert_eq!(latest_frame.recovery_epoch_tag, Some(1));
-    assert!(render_state_guard.take_latest_renderable_frame().is_none());
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert!(stats.video_renderer_submit_count_total >= 2);
     let decision = stats

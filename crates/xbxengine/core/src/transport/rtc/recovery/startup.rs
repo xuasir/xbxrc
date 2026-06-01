@@ -177,7 +177,7 @@ pub(crate) fn resolve_session_phase_from_stats(
         && effective_bitrate < profile.startup_low_quality_recovered_kbps
         && stats.video_present_fps < RECOVERING_PRESENT_FPS;
     if (active_recovery_escalation || stalled_output || degraded_output)
-        && !should_hold_steady_session_phase_during_displayed_idr_serving(stats)
+        && !should_hold_steady_session_phase_during_receive_presentation_serviceable(stats)
         && !recovery_exit_timed_fallback_allows_steady_phase(stats)
     {
         SessionPhase::Recovering
@@ -199,10 +199,13 @@ fn recovery_exit_timed_fallback_allows_steady_phase(stats: &XbxEngineMediaRuntim
     )
 }
 
-fn should_hold_steady_session_phase_during_displayed_idr_serving(
+fn should_hold_steady_session_phase_during_receive_presentation_serviceable(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
-    if !crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats) {
+    if !crate::transport::rtc::recovery::contract::receive_presentation_holds_steady_session_phase_from_stats(
+        stats,
+        now_ms_f64(),
+    ) {
         return false;
     }
     if crate::transport::rtc::recovery::contract::displayed_idr_serving_relaxation_blocked_from_stats(
@@ -575,7 +578,7 @@ mod tests {
                 stream_started_at,
                 Duration::from_secs(2),
             ),
-            SessionPhase::Steady
+            SessionPhase::Recovering
         );
     }
 
@@ -597,7 +600,7 @@ mod tests {
                 stream_started_at,
                 Duration::from_secs(2),
             ),
-            SessionPhase::Steady
+            SessionPhase::Recovering
         );
     }
 

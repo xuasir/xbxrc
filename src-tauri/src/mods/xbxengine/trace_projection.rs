@@ -30,6 +30,94 @@ fn retained_old_frame_risk(
         && no_pending_streak.unwrap_or(0) > 0
 }
 
+/// 当 presentation 进入 `displaySupplyStarved` 时，把上游卡点收成可读 blocker（仅 trace/UI）。
+/// 优先级：decode→clean anchor→display stable 闭环缺口，最后才是 generic wait-idr。
+fn derive_display_supply_starved_blocker(stats: &XbxEngineStatsDto) -> Option<String> {
+    let supply_starved = stats.presentation_health.as_deref() == Some("displaySupplyStarved")
+        || stats.video_health.as_deref() == Some("displaySupplyStarved");
+    if !supply_starved {
+        return None;
+    }
+    if stats
+        .latest_receive_picture_recovery_terminal_reason
+        .as_deref()
+        == Some("no-clean-anchor-after-decode")
+    {
+        return Some("decoded-no-clean-anchor".to_string());
+    }
+    if stats
+        .latest_receive_picture_recovery_terminal_reason
+        .as_deref()
+        == Some("no-display-stable-after-anchor")
+    {
+        return Some("clean-anchor-no-host-submit".to_string());
+    }
+    if stats.receive_keyframe_response_state.as_deref() == Some("usable-idr")
+        && stats.receive_display_state.as_deref() != Some("display-stable")
+    {
+        return Some("decoded-no-clean-anchor".to_string());
+    }
+    let present_fresh = stats.present_age_ms.is_some_and(|age| age < 600.0);
+    let submit_stale = stats.submit_age_ms.is_some_and(|age| age >= 200.0);
+    if present_fresh && submit_stale {
+        return Some("host-retained-old-frame".to_string());
+    }
+    if matches!(
+        stats
+            .latest_receive_picture_recovery_terminal_reason
+            .as_deref(),
+        Some(
+            "remote-no-usable-idr"
+                | "remote-continuation-only"
+                | "remote-no-response"
+                | "decoder-rejected-idr"
+        )
+    ) {
+        return Some("waiting-usable-idr".to_string());
+    }
+    if matches!(
+        stats.receive_keyframe_response_state.as_deref(),
+        Some("no-packet" | "non-idr-only" | "idr-unusable")
+    ) {
+        return Some("waiting-usable-idr".to_string());
+    }
+    if stats.receive_keyframe_required == Some(true) {
+        return Some("waiting-usable-idr".to_string());
+    }
+    if stats.receive_picture_recovery_terminal_candidate == Some(true) {
+        return Some("waiting-usable-idr".to_string());
+    }
+    if let Some(cause) = stats.receive_keyframe_required_cause.as_deref() {
+        if cause.contains("decode") || cause.contains("no-output") {
+            return Some("decoded-no-clean-anchor".to_string());
+        }
+    }
+    Some("presentation-supply-starved".to_string())
+}
+
+/// episode 仅作 effectiveness 投影时的对齐状态（trace 排障）。
+fn derive_episode_projection_state(stats: &XbxEngineStatsDto) -> &'static str {
+    let Some(episode) = stats.latest_keyframe_request_episode.as_ref() else {
+        return "absent";
+    };
+    let ledger_has_closure = stats.receive_display_state.as_deref() == Some("display-stable")
+        || stats
+            .latest_receive_picture_recovery_terminal_reason
+            .is_some();
+    if ledger_has_closure && stats.receive_keyframe_required != Some(true) {
+        return "matched";
+    }
+    if episode.status == "waiting"
+        && stats.receive_picture_recovery_terminal_candidate == Some(true)
+    {
+        return "mismatch";
+    }
+    if episode.status == "waiting" && !ledger_has_closure {
+        return "legacy-only";
+    }
+    "matched"
+}
+
 #[derive(Default)]
 pub(super) struct RuntimeTraceObservationState {
     packet_gap_observation_id: Option<u64>,
@@ -151,6 +239,9 @@ pub(super) struct RuntimeTraceObservationState {
     latest_observation_label: Option<String>,
     latest_observation_summary: Option<String>,
     keyframe_request_outcome_seq: u64,
+    receive_feedback_decision_seq: u64,
+    reference_chain_signature: Option<(String, String)>,
+    picture_recovery_terminal_signature: Option<(String, u64)>,
     ingress_idr_not_admitted_total: u64,
     insert_gate_signature: Option<(String, String, Option<bool>, u64)>,
     picture_recovery_authority: Option<String>,
@@ -2003,11 +2094,193 @@ pub(super) fn record_runtime_trace_observations(
                 "seq": stats.keyframe_request_outcome_seq,
                 "source": stats.latest_keyframe_request_source,
                 "outcome": stats.latest_keyframe_request_outcome,
+                "ledgerGeneration": stats.receive_recovery_ledger_generation,
                 "mediaSupplyPhase": stats.media_supply_phase,
                 "ingressWaitingRtpMarkerTotal": stats.ingress_waiting_rtp_marker_total,
                 "ingressWaitingIdrInspectionTotal": stats.ingress_waiting_idr_inspection_total,
             }),
         );
+    }
+
+    if stats.receive_feedback_decision_seq != observation_state.receive_feedback_decision_seq {
+        observation_state.receive_feedback_decision_seq = stats.receive_feedback_decision_seq;
+        let coalescing = stats.latest_receive_feedback_coalescing.clone();
+        let action = stats.latest_receive_feedback_action.clone();
+        let is_terminal = matches!(
+            coalescing.as_deref(),
+            Some("target-unavailable") | Some("rate-limited")
+        );
+        let is_sent = action.as_deref() == Some("requestPli")
+            || action.as_deref() == Some("requestFir")
+            || action.as_deref() == Some("sendNack");
+        let is_mismatch = stats.receive_feedback_arbiter_mismatch_total.unwrap_or(0) > 0;
+        if is_sent || is_terminal || is_mismatch || coalescing.as_deref() == Some("fresh-sent") {
+            let gap_sequence = stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .and_then(|timeline| timeline.gap.as_ref())
+                .and_then(|gap| gap.sequence);
+            let nack_packet_count = stats
+                .latest_video_nack_observation
+                .as_ref()
+                .map(|nack| nack.packet_count);
+            let h264_verdict =
+                stats
+                    .latest_h264_inspection_observation
+                    .as_ref()
+                    .map(|inspection| {
+                        if inspection.bootstrap_ready {
+                            "bootstrap-ready".to_string()
+                        } else if let Some(reason) = inspection.bootstrap_reject_reason.as_ref() {
+                            reason.clone()
+                        } else if inspection.is_idr {
+                            "idr-observed".to_string()
+                        } else {
+                            inspection
+                                .continuation_verdict
+                                .clone()
+                                .unwrap_or_else(|| "delta-observed".to_string())
+                        }
+                    });
+            let last_keyframe_sent_age_ms = stats
+                .receive_keyframe_last_sent_at_ms
+                .and_then(|sent_at| {
+                    stats
+                        .latest_video_receiver_observation
+                        .as_ref()
+                        .map(|obs| (obs.observed_at_ms - sent_at).max(0.0))
+                })
+                .or_else(|| {
+                    stats
+                        .latest_h264_inspection_observation
+                        .as_ref()
+                        .and_then(|inspection| {
+                            stats
+                                .receive_keyframe_last_sent_at_ms
+                                .map(|sent_at| (inspection.observed_at_ms - sent_at).max(0.0))
+                        })
+                });
+            runtime_trace.record_event(
+                "xbxengine",
+                "receiveFeedbackDecision",
+                session_id,
+                json!({
+                    "seq": stats.receive_feedback_decision_seq,
+                    "action": action,
+                    "reason": stats.latest_receive_feedback_reason,
+                    "source": stats.latest_receive_feedback_source,
+                    "coalescing": coalescing,
+                    "outcome": stats.latest_receive_feedback_executor_outcome,
+                    "lastKeyframeSentAgeMs": last_keyframe_sent_age_ms,
+                    "feedbackTargetState": stats.latest_feedback_target_availability_state,
+                    "referenceState": stats.reference_chain_state,
+                    "sparseActive": stats
+                        .latest_receive_feedback_sparse_active
+                        .unwrap_or(false),
+                    "sparsePliIntervalMs": stats.receive_sparse_idr_pli_interval_ms,
+                    "gapSequence": gap_sequence,
+                    "nackPacketCount": nack_packet_count,
+                    "h264Verdict": h264_verdict,
+                    "arbiterMismatchTotal": stats.receive_feedback_arbiter_mismatch_total,
+                    "feedbackCoalescedTotal": stats.receive_feedback_coalesced_total,
+                    "feedbackThrottledTotal": stats.receive_feedback_throttled_total,
+                    "keyframeRequired": stats.receive_keyframe_required,
+                    "keyframeRequiredCause": stats.receive_keyframe_required_cause,
+                    "responseState": stats.receive_keyframe_response_state,
+                    "receiveDisplayState": stats.receive_display_state,
+                    "terminalCandidate": stats.receive_picture_recovery_terminal_candidate,
+                    "ledgerGeneration": stats.receive_recovery_ledger_generation,
+                    "episodeProjectionState": derive_episode_projection_state(&stats),
+                    "displaySupplyStarvedBlocker": derive_display_supply_starved_blocker(&stats),
+                }),
+            );
+        }
+    }
+
+    let reference_chain_signature = (
+        stats.reference_chain_state.clone().unwrap_or_default(),
+        stats
+            .reference_chain_state_cause
+            .clone()
+            .unwrap_or_default(),
+    );
+    if observation_state.reference_chain_signature.as_ref() != Some(&reference_chain_signature) {
+        observation_state.reference_chain_signature = Some(reference_chain_signature.clone());
+        if stats.reference_chain_state.is_some() {
+            let bootstrap_reject_reason = stats
+                .latest_h264_inspection_observation
+                .as_ref()
+                .and_then(|inspection| inspection.bootstrap_reject_reason.clone());
+            let displayed_idr_host_hint = stats.recovery_displayed_idr_at_ms.is_some();
+            runtime_trace.record_event(
+                "xbxengine",
+                "referenceChainStateChanged",
+                session_id,
+                json!({
+                    "state": stats.reference_chain_state,
+                    "cause": stats.reference_chain_state_cause,
+                    "decoderReferenceSynced": stats.reference_chain_decoder_reference_synced,
+                    "bootstrapReady": stats.reference_chain_bootstrap_ready,
+                    "bootstrapRejectReason": bootstrap_reject_reason,
+                    "hasActiveGap": stats.reference_chain_has_active_gap,
+                    "nackExhausted": stats.reference_chain_nack_exhausted,
+                    "submitAgeMs": stats.reference_chain_submit_age_ms,
+                    "displayedIdrHostHint": displayed_idr_host_hint,
+                    "displayedIdrHostHintDiagnostic": true,
+                    "sparseMustIdrMismatch": stats.latest_reference_chain_sparse_must_idr_mismatch,
+                    "sparseMustIdrMismatchTotal": stats.receive_sparse_must_idr_mismatch_total,
+                    "source": stats
+                        .latest_reference_chain_observation_source
+                        .as_deref()
+                        .unwrap_or("ledger"),
+                    "responseState": stats.receive_keyframe_response_state,
+                    "receiveDisplayState": stats.receive_display_state,
+                    "referenceStatsFallbackTotal": stats.reference_stats_fallback_total,
+                    "keyframeRequired": stats.receive_keyframe_required,
+                    "ledgerGeneration": stats.receive_recovery_ledger_generation,
+                    "episodeProjectionState": derive_episode_projection_state(&stats),
+                    "displaySupplyStarvedBlocker": derive_display_supply_starved_blocker(&stats),
+                }),
+            );
+        }
+    }
+
+    if stats
+        .latest_receive_picture_recovery_terminal_reason
+        .is_some()
+    {
+        let terminal_signature = (
+            stats
+                .latest_receive_picture_recovery_terminal_reason
+                .clone()
+                .unwrap_or_default(),
+            stats.receive_picture_recovery_terminal_total.unwrap_or(0),
+        );
+        if observation_state
+            .picture_recovery_terminal_signature
+            .as_ref()
+            != Some(&terminal_signature)
+        {
+            observation_state.picture_recovery_terminal_signature = Some(terminal_signature);
+            runtime_trace.record_event(
+                "xbxengine",
+                "receivePictureRecoveryTerminal",
+                session_id,
+                json!({
+                    "reason": stats.latest_receive_picture_recovery_terminal_reason,
+                    "terminalTotal": stats.receive_picture_recovery_terminal_total,
+                    "referenceState": stats.reference_chain_state,
+                    "sentCountUnresolved": stats.receive_keyframe_sent_count_unresolved,
+                    "responseState": stats.receive_keyframe_response_state,
+                    "receiveDisplayState": stats.receive_display_state,
+                    "keyframeRequired": stats.receive_keyframe_required,
+                    "elapsedRttCount": stats.receive_picture_recovery_terminal_elapsed_rtt_count,
+                    "ledgerGeneration": stats.receive_recovery_ledger_generation,
+                    "episodeProjectionState": derive_episode_projection_state(&stats),
+                    "nextOwnerHint": "connectivity-reconnect-candidate",
+                }),
+            );
+        }
     }
 
     let insert_gate_signature = (
@@ -2031,8 +2304,13 @@ pub(super) fn record_runtime_trace_observations(
                     "reason": stats.latest_insert_decision_reason,
                     "bypassAligned": stats.insert_decode_bypass_aligned,
                     "holdDecodeBypassMismatchTotal": stats.insert_hold_decode_bypass_mismatch_total,
-                    "mediaSupplyPhase": stats.media_supply_phase,
-                    "actionStage": stats.recovery_surface_phase,
+                    "keyframeRequired": stats.receive_keyframe_required,
+                    "responseState": stats.receive_keyframe_response_state,
+                    "receiveDisplayState": stats.receive_display_state,
+                    "ledgerGeneration": stats.receive_recovery_ledger_generation,
+                    "packetRecoveryActionStage": stats.latest_packet_recovery_action_stage,
+                    "referenceState": stats.reference_chain_state,
+                    "mediaSupplyPhaseDiagnostic": stats.media_supply_phase,
                 }),
             );
         }

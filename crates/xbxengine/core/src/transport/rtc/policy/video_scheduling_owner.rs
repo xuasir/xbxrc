@@ -6,8 +6,8 @@ use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms,
     has_current_transport_await_issue_from_observation, is_ingress_waiting_keyframe,
     is_invalid_recovery_bootstrap_reject_reason, is_media_healthy_baseline,
-    is_receiver_state_waiting_keyframe, is_transport_await_probe_source_event, MediaSupplyPhase,
-    RecoveryExitPath, DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS,
+    is_receiver_state_waiting_keyframe, is_transport_await_probe_source_event, RecoveryExitPath,
+    DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 use crate::transport::rtc::session::control_model::SessionFaultDomain;
@@ -157,20 +157,35 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) recovery_displayed_idr_at_ms: Option<f64>,
     pub(crate) recovery_fresh_anchor_recovered_at_ms: Option<f64>,
     pub(crate) recovery_exit_path: RecoveryExitPath,
+    /// 仅诊断投影；owner 控制流不读取它。
     pub(crate) recovery_surface_phase:
         crate::transport::rtc::recovery::contract::RecoverySurfacePhase,
     pub(crate) derived_decoder_health:
         crate::transport::rtc::recovery::contract::DerivedDecoderHealth,
-    pub(crate) contract_snapshot:
-        crate::transport::rtc::recovery::contract::RecoveryContractSnapshot,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
     pub(crate) observed_at_ms: f64,
+    pub(crate) receive_keyframe_required: Option<bool>,
+    pub(crate) receive_keyframe_response_state: Option<String>,
+    pub(crate) receive_display_state: Option<String>,
+    pub(crate) recovery_decoder_reference_synced_at_ms: Option<f64>,
+    pub(crate) transport_recovery_episode_opened_at_ms: Option<f64>,
 }
 
 impl VideoSchedulingOwnerInput {
-    /// L3 控制面：宽 serving（Insert/decode）或 relaxed（短脉冲抑制 transport-await）。
+    /// L3 控制面：receive ledger 已标 display-stable（不读诊断投影 `serving_*`）。
     fn displayed_idr_control_plane_active(&self) -> bool {
-        self.contract_snapshot.serving_wide || self.contract_snapshot.serving_relaxed
+        self.receive_display_state.as_deref() == Some("display-stable")
+            && self.clean_anchor_epoch == Some(self.recovery_epoch)
+    }
+
+    fn control_decoder_reference_synced(&self) -> bool {
+        const FRESH_MS: f64 = 2_000.0;
+        self.recovery_decoder_reference_synced_at_ms
+            .is_some_and(|synced_at| {
+                self.transport_recovery_episode_opened_at_ms
+                    .map_or(true, |opened| synced_at >= opened)
+                    && (self.observed_at_ms - synced_at).max(0.0) <= FRESH_MS
+            })
     }
 
     fn has_established_displayed_idr_fact(&self) -> bool {
@@ -405,8 +420,7 @@ impl VideoSchedulingOwner {
             .demand
             .critical_signal(&input.display_supply_thresholds);
         let has_clean_anchor_evidence = Self::has_current_clean_anchor_release_evidence(input);
-        let displayed_idr_serving_release_active =
-            Self::displayed_idr_serving_release_active(input, host_present_stall_streak);
+        let receive_media_recovery_complete = Self::receive_ledger_media_recovery_complete(input);
         let chain_healthy = matches!(input.effective_chain_state(), Some("receiving"))
             || (has_clean_anchor_evidence
                 && matches!(input.effective_chain_state(), Some("repairing")))
@@ -414,7 +428,7 @@ impl VideoSchedulingOwner {
                 input,
                 has_clean_anchor_evidence,
             )
-            || displayed_idr_serving_release_active;
+            || receive_media_recovery_complete;
         let ingress_waiting_keyframe = is_ingress_waiting_keyframe(
             input.effective_receiver_state(),
             input.effective_chain_state(),
@@ -446,7 +460,7 @@ impl VideoSchedulingOwner {
             );
         let has_anchor_issue = if first_frame_acquisition_priority_active {
             false
-        } else if displayed_idr_serving_release_active {
+        } else if receive_media_recovery_complete {
             false
         } else if transport_await_local_probe_probation_active {
             false
@@ -488,15 +502,6 @@ impl VideoSchedulingOwner {
         } else {
             Self::timeline_indicates_anchor_issue(input) || input.anchor_reason_label.is_some()
         };
-        let has_anchor_issue = if matches!(
-            input.recovery_surface_phase,
-            crate::transport::rtc::recovery::contract::RecoverySurfacePhase::SupplyBreak
-        ) {
-            // L0 supply-break：禁止再叠 transport-await / rebuilding-supply 平行叙事。
-            false
-        } else {
-            has_anchor_issue
-        };
         let anchor_rebuild =
             Self::effective_anchor_rebuild(has_anchor_issue, input, ingress_waiting_keyframe);
         let completion_evidence = Self::resolve_recovery_completion_evidence(
@@ -528,17 +533,6 @@ impl VideoSchedulingOwner {
             hold_supply_starved_transition,
             host_present_stall_active,
         );
-        let next = if matches!(
-            input.recovery_surface_phase,
-            crate::transport::rtc::recovery::contract::RecoverySurfacePhase::SupplyBreak
-        ) && !matches!(
-            next,
-            VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming
-        ) {
-            VideoSchedulingOwnerState::SupplyStarved
-        } else {
-            next
-        };
         self.state = next;
 
         let health = match next {
@@ -691,13 +685,6 @@ impl VideoSchedulingOwner {
             return VideoSchedulingOwnerState::SeekingAnchor;
         }
         let first_present_grace_active = Self::first_present_grace_active(input);
-        if let Some(phase_state) = Self::owner_state_for_media_supply_phase(
-            input.contract_snapshot.media_supply_phase,
-            current,
-            has_anchor_issue,
-        ) {
-            return phase_state;
-        }
         match current {
             VideoSchedulingOwnerState::SeekingAnchor => {
                 if has_anchor_issue {
@@ -708,8 +695,7 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::Priming
                 } else if matches!(supply_state, DisplaySupplyState::Healthy) && !supply_absent {
                     VideoSchedulingOwnerState::Priming
-                } else if Self::media_supply_phase_requires_supply_starved(input)
-                    || Self::segmented_supply_starved_evidence(input)
+                } else if Self::segmented_supply_starved_evidence(input)
                     || matches!(supply_state, DisplaySupplyState::Critical)
                     || matches!(
                         input.demand.no_pending_pressure_level.as_deref(),
@@ -728,9 +714,7 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::StableServing
                 } else if first_present_grace_active {
                     VideoSchedulingOwnerState::Priming
-                } else if Self::media_supply_phase_requires_supply_starved(input)
-                    || Self::segmented_supply_starved_evidence(input)
-                {
+                } else if Self::segmented_supply_starved_evidence(input) {
                     VideoSchedulingOwnerState::SupplyStarved
                 } else {
                     VideoSchedulingOwnerState::DegradedServing
@@ -975,8 +959,16 @@ impl VideoSchedulingOwner {
         if ingress_waiting_keyframe
             && !transport_await_waiting_released
             && !terminal_invalid_bootstrap_serving_ready
-            && !Self::displayed_idr_serving_release_active(input, host_present_stall_streak)
+            && !Self::receive_ledger_media_recovery_complete(input)
         {
+            if matches!(
+                current,
+                VideoSchedulingOwnerState::RebuildingSupply
+                    | VideoSchedulingOwnerState::SupplyStarved
+            ) && Self::displayed_idr_serving_release_active(input, host_present_stall_streak)
+            {
+                return RecoveryCompletionEvidence::ServingReady;
+            }
             match input.recovery_exit_path {
                 RecoveryExitPath::DecodeOutput | RecoveryExitPath::TimedFallback => {
                     if matches!(
@@ -993,7 +985,7 @@ impl VideoSchedulingOwner {
             }
             return RecoveryCompletionEvidence::NotReady;
         }
-        if Self::displayed_idr_serving_release_active(input, host_present_stall_streak) {
+        if Self::receive_ledger_media_recovery_complete(input) {
             if matches!(classified_supply_state, DisplaySupplyState::Healthy) {
                 return RecoveryCompletionEvidence::Ready;
             }
@@ -1259,30 +1251,6 @@ impl VideoSchedulingOwner {
             return false;
         }
         input.demand.host_display_tick_epoch.unwrap_or_default() > 0
-    }
-
-    /// L3 表驱动：Owner 状态为 L0 `media_supply_phase` 的投影，禁止平行 completion 叙事。
-    fn owner_state_for_media_supply_phase(
-        phase: MediaSupplyPhase,
-        current: VideoSchedulingOwnerState,
-        has_anchor_issue: bool,
-    ) -> Option<VideoSchedulingOwnerState> {
-        match phase {
-            MediaSupplyPhase::Priming => Some(if has_anchor_issue {
-                VideoSchedulingOwnerState::RebuildingSupply
-            } else {
-                VideoSchedulingOwnerState::Priming
-            }),
-            MediaSupplyPhase::SupplyBreak => Some(VideoSchedulingOwnerState::SupplyStarved),
-            _ => None,
-        }
-    }
-
-    fn media_supply_phase_requires_supply_starved(input: &VideoSchedulingOwnerInput) -> bool {
-        matches!(
-            input.contract_snapshot.media_supply_phase,
-            MediaSupplyPhase::SupplyBreak | MediaSupplyPhase::MustIdr
-        )
     }
 
     fn segmented_supply_starved_evidence(input: &VideoSchedulingOwnerInput) -> bool {
@@ -1623,7 +1591,22 @@ impl VideoSchedulingOwner {
     }
 
     fn has_current_clean_anchor_release_evidence(input: &VideoSchedulingOwnerInput) -> bool {
-        input.has_established_displayed_idr_fact()
+        Self::receive_ledger_media_recovery_complete(input)
+    }
+
+    /// receive ledger 投影：media recovery 已闭合（不含 host present 旧帧保活）。
+    fn receive_ledger_media_recovery_complete(input: &VideoSchedulingOwnerInput) -> bool {
+        crate::transport::rtc::recovery::contract::receive_picture_recovery_complete_from_fields(
+            &crate::transport::rtc::recovery::contract::ReceivePictureRecoveryCompleteFields {
+                recovery_epoch: input.recovery_epoch,
+                receive_keyframe_required: input.receive_keyframe_required,
+                receive_keyframe_response_state: input.receive_keyframe_response_state.as_deref(),
+                receive_display_state: input.receive_display_state.as_deref(),
+                recovery_displayed_idr_at_ms: input.recovery_displayed_idr_at_ms,
+                clean_anchor_epoch: input.clean_anchor_epoch,
+                decoder_reference_synced: input.control_decoder_reference_synced(),
+            },
+        )
     }
 
     fn current_release_anchor_observed_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {
@@ -2185,52 +2168,6 @@ impl VideoSchedulingOwner {
         (input.observed_at_ms - since_ms).max(0.0) < DISPLAY_SUPPLY_STARVED_CONFIRM_MS
     }
 
-    fn build_supply_break_recovery_intent(
-        owner: &mut Self,
-        input: &VideoSchedulingOwnerInput,
-        supply_state: DisplaySupplyState,
-        host_present_stall_active: bool,
-        host_present_stall_streak: u32,
-    ) -> Option<RecoveryIntentContract> {
-        use crate::transport::rtc::recovery::contract::DerivedDecoderHealth;
-        if Self::displayed_idr_serving_release_active(input, host_present_stall_streak) {
-            owner.last_intent = None;
-            return None;
-        }
-        if host_present_stall_active {
-            let reason = OwnerRecoveryReason::HostPresentStalled;
-            let label = reason.as_reason_label();
-            return Some(RecoveryIntentContract {
-                emit: owner.should_emit_intent(reason.source(), label, input.observed_at_ms),
-                source: reason.source(),
-                reason,
-                reason_label: label.to_string(),
-            });
-        }
-        if matches!(
-            input.derived_decoder_health,
-            DerivedDecoderHealth::SupplyStalled
-        ) {
-            let reason = match supply_state {
-                DisplaySupplyState::Critical => OwnerRecoveryReason::DisplaySupplyCritical,
-                DisplaySupplyState::Degraded => OwnerRecoveryReason::DisplaySupplyDegraded,
-                DisplaySupplyState::Healthy => return None,
-            };
-            return Some(RecoveryIntentContract {
-                emit: owner.should_emit_intent(
-                    reason.source(),
-                    reason.as_reason_label(),
-                    input.observed_at_ms,
-                ),
-                source: reason.source(),
-                reason,
-                reason_label: reason.as_reason_label().to_string(),
-            });
-        }
-        owner.last_intent = None;
-        None
-    }
-
     fn rebuilding_supply_strong_anchor_intent(
         input: &VideoSchedulingOwnerInput,
         _completion_evidence: RecoveryCompletionEvidence,
@@ -2250,20 +2187,7 @@ impl VideoSchedulingOwner {
         host_present_stall_active: bool,
         host_present_stall_streak: u32,
     ) -> Option<RecoveryIntentContract> {
-        let routed_state = match intent_table::route(
-            input.recovery_surface_phase,
-            state,
-            ingress_waiting_keyframe,
-        ) {
-            intent_table::IntentRoute::SupplyBreakSupplyStarved => {
-                return Self::build_supply_break_recovery_intent(
-                    self,
-                    input,
-                    supply_state,
-                    host_present_stall_active,
-                    host_present_stall_streak,
-                );
-            }
+        let routed_state = match intent_table::route(state, ingress_waiting_keyframe) {
             intent_table::IntentRoute::AwaitIdrIngressWaiting => {
                 return Self::recovery_intent_for_ingress_waiting_keyframe(self, input, state);
             }
@@ -2425,10 +2349,12 @@ impl VideoSchedulingOwner {
     fn steady_displayed_idr_bootstrap_continuation_active(
         input: &VideoSchedulingOwnerInput,
     ) -> bool {
-        if !input.contract_snapshot.decoder_reference_synced {
+        if !input.control_decoder_reference_synced() {
             return false;
         }
-        if !input.contract_snapshot.serving_wide || !input.has_established_displayed_idr_fact() {
+        if !input.displayed_idr_control_plane_active()
+            || !input.has_established_displayed_idr_fact()
+        {
             return false;
         }
         if input.latest_h264_committed_sps_present != Some(true)
@@ -2449,9 +2375,10 @@ impl VideoSchedulingOwner {
         input: &VideoSchedulingOwnerInput,
         host_present_stall_streak: u32,
     ) -> bool {
-        if !input.displayed_idr_control_plane_active()
-            || !input.has_established_displayed_idr_fact()
-        {
+        if !input.has_established_displayed_idr_fact() {
+            return false;
+        }
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
             return false;
         }
         if input
@@ -2464,38 +2391,17 @@ impl VideoSchedulingOwner {
         if matches!(input.recovery_exit_path, RecoveryExitPath::TimedFallback) {
             return false;
         }
-        if input.connection_state != ConnectionLifecycleStateFact::Connected {
-            return false;
-        }
-        if is_receiver_state_waiting_keyframe(input.effective_receiver_state()) {
-            if !input.contract_snapshot.decoder_reference_synced {
-                return false;
-            }
-            if input.contract_snapshot.serving_relaxed
-                && host_present_stall_streak < HOST_PRESENT_STALL_TICK_STREAK_MIN
-            {
-                // relaxed 控制面：不因 receiver waiting-keyframe 单独阻断 release。
-            } else if host_present_stall_streak >= HOST_PRESENT_STALL_TICK_STREAK_MIN {
-                return false;
-            } else {
-                let decode_stale = input.demand.decode_age_ms.is_some_and(|age| {
-                    age > input.display_supply_thresholds.degraded_decode_age_ms * 2.0
-                });
-                if decode_stale {
-                    return false;
-                }
-            }
-        }
         if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
-        if !matches!(
+        let track_attached = matches!(
             input.latest_track_state.as_deref(),
             Some("remoteTrackAttached")
-        ) || !input
+        );
+        let track_has_video_bytes = input
             .latest_track_video_bytes_total
-            .is_some_and(|bytes| bytes > 0)
-        {
+            .is_some_and(|bytes| bytes > 0);
+        if !track_attached || !track_has_video_bytes {
             return false;
         }
         let present_fresh = input
@@ -2506,12 +2412,42 @@ impl VideoSchedulingOwner {
             .demand
             .decode_age_ms
             .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
-        if !present_fresh || !decode_fresh {
-            return Self::steady_displayed_idr_bootstrap_continuation_active(input)
-                && matches!(input.demand.host_cadence_phase.as_deref(), Some("steady"));
+        let host_presentation_steady =
+            matches!(input.demand.host_cadence_phase.as_deref(), Some("steady"))
+                || input.demand.host_frame_present_epoch.unwrap_or(0) > 0;
+        if input.displayed_idr_control_plane_active() {
+            if is_receiver_state_waiting_keyframe(input.effective_receiver_state()) {
+                if !input.control_decoder_reference_synced() {
+                    return false;
+                }
+                if host_present_stall_streak >= HOST_PRESENT_STALL_TICK_STREAK_MIN {
+                    return false;
+                }
+                let decode_stale = input.demand.decode_age_ms.is_some_and(|age| {
+                    age > input.display_supply_thresholds.degraded_decode_age_ms * 2.0
+                });
+                if decode_stale {
+                    return false;
+                }
+            }
+            if !present_fresh || !decode_fresh {
+                return Self::steady_displayed_idr_bootstrap_continuation_active(input)
+                    && host_presentation_steady;
+            }
+            return host_presentation_steady;
         }
-        matches!(input.demand.host_cadence_phase.as_deref(), Some("steady"))
-            || input.demand.host_frame_present_epoch.unwrap_or(0) > 0
+        if !present_fresh || !decode_fresh {
+            return false;
+        }
+        if host_present_stall_streak >= HOST_PRESENT_STALL_TICK_STREAK_MIN {
+            return false;
+        }
+        if is_receiver_state_waiting_keyframe(input.effective_receiver_state())
+            && !input.control_decoder_reference_synced()
+        {
+            return false;
+        }
+        host_presentation_steady
     }
 
     fn latest_clean_anchor_submitted_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {
@@ -2684,30 +2620,21 @@ impl VideoSchedulingOwner {
 /// (surface_phase, owner_state) → intent 构建路径；避免与 L0 contract 平行嵌套 if。
 mod intent_table {
     use super::VideoSchedulingOwnerState;
-    use crate::transport::rtc::recovery::contract::RecoverySurfacePhase;
 
     pub(super) enum IntentRoute {
-        SupplyBreakSupplyStarved,
         AwaitIdrIngressWaiting,
         ByOwnerState(VideoSchedulingOwnerState),
     }
 
     pub(super) fn route(
-        surface: RecoverySurfacePhase,
         state: VideoSchedulingOwnerState,
         ingress_waiting_keyframe: bool,
     ) -> IntentRoute {
-        match (surface, state) {
-            (RecoverySurfacePhase::SupplyBreak, VideoSchedulingOwnerState::SupplyStarved) => {
-                IntentRoute::SupplyBreakSupplyStarved
-            }
-            (RecoverySurfacePhase::AwaitIdr, VideoSchedulingOwnerState::RebuildingSupply)
-                if ingress_waiting_keyframe =>
-            {
-                IntentRoute::AwaitIdrIngressWaiting
-            }
-            _ => IntentRoute::ByOwnerState(state),
+        if matches!(state, VideoSchedulingOwnerState::RebuildingSupply) && ingress_waiting_keyframe
+        {
+            return IntentRoute::AwaitIdrIngressWaiting;
         }
+        IntentRoute::ByOwnerState(state)
     }
 }
 

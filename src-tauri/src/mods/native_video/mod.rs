@@ -1002,10 +1002,17 @@ pub(super) fn run_wgpu_render_tick(
                 }
             }
             ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
-                if size_changed {
-                    if let Some(frame) = cached_frame_for_repaint {
-                        renderer.update_frame(frame);
-                        let _ = renderer.render();
+                if let Some(frame) = cached_frame_for_repaint {
+                    renderer.update_frame(frame);
+                    if let Err(error) = renderer.render() {
+                        log::warn!(
+                            "[native_video][wgpu] retained frame render failed for viewport={} window={} error={}",
+                            viewport_id,
+                            window.label(),
+                            error
+                        );
+                    } else if let Ok(mut telemetry) = telemetry.lock() {
+                        telemetry.record_present_refresh(now_ms);
                     }
                 }
             }
@@ -1659,11 +1666,9 @@ pub(super) fn run_layer_present_tick(
         window_label,
         runtime_trace.as_ref(),
     );
-    let prepared_sample = match prepare_outcome {
-        LayerSamplePrepareOutcome::Prepared { sample } => sample,
-        LayerSamplePrepareOutcome::RetainedDisplayedFrame
-        | LayerSamplePrepareOutcome::SkippedNoReadyFrame
-        | LayerSamplePrepareOutcome::Failed => {
+    let (prepared_sample, is_refresh) = match prepare_outcome {
+        LayerSamplePrepareOutcome::Prepared { sample, is_refresh } => (sample, is_refresh),
+        LayerSamplePrepareOutcome::SkippedNoReadyFrame | LayerSamplePrepareOutcome::Failed => {
             finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
                 run_layer_present_tick(
                     viewport_id,
@@ -1759,7 +1764,11 @@ pub(super) fn run_layer_present_tick(
     present_cv_pixelbuffer(layer_ptr, prepared_sample);
     let now_ms = now_ms_f64();
     if let Ok(mut telemetry_state) = telemetry.lock() {
-        telemetry_state.record_present(now_ms);
+        if is_refresh {
+            telemetry_state.record_present_refresh(now_ms);
+        } else {
+            telemetry_state.record_present(now_ms);
+        }
     }
     let telemetry_diag = telemetry
         .lock()
@@ -1782,6 +1791,7 @@ pub(super) fn run_layer_present_tick(
             let host_cadence_phase = telemetry_diag
                 .as_ref()
                 .map(|diag| diag.cadence_phase.as_str().to_string());
+            let presentation_kind = if is_refresh { "refresh" } else { "present" };
             let displayed_frame_seq = frame_slot_diag
                 .as_ref()
                 .and_then(|diag| diag.displayed_frame_seq);
@@ -1807,6 +1817,7 @@ pub(super) fn run_layer_present_tick(
                 "frameAgeMs": (now_ms - sample_rendered_at_ms).max(0.0),
                 "frameRecoveryDisposition": sample_frame_recovery_disposition,
                 "frameUnrecoverableReason": sample_frame_unrecoverable_reason,
+                "presentationKind": presentation_kind,
                 "displayedFrameSeq": displayed_frame_seq,
                 "pendingFrameSeq": pending_frame_seqs.first().copied(),
                 "hasPendingFrame": pending_queue_depth > 0,
@@ -2078,8 +2089,8 @@ pub(super) fn prepare_layer_sample_for_present(
         &frame_slot_diag,
         &telemetry_diag,
     );
-    let frame = match frame_take_outcome {
-        ScheduledFrameTakeOutcome::Ready(frame) => frame,
+    let (frame, is_refresh) = match frame_take_outcome {
+        ScheduledFrameTakeOutcome::Ready(frame) => (frame, false),
         ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
             record_native_video_timing_event_lazy(
                 runtime_trace,
@@ -2109,7 +2120,26 @@ pub(super) fn prepare_layer_sample_for_present(
                     })
                 },
             );
-            return LayerSamplePrepareOutcome::RetainedDisplayedFrame;
+            let Some(displayed_frame) = frame_slot
+                .lock()
+                .ok()
+                .and_then(|slot| slot.displayed_frame())
+            else {
+                record_native_video_timing_event_lazy(
+                    runtime_trace,
+                    "layer",
+                    "prepare_sample_failed",
+                    viewport_id,
+                    window_label,
+                    || {
+                        json!({
+                            "reason": "retainedDisplayedFrameUnavailable",
+                        })
+                    },
+                );
+                return LayerSamplePrepareOutcome::Failed;
+            };
+            (displayed_frame, true)
         }
         ScheduledFrameTakeOutcome::NoPendingFrame => {
             record_native_video_timing_event_lazy(
@@ -2302,7 +2332,7 @@ pub(super) fn prepare_layer_sample_for_present(
             })
         },
     );
-    LayerSamplePrepareOutcome::Prepared { sample }
+    LayerSamplePrepareOutcome::Prepared { sample, is_refresh }
 }
 
 #[cfg(target_os = "macos")]
@@ -2538,8 +2568,10 @@ pub(super) enum PreparedLayerSampleOutcome {
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
 pub(super) enum LayerSamplePrepareOutcome {
-    Prepared { sample: PreparedLayerSample },
-    RetainedDisplayedFrame,
+    Prepared {
+        sample: PreparedLayerSample,
+        is_refresh: bool,
+    },
     SkippedNoReadyFrame,
     Failed,
 }

@@ -1049,6 +1049,67 @@ fn build_stats_projects_chain_presentation_health_and_last_displayed_frame() {
 }
 
 #[test]
+fn presentation_health_usable_idr_alone_does_not_suppress_supply_starved() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        session_phase: Some("recovering".to_string()),
+        receive_keyframe_response_state: Some("usable-idr".to_string()),
+        receive_keyframe_required: Some(true),
+        latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
+        host_mailbox_enqueue_count_total: 120,
+        host_no_pending_pressure_level: Some("critical".to_string()),
+        host_no_pending_streak: 1_280,
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(
+        dto.presentation_health.as_deref(),
+        Some("displaySupplyStarved")
+    );
+}
+
+#[test]
+fn presentation_health_requires_fresh_clean_anchor_for_usable_idr_serviceability() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stale_stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        session_phase: Some("recovering".to_string()),
+        receive_keyframe_response_state: Some("usable-idr".to_string()),
+        receive_keyframe_required: Some(true),
+        video_anchor_clean_epoch: Some(1),
+        transport_recovery_epoch: 1,
+        video_anchor_clean_observed_at_ms: Some(now_ms - 1_200.0),
+        latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
+        host_mailbox_enqueue_count_total: 120,
+        host_no_pending_pressure_level: Some("critical".to_string()),
+        host_no_pending_streak: 1_280,
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let fresh_stats = XbxEngineMediaRuntimeStats {
+        video_anchor_clean_observed_at_ms: Some(now_ms - 40.0),
+        ..stale_stats.clone()
+    };
+
+    let stale_dto = build_xbxengine_stats(&test_snapshot(), Some(&stale_stats));
+    let fresh_dto = build_xbxengine_stats(&test_snapshot(), Some(&fresh_stats));
+
+    assert_eq!(
+        stale_dto.presentation_health.as_deref(),
+        Some("displaySupplyStarved")
+    );
+    assert_eq!(fresh_dto.presentation_health.as_deref(), Some("recovering"));
+}
+
+#[test]
 fn build_stats_steady_healthy_when_output_fresh_and_owner_stable() {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

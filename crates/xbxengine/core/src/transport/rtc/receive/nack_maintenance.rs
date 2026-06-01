@@ -16,7 +16,8 @@ use crate::transport::rtc::receive::nack_policy::{
     OOS_REPAIRABILITY_PENALTY,
 };
 use crate::transport::rtc::recovery::contract::{
-    gap_keyframe_only_mode_active, resolve_gap_vs_keyframe_mode, GapVsKeyframeMode,
+    displayed_idr_serving_allows_relaxed_controls_from_stats, gap_keyframe_only_mode_active,
+    resolve_gap_vs_keyframe_mode, GapVsKeyframeMode,
 };
 use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
 use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
@@ -55,6 +56,10 @@ impl RtcVideoFrameSource {
         use crate::media::video::types::FrameValue;
 
         let now = std::time::Instant::now();
+        let displayed_idr_relaxed = self
+            .runtime_stats
+            .read(|stats| displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms))
+            .unwrap_or(false);
         let effective_rtt_ms = self
             .runtime_stats
             .read(|stats| {
@@ -67,103 +72,113 @@ impl RtcVideoFrameSource {
                 )
             })
             .unwrap_or(100.0);
-        let sparse_idr_rhythm = self
-            .runtime_stats
-            .read(|stats| {
-                crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
-                    stats, now_ms,
-                )
-            })
-            .unwrap_or_default();
+        let sparse_idr_rhythm = self.sparse_idr_rhythm_for_receive(now_ms);
         let poll = self
             .receive_core_mut()
             .receive_engine
             .poll_nack_maintenance(now, effective_rtt_ms, sparse_idr_rhythm);
         const MAX_RECEIVER_LOCAL_NACK_BATCH: usize = 32;
         const NACK_SPAN_KEYFRAME_ESCALATION_PACKETS: u32 = 96;
-        if poll.sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH {
-            let span_too_large = poll
+        let span_too_large = poll.sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH
+            && poll
                 .sequences
                 .first()
                 .zip(poll.sequences.last())
                 .is_some_and(|(first, last)| {
                     last.wrapping_sub(*first) as u32 >= NACK_SPAN_KEYFRAME_ESCALATION_PACKETS
                 });
-            if span_too_large || poll.sequences.len() > 128 {
-                self.request_receiver_local_keyframe(
-                    "receiver-local-nack-gap-too-large",
-                    None,
-                    now_ms,
-                    false,
-                );
-                self.receive_core_mut()
-                    .receive_engine
-                    .nack_requester
-                    .on_keyframe_escalation_sent();
-                return;
-            }
+        let keyframe_escalation_due = poll.keyframe_escalation_due && !displayed_idr_relaxed;
+        if keyframe_escalation_due {
+            self.trace_ledger
+                .recovery_ledger_mut()
+                .note_nack_exhausted();
+            self.sync_recovery_ledger_to_stats();
         }
-        if !poll.sequences.is_empty() {
-            let mut sequences = poll.sequences;
-            let mut retry_counts = poll.retry_counts;
-            if sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH {
-                sequences.truncate(MAX_RECEIVER_LOCAL_NACK_BATCH);
-                retry_counts.truncate(MAX_RECEIVER_LOCAL_NACK_BATCH);
-            }
-            let max_retry = retry_counts.iter().copied().max().unwrap_or(0);
-            let frame_value = FrameValue::new(false, false, 12 * 1024);
-            let budget_context = FrameBudgetContext::for_transport(
-                frame_value,
-                self.is_blocking_non_keyframe_admission(),
-                None,
-                None,
-                None,
-                false,
-                FrameBudgetWindowSource::Transport,
-            );
-            let batch = NackBatch {
-                sequences,
-                retry_count: max_retry,
-                source: "receiverLocal",
-                frame_rtp_timestamp: None,
-                frame_is_keyframe: None,
-                frame_importance: "transport",
-                deadline_at_ms: None,
-                estimated_recovery_arrival_ms: None,
-                frame_playout_deadline_at_ms: None,
-                nack_disposition: PacketRecoveryDisposition::Attempted,
-                frame_unrecoverable_reason: None,
-                budget_context,
-            };
-            let _ = self.send_nack_batch("sent", &batch, now_ms).await;
-        }
-        if poll.keyframe_escalation_due {
-            self.request_receiver_local_keyframe(
-                "receiver-local-nack-escalation",
-                None,
-                now_ms,
-                false,
-            );
-            self.receive_core_mut()
-                .receive_engine
-                .nack_requester
-                .on_keyframe_escalation_sent();
-        }
-        if self.is_blocking_non_keyframe_admission() {
-            let sparse_idr_rhythm = self
-                .runtime_stats
-                .read(|stats| {
-                    crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
-                        stats, now_ms,
+        let nack_snapshot = crate::transport::rtc::receive::feedback_arbiter::NackPollSnapshot {
+            sequences_len: poll.sequences.len(),
+            keyframe_escalation_due,
+            gap_span_too_large: span_too_large || poll.sequences.len() > 128,
+            gap_sequence: poll.sequences.first().copied(),
+        };
+        let source = if nack_snapshot.gap_span_too_large {
+            "receiver-local-nack-gap-too-large"
+        } else if keyframe_escalation_due {
+            "receiver-local-nack-escalation"
+        } else if self.is_blocking_non_keyframe_admission() {
+            "receiver-local-nack-blocking-admission"
+        } else {
+            "receiver-local-nack-maintenance"
+        };
+        let decision = self.plan_receive_feedback(
+            source,
+            now_ms,
+            effective_rtt_ms,
+            nack_snapshot,
+            None,
+            keyframe_escalation_due
+                || nack_snapshot.gap_span_too_large
+                || self.is_blocking_non_keyframe_admission(),
+            false,
+        );
+        use crate::transport::rtc::receive::feedback_arbiter::ReceiveFeedbackAction;
+        match decision.action {
+            ReceiveFeedbackAction::RequestPli | ReceiveFeedbackAction::RequestFir => {
+                let dispatch =
+                    self.execute_receive_feedback_keyframe(decision, source, None, now_ms, true);
+                if matches!(
+                    dispatch,
+                    crate::transport::rtc::receive::keyframe_requester::KeyframeRequestDispatch::Sent(
+                        crate::transport::rtc::capability::KeyframeSendOutcome::Sent
                     )
-                })
-                .unwrap_or_default();
-            let capability = self.receive_core().transport_capability.clone();
-            let _ = self
-                .receive_core_mut()
-                .receive_engine
-                .keyframe_requester
-                .request_dispatch(capability.as_ref(), true, sparse_idr_rhythm);
+                ) {
+                    self.receive_core_mut()
+                        .receive_engine
+                        .nack_requester
+                        .on_keyframe_escalation_sent();
+                }
+            }
+            ReceiveFeedbackAction::SendNack if !poll.sequences.is_empty() => {
+                self.record_receive_feedback_decision(
+                    decision,
+                    source,
+                    Some(ReceiveFeedbackAction::SendNack),
+                );
+                let mut sequences = poll.sequences;
+                let mut retry_counts = poll.retry_counts;
+                if sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH {
+                    sequences.truncate(MAX_RECEIVER_LOCAL_NACK_BATCH);
+                    retry_counts.truncate(MAX_RECEIVER_LOCAL_NACK_BATCH);
+                }
+                let max_retry = retry_counts.iter().copied().max().unwrap_or(0);
+                let frame_value = FrameValue::new(false, false, 12 * 1024);
+                let budget_context = FrameBudgetContext::for_transport(
+                    frame_value,
+                    self.is_blocking_non_keyframe_admission(),
+                    None,
+                    None,
+                    None,
+                    false,
+                    FrameBudgetWindowSource::Transport,
+                );
+                let batch = NackBatch {
+                    sequences,
+                    retry_count: max_retry,
+                    source: "receiverLocal",
+                    frame_rtp_timestamp: None,
+                    frame_is_keyframe: None,
+                    frame_importance: "transport",
+                    deadline_at_ms: None,
+                    estimated_recovery_arrival_ms: None,
+                    frame_playout_deadline_at_ms: None,
+                    nack_disposition: PacketRecoveryDisposition::Attempted,
+                    frame_unrecoverable_reason: None,
+                    budget_context,
+                };
+                let _ = self.send_nack_batch("sent", &batch, now_ms).await;
+            }
+            _ => {
+                self.record_receive_feedback_decision(decision, source, None);
+            }
         }
     }
 
@@ -610,18 +625,23 @@ impl RtcVideoFrameSource {
             );
             return false;
         }
+        let effective_rtt_ms = self
+            .runtime_stats
+            .read(|stats| {
+                resolve_effective_rtt_ms(
+                    stats,
+                    ScenarioPolicyResolver::resolve_kind(
+                        stats.session_target_type.as_ref(),
+                        stats.transport_path.as_deref(),
+                    ),
+                )
+            })
+            .unwrap_or(cloud_rtt_ms.unwrap_or(40.0));
         let gap_mode = self
             .runtime_stats
-            .read(|stats| resolve_gap_vs_keyframe_mode(stats, now_ms, cloud_rtt_ms.unwrap_or(40.0)))
+            .read(|stats| resolve_gap_vs_keyframe_mode(stats, now_ms, effective_rtt_ms))
             .unwrap_or(GapVsKeyframeMode::RepairFirst);
-        if gap_keyframe_only_mode_active(gap_mode) {
-            self.request_receiver_local_keyframe(
-                "gap-keyframe-only-mode",
-                Some(sample_rtp_timestamp),
-                now_ms,
-                false,
-            );
-        }
+        let force_keyframe = gap_keyframe_only_mode_active(gap_mode);
         let batch = NackBatch {
             sequences: missing_sequences.clone(),
             retry_count: 0,
@@ -689,8 +709,53 @@ impl RtcVideoFrameSource {
                 Some(frame_importance),
             );
         }
-        let _ = self.send_nack_batch("sent", &batch, now_ms).await;
-        true
+        const MAX_RECEIVER_LOCAL_NACK_BATCH: usize = 32;
+        let nack_snapshot = crate::transport::rtc::receive::feedback_arbiter::NackPollSnapshot {
+            sequences_len: missing_sequences.len(),
+            keyframe_escalation_due: false,
+            gap_span_too_large: missing_sequences.len() > MAX_RECEIVER_LOCAL_NACK_BATCH,
+            gap_sequence: missing_sequences.first().copied(),
+        };
+        let source = if used_recent_fallback {
+            "sample-loss-fallback"
+        } else {
+            "sample-loss"
+        };
+        let decision = self.plan_receive_feedback(
+            source,
+            now_ms,
+            effective_rtt_ms,
+            nack_snapshot,
+            None,
+            force_keyframe,
+            false,
+        );
+        use crate::transport::rtc::receive::feedback_arbiter::ReceiveFeedbackAction;
+        match decision.action {
+            ReceiveFeedbackAction::RequestPli | ReceiveFeedbackAction::RequestFir => {
+                self.execute_receive_feedback_keyframe(
+                    decision,
+                    source,
+                    Some(sample_rtp_timestamp),
+                    now_ms,
+                    true,
+                );
+                true
+            }
+            ReceiveFeedbackAction::SendNack => {
+                self.record_receive_feedback_decision(
+                    decision,
+                    source,
+                    Some(ReceiveFeedbackAction::SendNack),
+                );
+                let _ = self.send_nack_batch("sent", &batch, now_ms).await;
+                true
+            }
+            _ => {
+                self.record_receive_feedback_decision(decision, source, None);
+                false
+            }
+        }
     }
 
     fn record_nack_skipped(&mut self, skipped: &SkippedNackBatch, now_ms: f64) {

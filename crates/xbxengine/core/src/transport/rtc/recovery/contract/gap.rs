@@ -3,7 +3,8 @@ use super::decode_sync::{
     receiver_nack_exhausted_from_stats,
 };
 use super::display::{
-    displayed_idr_serving_from_stats, is_soft_missing_idr_bootstrap_reject_reason,
+    displayed_idr_serving_allows_relaxed_controls_from_stats,
+    is_soft_missing_idr_bootstrap_reject_reason,
 };
 use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
 use crate::XbxEngineMediaRuntimeStats;
@@ -61,7 +62,7 @@ pub(crate) fn parameter_sets_change_strict_active_from_stats(
     if fresh_h264_idr_admission_from_stats(stats, now_ms) {
         return false;
     }
-    if !displayed_idr_serving_from_stats(stats) {
+    if !displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms) {
         return false;
     }
     if media_supply_priming_for_ps_strict(stats, now_ms) {
@@ -80,7 +81,7 @@ fn repairing_missing_idr_keyframe_pressure_from_stats(
     if fresh_h264_idr_admission_from_stats(stats, now_ms) {
         return false;
     }
-    if !displayed_idr_serving_from_stats(stats) {
+    if !displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms) {
         return false;
     }
     if decoder_reference_synced_from_stats(stats, now_ms) {

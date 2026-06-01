@@ -1,6 +1,6 @@
 ---
 name: analyze-runtime-logs
-description: Analyze project-specific runtime trace logs written as JSONL. Use when Codex needs to inspect `runtime-logs/runtime-trace-*.jsonl` for incident triage, regression analysis, startup or streaming failures, cross-layer timeline reconstruction, or performance and stall evaluation in this Tauri + Vue 3 + TypeScript + Rust codebase.
+description: Analyze project-specific runtime trace logs written as JSONL. Use when Codex needs to inspect `runtime-logs/runtime-trace-*.jsonl` for incident triage, regression analysis, startup or streaming failures, cross-layer timeline reconstruction, receive feedback arbiter / ReferenceChain validation (`trace_receive_feedback_report.py`), or performance and stall evaluation in this Tauri + Vue 3 + TypeScript + Rust codebase.
 ---
 
 # Analyze Runtime Logs
@@ -18,39 +18,49 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 5. To drill down around a row anchor, use `--anchor-seq <n>` with optional `--context-before` / `--context-after` (prints JSONL lines to stdout).
 6. Use `--compare <other-trace.jsonl>` when you need a before/after regression check for the same phase window.
 7. For long-session steady-state acceptance gates (e.g. low-latency display scheduling), run [`scripts/trace_midsegment_report.py`](scripts/trace_midsegment_report.py) on the trace; default window is +79s–+150s from trace origin (`--start-s` / `--end-s` override). Exit code `0` = heuristic PASS, `2` = GATE FAIL.
-8. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics (including `traceMode` on schema v2+).
-9. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
-10. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
-11. For recovery regressions, always read these structured events first:
+8. For receive feedback arbiter / ReferenceChain regressions (NACK·PLI·FIR 收口、`receiveFeedbackDecision`), run [`scripts/trace_receive_feedback_report.py`](scripts/trace_receive_feedback_report.py) on the trace. Prints JSON with `feedbackActionCounts`, `keyframeOutcomeCounts`, `referenceStateCounts`, `arbiterMismatchTotal`, `needKeyframeNonIdrFeedViolations`, projection-layer gates (`displayStableWithoutLedgerClosure`, `insertSurfacePhaseActionStage`, `insertControlProjectionMismatch`), and `keyframeChain` (sent → displayStable). Exit `0` on success; old traces without `receiveFeedbackDecision` still run but `summary.receiveFeedbackDecisionEvents` may be `0`.
+9. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics (including `traceMode` on schema v2+).
+10. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
+11. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
+12. For recovery regressions, always read these structured events first:
    - `pictureRecoveryTransition`
    - `pictureRecoveryBlockerObserved`
    - `videoIngressTermination`
    - `firstFrameLatencyObserved`
-12. Treat the recovery mainline as:
+13. Treat the recovery mainline as:
    - `PliRequested -> PliSent -> ResponseObserved/PacketSeen -> Decoded -> CleanAnchorCommitted -> DisplayStable`
-13. Read the two recovery gates with fixed semantics:
+14. Read the two recovery gates with fixed semantics:
    - `cleanAnchorCommitted`: media gate，表示 decode 后的恢复锚点已经被下游真正接住
    - `DisplayStable`: display gate，表示显示侧稳定闭环成立
-14. Read `stableServingSettled` as the `DisplayStable` close reason / event name.
-15. For recovery regressions, always read the script's `recovery_audit.keyframeEffectiveness` and `recovery_audit.nackEffectiveness`, not only aggregate request counters.
-16. For recovery quality scoring, also read:
+15. Read `stableServingSettled` as the `DisplayStable` close reason / event name.
+16. For receive-feedback arbiter traces, read in this order after running step 8:
+   - **控制事实（决策权）**：`keyframeRequired` / `responseState` / `receiveDisplayState` / `ledgerGeneration` / `packetRecoveryActionStage`
+   - **诊断投影（仅 trace/UI）**：`mediaSupplyPhaseDiagnostic` / `displayedIdrHostHint` / `displayedIdrHostHintDiagnostic`
+   - `receiveFeedbackDecision` (`action`, `reason`, `coalescing`, `outcome`, `lastKeyframeSentAgeMs`, `referenceState`, control facts above)
+   - `referenceChainStateChanged` (`decoderReferenceSynced`, `bootstrapReady`, `bootstrapRejectReason`, `hasActiveGap`, `nackExhausted`, `submitAgeMs`, control facts; `displayedIdrHostHint` 仅诊断)
+   - `receivePictureRecoveryTerminal` (`reason=remote-no-usable-idr` when远端长期无 usable IDR)
+   - `keyframeRequestOutcome` (executor outcome: `sent` / `coalesced` / `throttled` / `feedbackUnavailable`)
+   - `insertGateDecision` (control facts + `needKeyframeNonIdrFeedViolations` / `insertControlProjectionMismatch` in script output)
+   - Script JSON: `rates.*`, `receiveFeedbackGate` (`PASS`/`FAIL`), `displayStableWithoutLedgerClosure`, `terminalRemoteNoUsableIdr`
+17. For recovery regressions, always read the script's `recovery_audit.keyframeEffectiveness` and `recovery_audit.nackEffectiveness`, not only aggregate request counters.
+18. For recovery quality scoring, also read:
    - `recovery_audit.keyframeEffectiveness.chainBuildSuccessRate`
    - `recovery_audit.nackEffectiveness.effectiveRate`
    - `recovery_audit.repairabilityPersistence`
    - `recovery_audit.recoveryEffectiveness`
-17. Read post-decode scheduling with fixed ownership:
+19. Read post-decode scheduling with fixed ownership:
    - `pacer*`: decode 后唯一主决策层
    - `renderMailbox*`: render latest-slot 的单槽交接 / overwrite 执行态
    - `hostMailbox*`: host pending/displayed mailbox 与上屏执行态
-18. Do not read `renderMailboxStateTransition` or `renderMailboxDecision` as a second value-comparator.
+20. Do not read `renderMailboxStateTransition` or `renderMailboxDecision` as a second value-comparator.
     They report mailbox overwrite / recovery telemetry after `pacer` has already chosen the frame.
-19. For browser-direct render pacing / WebGL2 drawing questions, always read these browser-side structured events first:
+21. For browser-direct render pacing / WebGL2 drawing questions, always read these browser-side structured events first:
    - `renderTelemetryObserved`
    - `renderFrameDropped`
    - `renderBackpressureChanged`
    - `renderCauseClassified`
    - `renderPolicyApplied`
-20. Read browser-direct render telemetry with fixed semantics:
+22. Read browser-direct render telemetry with fixed semantics:
    - `trackingSource`: `videoFrameCallback` 表示基于 `requestVideoFrameCallback`，`timeupdate` 表示 fallback 粗粒度节拍
    - `callbackCountSinceLastSample` / `frameEventsSinceLastSample`: sample 窗口内浏览器回调次数；两者当前等价，后者是历史兼容字段
    - `callbackGapCountSinceLastSample`: sample 窗口内“回调间隔超过本地阈值”的次数；优先拿它判断 callback 稀疏/晚到
@@ -62,7 +72,7 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
    - `sourceFpsEstimate` / `sourceFrameIntervalMs`: 视频源节拍估算，优先用来区分 30fps / 60fps 源与本地绘制问题
    - `droppedFramesSinceLastSample` / `droppedLikeStreak`: 浏览器侧 dropped-like 并集计数与连续性；它同时覆盖 callback gap 和 `presentedFrames` jump，不能单独当成真实掉帧结论
    - `maxCallbackIntervalMsSinceLastSample` / `maxPresentedFramesDeltaSinceLastSample`: 当前 sample 窗口内最差回调间隔与最大跳帧跨度
-21. Treat `renderFrameDropped` as browser-side dropped-like evidence, not literal GPU draw failure.
+23. Treat `renderFrameDropped` as browser-side dropped-like evidence, not literal GPU draw failure.
     It means callback cadence or presented-frame progression crossed the local threshold.
     Use `callbackGap` and `presentedFramesJump` to split “callback 稀疏” from “多帧合批推进”.
 
@@ -99,6 +109,7 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 
 - Use [`scripts/summarize_runtime_trace.py`](scripts/summarize_runtime_trace.py) first for row counts, domains, sessions, log levels, and suspicious rows.
 - Use [`scripts/trace_midsegment_report.py`](scripts/trace_midsegment_report.py) for mid-session steady-state gates: `statsSnapshot` steady ratio, recovering / `receiverWaitingKeyframe` pulses, `submit_age_ms` / `present_age_ms` P95, and `hostMailboxRetainedDisplayed` + `hasPendingFrame` anomalies. Prints `GATE: PASS` or `GATE: FAIL` and exits `0` / `2`.
+- Use [`scripts/trace_receive_feedback_report.py`](scripts/trace_receive_feedback_report.py) for receive feedback arbiter acceptance: aggregates `receiveFeedbackDecision`, `keyframeRequestOutcome`, `referenceChainStateChanged`, `receivePictureRecoveryTerminal`, arbiter mismatch, `NeedKeyframe` non-IDR feed violations, projection-layer gates (`displayStableWithoutLedgerClosure`, `insertSurfacePhaseActionStage`, `insertControlProjectionMismatch`), `rates` (response/decoded/clean-anchor/display/usable-IDR/chain-build), and `receiveFeedbackGate` (`PASS`/`FAIL`). `nackEffectiveRate` 在 trace 无统一 NACK 事件时为 `null`，可改用 `summarize_runtime_trace.py` 的 `recovery_audit.nackEffectiveness`.
 - Read [`references/log-schema.md`](references/log-schema.md) for the JSONL envelope, row categories, and interpretation rules.
 - Read [`references/analysis-playbook.md`](references/analysis-playbook.md) for project-specific analysis steps, common focus areas, and reporting format.
 - The script now surfaces structured recovery timeline anchors:

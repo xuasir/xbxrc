@@ -246,6 +246,29 @@ fn retained_displayed_frame_does_not_enter_starved_or_no_pending_streak() {
 }
 
 #[test]
+fn displayed_frame_clone_tracks_current_retained_frame() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let frame = mk_frame(42, 1_000.0);
+    let _ = slot.submit_frame(&frame, 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(_) => {}
+        other => panic!("expected initial present, got {other:?}"),
+    }
+
+    let cloned_displayed_frame = slot
+        .displayed_frame()
+        .expect("displayed frame should remain available after present");
+    assert_eq!(cloned_displayed_frame.frame_seq, frame.frame_seq);
+    assert_eq!(cloned_displayed_frame.rtp_timestamp, frame.rtp_timestamp);
+    assert_eq!(
+        cloned_displayed_frame.frame_recovery_disposition,
+        frame.frame_recovery_disposition
+    );
+}
+
+#[test]
 fn present_refresh_does_not_inflate_present_fps() {
     let mut telemetry = HostCadenceTelemetry::default();
     telemetry.record_present(1_000.0);

@@ -112,6 +112,7 @@ impl RuntimeStatsSink {
             }
             stats.recovery_displayed_idr_rtp = Some(rtp_timestamp);
             stats.recovery_displayed_idr_at_ms = Some(observed_at_ms);
+            stats.receive_display_state = Some("display-stable".to_string());
             stats.recovery_pending_displayed_idr_rtp = None;
             Self::apply_transport_clean_anchor(stats, observed_at_ms, "displayed-idr");
             let observation = XbxEnginePictureRecoveryTransitionObservation {

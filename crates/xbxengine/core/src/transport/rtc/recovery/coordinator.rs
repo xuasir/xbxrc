@@ -306,49 +306,27 @@ impl RecoveryCoordinator {
         });
     }
 
-    /// PLI / transport-await 完成：只认 host 已显示 IDR 或 receive 已离开 WaitingKeyframe。
+    /// PLI / transport-await 完成：与 owner 共用 current-epoch picture recovery 谓词。
     pub(crate) fn check_idr_completed(stats: &XbxEngineMediaRuntimeStats) -> bool {
-        let receiver_waiting_keyframe = stats.video_decoder_recovery_state.as_deref().is_some_and(
-            |state| {
-                crate::transport::rtc::recovery::contract::is_receiver_state_waiting_keyframe(Some(
-                    state,
-                ))
-            },
-        ) || stats
-            .latest_video_receiver_observation
-            .as_ref()
-            .is_some_and(|observation| {
-                crate::transport::rtc::recovery::contract::is_receiver_state_waiting_keyframe(Some(
-                    observation.receiver_state.as_str(),
-                ))
-            });
-        if receiver_waiting_keyframe {
-            return false;
-        }
-        if stats.recovery_displayed_idr_at_ms.is_some() {
-            return true;
-        }
-        stats
-            .latest_video_receiver_observation
-            .as_ref()
-            .is_some_and(|observation| {
-                !crate::transport::rtc::recovery::contract::is_receiver_state_waiting_keyframe(
-                    Some(observation.receiver_state.as_str()),
-                )
-            })
+        crate::transport::rtc::recovery::contract::receive_picture_recovery_complete_from_stats(
+            stats,
+        )
     }
 
     fn latest_transport_await_response_observed_at_ms(
         stats: &XbxEngineMediaRuntimeStats,
     ) -> Option<f64> {
-        let episode = stats.latest_keyframe_request_episode.as_ref()?;
-        if episode.request_reason.as_deref() != Some("receiverWaitingKeyframe") {
+        if stats.receive_keyframe_response_state.as_deref() != Some("usable-idr") {
             return None;
         }
-        if episode.retired_at_ms.is_some() {
+        let obs = stats.latest_h264_inspection_observation.as_ref()?;
+        if !obs.is_idr || !obs.bootstrap_ready {
             return None;
         }
-        episode.first_keyframe_packet_at_ms
+        if obs.bound_recovery_epoch != Some(stats.transport_recovery_epoch) {
+            return None;
+        }
+        Some(obs.observed_at_ms)
     }
 
     /// 检查decoder reset是否完成（基于执行事实）
@@ -476,6 +454,17 @@ impl RecoveryCoordinator {
     ) -> VideoEscalationDecision {
         let prior = decision.action;
         decision.action = suppress_session_picture_recovery_action(decision.action);
+        if matches!(
+            prior,
+            RecoveryAction::RequestPli | RecoveryAction::RequestFir
+        ) && decision.action != RecoveryAction::DelegatedToReceive
+        {
+            RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                stats.session_picture_recovery_ownership_violation_total = stats
+                    .session_picture_recovery_ownership_violation_total
+                    .saturating_add(1);
+            });
+        }
         if decision.action == RecoveryAction::DelegatedToReceive {
             let detail = if prior != decision.action {
                 format!("priorAction={} delegatedToReceive", prior.label())
@@ -623,6 +612,10 @@ impl RecoveryCoordinator {
         let backend_failure = signal.reason == VideoEscalationReason::DecoderBackendFailure;
         let reconfigure = signal.reason == VideoEscalationReason::Reconfigure;
         if (idr_recovery_active || supply_break_active) && !backend_failure && !reconfigure {
+            RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                stats.decoder_reset_violation_total =
+                    stats.decoder_reset_violation_total.saturating_add(1);
+            });
             decision.action = RecoveryAction::DelegatedToReceive;
             RuntimeStatsSink::update_shared(runtime_stats, |stats| {
                 stats.recovery_receive_keyframe_hint_at_ms = Some(
@@ -1394,43 +1387,103 @@ mod tests {
     }
 
     #[test]
+    fn ledger_usable_idr_response_visible_without_episode() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 1,
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 1,
+                frame_rtp_timestamp: Some(90_001),
+                is_idr: true,
+                bootstrap_ready: true,
+                observed_at_ms: 250.0,
+                bound_recovery_epoch: Some(1),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            RecoveryCoordinator::latest_transport_await_response_observed_at_ms(&stats),
+            Some(250.0),
+        );
+    }
+
+    #[test]
+    fn check_idr_not_completed_after_epoch_advance_with_stale_h264_inspection() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 2,
+            receive_keyframe_required: Some(false),
+            receive_keyframe_response_state: None,
+            receive_display_state: None,
+            latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 1,
+                is_idr: true,
+                bootstrap_ready: true,
+                observed_at_ms: 100.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            !RecoveryCoordinator::check_idr_completed(&stats),
+            "新 epoch 未建立 ledger response/display 前不得完成"
+        );
+        assert_eq!(
+            RecoveryCoordinator::latest_transport_await_response_observed_at_ms(&stats),
+            None,
+            "无 usable-idr response_state 时不得读旧 H264 inspection"
+        );
+    }
+
+    #[test]
+    fn transport_await_response_observed_requires_h264_inspection_not_sent_at() {
+        let stats = XbxEngineMediaRuntimeStats {
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            receive_keyframe_last_sent_at_ms: Some(999.0),
+            ..Default::default()
+        };
+        assert_eq!(
+            RecoveryCoordinator::latest_transport_await_response_observed_at_ms(&stats),
+            None,
+            "sent 时间不得冒充 response observed"
+        );
+    }
+
+    #[test]
     fn current_transport_await_keyframe_packet_counts_as_response_observed_only() {
         let stats = XbxEngineMediaRuntimeStats {
             transport_recovery_epoch: 7,
-            latest_keyframe_request_episode: Some(
-                crate::XbxEngineKeyframeRequestEpisodeObservation {
-                    episode_id: 71,
-                    request_reason: Some("receiverWaitingKeyframe".to_string()),
-                    request_kind: Some("pli".to_string()),
-                    status: "response-observed".to_string(),
-                    status_detail: Some("pending".to_string()),
-                    requested_at_ms: 100.0,
-                    sent_at_ms: Some(110.0),
-                    deadline_at_ms: Some(500.0),
-                    transport_detail: None,
-                    first_video_packet_at_ms: Some(170.0),
-                    first_video_packet_rtp_timestamp: Some(2_000),
-                    first_video_packet_is_keyframe: Some(false),
-                    first_keyframe_packet_at_ms: Some(180.0),
-                    first_keyframe_decoded_at_ms: None,
-                    response_rtp_timestamp: Some(2_000),
-                    response_frame_seq: None,
-                    response_verdict: Some("pending".to_string()),
-                    lifecycle_phase: Some("response-observed".to_string()),
-                    retired_at_ms: None,
-                },
-            ),
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 1,
+                is_idr: true,
+                bootstrap_ready: true,
+                observed_at_ms: 180.0,
+                bound_recovery_epoch: Some(7),
+                ..Default::default()
+            }),
+            latest_video_receiver_observation: Some(crate::XbxEngineVideoReceiverObservation {
+                observation_id: 1,
+                receiver_state: "waiting-keyframe".to_string(),
+                gap_sequence: None,
+                gap_span: None,
+                nack_in_flight: false,
+                keyframe_request_pending: true,
+                bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+                observed_at_ms: 900.0,
+            }),
             ..Default::default()
         };
 
         assert_eq!(
             RecoveryCoordinator::latest_transport_await_response_observed_at_ms(&stats),
             Some(180.0),
-            "当前 transport-await episode 的新 keyframe 响应应进入 response-observed 层"
+            "usable-idr H264 inspection 应进入 response-observed 层"
         );
         assert!(
             !RecoveryCoordinator::check_idr_completed(&stats),
-            "packet-seen 只表示远端已响应；完成仍需 displayed IDR 或 receiver 离开 waiting-keyframe"
+            "packet-seen 只表示远端已响应；完成仍需 ledger clean anchor / display-stable"
         );
     }
 
@@ -1443,6 +1496,9 @@ mod tests {
             video_anchor_clean_epoch: Some(3),
             video_anchor_clean_source_event: Some("displayed-idr".to_string()),
             video_decoder_recovery_state: Some("nominal".to_string()),
+            receive_keyframe_required: Some(false),
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            receive_display_state: Some("display-stable".to_string()),
             ..Default::default()
         };
         assert!(RecoveryCoordinator::check_idr_completed(&stats));
@@ -1470,8 +1526,31 @@ mod tests {
     }
 
     #[test]
-    fn check_idr_completed_when_receiver_leaves_waiting_keyframe() {
+    fn usable_idr_with_stale_h264_epoch_does_not_count_as_response_observed() {
         let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 3,
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 1,
+                is_idr: true,
+                bootstrap_ready: true,
+                observed_at_ms: 180.0,
+                bound_recovery_epoch: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            RecoveryCoordinator::latest_transport_await_response_observed_at_ms(&stats),
+            None,
+        );
+    }
+
+    #[test]
+    fn check_idr_not_completed_with_usable_idr_without_clean_anchor_or_display() {
+        let stats = XbxEngineMediaRuntimeStats {
+            receive_keyframe_required: Some(false),
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
             latest_video_receiver_observation: Some(crate::XbxEngineVideoReceiverObservation {
                 observation_id: 1,
                 receiver_state: "receiving".to_string(),
@@ -1482,6 +1561,26 @@ mod tests {
                 bootstrap_reject_reason: None,
                 observed_at_ms: 420.0,
             }),
+            ..Default::default()
+        };
+        assert!(
+            !RecoveryCoordinator::check_idr_completed(&stats),
+            "usable-idr  alone 不得闭合；须 current-epoch clean anchor 或 display-stable"
+        );
+    }
+
+    #[test]
+    fn check_idr_completed_when_clean_anchor_and_decoder_synced() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 2,
+            transport_recovery_episode_opened_at_ms: Some(400.0),
+            receive_keyframe_required: Some(false),
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            video_anchor_clean_epoch: Some(2),
+            video_anchor_clean_observed_at_ms: Some(500.0),
+            recovery_decoder_reference_synced_at_ms: Some(500.0),
+            latest_video_decode_ok_time_ms: Some(500.0),
+            latest_video_decode_ok_rtp_timestamp: Some(90_001),
             ..Default::default()
         };
         assert!(RecoveryCoordinator::check_idr_completed(&stats));

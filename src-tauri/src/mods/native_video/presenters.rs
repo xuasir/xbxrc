@@ -850,10 +850,17 @@ fn run_windows_wgpu_render_tick(
             }
         }
         ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
-            if size_changed {
-                if let Some(frame) = cached_frame_for_repaint {
-                    renderer.update_frame(frame);
-                    let _ = renderer.render();
+            if let Some(frame) = cached_frame_for_repaint {
+                renderer.update_frame(frame);
+                if let Err(error) = renderer.render() {
+                    log::warn!(
+                        "[native_video][windows][wgpu] retained frame render failed for viewport={} window={} error={}",
+                        viewport_id,
+                        window.label(),
+                        error
+                    );
+                } else if let Ok(mut telemetry) = telemetry.lock() {
+                    telemetry.record_present_refresh(now_ms);
                 }
             }
         }

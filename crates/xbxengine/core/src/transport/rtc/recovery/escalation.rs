@@ -935,26 +935,6 @@ impl VideoEscalationController {
         }
     }
 
-    fn try_enter_keyframe_epoch(
-        &mut self,
-        reason_class: KeyframeReasonClass,
-        now: Instant,
-    ) -> bool {
-        if self.keyframe_epoch_active {
-            let reason_changed = self.keyframe_epoch_reason_class != Some(reason_class);
-            if reason_changed {
-                self.clear_keyframe_epoch();
-            }
-        }
-        if self.keyframe_epoch_active {
-            return false;
-        }
-        self.keyframe_epoch_active = true;
-        self.keyframe_epoch_started_at = Some(now);
-        self.keyframe_epoch_reason_class = Some(reason_class);
-        true
-    }
-
     fn try_release_keyframe_epoch_for_same_reason(
         &mut self,
         reason_class: KeyframeReasonClass,
@@ -988,13 +968,6 @@ impl VideoEscalationController {
         self.keyframe_epoch_active = false;
         self.keyframe_epoch_started_at = None;
         self.keyframe_epoch_reason_class = None;
-    }
-
-    fn can_allocate_keyframe_attempt(&self) -> bool {
-        let provisional = self
-            .keyframe_budget_used
-            .saturating_add(u8::from(self.keyframe_budget_reservation_active));
-        provisional < self.keyframe_budget_limit
     }
 
     /// 图片级 PLI/FIR 由 receive-local 执行；session 不 enter keyframe epoch、不占 budget。

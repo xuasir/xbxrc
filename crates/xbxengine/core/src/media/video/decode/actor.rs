@@ -464,6 +464,7 @@ fn run_decode_loop(
                                 &frame.h264,
                                 &insert_ctx.decode,
                                 insert_ctx.action_stage,
+                                insert_ctx.reference_chain_state,
                             );
                             let emit_without_bootstrap =
                                 insert_emit_permits_decode_without_bootstrap_ready(

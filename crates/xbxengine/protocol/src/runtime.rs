@@ -804,6 +804,75 @@ pub struct XbxEngineStatsDto {
     /// receive-local keyframe 尝试序号（trace `keyframeRequestOutcome`）。
     #[serde(default)]
     pub keyframe_request_outcome_seq: u64,
+    /// receive feedback arbiter 决策序号（trace `receiveFeedbackDecision`）。
+    #[serde(default)]
+    pub receive_feedback_decision_seq: u64,
+    #[serde(default)]
+    pub latest_receive_feedback_action: Option<String>,
+    #[serde(default)]
+    pub latest_receive_feedback_reason: Option<String>,
+    #[serde(default)]
+    pub latest_receive_feedback_coalescing: Option<String>,
+    #[serde(default)]
+    pub latest_receive_feedback_source: Option<String>,
+    #[serde(default)]
+    pub latest_receive_feedback_sparse_active: Option<bool>,
+    #[serde(default)]
+    pub receive_feedback_arbiter_mismatch_total: Option<u64>,
+    #[serde(default)]
+    pub receive_feedback_coalesced_total: Option<u64>,
+    #[serde(default)]
+    pub receive_feedback_throttled_total: Option<u64>,
+    #[serde(default)]
+    pub latest_receive_feedback_executor_outcome: Option<String>,
+    #[serde(default)]
+    pub receive_keyframe_last_sent_at_ms: Option<f64>,
+    #[serde(default)]
+    pub reference_chain_state: Option<String>,
+    #[serde(default)]
+    pub reference_chain_state_cause: Option<String>,
+    #[serde(default)]
+    pub reference_chain_decoder_reference_synced: Option<bool>,
+    #[serde(default)]
+    pub reference_chain_bootstrap_ready: Option<bool>,
+    #[serde(default)]
+    pub reference_chain_has_active_gap: Option<bool>,
+    #[serde(default)]
+    pub reference_chain_nack_exhausted: Option<bool>,
+    #[serde(default)]
+    pub reference_chain_submit_age_ms: Option<f64>,
+    #[serde(default)]
+    pub latest_reference_chain_sparse_must_idr_mismatch: Option<bool>,
+    #[serde(default)]
+    pub receive_picture_recovery_terminal_total: Option<u64>,
+    #[serde(default)]
+    pub latest_receive_picture_recovery_terminal_reason: Option<String>,
+    #[serde(default)]
+    pub receive_keyframe_sent_count_unresolved: Option<u32>,
+    #[serde(default)]
+    pub receive_keyframe_required: Option<bool>,
+    #[serde(default)]
+    pub receive_keyframe_required_cause: Option<String>,
+    #[serde(default)]
+    pub receive_keyframe_response_state: Option<String>,
+    #[serde(default)]
+    pub receive_display_state: Option<String>,
+    #[serde(default)]
+    pub receive_recovery_ledger_generation: Option<u64>,
+    #[serde(default)]
+    pub receive_picture_recovery_terminal_candidate: Option<bool>,
+    #[serde(default)]
+    pub reference_stats_fallback_total: Option<u64>,
+    #[serde(default)]
+    pub receive_picture_recovery_terminal_elapsed_rtt_count: Option<u32>,
+    #[serde(default)]
+    pub latest_reference_chain_observation_source: Option<String>,
+    #[serde(default)]
+    pub receive_sparse_must_idr_mismatch_total: Option<u64>,
+    #[serde(default)]
+    pub session_picture_recovery_ownership_violation_total: Option<u64>,
+    #[serde(default)]
+    pub decoder_reset_violation_total: Option<u64>,
     /// 派生解码健康（owner 决策用）。
     #[serde(default)]
     pub derived_decoder_health: Option<String>,
@@ -950,6 +1019,9 @@ pub struct XbxEngineStatsDto {
     pub latest_insert_decision: Option<String>,
     #[serde(default)]
     pub latest_insert_decision_reason: Option<String>,
+    /// ledger 派生的 packet recovery action stage（Insert 控制面）。
+    #[serde(default)]
+    pub latest_packet_recovery_action_stage: Option<String>,
     #[serde(default)]
     pub insert_decode_bypass_aligned: Option<bool>,
     #[serde(default)]

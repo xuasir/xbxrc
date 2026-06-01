@@ -19,7 +19,7 @@ use crate::transport::rtc::receive::{
     inspection_bootstrap_blocks_delta_continuation, inspection_bootstrap_reason,
     keyframe_episode_response_detail, now_ms_f64, receiver_state_blocks_delta_continuation,
     recovery_keyframe_action_for_insert_decision, resolve_insert_decision_with_reason,
-    should_block_non_keyframe_admission, DecodeCorruptionPolicy, DecodeGateDecision, InsertContext,
+    should_block_non_keyframe_admission, DecodeCorruptionPolicy, DecodeGateDecision,
     InsertDecision, InspectionAdmission, ReceiverDecodeContext, ReceiverState, RtpAccessUnit,
     SyntheticMarkerBoundary,
 };
@@ -71,6 +71,7 @@ impl RtcVideoFrameSource {
     }
 
     pub(crate) fn maybe_ack_clean_anchor_commit_from_runtime_stats(&mut self) {
+        self.maybe_align_recovery_ledger_transport_epoch();
         let Some(committed_epoch) = self
             .runtime_stats
             .read(|stats| {
@@ -86,6 +87,24 @@ impl RtcVideoFrameSource {
             return;
         }
         self.last_consumed_clean_anchor_epoch = committed_epoch;
+        let (display_rtp, display_at_ms) = self
+            .runtime_stats
+            .read(|stats| {
+                (
+                    stats.recovery_displayed_idr_rtp,
+                    stats.recovery_displayed_idr_at_ms,
+                )
+            })
+            .unwrap_or((None, None));
+        if let Some(at_ms) = display_at_ms {
+            self.trace_ledger
+                .recovery_ledger_mut()
+                .note_display_stable(display_rtp, at_ms);
+        }
+        self.trace_ledger
+            .recovery_ledger_mut()
+            .note_clean_anchor_committed(display_rtp);
+        self.sync_recovery_ledger_to_stats();
     }
 
     pub(crate) async fn handle_drop_and_request_keyframe_action(
@@ -466,54 +485,20 @@ impl RtcVideoFrameSource {
     fn receiver_decode_context(&self) -> ReceiverDecodeContext {
         let engine = &self.receive_core().receive_engine;
         let now_ms = now_ms_f64();
-        let (
-            prior_output_established,
-            displayed_idr_serving,
-            displayed_idr_decoder_synced,
-            decoder_reference_synced,
-        ) = self
+        let decoder_reference_synced = self
             .runtime_stats
             .read(|stats| {
-                let displayed_idr_serving =
-                    crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(
-                        stats,
-                    );
-                let displayed_idr_decoder_synced = crate::transport::rtc::recovery::contract::displayed_idr_decoder_synced_from_stats(
+                crate::transport::rtc::recovery::contract::decoder_reference_synced_from_stats(
                     stats, now_ms,
-                );
-                let decoder_reference_synced =
-                    crate::transport::rtc::recovery::contract::decoder_reference_synced_from_stats(
-                        stats, now_ms,
-                    );
-                let prior_output_established =
-                    crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats(
-                        stats,
-                    ) || displayed_idr_serving
-                        || stats
-                            .latest_video_decode_ok_time_ms
-                            .is_some_and(|decode_ok_ms| {
-                                Self::progress_time_fresh_for_active_recovery_episode(
-                                    stats,
-                                    decode_ok_ms,
-                                )
-                            });
-                (
-                    prior_output_established,
-                    displayed_idr_serving,
-                    displayed_idr_decoder_synced,
-                    decoder_reference_synced,
                 )
             })
-            .unwrap_or((false, false, false, false));
+            .unwrap_or(false);
         ReceiverDecodeContext {
             receiver_state: self.receiver_local_state(),
             has_active_gap: engine.has_active_gap(),
             nack_exhausted: engine.nack_requester.nack_escalation_pending()
                 || engine.nack_requester.has_exhausted_gaps(),
             first_frame_acquired: self.receiver_local_first_frame_acquired(),
-            prior_output_established,
-            displayed_idr_serving,
-            displayed_idr_decoder_synced,
             decoder_reference_synced,
         }
     }
@@ -645,9 +630,13 @@ impl RtcVideoFrameSource {
             }
         };
         self.record_video_timeline_observation(event_name, None, frame_rtp_timestamp, now_ms);
-        self.queue_transport_observation(TransportObservation::Loss(
-            TransportLossObservation::RecoveryKeyframeRequested,
-        ));
+        self.trace_ledger.recovery_ledger_mut().note_first_delta();
+        self.sync_recovery_ledger_to_stats();
+        let source = match request_kind {
+            FirstFrameAcquisitionRequestKind::Initial => "first-frame-acquisition",
+            FirstFrameAcquisitionRequestKind::Followup => "first-frame-acquisition-followup",
+        };
+        self.request_receiver_local_keyframe(source, frame_rtp_timestamp, now_ms, false);
     }
 
     pub(crate) fn request_recovery_keyframe_from_source(
@@ -705,49 +694,6 @@ impl RtcVideoFrameSource {
                 frame_rtp_timestamp,
                 now_ms,
             );
-            self.record_anchor_candidate_ledger(
-                frame_rtp_timestamp,
-                source_event,
-                candidate_state,
-                failure_reason,
-                now_ms,
-            );
-            return;
-        }
-        let has_gap = self.receive_core().receive_engine.has_active_gap();
-        if self
-            .runtime_stats
-            .read(|stats| {
-                let effective_rtt_ms = crate::transport::rtc::recovery::timing::resolve_effective_rtt_ms(
-                    stats,
-                    crate::transport::rtc::recovery::policy::ScenarioPolicyResolver::resolve_kind(
-                        stats.session_target_type.as_ref(),
-                        stats.transport_path.as_deref(),
-                    ),
-                );
-                matches!(
-                    crate::transport::rtc::recovery::contract::resolve_gap_vs_keyframe_mode(
-                        stats, now_ms, effective_rtt_ms
-                    ),
-                    crate::transport::rtc::recovery::contract::GapVsKeyframeMode::RepairFirst
-                ) && crate::transport::rtc::recovery::contract::should_collapse_receiver_waiting_keyframe_to_repairing(
-                    stats,
-                    now_ms,
-                    has_gap,
-                    self.receive_core()
-                        .receive_engine
-                        .frame_assembler
-                        .assembled_count(),
-                )
-            })
-            .unwrap_or(false)
-            && matches!(
-                timeline_reason,
-                "bootstrapMissingIdr"
-                    | "mixedIdrWithTrailingDelta"
-                    | "awaitingRecoveryAnchor"
-            )
-        {
             self.record_anchor_candidate_ledger(
                 frame_rtp_timestamp,
                 source_event,
@@ -1124,22 +1070,7 @@ impl RtcVideoFrameSource {
             .runtime_stats
             .read(|stats| stats.recovery_effective_rtt_ms.unwrap_or(200.0))
             .unwrap_or(200.0);
-        let insert_ctx = self
-            .runtime_stats
-            .read(|stats| {
-                InsertContext::from_runtime(decode_ctx, stats, inspection_now_ms, effective_rtt_ms)
-            })
-            .unwrap_or(InsertContext {
-                decode: decode_ctx,
-                gap_mode: crate::transport::rtc::recovery::contract::GapVsKeyframeMode::RepairFirst,
-                action_stage:
-                    crate::transport::rtc::recovery::contract::PacketRecoveryActionStage::Drop,
-                fresh_idr_admission: false,
-                post_parameter_sets_change_strict: false,
-                supply_break_continuation: false,
-                media_supply_phase:
-                    crate::transport::rtc::recovery::contract::MediaSupplyPhase::Steady,
-            });
+        let insert_ctx = self.build_insert_context(decode_ctx, inspection_now_ms, effective_rtt_ms);
         let (insert_decision, insert_reason): (InsertDecision, &str) =
             resolve_insert_decision_with_reason(
                 &inspection,
@@ -1152,15 +1083,42 @@ impl RtcVideoFrameSource {
         self.runtime_stats.update(|stats| {
             stats.latest_insert_decision = Some(insert_decision_label(insert_decision).to_string());
             stats.latest_insert_decision_reason = Some(insert_reason.to_string());
+            stats.latest_packet_recovery_action_stage =
+                Some(insert_ctx.action_stage.as_str().to_string());
             stats.insert_decode_bypass_aligned = None;
         });
         if inspection.is_idr {
             let idr_admitted_to_decode = matches!(insert_decision, InsertDecision::Emit)
                 && (inspection.bootstrap_ready || insert_ctx.fresh_idr_admission);
+            if idr_admitted_to_decode && inspection.bootstrap_ready {
+                self.note_usable_idr_for_picture_recovery_terminal(
+                    sample.packet_timestamp,
+                    inspection_now_ms,
+                );
+            }
             if !idr_admitted_to_decode {
+                self.trace_ledger.recovery_ledger_mut().note_idr_unusable();
+                self.sync_recovery_ledger_to_stats();
                 self.note_ingress_idr_not_admitted(insert_reason);
             }
+        } else if !inspection.bootstrap_ready {
+            if !self
+                .trace_ledger
+                .recovery_ledger()
+                .has_established_usable_anchor
+            {
+                self.note_first_delta_for_recovery_ledger();
+            } else if self
+                .trace_ledger
+                .recovery_ledger()
+                .unresolved_keyframe_request_count
+                > 0
+                || self.trace_ledger.recovery_ledger().keyframe_required
+            {
+                self.note_non_idr_continuation_for_recovery_ledger();
+            }
         }
+        self.refresh_recovery_ledger_decoder_facts(inspection_now_ms);
         if matches!(insert_decision, InsertDecision::HoldRepair) {
             let now_ms = now_ms_f64();
             self.runtime_stats.record_h264_inspection_observation(
@@ -1212,29 +1170,17 @@ impl RtcVideoFrameSource {
             let source_event = if insert_ctx.post_parameter_sets_change_strict {
                 "insert-gate-post-ps-change-strict"
             } else if matches!(
-                insert_ctx.media_supply_phase,
-                crate::transport::rtc::recovery::contract::MediaSupplyPhase::MustIdr
+                insert_ctx.reference_chain_state,
+                crate::transport::rtc::recovery::contract::ReferenceChainState::NeedKeyframe
             ) {
-                "media-supply-must-idr"
-            } else if matches!(
-                insert_ctx.media_supply_phase,
-                crate::transport::rtc::recovery::contract::MediaSupplyPhase::SupplyBreak
-            ) {
-                "media-supply-supply-break"
+                "insert-gate-need-keyframe"
+            } else if insert_ctx.supply_break_continuation {
+                "insert-gate-supply-break"
             } else if crate::transport::rtc::recovery::contract::gap_keyframe_only_mode_active(
                 insert_ctx.gap_mode,
             ) {
                 "insert-gate-keyframe-only"
-            } else if self
-                .runtime_stats
-                .read(|stats| {
-                    crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
-                        stats, now_ms,
-                    )
-                    .active
-                })
-                .unwrap_or(false)
-            {
+            } else if self.sparse_idr_rhythm_for_receive(now_ms).active {
                 "insert-gate-hold-repair-sparse"
             } else {
                 "insert-gate-hold-repair"

@@ -28,15 +28,14 @@ use crate::transport::rtc::receive::nack_policy::{
 use crate::transport::rtc::receive::ReceiverState;
 use crate::transport::rtc::receive::ReceiverTraceLedger;
 
-use crate::transport::rtc::capability::{KeyframeSendOutcome, RtcTransportCapability};
-use crate::transport::rtc::receive::keyframe_requester::KeyframeRequestDispatch;
+use crate::transport::rtc::capability::RtcTransportCapability;
 use crate::transport::rtc::receive::{
     receiver_state_from_runtime, ReceiveCoreBody, ReceiveEngine, ReceiverObservation,
 };
 use crate::transport::rtc::recovery::contract::{
-    derive_media_supply_phase_from_stats, idr_recovery_active_from_stats, MediaSupplyPhase,
-    SparseIdrRhythm,
+    displayed_idr_serving_allows_relaxed_controls_from_stats, displayed_idr_serving_from_stats,
 };
+use crate::transport::rtc::recovery::contract::{idr_recovery_active_from_stats, SparseIdrRhythm};
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     VideoFramePipelineSources,
@@ -239,6 +238,7 @@ impl RtcVideoFrameSource {
         if should_begin_transport_recovery_episode(observation) {
             self.runtime_stats
                 .begin_transport_recovery_episode(now_ms_f64());
+            self.sync_recovery_ledger_to_stats();
         }
         let _ = self.transport_observation_tx.send(observation);
         self.transport_observation_emit_count =
@@ -409,28 +409,12 @@ impl RtcVideoFrameSource {
         (None, FrameRecoveryDisposition::Steady, None, None)
     }
 
-    fn collapse_receiver_waiting_keyframe_to_repairing(&self) -> bool {
-        let has_gap = self.receive_core().receive_engine.has_active_gap();
-        let assembled_count = self
-            .receive_core()
-            .receive_engine
-            .frame_assembler
-            .assembled_count();
-        let now_ms = now_ms_f64();
-        self.runtime_stats
-            .read(|stats| {
-                crate::transport::rtc::recovery::contract::should_collapse_receiver_waiting_keyframe_to_repairing(
-                    stats,
-                    now_ms,
-                    has_gap,
-                    assembled_count,
-                )
-            })
-            .unwrap_or(false)
-    }
-
     pub(crate) fn receiver_local_state(&self) -> ReceiverState {
         let has_gap = self.receive_core().receive_engine.has_active_gap();
+        let displayed_idr_serving = self
+            .runtime_stats
+            .read(|stats| displayed_idr_serving_from_stats(stats))
+            .unwrap_or(false);
         receiver_state_from_runtime(
             self.waiting_recovery_keyframe_since_ms.is_some(),
             has_gap,
@@ -438,7 +422,7 @@ impl RtcVideoFrameSource {
                 .receive_engine
                 .frame_assembler
                 .assembled_count(),
-            self.collapse_receiver_waiting_keyframe_to_repairing(),
+            displayed_idr_serving,
         )
     }
 
@@ -563,17 +547,11 @@ impl RtcVideoFrameSource {
 
     fn publish_receiver_observation(&mut self, now_ms: f64, bootstrap_reject: Option<String>) {
         let has_gap = self.receive_core().receive_engine.has_active_gap();
-        let waiting_keyframe = self.is_blocking_non_keyframe_admission()
-            || self.waiting_recovery_keyframe_since_ms.is_some();
-        let state = receiver_state_from_runtime(
-            waiting_keyframe,
-            has_gap,
-            self.receive_core()
-                .receive_engine
-                .frame_assembler
-                .assembled_count(),
-            self.collapse_receiver_waiting_keyframe_to_repairing(),
-        );
+        let displayed_idr_relaxed = self
+            .runtime_stats
+            .read(|stats| displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms))
+            .unwrap_or(false);
+        let state = self.receiver_local_state();
         let gap_sequence = self
             .runtime_stats
             .read(|stats| {
@@ -586,7 +564,8 @@ impl RtcVideoFrameSource {
         self.receiver_observation_id = self.receiver_observation_id.saturating_add(1);
         let observation = ReceiverObservation {
             nack_in_flight: has_gap,
-            keyframe_request_pending: self.waiting_recovery_keyframe_since_ms.is_some(),
+            keyframe_request_pending: self.waiting_recovery_keyframe_since_ms.is_some()
+                && !displayed_idr_relaxed,
             bootstrap_reject_reason: bootstrap_reject,
         };
         self.runtime_stats.record_video_receiver_observation(
@@ -612,6 +591,13 @@ impl RtcVideoFrameSource {
         if !soft {
             return true;
         }
+        if self
+            .runtime_stats
+            .read(|stats| displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms))
+            .unwrap_or(false)
+        {
+            return false;
+        }
         if rhythm.active && rhythm.pli_due {
             return true;
         }
@@ -619,14 +605,11 @@ impl RtcVideoFrameSource {
             .read(|stats| {
                 stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
                     || idr_recovery_active_from_stats(stats, now_ms)
-                    || matches!(
-                        derive_media_supply_phase_from_stats(stats, now_ms),
-                        MediaSupplyPhase::MustIdr
-                    )
             })
             .unwrap_or(false)
     }
 
+    /// 薄封装：所有 keyframe 决策经 `plan_receive_feedback` / `execute_receive_feedback_keyframe`。
     pub(crate) fn request_receiver_local_keyframe(
         &mut self,
         source_event: &'static str,
@@ -635,67 +618,32 @@ impl RtcVideoFrameSource {
         soft: bool,
     ) {
         self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
-        let capability = self.receive_core().transport_capability.clone();
-        let sparse_idr_rhythm = self
+        let effective_rtt_ms = self
             .runtime_stats
-            .read(|stats| {
-                crate::transport::rtc::recovery::contract::sparse_idr_rhythm_from_stats(
-                    stats, now_ms,
-                )
-            })
-            .unwrap_or_default();
+            .read(|stats| stats.recovery_effective_rtt_ms.unwrap_or(200.0))
+            .unwrap_or(200.0);
+        let sparse_idr_rhythm = self.sparse_idr_rhythm_for_receive(now_ms);
         let force = self.keyframe_request_force_required(soft, now_ms, sparse_idr_rhythm);
-        let dispatch = self
-            .receive_core_mut()
-            .receive_engine
-            .keyframe_requester
-            .request_dispatch(capability.as_ref(), force, sparse_idr_rhythm);
-        let outcome_name = match dispatch {
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent) => "sent",
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::FeedbackWarming) => {
-                "feedbackWarming"
-            }
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::FeedbackUnavailable) => {
-                "feedbackUnavailable"
-            }
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::TransportNotReady) => {
-                "transportNotReady"
-            }
-            KeyframeRequestDispatch::Throttled => "throttled",
-            KeyframeRequestDispatch::Coalesced => "coalesced",
-        };
-        if matches!(
-            dispatch,
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent)
-        ) {
-            if self.waiting_recovery_keyframe_since_ms.is_none() {
-                self.waiting_recovery_keyframe_since_ms = Some(now_ms);
-            }
-            self.queue_transport_observation(TransportObservation::Loss(
-                TransportLossObservation::RecoveryKeyframeRequested,
-            ));
+        let decision = self.plan_receive_feedback(
+            source_event,
+            now_ms,
+            effective_rtt_ms,
+            crate::transport::rtc::receive::feedback_arbiter::NackPollSnapshot::default(),
+            None,
+            force,
+            soft,
+        );
+        if decision.should_touch_keyframe_executor() {
+            let _ = self.execute_receive_feedback_keyframe(
+                decision,
+                source_event,
+                frame_rtp_timestamp,
+                now_ms,
+                force,
+            );
+        } else {
+            self.record_receive_feedback_decision(decision, source_event, None);
         }
-        self.runtime_stats.update(|stats| {
-            stats.keyframe_request_outcome_seq =
-                stats.keyframe_request_outcome_seq.saturating_add(1);
-            stats.latest_keyframe_request_source = Some(source_event.to_string());
-            stats.latest_keyframe_request_outcome = Some(outcome_name.to_string());
-            if sparse_idr_rhythm.active {
-                stats.receive_sparse_idr_pli_interval_ms = Some(sparse_idr_rhythm.pli_interval_ms);
-            }
-            if matches!(
-                dispatch,
-                KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent)
-            ) {
-                stats.receive_keyframe_last_sent_at_ms = Some(now_ms);
-            }
-            stats.latest_observation_label = Some("keyframeRequestOutcome".to_string());
-            stats.latest_observation_summary = Some(format!(
-                "seq={} source={source_event} soft={soft} outcome={outcome_name}",
-                stats.keyframe_request_outcome_seq
-            ));
-        });
-        self.publish_receiver_observation(now_ms, None);
     }
 
     pub(super) fn record_video_timeline_observation(
@@ -1007,6 +955,7 @@ pub(crate) fn build_rtc_video_frame_source(
 }
 
 mod decode;
+mod feedback;
 
 fn generate_local_rtcp_sender_ssrc() -> u32 {
     let seed = now_ms_f64() as u32;

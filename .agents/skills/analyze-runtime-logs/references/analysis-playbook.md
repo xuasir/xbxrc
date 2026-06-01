@@ -72,6 +72,40 @@ Keep these cases distinct:
 - performance is degraded without a terminal failure
 - browser-direct render callback cadence is unstable while transport and decode still look healthy
 
+### Receive feedback arbiter (RFC 2026-05-28)
+
+When validating receive-side NACK / PLI / FIR arbitration or `ReferenceChainState`:
+
+1. Run [`../scripts/trace_receive_feedback_report.py`](../scripts/trace_receive_feedback_report.py) `<trace.jsonl>` first.
+2. Separate **control facts** from **diagnostic projection** when reading structured events:
+   - **Control facts** (drive Insert / arbiter / owner release): `keyframeRequired`, `responseState`, `receiveDisplayState`, `ledgerGeneration`, `packetRecoveryActionStage`
+   - **Diagnostic only** (trace/UI narrative): `mediaSupplyPhaseDiagnostic`, `displayedIdrHostHint`, episode fields
+3. Read structured events in this order:
+   - `receiveFeedbackDecision` — arbiter `action` / `reason` / `coalescing` / `referenceState` + control facts
+   - `referenceChainStateChanged` — `unknown` / `continuous` / `repairing` / `need-keyframe` + control facts
+   - `keyframeRequestOutcome` — executor result (`sent`, `coalesced`, `throttled`, `feedbackUnavailable`)
+   - `insertGateDecision` — cross-check `needKeyframeNonIdrFeedViolations`, `insertControlProjectionMismatch`, `insertSurfacePhaseActionStage` from script output
+4. Treat script red flags:
+   - `arbiterMismatchTotal > 0` — planned vs executed feedback diverged
+   - `needKeyframeNonIdrFeedViolations > 0` — non-IDR emit under `need-keyframe`
+   - `displayStableWithoutLedgerClosure > 0` — `DisplayStable` without `usable-idr` + `display-stable` ledger facts
+   - `insertSurfacePhaseActionStage > 0` — `insertGateDecision.packetRecoveryActionStage` still uses surface-phase names (legacy `actionStage`-only traces are not gated)
+   - `sparseMustIdrMismatchTotal` — diagnostic only (`MediaSupplyPhase` vs ledger); reported, not a hard gate
+   - `insertControlProjectionMismatch > 0` — emit while `packetRecoveryActionStage` is `wait_keyframe` / `request_idr` with `keyframeRequired`
+   - `sessionPictureRecoveryViolations > 0` — session still owns picture recovery or keyframe in-flight
+   - `summary.receiveFeedbackDecisionEvents == 0` on a post-RFC trace — instrumentation or projection gap
+5. Align with recovery mainline: `sent` → response → decoded → `cleanAnchorCommitted` → `displayStable` (`keyframeChain` in script JSON). Script also counts `FreshAnchorRecovered` as anchor and `PlaybackRecovered` as decoded for post-IDR-climbing traces.
+
+#### Standard three-sample matrix (receive arbiter landing)
+
+| Sample | Capture | PASS heuristics |
+|--------|---------|-----------------|
+| Healthy | Normal start, no forced loss, until stable picture | `receiveFeedbackGate=PASS`; `keyframeChain` response/decoded/anchor/display (or playback recovered) **> 0** |
+| Continuation-only | Weak net or PLI-heavy / no usable IDR | `terminalAny > 0`; `terminalRemoteContinuationOnly` or `terminalRemoteNoUsableIdr`; **no** `silentStuck` |
+| Failing replay | Re-run script on pre-fix trace `runtime-trace-1779961935840-1.jsonl` | Expect **FAIL** `silentStuck` as regression baseline; post-fix **new** capture must not reproduce |
+
+Archived script output: [`docs/reports/trace-validation/`](../../../docs/reports/trace-validation/).
+
 For keyframe and NACK analysis, split outcomes further:
 
 - keyframe request was suppressed or coalesced before send

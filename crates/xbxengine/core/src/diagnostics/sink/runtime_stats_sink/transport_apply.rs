@@ -27,6 +27,7 @@ impl RuntimeStatsSink {
         stats.recovery_displayed_idr_at_ms = None;
         stats.recovery_pending_displayed_idr_rtp = None;
         Self::apply_clear_transport_clean_anchor(stats);
+        Self::apply_clear_receive_recovery_projection(stats);
         stats.keyframe_consecutive_sent_failures = 0;
         stats.keyframe_sent_failure_last_counted_episode_id = None;
         stats.transport_recovery_epoch
@@ -49,9 +50,26 @@ impl RuntimeStatsSink {
         stats.recovery_displayed_idr_at_ms = None;
         stats.recovery_pending_displayed_idr_rtp = None;
         Self::apply_clear_transport_clean_anchor(stats);
+        Self::apply_clear_receive_recovery_projection(stats);
         stats.keyframe_consecutive_sent_failures = 0;
         stats.keyframe_sent_failure_last_counted_episode_id = None;
         stats.transport_recovery_epoch
+    }
+
+    /// 清空 receive ledger 投影与上轮 decode-sync 事实，避免新 epoch 误闭合。
+    pub(crate) fn apply_clear_receive_recovery_projection(stats: &mut XbxEngineMediaRuntimeStats) {
+        stats.receive_display_state = None;
+        stats.receive_keyframe_response_state = None;
+        stats.receive_keyframe_required = Some(false);
+        stats.receive_keyframe_required_cause = None;
+        stats.receive_picture_recovery_terminal_candidate = Some(false);
+        stats.latest_receive_picture_recovery_terminal_reason = None;
+        stats.receive_keyframe_sent_count_unresolved = 0;
+        stats.receive_keyframe_last_sent_at_ms = None;
+        stats.latest_h264_inspection_observation = None;
+        stats.recovery_decoder_reference_synced_at_ms = None;
+        stats.latest_video_decode_ok_time_ms = None;
+        stats.latest_video_decode_ok_rtp_timestamp = None;
     }
 
     pub(crate) fn apply_complete_transport_recovery_episode(

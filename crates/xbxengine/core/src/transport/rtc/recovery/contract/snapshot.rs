@@ -35,7 +35,9 @@ impl DerivedDecoderHealth {
     }
 }
 
-/// 单 tick 从 stats 派生的合同快照；Owner/policy/coordinator 应优先读此结构，避免重复调用 6+ 个 helper。
+/// 单 tick 从 stats 派生的合同快照；**诊断/UI 用**。
+/// 控制面 picture recovery / insert / feedback 应读 receive ledger 与 stats 控制事实，
+/// 勿用本结构里的 `media_supply_phase` / `serving_*` 驱动决策。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct RecoveryContractSnapshot {
     pub(crate) media_supply_phase: MediaSupplyPhase,
@@ -81,6 +83,8 @@ impl RecoveryContractSnapshot {
     }
 }
 
+/// 仅写诊断投影字段（`media_supply_phase` / `surface_phase` / `derived_decoder_health`）。
+/// 不写 receive ledger / clean anchor / decoder sync 等控制事实。
 pub(crate) fn sync_derived_recovery_contract_fields(
     stats: &mut XbxEngineMediaRuntimeStats,
     now_ms: f64,

@@ -4,6 +4,7 @@ mod core_runtime;
 mod decode_gate;
 mod decode_gate_eval;
 mod engine;
+mod feedback_arbiter;
 mod h264_bootstrap_tracker;
 mod ingress_loop;
 mod ingress_state;
@@ -17,6 +18,7 @@ mod observation;
 mod packet_buffer;
 pub mod pipeline;
 mod receiver_state;
+pub(crate) mod recovery_ledger;
 mod trace_ledger;
 pub(crate) use trace_ledger::ReceiverTraceLedger;
 mod rtp_frame_assembler;
@@ -53,8 +55,8 @@ pub(crate) use engine::ReceiveEngine;
 pub(crate) use insert_gate::{
     insert_decision_label, insert_decision_to_inspection_admission,
     insert_emit_permits_decode_without_bootstrap_ready,
-    recovery_keyframe_action_for_insert_decision, resolve_insert_decision,
-    resolve_insert_decision_with_reason, InsertContext, InsertDecision,
+    recovery_keyframe_action_for_insert_decision, resolve_insert_decision_with_reason,
+    InsertContext, InsertDecision,
 };
 pub use observation::ReceiverObservation;
 pub use packet_buffer::SequenceObserveOutcome;

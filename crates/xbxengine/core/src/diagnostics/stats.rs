@@ -271,6 +271,7 @@ fn resolve_presentation_health(
 
 fn recovery_progress_is_still_serviceable(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
     const RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS: f64 = 480.0;
+    let fresh = |at_ms: f64| (now_ms - at_ms).max(0.0) <= RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS;
     if !matches!(
         stats.session_phase.as_deref(),
         Some("recovering" | "recovery-eligible" | "active-recovery" | "recovery-blocked")
@@ -283,14 +284,31 @@ fn recovery_progress_is_still_serviceable(stats: &XbxEngineMediaRuntimeStats, no
     if stats.video_decoder_stalled == Some(true) {
         return false;
     }
-    stats
-        .latest_video_decode_ok_time_ms
-        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS)
-        || stats
-            .latest_host_mailbox_submit_time_ms
-            .is_some_and(|at_ms| {
-                (now_ms - at_ms).max(0.0) <= RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS
-            })
+    if stats.receive_display_state.as_deref() == Some("display-stable") {
+        return true;
+    }
+    if stats
+        .recovery_decoder_reference_synced_at_ms
+        .is_some_and(fresh)
+    {
+        return true;
+    }
+    if stats.latest_host_mailbox_submit_time_ms.is_some_and(fresh) {
+        return true;
+    }
+    // `usable-idr` 仅作辅助：须与当前 epoch 的 fresh clean anchor 同拍，不能单独把 display 判成可服务。
+    if stats.receive_keyframe_response_state.as_deref() == Some("usable-idr")
+        && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
+        && stats.video_anchor_clean_observed_at_ms.is_some_and(fresh)
+    {
+        return true;
+    }
+    if stats.receive_keyframe_required != Some(true) {
+        if stats.latest_video_decode_ok_time_ms.is_some_and(fresh) {
+            return true;
+        }
+    }
+    false
 }
 
 /// inspection reject 簇与 submit 尾延迟尖峰同现，便于 trace 归因控制面脉冲。
@@ -957,6 +975,75 @@ pub fn build_xbxengine_stats(
         keyframe_request_outcome_seq: runtime_stats
             .map(|stats| stats.keyframe_request_outcome_seq)
             .unwrap_or(0),
+        receive_feedback_decision_seq: runtime_stats
+            .map(|stats| stats.receive_feedback_decision_seq)
+            .unwrap_or(0),
+        latest_receive_feedback_action: runtime_stats
+            .and_then(|stats| stats.latest_receive_feedback_action.clone()),
+        latest_receive_feedback_reason: runtime_stats
+            .and_then(|stats| stats.latest_receive_feedback_reason.clone()),
+        latest_receive_feedback_coalescing: runtime_stats
+            .and_then(|stats| stats.latest_receive_feedback_coalescing.clone()),
+        latest_receive_feedback_source: runtime_stats
+            .and_then(|stats| stats.latest_receive_feedback_source.clone()),
+        latest_receive_feedback_sparse_active: runtime_stats
+            .map(|stats| stats.latest_receive_feedback_sparse_active),
+        receive_feedback_arbiter_mismatch_total: runtime_stats
+            .map(|stats| stats.receive_feedback_arbiter_mismatch_total),
+        receive_feedback_coalesced_total: runtime_stats
+            .map(|stats| stats.receive_feedback_coalesced_total),
+        receive_feedback_throttled_total: runtime_stats
+            .map(|stats| stats.receive_feedback_throttled_total),
+        latest_receive_feedback_executor_outcome: runtime_stats
+            .and_then(|stats| stats.latest_receive_feedback_executor_outcome.clone()),
+        receive_keyframe_last_sent_at_ms: runtime_stats
+            .and_then(|stats| stats.receive_keyframe_last_sent_at_ms),
+        reference_chain_state: runtime_stats.and_then(|stats| stats.reference_chain_state.clone()),
+        reference_chain_state_cause: runtime_stats
+            .and_then(|stats| stats.reference_chain_state_cause.clone()),
+        reference_chain_decoder_reference_synced: runtime_stats
+            .and_then(|stats| stats.reference_chain_decoder_reference_synced),
+        reference_chain_bootstrap_ready: runtime_stats
+            .and_then(|stats| stats.reference_chain_bootstrap_ready),
+        reference_chain_has_active_gap: runtime_stats
+            .and_then(|stats| stats.reference_chain_has_active_gap),
+        reference_chain_nack_exhausted: runtime_stats
+            .and_then(|stats| stats.reference_chain_nack_exhausted),
+        reference_chain_submit_age_ms: runtime_stats
+            .and_then(|stats| stats.reference_chain_submit_age_ms),
+        latest_reference_chain_sparse_must_idr_mismatch: runtime_stats
+            .and_then(|stats| stats.latest_reference_chain_sparse_must_idr_mismatch),
+        receive_picture_recovery_terminal_total: runtime_stats
+            .map(|stats| stats.receive_picture_recovery_terminal_total),
+        latest_receive_picture_recovery_terminal_reason: runtime_stats.and_then(|stats| {
+            stats
+                .latest_receive_picture_recovery_terminal_reason
+                .clone()
+        }),
+        receive_keyframe_sent_count_unresolved: runtime_stats
+            .map(|stats| stats.receive_keyframe_sent_count_unresolved),
+        receive_keyframe_required: runtime_stats.and_then(|stats| stats.receive_keyframe_required),
+        receive_keyframe_required_cause: runtime_stats
+            .and_then(|stats| stats.receive_keyframe_required_cause.clone()),
+        receive_keyframe_response_state: runtime_stats
+            .and_then(|stats| stats.receive_keyframe_response_state.clone()),
+        receive_display_state: runtime_stats.and_then(|stats| stats.receive_display_state.clone()),
+        receive_recovery_ledger_generation: runtime_stats
+            .and_then(|stats| stats.receive_recovery_ledger_generation),
+        receive_picture_recovery_terminal_candidate: runtime_stats
+            .and_then(|stats| stats.receive_picture_recovery_terminal_candidate),
+        reference_stats_fallback_total: runtime_stats
+            .map(|stats| stats.reference_stats_fallback_total),
+        receive_picture_recovery_terminal_elapsed_rtt_count: runtime_stats
+            .and_then(|stats| stats.receive_picture_recovery_terminal_elapsed_rtt_count),
+        latest_reference_chain_observation_source: runtime_stats
+            .and_then(|stats| stats.latest_reference_chain_observation_source.clone()),
+        receive_sparse_must_idr_mismatch_total: runtime_stats
+            .map(|stats| stats.receive_sparse_must_idr_mismatch_total),
+        session_picture_recovery_ownership_violation_total: runtime_stats
+            .map(|stats| stats.session_picture_recovery_ownership_violation_total),
+        decoder_reset_violation_total: runtime_stats
+            .map(|stats| stats.decoder_reset_violation_total),
         derived_decoder_health: runtime_stats
             .and_then(|stats| stats.derived_decoder_health.clone()),
         video_owner_source: video_owner.and_then(|owner| owner.source.clone()),
@@ -1231,6 +1318,8 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.latest_insert_decision.clone()),
         latest_insert_decision_reason: runtime_stats
             .and_then(|stats| stats.latest_insert_decision_reason.clone()),
+        latest_packet_recovery_action_stage: runtime_stats
+            .and_then(|stats| stats.latest_packet_recovery_action_stage.clone()),
         insert_decode_bypass_aligned: runtime_stats
             .and_then(|stats| stats.insert_decode_bypass_aligned),
         insert_hold_decode_bypass_mismatch_total: runtime_stats

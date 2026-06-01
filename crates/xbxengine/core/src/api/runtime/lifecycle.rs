@@ -276,6 +276,9 @@ where
         if self.maybe_consume_pending_runtime_recovery_action(&runtime_stats) {
             return;
         }
+        if self.should_reconnect_for_remote_no_usable_idr_terminal(&runtime_stats, now_ms_f64()) {
+            return;
+        }
         // rust-owned 模式下，恢复动作统一由 transport session policy 主链裁决并执行；
         // runtime lifecycle 不再并行发 keyframe/reset/reconnect，避免双轨决策。
         if self.recovery_actions_owned_by_transport_policy() {
@@ -400,6 +403,71 @@ where
                 .video_decoder_recovery_state
                 .as_deref()
                 .is_some_and(|state| state == "waiting-keyframe")
+    }
+
+    fn should_reconnect_for_remote_no_usable_idr_terminal(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) -> bool {
+        let terminal_reason = runtime_stats
+            .latest_receive_picture_recovery_terminal_reason
+            .as_deref();
+        let remote_terminal = matches!(
+            terminal_reason,
+            Some("remote-no-response" | "remote-continuation-only" | "remote-idr-unusable")
+        );
+        if !remote_terminal {
+            return false;
+        }
+        if runtime_stats.receive_keyframe_required != Some(true) {
+            return false;
+        }
+        let keyframe_request_stall_ms =
+            self.config.webrtc.recovery.keyframe_request_stall_ms as f64;
+        let fresh_clean_anchor = runtime_stats
+            .video_anchor_clean_observed_at_ms
+            .or(runtime_stats.recovery_displayed_idr_at_ms)
+            .is_some_and(|anchor_at_ms| {
+                self.health
+                    .last_keyframe_request_at_ms
+                    .is_some_and(|last_keyframe_request_at_ms| {
+                        anchor_at_ms >= last_keyframe_request_at_ms
+                            && (now_ms - anchor_at_ms).max(0.0) < keyframe_request_stall_ms
+                    })
+            });
+        if fresh_clean_anchor {
+            return false;
+        }
+        if !self.health.keyframe_requested_for_current_stall
+            || self
+                .health
+                .last_keyframe_request_at_ms
+                .is_none_or(|last| now_ms - last < keyframe_request_stall_ms)
+        {
+            return false;
+        }
+        let decoder_fresh = runtime_stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(|ts| now_ms - ts < keyframe_request_stall_ms);
+        let present_fresh = runtime_stats
+            .latest_video_host_present_time_ms
+            .is_some_and(|ts| now_ms - ts < keyframe_request_stall_ms);
+        if decoder_fresh || present_fresh {
+            return false;
+        }
+        if let Err(error) = self.request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Other,
+        ) {
+            if !error.is_cancelled() {
+                self.emit_error(
+                    "requestReconnectForRemoteNoUsableIdrFailed",
+                    error.to_string(),
+                );
+            }
+        }
+        true
     }
 
     fn has_fresh_post_decode_display_recovery_evidence(

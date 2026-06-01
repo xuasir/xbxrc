@@ -3,7 +3,8 @@
 
 use crate::api::backend::{XbxEngineAnchorCandidateState, XbxEngineMediaRuntimeStats};
 use crate::transport::rtc::recovery::contract::{
-    derived_decoder_health_indicates_await_idr_or_supply_stall, has_current_clean_anchor_from_stats,
+    derived_decoder_health_indicates_await_idr_or_supply_stall,
+    displayed_idr_serving_allows_relaxed_controls_from_stats, has_current_clean_anchor_from_stats,
 };
 use crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal;
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
@@ -150,7 +151,10 @@ pub(crate) fn upgrade_local_supply_suspect_signal_if_ready(
 pub(crate) fn recovery_anchor_evidence_trace_code(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> Option<String> {
-    if stats.recovery_displayed_idr_at_ms.is_some() {
+    let now_ms = crate::transport::rtc::stats::now_ms_f64();
+    if displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms)
+        && stats.recovery_displayed_idr_at_ms.is_some()
+    {
         return Some("displayedIdr".to_string());
     }
     if stats.recovery_playback_recovered_at_ms.is_some() {

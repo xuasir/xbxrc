@@ -6,18 +6,14 @@ use super::transport_await::{
 use crate::XbxEngineMediaRuntimeStats;
 
 pub(crate) struct RecoveryDisplayFacts {
-    pub displayed_idr_rtp: Option<u32>,
     pub displayed_idr_at_ms: Option<f64>,
-    pub playback_recovered_at_ms: Option<f64>,
     pub fresh_anchor_recovered_at_ms: Option<f64>,
 }
 
 impl RecoveryDisplayFacts {
     pub(crate) fn from_stats(stats: &XbxEngineMediaRuntimeStats) -> Self {
         Self {
-            displayed_idr_rtp: stats.recovery_displayed_idr_rtp,
             displayed_idr_at_ms: stats.recovery_displayed_idr_at_ms,
-            playback_recovered_at_ms: stats.recovery_playback_recovered_at_ms,
             fresh_anchor_recovered_at_ms: stats.recovery_fresh_anchor_recovered_at_ms,
         }
     }
@@ -164,10 +160,9 @@ fn stale_submit_pipeline_breaks_displayed_idr_relaxation(
 pub(crate) fn should_collapse_receiver_waiting_keyframe_to_repairing(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
-    has_active_gap: bool,
+    _has_active_gap: bool,
     assembled_frame_count: u64,
 ) -> bool {
     displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms)
-        && has_active_gap
         && assembled_frame_count > 0
 }

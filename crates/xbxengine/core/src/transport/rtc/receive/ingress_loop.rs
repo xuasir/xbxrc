@@ -181,6 +181,7 @@ impl RtcVideoFrameSource {
         const MAX_ACCESS_UNIT_CONTINUE_SPIN_PER_RECV: u32 = 128;
         let mut access_unit_continue_spins = 0u32;
         loop {
+            self.sync_recovery_ledger_to_stats();
             self.maybe_ack_clean_anchor_commit_from_runtime_stats();
             if self.should_run_nack_maintenance_tick() {
                 self.maybe_run_nack_maintenance().await;

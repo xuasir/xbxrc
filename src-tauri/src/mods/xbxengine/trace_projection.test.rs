@@ -3713,3 +3713,290 @@ fn picture_recovery_delegated_total_projects_runtime_trace_event() {
     assert_eq!(payload["delegatedTotal"], 1);
     assert_eq!(payload["authority"], "receive");
 }
+
+#[test]
+fn record_runtime_trace_observations_projects_receive_feedback_and_reference_chain_fields() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1920x1080",
+        "rtt": "50ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1ms",
+        "br": "8Mbps",
+        "decode": "",
+        "receive_feedback_decision_seq": 1,
+        "latest_receive_feedback_action": "requestPli",
+        "latest_receive_feedback_reason": "need-keyframe",
+        "latest_receive_feedback_coalescing": "fresh-sent",
+        "latest_receive_feedback_source": "insert-gate-need-keyframe",
+        "latest_receive_feedback_executor_outcome": "sent",
+        "receive_keyframe_last_sent_at_ms": 1_000.0,
+        "receive_feedback_coalesced_total": 2,
+        "receive_feedback_throttled_total": 1,
+        "reference_chain_state": "need-keyframe",
+        "reference_chain_state_cause": "submit-starved",
+        "reference_chain_decoder_reference_synced": false,
+        "reference_chain_bootstrap_ready": false,
+        "reference_chain_has_active_gap": true,
+        "reference_chain_nack_exhausted": false,
+        "reference_chain_submit_age_ms": 4_500.0,
+        "recovery_displayed_idr_at_ms": 900.0,
+        "latest_h264_inspection_observation": {
+            "observation_id": 2,
+            "frame_rtp_timestamp": 77_001,
+            "nal_types": ["SliceLayerWithoutPartitioningIdr"],
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": false,
+            "committed_pps_present": false,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": false,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": true,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "bootstrapMissingSps",
+            "admission_accepted": false,
+            "observed_at_ms": 1_050.0
+        },
+        "receive_sparse_must_idr_mismatch_total": 0,
+        "latest_reference_chain_sparse_must_idr_mismatch": true,
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(&recorder);
+    let feedback = find_event_payload(&entries, "receiveFeedbackDecision");
+    assert_eq!(feedback["outcome"], "sent");
+    assert_eq!(feedback["lastKeyframeSentAgeMs"], 50.0);
+    assert_eq!(feedback["feedbackCoalescedTotal"], 2);
+    let reference = find_event_payload(&entries, "referenceChainStateChanged");
+    assert_eq!(reference["decoderReferenceSynced"], false);
+    assert_eq!(reference["bootstrapRejectReason"], "bootstrapMissingSps");
+    assert_eq!(reference["submitAgeMs"], 4_500.0);
+    assert_eq!(reference["displayedIdrHostHint"], true);
+    assert_eq!(reference["sparseMustIdrMismatch"], true);
+    assert_eq!(reference["displayedIdrHostHintDiagnostic"], true);
+}
+
+#[test]
+fn insert_gate_decision_trace_emits_control_facts_and_diagnostic_projection() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1280x720",
+        "rtt": "50.0ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1.0ms",
+        "br": "8.5Mbps",
+        "decode": "",
+        "latest_insert_decision": "holdRepair",
+        "latest_insert_decision_reason": "mustIdrHold",
+        "latest_packet_recovery_action_stage": "wait_keyframe",
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 7,
+        "reference_chain_state": "need-keyframe",
+        "media_supply_phase": "must-idr",
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(&recorder);
+    let insert = find_event_payload(&entries, "insertGateDecision");
+    assert_eq!(insert["decision"], "holdRepair");
+    assert_eq!(insert["packetRecoveryActionStage"], "wait_keyframe");
+    assert_eq!(insert["keyframeRequired"], true);
+    assert_eq!(insert["responseState"], "usable-idr");
+    assert_eq!(insert["receiveDisplayState"], "display-stable");
+    assert_eq!(insert["ledgerGeneration"], 7);
+    assert_eq!(insert["mediaSupplyPhaseDiagnostic"], "must-idr");
+    assert!(insert.get("mediaSupplyPhase").is_none());
+    assert!(insert.get("actionStage").is_none());
+}
+
+#[test]
+fn receive_feedback_decision_trace_emits_episode_projection_and_supply_blocker() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1280x720",
+        "rtt": "50.0ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1.0ms",
+        "br": "8.5Mbps",
+        "decode": "",
+        "presentation_health": "displaySupplyStarved",
+        "present_age_ms": 120.0,
+        "submit_age_ms": 80.0,
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "non-idr-only",
+        "receive_feedback_decision_seq": 1,
+        "latest_receive_feedback_action": "requestPli",
+        "latest_receive_feedback_reason": "keyframeRequired",
+        "latest_receive_feedback_source": "receive",
+        "latest_receive_feedback_coalescing": "sent",
+        "latest_receive_feedback_executor_outcome": "sent",
+        "reference_chain_state": "need-keyframe",
+        "receive_recovery_ledger_generation": 3,
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(&recorder);
+    let decision = find_event_payload(&entries, "receiveFeedbackDecision");
+    assert_eq!(decision["episodeProjectionState"], "absent");
+    assert_eq!(
+        decision["displaySupplyStarvedBlocker"],
+        "waiting-usable-idr"
+    );
+}
+
+#[test]
+fn receive_feedback_decision_trace_keeps_episode_projection_open_until_display_stable() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1280x720",
+        "rtt": "50.0ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1.0ms",
+        "br": "8.5Mbps",
+        "decode": "",
+        "presentation_health": "displaySupplyStarved",
+        "present_age_ms": 120.0,
+        "submit_age_ms": 80.0,
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "usable-idr",
+        "latest_keyframe_request_episode": {
+            "episode_id": 12,
+            "request_reason": "receiverWaitingKeyframe",
+            "request_kind": "pli",
+            "status": "waiting",
+            "requested_at_ms": 1_000.0,
+            "sent_at_ms": 1_010.0,
+            "deadline_at_ms": 1_500.0,
+            "response_verdict": "pending"
+        },
+        "receive_feedback_decision_seq": 1,
+        "latest_receive_feedback_action": "requestPli",
+        "latest_receive_feedback_reason": "keyframeRequired",
+        "latest_receive_feedback_source": "receive",
+        "latest_receive_feedback_coalescing": "sent",
+        "latest_receive_feedback_executor_outcome": "sent",
+        "reference_chain_state": "need-keyframe",
+        "receive_recovery_ledger_generation": 3,
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(&recorder);
+    let decision = find_event_payload(&entries, "receiveFeedbackDecision");
+
+    assert_eq!(decision["episodeProjectionState"], "legacy-only");
+    assert_eq!(
+        decision["displaySupplyStarvedBlocker"],
+        "decoded-no-clean-anchor"
+    );
+}
+
+#[test]
+fn supply_starved_blocker_prefers_decoded_gap_over_generic_wait_idr() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1280x720",
+        "rtt": "50.0ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1.0ms",
+        "br": "8.5Mbps",
+        "decode": "",
+        "presentation_health": "displaySupplyStarved",
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_feedback_decision_seq": 1,
+        "latest_receive_feedback_action": "requestPli",
+        "latest_receive_feedback_reason": "keyframeRequired",
+        "latest_receive_feedback_source": "receive",
+        "latest_receive_feedback_coalescing": "sent",
+        "latest_receive_feedback_executor_outcome": "sent",
+        "reference_chain_state": "need-keyframe",
+        "receive_recovery_ledger_generation": 3,
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(&recorder);
+    let decision = find_event_payload(&entries, "receiveFeedbackDecision");
+    assert_eq!(
+        decision["displaySupplyStarvedBlocker"],
+        "decoded-no-clean-anchor"
+    );
+}
+
+#[test]
+fn supply_starved_blocker_terminal_no_clean_anchor_with_keyframe_required() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1280x720",
+        "rtt": "50.0ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1.0ms",
+        "br": "8.5Mbps",
+        "decode": "",
+        "presentation_health": "displaySupplyStarved",
+        "present_age_ms": 120.0,
+        "submit_age_ms": 80.0,
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "no-packet",
+        "latest_receive_picture_recovery_terminal_reason": "no-clean-anchor-after-decode",
+        "receive_picture_recovery_terminal_total": 1,
+        "receive_keyframe_sent_count_unresolved": 3,
+        "receive_feedback_decision_seq": 1,
+        "latest_receive_feedback_action": "requestPli",
+        "latest_receive_feedback_reason": "keyframeRequired",
+        "latest_receive_feedback_source": "receive",
+        "latest_receive_feedback_coalescing": "sent",
+        "latest_receive_feedback_executor_outcome": "sent",
+        "reference_chain_state": "need-keyframe",
+        "receive_recovery_ledger_generation": 5,
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(&recorder);
+
+    let terminal = find_event_payload(&entries, "receivePictureRecoveryTerminal");
+    assert_eq!(terminal["reason"], "no-clean-anchor-after-decode");
+    assert_eq!(terminal["keyframeRequired"], true);
+    assert_eq!(terminal["responseState"], "no-packet");
+    assert_eq!(terminal["ledgerGeneration"], 5);
+
+    let decision = find_event_payload(&entries, "receiveFeedbackDecision");
+    assert_eq!(
+        decision["displaySupplyStarvedBlocker"],
+        "decoded-no-clean-anchor"
+    );
+    assert_eq!(decision["keyframeRequired"], true);
+}

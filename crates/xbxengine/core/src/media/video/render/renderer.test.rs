@@ -37,13 +37,6 @@ fn render_mailbox_exposes_single_latest_handoff() {
         state.peek_latest_frame().map(|frame| frame.frame_seq),
         Some(11)
     );
-    assert_eq!(
-        state
-            .take_latest_renderable_frame()
-            .map(|frame| frame.frame_seq),
-        Some(11)
-    );
-    assert!(state.take_latest_renderable_frame().is_none());
 }
 
 #[test]
@@ -82,34 +75,4 @@ fn render_mailbox_reports_overwrite_when_pending_frame_is_replaced() {
     assert_eq!(decision.state, XbxRenderMailboxState::LatestOverwrite);
     assert_eq!(decision.action, "replace");
     assert_eq!(decision.frame_seq, Some(20));
-}
-
-#[test]
-fn render_mailbox_returns_to_nominal_after_overwrite_is_drained() {
-    let mut state = XbxRenderState::default();
-
-    state
-        .present_frame(mk_frame(30, 1_000.0))
-        .expect("first frame should be accepted");
-    state
-        .present_frame(mk_frame(31, 1_016.0))
-        .expect("second frame should overwrite pending");
-    assert_eq!(
-        state
-            .take_latest_renderable_frame()
-            .map(|frame| frame.frame_seq),
-        Some(31)
-    );
-
-    state
-        .present_frame(mk_frame(32, 1_032.0))
-        .expect("third frame should be accepted");
-
-    let decision = state
-        .latest_render_mailbox_decision()
-        .expect("recovery should be recorded");
-    assert_eq!(decision.state, XbxRenderMailboxState::Nominal);
-    assert_eq!(decision.action, "accept");
-    assert_eq!(decision.detail, "mailboxRecovered");
-    assert_eq!(decision.frame_seq, Some(32));
 }

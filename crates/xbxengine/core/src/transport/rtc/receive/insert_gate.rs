@@ -6,11 +6,10 @@ use crate::transport::rtc::receive::decode_gate::{
     InspectionAdmission, ReceiverDecodeContext,
 };
 use crate::transport::rtc::recovery::contract::{
-    derive_media_supply_phase_from_stats, derive_packet_recovery_action_stage_from_stats,
-    fresh_h264_idr_admission_from_stats, gap_keyframe_only_mode_active,
-    media_supply_submit_starved_from_stats, parameter_sets_change_strict_active_from_stats,
-    recovery_supply_break_active_from_stats, resolve_gap_vs_keyframe_mode, GapVsKeyframeMode,
-    MediaSupplyPhase, PacketRecoveryActionStage,
+    derive_packet_recovery_action_stage_from_stats, derive_reference_chain_state_from_stats,
+    fresh_idr_admission_from_control, parameter_sets_change_strict_from_control,
+    resolve_gap_mode_from_control, supply_break_continuation_from_control, GapVsKeyframeMode,
+    InsertControlTiming, PacketRecoveryActionStage, ReferenceChainObservation, ReferenceChainState,
 };
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -56,7 +55,7 @@ impl InsertDecisionReason {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InsertContext {
     pub decode: ReceiverDecodeContext,
-    /// 与 `gap_keyframe_only_mode_active(gap_mode)` 联动；`MustIdr` 由 supply 层 `derive_media_supply_phase` 统一裁决。
+    /// 与 `gap_keyframe_only_mode_active(gap_mode)` 联动。
     pub gap_mode: GapVsKeyframeMode,
     pub action_stage: PacketRecoveryActionStage,
     pub fresh_idr_admission: bool,
@@ -64,7 +63,9 @@ pub(crate) struct InsertContext {
     pub post_parameter_sets_change_strict: bool,
     /// supply-break 续播窄路径：仍允许 repairing delta Emit。
     pub supply_break_continuation: bool,
-    pub media_supply_phase: MediaSupplyPhase,
+    pub reference_chain_state: ReferenceChainState,
+    /// receive ledger `keyframe_required`：完整 usable keyframe 优先 Emit。
+    pub keyframe_required: bool,
 }
 
 impl InsertContext {
@@ -74,23 +75,111 @@ impl InsertContext {
         now_ms: f64,
         effective_rtt_ms: f64,
     ) -> Self {
+        Self::from_runtime_with_reference(
+            decode,
+            stats,
+            now_ms,
+            effective_rtt_ms,
+            derive_reference_chain_state_from_stats(stats, now_ms, effective_rtt_ms),
+            stats.receive_keyframe_required.unwrap_or(false),
+        )
+    }
+
+    pub(crate) fn from_runtime_with_reference(
+        decode: ReceiverDecodeContext,
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+        effective_rtt_ms: f64,
+        reference_chain: ReferenceChainObservation,
+        keyframe_required: bool,
+    ) -> Self {
+        Self::from_ledger_inputs(
+            decode,
+            reference_chain,
+            derive_packet_recovery_action_stage_from_stats(stats, now_ms, effective_rtt_ms),
+            keyframe_required,
+            stats,
+            now_ms,
+            effective_rtt_ms,
+        )
+    }
+
+    /// Insert / feedback 单轨：主裁决只读 ledger 投影的 reference、action_stage、keyframe_required。
+    pub(crate) fn from_ledger_inputs(
+        decode: ReceiverDecodeContext,
+        reference_chain: ReferenceChainObservation,
+        action_stage: PacketRecoveryActionStage,
+        keyframe_required: bool,
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+        effective_rtt_ms: f64,
+    ) -> Self {
+        let timing = InsertControlTiming {
+            fresh_idr_inspection_accepted_at_ms: stats
+                .latest_h264_inspection_observation
+                .as_ref()
+                .filter(|inspection| inspection.is_idr && inspection.admission_accepted)
+                .map(|inspection| inspection.observed_at_ms),
+            parameter_sets_changed_at_ms: stats.video_parameter_sets_changed_at_ms,
+            gap_age_ms: stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .and_then(|timeline| timeline.gap.as_ref())
+                .map(|gap| (now_ms - gap.observed_at_ms).max(0.0)),
+            receive_display_stable: stats.receive_display_state.as_deref()
+                == Some("display-stable")
+                && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch),
+            decoder_waiting_keyframe: stats.video_decoder_recovery_state.as_deref()
+                == Some("waiting-keyframe"),
+        };
+        Self::from_ledger_control(
+            decode,
+            reference_chain,
+            action_stage,
+            keyframe_required,
+            timing,
+            now_ms,
+            effective_rtt_ms,
+        )
+    }
+
+    /// 控制面路径：不读 stats 派生 gap/supply 诊断投影参与 Hold/Emit。
+    pub(crate) fn from_ledger_control(
+        decode: ReceiverDecodeContext,
+        reference_chain: ReferenceChainObservation,
+        action_stage: PacketRecoveryActionStage,
+        keyframe_required: bool,
+        timing: InsertControlTiming,
+        now_ms: f64,
+        effective_rtt_ms: f64,
+    ) -> Self {
+        let fresh_idr_admission = fresh_idr_admission_from_control(&timing, now_ms);
+        let post_parameter_sets_change_strict = parameter_sets_change_strict_from_control(
+            &timing,
+            reference_chain,
+            fresh_idr_admission,
+            now_ms,
+            effective_rtt_ms,
+        );
+        let supply_break_continuation =
+            supply_break_continuation_from_control(reference_chain, action_stage);
+        let gap_mode = resolve_gap_mode_from_control(
+            reference_chain,
+            action_stage,
+            &timing,
+            post_parameter_sets_change_strict,
+            now_ms,
+            effective_rtt_ms,
+        );
         Self {
             decode,
-            gap_mode: resolve_gap_vs_keyframe_mode(stats, now_ms, effective_rtt_ms),
-            action_stage: derive_packet_recovery_action_stage_from_stats(
-                stats,
-                now_ms,
-                effective_rtt_ms,
-            ),
-            fresh_idr_admission: fresh_h264_idr_admission_from_stats(stats, now_ms),
-            post_parameter_sets_change_strict: parameter_sets_change_strict_active_from_stats(
-                stats,
-                now_ms,
-                effective_rtt_ms,
-            ),
-            supply_break_continuation: recovery_supply_break_active_from_stats(stats, now_ms)
-                && !media_supply_submit_starved_from_stats(stats, now_ms),
-            media_supply_phase: derive_media_supply_phase_from_stats(stats, now_ms),
+            gap_mode,
+            action_stage,
+            fresh_idr_admission,
+            post_parameter_sets_change_strict,
+            supply_break_continuation,
+            reference_chain_state: reference_chain.state,
+            keyframe_required,
         }
     }
 }
@@ -126,6 +215,12 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
             InsertDecisionReason::CorruptIdrWithLoss,
         );
     }
+    if ctx.keyframe_required
+        && inspection.is_idr
+        && (inspection.bootstrap_ready || ctx.fresh_idr_admission)
+    {
+        return (InsertDecision::Emit, InsertDecisionReason::FreshIdr);
+    }
     if ctx.fresh_idr_admission && inspection.is_idr {
         return (InsertDecision::Emit, InsertDecisionReason::FreshIdr);
     }
@@ -136,7 +231,7 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
             InsertDecisionReason::PostPsStrict,
         );
     }
-    if matches!(ctx.media_supply_phase, MediaSupplyPhase::MustIdr)
+    if matches!(ctx.reference_chain_state, ReferenceChainState::NeedKeyframe)
         && ctx.decode.first_frame_acquired
     {
         if inspection.is_idr {
@@ -153,7 +248,12 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
             );
         }
     }
-    if insert_decodable_to_feed(inspection, &ctx.decode, ctx.action_stage) {
+    if insert_decodable_to_feed(
+        inspection,
+        &ctx.decode,
+        ctx.action_stage,
+        ctx.reference_chain_state,
+    ) {
         return (InsertDecision::Emit, InsertDecisionReason::DecodableToFeed);
     }
     if inspection.is_idr && inspection.bootstrap_ready {
@@ -245,9 +345,6 @@ mod tests {
                 has_active_gap: true,
                 nack_exhausted: false,
                 first_frame_acquired: true,
-                prior_output_established: true,
-                displayed_idr_serving: true,
-                displayed_idr_decoder_synced: true,
                 decoder_reference_synced: true,
             },
             gap_mode: GapVsKeyframeMode::RepairFirst,
@@ -255,7 +352,8 @@ mod tests {
             fresh_idr_admission: false,
             post_parameter_sets_change_strict: false,
             supply_break_continuation: false,
-            media_supply_phase: MediaSupplyPhase::Steady,
+            reference_chain_state: ReferenceChainState::Continuous,
+            keyframe_required: false,
         }
     }
 
@@ -289,9 +387,6 @@ mod tests {
                 has_active_gap: false,
                 nack_exhausted: false,
                 first_frame_acquired: false,
-                prior_output_established: false,
-                displayed_idr_serving: false,
-                displayed_idr_decoder_synced: false,
                 decoder_reference_synced: false,
             },
             gap_mode: GapVsKeyframeMode::RepairFirst,
@@ -299,7 +394,8 @@ mod tests {
             fresh_idr_admission: false,
             post_parameter_sets_change_strict: false,
             supply_break_continuation: false,
-            media_supply_phase: MediaSupplyPhase::MustIdr,
+            reference_chain_state: ReferenceChainState::NeedKeyframe,
+            keyframe_required: true,
         }
     }
 
@@ -323,7 +419,9 @@ mod tests {
         );
         assert_eq!(decision, InsertDecision::Emit);
         assert!(
-            reason == "decodableToFeed" || reason == "firstFrameFreshOrBootstrapIdr",
+            reason == "decodableToFeed"
+                || reason == "firstFrameFreshOrBootstrapIdr"
+                || reason == "freshIdr",
             "bootstrap IDR emits via decodable or first-frame path, got {reason}"
         );
 
@@ -353,7 +451,7 @@ mod tests {
     #[test]
     fn must_idr_holds_non_bootstrap_delta_after_first_frame() {
         let mut ctx = ctx_decoder_synced();
-        ctx.media_supply_phase = MediaSupplyPhase::MustIdr;
+        ctx.reference_chain_state = ReferenceChainState::NeedKeyframe;
         ctx.decode.receiver_state = ReceiverState::WaitingKeyframe;
         let inspection = non_idr_inspection();
         let (decision, reason) = resolve_insert_decision_with_reason(
@@ -370,12 +468,45 @@ mod tests {
     fn host_displayed_only_without_decoder_sync_holds_non_idr() {
         let mut ctx = ctx_decoder_synced();
         ctx.decode.decoder_reference_synced = false;
-        ctx.decode.displayed_idr_decoder_synced = false;
-        ctx.decode.displayed_idr_serving = true;
         let inspection = non_idr_inspection();
         assert_eq!(
             resolve_insert_decision(&inspection, &ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
             InsertDecision::HoldRepair
+        );
+    }
+
+    #[test]
+    fn displayed_idr_projection_does_not_collapse_waiting_keyframe_without_active_gap() {
+        use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
+        use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoReceiverObservation};
+
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_displayed_idr_at_ms = Some(9_950.0);
+        stats.recovery_playback_recovered_at_ms = Some(9_950.0);
+        stats.recovery_decoder_reference_synced_at_ms = Some(9_950.0);
+        stats.latest_video_decode_ok_time_ms = Some(9_950.0);
+        stats.latest_video_receiver_observation = Some(XbxEngineVideoReceiverObservation {
+            observation_id: 1,
+            receiver_state: "waiting-keyframe".to_string(),
+            gap_sequence: Some(1),
+            gap_span: None,
+            nack_in_flight: false,
+            keyframe_request_pending: true,
+            bootstrap_reject_reason: None,
+            observed_at_ms: 10_000.0,
+        });
+
+        let decode = receiver_decode_context_from_stats(&stats, 10_000.0);
+        assert_eq!(decode.receiver_state, ReceiverState::WaitingKeyframe);
+        assert!(!should_block_non_keyframe_admission(&decode));
+
+        let ctx = InsertContext::from_runtime(decode, &stats, 10_000.0, 50.0);
+        assert_eq!(ctx.decode.receiver_state, ReceiverState::WaitingKeyframe);
+
+        let inspection = non_idr_inspection();
+        assert_eq!(
+            resolve_insert_decision(&inspection, &ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
+            InsertDecision::Emit
         );
     }
 
@@ -395,8 +526,6 @@ mod tests {
         let mut ctx = ctx_decoder_synced();
         ctx.gap_mode = GapVsKeyframeMode::KeyframeOnly;
         ctx.decode.decoder_reference_synced = false;
-        ctx.decode.displayed_idr_decoder_synced = false;
-        ctx.decode.displayed_idr_serving = false;
         ctx.action_stage = PacketRecoveryActionStage::WaitKeyframe;
         let inspection = non_idr_inspection();
         assert_eq!(
@@ -410,7 +539,6 @@ mod tests {
         let mut ctx = ctx_decoder_synced();
         ctx.gap_mode = GapVsKeyframeMode::KeyframeOnly;
         ctx.decode.decoder_reference_synced = false;
-        ctx.decode.displayed_idr_decoder_synced = false;
         ctx.action_stage = PacketRecoveryActionStage::WaitKeyframe;
         let inspection = non_idr_inspection();
         assert_eq!(

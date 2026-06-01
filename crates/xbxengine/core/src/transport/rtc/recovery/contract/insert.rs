@@ -2,13 +2,14 @@ use super::decode_sync::{
     receiver_nack_exhausted_from_stats, CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK,
 };
 use super::gap::GAP_KEYFRAME_ONLY_MAX_AGE_MS;
+use super::reference_chain::ReferenceChainState;
 use super::transport_await::is_recovery_delta_continuation_ready;
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use crate::XbxEngineMediaRuntimeStats;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PacketRecoveryActionStage {
-    Drop,
+    Steady,
     NackPending,
     NackMissed,
     WaitKeyframe,
@@ -17,14 +18,14 @@ pub(crate) enum PacketRecoveryActionStage {
 
 impl Default for PacketRecoveryActionStage {
     fn default() -> Self {
-        Self::Drop
+        Self::Steady
     }
 }
 
 impl PacketRecoveryActionStage {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
-            Self::Drop => "drop",
+            Self::Steady => "steady",
             Self::NackPending => "nack_pending",
             Self::NackMissed => "nack_missed",
             Self::WaitKeyframe => "wait_keyframe",
@@ -37,10 +38,8 @@ impl PacketRecoveryActionStage {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DecodableFeedContext {
     pub decoder_reference_synced: bool,
-    pub displayed_idr_host_hint: bool,
     pub first_frame_acquired: bool,
     pub hard_gap_blocks_delta: bool,
-    pub prior_output_established: bool,
     pub receiver_repairing: bool,
     pub has_active_gap: bool,
 }
@@ -83,7 +82,7 @@ pub(crate) fn derive_packet_recovery_action_stage_from_stats(
         }
         return PacketRecoveryActionStage::NackMissed;
     }
-    PacketRecoveryActionStage::Drop
+    PacketRecoveryActionStage::Steady
 }
 
 /// 是否允许将本 AU 送入解码器（与 libwebrtc reference-complete 纪律对齐）。
@@ -91,6 +90,7 @@ pub(crate) fn decodable_to_feed(
     inspection: &H264AccessUnitInspection,
     ctx: &DecodableFeedContext,
     stage: PacketRecoveryActionStage,
+    reference_state: ReferenceChainState,
 ) -> bool {
     if !inspection.slice_headers_valid {
         return false;
@@ -110,8 +110,14 @@ pub(crate) fn decodable_to_feed(
     if !ctx.decoder_reference_synced {
         return false;
     }
+    if matches!(reference_state, ReferenceChainState::NeedKeyframe)
+        && !inspection.is_idr
+        && !inspection.bootstrap_ready
+    {
+        return false;
+    }
     match stage {
-        PacketRecoveryActionStage::Drop | PacketRecoveryActionStage::NackPending => true,
+        PacketRecoveryActionStage::Steady | PacketRecoveryActionStage::NackPending => true,
         PacketRecoveryActionStage::NackMissed => ctx.receiver_repairing || !ctx.has_active_gap,
         PacketRecoveryActionStage::WaitKeyframe | PacketRecoveryActionStage::RequestIdr => false,
     }

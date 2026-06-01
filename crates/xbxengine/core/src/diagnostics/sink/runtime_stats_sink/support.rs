@@ -546,6 +546,11 @@ pub(super) fn host_display_rtp_qualifies_for_fresh_anchor(
     displayed_rtp: u32,
     now_ms: f64,
 ) -> bool {
+    if crate::transport::rtc::recovery::contract::recovery_supply_break_active_from_stats(
+        stats, now_ms,
+    ) {
+        return false;
+    }
     if stats
         .latest_h264_inspection_observation
         .as_ref()

@@ -17,7 +17,7 @@ use crate::transport::rtc::receive::{
     DecodeCorruptionPolicy, ReceiverDecodeContext, ReceiverState, RtcVideoFrameSource,
 };
 use crate::transport::rtc::recovery::contract::{
-    GapVsKeyframeMode, MediaSupplyPhase, PacketRecoveryActionStage,
+    GapVsKeyframeMode, MediaSupplyPhase, PacketRecoveryActionStage, ReferenceChainState,
 };
 
 fn assert_receiver_local_waiting_keyframe(source: &RtcVideoFrameSource) {
@@ -585,7 +585,6 @@ fn test_receiver_decode_context(
         nack_exhausted,
         first_frame_acquired,
         first_frame_acquired,
-        first_frame_acquired,
     )
 }
 
@@ -594,18 +593,14 @@ fn test_receiver_decode_context_with_output(
     has_active_gap: bool,
     nack_exhausted: bool,
     first_frame_acquired: bool,
-    prior_output_established: bool,
-    displayed_idr_serving: bool,
+    decoder_reference_synced: bool,
 ) -> ReceiverDecodeContext {
     ReceiverDecodeContext {
         receiver_state,
         has_active_gap,
         nack_exhausted,
         first_frame_acquired,
-        prior_output_established,
-        displayed_idr_serving,
-        displayed_idr_decoder_synced: displayed_idr_serving,
-        decoder_reference_synced: displayed_idr_serving && prior_output_established,
+        decoder_reference_synced,
     }
 }
 
@@ -621,7 +616,8 @@ fn test_insert_context(
         fresh_idr_admission: false,
         post_parameter_sets_change_strict: false,
         supply_break_continuation: false,
-        media_supply_phase: MediaSupplyPhase::Steady,
+        reference_chain_state: ReferenceChainState::Continuous,
+        keyframe_required: false,
     }
 }
 
@@ -662,7 +658,7 @@ fn insert_decision_rejects_frames_without_bootstrap_or_continuation() {
         &test_insert_context(
             test_receiver_decode_context(ReceiverState::Receiving, false, false, true),
             GapVsKeyframeMode::RepairFirst,
-            PacketRecoveryActionStage::Drop,
+            PacketRecoveryActionStage::Steady,
         ),
     );
 
@@ -700,7 +696,7 @@ fn insert_decision_rejects_frames_without_bootstrap_or_continuation() {
         &test_insert_context(
             test_receiver_decode_context(ReceiverState::Receiving, false, false, true),
             GapVsKeyframeMode::RepairFirst,
-            PacketRecoveryActionStage::Drop,
+            PacketRecoveryActionStage::Steady,
         ),
     );
 }
@@ -735,10 +731,9 @@ fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
                 false,
                 true,
                 false,
-                false,
             ),
             GapVsKeyframeMode::RepairFirst,
-            PacketRecoveryActionStage::Drop,
+            PacketRecoveryActionStage::Steady,
         ),
     );
 }
@@ -762,7 +757,6 @@ fn waiting_keyframe_accepts_non_idr_continuation_after_first_frame_acquired() {
             test_receiver_decode_context_with_output(
                 ReceiverState::WaitingKeyframe,
                 false,
-                true,
                 true,
                 true,
                 true,
@@ -795,7 +789,6 @@ fn displayed_idr_decoder_sync_holds_non_idr_when_hard_gap_blocks_delta() {
                 true,
                 true,
                 true,
-                true,
             ),
             GapVsKeyframeMode::RepairFirst,
             PacketRecoveryActionStage::NackPending,
@@ -821,7 +814,6 @@ fn waiting_keyframe_rejects_non_idr_continuation_when_hard_gap_blocks_delta() {
         &test_insert_context(
             test_receiver_decode_context_with_output(
                 ReceiverState::WaitingKeyframe,
-                true,
                 true,
                 true,
                 true,

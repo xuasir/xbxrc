@@ -150,7 +150,8 @@ impl<'a> RtcStackRuntimePort<'a> {
         self.render_state
             .lock()
             .ok()
-            .and_then(|mut render_state| render_state.take_latest_renderable_frame())
+            // runtime 侧只读最新槽快照，host push 是唯一执行面。
+            .and_then(|render_state| render_state.latest_engine_frame_for_host_push())
     }
 
     pub(crate) fn record_video_frame_drop(&self, observation: XbxEngineVideoFrameDropObservation) {
@@ -368,6 +369,25 @@ mod tests {
     use crate::transport::rtc::stream::RtcMediaService;
 
     use super::{LocalDecoderResetPolicyState, RtcStackRuntimePort};
+
+    fn mk_render_frame(frame_seq: u64) -> crate::media::video::render::renderer::XbxRenderFrame {
+        crate::media::video::render::renderer::XbxRenderFrame {
+            width: 1,
+            height: 1,
+            frame_seq,
+            rendered_at_ms: frame_seq as f64,
+            rtp_timestamp: Some(frame_seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: true,
+            frame_recovery_disposition: None,
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: crate::XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 4]),
+            },
+        }
+    }
 
     #[test]
     fn small_host_timing_change_does_not_trigger_local_decoder_reset() {
@@ -914,6 +934,43 @@ mod tests {
             snapshot.latest_video_host_submit_rtp_timestamp,
             Some(90_001)
         );
+    }
+
+    #[test]
+    fn take_latest_render_frame_exposes_latest_slot_snapshot_without_draining() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let media = Arc::new(Mutex::new(RtcMediaService::default()));
+        let (tx, _rx) = mpsc::sync_channel(1);
+        let local_decoder_reset_handle = Arc::new(Mutex::new(Some(Arc::new(
+            DecodeActorHandle::from_test_sender(tx),
+        ))));
+        let local_decoder_reset_policy =
+            Arc::new(Mutex::new(LocalDecoderResetPolicyState::default()));
+        let runtime_port = RtcStackRuntimePort::new(
+            &runtime_stats,
+            &render_state,
+            &media,
+            &local_decoder_reset_handle,
+            &local_decoder_reset_policy,
+        );
+
+        {
+            let mut state = render_state.lock().expect("render state lock");
+            state
+                .present_frame(mk_render_frame(77))
+                .expect("render frame should be accepted");
+        }
+
+        let first = runtime_port
+            .take_latest_render_frame()
+            .expect("first snapshot should exist");
+        let second = runtime_port
+            .take_latest_render_frame()
+            .expect("latest slot should remain readable");
+
+        assert_eq!(first.frame_seq, 77);
+        assert_eq!(second.frame_seq, 77);
     }
 
     #[test]

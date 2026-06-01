@@ -27,13 +27,11 @@ use crate::transport::rtc::policy::video_scheduling_owner::{
 };
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_observed_at_ms,
-    derived_decoder_health_indicates_await_idr_or_supply_stall, displayed_idr_serving_from_stats,
-    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_observation,
-    has_current_transport_await_issue_from_stats, idr_recovery_active_from_stats,
-    is_ingress_waiting_keyframe, is_media_healthy_baseline,
+    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
+    idr_recovery_active_from_stats, is_media_healthy_baseline,
     is_terminal_transport_await_deferred_episode, is_timeline_chain_receiving_from_stats,
-    recovery_supply_break_active_from_stats, sync_derived_recovery_contract_fields,
+    receive_media_recovery_pressure_from_stats, recovery_supply_break_active_from_stats,
+    sync_derived_recovery_contract_fields,
 };
 use crate::transport::rtc::recovery::coordinator::{
     CoordinatorProposal, RecoveryCoordinator, RecoveryOwnerSignal,
@@ -1064,12 +1062,12 @@ impl RtcSessionPolicy {
         let owner_signal =
             self.apply_local_supply_suspect_anchor_gate(owner_signal, observed_at_ms);
         if owner_signal.reason_label == "receiverWaitingKeyframe" && !owner_signal_missing_anchor {
-            let decoder_waiting_keyframe =
+            let media_recovery_open =
                 RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-                    derived_decoder_health_indicates_await_idr_or_supply_stall(stats)
+                    receive_media_recovery_pressure_from_stats(stats, observed_at_ms)
                 })
                 .unwrap_or(false);
-            if !decoder_waiting_keyframe {
+            if !media_recovery_open {
                 self.clear_local_supply_suspect();
                 return None;
             }
@@ -1226,17 +1224,8 @@ impl RtcSessionPolicy {
 
             let media_supply_bypass_fresh_suppress =
                 RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-                    use crate::transport::rtc::recovery::contract::{
-                        decoder_reference_synced_from_stats, sparse_idr_pressure_active_from_stats,
-                    };
-                    if sparse_idr_pressure_active_from_stats(stats, observed_at_ms) {
-                        return true;
-                    }
-                    matches!(
-                        stats.media_supply_phase.as_deref(),
-                        Some("priming" | "repairing")
-                    ) || (stats.media_supply_phase.as_deref() == Some("must-idr")
-                        && !decoder_reference_synced_from_stats(stats, observed_at_ms))
+                    use crate::transport::rtc::recovery::contract::sparse_idr_pressure_active_from_stats;
+                    sparse_idr_pressure_active_from_stats(stats, observed_at_ms)
                 })
                 .unwrap_or(false);
             let decode_no_output_pressure = RuntimeStatsSink::read_shared(
@@ -2608,17 +2597,11 @@ impl RtcSessionPolicy {
             return RecoveryLedgerNarrativeState::FailedTerminal;
         }
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
-        let idr_recovery_active =
+        let active_idr_recovery =
             RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
                 idr_recovery_active_from_stats(stats, observed_at_ms)
             })
             .unwrap_or(false);
-        let surface_await_idr =
-            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-                stats.recovery_surface_phase.as_deref() == Some("await-idr")
-            })
-            .unwrap_or(false);
-        let active_idr_recovery = idr_recovery_active || surface_await_idr;
         match snapshot.connection.lifecycle_state {
             ConnectionLifecycleStateFact::Failed => RecoveryLedgerNarrativeState::FailedTerminal,
             ConnectionLifecycleStateFact::Recovering | ConnectionLifecycleStateFact::Connecting => {
@@ -2724,16 +2707,6 @@ impl RtcSessionPolicy {
             )
     }
 
-    fn recovery_startup_grace(&self) -> Duration {
-        let grace_ms = self
-            .runtime_config
-            .lock()
-            .ok()
-            .map(|config| config.webrtc.recovery.first_frame_grace_ms)
-            .unwrap_or(RECOVERY_STARTUP_GRACE_MS);
-        Duration::from_millis(grace_ms)
-    }
-
     /// supply-break / 参考链 IDR：session 只 hint receive，不再走 fast-path 窗。
     fn maybe_receive_keyframe_delegation_owner_signal(
         &self,
@@ -2741,6 +2714,13 @@ impl RtcSessionPolicy {
         gap_severity: Option<GapSeverity>,
         repairability: Option<f64>,
     ) -> Option<RecoveryOwnerSignal> {
+        if let Some(signal) = self.maybe_remote_no_usable_idr_transport_await_owner_signal(
+            observed_at_ms,
+            gap_severity,
+            repairability,
+        ) {
+            return Some(signal);
+        }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             let supply_break = recovery_supply_break_active_from_stats(stats, observed_at_ms);
             let idr_recovery = idr_recovery_active_from_stats(stats, observed_at_ms);
@@ -2757,6 +2737,42 @@ impl RtcSessionPolicy {
             Some(RecoveryOwnerSignal {
                 reason: VideoEscalationReason::WaitKeyframe,
                 reason_label,
+                observed_at_ms,
+                gap_severity,
+                repairability,
+            })
+        })
+        .flatten()
+    }
+
+    /// remote no-usable-IDR 终止进入 `TransportAwaitRecoveryKeyframe`，
+    /// 让同一条 transport-await 梯子负责后续 reconnect fallback。
+    fn maybe_remote_no_usable_idr_transport_await_owner_signal(
+        &self,
+        observed_at_ms: f64,
+        gap_severity: Option<GapSeverity>,
+        repairability: Option<f64>,
+    ) -> Option<RecoveryOwnerSignal> {
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            let terminal_reason = stats
+                .latest_receive_picture_recovery_terminal_reason
+                .as_deref();
+            let remote_terminal = matches!(
+                terminal_reason,
+                Some("remote-no-response" | "remote-continuation-only" | "remote-idr-unusable")
+            );
+            if !remote_terminal {
+                return None;
+            }
+            if has_current_clean_anchor_from_stats(stats) {
+                return None;
+            }
+            if !receive_media_recovery_pressure_from_stats(stats, observed_at_ms) {
+                return None;
+            }
+            Some(RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "receiverWaitingKeyframe".to_string(),
                 observed_at_ms,
                 gap_severity,
                 repairability,
@@ -2908,6 +2924,44 @@ fn map_budget_snapshot(
         decoder_reset_budget_limit: budget.decoder_reset_budget_limit,
         reconnect_budget_used: budget.reconnect_budget_used,
         reconnect_budget_limit: budget.reconnect_budget_limit,
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::RtcSessionPolicy;
+    use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use crate::api::runtime::XbxEngineRuntimeConfig;
+    use crate::transport::rtc::session::facts::GapSeverity;
+
+    #[test]
+    fn remote_no_usable_idr_terminal_promotes_transport_await_owner_signal() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.latest_receive_picture_recovery_terminal_reason =
+                Some("remote-continuation-only".to_string());
+            stats.receive_keyframe_required = Some(true);
+        }
+        let policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+
+        let signal = policy.maybe_remote_no_usable_idr_transport_await_owner_signal(
+            2_000.0,
+            Some(GapSeverity::RepairableGap),
+            Some(0.5),
+        );
+
+        let signal = signal.expect("remote terminal should promote transport-await");
+        assert_eq!(
+            signal.reason,
+            crate::transport::rtc::recovery::escalation::VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        );
+        assert_eq!(signal.reason_label, "receiverWaitingKeyframe");
+        assert_eq!(signal.gap_severity, Some(GapSeverity::RepairableGap));
+        assert_eq!(signal.repairability, Some(0.5));
     }
 }
 

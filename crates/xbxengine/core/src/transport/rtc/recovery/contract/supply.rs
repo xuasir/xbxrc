@@ -1,4 +1,6 @@
-use super::display::displayed_idr_serving_from_stats;
+use super::display::{
+    displayed_idr_serving_allows_relaxed_controls_from_stats, displayed_idr_serving_from_stats,
+};
 use super::gap::{
     gap_keyframe_only_mode_active, parameter_sets_change_strict_active_from_stats,
     resolve_gap_vs_keyframe_mode,
@@ -49,7 +51,7 @@ impl RecoverySurfacePhase {
     }
 }
 
-/// 全生命周期对外主叙事（Owner / Insert / trace 单轨投影源）。
+/// diagnostics / UI / trace 投影；Insert Hold/Emit 由 `ReferenceChainState` 裁决。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum MediaSupplyPhase {
     #[default]
@@ -186,15 +188,49 @@ pub(crate) fn derive_media_supply_phase_from_stats(
     MediaSupplyPhase::Steady
 }
 
-/// 控制面应走 receive PLI / await-idr（waiting-keyframe 与 gap/PS 导致的 MustIdr 统一入口）。
+/// 控制面应走 receive PLI / await-idr；这里只读 receive-local `keyframe_required`
+/// 与 decoder waiting-keyframe 事实，`ReferenceChainState` 只保留给投影与 mismatch 诊断。
 pub(crate) fn idr_recovery_active_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    matches!(
-        derive_media_supply_phase_from_stats(stats, now_ms),
-        MediaSupplyPhase::MustIdr
-    )
+    let _ = now_ms;
+    stats.receive_keyframe_required.unwrap_or(false)
+        || stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+}
+
+/// Session / suspect 门控：receive ledger + 供给断裂控制事实，不读 `derived_decoder_health` 投影。
+pub(crate) fn receive_media_recovery_pressure_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if idr_recovery_active_from_stats(stats, now_ms) {
+        return true;
+    }
+    recovery_supply_break_active_from_stats(stats, now_ms)
+        && stats.receive_display_state.as_deref() != Some("display-stable")
+}
+
+/// SessionPhase::Steady 保持：host 可见供给仍可服务，即使 receive media recovery 仍 open。
+pub(crate) fn receive_presentation_holds_steady_session_phase_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if stats.receive_display_state.as_deref() == Some("display-stable") {
+        return true;
+    }
+    let host_presenting =
+        stats.host_frame_present_epoch > 0 && stats.latest_video_host_present_time_ms.is_some();
+    if !host_presenting {
+        return false;
+    }
+    if stats.recovery_playback_recovered_at_ms.is_some() {
+        return true;
+    }
+    stats.receive_keyframe_required == Some(true)
+        && stats
+            .latest_video_host_present_time_ms
+            .is_some_and(|at| (now_ms - at).max(0.0) < 600.0)
 }
 
 pub(crate) fn recovery_surface_phase_from_media_supply_phase(
@@ -208,7 +244,7 @@ pub(crate) fn recovery_surface_phase_from_media_supply_phase(
     }
 }
 
-const RECOVERY_SUPPLY_BREAK_SUBMIT_AGE_MS: f64 = 1_500.0;
+pub(crate) const RECOVERY_SUPPLY_BREAK_SUBMIT_AGE_MS: f64 = 1_500.0;
 
 /// 曾上屏但 Host mailbox submit 停供：须 PLI/IDR，禁止 continuation emit。
 pub(crate) fn media_supply_submit_starved_from_stats(
@@ -236,7 +272,7 @@ pub(crate) fn recovery_supply_break_active_from_stats(
         return false;
     }
     if stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe") {
-        if !(displayed_idr_serving_from_stats(stats)
+        if !(displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms)
             || stats.recovery_playback_recovered_at_ms.is_some())
         {
             return false;
@@ -279,8 +315,5 @@ pub(crate) fn derive_decoder_health_from_stats(
 pub(crate) fn derived_decoder_health_indicates_await_idr_or_supply_stall(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
-    matches!(
-        stats.derived_decoder_health.as_deref(),
-        Some("await-idr" | "supply-stalled")
-    )
+    receive_media_recovery_pressure_from_stats(stats, 0.0)
 }

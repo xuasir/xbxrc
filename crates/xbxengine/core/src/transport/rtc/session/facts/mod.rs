@@ -9,9 +9,9 @@ use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerI
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms_from_stats,
-    has_current_clean_anchor_from_stats, recovery_exit_path_from_stats,
-    sync_derived_recovery_contract_fields, DerivedDecoderHealth, RecoveryContractSnapshot,
-    RecoveryDisplayFacts, RecoveryExitPath, RecoveryExitThresholds, RecoverySurfacePhase,
+    has_current_clean_anchor_from_stats, sync_derived_recovery_contract_fields,
+    DerivedDecoderHealth, RecoveryContractSnapshot, RecoveryDisplayFacts, RecoveryExitPath,
+    RecoveryExitThresholds, RecoverySurfacePhase,
 };
 
 pub(crate) mod gap_severity;
@@ -35,9 +35,9 @@ pub(crate) use gap_severity::{
     frame_value_from_gap_severity, FrameValue, GapSeverity,
 };
 pub(crate) use recovery_episode::{
-    recovery_episode_stage_from_status, recovery_progress_allows_decoder_reset,
-    recovery_progress_level_from_episode, recovery_progress_level_from_str,
-    recovery_progress_missing_anchor, RecoveryEpisodeStage, RecoveryProgressLevel,
+    recovery_episode_stage_from_status, recovery_progress_level_from_episode,
+    recovery_progress_level_from_str, recovery_progress_missing_anchor, RecoveryEpisodeStage,
+    RecoveryProgressLevel,
 };
 
 use super::startup_compat::{
@@ -124,7 +124,11 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) recovery_exit_path: RecoveryExitPath,
     pub(crate) recovery_surface_phase: RecoverySurfacePhase,
     pub(crate) derived_decoder_health: DerivedDecoderHealth,
-    pub(crate) contract_snapshot: RecoveryContractSnapshot,
+    pub(crate) receive_keyframe_required: Option<bool>,
+    pub(crate) receive_keyframe_response_state: Option<String>,
+    pub(crate) receive_display_state: Option<String>,
+    pub(crate) recovery_decoder_reference_synced_at_ms: Option<f64>,
+    pub(crate) transport_recovery_episode_opened_at_ms: Option<f64>,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -240,7 +244,11 @@ pub(crate) fn read_owner_runtime_facts(
             recovery_exit_path: contract_snapshot.exit_path,
             recovery_surface_phase: contract_snapshot.surface_phase,
             derived_decoder_health: contract_snapshot.derived_health,
-            contract_snapshot,
+            receive_keyframe_required: stats.receive_keyframe_required,
+            receive_keyframe_response_state: stats.receive_keyframe_response_state.clone(),
+            receive_display_state: stats.receive_display_state.clone(),
+            recovery_decoder_reference_synced_at_ms: stats.recovery_decoder_reference_synced_at_ms,
+            transport_recovery_episode_opened_at_ms: stats.transport_recovery_episode_opened_at_ms,
         }
     })
     .unwrap_or_default()
@@ -325,9 +333,15 @@ pub(crate) fn build_owner_input(
         recovery_exit_path: owner_facts.recovery_exit_path,
         recovery_surface_phase: owner_facts.recovery_surface_phase,
         derived_decoder_health: owner_facts.derived_decoder_health,
-        contract_snapshot: owner_facts.contract_snapshot,
         display_supply_thresholds,
         observed_at_ms,
+        receive_keyframe_required: owner_facts.receive_keyframe_required,
+        receive_keyframe_response_state: owner_facts.receive_keyframe_response_state.clone(),
+        receive_display_state: owner_facts.receive_display_state.clone(),
+        recovery_decoder_reference_synced_at_ms: owner_facts
+            .recovery_decoder_reference_synced_at_ms,
+        transport_recovery_episode_opened_at_ms: owner_facts
+            .transport_recovery_episode_opened_at_ms,
     }
 }
 
@@ -412,7 +426,10 @@ mod tests {
         });
         let facts = read_owner_runtime_facts(runtime_stats.as_ref(), 10_000.0);
         assert_eq!(facts.recovery_surface_phase, RecoverySurfacePhase::AwaitIdr);
-        assert!(facts.contract_snapshot.supply_break_active);
+        assert!(matches!(
+            facts.derived_decoder_health,
+            DerivedDecoderHealth::AwaitIdr | DerivedDecoderHealth::SupplyStalled
+        ));
     }
 }
 

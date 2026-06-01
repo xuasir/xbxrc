@@ -5,24 +5,141 @@ use super::{
 use crate::transport::rtc::facts::ConnectionLifecycleStateFact;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::recovery::contract::{
-    DerivedDecoderHealth, MediaSupplyPhase, PacketRecoveryActionStage, RecoveryContractSnapshot,
-    RecoveryExitPath, RecoverySurfacePhase,
+    DerivedDecoderHealth, RecoveryExitPath, RecoverySurfacePhase,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 
-fn default_contract_snapshot() -> RecoveryContractSnapshot {
-    RecoveryContractSnapshot {
-        media_supply_phase: MediaSupplyPhase::Steady,
-        surface_phase: RecoverySurfacePhase::Steady,
-        derived_health: DerivedDecoderHealth::Nominal,
-        exit_path: RecoveryExitPath::AwaitingAnchor,
-        serving_wide: false,
-        serving_relaxed: false,
-        supply_break_active: false,
-        decoder_reference_synced: false,
-        displayed_idr_decoder_synced: false,
-        action_stage: PacketRecoveryActionStage::Drop,
+/// 为 displayed-idr / clean-anchor 退出 rebuilding 的用例补齐 receive ledger 投影。
+fn seed_ledger_display_recovery(input: &mut VideoSchedulingOwnerInput) {
+    input.receive_keyframe_required = Some(false);
+    input.receive_keyframe_response_state = Some("usable-idr".to_string());
+    input.receive_display_state = Some("display-stable".to_string());
+
+    if input.clean_anchor_epoch.is_none() {
+        input.clean_anchor_epoch = Some(input.recovery_epoch);
     }
+    if input.recovery_decoder_reference_synced_at_ms.is_none() {
+        input.recovery_decoder_reference_synced_at_ms =
+            Some((input.observed_at_ms - 50.0).max(0.0));
+    }
+    if input.transport_recovery_episode_opened_at_ms.is_none() {
+        input.transport_recovery_episode_opened_at_ms =
+            Some((input.observed_at_ms - 500.0).max(0.0));
+    }
+}
+
+/// clean-anchor 单独不足以闭合 release；须 usable-idr + decoder sync（或 display-stable）。
+fn seed_ledger_clean_anchor_recovery(input: &mut VideoSchedulingOwnerInput) {
+    input.receive_keyframe_required = Some(false);
+    input.receive_keyframe_response_state = Some("usable-idr".to_string());
+
+    if input.clean_anchor_epoch.is_none() {
+        input.clean_anchor_epoch = Some(input.recovery_epoch);
+    }
+    if input.recovery_decoder_reference_synced_at_ms.is_none() {
+        input.recovery_decoder_reference_synced_at_ms =
+            Some((input.observed_at_ms - 50.0).max(0.0));
+    }
+    if input.transport_recovery_episode_opened_at_ms.is_none() {
+        input.transport_recovery_episode_opened_at_ms =
+            Some((input.observed_at_ms - 500.0).max(0.0));
+    }
+}
+
+#[test]
+fn clean_anchor_without_receive_ledger_projection_does_not_release() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("receiverWaitingKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-anchor"),
+        Some("remoteTrackAttached"),
+        Some(24_000),
+        620.0,
+        1,
+    ));
+
+    let mut anchor_only = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(14.0),
+            decode_age_ms: Some(9.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("receiving"),
+        Some("frame-observed"),
+        Some("remoteTrackAttached"),
+        Some(42_000),
+        640.0,
+        1,
+    );
+    anchor_only.clean_anchor_epoch = Some(1);
+    anchor_only.clean_anchor_observed_at_ms = Some(639.0);
+    anchor_only.clean_anchor_source_event = Some("displayed-idr".to_string());
+    anchor_only.recovery_displayed_idr_at_ms = anchor_only.clean_anchor_observed_at_ms;
+    anchor_only.recovery_fresh_anchor_recovered_at_ms = anchor_only.clean_anchor_observed_at_ms;
+
+    let output = owner.evaluate(&anchor_only);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+}
+
+#[test]
+fn displayed_idr_playback_release_without_control_plane_exits_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("receiverWaitingKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("waiting-keyframe"),
+        Some("frame-await-recovery-anchor"),
+        Some("remoteTrackAttached"),
+        Some(24_000),
+        620.0,
+        1,
+    ));
+
+    let mut playback_ready = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(16.0),
+            decode_age_ms: Some(12.0),
+            video_renderer_stalled: false,
+            host_display_tick_epoch: Some(42),
+            host_frame_present_epoch: Some(7),
+            host_cadence_phase: Some("steady".to_string()),
+            submit_age_ms: Some(24.0),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("waiting-keyframe"),
+        Some("insert-gate-need-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(48_000),
+        720.0,
+        1,
+    );
+    playback_ready.clean_anchor_epoch = Some(1);
+    playback_ready.clean_anchor_observed_at_ms = Some(710.0);
+    playback_ready.clean_anchor_source_event = Some("displayed-idr".to_string());
+    playback_ready.recovery_displayed_idr_at_ms = playback_ready.clean_anchor_observed_at_ms;
+    playback_ready.recovery_fresh_anchor_recovered_at_ms =
+        playback_ready.clean_anchor_observed_at_ms;
+    playback_ready.receive_keyframe_required = Some(true);
+    playback_ready.receive_keyframe_response_state = Some("non-idr-only".to_string());
+    playback_ready.recovery_decoder_reference_synced_at_ms = Some(715.0);
+    playback_ready.transport_recovery_episode_opened_at_ms = Some(200.0);
+
+    let output = owner.evaluate(&playback_ready);
+    assert_ne!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert!(output.recovery_intent.is_none());
 }
 
 fn thresholds() -> DisplaySupplyThresholds {
@@ -103,15 +220,19 @@ fn input(
         recovery_exit_path: RecoveryExitPath::AwaitingAnchor,
         recovery_surface_phase: RecoverySurfacePhase::Steady,
         derived_decoder_health: DerivedDecoderHealth::Nominal,
-        contract_snapshot: default_contract_snapshot(),
         display_supply_thresholds: thresholds(),
         observed_at_ms,
         latest_anchor_candidate_ledger: None,
+        receive_keyframe_required: None,
+        receive_keyframe_response_state: None,
+        receive_display_state: None,
+        recovery_decoder_reference_synced_at_ms: None,
+        transport_recovery_episode_opened_at_ms: None,
     }
 }
 
 #[test]
-fn supply_break_surface_forces_supply_starved_without_transport_await_intent() {
+fn supply_break_surface_stays_projection_only_without_forcing_supply_starved() {
     let mut owner = VideoSchedulingOwner::new();
     let _ = owner.evaluate(&input(
         ConnectionLifecycleStateFact::Connected,
@@ -149,9 +270,6 @@ fn supply_break_surface_forces_supply_starved_without_transport_await_intent() {
     ready.recovery_fresh_anchor_recovered_at_ms = ready.clean_anchor_observed_at_ms;
     let _ = owner.evaluate(&ready);
 
-    let mut contract = default_contract_snapshot();
-    contract.surface_phase = RecoverySurfacePhase::SupplyBreak;
-    contract.supply_break_active = true;
     let mut inp = input(
         ConnectionLifecycleStateFact::Connected,
         Some("frame-await-recovery-anchor"),
@@ -165,10 +283,13 @@ fn supply_break_surface_forces_supply_starved_without_transport_await_intent() {
     );
     inp.recovery_surface_phase = RecoverySurfacePhase::SupplyBreak;
     inp.derived_decoder_health = DerivedDecoderHealth::Nominal;
-    inp.contract_snapshot = contract;
+
     let output = owner.evaluate(&inp);
-    assert_eq!(output.state, VideoSchedulingOwnerState::SupplyStarved);
-    assert!(output.recovery_intent.is_none());
+    assert_ne!(output.state, VideoSchedulingOwnerState::SupplyStarved);
+    assert!(output
+        .recovery_intent
+        .as_ref()
+        .is_none_or(|intent| intent.reason_label != "displaySupplyCritical"));
 }
 
 #[test]
@@ -208,7 +329,7 @@ fn surface_matrix_steady_stable_serving_emits_no_recovery_intent() {
     settled.clean_anchor_source_event = Some("displayed-idr".to_string());
     settled.recovery_displayed_idr_at_ms = settled.clean_anchor_observed_at_ms;
     settled.recovery_fresh_anchor_recovered_at_ms = settled.clean_anchor_observed_at_ms;
-    settled.contract_snapshot.serving_wide = true;
+
     settled.recovery_surface_phase = RecoverySurfacePhase::Steady;
     let output = owner.evaluate(&settled);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
@@ -270,9 +391,7 @@ fn surface_matrix_repairing_gap_in_flight_avoids_transport_await_intent() {
         1,
     );
     inp.recovery_surface_phase = RecoverySurfacePhase::Repairing;
-    inp.contract_snapshot.serving_wide = true;
-    inp.contract_snapshot.serving_wide = true;
-    inp.contract_snapshot.serving_relaxed = true;
+
     inp.recovery_displayed_idr_at_ms = Some(390.0);
     inp.recovery_fresh_anchor_recovered_at_ms = Some(390.0);
     inp.clean_anchor_epoch = Some(1);
@@ -904,10 +1023,7 @@ fn stable_serving_with_frozen_present_epoch_and_stale_decode_surfaces_host_prese
     base.clean_anchor_source_event = Some("displayed-idr".to_string());
     base.recovery_displayed_idr_at_ms = base.clean_anchor_observed_at_ms;
     base.recovery_fresh_anchor_recovered_at_ms = base.clean_anchor_observed_at_ms;
-    base.contract_snapshot.serving_wide = true;
-    base.contract_snapshot.serving_wide = true;
-    base.contract_snapshot.decoder_reference_synced = true;
-    base.contract_snapshot.displayed_idr_decoder_synced = true;
+
     base.latest_h264_bootstrap_ready = Some(false);
     base.latest_h264_bootstrap_reject_reason = Some("bootstrapMissingIdr".to_string());
     base.latest_h264_committed_sps_present = Some(true);
@@ -915,6 +1031,7 @@ fn stable_serving_with_frozen_present_epoch_and_stale_decode_surfaces_host_prese
     base.latest_h264_delta_continuation_ready = Some(true);
     base.latest_h264_observed_at_ms = Some(3_950.0);
     base.receiver_state = Some("waiting-keyframe".to_string());
+    seed_ledger_display_recovery(&mut base);
     assert_eq!(
         owner.evaluate(&base).state,
         VideoSchedulingOwnerState::StableServing
@@ -1044,6 +1161,7 @@ fn transient_anchor_noise_with_clean_anchor_and_delta_ready_does_not_stick_recov
         failure_reason: None,
     });
 
+    seed_ledger_display_recovery(&mut recoverable);
     let output = owner.evaluate(&recoverable);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -1180,6 +1298,7 @@ fn connected_lingering_no_pending_with_clean_anchor_can_return_to_stable_serving
 
     ready.recovery_fresh_anchor_recovered_at_ms = ready.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut ready);
     let output = owner.evaluate(&ready);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -1231,8 +1350,9 @@ fn first_present_feedback_lag_with_clean_anchor_exits_rebuilding_supply() {
 
     recoverable.recovery_fresh_anchor_recovered_at_ms = recoverable.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut recoverable);
     let output = owner.evaluate(&recoverable);
-    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
 }
 
@@ -1283,8 +1403,9 @@ fn media_continuity_without_decode_or_present_feedback_can_exit_rebuilding_suppl
     recoverable.latest_h264_delta_continuation_ready = Some(true);
     recoverable.latest_h264_observed_at_ms = Some(719.0);
 
+    seed_ledger_display_recovery(&mut recoverable);
     let output = owner.evaluate(&recoverable);
-    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
     assert!(output.recovery_intent.is_none());
 }
@@ -1783,6 +1904,7 @@ fn clean_anchor_and_fresh_supply_can_exit_rebuilding_even_with_recovery_noise() 
 
     ready.recovery_fresh_anchor_recovered_at_ms = ready.clean_anchor_observed_at_ms;
     ready.display_supply_thresholds = home_thresholds();
+    seed_ledger_display_recovery(&mut ready);
     let output = owner.evaluate(&ready);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -2143,6 +2265,7 @@ fn first_transport_await_probe_with_clean_anchor_stays_out_of_rebuilding_supply(
     priming.recovery_displayed_idr_at_ms = priming.clean_anchor_observed_at_ms;
 
     priming.recovery_fresh_anchor_recovered_at_ms = priming.clean_anchor_observed_at_ms;
+    seed_ledger_display_recovery(&mut priming);
     assert_eq!(
         owner.evaluate(&priming).state,
         VideoSchedulingOwnerState::Priming
@@ -2177,6 +2300,7 @@ fn first_transport_await_probe_with_clean_anchor_stays_out_of_rebuilding_supply(
 
     weak_probe.recovery_fresh_anchor_recovered_at_ms = weak_probe.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut weak_probe);
     let output = owner.evaluate(&weak_probe);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -2477,6 +2601,7 @@ fn owner_exits_recovering_only_after_strong_recovery_evidence() {
     ready.recovery_displayed_idr_at_ms = ready.clean_anchor_observed_at_ms;
 
     ready.recovery_fresh_anchor_recovered_at_ms = ready.clean_anchor_observed_at_ms;
+    seed_ledger_display_recovery(&mut ready);
     let stable = owner.evaluate(&ready);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(stable.health, VideoHealthContract::Stable);
@@ -2596,6 +2721,7 @@ fn critical_wait_keyframe_noise_prefers_rebuilding_over_supply_starved_even_with
     stable.recovery_displayed_idr_at_ms = stable.clean_anchor_observed_at_ms;
 
     stable.recovery_fresh_anchor_recovered_at_ms = stable.clean_anchor_observed_at_ms;
+    seed_ledger_display_recovery(&mut stable);
     let stable_output = owner.evaluate(&stable);
     assert_eq!(stable_output.state, VideoSchedulingOwnerState::Priming);
 
@@ -2625,6 +2751,7 @@ fn critical_wait_keyframe_noise_prefers_rebuilding_over_supply_starved_even_with
 
     noisy.recovery_fresh_anchor_recovered_at_ms = noisy.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut noisy);
     let output = owner.evaluate(&noisy);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -2790,6 +2917,7 @@ fn sustaining_recovery_with_serviceable_output_exits_rebuilding_supply_as_degrad
         observed_at_ms: 1_120.0,
     });
 
+    seed_ledger_display_recovery(&mut sustaining);
     let output = owner.evaluate(&sustaining);
     assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -3127,6 +3255,7 @@ fn rebuilding_supply_allows_displayed_idr_fact() {
     ready.recovery_displayed_idr_at_ms = Some(2_680.0);
     ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
 
+    seed_ledger_display_recovery(&mut ready);
     let stable = owner.evaluate(&ready);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(stable.health, VideoHealthContract::Stable);
@@ -3169,8 +3298,8 @@ fn displayed_idr_with_repairing_chain_and_stale_anchor_label_exits_rebuilding_su
     );
     ready.recovery_displayed_idr_at_ms = Some(2_680.0);
     ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
-    ready.contract_snapshot.serving_wide = true;
-    ready.contract_snapshot.serving_wide = true;
+
+    seed_ledger_display_recovery(&mut ready);
 
     let stable = owner.evaluate(&ready);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
@@ -3216,9 +3345,8 @@ fn displayed_idr_with_waiting_keyframe_chain_exits_rebuilding_supply() {
     );
     ready.recovery_displayed_idr_at_ms = Some(2_680.0);
     ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
-    ready.contract_snapshot.serving_wide = true;
-    ready.contract_snapshot.decoder_reference_synced = true;
-    ready.contract_snapshot.displayed_idr_decoder_synced = true;
+
+    seed_ledger_display_recovery(&mut ready);
 
     let stable = owner.evaluate(&ready);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
@@ -3263,9 +3391,6 @@ fn serving_wide_without_decoder_sync_does_not_release_to_stable_serving() {
     );
     ready.recovery_displayed_idr_at_ms = Some(2_680.0);
     ready.recovery_fresh_anchor_recovered_at_ms = Some(2_680.0);
-    ready.contract_snapshot.serving_wide = true;
-    ready.contract_snapshot.decoder_reference_synced = false;
-    ready.contract_snapshot.displayed_idr_decoder_synced = false;
 
     let output = owner.evaluate(&ready);
     assert_ne!(output.state, VideoSchedulingOwnerState::StableServing);
@@ -3367,6 +3492,7 @@ fn clean_anchor_recovery_can_exit_supply_starved_to_degraded_serving_before_full
 
     recovering.recovery_fresh_anchor_recovered_at_ms = recovering.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut recovering);
     let output = owner.evaluate(&recovering);
     assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
@@ -3426,7 +3552,7 @@ fn clean_anchor_recovery_ignores_shadow_renderer_stall_when_host_present_is_fres
     recovering.recovery_fresh_anchor_recovered_at_ms = recovering.clean_anchor_observed_at_ms;
 
     let output = owner.evaluate(&recovering);
-    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
+    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
     assert!(output.recovery_intent.is_none());
 }
@@ -3501,6 +3627,7 @@ fn clean_anchor_recovery_stays_rebuilding_when_present_feedback_gap_is_not_settl
     fresh_present.recovery_displayed_idr_at_ms = fresh_present.clean_anchor_observed_at_ms;
 
     fresh_present.recovery_fresh_anchor_recovered_at_ms = fresh_present.clean_anchor_observed_at_ms;
+    seed_ledger_display_recovery(&mut fresh_present);
     let healed = owner.evaluate(&fresh_present);
     assert_eq!(healed.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(healed.health, VideoHealthContract::Stable);
@@ -3755,6 +3882,7 @@ fn non_idr_grace_window_keeps_rebuilding_supply_until_clean_anchor_reaches_stabl
 
     healed.recovery_fresh_anchor_recovered_at_ms = healed.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut healed);
     let stable = owner.evaluate(&healed);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(stable.health, VideoHealthContract::Stable);
@@ -4052,6 +4180,7 @@ fn supply_starved_probe_with_clean_anchor_stays_out_of_rebuilding_supply() {
 
     probed.recovery_fresh_anchor_recovered_at_ms = probed.clean_anchor_observed_at_ms;
 
+    seed_ledger_display_recovery(&mut probed);
     let output = owner.evaluate(&probed);
     assert_ne!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
     assert!(output.recovery_intent.is_none());
