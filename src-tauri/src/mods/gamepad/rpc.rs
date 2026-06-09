@@ -2,8 +2,8 @@ use crate::error::AppResult;
 use crate::mods::gamepad::GamepadDeviceProfileDto;
 use crate::AppState;
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadSamplingConfigDto,
+    LogicalPadStateDto, MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto, OhMyGamepadSamplingConfigDto,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -47,6 +47,9 @@ pub enum GamepadCommand {
     },
     ReplaceKeyboardMapping {
         mapping: OhMyGamepadKeyboardMappingDto,
+    },
+    SubmitKeyboardState {
+        state: LogicalPadStateDto,
     },
     ResetDeviceProfiles,
     ResetKeyboardMapping,
@@ -111,6 +114,9 @@ pub async fn handle_rpc(
         GamepadCommand::ReplaceKeyboardMapping { mapping } => Ok(serde_json::to_value(
             service.replace_keyboard_mapping(mapping)?,
         )?),
+        GamepadCommand::SubmitKeyboardState { state } => {
+            Ok(serde_json::to_value(service.submit_keyboard_state(state)?)?)
+        }
         GamepadCommand::ResetDeviceProfiles => {
             Ok(serde_json::to_value(service.reset_device_profiles()?)?)
         }

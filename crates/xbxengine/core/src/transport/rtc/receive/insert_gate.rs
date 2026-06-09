@@ -718,6 +718,97 @@ mod tests {
     }
 
     #[test]
+    fn decoder_waiting_keyframe_reopens_window_and_holds_continuation() {
+        use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
+        use crate::transport::rtc::receive::recovery_ledger::ReceiveRecoveryLedger;
+        use crate::XbxEngineMediaRuntimeStats;
+
+        let mut ledger = ReceiveRecoveryLedger::default();
+        ledger.note_clean_anchor_committed(Some(77_001));
+        ledger.note_decoder_reference_synced(9_950.0);
+        ledger.note_decoder_waiting_keyframe();
+
+        let mut stats = XbxEngineMediaRuntimeStats {
+            recovery_playback_recovered_at_ms: Some(9_900.0),
+            latest_video_decode_ok_time_ms: Some(9_950.0),
+            latest_video_decode_ok_rtp_timestamp: Some(77_001),
+            ..Default::default()
+        };
+        ledger.sync_to_stats(&mut stats);
+
+        let decode = receiver_decode_context_from_stats(&stats, 10_000.0);
+        let reference = ReferenceChainObservation {
+            state: ReferenceChainState::NeedKeyframe,
+            cause: "decoder-waiting-keyframe",
+            ..Default::default()
+        };
+        let ctx = InsertContext::from_ledger_inputs(
+            decode,
+            reference,
+            ledger.derive_packet_recovery_action_stage(false, false, None, 50.0),
+            ledger.keyframe_required,
+            &stats,
+            10_000.0,
+            50.0,
+        );
+        let inspection = non_idr_inspection();
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(reference.state, ReferenceChainState::NeedKeyframe);
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "mustIdrHold");
+    }
+
+    #[test]
+    fn nack_exhausted_reopens_window_and_holds_continuation_after_clean_anchor() {
+        use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
+        use crate::transport::rtc::receive::recovery_ledger::ReceiveRecoveryLedger;
+        use crate::XbxEngineMediaRuntimeStats;
+
+        let mut ledger = ReceiveRecoveryLedger::default();
+        ledger.note_clean_anchor_committed(Some(77_001));
+        ledger.note_decoder_reference_synced(9_950.0);
+        ledger.note_nack_exhausted();
+
+        let mut stats = XbxEngineMediaRuntimeStats {
+            recovery_playback_recovered_at_ms: Some(9_900.0),
+            latest_video_decode_ok_time_ms: Some(9_950.0),
+            latest_video_decode_ok_rtp_timestamp: Some(77_001),
+            ..Default::default()
+        };
+        ledger.sync_to_stats(&mut stats);
+
+        let decode = receiver_decode_context_from_stats(&stats, 10_000.0);
+        let reference = ledger.project_reference_chain(false, true, &Default::default());
+        let ctx = InsertContext::from_ledger_inputs(
+            decode,
+            reference,
+            ledger.derive_packet_recovery_action_stage(true, false, Some(120.0), 50.0),
+            ledger.keyframe_required,
+            &stats,
+            10_000.0,
+            50.0,
+        );
+        let inspection = non_idr_inspection();
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(reference.state, ReferenceChainState::NeedKeyframe);
+        assert_eq!(reference.cause, "nack-exhausted");
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "mustIdrHold");
+    }
+
+    #[test]
     fn insert_emit_bypass_matches_emit_decision_for_synced_soft_missing_idr() {
         let ctx = ctx_decoder_synced();
         let inspection = non_idr_inspection();

@@ -82,8 +82,7 @@ impl RtcVideoFrameSource {
                 .is_some_and(|(first, last)| {
                     last.wrapping_sub(*first) as u32 >= NACK_SPAN_KEYFRAME_ESCALATION_PACKETS
                 });
-        let reference_blocking_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal();
-        let keyframe_escalation_due = poll.keyframe_escalation_due && reference_blocking_gap;
+        let keyframe_escalation_due = poll.keyframe_escalation_due;
         if keyframe_escalation_due {
             self.trace_ledger
                 .recovery_ledger_mut()

@@ -7,6 +7,7 @@ import type {
   GamepadRuntimeSnapshotDto,
   GamepadSamplingConfigDto,
   GamepadSamplingStrategyDto,
+  LogicalPadStateDto,
 } from '../gamepad/contract'
 import type {
   RuntimeTraceAckResult,
@@ -138,6 +139,7 @@ export interface XBoxRpcSchema {
     stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
     replaceDeviceProfiles: RpcMethod<{ profiles: GamepadDeviceProfileDto[] }, GamepadRuntimeSnapshotDto>
     replaceKeyboardMapping: RpcMethod<{ mapping: GamepadKeyboardMappingDto }, GamepadRuntimeSnapshotDto>
+    submitKeyboardState: RpcMethod<{ state: LogicalPadStateDto }, GamepadRuntimeSnapshotDto>
     resetDeviceProfiles: RpcMethod<void, GamepadRuntimeSnapshotDto>
     resetKeyboardMapping: RpcMethod<void, GamepadRuntimeSnapshotDto>
   }

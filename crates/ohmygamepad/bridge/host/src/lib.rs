@@ -206,6 +206,15 @@ impl GamepadRuntimeHost {
             })
     }
 
+    pub fn submit_keyboard_state(
+        &self,
+        state: LogicalPadStateDto,
+    ) -> Result<(), GamepadRuntimeHostError> {
+        self.runtime
+            .submit_keyboard_state(state)
+            .map_err(|error| GamepadRuntimeHostError::new(format!("submitKeyboardState:{error:?}")))
+    }
+
     pub fn replace_device_profiles(
         &self,
         profiles: Vec<DeviceProfile>,

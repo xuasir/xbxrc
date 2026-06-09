@@ -17,17 +17,29 @@ fn displayed_frame_stale(
         && present_age_ms.is_some_and(|age_ms| age_ms >= DISPLAYED_FRAME_STALE_THRESHOLD_MS)
 }
 
+fn displayed_source_frame_stale(
+    present_age_ms: Option<f64>,
+    submit_age_ms: Option<f64>,
+    last_displayed_frame_seq: Option<u64>,
+) -> bool {
+    displayed_frame_stale(present_age_ms, last_displayed_frame_seq)
+        || (last_displayed_frame_seq.is_some()
+            && submit_age_ms.is_some_and(|age_ms| age_ms >= DISPLAYED_FRAME_STALE_THRESHOLD_MS))
+}
+
 fn retained_old_frame_risk(
     present_age_ms: Option<f64>,
+    submit_age_ms: Option<f64>,
     last_displayed_frame_seq: Option<u64>,
     no_pending_streak: Option<u32>,
     host_cadence_phase: Option<&str>,
 ) -> bool {
-    if matches!(host_cadence_phase, Some("steady" | "priming")) {
+    let source_frame_stale =
+        displayed_source_frame_stale(present_age_ms, submit_age_ms, last_displayed_frame_seq);
+    if matches!(host_cadence_phase, Some("steady" | "priming")) && !source_frame_stale {
         return false;
     }
-    displayed_frame_stale(present_age_ms, last_displayed_frame_seq)
-        && no_pending_streak.unwrap_or(0) > 0
+    source_frame_stale && no_pending_streak.unwrap_or(0) > 0
 }
 
 /// 当 presentation 进入 `displaySupplyStarved` 时，把上游卡点收成可读 blocker（仅 trace/UI）。
@@ -485,6 +497,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             ),
             "retainedOldFrameRisk": retained_old_frame_risk(
                 stats.present_age_ms,
+                stats.submit_age_ms,
                 stats.last_displayed_frame_seq,
                 stats.host_no_pending_streak,
                 stats.host_cadence_phase.as_deref(),
@@ -2043,6 +2056,7 @@ pub(super) fn record_runtime_trace_observations(
                 ),
                 "retainedOldFrameRisk": retained_old_frame_risk(
                     stats.present_age_ms,
+                    stats.submit_age_ms,
                     stats.last_displayed_frame_seq,
                     stats.host_no_pending_streak,
                     stats.host_cadence_phase.as_deref(),

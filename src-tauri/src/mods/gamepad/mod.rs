@@ -9,9 +9,10 @@ pub use ohmygamepad_sdl3::ShellWindowGateHints;
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadInputGateModeDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
+    LogicalPadStateDto, MultiControllerSamplingStrategyDto, OhMyGamepadInputGateModeDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingLifecycleDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -136,6 +137,10 @@ pub trait GamepadProvider: Send + Sync {
     fn replace_keyboard_mapping(
         &self,
         mapping: OhMyGamepadKeyboardMappingDto,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn submit_keyboard_state(
+        &self,
+        state: LogicalPadStateDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn reset_device_profiles(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn reset_keyboard_mapping(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;

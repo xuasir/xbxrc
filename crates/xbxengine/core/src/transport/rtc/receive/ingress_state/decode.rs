@@ -533,13 +533,11 @@ impl RtcVideoFrameSource {
                 )
             })
             .unwrap_or(false);
-        let reference_blocking_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal();
         ReceiverDecodeContext {
             receiver_state: self.receiver_local_state(),
             has_active_gap: engine.has_active_gap(),
-            nack_exhausted: reference_blocking_gap
-                && (engine.nack_requester.nack_escalation_pending()
-                    || engine.nack_requester.has_exhausted_gaps()),
+            nack_exhausted: engine.nack_requester.nack_escalation_pending()
+                || engine.nack_requester.has_exhausted_gaps(),
             first_frame_acquired: self.receiver_local_first_frame_acquired(),
             decoder_reference_synced,
         }
@@ -626,7 +624,8 @@ impl RtcVideoFrameSource {
             )
     }
 
-    /// 消费 session fast-path / supply-break 写入的 receive keyframe 提示。
+    /// 消费 session / decode 写入的 receive keyframe 提示。
+    /// decoder reset 后需要进入硬恢复窗，阻止后续 delta continuation 继续喂给刚重置的后端。
     fn maybe_consume_recovery_receive_keyframe_hint(&mut self) {
         const HINT_TTL_MS: f64 = 2_000.0;
         let now_ms = now_ms_f64();
@@ -642,13 +641,18 @@ impl RtcVideoFrameSource {
                 .update(|stats| stats.recovery_receive_keyframe_hint_at_ms = None);
             return;
         }
-        self.runtime_stats
-            .update(|stats| stats.recovery_receive_keyframe_hint_at_ms = None);
-        self.request_recovery_keyframe_soft_from_source(
-            "recovery-receive-keyframe-hint",
-            None,
-            now_ms,
-        );
+        self.runtime_stats.update(|stats| {
+            stats.recovery_receive_keyframe_hint_at_ms = None;
+            stats.recovery_decoder_reference_synced_at_ms = None;
+            stats.video_anchor_clean_epoch = None;
+            stats.video_anchor_clean_observed_at_ms = None;
+            stats.video_anchor_clean_source_event = None;
+        });
+        self.trace_ledger
+            .recovery_ledger_mut()
+            .note_decoder_waiting_keyframe();
+        self.sync_recovery_ledger_to_stats();
+        self.request_recovery_keyframe_from_source("recovery-receive-keyframe-hint", None, now_ms);
     }
 
     pub(crate) fn maybe_request_first_frame_acquisition_keyframe(

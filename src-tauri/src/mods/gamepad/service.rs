@@ -8,10 +8,11 @@ use ohmygamepad_core::{
 };
 use ohmygamepad_host::GamepadRuntimeHost;
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadInputGateModeDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRejectionReasonDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
+    LogicalPadStateDto, MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto,
+    OhMyGamepadInputGateModeDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRejectionReasonDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingLifecycleDto,
 };
 use ohmygamepad_sdl3::ShellWindowGateHints;
 use tauri::{AppHandle, Manager};
@@ -278,6 +279,16 @@ impl GamepadProvider for GamepadService {
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         self.host
             .replace_keyboard_mapping(mapping)
+            .map_err(|error| format!("{:?}", error))?;
+        self.get_runtime_snapshot()
+    }
+
+    fn submit_keyboard_state(
+        &self,
+        state: LogicalPadStateDto,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
+        self.host
+            .submit_keyboard_state(state)
             .map_err(|error| format!("{:?}", error))?;
         self.get_runtime_snapshot()
     }

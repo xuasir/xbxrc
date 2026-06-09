@@ -3409,6 +3409,42 @@ fn host_mailbox_state_steady_cadence_does_not_project_retained_old_frame_risk() 
 }
 
 #[test]
+fn host_mailbox_state_steady_cadence_flags_stale_submit_age_risk() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "present_fps": 59.8,
+        "host_mailbox_enqueue_count_total": 12,
+        "host_no_pending_streak": 7,
+        "host_cadence_phase": "steady",
+        "submit_age_ms": 1048.0,
+        "present_age_ms": 6.0,
+        "last_displayed_frame_seq": 1426,
+        "last_displayed_frame_rtp_timestamp": 721166838u32,
+        "last_displayed_at_ms": 1514.0
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "hostMailboxState");
+    assert_eq!(payload["displayedFrameStale"], false);
+    assert_eq!(
+        payload["retainedOldFrameRisk"], true,
+        "source frame age should flag stale retained frame risk during steady cadence"
+    );
+}
+
+#[test]
 fn host_mailbox_state_records_present_age_transition_from_none_to_fresh() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),

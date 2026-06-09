@@ -191,10 +191,9 @@ impl ReceiverTraceLedger {
         let mut diagnostic_facts = reference_chain_diagnostic_facts_from_stats(stats, now_ms);
         diagnostic_facts.has_active_gap =
             diagnostic_facts.has_active_gap || has_unresolved_hard_gap;
-        diagnostic_facts.nack_exhausted = has_unresolved_hard_gap
-            && (diagnostic_facts.nack_exhausted
-                || self.recovery.nack_state
-                    == crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::Exhausted);
+        diagnostic_facts.nack_exhausted = diagnostic_facts.nack_exhausted
+            || self.recovery.nack_state
+                == crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::Exhausted;
         if let Some(unrecoverable) =
             self.reference_chain_observation_from_unrecoverable(&diagnostic_facts)
         {
@@ -1050,6 +1049,27 @@ mod inline_recovery_tests {
             crate::transport::rtc::recovery::contract::ReferenceChainState::NeedKeyframe
         );
         assert_eq!(observation.cause, "receive-ledger-hard-gap-nack-exhausted");
+    }
+
+    #[test]
+    fn disposable_nack_exhausted_after_clean_anchor_reopens_keyframe_window() {
+        let mut state = ReceiverTraceLedger::new();
+        state.note_clean_anchor_committed(Some(90_001));
+        state.recovery.note_decoder_reference_synced(2.0);
+        state.mark_gap_nack_candidate(&[704], 3.0, Some(90_002), "disposable", "unknown");
+        state.recovery.note_nack_exhausted();
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(2.0),
+            ..Default::default()
+        };
+
+        let observation = state.reference_chain_observation(&stats, 4.0, 80.0);
+
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::NeedKeyframe
+        );
+        assert_eq!(observation.cause, "nack-exhausted");
     }
 
     #[test]

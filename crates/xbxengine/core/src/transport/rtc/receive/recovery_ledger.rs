@@ -375,6 +375,7 @@ impl ReceiveRecoveryLedger {
     }
 
     pub(crate) fn note_decoder_waiting_keyframe(&mut self) {
+        self.open_hard_gap_picture_recovery_window();
         self.decoder_result = RecoveryDecoderResult::WaitingKeyframe;
         self.set_keyframe_required(KeyframeRequiredCause::DecoderWaitingKeyframe);
     }
@@ -391,6 +392,7 @@ impl ReceiveRecoveryLedger {
     }
 
     pub(crate) fn note_nack_exhausted(&mut self) {
+        self.open_hard_gap_picture_recovery_window();
         self.nack_state = RecoveryNackState::Exhausted;
         self.set_keyframe_required(KeyframeRequiredCause::NackExhausted);
     }

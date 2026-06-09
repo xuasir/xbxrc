@@ -11,6 +11,7 @@ import {
   businessInputArbiter,
   toBusinessInputTracePayload,
 } from './shared/gamepad/business-input-arbiter'
+import { installKeyboardFallbackBridge } from './shared/gamepad/keyboard-fallback-bridge'
 import './styles/base.css'
 import './styles/tokens.css'
 import './styles/theme.scss'
@@ -42,6 +43,7 @@ function installBusinessInputTraceBridge(): void {
 
 async function bootstrap(): Promise<void> {
   ensureShellGamepadListening()
+  installKeyboardFallbackBridge()
   businessInputArbiter.installGamepadGateBridge()
   installBusinessInputTraceBridge()
   syncBusinessInputScene(router.currentRoute.value.path)

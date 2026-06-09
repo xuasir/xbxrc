@@ -380,6 +380,49 @@ fn repeated_hardware_backend_no_output_falls_back_to_software_decoder() {
         .is_some_and(|summary| summary.contains("backend-no-output")));
 }
 
+#[test]
+fn nominal_continuation_no_output_exports_receive_keyframe_hint() {
+    let decoder = ScriptedHardwareDecoder {
+        backend_name: "ffmpeg-videotoolbox",
+        decode_calls: Arc::new(AtomicUsize::new(0)),
+        scripted_results: VecDeque::from([Ok(None), Ok(None)]),
+    };
+    let reset_calls = Arc::new(AtomicUsize::new(0));
+    let reset_calls_for_factory = reset_calls.clone();
+    let decoder_factory = Box::new(move || {
+        reset_calls_for_factory.fetch_add(1, Ordering::Relaxed);
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "ffmpeg-videotoolbox",
+                decode_calls: Arc::new(AtomicUsize::new(0)),
+                scripted_results: VecDeque::new(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "ffmpeg-videotoolbox".to_string(),
+                selected_backend_kind: "hardware".to_string(),
+                fallback_count: 0,
+                fallback_summary: None,
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    let _ = state.process_encoded_frame(make_encoded_frame(true), 984.0);
+    assert_eq!(state.decoder_reset_count(), 0);
+
+    assert!(state
+        .process_encoded_frame(make_non_idr_continuation_frame(10), 1_000.0)
+        .is_none());
+    assert!(state.take_pending_receive_keyframe_hint_at_ms().is_some());
+    assert!(state
+        .process_encoded_frame(make_non_idr_continuation_frame(11), 1_016.0)
+        .is_none());
+    assert!(state.take_pending_receive_keyframe_hint_at_ms().is_some());
+    assert_eq!(state.decoder_reset_count(), 0);
+    assert_eq!(reset_calls.load(Ordering::Relaxed), 0);
+}
+
 #[cfg(target_os = "windows")]
 #[test]
 fn d3d11va_backend_no_output_rebuilds_once_before_software_fallback() {
