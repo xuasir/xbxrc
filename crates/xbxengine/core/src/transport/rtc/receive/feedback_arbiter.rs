@@ -69,6 +69,7 @@ impl ReceiveFeedbackDecision {
         matches!(
             reason,
             "need-keyframe"
+                | "forced-keyframe"
                 | "sparse-idr"
                 | "gap-too-large"
                 | "feedback-target-unavailable"
@@ -202,10 +203,30 @@ pub(crate) fn decide(input: &ReceiveFeedbackArbiterInput) -> ReceiveFeedbackDeci
         );
     }
 
+    if input.force_keyframe {
+        return keyframe_decision(
+            input,
+            "forced-keyframe",
+            sparse_active,
+            feedback_target_state,
+            nack_packet_count,
+        );
+    }
+
     if sparse_active && input.sparse_idr.pli_due {
         return keyframe_decision(
             input,
             "sparse-idr",
+            sparse_active,
+            feedback_target_state,
+            nack_packet_count,
+        );
+    }
+
+    if input.soft_keyframe {
+        return keyframe_decision(
+            input,
+            "gap-repair",
             sparse_active,
             feedback_target_state,
             nack_packet_count,
@@ -380,6 +401,49 @@ mod tests {
         let d = decide(&input);
         assert_eq!(d.action, ReceiveFeedbackAction::None);
         assert_eq!(d.coalescing, ReceiveFeedbackCoalescing::SameInterval);
+        assert!(d.should_touch_keyframe_executor());
+    }
+
+    #[test]
+    fn forced_keyframe_request_sends_without_latching_keyframe_required() {
+        let mut input = base_input();
+        input.force_keyframe = true;
+        input.reference_state = ReferenceChainState::Unknown;
+
+        let d = decide(&input);
+
+        assert_eq!(d.action, ReceiveFeedbackAction::RequestPli);
+        assert_eq!(d.reason, "forced-keyframe");
+        assert_eq!(d.coalescing, ReceiveFeedbackCoalescing::FreshSent);
+        assert!(!d.keyframe_required);
+        assert_eq!(d.keyframe_required_cause, KeyframeRequiredCause::None);
+        assert!(d.should_touch_keyframe_executor());
+    }
+
+    #[test]
+    fn soft_keyframe_uses_executor_interval_state() {
+        let mut input = base_input();
+        input.soft_keyframe = true;
+
+        let d = decide(&input);
+
+        assert_eq!(d.action, ReceiveFeedbackAction::RequestPli);
+        assert_eq!(d.reason, "gap-repair");
+        assert_eq!(d.coalescing, ReceiveFeedbackCoalescing::FreshSent);
+        assert!(d.should_touch_keyframe_executor());
+    }
+
+    #[test]
+    fn soft_keyframe_rate_limited_still_records_executor_outcome() {
+        let mut input = base_input();
+        input.soft_keyframe = true;
+        input.pli_throttled = true;
+
+        let d = decide(&input);
+
+        assert_eq!(d.action, ReceiveFeedbackAction::None);
+        assert_eq!(d.reason, "gap-repair");
+        assert_eq!(d.coalescing, ReceiveFeedbackCoalescing::RateLimited);
         assert!(d.should_touch_keyframe_executor());
     }
 

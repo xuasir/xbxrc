@@ -1,0 +1,227 @@
+# WebRTC 式恢复边界设计级修正 Report
+
+## Summary
+
+- Related RFC: [`docs/rfcs/2026-06-02-webrtc-recovery-boundary-redesign.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-06-02-webrtc-recovery-boundary-redesign.md)
+- 完成 receive/decode 闭合 media recovery 的主线改造，host/display 改为 post-media projection，decoded usable IDR 可独立于 mailbox overwrite 与 host display lag 闭合 `no-idr` 恢复。
+- 第二遍收口已清掉 displayed-IDR 对 receive 状态/ledger/keyframe 节奏的控制影响，并把 supply-break 固定为 presentation diagnostic。
+- `runtime-trace-1780371569875-1.jsonl` 证明 media gate 已闭合，但 continuation 链仍被 receive H264 参数集提交滞后与 ledger 陈旧 decoder fact 覆盖卡住；本轮追加把 SPS/PPS commit 下沉到 receive AU 准入点，并让 decoder reference sync / clean anchor 在 ledger 中保持最高优先级。
+- `runtime-trace-1780376769157-1.jsonl` 证明上一条修正后仍存在恢复后 response-state 回退：clean anchor 已提交，后续 non-IDR continuation 被 `note_non_idr_continuation()` 重新累计为 `keyframe-sent-non-idr-only`，insert gate 再次进入 `must-idr`。本轮追加让 clean anchor / decoder sync 后的 continuation 保持 reference continuous。
+- 代码回归继续定位到 clean-anchor 消费链三处根因：epoch 0 clean-anchor ack 被数值哨兵跳过；clean anchor 后旧 decoder waiting/no-output 结果仍驱动 `RequestIdr`；旧 gap / anchor rejected projection 仍压过 clean anchor。已按 WebRTC `FrameDecoded()` 语义清理旧 packet/reference recovery debt。
+- 启动链路追加收口：first-frame acquisition 只保留为 receive-local feedback probe，不再写 `note_first_delta()`，避免“请求关键帧”本身变成 `keyframe_required/cause=first-delta` 并让 startup compatibility 自我失效；arbiter 增加 `forced-keyframe` 决策，确保 probe 仍真实发送 PLI/FIR。
+- sent 后状态发布追加收口：`keyframeRequestOutcome=sent` 后立即重投影 receiver/timeline，使 `latest_video_receiver_observation` 与 `latest_video_timeline_observation` 同步进入 `waiting-keyframe`，避免 session/facts 读取到请求前 timeline。
+- 最新 trace 复盘继续定位到 `seq=538 CleanAnchorCommitted` 后 receive 仍发布 `receiverWaitingKeyframe`，后续 continuation 被 `insert-gate-need-keyframe` hold；本轮补齐 clean-anchor ack 对 receive-local blocking wait 的清理，并立即发布 `clean-anchor-committed` receiver/timeline。
+- 进一步代码回归发现 `video_decoder_recovery_state=waiting-keyframe` 仍可绕过 receive ledger 进入 InsertGate timing、packet recovery action stage、reference chain、gap mode 与 supply phase；本轮把这些控制读取收敛到 `decoder_waiting_keyframe_control_active_from_stats()`，clean anchor / decoder reference sync 已成立时旧 waiting 只保留为诊断投影。
+- clean-anchor ack 现在同步把 runtime stats 的 decoder recovery projection 从 stale `waiting-keyframe` 推进到 `nominal`，避免下一拍 InsertGate 从 stats 重新读出 `RequestIdr/KeyframeOnly`。
+- 最新代码回归继续清掉三处 WebRTC 边界残留：current clean anchor 不再只认 `displayed-idr`，`decoded-usable-idr` / `clean-anchor-committed` 也能驱动 transport-await 与 idle guard 退出；host submit starvation 不再把 `ReferenceChainState` 推成 `NeedKeyframe`，decoder/reference 已同步时 continuation 继续 `Emit`；decode actor 与 session owner 从 runtime stats 重建上下文时会把 clean anchor / decoder sync 后的 stale receiver `waiting-keyframe` 归一为 `receiving/repairing`。
+- 最新收口继续拆掉 presentation pressure 到 picture recovery 的语义映射：纯 host submit starvation 现在投影为 `PresentationSupplyPhase::SupplyBreak`，不会进入 `MustIdr/AwaitIdr`；suspect-anchor 只把 displayed-IDR 当作诊断 display fact，session 不再引用 displayed-IDR relaxed-control helper。
+- startup/session phase 的 steady-hold 也完成边界修正：只用 receive hard bootstrap evidence 与 active decoder waiting 控制事实阻止 steady，displayed-IDR relaxed-control helper 退出 session/startup/policy 控制面。
+- 2026-06-03 代码回归继续完成 ledger-first 收口：`ReferenceChainState` 生产主路径由 receive ledger 投影，stats 只补诊断字段；InsertContext 生产路径退出 stats-derived fallback；sparse-IDR rhythm、NACK/keyframe requester action stage、session fresh-output bypass 与 recovery retry interval 统一读取 receive ledger 同步事实。
+- 2026-06-03 追加清理 current clean-anchor source 分裂：`has_current_clean_anchor_from_stats()` 现在与 `current_clean_anchor_observed_at_ms_from_stats()` 共用 media/display source，decoded clean anchor 可释放 soft transport-await、startup phase hold 与 decode continuation bypass；decode FSM 的 waiting-keyframe continuation bypass 也改为 current clean anchor 驱动。
+- `runtime-trace-1780456567200-1.jsonl` 显示代码侧改善明显但目标仍未达成：startup 后 decode/present 能接近 60fps，NACK effective rate 为 1.0，`sparseMustIdrMismatchTotal=0`，但 stale `nack-exhausted` 仍能让 `keyframeRequired=true` 与 continuous reference 共存，造成 `host-retained-old-frame` 长驻、`DisplayStable=0` 与 midsegment `GLOBAL_LATENCY_GATE=FAIL`。
+- 本轮追加设计级清债：decoder reference sync 按 WebRTC `FrameDecoded()` 语义清 keyframe debt 与 NACK exhausted；NACK recovered、hard gap resolved、complete candidate 在无 unresolved hard gap 时清 stale NACK debt；reference projection 只在 hard gap 仍存在时把 `nack_exhausted` 作为控制事实。
+- `runtime-trace-1780467603921-1.jsonl` 显示 stale NACK debt 清理生效：host mailbox 推进到 1058，`CleanAnchorCommitted=3`，retained old frame 风险显著下降；剩余根因收敛为 packet action/reference mismatch 与 disposable/unknown gap 误升 keyframe-only。最新实现把 NACK exhausted 绑定 hard/reference gap，continuous/repairing + decoder synced 下的 `RequestIdr/WaitKeyframe` 归一为 repair-first，runtime timeline diagnostic gap 退出生产 packet action stage。
+- `runtime-trace-1780483285846-1.jsonl` 完成 fresh 组合验收：`acceptanceGate=PASS`、`traceFreshness.freshnessGate=PASS`、`receiveFeedbackGate=PASS`、`receiveFeedbackGateFailures=[]`；keyframe chain 为 `sent=5 / responseObserved=2 / decoded=2 / cleanAnchorCommitted=2 / DisplayStable=1`；midsegment `globalLatencyGate=PASS / mediaSupplyGate=PASS / steadySupplyGate=SKIPPED`。应用运行约 420 秒未见 panic，进程由 timeout 结束。
+
+## Delivered
+
+- decoded usable IDR 直接提交当前 recovery epoch 的 clean anchor，并同步 `receive_keyframe_response_state=usable-idr`、`receive_keyframe_required=false`、decoder reference sync。
+- receive ledger ack 支持无 displayed IDR 的 decoded clean anchor，确保 recovery ledger 不再等待 host present 才清 keyframe required。
+- decode actor 拆分 media recovery 与 display pending：media recovery 由 decoded keyframe 闭合，pending displayed IDR 只在 pacer submit 成功后记录。
+- runtime port / host present 合同迁移为 post-media gate，host present 不再覆盖 `decoded-usable-idr` 的 clean-anchor 时间和来源。
+- trace receive-feedback report 将 `CleanAnchorCommitted` 纳入 decoded/anchor chain 兼容统计。
+- receive-local state 只读 waiting-keyframe、gap、assembled frame；displayed-IDR serving 退出 receiver 状态推导。
+- receive ledger 直接消费 decoder waiting-keyframe / no-output-streak fact，displayed-IDR serving 无法跳过 `keyframe_required`。
+- H264 PS/config strict 与 repairing missing-IDR 压力改为 packet/reference/decoder evidence 驱动，display projection 退出 IDR 请求判断。
+- `MediaSupplyPhase` 内部改名为 `PresentationSupplyPhase`；外部 `media_supply_phase` 字段保留兼容，`supply-break` 只服务 presentation/surface/health projection。
+- session policy 移除 supply-break recovery escalation bypass 与动作标签 dead branch，picture recovery owner signal 只由 receive-local IDR active/terminal 进入。
+- recovery coordinator 的 decoder reset 抑制只看 receive-local IDR active；supply-break 退出 `DelegatedToReceive` 触发条件。
+- expensive reconnect gate 与 startup compatibility 退出 supply-break surface 读取，reconnect/启动保护继续按 transport-await、连接态、receive IDR fact 工作。
+- host displayed fresh-anchor qualification 移除 supply-break veto，匹配的 H264/display fact 可继续形成 post-media projection。
+- receive gate 在 `InspectionAdmission::Accept` 后立即提交 H264 inspection，参数集缓存归属 receive packet/H264 主链，后续 non-IDR inspection 可以看到 committed SPS/PPS。
+- receive ledger 先消费 `decoder_reference_synced`，再处理 waiting-keyframe / no-output / invalid-data；clean anchor 或 decoder sync 已成立后，`first-delta` 无法重新打开 `keyframe_required`。
+- receive ledger 在 clean anchor 或 decoder sync 已成立后忽略 `non-idr-only` 失败累计，恢复后 continuation 不再触发 `keyframe-sent-non-idr-only`。
+- clean-anchor ack 的 consumed epoch 从 `u64` 数值哨兵改为 `Option<u64>`，首轮 `transport_recovery_epoch=0` 也能消费 decoded clean anchor。
+- clean anchor 提交时将 receive ledger 的 stale decoder result 归为 `Ok`，旧 waiting-keyframe / no-output / invalid-data 不再继续把 packet action stage 推到 `RequestIdr`。
+- clean anchor 提交时清理 receive trace ledger 中旧 hard gap、unrecoverable frame、anchor candidate reject 与 chain-break evidence，避免旧投影压过新的 continuous reference chain。
+- clean anchor 提交时同步清 receive packet buffer gaps 与 NACK pending/exhausted/keyframe escalation，后续 gap 由新 packet 重新建账。
+- first-frame acquisition request 与阻塞恢复事实解耦：probe 会请求 PLI/FIR，真实 `keyframe_required` 只能由 packet/H264 reject、NACK exhausted、decoder waiting/no-output/invalid-data 等事实产生。
+- startup compatibility 明确区分非阻塞 probe 与 blocking receive recovery：`receive_keyframe_required=false` 的 probe 不关闭启动保护窗口，真实 blocking recovery 继续关闭该窗口。
+- keyframe request sent 后重新发布 timeline projection，最终 `chain.state=waiting-keyframe` / `reason=receiverWaitingKeyframe` 与 receiver pending 状态一致。
+- decoded clean anchor ack 现在清理 `waiting_recovery_keyframe_since_ms`、retry timer 与 retry count，下一帧 continuation 不会继续被 receive-local waiting 状态挡住。
+- clean anchor ack 后发布 `clean-anchor-committed` timeline/receiver observation，owner facts 能看到 keyframe pending 已关闭。
+- clean anchor / decoder reference sync 后的 stale decoder waiting 被统一遮蔽：`derive_packet_recovery_action_stage_from_stats()` 保持 `Steady`，`derive_reference_chain_state_from_stats()` 保持 `Continuous`，InsertGate `gap_mode` 保持 `RepairFirst`，non-IDR continuation 可继续 `Emit`。
+- `recovery_exit_path_from_stats()` 优先识别 current clean anchor，再处理 waiting-keyframe timed fallback，避免 clean anchor 被 stale waiting + submit stalled 抢先解释成降级出口。
+- `current_clean_anchor_observed_at_ms()` 现在统一承认 `decoded-usable-idr`、`clean-anchor-committed`、`displayed-idr`，receive idle guard 与 recovery contract 共享同一 current anchor 语义。
+- `ReferenceChainState` 删除 host `submit_age_ms` / supply starvation 到 `NeedKeyframe` 的控制边，submit starvation 只保留为 presentation/owner 诊断，不能反向阻塞 decoder feed。
+- `receiver_decode_context_from_stats()` 与 `build_owner_input()` 会在 current clean anchor 或 fresh decoder reference sync 后遮蔽 stale receiver `waiting-keyframe`，避免 runtime stats 投影重新覆盖 receive ledger。
+- `has_current_transport_await_issue_from_stats()` 在 current clean anchor 后只接受 receive ledger `keyframe_required` 或 fresh hard invalid bootstrap 作为 unresolved 证据，旧 `insert-gate-need-keyframe` timeline 诊断不再阻止 soft SPS/PPS keyframe request 和 session release。
+- `media_supply_submit_starved_from_stats()` 只生成 `PresentationSupplyPhase::SupplyBreak`，`MustIdr` 保留给 receive-local waiting-keyframe、PS/config strict、gap keyframe-only 等媒体事实。
+- `session/suspect_anchor_gate.rs` 的 trace evidence 改读 `displayed_idr_serving_from_stats()`，去掉 displayed-IDR relaxed-control helper 的 session 入口。
+- `recovery/startup.rs` 的 `SessionPhase::Steady` hold gate 改为 receive hard facts，session/startup/policy 残留搜索已不再命中 displayed-IDR relaxed-control helper。
+- `ReceiverTraceLedger::reference_chain_observation()` 由 receive ledger 投影 reference state/cause，stats-derived reference chain 降为 contract/test/legacy projection。
+- `InsertContext::from_runtime()` / `from_runtime_with_reference()` 降为测试入口，生产 `build_insert_context()` 使用 ledger-projected reference、ledger-derived packet action stage 与 ledger `keyframe_required`。
+- `sparse_idr_rhythm_from_recovery_ledger()` 接收 caller 传入的 ledger-derived `PacketRecoveryActionStage`，feedback arbiter、NACK escalation 与 keyframe requester 使用同一份 receive-local action stage。
+- `receive_ledger_sparse_pressure_active_from_stats()` 成为 session fresh-output suppression 与 keyframe retry interval 的 active source，legacy sparse rhythm 继续保留为 projection/test helper。
+- sparse/MustIdr mismatch 改为 ledger reference state 对 presentation supply phase 的诊断比较，避免 mismatch 统计重新派生 reference control。
+- `has_current_clean_anchor_from_stats()` 统一承认 `decoded-usable-idr`、`clean-anchor-committed`、`displayed-idr`，与 `current_clean_anchor_observed_at_ms_from_stats()` 保持同一 source whitelist。
+- `media_anchor_output_pipeline_active()` 替代 runtime_state 里的 displayed-IDR pipeline 控制 helper，transport-await/startup stale evidence release 以 current media anchor + fresh decode/present 输出为准。
+- `XbxVideoDecodeState::sync_recovery_exit_policy_from_stats()` 的 continuation bypass 改读 current clean anchor，decoded clean anchor 后可在 waiting-keyframe recovery state 下继续喂 committed-SPS/PPS 的 non-IDR continuation。
+- `ReceiveRecoveryLedger::note_decoder_reference_synced()` 现在直接清 `keyframe_required`、unresolved request、non-IDR continuation 计数、terminal candidate 与 `nack_state=Exhausted`，以 decoder/reference progress 作为最高优先级媒体事实。
+- `ReceiveRecoveryLedger::note_packet_gap_repaired()` 新增 NACK debt 清理入口：仍有 unresolved hard gap 时保留 debt，无 hard gap 时清 stale `NackExhausted` keyframe requirement。
+- `ReceiverTraceLedger::mark_gap_resolved()`、`mark_frame_complete_candidate()`、`record_nack_recovered()` 接入 packet recovery progress 清债，并同步 recovery ledger 到 runtime stats。
+- `ReceiverTraceLedger::reference_chain_observation()` 将 `nack_exhausted` control 绑定到 unresolved hard gap，避免历史 NACK exhausted 继续把 continuous reference 推回 keyframe-only。
+- `NACK` maintenance 的 keyframe escalation 现在要求 unresolved hard/reference gap；soft/disposable transport gap 到期只清 packet debt 并继续 NACK/repair 诊断，不写 `keyframe_required`。
+- `ReceiverDecodeContext.nack_exhausted` 绑定 trace ledger hard gap，packet buffer 的 exhausted gaps 不再直接触发 pre-decode non-keyframe blocking。
+- `InsertControl::normalize_action_stage_for_reference()` 新增 reference-aware 归一化，decoder/reference 已同步时 `RequestIdr/WaitKeyframe` 降为 `NackMissed/NackPending/Steady`，`resolve_gap_mode_from_control()` 只在 unresolved reference gap 上进入 keyframe-only。
+
+## Changes
+
+- `runtime_stats_sink/picture_recovery.rs`：decoded keyframe 提交 media recovery，episode 进入 `succeeded/success`。
+- `transport/rtc/receive/ingress_state/decode.rs`：clean-anchor ack 从 display-gated 改为 media-gated，并回写 usable IDR、decoder sync、clean anchor 到 receive ledger。
+- `transport/rtc/receive/ingress_state/decode.rs`：完整 AU 被 InsertGate 接受后立即 `inspection.commit()`，H264 bootstrap tracker 与 downstream scheduler 解耦。
+- `media/video/decode/actor.rs`：增加 recovery epoch / owner guard，submit 成功后才写 pending displayed IDR。
+- `transport/rtc/stack/runtime_port.rs`：测试合同收敛为 host 不改写 decoded media anchor。
+- `runtime_stats_sink/support.rs`：保留 succeeded episode 的短期 transport family context，供后续 continuation 诊断归属。
+- `trace_receive_feedback_report.py`：兼容新的 clean-anchor projection 统计。
+- `transport/rtc/receive/core.rs`：删除 `displayed_idr_serving` 参数，waiting-keyframe 保持 receive-local waiting/repairing。
+- `transport/rtc/receive/recovery_ledger.rs`：删除 displayed-IDR relaxed 对 decoder facts 的抑制。
+- `transport/rtc/receive/recovery_ledger.rs`：decoder reference sync 优先清理陈旧 waiting-keyframe / no-output fact，clean anchor 后 first-delta 保持 continuous。
+- `transport/rtc/receive/recovery_ledger.rs`：clean anchor 后 non-IDR continuation 保持 continuous，停止把恢复后的 continuation 记为 keyframe 请求失败响应。
+- `transport/rtc/receive/recovery_ledger.rs`：clean anchor 将 decoder result 归为 Ok，并遮蔽旧 decoder failure 对 packet action stage 的影响。
+- `transport/rtc/receive/trace_ledger.rs`：新增 `note_clean_anchor_committed()`，统一清理旧 gap / anchor candidate / frame recovery debt。
+- `transport/rtc/receive/packet_buffer.rs` / `nack_requester.rs` / `engine.rs`：新增 decoded anchor 后清理 packet/NACK recovery state 的入口。
+- `transport/rtc/receive/ingress_state/*`：clean-anchor ack 消费改为 `Option<u64>`，支持 epoch 0，并在消费时调用 receive engine 清理。
+- `transport/rtc/receive/ingress_state/decode.rs`：clean-anchor ack 同步清 receive-local blocking wait，并发布 `clean-anchor-committed` projection。
+- `transport/rtc/receive/ingress_state/decode.rs`：clean-anchor ack 同步将 stale decoder recovery stats 推进到 `nominal / clean-anchor-committed`。
+- `transport/rtc/recovery/contract/decode_sync.rs`：新增 `decoder_waiting_keyframe_control_active_from_stats()`，把 clean anchor / decoder reference sync 后的 decoder waiting 降级为诊断投影。
+- `transport/rtc/receive/insert_gate.rs`、`transport/rtc/recovery/contract/{insert,reference_chain,gap,supply,exit}.rs`：统一通过新 helper 读取 decoder waiting 控制事实，防止 stale decoder FSM 重新驱动 `RequestIdr`、`KeyframeOnly`、`MustIdr`。
+- `transport/rtc/recovery/contract/transport_await.rs` / `transport/rtc/receive/ingress_loop.rs`：current clean anchor source 白名单扩展为 media/display 统一口径，decoded clean anchor 可吸收旧 transport-await / idle timeout 噪声。
+- `transport/rtc/recovery/contract/reference_chain.rs`：删除 supply starvation 到 reference `NeedKeyframe` 的边，reference chain 只读 decoder sync、H264 bootstrap、NACK/gap 与 packet action stage。
+- `transport/rtc/receive/decode_gate.rs`：runtime stats 重建 `ReceiverDecodeContext` 时，clean anchor / decoder sync 后 stale waiting 归一为 receiving/repairing。
+- `transport/rtc/session/facts/mod.rs` / `transport/rtc/session/policy.rs`：owner input 使用归一化 receiver state，recovery exit gate 不再读取原始 stale receiver observation。
+- `transport/rtc/receive/ingress_state/decode.rs`：first-frame acquisition 不再调用 `note_first_delta()`，只执行 receive-local keyframe request。
+- `transport/rtc/receive/ingress_state/feedback.rs`：keyframe sent 后追加 `keyframe-request-sent` timeline projection，消除 executor sent 与 owner facts timeline 的旧状态窗口。
+- `transport/rtc/receive/feedback_arbiter.rs`：新增 `forced-keyframe` 决策分支，显式 receive-local request 可触发 PLI/FIR，同时保持 `keyframe_required=false`。
+- `transport/rtc/recovery/contract/gap.rs`：删除 displayed-IDR relaxed 对 PS/config strict 和 missing-IDR pressure 的前置要求。
+- `transport/rtc/recovery/contract/supply.rs` / `snapshot.rs` / `sparse_idr.rs`：内部 projection 命名迁移到 `PresentationSupplyPhase`，外部 stats 字段继续写 `media_supply_phase`。
+- `transport/rtc/session/policy.rs`：删除 supply-break 对 fresh-output/ramp-up/action-label 的 recovery 旁路形状。
+- `transport/rtc/recovery/coordinator.rs`：decoder reset guard 只读 `idr_recovery_active_from_stats()`。
+- `transport/rtc/session/expensive_recovery_gate.rs` / `startup_compat.rs`：删除 session gate 对 `RecoverySurfacePhase::SupplyBreak` 的控制读取。
+- `transport/rtc/session/startup_compat.rs`：新增 probe / blocking recovery 双测试，保证非阻塞首帧采集不会关闭 startup priority。
+- `diagnostics/sink/runtime_stats_sink/support.rs`：host displayed fresh anchor qualification 删除 supply-break veto。
+- `transport/rtc/receive/trace_ledger.rs` / `receive/recovery_ledger.rs` / `recovery/contract/reference_chain.rs`：ReferenceChain 主路径改为 receive-ledger-first，stats 只补 diagnostic facts。
+- `transport/rtc/receive/insert_gate.rs`：stats-derived `from_runtime*` 入口收为测试编译，生产 fallback 改为 ledger/default projection。
+- `transport/rtc/receive/ingress_state/feedback.rs` / `recovery/contract/sparse_idr.rs`：sparse-IDR rhythm 接收 ledger-derived packet action stage，session/retry 读取 receive-ledger sparse pressure。
+- `transport/rtc/session/policy.rs`：fresh-output suppression bypass 改读 receive ledger sparse pressure helper。
+- `transport/rtc/recovery/contract/display.rs` / `transport/rtc/recovery/runtime_state.rs` / `transport/rtc/recovery/contract/transport_await.rs` / `transport/rtc/recovery/startup.rs`：current media anchor 成为 stale transport-await/startup release 的统一输入。
+- `media/video/decode/video_decode.rs`：decode continuation bypass 从 displayed-IDR serving 迁移到 current clean anchor。
+- `transport/rtc/receive/recovery_ledger.rs`：decoder reference sync、clean anchor、gap repaired 统一清 packet-repair debt，stale `NackExhausted` 无法在无 hard gap 时保持 `keyframe_required`。
+- `transport/rtc/receive/trace_ledger.rs`：gap resolved / complete candidate 推进 receive ledger 清债，`nack_exhausted` 只在 hard gap 仍存在时参与 reference projection。
+- `transport/rtc/receive/nack_maintenance.rs`：NACK recovered 后立即记录 packet recovery progress 并同步 ledger stats。
+- `transport/rtc/receive/ingress_state/decode.rs`：complete candidate 后同步 recovery ledger，确保清债结果进入下一拍 trace / InsertGate 输入。
+- `transport/rtc/receive/nack_maintenance.rs`：NACK escalation 只有 hard/reference gap 才触发 keyframe feedback，disposable/unknown gap 的 exhausted 状态不再升级 picture recovery。
+- `transport/rtc/receive/ingress_state/{decode,feedback}.rs`：decode context 与 packet action stage 只把 hard/reference gap 当作 keyframe 控制事实，runtime timeline gap 留作诊断。
+- `transport/rtc/recovery/contract/insert_control.rs` / `receive/insert_gate.rs`：action stage 按 reference chain 状态归一化，continuous/repairing reference 下的 stale request-idr 不再触发 must-IDR hold。
+- `transport/rtc/recovery/action_coordinator.rs` / `state_coordinator.rs` / `coordinator.rs`：session 状态型恢复退出 picture recovery 执行权，`DelegatedToReceive` 不再创建 `FrameRecovery` / `idr_requested` / session keyframe in-flight；偶发 `RequestPli/Fir` 进入 sync 时只记录 ownership violation 并委托 receive。
+- `transport/rtc/session/control_model.rs` / `session/policy.rs` / `policy/recovery.rs` / `diagnostics/stats.rs`：PLI/FIR 在 session RFC cost、active recovery narrative、ledger command pending 中降为 receive delegation/diagnostic，真实 pending command 仅保留 decoder reset 与 reconnect。
+- `transport/rtc/session/policy.rs`：first-frame acquisition 强制本地探测时直接返回 `DelegatedToReceive` 并记录 receive keyframe hint，去掉 `CoalescedKeyframeInFlight` 作为 session keyframe-in-flight 占位的路径。
+- `diagnostics/sink/runtime_stats_sink/picture_recovery.rs` / `transport/rtc/stack/transport_session.rs`：H264 continuation blocker 与 deferred command unlock reason 改读 current clean anchor，decoded/committed anchor 可在 host displayed-IDR 前吸收陈旧 continuation/bootstrap 诊断。
+
+## Validation
+
+- `cargo fmt`
+- `git diff --check`
+- `cargo test -p xbxengine media::video::decode::actor --lib`
+- `cargo test -p xbxengine diagnostics::sink::runtime_stats_sink --lib`
+- `cargo test -p xbxengine transport::rtc::stack::runtime_port --lib`
+- `cargo test -p xbxengine decoded_clean_anchor_ack_consumes_epoch_without_displayed_idr --lib`
+- `cargo test -p xbxengine clean_anchor_masks_stale_decoder_waiting_for_insert_control --lib`
+- `cargo test -p xbxengine clean_anchor_masks_stale_decoder_waiting_for_recovery_contract --lib`
+- `cargo test -p xbxengine clean_anchor_ack_consumes --lib`
+- `cargo test -p xbxengine recovery_ledger --lib`
+- `cargo test -p xbxengine stale_wait_after_clean_anchor_accepts_bootstrap_missing_idr_continuation --lib`
+- `cargo test -p xbxengine clean_anchor_then_consecutive_non_idr_continuation_does_not_fall_back_to_wait_keyframe --lib`
+- `cargo test -p xbxengine clean_anchor_clears_stale_decoder_result_for_packet_action_stage --lib`
+- `cargo test -p xbxengine clean_anchor_clears_prior_gap_and_anchor_candidate_projection --lib`
+- `cargo test -p xbxengine decoded_clean_anchor_ack_consumes_initial_epoch_zero --lib`
+- `cargo test -p xbxengine forced_keyframe_request_sends_without_latching_keyframe_required --lib`
+- `cargo test -p xbxengine first_frame_acquisition_probe_does_not_latch_keyframe_required --lib`：覆盖 first-frame acquisition sent、`keyframe_required=false`、receiver/timeline pending projection
+- `cargo test -p xbxengine first_frame_probe_keeps_startup_priority_window_active --lib`
+- `cargo test -p xbxengine blocking_receive_recovery_closes_startup_priority_window --lib`
+- `cargo test -p xbxengine transport::rtc::receive --lib`：186 passed, 16 ignored
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：46 passed
+- `cargo test -p xbxengine transport::rtc::session::policy --lib`：55 passed
+- `cargo test -p xbxengine transport::rtc::session --lib`：76 passed
+- `cargo test -p xbxengine clean_anchor_masks_stale_insert_gate_waiting_transport_await_issue --lib`
+- `cargo test -p xbxengine submit_starved_stats_context_emits_non_idr_when_decoder_synced --lib`
+- `cargo test -p xbxengine submit_starved_without_bootstrap_stays_out_of_reference_chain_control --lib`
+- `cargo test -p xbxengine stale_transport_issue_after_clean_anchor_allows_soft_recovery_keyframe_request --lib`
+- `cargo test -p xbxengine unresolved_transport_issue_without_clean_anchor_blocks_soft_recovery_keyframe_request --lib`
+- `cargo test -p xbxengine steady_idle_timeout_is_absorbed_when_render_output_is_still_fresh --lib`
+- `cargo test -p xbxengine transport::rtc::receive --lib`：187 passed, 16 ignored
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：47 passed
+- `cargo test -p xbxengine transport::rtc::session --lib`：77 passed
+- `cargo test -p xbxengine transport::rtc::policy --lib`：99 passed
+- `cargo test -p xbxengine transport::rtc::session --lib`：77 passed（submit-starvation/suspect-anchor 收口后复跑）
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：47 passed（submit-starvation/suspect-anchor 收口后复跑）
+- `cargo test -p xbxengine transport::rtc::recovery::startup --lib`：13 passed
+- `cargo test -p xbxengine recovery::coordinator --lib`：24 passed
+- `cargo test -p xbxengine diagnostics::sink::runtime_stats_sink --lib`：40 passed
+- `cargo test -p xbxengine --lib`：1051 passed, 24 ignored
+- `cargo test -p xbxengine --lib`：1054 passed, 24 ignored
+- `cargo test -p xbxengine transport::rtc::receive --lib`：188 passed, 16 ignored
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：47 passed
+- `cargo test -p xbxengine --lib`：1055 passed, 24 ignored
+- `cargo test -p xbxengine media::video::decode --lib`：65 passed
+- `cargo test -p xbxengine transport::rtc::receive --lib`：188 passed, 16 ignored
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：49 passed
+- `cargo test -p xbxengine transport::rtc::recovery::startup --lib`：14 passed
+- `cargo test -p xbxengine --lib`：1059 passed, 24 ignored
+- `cargo test -p xbxengine transport::rtc::recovery --lib`：161 passed, 2 ignored
+- `cargo test -p xbxengine transport::rtc::session --lib`：77 passed
+- `cargo test -p xbxengine transport::rtc::policy --lib`：99 passed
+- `cargo test -p xbxengine diagnostics --lib`：107 passed
+- `cargo test -p xbxengine diagnostics::sink::runtime_stats_sink --lib`：40 passed
+- `cargo test -p xbxengine transport::rtc::stack::transport_session --lib`：16 passed
+- `python3 .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py runtime-logs/runtime-trace-1780456567200-1.jsonl`：NACK effective rate 1.0，`CleanAnchorCommitted=2`，仍有 `outOfRecoveryContextContinuation=96`。
+- `python3 .agents/skills/analyze-runtime-logs/scripts/trace_receive_feedback_report.py runtime-logs/runtime-trace-1780456567200-1.jsonl`：`receiveFeedbackGate=FAIL`，`keyframeChain sent=23 / decoded=3 / cleanAnchorCommitted=2 / displayStable=0`，`displaySupplyStarvedBlockerCounts.host-retained-old-frame=346`。
+- `python3 .agents/skills/analyze-runtime-logs/scripts/trace_midsegment_report.py runtime-logs/runtime-trace-1780456567200-1.jsonl`：`GLOBAL_LATENCY_GATE=FAIL`，`submit_age_ms P95=4601ms`，recovering streak `55.1s`。
+- `cargo test -p xbxengine transport::rtc::receive --lib`：194 passed, 16 ignored
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：49 passed
+- `cargo test -p xbxengine --lib`：1065 passed, 24 ignored
+- `python3 .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py runtime-logs/runtime-trace-1780467603921-1.jsonl`：host mailbox 推进到 1058，CleanAnchorCommitted=3，仍有后段 `submitAgeMs` 秒级增长。
+- `python3 .agents/skills/analyze-runtime-logs/scripts/trace_receive_feedback_report.py runtime-logs/runtime-trace-1780467603921-1.jsonl`：`receiveFeedbackGate=FAIL`，`arbiterMismatchTotal=2733`，`sparseMustIdrMismatchTotal=602`。
+- `python3 .agents/skills/analyze-runtime-logs/scripts/trace_midsegment_report.py runtime-logs/runtime-trace-1780467603921-1.jsonl`：`GLOBAL_LATENCY_GATE=FAIL`，定位后段 `receiverWaitingKeyframe` / retained old frame。
+- `python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_webrtc_acceptance_gate.py --latest --max-age-seconds 3600`：当前最新旧 trace 返回 `gate_code=2`，`traceFreshness.freshnessGate=FAIL`，同时保留 receive / midsegment 失败摘要。
+- `python3 -B -m unittest discover .agents/skills/analyze-runtime-logs/tests`：9 tests OK，覆盖 strict receive gate、组合 gate、`--latest` 与 freshness gate。
+- `cargo test -p xbxengine transport::rtc::receive --lib`：197 passed, 16 ignored
+- `cargo test -p xbxengine transport::rtc::recovery::contract --lib`：49 passed
+- `cargo test -p xbxengine --lib`：1068 passed, 24 ignored
+- `cargo test -p xbxengine transport::rtc::receive::recovery_ledger --lib`：30 passed
+- `cargo test -p xbxrc trace_projection --lib`：75 passed
+- `cargo test -p xbxengine transport::rtc::receive --lib`：204 passed, 16 ignored
+- `python3 -B -m unittest discover .agents/skills/analyze-runtime-logs/tests`：12 OK
+- `python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_receive_feedback_report.py runtime-logs/runtime-trace-1780483285846-1.jsonl --fail-on-gate --require-media-recovered --require-display-stable`：PASS，`receiveFeedbackGate=PASS`，keyframe chain `sent=5 / responseObserved=2 / decoded=2 / cleanAnchorCommitted=2 / DisplayStable=1`。
+- `python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_webrtc_acceptance_gate.py --latest --runtime-log-dir runtime-logs --max-age-seconds 900`：PASS，`acceptanceGate=PASS`，`traceFreshness.freshnessGate=PASS`，midsegment `globalLatencyGate=PASS / mediaSupplyGate=PASS / steadySupplyGate=SKIPPED`。
+- `git diff --check`
+- `git diff --check`
+- `git diff --cached --check`
+- `trace_receive_feedback_report.py` 已跑最近三份旧 trace；`1780301689889` 和 `1780304000721` 仍显示旧二进制 `decoded=1 / cleanAnchorCommitted=0`，作为本次修正的前置失败证据。
+- `runtime-trace-1780371569875-1.jsonl` 新证据：`sent=4 / decoded=1 / cleanAnchorCommitted=1 / displayStable=0`，host mailbox 仅显示 `frameSeq=3`，后续 non-IDR inspection 全部缺 committed SPS/PPS。
+- `runtime-trace-1780376769157-1.jsonl` 新证据：`sent=5 / decoded=1 / cleanAnchorCommitted=1 / displayStable=0`，`receive_keyframe_required_cause=keyframe-sent-non-idr-only`，host mailbox 仅显示 `frameSeq=4`，midsegment `GLOBAL_LATENCY_GATE=FAIL`。
+- `trace_receive_feedback_report.py runtime-logs/runtime-trace-1780376769157-1.jsonl`：旧 trace 的 receive arbiter gate 为 PASS，`sent=5 / responseObserved=1 / decoded=1 / cleanAnchorCommitted=1 / DisplayStable=0`，说明新二进制验收要看 sent 后响应、continuation emit 与 host enqueue/display stable 的完整闭环。
+- `runtime-trace-1780376769157-1.jsonl` 定位的后续自锁点：`seq=538 CleanAnchorCommitted` 后 `seq=549/558/586/629` 继续 `receiverWaitingKeyframe`，已由 clean-anchor ack 清 blocking wait 回归覆盖。
+- 最新代码审计定位的控制残留：`video_decoder_recovery_state=waiting-keyframe` 仍会驱动 InsertGate / contract；已由 stale waiting helper 与 clean-anchor ack 推 nominal 回归覆盖。
+
+## Risks
+
+- 旧 trace 只能证明旧二进制的失败链；`1780371569875` 证明 mediaRecovered 已出现，下一份 trace 应重点验证 committed SPS/PPS、continuation emit、host enqueue 是否推进。
+- `displayed_idr` 仍保留在 TimedFallback / presentation projection 路径；receive/session picture recovery 控制路径的残留搜索已清理。
+- 2026-06-03 追加收口：`PresentationSupplyPhase` 已退出 `MustIdr`，`RecoverySurfacePhase::AwaitIdr` 由 receive-local keyframe / decoder waiting / packet action stage 直出，`displayed-idr` 只保留为 presentation diagnostic；本轮验证通过 `cargo test -p xbxengine transport::rtc::recovery::contract --lib`、`cargo test -p xbxengine --lib` 与 `git diff --check`。
+- 2026-06-03 fresh trace 已验证 `receiveFeedbackGate=PASS`、media recovery、`DisplayStable` 与 low-latency midsegment gate 同时闭合；当前剩余风险转为更长时间运行、弱网/丢包画像和不同游戏场景覆盖。
+- 2026-06-03 `runtime-trace-1780483285846-1.jsonl` 已证明 soft/disposable gap 与 stale request-idr action stage 不再阻断主线组合验收；`steadySupplyGate=SKIPPED` 表示该 trace 没有稳定供给专项窗口，低延迟主 gate 已通过。
+
+## Follow-up
+
+- 下一轮专项放到长跑与弱网画像：保持 `trace_webrtc_acceptance_gate.py --latest --runtime-log-dir runtime-logs --max-age-seconds 900` 作为每次实机 trace 的组合验收入口。

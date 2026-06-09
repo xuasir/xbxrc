@@ -202,7 +202,10 @@ pub(crate) fn current_clean_anchor_observed_at_ms(
     recovery_epoch: u64,
 ) -> Option<f64> {
     if clean_anchor_epoch == Some(recovery_epoch)
-        && clean_anchor_source_event == Some("displayed-idr")
+        && matches!(
+            clean_anchor_source_event,
+            Some("decoded-usable-idr" | "clean-anchor-committed" | "displayed-idr")
+        )
     {
         clean_anchor_observed_at_ms
     } else {
@@ -250,9 +253,8 @@ pub(crate) fn transport_await_has_hard_bootstrap_evidence_from_stats(
                 true
             }
             Some("bootstrapMissingIdr" | "NonIdrVcl") => {
-                !crate::transport::rtc::recovery::runtime_state::displayed_idr_output_pipeline_active(
-                    stats,
-                    now_ms,
+                !crate::transport::rtc::recovery::runtime_state::media_anchor_output_pipeline_active(
+                    stats, now_ms,
                 )
             }
             _ => false,
@@ -286,6 +288,22 @@ pub(crate) fn has_current_transport_await_issue_from_stats(
         timeline,
         current_clean_anchor_observed_at_ms,
     ) {
+        if current_clean_anchor_observed_at_ms.is_some()
+            && !stats.receive_keyframe_required.unwrap_or(false)
+            && !stats
+                .latest_h264_inspection_observation
+                .as_ref()
+                .is_some_and(|inspection| {
+                    current_clean_anchor_observed_at_ms.is_some_and(|clean_anchor_at_ms| {
+                        inspection.observed_at_ms >= clean_anchor_at_ms
+                            && (timeline.observed_at_ms - inspection.observed_at_ms).max(0.0)
+                                <= CURRENT_TRANSPORT_AWAIT_INVALID_BOOTSTRAP_FRESH_MS
+                            && inspection_has_invalid_recovery_bootstrap(inspection)
+                    })
+                })
+        {
+            return false;
+        }
         return true;
     }
     let receiver_receiving = stats

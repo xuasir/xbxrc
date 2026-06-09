@@ -2,15 +2,16 @@ use super::decode_sync::{
     decoder_reference_synced_from_stats, displayed_idr_decoder_synced_from_stats,
 };
 use super::display::{
-    displayed_idr_serving_allows_relaxed_controls_from_stats, displayed_idr_serving_from_stats,
+    displayed_idr_presentation_continuation_serviceable_from_stats,
+    displayed_idr_serving_from_stats,
 };
 use super::exit::{recovery_exit_path_from_stats, RecoveryExitPath, RecoveryExitThresholds};
 use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
 use super::supply::{
-    derive_decoder_health_from_stats, derive_media_supply_phase_from_stats,
-    idr_recovery_active_from_stats, recovery_effective_rtt_ms_from_stats,
-    recovery_supply_break_active_from_stats, recovery_surface_phase_from_media_supply_phase,
-    MediaSupplyPhase, RecoverySurfacePhase,
+    derive_decoder_health_from_stats, derive_presentation_supply_phase_from_stats,
+    derive_recovery_surface_phase_from_stats, idr_recovery_active_from_stats,
+    recovery_effective_rtt_ms_from_stats, recovery_supply_break_active_from_stats,
+    PresentationSupplyPhase, RecoverySurfacePhase,
 };
 use super::transport_await::is_transport_await_unresolved_reason;
 use crate::XbxEngineMediaRuntimeStats;
@@ -37,10 +38,10 @@ impl DerivedDecoderHealth {
 
 /// 单 tick 从 stats 派生的合同快照；**诊断/UI 用**。
 /// 控制面 picture recovery / insert / feedback 应读 receive ledger 与 stats 控制事实，
-/// 勿用本结构里的 `media_supply_phase` / `serving_*` 驱动决策。
+/// 勿用本结构里的 `presentation_supply_phase` / `serving_*` 驱动决策。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct RecoveryContractSnapshot {
-    pub(crate) media_supply_phase: MediaSupplyPhase,
+    pub(crate) presentation_supply_phase: PresentationSupplyPhase,
     pub(crate) surface_phase: RecoverySurfacePhase,
     pub(crate) derived_health: DerivedDecoderHealth,
     pub(crate) exit_path: RecoveryExitPath,
@@ -60,17 +61,17 @@ impl RecoveryContractSnapshot {
     ) -> Self {
         let serving_wide = displayed_idr_serving_from_stats(stats);
         let serving_relaxed =
-            displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms);
+            displayed_idr_presentation_continuation_serviceable_from_stats(stats, now_ms);
         let supply_break_active = recovery_supply_break_active_from_stats(stats, now_ms);
-        let media_supply_phase = derive_media_supply_phase_from_stats(stats, now_ms);
+        let presentation_supply_phase = derive_presentation_supply_phase_from_stats(stats, now_ms);
         let effective_rtt_ms = recovery_effective_rtt_ms_from_stats(stats);
         let decoder_reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
         let displayed_idr_decoder_synced = displayed_idr_decoder_synced_from_stats(stats, now_ms);
         let action_stage =
             derive_packet_recovery_action_stage_from_stats(stats, now_ms, effective_rtt_ms);
         Self {
-            media_supply_phase,
-            surface_phase: recovery_surface_phase_from_media_supply_phase(media_supply_phase),
+            presentation_supply_phase,
+            surface_phase: derive_recovery_surface_phase_from_stats(stats, now_ms),
             derived_health: derive_decoder_health_from_stats(stats, now_ms),
             exit_path: recovery_exit_path_from_stats(stats, now_ms, exit_thresholds),
             serving_wide,
@@ -83,14 +84,14 @@ impl RecoveryContractSnapshot {
     }
 }
 
-/// 仅写诊断投影字段（`media_supply_phase` / `surface_phase` / `derived_decoder_health`）。
+/// 仅写诊断投影字段（外部仍沿用 `media_supply_phase` 字段名）。
 /// 不写 receive ledger / clean anchor / decoder sync 等控制事实。
 pub(crate) fn sync_derived_recovery_contract_fields(
     stats: &mut XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) {
-    let media = derive_media_supply_phase_from_stats(stats, now_ms);
-    let surface = recovery_surface_phase_from_media_supply_phase(media);
+    let media = derive_presentation_supply_phase_from_stats(stats, now_ms);
+    let surface = derive_recovery_surface_phase_from_stats(stats, now_ms);
     let health = derive_decoder_health_from_stats(stats, now_ms);
     stats.media_supply_phase = Some(media.as_str().to_string());
     stats.recovery_surface_phase = Some(surface.as_str().to_string());

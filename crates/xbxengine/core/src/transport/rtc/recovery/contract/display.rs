@@ -36,7 +36,9 @@ pub(crate) fn current_clean_anchor_observed_at_ms_from_stats(
 
 pub(crate) fn has_current_clean_anchor_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
     let display = RecoveryDisplayFacts::from_stats(stats);
-    display.fresh_anchor_recovered_at_ms.is_some() || display.has_established_displayed_idr()
+    current_clean_anchor_observed_at_ms_from_stats(stats).is_some()
+        || display.fresh_anchor_recovered_at_ms.is_some()
+        || display.has_established_displayed_idr()
 }
 
 /// latest-only mailbox 上屏帧常已是 IDR 之后的 delta；pending IDR + host 已 present 即视为 serving。
@@ -73,8 +75,8 @@ pub(crate) fn recovery_timed_fallback_active_from_stats(
         == RecoveryExitPath::TimedFallback
 }
 
-/// decoder 要 IDR / bootstrap 硬拒 / submit 管线停滞时，禁用 P1 放松（collapse、强制 Submit、抑制 recovery-wait）。
-pub(crate) fn displayed_idr_serving_relaxation_blocked_from_stats(
+/// decoder 要 IDR / bootstrap 硬拒 / submit 管线停滞时，displayed-IDR 续播投影不可判为健康。
+pub(crate) fn displayed_idr_presentation_continuation_blocked_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
@@ -102,13 +104,13 @@ pub(crate) fn displayed_idr_serving_relaxation_blocked_from_stats(
     stale_submit_pipeline_breaks_displayed_idr_relaxation(stats, now_ms)
 }
 
-/// displayed IDR 已上屏且允许 P1 放松控制（短脉冲抑制，不含供给断裂长尾）。
-pub(crate) fn displayed_idr_serving_allows_relaxed_controls_from_stats(
+/// displayed IDR 已上屏且展示续播仍可服务。仅用于 presentation diagnostic / UI projection。
+pub(crate) fn displayed_idr_presentation_continuation_serviceable_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
     displayed_idr_serving_from_stats(stats)
-        && !displayed_idr_serving_relaxation_blocked_from_stats(stats, now_ms)
+        && !displayed_idr_presentation_continuation_blocked_from_stats(stats, now_ms)
 }
 
 fn decoder_bootstrap_blocks_displayed_idr_relaxation(
@@ -156,13 +158,14 @@ fn stale_submit_pipeline_breaks_displayed_idr_relaxation(
             || stats.video_decoder_stalled.unwrap_or(false))
 }
 
-/// displayed IDR 已上屏且仍在 gap repair：不把 receiver 投影成 waiting-keyframe，避免 supply 短脉冲。
-pub(crate) fn should_collapse_receiver_waiting_keyframe_to_repairing(
+/// displayed IDR 已上屏且仍在 gap repair：presentation projection 可显示为 repairing。
+#[cfg(test)]
+pub(crate) fn displayed_idr_projection_can_show_repairing(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
     _has_active_gap: bool,
     assembled_frame_count: u64,
 ) -> bool {
-    displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms)
+    displayed_idr_presentation_continuation_serviceable_from_stats(stats, now_ms)
         && assembled_frame_count > 0
 }

@@ -372,7 +372,7 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             fps,
         } => {
             stats.latest_video_packet_arrival_time_ms = Some(now_ms);
-            stats.inbound_video_packet_count_total = frame_count;
+            stats.inbound_video_frame_count_total = frame_count;
             stats.inbound_video_frame_rate_fps = fps;
         }
         ObservationEvent::StreamDimensions { width, height } => {

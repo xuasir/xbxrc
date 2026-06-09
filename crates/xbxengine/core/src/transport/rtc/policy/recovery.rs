@@ -76,7 +76,7 @@ impl RecoveryPolicyProposal {
 pub(crate) fn ledger_action_selected_expects_command_result(action_selected: &str) -> bool {
     matches!(
         action_selected,
-        "requestPli" | "requestFir" | "requestDecoderReset" | "requestReconnectCandidate"
+        "requestDecoderReset" | "requestReconnectCandidate"
     )
 }
 
@@ -158,10 +158,10 @@ mod tests {
 
     #[test]
     fn ledger_expects_command_result_only_for_transport_owner_actions() {
-        assert!(ledger_action_selected_expects_command_result(
+        assert!(!ledger_action_selected_expects_command_result(
             RecoveryAction::RequestPli.label()
         ));
-        assert!(ledger_action_selected_expects_command_result(
+        assert!(!ledger_action_selected_expects_command_result(
             RecoveryAction::RequestFir.label()
         ));
         assert!(ledger_action_selected_expects_command_result(
@@ -214,7 +214,7 @@ mod tests {
         );
 
         let mut issued = suppressed.clone();
-        issued.action_selected = RecoveryAction::RequestPli.label().to_string();
+        issued.action_selected = RecoveryAction::RequestDecoderReset.label().to_string();
         assert!(recovery_decision_ledger_has_pending_transport_command(
             &issued
         ));

@@ -489,9 +489,15 @@ impl RecoveryCoordinator {
         .unwrap_or(false);
         match decision.action {
             RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
-                let state_machine = self.state_machine_mut();
-                state_machine.transition_to_frame_recovery();
-                state_machine.mark_idr_requested();
+                RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                    stats.session_picture_recovery_ownership_violation_total = stats
+                        .session_picture_recovery_ownership_violation_total
+                        .saturating_add(1);
+                    record_picture_recovery_delegation(
+                        stats,
+                        "syncStateRefusedSessionPictureRecovery",
+                    );
+                });
             }
             RecoveryAction::DelegatedToReceive => {}
             RecoveryAction::RequestDecoderReset => {
@@ -504,11 +510,7 @@ impl RecoveryCoordinator {
                 state_machine.transition_to_transport_recovery();
             }
             RecoveryAction::CoalescedKeyframeInFlight => {
-                if receive_owns_keyframe {
-                    return;
-                }
-                let state_machine = self.state_machine_mut();
-                state_machine.transition_to_frame_recovery();
+                let _ = receive_owns_keyframe;
             }
             RecoveryAction::CoalescedDecoderResetInFlight => {
                 let state_machine = self.state_machine_mut();
@@ -598,20 +600,14 @@ impl RecoveryCoordinator {
         if decision.action != RecoveryAction::RequestDecoderReset {
             return decision;
         }
-        use crate::transport::rtc::recovery::contract::{
-            idr_recovery_active_from_stats, recovery_supply_break_active_from_stats,
-        };
-        let (idr_recovery_active, supply_break_active) =
-            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                (
-                    idr_recovery_active_from_stats(stats, signal.observed_at_ms),
-                    recovery_supply_break_active_from_stats(stats, signal.observed_at_ms),
-                )
-            })
-            .unwrap_or((false, false));
+        use crate::transport::rtc::recovery::contract::idr_recovery_active_from_stats;
+        let idr_recovery_active = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            idr_recovery_active_from_stats(stats, signal.observed_at_ms)
+        })
+        .unwrap_or(false);
         let backend_failure = signal.reason == VideoEscalationReason::DecoderBackendFailure;
         let reconfigure = signal.reason == VideoEscalationReason::Reconfigure;
-        if (idr_recovery_active || supply_break_active) && !backend_failure && !reconfigure {
+        if idr_recovery_active && !backend_failure && !reconfigure {
             RuntimeStatsSink::update_shared(runtime_stats, |stats| {
                 stats.decoder_reset_violation_total =
                     stats.decoder_reset_violation_total.saturating_add(1);
@@ -625,10 +621,7 @@ impl RecoveryCoordinator {
                 );
                 record_picture_recovery_delegation(
                     stats,
-                    &format!(
-                        "idrChain:noDecoderReset reason={} supplyBreak={supply_break_active}",
-                        signal.reason_label
-                    ),
+                    &format!("idrChain:noDecoderReset reason={}", signal.reason_label),
                 );
             });
             return decision;

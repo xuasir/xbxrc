@@ -142,6 +142,8 @@ fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
         | "run_on_main_thread_delay"
         | "tick_total"
         | "hostMailboxSubmitGap"
+        | "present_tick_dispatch_coalesced"
+        | "present_tick_rerun"
         | "hostMailboxUpdateFailed"
         | "present_tick_failed"
         | "present_tick_blocked" => HostTimingRecordPolicy::Sampled,
@@ -1592,6 +1594,18 @@ unsafe extern "C" fn macos_layer_display_link_callback(
         return 0;
     };
     if !request_host_present_tick_dispatch(&context.render_loop_pending, &context.rerun_requested) {
+        record_native_video_timing_event_lazy(
+            context.runtime_trace.as_ref(),
+            "layer",
+            "present_tick_dispatch_coalesced",
+            &context.viewport_id,
+            &context.window_label,
+            || {
+                serde_json::json!({
+                    "source": "displayLink",
+                })
+            },
+        );
         return 0;
     }
     run_layer_present_tick(
@@ -1602,6 +1616,7 @@ unsafe extern "C" fn macos_layer_display_link_callback(
         &context.telemetry,
         &context.render_loop_pending,
         &context.rerun_requested,
+        None,
         context.runtime_trace.clone(),
     );
     0
@@ -1653,11 +1668,29 @@ pub(super) fn run_layer_present_tick(
     telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<AtomicBool>,
     rerun_requested: &Arc<AtomicBool>,
+    dispatch_requested_at_ms: Option<f64>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
     let tick_started_at_ms = now_ms_f64();
     let mut tick_dispatch_guard =
         HostPresentTickGuard::new(render_loop_pending.clone(), rerun_requested.clone());
+    if let Some(dispatch_ms) = dispatch_requested_at_ms {
+        let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
+        if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
+            record_native_video_timing_event_lazy(
+                runtime_trace.as_ref(),
+                "layer",
+                "run_on_main_thread_delay",
+                viewport_id,
+                window_label,
+                || {
+                    serde_json::json!({
+                        "queueDelayMs": queue_delay_ms,
+                    })
+                },
+            );
+        }
+    }
     let prepare_outcome = prepare_layer_sample_for_present(
         layer_state,
         frame_slot,
@@ -1669,18 +1702,26 @@ pub(super) fn run_layer_present_tick(
     let (prepared_sample, is_refresh) = match prepare_outcome {
         LayerSamplePrepareOutcome::Prepared { sample, is_refresh } => (sample, is_refresh),
         LayerSamplePrepareOutcome::SkippedNoReadyFrame | LayerSamplePrepareOutcome::Failed => {
-            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
-                run_layer_present_tick(
-                    viewport_id,
-                    window_label,
-                    layer_state,
-                    frame_slot,
-                    telemetry,
-                    render_loop_pending,
-                    rerun_requested,
-                    runtime_trace.clone(),
-                );
-            });
+            finish_layer_present_tick_guard_and_maybe_rerun(
+                &mut tick_dispatch_guard,
+                runtime_trace.as_ref(),
+                viewport_id,
+                window_label,
+                "prepareSkipped",
+                || {
+                    run_layer_present_tick(
+                        viewport_id,
+                        window_label,
+                        layer_state,
+                        frame_slot,
+                        telemetry,
+                        render_loop_pending,
+                        rerun_requested,
+                        None,
+                        runtime_trace.clone(),
+                    );
+                },
+            );
             return;
         }
     };
@@ -1698,18 +1739,26 @@ pub(super) fn run_layer_present_tick(
                     })
                 },
             );
-            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
-                run_layer_present_tick(
-                    viewport_id,
-                    window_label,
-                    layer_state,
-                    frame_slot,
-                    telemetry,
-                    render_loop_pending,
-                    rerun_requested,
-                    runtime_trace.clone(),
-                );
-            });
+            finish_layer_present_tick_guard_and_maybe_rerun(
+                &mut tick_dispatch_guard,
+                runtime_trace.as_ref(),
+                viewport_id,
+                window_label,
+                "layerStateLockFailed",
+                || {
+                    run_layer_present_tick(
+                        viewport_id,
+                        window_label,
+                        layer_state,
+                        frame_slot,
+                        telemetry,
+                        render_loop_pending,
+                        rerun_requested,
+                        None,
+                        runtime_trace.clone(),
+                    );
+                },
+            );
             return;
         };
         let Some(layer_ptr) = layer_state_guard.display_layer_ptr else {
@@ -1725,18 +1774,26 @@ pub(super) fn run_layer_present_tick(
                     })
                 },
             );
-            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
-                run_layer_present_tick(
-                    viewport_id,
-                    window_label,
-                    layer_state,
-                    frame_slot,
-                    telemetry,
-                    render_loop_pending,
-                    rerun_requested,
-                    runtime_trace.clone(),
-                );
-            });
+            finish_layer_present_tick_guard_and_maybe_rerun(
+                &mut tick_dispatch_guard,
+                runtime_trace.as_ref(),
+                viewport_id,
+                window_label,
+                "displayLayerUnavailable",
+                || {
+                    run_layer_present_tick(
+                        viewport_id,
+                        window_label,
+                        layer_state,
+                        frame_slot,
+                        telemetry,
+                        render_loop_pending,
+                        rerun_requested,
+                        None,
+                        runtime_trace.clone(),
+                    );
+                },
+            );
             return;
         };
         let first_present = !layer_state_guard.first_present_logged;
@@ -1846,18 +1903,52 @@ pub(super) fn run_layer_present_tick(
             },
         );
     }
-    finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
-        run_layer_present_tick(
+    finish_layer_present_tick_guard_and_maybe_rerun(
+        &mut tick_dispatch_guard,
+        runtime_trace.as_ref(),
+        viewport_id,
+        window_label,
+        "tickFinished",
+        || {
+            run_layer_present_tick(
+                viewport_id,
+                window_label,
+                layer_state,
+                frame_slot,
+                telemetry,
+                render_loop_pending,
+                rerun_requested,
+                None,
+                runtime_trace.clone(),
+            );
+        },
+    );
+}
+
+#[cfg(target_os = "macos")]
+fn finish_layer_present_tick_guard_and_maybe_rerun(
+    guard: &mut HostPresentTickGuard,
+    runtime_trace: Option<&RuntimeTraceRecorderRef>,
+    viewport_id: &str,
+    window_label: &str,
+    source: &str,
+    rerun: impl FnOnce(),
+) {
+    if guard.finish_dispatch() {
+        record_native_video_timing_event_lazy(
+            runtime_trace,
+            "layer",
+            "present_tick_rerun",
             viewport_id,
             window_label,
-            layer_state,
-            frame_slot,
-            telemetry,
-            render_loop_pending,
-            rerun_requested,
-            runtime_trace,
+            || {
+                serde_json::json!({
+                    "source": source,
+                })
+            },
         );
-    });
+        rerun();
+    }
 }
 
 #[cfg(target_os = "macos")]

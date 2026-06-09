@@ -28,24 +28,6 @@ fn seed_ledger_display_recovery(input: &mut VideoSchedulingOwnerInput) {
     }
 }
 
-/// clean-anchor 单独不足以闭合 release；须 usable-idr + decoder sync（或 display-stable）。
-fn seed_ledger_clean_anchor_recovery(input: &mut VideoSchedulingOwnerInput) {
-    input.receive_keyframe_required = Some(false);
-    input.receive_keyframe_response_state = Some("usable-idr".to_string());
-
-    if input.clean_anchor_epoch.is_none() {
-        input.clean_anchor_epoch = Some(input.recovery_epoch);
-    }
-    if input.recovery_decoder_reference_synced_at_ms.is_none() {
-        input.recovery_decoder_reference_synced_at_ms =
-            Some((input.observed_at_ms - 50.0).max(0.0));
-    }
-    if input.transport_recovery_episode_opened_at_ms.is_none() {
-        input.transport_recovery_episode_opened_at_ms =
-            Some((input.observed_at_ms - 500.0).max(0.0));
-    }
-}
-
 #[test]
 fn clean_anchor_without_receive_ledger_projection_does_not_release() {
     let mut owner = VideoSchedulingOwner::new();
@@ -4246,6 +4228,45 @@ fn supply_starved_pipeline_stress_absorbs_to_degraded_serving() {
     let output = owner.evaluate(&stressed);
     assert_ne!(output.state, VideoSchedulingOwnerState::SupplyStarved);
     assert_ne!(output.health, VideoHealthContract::Starved);
+}
+
+#[test]
+fn supply_starved_repairing_chain_with_fresh_output_exits_to_degraded_serving() {
+    let mut owner = VideoSchedulingOwner::new();
+    owner.state = VideoSchedulingOwnerState::SupplyStarved;
+    let mut repairing = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(44.0),
+            decode_age_ms: Some(23.0),
+            submit_age_ms: Some(20.0),
+            smoothed_present_fps: Some(17.4),
+            smoothed_decode_fps: Some(22.5),
+            host_display_tick_epoch: Some(14_166),
+            host_frame_present_epoch: Some(1_541),
+            host_cadence_phase: Some("steady".to_string()),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("repairing"),
+        Some("insert-gate-supply-break"),
+        Some("remoteTrackAttached"),
+        Some(225_308_692),
+        1_785_100.0,
+        9,
+    );
+    repairing.receive_keyframe_required = Some(false);
+    repairing.receive_keyframe_response_state = Some("non-idr-only".to_string());
+    repairing.receive_display_state = Some("none".to_string());
+
+    let output = owner.evaluate(&repairing);
+
+    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+    assert!(output.recovery_intent.is_none());
 }
 
 #[test]

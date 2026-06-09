@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use super::{
     drive_ready_frames_with_submit, enqueue_render_frame, flush_pending_render_output_with_submit,
     format_render_backpressure_summary, next_wait_duration, render_frame_is_stale,
-    resolve_cadence_sleep_guard_override_ms, should_replace_render_queue_head,
-    HostCadencePhaseHint, HostPacingContext, PendingRenderSubmitResult,
-    PendingRenderSubmitResultWithFrame,
+    resolve_cadence_sleep_guard_override_ms, resolve_host_pacing_context,
+    should_replace_render_queue_head, HostCadencePhaseHint, HostPacingContext,
+    PendingRenderSubmitResult, PendingRenderSubmitResultWithFrame,
 };
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
@@ -407,6 +407,48 @@ fn cadence_sleep_guard_override_disables_sleep_when_host_is_starved() {
         resolve_cadence_sleep_guard_override_ms(&host_context),
         Some(0)
     );
+}
+
+#[test]
+fn host_pacing_context_uses_fast_release_when_submit_age_lags_steady_host() {
+    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new({
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.host_display_interval_ms = Some(16.0);
+        stats.video_decode_fps = 22.8;
+        stats.video_present_fps = 19.0;
+        stats.submit_age_ms = Some(357.0);
+        stats.display_age_ms = Some(181.0);
+        stats.host_frame_present_epoch = 609;
+        stats.host_mailbox_enqueue_count_total = 609;
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.host_no_pending_streak = 0;
+        stats
+    })));
+
+    let host_context = resolve_host_pacing_context(&runtime_stats, 16);
+
+    assert_eq!(host_context.release_interval_ms, 16);
+}
+
+#[test]
+fn host_pacing_context_uses_fast_release_for_high_fps_latency_spike() {
+    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new({
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.host_display_interval_ms = Some(8.0);
+        stats.video_decode_fps = 52.2;
+        stats.video_present_fps = 55.9;
+        stats.submit_age_ms = Some(294.0);
+        stats.display_age_ms = Some(82.0);
+        stats.host_frame_present_epoch = 4_173;
+        stats.host_mailbox_enqueue_count_total = 4_178;
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.host_no_pending_streak = 0;
+        stats
+    })));
+
+    let host_context = resolve_host_pacing_context(&runtime_stats, 16);
+
+    assert_eq!(host_context.release_interval_ms, 8);
 }
 
 #[test]

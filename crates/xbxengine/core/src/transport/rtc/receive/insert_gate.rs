@@ -2,14 +2,18 @@
 
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use crate::transport::rtc::receive::decode_gate::{
-    insert_decodable_to_feed, should_block_non_keyframe_admission, DecodeCorruptionPolicy,
-    InspectionAdmission, ReceiverDecodeContext,
+    insert_decodable_to_feed, inspection_bootstrap_blocks_delta_continuation,
+    should_block_non_keyframe_admission, DecodeCorruptionPolicy, InspectionAdmission,
+    ReceiverDecodeContext,
+};
+use crate::transport::rtc::recovery::contract::{
+    decoder_waiting_keyframe_control_active_from_stats, fresh_idr_admission_from_control,
+    normalize_action_stage_for_reference, parameter_sets_change_strict_from_control,
+    resolve_gap_mode_from_control, supply_break_continuation_from_control, GapVsKeyframeMode,
+    InsertControlTiming, PacketRecoveryActionStage, ReferenceChainObservation, ReferenceChainState,
 };
 use crate::transport::rtc::recovery::contract::{
     derive_packet_recovery_action_stage_from_stats, derive_reference_chain_state_from_stats,
-    fresh_idr_admission_from_control, parameter_sets_change_strict_from_control,
-    resolve_gap_mode_from_control, supply_break_continuation_from_control, GapVsKeyframeMode,
-    InsertControlTiming, PacketRecoveryActionStage, ReferenceChainObservation, ReferenceChainState,
 };
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -69,6 +73,7 @@ pub(crate) struct InsertContext {
 }
 
 impl InsertContext {
+    /// stats 投影路径：decode actor 等无 ledger 上下文时的 InsertContext 构造。
     pub(crate) fn from_runtime(
         decode: ReceiverDecodeContext,
         stats: &XbxEngineMediaRuntimeStats,
@@ -129,8 +134,9 @@ impl InsertContext {
             receive_display_stable: stats.receive_display_state.as_deref()
                 == Some("display-stable")
                 && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch),
-            decoder_waiting_keyframe: stats.video_decoder_recovery_state.as_deref()
-                == Some("waiting-keyframe"),
+            decoder_waiting_keyframe: decoder_waiting_keyframe_control_active_from_stats(
+                stats, now_ms,
+            ),
         };
         Self::from_ledger_control(
             decode,
@@ -153,6 +159,7 @@ impl InsertContext {
         now_ms: f64,
         effective_rtt_ms: f64,
     ) -> Self {
+        let action_stage = normalize_action_stage_for_reference(reference_chain, action_stage);
         let fresh_idr_admission = fresh_idr_admission_from_control(&timing, now_ms);
         let post_parameter_sets_change_strict = parameter_sets_change_strict_from_control(
             &timing,
@@ -231,9 +238,7 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
             InsertDecisionReason::PostPsStrict,
         );
     }
-    if matches!(ctx.reference_chain_state, ReferenceChainState::NeedKeyframe)
-        && ctx.decode.first_frame_acquired
-    {
+    if matches!(ctx.reference_chain_state, ReferenceChainState::NeedKeyframe) {
         if inspection.is_idr {
             if !(inspection.bootstrap_ready || ctx.fresh_idr_admission) {
                 return (
@@ -254,6 +259,9 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
         ctx.action_stage,
         ctx.reference_chain_state,
     ) {
+        return (InsertDecision::Emit, InsertDecisionReason::DecodableToFeed);
+    }
+    if insert_serviceable_continuation_to_feed(inspection, ctx) {
         return (InsertDecision::Emit, InsertDecisionReason::DecodableToFeed);
     }
     if inspection.is_idr && inspection.bootstrap_ready {
@@ -281,6 +289,28 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
         InsertDecision::HoldRepair,
         InsertDecisionReason::HoldDefault,
     )
+}
+
+fn insert_serviceable_continuation_to_feed(
+    inspection: &H264AccessUnitInspection,
+    ctx: &InsertContext,
+) -> bool {
+    if inspection.is_idr || inspection.bootstrap_ready {
+        return false;
+    }
+    if !inspection_bootstrap_blocks_delta_continuation(inspection) {
+        return false;
+    }
+    if !ctx.decode.first_frame_acquired || ctx.keyframe_required {
+        return false;
+    }
+    if ctx.post_parameter_sets_change_strict || ctx.decode.hard_gap_blocks_delta() {
+        return false;
+    }
+    if matches!(ctx.reference_chain_state, ReferenceChainState::NeedKeyframe) {
+        return false;
+    }
+    ctx.supply_break_continuation
 }
 
 pub(crate) fn insert_decision_label(decision: InsertDecision) -> &'static str {
@@ -326,7 +356,9 @@ pub(crate) fn insert_decision_to_inspection_admission(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::media::video::h264::inspection::H264AccessUnitInspector;
+    use crate::media::video::h264::inspection::{
+        H264AccessUnitInspector, H264BootstrapRejectReason,
+    };
     use crate::media::video::test_fixtures::{
         bootstrap_idr_nalu, bootstrap_pps_nalu, bootstrap_sps_nalu,
     };
@@ -369,6 +401,24 @@ mod tests {
             .expect("inspect non-idr")
     }
 
+    fn soft_missing_idr_continuation_inspection() -> H264AccessUnitInspection {
+        H264AccessUnitInspection {
+            nals: Vec::new(),
+            parameter_sets: None,
+            width: None,
+            height: None,
+            is_idr: false,
+            has_inband_sps: false,
+            has_inband_pps: false,
+            slice_headers_valid: false,
+            parameter_sets_changed: false,
+            config_changed: false,
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some(H264BootstrapRejectReason::BootstrapMissingIdr),
+            commit_state: H264AccessUnitInspector::test_commit_state(),
+        }
+    }
+
     #[test]
     fn decoder_synced_delta_emits_despite_bootstrap_missing_idr() {
         let ctx = ctx_decoder_synced();
@@ -378,6 +428,48 @@ mod tests {
             resolve_insert_decision(&inspection, &ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
             InsertDecision::Emit
         );
+    }
+
+    #[test]
+    fn continuous_reference_masks_request_idr_action_stage_for_insert_gate() {
+        let decode = ReceiverDecodeContext {
+            receiver_state: ReceiverState::Repairing,
+            has_active_gap: true,
+            nack_exhausted: false,
+            first_frame_acquired: true,
+            decoder_reference_synced: true,
+        };
+        let reference = ReferenceChainObservation {
+            state: ReferenceChainState::Continuous,
+            cause: "ledger-decoder-reference-synced",
+            decoder_reference_synced: true,
+            has_active_gap: true,
+            ..Default::default()
+        };
+        let ctx = InsertContext::from_ledger_control(
+            decode,
+            reference,
+            PacketRecoveryActionStage::RequestIdr,
+            false,
+            InsertControlTiming {
+                gap_age_ms: Some(6_000.0),
+                ..Default::default()
+            },
+            10_000.0,
+            50.0,
+        );
+
+        assert_eq!(ctx.action_stage, PacketRecoveryActionStage::NackMissed);
+        assert_eq!(ctx.gap_mode, GapVsKeyframeMode::RepairFirst);
+        let inspection = non_idr_inspection();
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+        assert_eq!(decision, InsertDecision::Emit);
+        assert_eq!(reason, "decodableToFeed");
     }
 
     fn ctx_first_frame_unsynced() -> InsertContext {
@@ -397,6 +489,23 @@ mod tests {
             reference_chain_state: ReferenceChainState::NeedKeyframe,
             keyframe_required: true,
         }
+    }
+
+    #[test]
+    fn need_keyframe_holds_decodable_non_idr_before_first_frame() {
+        let mut ctx = ctx_first_frame_unsynced();
+        ctx.action_stage = PacketRecoveryActionStage::NackPending;
+        let inspection = non_idr_inspection();
+
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "mustIdrHold");
     }
 
     #[test]
@@ -434,7 +543,7 @@ mod tests {
             0,
         );
         assert_eq!(hold, InsertDecision::HoldRepair);
-        assert_eq!(hold_reason, "firstFrameHold");
+        assert_eq!(hold_reason, "mustIdrHold");
 
         let mut fresh_ctx = ctx;
         fresh_ctx.fresh_idr_admission = true;
@@ -476,7 +585,47 @@ mod tests {
     }
 
     #[test]
-    fn displayed_idr_projection_does_not_collapse_waiting_keyframe_without_active_gap() {
+    fn serviceable_anchor_supply_break_emits_soft_missing_idr_continuation() {
+        let mut ctx = ctx_decoder_synced();
+        ctx.action_stage = PacketRecoveryActionStage::Steady;
+        ctx.supply_break_continuation = true;
+        ctx.reference_chain_state = ReferenceChainState::Continuous;
+        ctx.keyframe_required = false;
+        let inspection = soft_missing_idr_continuation_inspection();
+
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(decision, InsertDecision::Emit);
+        assert_eq!(reason, "decodableToFeed");
+    }
+
+    #[test]
+    fn need_keyframe_keeps_holding_soft_missing_idr_continuation() {
+        let mut ctx = ctx_decoder_synced();
+        ctx.action_stage = PacketRecoveryActionStage::Steady;
+        ctx.supply_break_continuation = true;
+        ctx.reference_chain_state = ReferenceChainState::NeedKeyframe;
+        ctx.keyframe_required = true;
+        let inspection = soft_missing_idr_continuation_inspection();
+
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "mustIdrHold");
+    }
+
+    #[test]
+    fn decoder_reference_sync_collapses_stale_waiting_keyframe_without_active_gap() {
         use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
         use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoReceiverObservation};
 
@@ -497,11 +646,69 @@ mod tests {
         });
 
         let decode = receiver_decode_context_from_stats(&stats, 10_000.0);
-        assert_eq!(decode.receiver_state, ReceiverState::WaitingKeyframe);
+        assert_eq!(decode.receiver_state, ReceiverState::Receiving);
         assert!(!should_block_non_keyframe_admission(&decode));
 
         let ctx = InsertContext::from_runtime(decode, &stats, 10_000.0, 50.0);
-        assert_eq!(ctx.decode.receiver_state, ReceiverState::WaitingKeyframe);
+        assert_eq!(ctx.decode.receiver_state, ReceiverState::Receiving);
+
+        let inspection = non_idr_inspection();
+        assert_eq!(
+            resolve_insert_decision(&inspection, &ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
+            InsertDecision::Emit
+        );
+    }
+
+    #[test]
+    fn clean_anchor_masks_stale_decoder_waiting_for_insert_control() {
+        use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
+        use crate::transport::rtc::recovery::contract::CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK;
+        use crate::{
+            XbxEngineDecodeOutputPathObservation, XbxEngineMediaRuntimeStats,
+            XbxEngineVideoReceiverObservation,
+        };
+
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 3;
+        stats.video_anchor_clean_epoch = Some(3);
+        stats.video_anchor_clean_observed_at_ms = Some(9_950.0);
+        stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
+        stats.recovery_fresh_anchor_recovered_at_ms = Some(9_950.0);
+        stats.recovery_decoder_reference_synced_at_ms = Some(9_950.0);
+        stats.latest_video_decode_ok_time_ms = Some(9_950.0);
+        stats.latest_video_decode_ok_rtp_timestamp = Some(77_001);
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        stats.latest_decode_output_path_observation = Some(XbxEngineDecodeOutputPathObservation {
+            observation_id: 1,
+            verdict: "backend-no-output".to_string(),
+            detail: "backendNoOutputAfterWaitingKeyframeContinuation".to_string(),
+            frame_rtp_timestamp: 77_001,
+            is_keyframe: false,
+            status: None,
+            send_packet_status: None,
+            receive_frame_status: None,
+            backend_no_output_streak: Some(CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK),
+            input_frames_since_last_decoded: Some(8),
+            bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+            observed_at_ms: 9_940.0,
+        });
+        stats.latest_video_receiver_observation = Some(XbxEngineVideoReceiverObservation {
+            observation_id: 1,
+            receiver_state: "waiting-keyframe".to_string(),
+            gap_sequence: None,
+            gap_span: None,
+            nack_in_flight: false,
+            keyframe_request_pending: true,
+            bootstrap_reject_reason: None,
+            observed_at_ms: 9_940.0,
+        });
+
+        let decode = receiver_decode_context_from_stats(&stats, 10_000.0);
+        assert_eq!(decode.receiver_state, ReceiverState::Receiving);
+        let ctx = InsertContext::from_runtime(decode, &stats, 10_000.0, 50.0);
+        assert_eq!(ctx.action_stage, PacketRecoveryActionStage::Steady);
+        assert_eq!(ctx.gap_mode, GapVsKeyframeMode::RepairFirst);
+        assert_eq!(ctx.reference_chain_state, ReferenceChainState::Continuous);
 
         let inspection = non_idr_inspection();
         assert_eq!(
@@ -559,7 +766,7 @@ mod tests {
     }
 
     #[test]
-    fn submit_starved_stats_context_holds_non_idr_even_when_decoder_synced() {
+    fn submit_starved_stats_context_emits_non_idr_when_decoder_synced() {
         use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
         use crate::XbxEngineMediaRuntimeStats;
         use crate::XbxEngineVideoReceiverObservation;
@@ -588,7 +795,7 @@ mod tests {
         let inspection = non_idr_inspection();
         assert_eq!(
             resolve_insert_decision(&inspection, &ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
-            InsertDecision::HoldRepair
+            InsertDecision::Emit
         );
     }
 

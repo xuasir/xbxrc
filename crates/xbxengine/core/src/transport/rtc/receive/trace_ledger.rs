@@ -4,7 +4,7 @@ use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameRecoveryDisposition;
 use crate::transport::rtc::receive::recovery_ledger::ReceiveRecoveryLedger;
 use crate::transport::rtc::recovery::contract::{
-    derive_reference_chain_state_from_stats, ReferenceChainObservation, ReferenceChainState,
+    reference_chain_diagnostic_facts_from_stats, ReferenceChainObservation, ReferenceChainState,
 };
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateLedger,
@@ -156,6 +156,14 @@ impl ReceiverTraceLedger {
         &mut self.recovery
     }
 
+    pub(crate) fn note_clean_anchor_committed(&mut self, rtp_timestamp: Option<u32>) {
+        self.recovery.note_clean_anchor_committed(rtp_timestamp);
+        self.gaps.clear();
+        self.frame_recovery_ledger.clear();
+        self.latest_anchor_candidate = None;
+        self.last_chain_break_evidence = None;
+    }
+
     #[cfg(test)]
     pub(crate) fn has_hard_recovery_gap_risk(&self) -> bool {
         if self.gaps.values().any(|entry| {
@@ -178,23 +186,27 @@ impl ReceiverTraceLedger {
         now_ms: f64,
         effective_rtt_ms: f64,
     ) -> ReferenceChainObservation {
-        let stats_observation =
-            derive_reference_chain_state_from_stats(stats, now_ms, effective_rtt_ms);
-        let nack_exhausted = stats_observation.nack_exhausted
-            || self.recovery.nack_state
-                == crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::Exhausted;
+        let _ = effective_rtt_ms;
+        let has_unresolved_hard_gap = self.has_unresolved_hard_gap();
+        let mut diagnostic_facts = reference_chain_diagnostic_facts_from_stats(stats, now_ms);
+        diagnostic_facts.has_active_gap =
+            diagnostic_facts.has_active_gap || has_unresolved_hard_gap;
+        diagnostic_facts.nack_exhausted = has_unresolved_hard_gap
+            && (diagnostic_facts.nack_exhausted
+                || self.recovery.nack_state
+                    == crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::Exhausted);
         if let Some(unrecoverable) =
-            self.reference_chain_observation_from_unrecoverable(&stats_observation)
+            self.reference_chain_observation_from_unrecoverable(&diagnostic_facts)
         {
             return unrecoverable;
         }
-        self.recovery
-            .project_reference_chain(
-                self.has_unresolved_hard_gap(),
-                nack_exhausted,
-                &stats_observation,
-            )
-            .unwrap_or(stats_observation)
+        let effective_hard_gap =
+            has_unresolved_hard_gap && !self.recovery.current_media_anchor_absorbs_repair_refresh();
+        self.recovery.project_reference_chain(
+            effective_hard_gap,
+            diagnostic_facts.nack_exhausted,
+            &diagnostic_facts,
+        )
     }
 
     fn reference_chain_observation_from_unrecoverable(
@@ -237,7 +249,9 @@ impl ReceiverTraceLedger {
                 "receive-ledger-anchor-rejected",
             ));
         }
-        if self.has_unresolved_hard_gap() {
+        if self.has_unresolved_hard_gap()
+            && !self.recovery.current_media_anchor_absorbs_repair_refresh()
+        {
             return Some(reference_observation_with_state(
                 stats_observation,
                 if stats_observation.nack_exhausted {
@@ -437,6 +451,7 @@ impl ReceiverTraceLedger {
                 None,
             );
         }
+        self.note_packet_recovery_progress();
     }
 
     pub(crate) fn observe_frame(
@@ -540,6 +555,13 @@ impl ReceiverTraceLedger {
             frame_importance,
             None,
         );
+        self.note_packet_recovery_progress();
+    }
+
+    pub(crate) fn note_packet_recovery_progress(&mut self) {
+        let has_unresolved_hard_gap = self.has_unresolved_hard_gap();
+        self.recovery
+            .note_packet_gap_repaired(has_unresolved_hard_gap);
     }
 
     pub(crate) fn record_frame_recovery(
@@ -617,18 +639,6 @@ impl ReceiverTraceLedger {
     }
 
     #[cfg(test)]
-    pub(crate) fn gap_state_of(&self, sequence: u16) -> Option<GapState> {
-        self.gaps.get(&sequence).map(|entry| entry.state)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn frame_state_of(&self, frame_rtp_timestamp: u32) -> Option<FrameReceiveState> {
-        self.frames
-            .get(&frame_rtp_timestamp)
-            .map(|entry| entry.state)
-    }
-
-    #[cfg(test)]
     pub(crate) fn has_hard_recovery_risk_for_test(&self) -> bool {
         self.has_hard_recovery_gap_risk()
     }
@@ -644,13 +654,19 @@ impl ReceiverTraceLedger {
         close_reason: Option<&'static str>,
     ) {
         if let Some(entry) = self.gaps.get_mut(&sequence) {
+            // RTP sequence 是 16-bit，同号缺洞不能跨不同 frame RTP 继承 anchor 证据。
+            let same_frame_or_unbound = frame_rtp_timestamp.is_none()
+                || entry.frame_rtp_timestamp.is_none()
+                || entry.frame_rtp_timestamp == frame_rtp_timestamp;
             entry.state = state;
             entry.last_updated_at_ms = now_ms;
-            entry.frame_rtp_timestamp = entry.frame_rtp_timestamp.or(frame_rtp_timestamp);
-            entry.budget_importance =
-                merge_importance_lane(entry.budget_importance, budget_importance);
-            entry.evidence_importance =
-                merge_importance_lane(entry.evidence_importance, evidence_importance);
+            if same_frame_or_unbound {
+                entry.frame_rtp_timestamp = entry.frame_rtp_timestamp.or(frame_rtp_timestamp);
+                entry.budget_importance =
+                    merge_importance_lane(entry.budget_importance, budget_importance);
+                entry.evidence_importance =
+                    merge_importance_lane(entry.evidence_importance, evidence_importance);
+            }
             let merged_ts = entry.frame_rtp_timestamp;
             let media = effective_media_importance_for_gap(
                 entry.budget_importance,
@@ -968,6 +984,75 @@ mod inline_recovery_tests {
     }
 
     #[test]
+    fn clean_anchor_clears_prior_gap_and_anchor_candidate_projection() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[701], 1.0, Some(90_000), "supply", "supply");
+        state.observe_anchor_candidate(
+            0,
+            Some(90_000),
+            "insert-gate-hold-repair",
+            crate::XbxEngineAnchorCandidateState::Rejected,
+            Some(crate::XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+            1.0,
+        );
+
+        state.note_clean_anchor_committed(Some(90_001));
+
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(2.0),
+            ..Default::default()
+        };
+        let observation = state.reference_chain_observation(&stats, 2.0, 80.0);
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::Continuous
+        );
+        assert_eq!(observation.cause, "ledger-clean-anchor-committed");
+    }
+
+    #[test]
+    fn active_hard_gap_after_clean_anchor_keeps_reference_chain_serviceable() {
+        let mut state = ReceiverTraceLedger::new();
+        state.note_clean_anchor_committed(Some(90_001));
+        state.recovery.note_decoder_reference_synced(2.0);
+        state.mark_gap_repair_in_flight(&[702], 3.0, Some(90_002), "supply", "supply");
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(2.0),
+            ..Default::default()
+        };
+
+        let observation = state.reference_chain_observation(&stats, 4.0, 80.0);
+
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::Continuous
+        );
+        assert_eq!(observation.cause, "ledger-clean-anchor-committed");
+        assert!(observation.has_active_gap);
+    }
+
+    #[test]
+    fn nack_exhausted_after_clean_anchor_still_requests_keyframe() {
+        let mut state = ReceiverTraceLedger::new();
+        state.note_clean_anchor_committed(Some(90_001));
+        state.recovery.note_decoder_reference_synced(2.0);
+        state.mark_gap_repair_in_flight(&[703], 3.0, Some(90_002), "supply", "supply");
+        state.recovery.note_nack_exhausted();
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(2.0),
+            ..Default::default()
+        };
+
+        let observation = state.reference_chain_observation(&stats, 4.0, 80.0);
+
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::NeedKeyframe
+        );
+        assert_eq!(observation.cause, "receive-ledger-hard-gap-nack-exhausted");
+    }
+
+    #[test]
     fn ledger_reference_observation_drives_insert_context_state() {
         use crate::transport::rtc::receive::insert_gate::InsertContext;
         use crate::transport::rtc::recovery::contract::ReferenceChainState;
@@ -1025,6 +1110,114 @@ mod inline_recovery_tests {
             crate::transport::rtc::recovery::contract::ReferenceChainState::Repairing
         );
         assert_eq!(merged.cause, "receive-ledger-hard-gap-repairing");
+    }
+
+    #[test]
+    fn ledger_nack_exhausted_wins_over_stats_repairing_projection() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[802], 1.0, Some(90_002), "supply", "supply");
+        state.recovery.nack_state =
+            crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::Exhausted;
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(1.0),
+            ..Default::default()
+        };
+
+        let observation = state.reference_chain_observation(&stats, 2.0, 80.0);
+
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::NeedKeyframe
+        );
+        assert_eq!(observation.cause, "receive-ledger-hard-gap-nack-exhausted");
+    }
+
+    #[test]
+    fn disposable_transport_gap_does_not_reopen_keyframe_required() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[804], 1.0, Some(90_004), "disposable", "unknown");
+        state.recovery.note_nack_exhausted();
+
+        state.note_packet_recovery_progress();
+        state.recovery.note_decoder_reference_synced(2.0);
+
+        assert!(!state.has_unresolved_hard_gap_for_test());
+        assert_eq!(
+            state.recovery.nack_state,
+            crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::None
+        );
+        assert!(!state.recovery.keyframe_required);
+
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(1.0),
+            ..Default::default()
+        };
+        let observation = state.reference_chain_observation(&stats, 2.0, 80.0);
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::Continuous
+        );
+    }
+
+    #[test]
+    fn same_sequence_on_different_frame_does_not_upgrade_disposable_gap_to_anchor() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[64271], 1.0, Some(2458554852), "disposable", "unknown");
+        state.mark_gap_repair_in_flight(&[64271], 2.0, Some(2459104302), "anchor", "anchor");
+
+        assert!(!state.has_unresolved_hard_gap_for_test());
+
+        state.recovery.note_nack_exhausted();
+        state.note_packet_recovery_progress();
+        state.recovery.note_decoder_reference_synced(3.0);
+        let stats = crate::XbxEngineMediaRuntimeStats {
+            recovery_decoder_reference_synced_at_ms: Some(3.0),
+            ..Default::default()
+        };
+        let observation = state.reference_chain_observation(&stats, 3.0, 80.0);
+        assert_eq!(
+            observation.state,
+            crate::transport::rtc::recovery::contract::ReferenceChainState::Continuous
+        );
+    }
+
+    #[test]
+    fn same_frame_anchor_gap_remains_hard_when_repair_starts() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[64271], 1.0, Some(2459104302), "anchor", "anchor");
+        state.mark_gap_repair_in_flight(&[64271], 2.0, Some(2459104302), "anchor", "anchor");
+
+        assert!(state.has_unresolved_hard_gap_for_test());
+    }
+
+    #[test]
+    fn gap_resolved_clears_stale_nack_exhausted_debt() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[803], 1.0, Some(90_003), "supply", "supply");
+        state.recovery.note_nack_exhausted();
+
+        state.mark_gap_resolved(803, 2.0, Some(90_003), "supply", "supply");
+
+        assert_eq!(
+            state.recovery.nack_state,
+            crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::None
+        );
+        assert!(!state.recovery.keyframe_required);
+        assert!(!state.has_unresolved_hard_gap_for_test());
+    }
+
+    #[test]
+    fn complete_candidate_without_hard_gap_clears_stale_nack_exhausted_debt() {
+        let mut state = ReceiverTraceLedger::new();
+        state.recovery.note_nack_exhausted();
+
+        state.mark_frame_complete_candidate(90_004, 2.0, Some(false), "supply");
+
+        assert_eq!(
+            state.recovery.nack_state,
+            crate::transport::rtc::receive::recovery_ledger::RecoveryNackState::None
+        );
+        assert!(!state.recovery.keyframe_required);
     }
 
     #[test]

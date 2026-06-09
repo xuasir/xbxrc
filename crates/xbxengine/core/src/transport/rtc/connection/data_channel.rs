@@ -149,6 +149,14 @@ pub(crate) fn build_control_decoder_reset_payload() -> String {
     .to_string()
 }
 
+pub(crate) fn build_control_video_keyframe_requested_payload() -> String {
+    serde_json::json!({
+        "message": "videoKeyframeRequested",
+        "ifrRequested": true,
+    })
+    .to_string()
+}
+
 pub(crate) fn build_control_authorization_payload() -> String {
     serde_json::json!({
         "message": "authorizationRequest",
@@ -185,6 +193,48 @@ fn build_message_payload(target: &str, content: serde_json::Value) -> String {
     .to_string()
 }
 
+fn build_local_text_catalog_observation(
+    observation_id: u64,
+    channel: String,
+    payload: &str,
+) -> XbxEngineDataChannelMessageCatalogObservation {
+    let parsed = serde_json::from_str::<serde_json::Value>(payload).ok();
+    let kind_type = parsed
+        .as_ref()
+        .and_then(|value| value.get("type"))
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    let kind_message = parsed
+        .as_ref()
+        .and_then(|value| value.get("message"))
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    let target = parsed
+        .as_ref()
+        .and_then(|value| value.get("target"))
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .or_else(|| Some(channel.clone()));
+    let mut keys = parsed
+        .as_ref()
+        .and_then(|value| value.as_object())
+        .map(|object| object.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_else(|| vec!["payload".to_string()]);
+    keys.sort();
+
+    XbxEngineDataChannelMessageCatalogObservation {
+        observation_id,
+        direction: "local".to_string(),
+        channel,
+        kind_type,
+        kind_message,
+        target,
+        keys,
+        payload_len: payload.len(),
+        observed_at_ms: now_ms_f64(),
+    }
+}
+
 pub(crate) fn build_input_metadata_packet(seq: u32, time: f64, max_touchpoints: u8) -> Vec<u8> {
     let mut packet = Vec::with_capacity(15);
     packet.extend_from_slice(&8u16.to_le_bytes());
@@ -195,6 +245,12 @@ pub(crate) fn build_input_metadata_packet(seq: u32, time: f64, max_touchpoints: 
 }
 
 impl RtcConnectionService {
+    fn next_data_channel_catalog_observation_id(&mut self) -> u64 {
+        self.data_channel_catalog_observation_id =
+            self.data_channel_catalog_observation_id.saturating_add(1);
+        self.data_channel_catalog_observation_id
+    }
+
     pub(super) fn observe_control_replay_if_ready(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
@@ -347,6 +403,27 @@ impl RtcConnectionService {
         )
     }
 
+    pub(crate) fn control_keyframe_request_ready(&self) -> bool {
+        self.control_service.is_control_ready()
+    }
+
+    pub(crate) fn request_video_keyframe_control_direct(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if !self.control_keyframe_request_ready() {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcControlChannelNotReadyForVideoKeyframe",
+            ));
+        }
+        self.send_control_payload(
+            build_control_video_keyframe_requested_payload(),
+            "rtcControlVideoKeyframeRequested",
+            "phase1 rtc control video keyframe requested",
+            runtime_stats,
+        )
+    }
+
     pub(super) fn send_text_on_channel_id(
         &mut self,
         channel_id: u16,
@@ -355,6 +432,17 @@ impl RtcConnectionService {
         observation_summary: &str,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        let channel_label = self
+            .state
+            .lock()
+            .ok()
+            .and_then(|state| state.data_channel_labels.get(&channel_id).cloned())
+            .unwrap_or_else(|| format!("id:{channel_id}"));
+        let catalog = build_local_text_catalog_observation(
+            self.next_data_channel_catalog_observation_id(),
+            channel_label,
+            &payload,
+        );
         let peer_connection = self
             .peer_connection
             .as_mut()
@@ -369,6 +457,7 @@ impl RtcConnectionService {
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.latest_observation_label = Some(observation_label.to_string());
             stats.latest_observation_summary = Some(observation_summary.to_string());
+            stats.latest_data_channel_message_catalog_observation = Some(catalog);
         });
         Ok(())
     }
@@ -524,7 +613,7 @@ impl RtcConnectionService {
     }
 
     pub(super) fn publish_channel_lifecycle(
-        &self,
+        &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         label: &str,
         summary: &str,
@@ -547,12 +636,13 @@ impl RtcConnectionService {
         } else {
             "lifecycle"
         };
+        let observation_id = self.next_data_channel_catalog_observation_id();
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.latest_observation_label = Some(label.to_string());
             stats.latest_observation_summary = Some(summary.to_string());
             stats.latest_data_channel_message_catalog_observation =
                 Some(XbxEngineDataChannelMessageCatalogObservation {
-                    observation_id: self.read_counters.data_channel_messages,
+                    observation_id,
                     direction: "local".to_string(),
                     channel: channel.to_string(),
                     kind_type: Some("lifecycle".to_string()),
@@ -1017,6 +1107,11 @@ impl RtcConnectionService {
                 .last_data_channel_label
                 .clone()
                 .unwrap_or_else(|| "none".to_string());
+            let ingress_catalog_observation_id = if self.read_counters.data_channel_messages > 0 {
+                Some(self.next_data_channel_catalog_observation_id())
+            } else {
+                None
+            };
             RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
                 stats.latest_observation_label = Some("rtcReadIngressObserved".to_string());
                 stats.latest_observation_summary = Some(format!(
@@ -1026,10 +1121,10 @@ impl RtcConnectionService {
                     self.read_counters.data_channel_messages,
                     last_label
                 ));
-                if self.read_counters.data_channel_messages > 0 {
+                if let Some(observation_id) = ingress_catalog_observation_id {
                     stats.latest_data_channel_message_catalog_observation =
                         Some(XbxEngineDataChannelMessageCatalogObservation {
-                            observation_id: self.read_counters.data_channel_messages,
+                            observation_id,
                             direction: "inbound".to_string(),
                             channel: last_label.clone(),
                             kind_type: Some("ingress".to_string()),

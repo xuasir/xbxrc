@@ -378,6 +378,58 @@ fn unchanged_snapshot_preserves_sample_seq_in_on_change_mode() {
 }
 
 #[test]
+fn all_zero_raw_sample_establishes_logical_progress() {
+    let backend = ScriptedBackend::new(vec![BackendPollResult {
+        device_events: vec![DeviceLifecycleEvent::Added(device("pad-zero"))],
+        samples: vec![sample("pad-zero", 10, vec![0.0; 17], vec![0.0; 6])],
+        ..Default::default()
+    }]);
+    let mut core = InputCore::new(
+        InputCoreConfig::default(),
+        backend,
+        SharedUiSink::default(),
+        SharedStreamSink::default(),
+    );
+
+    core.sync_clock_ms(10);
+    core.tick();
+
+    let snapshot = core.runtime_snapshot();
+    assert_eq!(snapshot.slots.len(), 1);
+    assert_eq!(snapshot.slots[0].device_ids, vec!["pad-zero".to_owned()]);
+    assert!(snapshot.slots[0].sample_seq > 0);
+    assert!(snapshot.slots[0].sampled_at_ms > 0);
+    assert!(snapshot.last_sample_progress_at_ms > 0);
+}
+
+#[test]
+fn backend_sample_timestamps_are_normalized_to_runtime_clock() {
+    let backend = ScriptedBackend::new(vec![BackendPollResult {
+        device_events: vec![DeviceLifecycleEvent::Added(device("pad-clock"))],
+        samples: vec![sample(
+            "pad-clock",
+            1_780_000_000_000_000_000,
+            vec![1.0],
+            vec![0.0; 6],
+        )],
+        activity_observed_at_ms: Some(1_780_000_000_000_000_000),
+    }]);
+    let mut core = InputCore::new(
+        InputCoreConfig::default(),
+        backend,
+        SharedUiSink::default(),
+        SharedStreamSink::default(),
+    );
+
+    core.sync_clock_ms(10);
+    core.tick();
+
+    let snapshot = core.runtime_snapshot();
+    assert_eq!(snapshot.slots[0].sampled_at_ms, 10);
+    assert_eq!(snapshot.last_backend_sample_activity_at_ms, 10);
+}
+
+#[test]
 fn fixed_rate_stream_mode_advances_sample_seq_without_payload_change() {
     let backend = ScriptedBackend::new(vec![
         BackendPollResult {

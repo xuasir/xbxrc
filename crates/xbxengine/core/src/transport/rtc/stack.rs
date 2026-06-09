@@ -45,7 +45,10 @@ fn map_video_recovery_request_result_to_command_status(
     result: &Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError>,
 ) -> CommandResultStatus {
     match result {
-        Ok(VideoRecoveryRequestOutcome::RequestedPli) => CommandResultStatus::Succeeded,
+        Ok(
+            VideoRecoveryRequestOutcome::RequestedPli
+            | VideoRecoveryRequestOutcome::RequestedControlKeyframe,
+        ) => CommandResultStatus::Succeeded,
         Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => {
             CommandResultStatus::Deferred {
                 reason: "familyDeferred:videoRtcpFeedbackTransportNotReady".to_string(),
@@ -402,7 +405,10 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             status,
         );
         match result {
-            Ok(VideoRecoveryRequestOutcome::RequestedPli) => Ok(()),
+            Ok(
+                VideoRecoveryRequestOutcome::RequestedPli
+                | VideoRecoveryRequestOutcome::RequestedControlKeyframe,
+            ) => Ok(()),
             Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => {
                 Err(XbxEngineRuntimeError::new(
                     "xbxEngineRtcVideoKeyframeDeferred:videoRtcpFeedbackTransportNotReady",
@@ -451,7 +457,6 @@ mod tests {
     use super::runtime_stats::merge_media_snapshot_into_runtime_stats;
     use crate::api::backend::XbxEngineMediaRuntimeStats;
     use crate::transport::rtc::connection::VideoRecoveryRequestOutcome;
-    use crate::transport::rtc::connection::VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON;
     use crate::transport::rtc::facts::CommandResultStatus;
     use crate::transport::rtc::stream::runtime_state::RtcMediaIngressSnapshot;
     use crate::XbxEngineRuntimeError;
@@ -606,6 +611,14 @@ mod tests {
     fn map_video_recovery_request_result_requested_pli_is_succeeded() {
         let status = map_video_recovery_request_result_to_command_status(&Ok(
             VideoRecoveryRequestOutcome::RequestedPli,
+        ));
+        assert_eq!(status, CommandResultStatus::Succeeded);
+    }
+
+    #[test]
+    fn map_video_recovery_request_result_requested_control_keyframe_is_succeeded() {
+        let status = map_video_recovery_request_result_to_command_status(&Ok(
+            VideoRecoveryRequestOutcome::RequestedControlKeyframe,
         ));
         assert_eq!(status, CommandResultStatus::Succeeded);
     }

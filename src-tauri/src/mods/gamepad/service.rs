@@ -467,9 +467,19 @@ impl GamepadService {
             if let Ok(mapping) =
                 serde_json::from_value::<OhMyGamepadKeyboardMappingDto>(value.clone())
             {
-                let _ = self.replace_keyboard_mapping(mapping);
+                let _ = self.replace_keyboard_mapping(normalize_keyboard_mapping(mapping));
             }
         }
+    }
+}
+
+fn normalize_keyboard_mapping(
+    mapping: OhMyGamepadKeyboardMappingDto,
+) -> OhMyGamepadKeyboardMappingDto {
+    if mapping.bindings.is_empty() {
+        OhMyGamepadKeyboardMappingDto::default()
+    } else {
+        mapping
     }
 }
 

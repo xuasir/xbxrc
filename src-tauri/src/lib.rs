@@ -22,38 +22,6 @@ fn install_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
-fn record_gamepad_shell_trace(window: &tauri::Window, event: &str, payload: serde_json::Value) {
-    let app_state = window.state::<shell::state::AppState>();
-    app_state
-        .runtime_trace
-        .record_event("gamepad-shell", event, None, payload);
-}
-
-fn hint_gamepad_shell_background(window: &tauri::Window, reason: &str) {
-    use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
-
-    let app_state = window.state::<shell::state::AppState>();
-    record_gamepad_shell_trace(
-        window,
-        "shellBackgroundHint",
-        serde_json::json!({
-            "reason": reason,
-            "windowLabel": window.label(),
-        }),
-    );
-    if let Err(error) = app_state
-        .gamepad
-        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
-    {
-        log::warn!(
-            "Failed to set gamepad sampling lifecycle BackgroundWarm reason={} error={}",
-            reason,
-            error
-        );
-    }
-    mods::gamepad::input_gate::sync_gamepad_input_gate(&window.app_handle());
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     install_rustls_crypto_provider();
@@ -75,126 +43,21 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .on_page_load(|webview, _payload| {
-            if let Some(app_state) = webview.window().try_state::<shell::state::AppState>() {
-                app_state.runtime_trace.record_event(
-                    "gamepad-shell",
-                    "pageLoad",
-                    None,
-                    serde_json::json!({
-                        "windowLabel": webview.window().label(),
-                        "url": webview.url().map(|value| value.to_string()).unwrap_or_default(),
-                    }),
-                );
-            }
-            let visible = webview.window().is_visible().unwrap_or(false);
-            let minimized = webview.window().is_minimized().unwrap_or(false);
-            shell::refresh_gamepad_on_window_foreground(
-                &webview.window().app_handle(),
-                "page-load",
+            shell::handle_gamepad_page_loaded(
+                &webview.window(),
+                webview
+                    .url()
+                    .map(|value| value.to_string())
+                    .unwrap_or_default(),
             );
-            if visible && !minimized {
-                #[cfg(target_os = "windows")]
-                shell::schedule_gamepad_cold_start_sdl_binding_nudge(
-                    &webview.window().app_handle(),
-                );
-                #[cfg(target_os = "windows")]
-                shell::schedule_gamepad_fse_gate_fallback_nudge(&webview.window().app_handle());
-            }
             let _ = webview.eval(shell::build_external_link_patch_script());
         })
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::Focused(focused) => {
-                    mods::gamepad::input_gate::record_shell_main_window_focused_from_os_event(
-                        *focused,
-                    );
-                    record_gamepad_shell_trace(
-                        window,
-                        "windowFocused",
-                        serde_json::json!({
-                            "focused": focused,
-                            "windowLabel": window.label(),
-                        }),
-                    );
-                    mods::gamepad::input_gate::sync_gamepad_input_gate(&window.app_handle());
-                    if *focused {
-                        shell::refresh_gamepad_on_window_foreground(
-                            &window.app_handle(),
-                            "window-focused",
-                        );
-                    } else {
-                        let shell_still_active = window
-                            .app_handle()
-                            .get_webview_window("main")
-                            .map(|main_window| {
-                                let hints =
-                                    mods::gamepad::input_gate::current_shell_window_gate_hints(
-                                        &main_window,
-                                    );
-                                #[cfg(target_os = "windows")]
-                                record_gamepad_shell_trace(
-                                    window,
-                                    "windowUnfocusedGateEvaluated",
-                                    serde_json::json!({
-                                        "windowLabel": window.label(),
-                                        "shellAppActive": hints.shell_app_active,
-                                        "usesWin32ForegroundGate":
-                                            mods::gamepad::fse_windows::uses_win32_foreground_gate(
-                                                &main_window,
-                                            ),
-                                        "isFseActive":
-                                            mods::gamepad::fse_windows::is_fse_active(),
-                                        "isFullscreen": main_window
-                                            .is_fullscreen()
-                                            .unwrap_or(false),
-                                    }),
-                                );
-                                hints.shell_app_active
-                            })
-                            .unwrap_or(false);
-                        if shell_still_active {
-                            record_gamepad_shell_trace(
-                                window,
-                                "windowUnfocusedShellGateStillActive",
-                                serde_json::json!({
-                                    "windowLabel": window.label(),
-                                }),
-                            );
-                        } else {
-                            hint_gamepad_shell_background(window, "window-unfocused");
-                        }
-                    }
+                    shell::handle_gamepad_window_focus_changed(window, *focused);
                 }
-                tauri::WindowEvent::Resized(_) => match window.is_minimized() {
-                    Ok(false) => {
-                        record_gamepad_shell_trace(
-                            window,
-                            "windowResizedRestored",
-                            serde_json::json!({
-                                "windowLabel": window.label(),
-                                "minimized": false,
-                            }),
-                        );
-                        shell::refresh_gamepad_on_window_foreground(
-                            &window.app_handle(),
-                            "window-restored-from-minimized",
-                        );
-                    }
-                    Ok(true) => {
-                        record_gamepad_shell_trace(
-                            window,
-                            "windowResizedMinimized",
-                            serde_json::json!({
-                                "windowLabel": window.label(),
-                                "minimized": true,
-                            }),
-                        );
-                        mods::gamepad::input_gate::sync_gamepad_input_gate(&window.app_handle());
-                    }
-                    Err(e) => {
-                        log::warn!("Failed to inspect window minimized state: {}", e);
-                    }
-                },
+                tauri::WindowEvent::Resized(_) => shell::handle_gamepad_window_resized(window),
                 _ => {}
             }
 
@@ -233,32 +96,7 @@ pub fn run() {
 
         match event {
             tauri::RunEvent::Resumed => {
-                let app_state = app_handle.state::<shell::state::AppState>();
-                app_state.runtime_trace.record_event(
-                    "gamepad-shell",
-                    "appResumed",
-                    None,
-                    serde_json::json!({
-                        "source": "runEvent",
-                    }),
-                );
-                use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
-                if let Err(error) = app_state
-                    .gamepad
-                    .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)
-                {
-                    log::warn!(
-                        "Failed to set gamepad lifecycle on app resume error={}",
-                        error
-                    );
-                }
-                if let Err(error) = app_state.gamepad.try_stalled_sampling_self_heal() {
-                    log::warn!(
-                        "Failed to try stalled gamepad self-heal on app resume error={}",
-                        error
-                    );
-                }
-                mods::gamepad::input_gate::sync_gamepad_input_gate(app_handle);
+                shell::handle_gamepad_app_resumed(app_handle);
             }
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                 tauri::async_runtime::block_on(shell::terminate(app_handle));

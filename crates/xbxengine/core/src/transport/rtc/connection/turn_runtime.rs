@@ -15,7 +15,7 @@ use url::Url;
 use crate::XbxEngineRuntimeError;
 use xbxengine_protocol::XbxEngineTurnServerDto;
 
-const TURN_ALLOCATE_TIMEOUT: Duration = Duration::from_secs(3);
+const TURN_ALLOCATE_TIMEOUT: Duration = Duration::from_secs(10);
 const TURN_PUMP_MAX_PASSES: usize = 8;
 
 pub(crate) struct RelayPacket {
@@ -28,8 +28,20 @@ struct OutboundPacket {
     target: SocketAddr,
 }
 
+#[derive(Default)]
+struct TurnRuntimeIoStats {
+    sent_packet_count: u64,
+    sent_byte_count: u64,
+    read_packet_count: u64,
+    read_byte_count: u64,
+    timeout_event_count: u64,
+    last_send_target: Option<SocketAddr>,
+    last_read_peer: Option<SocketAddr>,
+}
+
 pub(crate) struct TurnRuntime {
     base_addr: SocketAddr,
+    server_addr: SocketAddr,
     relay_addr: SocketAddr,
     turn_url: String,
     socket: UdpSocket,
@@ -37,6 +49,7 @@ pub(crate) struct TurnRuntime {
     outbound: VecDeque<OutboundPacket>,
     permitted_peers: HashSet<SocketAddr>,
     pending_permission_peers: HashSet<SocketAddr>,
+    io_stats: TurnRuntimeIoStats,
     client: Client,
 }
 
@@ -76,6 +89,7 @@ impl TurnRuntime {
 
         let mut runtime = Self {
             base_addr,
+            server_addr,
             relay_addr: base_addr,
             turn_url: turn_server.url.clone(),
             socket,
@@ -83,6 +97,7 @@ impl TurnRuntime {
             outbound: VecDeque::new(),
             permitted_peers: HashSet::new(),
             pending_permission_peers: HashSet::new(),
+            io_stats: TurnRuntimeIoStats::default(),
             client,
         };
 
@@ -96,6 +111,10 @@ impl TurnRuntime {
 
     pub(crate) fn base_addr(&self) -> SocketAddr {
         self.base_addr
+    }
+
+    pub(crate) fn server_addr(&self) -> SocketAddr {
+        self.server_addr
     }
 
     pub(crate) fn url(&self) -> &str {
@@ -153,6 +172,7 @@ impl TurnRuntime {
         &mut self,
         allocate_tid: rtc_stun::message::TransactionId,
     ) -> Result<(), XbxEngineRuntimeError> {
+        let started_at = Instant::now();
         let deadline = Instant::now() + TURN_ALLOCATE_TIMEOUT;
         while Instant::now() < deadline {
             self.flush_client_writes()?;
@@ -166,11 +186,17 @@ impl TurnRuntime {
                     }
                     TurnEvent::AllocateError(tid, err) if tid == allocate_tid => {
                         return Err(XbxEngineRuntimeError::new(format!(
-                            "xbxEngineTurnAllocateFailed: {err}"
+                            "xbxEngineTurnAllocateFailed: {err} {}",
+                            self.allocate_diagnostics(started_at)
                         )));
                     }
                     TurnEvent::TransactionTimeout(tid) if tid == allocate_tid => {
-                        return Err(XbxEngineRuntimeError::new("xbxEngineTurnAllocateTimeout"));
+                        self.io_stats.timeout_event_count =
+                            self.io_stats.timeout_event_count.saturating_add(1);
+                        return Err(XbxEngineRuntimeError::new(format!(
+                            "xbxEngineTurnAllocateTimeout {}",
+                            self.allocate_diagnostics(started_at)
+                        )));
                     }
                     other => {
                         self.handle_event(other)?;
@@ -189,7 +215,10 @@ impl TurnRuntime {
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        Err(XbxEngineRuntimeError::new("xbxEngineTurnAllocateTimeout"))
+        Err(XbxEngineRuntimeError::new(format!(
+            "xbxEngineTurnAllocateTimeout {}",
+            self.allocate_diagnostics(started_at)
+        )))
     }
 
     fn flush_client_writes(&mut self) -> Result<bool, XbxEngineRuntimeError> {
@@ -200,6 +229,12 @@ impl TurnRuntime {
                 .map_err(|err| {
                     XbxEngineRuntimeError::new(format!("xbxEngineTurnSocketSendFailed: {err}"))
                 })?;
+            self.io_stats.sent_packet_count = self.io_stats.sent_packet_count.saturating_add(1);
+            self.io_stats.sent_byte_count = self
+                .io_stats
+                .sent_byte_count
+                .saturating_add(transmit.message.len() as u64);
+            self.io_stats.last_send_target = Some(transmit.transport.peer_addr);
             progressed = true;
         }
         Ok(progressed)
@@ -211,6 +246,11 @@ impl TurnRuntime {
         loop {
             match self.socket.recv_from(&mut buffer) {
                 Ok((size, peer_addr)) => {
+                    self.io_stats.read_packet_count =
+                        self.io_stats.read_packet_count.saturating_add(1);
+                    self.io_stats.read_byte_count =
+                        self.io_stats.read_byte_count.saturating_add(size as u64);
+                    self.io_stats.last_read_peer = Some(peer_addr);
                     self.client
                         .handle_read(TransportMessage {
                             now: Instant::now(),
@@ -252,6 +292,8 @@ impl TurnRuntime {
     fn handle_event(&mut self, event: TurnEvent) -> Result<(), XbxEngineRuntimeError> {
         match event {
             TurnEvent::TransactionTimeout(tid) => {
+                self.io_stats.timeout_event_count =
+                    self.io_stats.timeout_event_count.saturating_add(1);
                 log::warn!("[xbxengine][rtc-connection] turn transaction timeout tid={tid:?}");
             }
             TurnEvent::BindingResponse(_, _) | TurnEvent::BindingError(_, _) => {}
@@ -274,6 +316,24 @@ impl TurnRuntime {
             }
         }
         Ok(())
+    }
+
+    fn allocate_diagnostics(&self, started_at: Instant) -> String {
+        let elapsed_ms = started_at.elapsed().as_millis();
+        format!(
+            "diagnostics=serverAddr={} baseAddr={} timeoutMs={} elapsedMs={} sentPackets={} sentBytes={} readPackets={} readBytes={} timeoutEvents={} lastSendTarget={} lastReadPeer={}",
+            self.server_addr,
+            self.base_addr,
+            TURN_ALLOCATE_TIMEOUT.as_millis(),
+            elapsed_ms,
+            self.io_stats.sent_packet_count,
+            self.io_stats.sent_byte_count,
+            self.io_stats.read_packet_count,
+            self.io_stats.read_byte_count,
+            self.io_stats.timeout_event_count,
+            format_optional_addr(self.io_stats.last_send_target),
+            format_optional_addr(self.io_stats.last_read_peer),
+        )
     }
 
     fn flush_outbound(&mut self) -> Result<bool, XbxEngineRuntimeError> {
@@ -338,6 +398,11 @@ impl Drop for TurnRuntime {
 
 fn to_io_error(err: XbxEngineRuntimeError) -> std::io::Error {
     std::io::Error::other(err.to_string())
+}
+
+fn format_optional_addr(addr: Option<SocketAddr>) -> String {
+    addr.map(|addr| addr.to_string())
+        .unwrap_or_else(|| "none".to_string())
 }
 
 fn parse_turn_server_addr(url: &str) -> Result<SocketAddr, XbxEngineRuntimeError> {

@@ -125,6 +125,7 @@ export interface XBoxRpcSchema {
     setStreamPadForwarding: RpcMethod<{ enabled: boolean }, GamepadRuntimeSnapshotDto>
     activateSampling: RpcMethod<void, GamepadRuntimeSnapshotDto>
     resumeShellSampling: RpcMethod<void, GamepadRuntimeSnapshotDto>
+    hintShellInteractive: RpcMethod<{ reason: string }, GamepadRuntimeSnapshotDto>
     updateSampling: RpcMethod<{ sampling: GamepadSamplingConfigDto }, GamepadRuntimeSnapshotDto>
     setSamplingStrategy: RpcMethod<
       { strategy: GamepadSamplingStrategyDto },

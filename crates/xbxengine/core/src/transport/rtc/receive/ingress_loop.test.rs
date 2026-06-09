@@ -12,12 +12,13 @@ use crate::transport::rtc::receive::ingress_loop::{
 use crate::transport::rtc::receive::insert_gate::{
     resolve_insert_decision, InsertContext, InsertDecision,
 };
+use crate::transport::rtc::receive::keyframe_requester::KeyframeRequestDispatch;
 use crate::transport::rtc::receive::{
     now_ms_f64, should_block_non_keyframe_admission, test_transport_capability,
     DecodeCorruptionPolicy, ReceiverDecodeContext, ReceiverState, RtcVideoFrameSource,
 };
 use crate::transport::rtc::recovery::contract::{
-    GapVsKeyframeMode, MediaSupplyPhase, PacketRecoveryActionStage, ReferenceChainState,
+    GapVsKeyframeMode, PacketRecoveryActionStage, ReferenceChainState,
 };
 
 fn assert_receiver_local_waiting_keyframe(source: &RtcVideoFrameSource) {
@@ -26,9 +27,11 @@ fn assert_receiver_local_waiting_keyframe(source: &RtcVideoFrameSource) {
         ReceiverState::WaitingKeyframe
     );
 }
-use crate::transport::rtc::receive::decode_gate_eval::RecoveryKeyframeAction;
+use crate::transport::rtc::receive::decode_gate_eval::{
+    FirstFrameAcquisitionRequestKind, RecoveryKeyframeAction,
+};
 use crate::transport::rtc::stream::adapter_types::{
-    TransportAdmissionObservation, TransportLossObservation, TransportObservation,
+    TransportLossObservation, TransportObservation,
 };
 use crate::transport::rtc::stream::nack_contract::NackSchedulerConfig;
 use crate::transport::rtc::stream::packet_types::{RtcVideoIngressKind, RtcVideoRepairMetadata};
@@ -124,6 +127,57 @@ fn bootstrap_non_idr_nalu() -> Vec<u8> {
     let mut nalu = bootstrap_idr_nalu().to_vec();
     nalu[0] = 0x41;
     nalu
+}
+
+#[test]
+fn active_refresh_outcome_sent_does_not_reopen_hard_request_stats_window() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    let now_ms = 1_000.0;
+    source.runtime_stats.update(|stats| {
+        stats.recovery_effective_rtt_ms = Some(24.0);
+    });
+    source
+        .trace_ledger
+        .note_clean_anchor_committed(Some(90_001));
+    source
+        .trace_ledger
+        .recovery_ledger_mut()
+        .note_decoder_reference_synced(now_ms - 20.0);
+    source.trace_ledger.mark_gap_repair_in_flight(
+        &[702],
+        now_ms - 5.0,
+        Some(90_002),
+        "supply",
+        "supply",
+    );
+    source.sync_recovery_ledger_to_stats();
+
+    let decision = source.plan_receive_feedback(
+        "insert-gate-supply-break",
+        now_ms,
+        24.0,
+        Default::default(),
+        Some(InsertDecision::HoldRepair),
+        false,
+        true,
+    );
+    let dispatch = source.execute_receive_feedback_keyframe(
+        decision,
+        "insert-gate-supply-break",
+        Some(90_002),
+        now_ms,
+        true,
+    );
+
+    assert!(matches!(dispatch, KeyframeRequestDispatch::Sent(_)));
+    let stats = source.runtime_stats.read(|stats| {
+        (
+            stats.latest_keyframe_request_outcome.clone(),
+            stats.receive_keyframe_last_sent_at_ms,
+            stats.receive_keyframe_sent_count_unresolved,
+        )
+    });
+    assert_eq!(stats, Some((Some("sent".to_string()), None, 0)));
 }
 
 #[test]
@@ -232,6 +286,20 @@ fn steady_idle_timeout_is_absorbed_when_render_output_is_still_fresh() {
         Duration::from_millis(150),
     );
     assert!(absorbed);
+
+    let decoded_anchor_absorbed = should_absorb_idle_timeout_for_steady_gap(
+        XbxEngineTransportStateDto::Connected,
+        3,
+        Some(3),
+        Some("decoded-usable-idr"),
+        None,
+        Some(1_000.0 - 70.0),
+        Some(false),
+        Some(false),
+        1_000.0,
+        Duration::from_millis(150),
+    );
+    assert!(decoded_anchor_absorbed);
 }
 
 #[test]
@@ -312,7 +380,7 @@ fn clean_anchor_serviceable_output_allows_soft_recovery_keyframe_request_after_i
 }
 
 #[test]
-fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
+fn stale_transport_issue_after_clean_anchor_allows_soft_recovery_keyframe_request() {
     let now_ms = 1_000.0;
     let mut stats = serviceable_runtime_stats(now_ms);
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
@@ -337,6 +405,46 @@ fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
             reason: Some("receiverWaitingKeyframe".to_string()),
             chain_break_evidence: None,
 
+            observed_at_ms: now_ms - 5.0,
+        },
+        observed_at_ms: now_ms - 5.0,
+    });
+
+    assert!(RtcVideoFrameSource::should_soft_request_recovery_keyframe(
+        &stats,
+        now_ms,
+        Some("bootstrapMissingSps"),
+        true,
+        true,
+        true,
+    ));
+}
+
+#[test]
+fn unresolved_transport_issue_without_clean_anchor_blocks_soft_recovery_keyframe_request() {
+    let now_ms = 1_000.0;
+    let mut stats = serviceable_runtime_stats(now_ms);
+    stats.video_anchor_clean_epoch = None;
+    stats.video_anchor_clean_observed_at_ms = None;
+    stats.video_anchor_clean_source_event = None;
+    stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 2,
+        source_event: "frame-await-recovery-anchor".to_string(),
+        gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+            state: "pending".to_string(),
+            sequence: Some(99),
+            frame_rtp_timestamp: None,
+            frame_importance: Some("supply".to_string()),
+            budget_importance: None,
+            evidence_importance: None,
+            gap_dependency_confidence: None,
+            observed_at_ms: now_ms - 5.0,
+        }),
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "waiting-keyframe".to_string(),
+            reason: Some("receiverWaitingKeyframe".to_string()),
+            chain_break_evidence: None,
             observed_at_ms: now_ms - 5.0,
         },
         observed_at_ms: now_ms - 5.0,
@@ -1138,7 +1246,94 @@ fn clean_anchor_ack_consumes_submission_epoch() {
 
     source.maybe_ack_clean_anchor_commit_from_runtime_stats();
 
-    assert_eq!(source.last_consumed_clean_anchor_epoch, 1);
+    assert_eq!(source.last_consumed_clean_anchor_epoch, Some(1));
+}
+
+#[test]
+fn decoded_clean_anchor_ack_consumes_epoch_without_displayed_idr() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.waiting_recovery_keyframe_since_ms = Some(105.0);
+    source.next_recovery_keyframe_retry_at_ms = Some(305.0);
+    source
+        .trace_ledger
+        .recovery_ledger_mut()
+        .note_keyframe_request_sent(105.0);
+    source.runtime_stats.update(|stats| {
+        stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+        stats.video_decoder_recovery_state_changed_at_ms = Some(105.0);
+        stats.video_decoder_recovery_event = Some("external-decoder-reset-requested".to_string());
+        stats.video_decoder_recovery_detail = Some("decoderResetRequested".to_string());
+    });
+    source.sync_recovery_ledger_to_stats();
+
+    source
+        .runtime_stats
+        .record_picture_recovery_episode_decoded(120.0, 9_000, 42);
+
+    source.maybe_ack_clean_anchor_commit_from_runtime_stats();
+
+    assert_eq!(source.last_consumed_clean_anchor_epoch, Some(1));
+    assert_eq!(source.waiting_recovery_keyframe_since_ms, None);
+    assert_eq!(source.next_recovery_keyframe_retry_at_ms, None);
+    let stats = source
+        .runtime_stats
+        .read(|stats| stats.clone())
+        .expect("runtime stats snapshot");
+    assert_eq!(stats.receive_keyframe_required, Some(false));
+    assert_eq!(
+        stats.receive_keyframe_response_state.as_deref(),
+        Some("usable-idr")
+    );
+    assert_eq!(stats.receive_display_state.as_deref(), Some("none"));
+    assert_eq!(stats.recovery_displayed_idr_at_ms, None);
+    assert_eq!(
+        stats.video_decoder_recovery_state.as_deref(),
+        Some("nominal")
+    );
+    assert_eq!(
+        stats.video_decoder_recovery_event.as_deref(),
+        Some("clean-anchor-committed")
+    );
+    let receiver = stats
+        .latest_video_receiver_observation
+        .as_ref()
+        .expect("clean anchor ack should publish receiver observation");
+    assert!(!receiver.keyframe_request_pending);
+    assert_ne!(receiver.receiver_state, "waiting-keyframe");
+    let timeline = stats
+        .latest_video_timeline_observation
+        .as_ref()
+        .expect("clean anchor ack should publish timeline observation");
+    assert_eq!(timeline.source_event, "clean-anchor-committed");
+    assert_ne!(timeline.chain.state, "waiting-keyframe");
+}
+
+#[test]
+fn decoded_clean_anchor_ack_consumes_initial_epoch_zero() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source
+        .trace_ledger
+        .recovery_ledger_mut()
+        .note_keyframe_request_sent(105.0);
+    source.sync_recovery_ledger_to_stats();
+
+    source
+        .runtime_stats
+        .record_picture_recovery_episode_decoded(120.0, 9_000, 42);
+
+    source.maybe_ack_clean_anchor_commit_from_runtime_stats();
+
+    assert_eq!(source.last_consumed_clean_anchor_epoch, Some(0));
+    let stats = source
+        .runtime_stats
+        .read(|stats| stats.clone())
+        .expect("runtime stats snapshot");
+    assert_eq!(stats.receive_keyframe_required, Some(false));
+    assert_eq!(
+        stats.receive_keyframe_response_state.as_deref(),
+        Some("usable-idr")
+    );
 }
 
 #[test]
@@ -1156,7 +1351,7 @@ fn clean_anchor_ack_consumes_epoch_after_recovery_advance() {
 
     source.maybe_ack_clean_anchor_commit_from_runtime_stats();
 
-    assert_eq!(source.last_consumed_clean_anchor_epoch, 0);
+    assert_eq!(source.last_consumed_clean_anchor_epoch, None);
 }
 
 #[tokio::test]
@@ -1189,9 +1384,35 @@ async fn clean_anchor_then_consecutive_non_idr_continuation_does_not_fall_back_t
             .expect("bootstrap frame should assemble")
             .expect("bootstrap frame should be emitted");
     assert!(bootstrap_frame.is_keyframe);
+    assert!(bootstrap_frame.h264.committed_sps_present());
+    assert!(bootstrap_frame.h264.committed_pps_present());
+    source
+        .trace_ledger
+        .note_clean_anchor_committed(Some(bootstrap_frame.rtp_timestamp));
+    source
+        .receive_core_mut()
+        .receive_engine
+        .clear_recovery_state_after_decoded_anchor();
+    source.runtime_stats.update(|stats| {
+        let now_ms = now_ms_f64();
+        stats.latest_video_decode_ok_time_ms = Some(now_ms);
+        stats.latest_video_decode_ok_rtp_timestamp = Some(bootstrap_frame.rtp_timestamp);
+        stats.recovery_decoder_reference_synced_at_ms = Some(now_ms);
+        stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
+        stats.video_anchor_clean_observed_at_ms = Some(now_ms);
+    });
+    source.sync_recovery_ledger_to_stats();
 
-    for _ in 0..3 {
-        let _ = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner()).await;
+    for rtp in [9_016, 9_032, 9_048] {
+        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("continuation frame should assemble")
+            .expect("continuation should be emitted after bootstrap commit");
+        assert_eq!(frame.rtp_timestamp, rtp);
+        assert!(!frame.is_keyframe);
+        assert!(frame.h264.committed_sps_present());
+        assert!(frame.h264.committed_pps_present());
+        assert!(frame.h264.delta_continuation_ready());
     }
 
     while transport_observation_rx.try_recv().is_ok() {}
@@ -1213,7 +1434,8 @@ async fn stale_wait_after_clean_anchor_accepts_bootstrap_missing_idr_continuatio
             .expect("bootstrap frame should assemble")
             .expect("bootstrap frame should be emitted");
     assert!(bootstrap_frame.is_keyframe);
-    bootstrap_frame.h264.commit();
+    assert!(bootstrap_frame.h264.committed_sps_present());
+    assert!(bootstrap_frame.h264.committed_pps_present());
     source.runtime_stats.update(|stats| {
         stats.latest_video_decode_ok_time_ms = Some(1.0);
         stats.latest_video_host_present_time_ms = Some(1.0);
@@ -1247,7 +1469,7 @@ async fn stale_wait_after_clean_anchor_accepts_bootstrap_missing_idr_continuatio
 
 #[test]
 fn waiting_recovery_keyframe_timeout_triggers_retry_request() {
-    let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    let (_tx, transport_observation_rx, mut source) = make_video_source_for_test();
     source.runtime_stats.update(|stats| {
         let now_ms = now_ms_f64();
         stats.latest_video_decode_ok_time_ms = Some(now_ms);
@@ -1457,6 +1679,62 @@ async fn idr_without_parameter_sets_requests_recovery_keyframe_instead_of_emitti
     assert!(
         source.first_frame_acquisition_keyframe_request_count > 0
             || source.is_blocking_non_keyframe_admission()
+    );
+}
+
+#[tokio::test]
+async fn first_frame_acquisition_probe_does_not_latch_keyframe_required() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.update(|stats| {
+        stats.session_phase = Some("priming".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.latest_remote_answer_observation = Some(startup_h264_answer_without_sprop());
+    });
+
+    source.maybe_request_first_frame_acquisition_keyframe(
+        Some(9_001),
+        FirstFrameAcquisitionRequestKind::Initial,
+    );
+
+    assert_eq!(source.first_frame_acquisition_keyframe_request_count, 1);
+    let stats = source
+        .runtime_stats
+        .read(|stats| stats.clone())
+        .expect("runtime stats snapshot");
+    assert_eq!(stats.receive_keyframe_required, Some(false));
+    assert_eq!(
+        stats.receive_keyframe_required_cause.as_deref(),
+        Some("none")
+    );
+    assert_eq!(
+        stats.receive_keyframe_response_state.as_deref(),
+        Some("no-packet")
+    );
+    assert_eq!(
+        stats.latest_keyframe_request_source.as_deref(),
+        Some("first-frame-acquisition")
+    );
+    assert_eq!(
+        stats.latest_keyframe_request_outcome.as_deref(),
+        Some("sent")
+    );
+    assert_eq!(stats.receive_keyframe_sent_count_unresolved, 1);
+    assert!(stats.receive_keyframe_last_sent_at_ms.is_some());
+    let receiver = stats
+        .latest_video_receiver_observation
+        .as_ref()
+        .expect("sent keyframe request should publish receiver observation");
+    assert_eq!(receiver.receiver_state, "waiting-keyframe");
+    assert!(receiver.keyframe_request_pending);
+    let timeline = stats
+        .latest_video_timeline_observation
+        .as_ref()
+        .expect("sent keyframe request should publish timeline observation");
+    assert_eq!(timeline.source_event, "keyframe-request-sent");
+    assert_eq!(timeline.chain.state, "waiting-keyframe");
+    assert_eq!(
+        timeline.chain.reason.as_deref(),
+        Some("receiverWaitingKeyframe")
     );
 }
 
@@ -1707,6 +1985,60 @@ async fn bootstrap_packets_without_followup_boundary_can_emit_when_early_emit_en
     assert!(frame.is_keyframe);
     assert_eq!(frame.rtp_timestamp, 9000);
     assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn bootstrap_emit_path_records_frame_supply_counters() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.set_jitter_early_emit_enabled(true);
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish")
+        .expect("bootstrap frame should emit");
+    drop(tx);
+
+    assert!(frame.is_keyframe);
+    let counters = source.runtime_stats.read(|stats| {
+        (
+            stats.inbound_video_rtp_marker_count_total,
+            stats.inbound_video_access_unit_count_total,
+            stats.inbound_video_decode_gate_emit_count_total,
+            stats.inbound_video_decode_gate_continue_count_total,
+        )
+    });
+    assert_eq!(counters, Some((1, 1, 1, 0)));
+}
+
+#[tokio::test]
+async fn pre_first_frame_non_idr_continue_path_records_frame_supply_counters() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    let non_idr = bootstrap_non_idr_nalu();
+
+    tx.send(make_video_rtp_packet(100, 9_000, true, &non_idr))
+        .await
+        .expect("first non-idr packet should enqueue");
+    tx.send(make_video_rtp_packet(101, 9_016, true, &non_idr))
+        .await
+        .expect("second non-idr packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+
+    assert!(frame.is_none());
+    let counters = source.runtime_stats.read(|stats| {
+        (
+            stats.inbound_video_rtp_marker_count_total,
+            stats.inbound_video_access_unit_count_total,
+            stats.inbound_video_decode_gate_emit_count_total,
+            stats.inbound_video_decode_gate_continue_count_total,
+        )
+    });
+    assert_eq!(counters, Some((2, 1, 0, 1)));
 }
 
 #[tokio::test]

@@ -59,6 +59,10 @@ impl PacketBuffer {
         self.gaps.remove(&sequence);
     }
 
+    pub fn clear_gaps(&mut self) {
+        self.gaps.clear();
+    }
+
     pub fn all_missing(&self) -> Vec<u16> {
         self.gaps.keys().copied().collect()
     }

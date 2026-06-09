@@ -296,6 +296,13 @@ export function createXbxEngineRuntime(options: {
         inboundBytesTotal: snapshot.inbound_bytes_total,
         inboundVideoBytesTotal: snapshot.inbound_video_bytes_total,
         inboundAudioBytesTotal: snapshot.inbound_audio_bytes_total,
+        inboundVideoFrameCountTotal: snapshot.inbound_video_frame_count_total,
+        inboundVideoRtpMarkerCountTotal: snapshot.inbound_video_rtp_marker_count_total,
+        inboundVideoAccessUnitCountTotal: snapshot.inbound_video_access_unit_count_total,
+        inboundVideoDecodeGateEmitCountTotal:
+          snapshot.inbound_video_decode_gate_emit_count_total,
+        inboundVideoDecodeGateContinueCountTotal:
+          snapshot.inbound_video_decode_gate_continue_count_total,
         inboundVideoPacketCountTotal: snapshot.inbound_video_packet_count_total,
         latestVideoPacketArrivalRtpTimestamp: snapshot.latest_video_packet_arrival_rtp_timestamp,
         videoDecoderResetCount: snapshot.video_decoder_reset_count,

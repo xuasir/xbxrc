@@ -467,12 +467,15 @@ pub(super) fn episode_keeps_transport_recovery_family_context(
 ) -> bool {
     matches!(
         episode.status.as_str(),
-        "packet-seen" | "decoded" | "response-observed" | "missed"
+        "packet-seen" | "decoded" | "response-observed" | "missed" | "succeeded"
     ) && request_reason_is_transport_recovery_keyframe_family(episode.request_reason.as_deref())
         && episode
             .first_keyframe_packet_at_ms
             .or(episode.first_video_packet_at_ms)
             .is_some()
+        && (episode.status.as_str() != "succeeded"
+            || (episode.first_keyframe_decoded_at_ms.is_some()
+                && episode.response_verdict.as_deref() == Some("cleanAnchorCommitted")))
 }
 
 pub(super) fn unresolved_transport_await_episode_keeps_serviceable_continuation_bridge(
@@ -546,11 +549,6 @@ pub(super) fn host_display_rtp_qualifies_for_fresh_anchor(
     displayed_rtp: u32,
     now_ms: f64,
 ) -> bool {
-    if crate::transport::rtc::recovery::contract::recovery_supply_break_active_from_stats(
-        stats, now_ms,
-    ) {
-        return false;
-    }
     if stats
         .latest_h264_inspection_observation
         .as_ref()
@@ -575,7 +573,9 @@ pub(super) fn current_transport_recovery_keyframe_episode_snapshot(
     collect_keyframe_episode_candidates(stats)
         .into_iter()
         .filter(|episode| {
-            keyframe_episode_observability_active(episode)
+            (keyframe_episode_observability_active(episode)
+                || (episode_keeps_transport_recovery_family_context(episode)
+                    && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)))
                 && request_reason_is_transport_recovery_keyframe_family(
                     episode.request_reason.as_deref(),
                 )

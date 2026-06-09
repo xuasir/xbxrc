@@ -28,6 +28,9 @@ use crate::{
 
 const POLLED_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(8);
 const POLLED_SNAPSHOT_TRACE_INTERVAL_MS: u64 = 1000;
+const DEVICE_REENUMERATE_INTERVAL: Duration = Duration::from_millis(1000);
+const STARTUP_DEVICE_REENUMERATE_INTERVAL: Duration = Duration::from_millis(100);
+const STARTUP_DEVICE_REENUMERATE_WINDOW: Duration = Duration::from_millis(2000);
 
 const KNOWN_HANDHELD_CONTROLLER_IDS: &[(u16, u16)] = &[
     (0x28de, 0x1205), // Steam Deck
@@ -213,7 +216,7 @@ fn run_sdl3_source_thread(
     command_rx: Receiver<Sdl3RumbleCommand>,
     ready_tx: Sender<Result<(), Sdl3SourceInitError>>,
 ) {
-    let _ = hint::set("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
+    configure_sdl_input_runtime();
 
     let sdl = match sdl3::init() {
         Ok(value) => value,
@@ -255,33 +258,33 @@ fn run_sdl3_source_thread(
     apply_gamepad_mappings(&gamepad_subsystem, &config);
     log_unmapped_joysticks(&joystick_subsystem, &gamepad_subsystem);
     gamepad_subsystem.set_events_processing_state(true);
+    joystick_subsystem.set_joystick_events_enabled(true);
+    joystick_subsystem.update();
+    gamepad_subsystem.update();
+    record_runtime_trace(
+        "sdl3InputRuntimeInitialized",
+        json!({
+            "joystickEventsEnabled": joystick_subsystem.event_state(),
+            "gamepadEventsEnabled": gamepad_subsystem.event_processing_state(),
+            "pollIntervalMs": POLLED_SNAPSHOT_INTERVAL.as_millis(),
+            "startupReenumerateIntervalMs": STARTUP_DEVICE_REENUMERATE_INTERVAL.as_millis(),
+            "startupReenumerateWindowMs": STARTUP_DEVICE_REENUMERATE_WINDOW.as_millis(),
+            "reenumerateIntervalMs": DEVICE_REENUMERATE_INTERVAL.as_millis(),
+        }),
+    );
 
     let mut opened_gamepads = HashMap::new();
-    if let Ok(gamepad_ids) = gamepad_subsystem.gamepads() {
-        for gamepad_id in gamepad_ids {
-            if let Some((device_id, opened)) = open_gamepad(&gamepad_subsystem, gamepad_id, &config)
-            {
-                if dedupe_or_insert_opened_gamepad(
-                    &event_tx,
-                    &mut opened_gamepads,
-                    &opened,
-                    DuplicatePolicy::InitialEnumerate,
-                ) {
-                    continue;
-                }
-                let observed_at_ms = now_ms();
-                log_gamepad_diagnostics("initial-enumerate", &opened.descriptor);
-                if !emit_connected_baseline_event(
-                    &event_tx,
-                    &opened.descriptor,
-                    &opened.gamepad,
-                    observed_at_ms,
-                ) {
-                    return;
-                }
-                opened_gamepads.insert(device_id, opened);
-            }
-        }
+    if enumerate_available_gamepads(
+        &event_tx,
+        &gamepad_subsystem,
+        &mut opened_gamepads,
+        &config,
+        "initial-enumerate",
+        DuplicatePolicy::InitialEnumerate,
+    )
+    .is_none()
+    {
+        return;
     }
 
     if ready_tx.send(Ok(())).is_err() {
@@ -291,6 +294,8 @@ fn run_sdl3_source_thread(
     let mut last_polled_snapshot_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
+    let source_started_at = last_polled_snapshot_at;
+    let mut last_reenumerated_at = last_polled_snapshot_at;
     let mut trace_state = SourceTraceState::default();
 
     loop {
@@ -301,6 +306,7 @@ fn run_sdl3_source_thread(
             &gamepad_subsystem,
             &config,
         );
+        joystick_subsystem.update();
         gamepad_subsystem.update();
 
         let mut received_event = false;
@@ -324,11 +330,66 @@ fn run_sdl3_source_thread(
             emit_polled_snapshots(&event_tx, &mut opened_gamepads, now_ms(), &mut trace_state);
             last_polled_snapshot_at = now;
         }
+        let startup_reenumerate_active =
+            now.saturating_sub(source_started_at) < STARTUP_DEVICE_REENUMERATE_WINDOW;
+        let reenumerate_interval = if startup_reenumerate_active {
+            STARTUP_DEVICE_REENUMERATE_INTERVAL
+        } else {
+            DEVICE_REENUMERATE_INTERVAL
+        };
+        if now.saturating_sub(last_reenumerated_at) >= reenumerate_interval {
+            if enumerate_available_gamepads(
+                &event_tx,
+                &gamepad_subsystem,
+                &mut opened_gamepads,
+                &config,
+                if startup_reenumerate_active {
+                    "startup-reenumerate"
+                } else {
+                    "periodic-reenumerate"
+                },
+                DuplicatePolicy::PeriodicReenumerate,
+            )
+            .is_none()
+            {
+                return;
+            }
+            last_reenumerated_at = now;
+        }
 
         if !received_event {
             thread::sleep(Duration::from_millis(2));
         }
     }
+}
+
+fn configure_sdl_input_runtime() {
+    unsafe {
+        sdl3::sys::main::SDL_SetMainReady();
+    }
+
+    const HINTS: [(&str, &str); 4] = [
+        ("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1"),
+        ("SDL_JOYSTICK_HIDAPI_PS4_RUMBLE", "1"),
+        ("SDL_JOYSTICK_HIDAPI_PS5_RUMBLE", "1"),
+        ("SDL_JOYSTICK_HIDAPI_STEAMDECK", "0"),
+    ];
+
+    for (name, value) in HINTS {
+        if !hint::set(name, value) {
+            log::warn!("sdl3_input_hint_failed name={} value={}", name, value);
+        }
+    }
+    record_runtime_trace(
+        "sdl3InputRuntimeHintsApplied",
+        json!({
+            "mainReadyDeclared": true,
+            "allowBackgroundEvents": true,
+            "hidapiPs4Rumble": true,
+            "hidapiPs5Rumble": true,
+            "hidapiSteamDeck": false,
+        }),
+    );
 }
 
 struct OpenedSdl3Gamepad {
@@ -581,6 +642,109 @@ enum DuplicatePolicy {
     InitialEnumerate,
     HotplugAdd,
     RemapRefresh,
+    PeriodicReenumerate,
+}
+
+fn enumerate_available_gamepads(
+    event_tx: &Sender<Sdl3InputEvent>,
+    gamepad_subsystem: &sdl3::GamepadSubsystem,
+    opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
+    config: &Sdl3BackendConfig,
+    stage: &str,
+    policy: DuplicatePolicy,
+) -> Option<usize> {
+    let Ok(gamepad_ids) = gamepad_subsystem.gamepads() else {
+        record_runtime_trace(
+            "sdl3GamepadEnumerationObserved",
+            json!({
+                "stage": stage,
+                "error": "gamepads-query-failed",
+                "openedDeviceCount": opened_gamepads.len(),
+                "openedDeviceIds": opened_gamepad_device_ids(opened_gamepads),
+            }),
+        );
+        return Some(0);
+    };
+
+    let discovered_ids = gamepad_ids
+        .iter()
+        .map(|id| id.0.to_string())
+        .collect::<Vec<_>>();
+    let mut opened_count = 0usize;
+    let mut skipped_already_open_count = 0usize;
+    let mut failed_or_ignored_count = 0usize;
+    let mut duplicate_ignored_count = 0usize;
+    for gamepad_id in gamepad_ids {
+        if opened_gamepad_contains_joystick_id(opened_gamepads, gamepad_id) {
+            skipped_already_open_count = skipped_already_open_count.saturating_add(1);
+            continue;
+        }
+        let Some((device_id, opened)) = open_gamepad(gamepad_subsystem, gamepad_id, config) else {
+            failed_or_ignored_count = failed_or_ignored_count.saturating_add(1);
+            continue;
+        };
+        if opened_gamepads.contains_key(&device_id) {
+            duplicate_ignored_count = duplicate_ignored_count.saturating_add(1);
+            continue;
+        }
+        if dedupe_or_insert_opened_gamepad(event_tx, opened_gamepads, &opened, policy) {
+            duplicate_ignored_count = duplicate_ignored_count.saturating_add(1);
+            continue;
+        }
+        let observed_at_ms = now_ms();
+        log_gamepad_diagnostics(stage, &opened.descriptor);
+        if !emit_connected_baseline_event(
+            event_tx,
+            &opened.descriptor,
+            &opened.gamepad,
+            observed_at_ms,
+        ) {
+            return None;
+        }
+        opened_gamepads.insert(device_id, opened);
+        opened_count = opened_count.saturating_add(1);
+    }
+
+    let opened_device_ids = opened_gamepad_device_ids(opened_gamepads);
+    let payload = json!({
+        "stage": stage,
+        "discoveredCount": discovered_ids.len(),
+        "discoveredJoystickIds": discovered_ids,
+        "openedCount": opened_count,
+        "openedDeviceCount": opened_gamepads.len(),
+        "openedDeviceIds": opened_device_ids,
+        "skippedAlreadyOpenCount": skipped_already_open_count,
+        "failedOrIgnoredCount": failed_or_ignored_count,
+        "duplicateIgnoredCount": duplicate_ignored_count,
+    });
+
+    if opened_count > 0 {
+        log::info!(
+            "sdl3_gamepad_reenumerate_completed stage={} opened_count={} opened_device_count={}",
+            stage,
+            opened_count,
+            opened_gamepads.len()
+        );
+        record_runtime_trace("sdl3GamepadReenumerateCompleted", payload.clone());
+    }
+    record_runtime_trace("sdl3GamepadEnumerationObserved", payload);
+
+    Some(opened_count)
+}
+
+fn opened_gamepad_device_ids(opened_gamepads: &HashMap<String, OpenedSdl3Gamepad>) -> Vec<String> {
+    let mut device_ids = opened_gamepads.keys().cloned().collect::<Vec<_>>();
+    device_ids.sort();
+    device_ids
+}
+
+fn opened_gamepad_contains_joystick_id(
+    opened_gamepads: &HashMap<String, OpenedSdl3Gamepad>,
+    joystick_id: JoystickId,
+) -> bool {
+    opened_gamepads
+        .values()
+        .any(|opened| opened.gamepad.id().ok().map(|id| id.0) == Some(joystick_id.0))
 }
 
 fn apply_gamepad_mappings(gamepad_subsystem: &sdl3::GamepadSubsystem, config: &Sdl3BackendConfig) {
@@ -1106,15 +1270,31 @@ fn reopen_devices_and_prime_sampling(
         reopened_ids.push(resolved_device_id);
     }
 
+    let Some(enumerated_count) = enumerate_available_gamepads(
+        event_tx,
+        gamepad_subsystem,
+        opened_gamepads,
+        config,
+        "reopen-prime-reenumerate",
+        DuplicatePolicy::RemapRefresh,
+    ) else {
+        return;
+    };
+
     log::info!(
-        "sdl3_gamepad_reopen_prime_completed reopened_count={} reopened_device_ids={}",
+        "sdl3_gamepad_reopen_prime_completed reopened_count={} enumerated_count={} opened_device_count={} reopened_device_ids={}",
         reopened_count,
+        enumerated_count,
+        opened_gamepads.len(),
         reopened_ids.join("|"),
     );
     record_runtime_trace(
         "sdl3ReopenPrimeCommandApplied",
         json!({
             "reopenedCount": reopened_count,
+            "enumeratedCount": enumerated_count,
+            "openedDeviceCount": opened_gamepads.len(),
+            "openedDeviceIds": opened_gamepad_device_ids(opened_gamepads),
             "reopenedDeviceIds": reopened_ids,
         }),
     );
@@ -1165,6 +1345,12 @@ fn record_snapshot_trace(
     let mut payload = json!({
         "stage": stage,
         "deviceId": descriptor.device_id,
+        "deviceName": descriptor.name,
+        "backend": "sdl3",
+        "vendorId": descriptor.vendor_id,
+        "productId": descriptor.product_id,
+        "gamepadType": descriptor.gamepad_type,
+        "classification": descriptor.classification,
         "observedAtMs": observed_at_ms,
         "pressedButtonCount": summary.pressed_button_count,
         "nonZeroAxisCount": summary.non_zero_axis_count,

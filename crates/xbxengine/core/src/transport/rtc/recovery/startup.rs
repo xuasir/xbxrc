@@ -6,7 +6,7 @@ use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
 use crate::transport::rtc::recovery::runtime_state::{
-    displayed_idr_output_pipeline_active, renderer_shadow_blocks_serviceability,
+    media_anchor_output_pipeline_active, renderer_shadow_blocks_serviceability,
     resolve_runtime_recovery_profile,
 };
 use crate::XbxEngineMediaRuntimeStats;
@@ -202,16 +202,19 @@ fn recovery_exit_timed_fallback_allows_steady_phase(stats: &XbxEngineMediaRuntim
 fn should_hold_steady_session_phase_during_receive_presentation_serviceable(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
+    let now_ms = now_ms_f64();
     if !crate::transport::rtc::recovery::contract::receive_presentation_holds_steady_session_phase_from_stats(
-        stats,
-        now_ms_f64(),
+        stats, now_ms,
     ) {
         return false;
     }
-    if crate::transport::rtc::recovery::contract::displayed_idr_serving_relaxation_blocked_from_stats(
-        stats,
-        now_ms_f64(),
-    ) {
+    let hard_receive_recovery =
+        crate::transport::rtc::recovery::contract::transport_await_has_hard_bootstrap_evidence_from_stats(
+            stats, now_ms,
+        ) || crate::transport::rtc::recovery::contract::decoder_waiting_keyframe_control_active_from_stats(
+            stats, now_ms,
+        );
+    if hard_receive_recovery && stats.receive_display_state.as_deref() != Some("display-stable") {
         return false;
     }
     let host_steady_cadence = matches!(stats.host_cadence_phase.as_deref(), Some("steady"));
@@ -223,7 +226,7 @@ fn should_hold_steady_session_phase_during_receive_presentation_serviceable(
     if host_steady_cadence && waiting_keyframe_escalation {
         return true;
     }
-    if !displayed_idr_output_pipeline_active(stats, now_ms_f64()) {
+    if !media_anchor_output_pipeline_active(stats, now_ms) {
         return false;
     }
     matches!(
@@ -601,6 +604,33 @@ mod tests {
                 Duration::from_secs(2),
             ),
             SessionPhase::Recovering
+        );
+    }
+
+    #[test]
+    fn session_phase_holds_steady_when_decoded_clean_anchor_pipeline_active() {
+        let stream_started_at = Instant::now() - Duration::from_secs(5);
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        let now_ms = now_ms_f64();
+        stats.transport_recovery_epoch = 4;
+        stats.video_anchor_clean_epoch = Some(4);
+        stats.video_anchor_clean_observed_at_ms = Some(now_ms);
+        stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
+        stats.latest_video_decode_ok_time_ms = Some(now_ms);
+        stats.latest_video_host_present_time_ms = Some(now_ms);
+        stats.host_frame_present_epoch = 1;
+        stats.recovery_playback_recovered_at_ms = Some(now_ms);
+        stats.video_owner_state = Some("stable-serving".to_string());
+        stats.recovery_active_escalation_reason = Some("receiverWaitingKeyframe".to_string());
+        stats.inbound_video_bitrate_kbps = Some(14_000.0);
+        stats.video_present_fps = 18.0;
+        assert_eq!(
+            resolve_session_phase_from_stats(
+                Some(&stats),
+                stream_started_at,
+                Duration::from_secs(2),
+            ),
+            SessionPhase::Steady
         );
     }
 

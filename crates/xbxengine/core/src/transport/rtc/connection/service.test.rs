@@ -925,10 +925,10 @@ fn service_pump_observes_data_channel_message_from_poll_read() {
 
     let outcome = service
         .request_video_pli_with_outcome(&runtime_stats)
-        .expect("未 prime feedback target 前应返回 pending outcome");
+        .expect("control ready 时应走 Xbox control keyframe 请求");
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::RequestedControlKeyframe
     );
 }
 
@@ -1550,7 +1550,7 @@ fn video_recovery_requests_fir_explicitly_within_same_epoch() {
 }
 
 #[test]
-fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supported() {
+fn video_recovery_uses_control_keyframe_when_rtcp_feedback_is_not_supported() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -1568,7 +1568,7 @@ fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supporte
     }
     let outcome = service
         .request_video_pli_with_outcome(&runtime_stats)
-        .expect("缺少反馈能力时应返回 pending outcome");
+        .expect("control ready 时缺少 RTCP feedback 也应发出 keyframe request");
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert!(
@@ -1577,9 +1577,57 @@ fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supporte
     );
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::RequestedControlKeyframe
     );
     assert_eq!(stats.video_pli_request_count_total, 0);
+}
+
+#[test]
+fn transport_capability_sends_keyframe_over_control_when_rtcp_target_is_warming() {
+    use crate::transport::rtc::capability::{
+        ConnectionTransportCapability, KeyframeRequestKind, KeyframeSendOutcome,
+        RtcTransportCapability, VideoFeedbackState,
+    };
+
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (_answer_pc, _answer_io, _, control_dc_id, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    assert!(control_dc_id.is_some(), "control channel should be open");
+    assert!(
+        !super::video_rtcp_recovery_feedback_media_ssrc_ready(
+            &mut service.controlled_twcc_feedback
+        ),
+        "RTCP feedback target should still be warming"
+    );
+
+    let connection = Arc::new(Mutex::new(service));
+    let capability = ConnectionTransportCapability::new(connection, runtime_stats.clone());
+
+    assert_eq!(capability.video_feedback_state(), VideoFeedbackState::Ready);
+    assert_eq!(
+        capability.send_keyframe(KeyframeRequestKind::Pli),
+        KeyframeSendOutcome::Sent
+    );
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_pli_request_count_total, 0);
+    let catalog = stats
+        .latest_data_channel_message_catalog_observation
+        .as_ref()
+        .expect("control keyframe should publish data-channel catalog");
+    assert_eq!(catalog.direction, "local");
+    assert_eq!(catalog.channel, CONTROL_CHANNEL_LABEL);
+    assert_eq!(
+        catalog.kind_message.as_deref(),
+        Some("videoKeyframeRequested")
+    );
 }
 
 #[test]
@@ -1612,6 +1660,16 @@ fn video_recovery_pli_survives_twcc_interval_adjustment_without_losing_feedback_
     assert_eq!(
         stats.latest_feedback_target_availability_reason.as_deref(),
         Some("pliSent")
+    );
+    let catalog = stats
+        .latest_data_channel_message_catalog_observation
+        .as_ref()
+        .expect("RTCP ready path should also publish control keyframe catalog");
+    assert_eq!(catalog.direction, "local");
+    assert_eq!(catalog.channel, CONTROL_CHANNEL_LABEL);
+    assert_eq!(
+        catalog.kind_message.as_deref(),
+        Some("videoKeyframeRequested")
     );
 }
 
@@ -2616,7 +2674,7 @@ fn request_video_pli_reports_feedback_target_unavailable_without_twcc_feedback_t
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, observed_payloads) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
@@ -2633,12 +2691,59 @@ fn request_video_pli_reports_feedback_target_unavailable_without_twcc_feedback_t
 
     let outcome = service
         .request_video_pli_with_outcome(&runtime_stats)
-        .expect("缺少反馈目标时应返回 pending outcome");
+        .expect("缺少 RTCP 反馈目标时应回退到 control keyframe");
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::RequestedControlKeyframe
+    );
+    let mut saw_control_keyframe = observed_payloads.iter().any(|(label, body)| {
+        label == CONTROL_CHANNEL_LABEL
+            && body.contains("\"message\":\"videoKeyframeRequested\"")
+            && body.contains("\"ifrRequested\":true")
+    });
+    let read_deadline = Instant::now() + Duration::from_secs(1);
+    while !saw_control_keyframe && Instant::now() < read_deadline {
+        answer_io.pump(&mut answer_pc).unwrap();
+        while let Some(message) = answer_pc.poll_read() {
+            if let rtc::peer_connection::message::RTCMessage::DataChannelMessage(
+                channel_id,
+                payload,
+            ) = message
+            {
+                let label = answer_pc
+                    .data_channel(channel_id)
+                    .expect("answer data channel")
+                    .label()
+                    .to_string();
+                let body = String::from_utf8_lossy(payload.data.as_ref()).to_string();
+                if label == CONTROL_CHANNEL_LABEL
+                    && body.contains("\"message\":\"videoKeyframeRequested\"")
+                    && body.contains("\"ifrRequested\":true")
+                {
+                    saw_control_keyframe = true;
+                    break;
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        saw_control_keyframe,
+        "control channel should carry browser-compatible keyframe request"
     );
     let stats = runtime_stats.lock().unwrap();
+    let catalog = stats
+        .latest_data_channel_message_catalog_observation
+        .as_ref()
+        .expect("local control keyframe should publish data-channel catalog");
+    assert_eq!(catalog.direction, "local");
+    assert_eq!(catalog.channel, CONTROL_CHANNEL_LABEL);
+    assert_eq!(
+        catalog.kind_message.as_deref(),
+        Some("videoKeyframeRequested")
+    );
+    assert!(catalog.keys.iter().any(|key| key == "ifrRequested"));
+    assert!(catalog.keys.iter().any(|key| key == "message"));
     assert_ne!(
         stats.latest_observation_label.as_deref(),
         Some("rtcVideoPliRequested")

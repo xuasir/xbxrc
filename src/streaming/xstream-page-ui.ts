@@ -148,6 +148,21 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     }
   }
 
+  function syncOverlayCapture(
+    visible: boolean,
+    wasVisible: boolean | undefined,
+    captureReason: UiCaptureReason,
+    releaseReason: UiReleaseReason,
+  ): void {
+    if (visible) {
+      streamInputRouteController.captureUiInput(captureReason)
+      return
+    }
+    if (wasVisible) {
+      void streamInputRouteController.releaseUiInputAfterNeutral(releaseReason)
+    }
+  }
+
   watch(
     () => [options.getIsConnected(), hasOverlay.value] as const,
     ([connected]) => {
@@ -173,25 +188,11 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     { immediate: true },
   )
 
-  watch(showFailedSheet, (visible, wasVisible) => {
-    if (visible) {
-      streamInputRouteController.captureUiInput('failed')
-      return
-    }
-    if (wasVisible) {
-      void streamInputRouteController.releaseUiInputAfterNeutral('failed-close')
-    }
-  })
+  watch(showFailedSheet, (visible, wasVisible) =>
+    syncOverlayCapture(visible, wasVisible, 'failed', 'failed-close'))
 
-  watch(showWarningSheet, (visible, wasVisible) => {
-    if (visible) {
-      streamInputRouteController.captureUiInput('warning')
-      return
-    }
-    if (wasVisible) {
-      void streamInputRouteController.releaseUiInputAfterNeutral('warning-close')
-    }
-  })
+  watch(showWarningSheet, (visible, wasVisible) =>
+    syncOverlayCapture(visible, wasVisible, 'warning', 'warning-close'))
 
   onMounted(() => {
     for (const eventName of REVEAL_EVENTS) {

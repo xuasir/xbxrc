@@ -403,9 +403,7 @@ fn repeated_transport_sample_loss_after_keyframe_stays_in_keyframe_family() {
         .action;
     assert!(matches!(
         second,
-        RecoveryAction::DelegatedToReceive
-            | RecoveryAction::DelegatedToReceive
-            | RecoveryAction::CooldownSuppressed
+        RecoveryAction::DelegatedToReceive | RecoveryAction::CooldownSuppressed
     ));
 }
 

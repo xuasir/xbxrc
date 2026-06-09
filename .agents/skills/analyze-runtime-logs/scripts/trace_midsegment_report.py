@@ -75,9 +75,7 @@ def p95(values: list[float]) -> float | None:
         return None
     if len(values) == 1:
         return values[0]
-    ordered = sorted(values)
-    idx = int(round(0.95 * (len(ordered) - 1)))
-    return ordered[idx]
+    return statistics.quantiles(sorted(values), n=20, method="inclusive")[18]
 
 
 def filter_latency(values: list[float]) -> list[float]:
@@ -94,6 +92,7 @@ def collect_stats_snapshot_metrics(
     present_fps_vals: list[float] = []
     session_phases: list[str] = []
     steady_supply_rows: list[tuple[float, float]] = []
+    stats_snapshots: list[dict[str, Any]] = []
 
     for event in events:
         if not in_window(event, origin, start_s, end_s):
@@ -105,6 +104,7 @@ def collect_stats_snapshot_metrics(
         stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else payload
         if not isinstance(stats, dict):
             continue
+        stats_snapshots.append(stats)
         for field, bucket in (
             ("submitAgeMs", submit_ages),
             ("submit_age_ms", submit_ages),
@@ -142,7 +142,56 @@ def collect_stats_snapshot_metrics(
         "present_fps": present_fps_vals,
         "session_phases": session_phases,
         "steady_supply_rows": steady_supply_rows,
+        "frame_supply_deltas": collect_counter_deltas(stats_snapshots),
     }
+
+
+COUNTER_FIELDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("inboundFrames", ("inbound_video_frame_count_total", "inboundFrameCountTotal")),
+    ("rtpMarkers", ("inbound_video_rtp_marker_count_total", "inboundRtpMarkerCountTotal")),
+    ("accessUnits", ("inbound_video_access_unit_count_total", "inboundAccessUnitCountTotal")),
+    (
+        "decodeGateEmit",
+        ("inbound_video_decode_gate_emit_count_total", "inboundDecodeGateEmitCountTotal"),
+    ),
+    (
+        "decodeGateContinue",
+        (
+            "inbound_video_decode_gate_continue_count_total",
+            "inboundDecodeGateContinueCountTotal",
+        ),
+    ),
+    ("pacerSubmit", ("video_pacer_submit_count_total", "pacerSubmitCountTotal")),
+    ("pacerDrop", ("video_pacer_drop_count_total", "pacerDropCountTotal")),
+    ("rendererSubmit", ("video_renderer_submit_count_total", "rendererSubmitCountTotal")),
+    ("hostEnqueue", ("host_mailbox_enqueue_count_total", "hostMailboxEnqueueCountTotal")),
+    ("hostOverwrite", ("host_mailbox_overwrite_count_total", "hostMailboxOverwriteCountTotal")),
+    ("hostPresent", ("host_frame_present_epoch", "hostFramePresentEpoch")),
+    ("hostNoPendingTake", ("host_no_pending_take_count_total", "hostNoPendingTakeCountTotal")),
+)
+
+
+def first_numeric(stats: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+    for key in keys:
+        value = stats.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
+def collect_counter_deltas(stats_snapshots: list[dict[str, Any]]) -> dict[str, int]:
+    if len(stats_snapshots) < 2:
+        return {}
+    first = stats_snapshots[0]
+    last = stats_snapshots[-1]
+    deltas: dict[str, int] = {}
+    for label, keys in COUNTER_FIELDS:
+        start = first_numeric(first, keys)
+        end = first_numeric(last, keys)
+        if start is None or end is None:
+            continue
+        deltas[label] = int(end - start)
+    return deltas
 
 
 def collect_host_take_metrics(
@@ -253,6 +302,16 @@ def ready_ratio(take: Counter[str]) -> float | None:
     if denom == 0:
         return None
     return ready / denom
+
+
+def host_counter_ready_ratio(frame_supply_deltas: dict[str, int]) -> float | None:
+    host_present = frame_supply_deltas.get("hostPresent")
+    host_enqueue = frame_supply_deltas.get("hostEnqueue")
+    if not host_present or not host_enqueue:
+        return None
+    if host_enqueue <= 0:
+        return None
+    return min(host_present, host_enqueue) / host_enqueue
 
 
 def collect_startup_supply_metrics(
@@ -368,7 +427,10 @@ def main() -> int:
             media_supply_gates.append(
                 f"supply-starved snapshots in first-present+5s: {startup['supply_starved_in_window']}"
             )
-        if startup["keyframe_outcomes"] < 1:
+        if (
+            startup["keyframe_outcomes"] < 1
+            and (startup["supply_starved_in_window"] > 0 or startup["waiting_keyframe_snapshots"] > 0)
+        ):
             media_supply_gates.append("no keyframeRequestOutcome in first-present+5s")
         if startup["waiting_keyframe_snapshots"] >= 3:
             media_supply_gates.append(
@@ -380,6 +442,7 @@ def main() -> int:
         media_supply_gates.append("no host present epoch in trace")
 
     ratio = ready_ratio(take_metrics["take"])
+    counter_ratio = host_counter_ready_ratio(metrics["frame_supply_deltas"])
 
     print(f"trace: {args.trace}")
     print(f"traceMode: {trace_mode}")
@@ -400,9 +463,13 @@ def main() -> int:
             f"steady_supply (phase=steady, decode in [{STEADY_DECODE_MIN},{STEADY_DECODE_MAX}]): "
             f"samples={len(metrics['steady_supply_rows'])} gap_avg={steady_supply_gap:.1f}"
         )
+    if metrics["frame_supply_deltas"]:
+        print(f"frame_supply_deltas: {metrics['frame_supply_deltas']}")
     print(f"host take decisions (mid): {dict(take_metrics['take'])}")
     if ratio is not None:
         print(f"ready/(ready+retainedDisplayed): {ratio:.1%}")
+    if counter_ratio is not None:
+        print(f"host_present/host_enqueue delta ratio: {counter_ratio:.1%}")
     print(f"retainedDisplayed+hasPendingFrame: {take_metrics['retained_pending']}")
     if drops:
         print(f"frameDropped top: {drops.most_common(5)}")
@@ -435,8 +502,11 @@ def main() -> int:
             steady_gates.append(
                 f"retainedDisplayed+hasPending {take_metrics['retained_pending']} > 0"
             )
-        if ratio is not None and ratio < READY_RATIO_MIN:
-            steady_gates.append(f"ready ratio {ratio:.1%} < {READY_RATIO_MIN:.0%}")
+        effective_ready_ratio = counter_ratio if counter_ratio is not None else ratio
+        if effective_ready_ratio is not None and effective_ready_ratio < READY_RATIO_MIN:
+            steady_gates.append(
+                f"ready ratio {effective_ready_ratio:.1%} < {READY_RATIO_MIN:.0%}"
+            )
         if steady_gates:
             steady_verdict = "FAIL"
 

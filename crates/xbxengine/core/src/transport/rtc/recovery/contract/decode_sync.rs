@@ -71,6 +71,48 @@ pub(crate) fn decoder_reference_synced_from_stats(
         })
 }
 
+fn decoder_recovery_debt_cleared_by_anchor_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
+        && stats.video_anchor_clean_observed_at_ms.is_some()
+    {
+        return true;
+    }
+    if stats.recovery_fresh_anchor_recovered_at_ms.is_some() {
+        return true;
+    }
+    decoder_reference_synced_from_stats(stats, now_ms)
+}
+
+/// 控制面只把尚未被 clean anchor / FrameDecoded 事实覆盖的 decoder waiting 视为硬门槛。
+pub(crate) fn decoder_waiting_keyframe_control_active_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if stats.video_decoder_recovery_state.as_deref() != Some("waiting-keyframe") {
+        return false;
+    }
+    !decoder_recovery_debt_cleared_by_anchor_from_stats(stats, now_ms)
+}
+
+/// 控制面只把尚未被 clean anchor / FrameDecoded 事实覆盖的 no-output streak 视为 IDR 压力。
+pub(crate) fn decoder_no_output_request_idr_control_active_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if decoder_recovery_debt_cleared_by_anchor_from_stats(stats, now_ms) {
+        return false;
+    }
+    stats
+        .latest_decode_output_path_observation
+        .as_ref()
+        .and_then(|obs| obs.backend_no_output_streak)
+        .unwrap_or(0)
+        >= CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK
+}
+
 pub(crate) fn displayed_idr_decoder_synced_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,

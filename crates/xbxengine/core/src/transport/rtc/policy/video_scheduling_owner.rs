@@ -158,8 +158,10 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) recovery_fresh_anchor_recovered_at_ms: Option<f64>,
     pub(crate) recovery_exit_path: RecoveryExitPath,
     /// 仅诊断投影；owner 控制流不读取它。
+    #[allow(dead_code)]
     pub(crate) recovery_surface_phase:
         crate::transport::rtc::recovery::contract::RecoverySurfacePhase,
+    #[allow(dead_code)]
     pub(crate) derived_decoder_health:
         crate::transport::rtc::recovery::contract::DerivedDecoderHealth,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
@@ -754,6 +756,9 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::DegradedServing
                 } else if Self::transient_serving_pipeline_healthy(input) {
                     VideoSchedulingOwnerState::DegradedServing
+                } else if Self::repairing_chain_output_serviceable(input, host_present_stall_active)
+                {
+                    VideoSchedulingOwnerState::DegradedServing
                 } else {
                     VideoSchedulingOwnerState::SupplyStarved
                 }
@@ -779,6 +784,7 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::DegradedServing
                 } else if Self::transient_serving_pipeline_healthy(input)
                     || Self::display_pipeline_stressed_serving_absorb(input)
+                    || Self::repairing_chain_output_serviceable(input, host_present_stall_active)
                 {
                     VideoSchedulingOwnerState::DegradedServing
                 } else {
@@ -792,6 +798,7 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::StableServing
                 } else if completion_evidence == RecoveryCompletionEvidence::ServingReady
                     || Self::display_pipeline_stressed_serving_absorb(input)
+                    || Self::repairing_chain_output_serviceable(input, host_present_stall_active)
                 {
                     VideoSchedulingOwnerState::DegradedServing
                 } else {
@@ -2005,6 +2012,64 @@ impl VideoSchedulingOwner {
             .latest_track_video_bytes_total
             .is_some_and(|bytes| bytes > 0);
         decode_fresh && present_fresh && track_attached && track_has_video_bytes
+    }
+
+    /// receive 正在修 reference gap，但本地 decode/submit/present 都可服务时，保持 degraded serving。
+    fn repairing_chain_output_serviceable(
+        input: &VideoSchedulingOwnerInput,
+        host_present_stall_active: bool,
+    ) -> bool {
+        if host_present_stall_active
+            || input.connection_state != ConnectionLifecycleStateFact::Connected
+        {
+            return false;
+        }
+        if Self::renderer_shadow_blocks_recovery_release(input) {
+            return false;
+        }
+        if input.receive_keyframe_required == Some(true)
+            || is_receiver_state_waiting_keyframe(input.effective_receiver_state())
+        {
+            return false;
+        }
+        if !matches!(
+            input.effective_chain_state(),
+            Some("repairing" | "receiving")
+        ) {
+            return false;
+        }
+        let repair_in_flight = matches!(input.effective_chain_reason(), Some("gapRepairInFlight"))
+            || matches!(
+                input.effective_source_event(),
+                Some(
+                    "frame-complete-candidate"
+                        | "frame-observed"
+                        | "insert-gate-supply-break"
+                        | "insert-gate-hold-repair"
+                )
+            );
+        if !repair_in_flight {
+            return false;
+        }
+        let decode_fresh = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
+        let present_fresh = input
+            .demand
+            .present_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_present_age_ms);
+        let submit_fresh = input.demand.submit_age_ms.map_or(true, |age| {
+            age <= input.display_supply_thresholds.degraded_decode_age_ms
+        });
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        decode_fresh && present_fresh && submit_fresh && track_attached && track_has_video_bytes
     }
 
     fn should_absorb_steady_jitter(

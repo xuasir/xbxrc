@@ -206,8 +206,10 @@ where
             devices_changed |= self.apply_device_event(event);
         }
 
-        for sample in samples {
-            let observed = sample.observed_at_ms.max(self.clock_ms);
+        for mut sample in samples {
+            sample.observed_at_ms =
+                normalize_backend_observed_at_ms(sample.observed_at_ms, self.clock_ms);
+            let observed = sample.observed_at_ms;
             self.last_backend_sample_activity_at_ms =
                 self.last_backend_sample_activity_at_ms.max(observed);
             self.track_activity(&sample);
@@ -217,7 +219,7 @@ where
         if let Some(activity_ms) = activity_observed_at_ms {
             self.last_backend_sample_activity_at_ms = self
                 .last_backend_sample_activity_at_ms
-                .max(activity_ms.max(self.clock_ms));
+                .max(normalize_backend_observed_at_ms(activity_ms, self.clock_ms));
         }
 
         if devices_changed {
@@ -589,6 +591,17 @@ fn pad_slot(pad_id: LogicalPadId) -> usize {
 
 fn pad_order(pad_id: LogicalPadId) -> u8 {
     pad_slot(pad_id) as u8
+}
+
+fn normalize_backend_observed_at_ms(observed_at_ms: u64, clock_ms: u64) -> u64 {
+    const MAX_BACKEND_TIMESTAMP_FUTURE_DRIFT_MS: u64 = 1_000;
+    if observed_at_ms == 0
+        || observed_at_ms > clock_ms.saturating_add(MAX_BACKEND_TIMESTAMP_FUTURE_DRIFT_MS)
+    {
+        clock_ms
+    } else {
+        observed_at_ms
+    }
 }
 
 fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotDto) -> bool {

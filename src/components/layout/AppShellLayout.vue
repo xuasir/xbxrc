@@ -26,6 +26,7 @@ import { devWarn, devWarnRateLimited } from '../../shared/dev-log'
 import GamepadProfileCard from '../navigation/GamepadProfileCard.vue'
 import TopNavBar from '../navigation/TopNavBar.vue'
 import UserProfileMenu from '../navigation/UserProfileMenu.vue'
+import { useGamepadShellInteractiveHint } from './useGamepadShellInteractiveHint'
 
 type AuthState = Awaited<ReturnType<typeof rpc.auth.getState>>
 type UserProfile = Awaited<ReturnType<typeof rpc.data.getUserProfile>>
@@ -139,6 +140,39 @@ function connectedDeviceCount(snapshot: GamepadRuntimeSnapshotDto | null): numbe
   return snapshot?.devices.filter(device => device.connected).length ?? 0
 }
 
+function connectedDeviceIds(snapshot: GamepadRuntimeSnapshotDto | null): string[] {
+  return [...(snapshot?.devices.filter(device => device.connected).map(device => device.deviceId) ?? [])].sort()
+}
+
+function gamepadDeviceTraceSummaries(snapshot: GamepadRuntimeSnapshotDto | null): Array<Record<string, unknown>> {
+  return snapshot?.devices
+    .filter(device => device.connected)
+    .map(device => ({
+      deviceId: device.deviceId,
+      name: device.name,
+      backend: device.backend,
+      vendorId: device.vendorId,
+      productId: device.productId,
+      gamepadType: device.gamepadType,
+      connection: device.connection,
+      isVirtualController: device.classification.isVirtualController,
+      isHandheldBuiltin: device.classification.isHandheldBuiltin,
+      classificationReasons: device.classification.reasons,
+    })) ?? []
+}
+
+function keyboardFallbackConnected(snapshot: GamepadRuntimeSnapshotDto | null): boolean {
+  return snapshot?.devices.some(device => device.connected && device.deviceId === 'virtual:keyboard') ?? false
+}
+
+function sdlPhysicalConnectedDeviceCount(snapshot: GamepadRuntimeSnapshotDto | null): number {
+  return snapshot?.devices.filter(device =>
+    device.connected
+    && device.backend === 'sdl3'
+    && device.deviceId !== 'virtual:keyboard',
+  ).length ?? 0
+}
+
 function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null): Record<string, unknown> {
   const businessInputTrace = toBusinessInputTracePayload({
     state: businessInputArbiter.getState(),
@@ -166,6 +200,10 @@ function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null)
     samplingLifecycle: snapshot.samplingLifecycle ?? 'active',
     samplingHealth: snapshot.samplingHealth ?? 'healthy',
     connectedDevices: connectedDeviceCount(snapshot),
+    connectedDeviceIds: connectedDeviceIds(snapshot),
+    keyboardFallbackConnected: keyboardFallbackConnected(snapshot),
+    sdlPhysicalConnectedDevices: sdlPhysicalConnectedDeviceCount(snapshot),
+    deviceSummaries: gamepadDeviceTraceSummaries(snapshot),
     slotCount: snapshot.slots.length,
     maxSampleSeq,
     maxSampledAtMs,
@@ -186,6 +224,9 @@ function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapsho
     payload.samplingLifecycle ?? null,
     payload.samplingHealth ?? null,
     payload.connectedDevices ?? 0,
+    payload.connectedDeviceIds ?? [],
+    payload.keyboardFallbackConnected ?? false,
+    payload.sdlPhysicalConnectedDevices ?? 0,
     payload.slotCount ?? 0,
     payload.maxSampleSeq ?? null,
     payload.maxSampledAtMs ?? null,
@@ -204,6 +245,16 @@ function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapsho
     ...payload,
   })
 }
+
+const { hintShellInteractive } = useGamepadShellInteractiveHint({
+  getSnapshot: () => gamepadSnapshot.value,
+  setSnapshot: (snapshot) => {
+    gamepadSnapshot.value = snapshot
+  },
+  traceSnapshotTransition,
+  resolveSnapshotTracePayload,
+  recordTrace: recordGamepadRecoveryTrace,
+})
 
 function handleDocumentVisibilityChange(): void {
   recordGamepadRecoveryTrace('gamepadDocumentVisibilityChanged', {
@@ -354,6 +405,7 @@ const SWIPE_TIMEOUT = 300 // 最大滑动时间
 function handleTouchStart(e: TouchEvent): void {
   touchStartX = e.touches[0].clientX
   touchStartTime = Date.now()
+  void hintShellInteractive('frontend-touchstart')
 }
 
 function handleTouchEnd(e: TouchEvent): void {

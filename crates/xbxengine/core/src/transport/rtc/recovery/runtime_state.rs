@@ -708,12 +708,12 @@ pub(crate) fn decode_present_pipeline_stressed(
     fps_gap_stressed || present_lagging
 }
 
-/// displayed-idr 已建立且 decode/present 仍新鲜：控制面不应再被 stale transport-await 拉回。
-pub(crate) fn displayed_idr_output_pipeline_active(
+/// 当前 media anchor 已建立且 decode/present 仍新鲜：控制面吸收 stale transport-await。
+pub(crate) fn media_anchor_output_pipeline_active(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats)
+    crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats(stats)
         && has_fresh_media_output(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
         && !renderer_shadow_blocks_serviceability(stats, now_ms)
@@ -800,7 +800,7 @@ fn should_absorb_stale_recovery_diagnosis(
     let fresh_output = has_fresh_media_output(stats, now_ms);
     let pipeline_serviceable = !stats.video_decoder_stalled.unwrap_or(false)
         && !renderer_shadow_blocks_serviceability(stats, now_ms);
-    if crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats)
+    if media_anchor_output_pipeline_active(stats, now_ms)
         && fresh_output
         && pipeline_serviceable
         && host_presentation_serviceable(stats, now_ms)

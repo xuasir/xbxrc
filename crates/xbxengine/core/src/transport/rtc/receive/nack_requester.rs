@@ -92,6 +92,13 @@ impl NackRequester {
         self.keyframe_escalation.clear();
     }
 
+    pub fn clear_recovery_state(&mut self) {
+        self.pending.clear();
+        self.recovered.clear();
+        self.exhausted_sequences.clear();
+        self.keyframe_escalation.clear();
+    }
+
     pub fn nack_escalation_pending(&self) -> bool {
         self.keyframe_escalation.is_armed()
     }

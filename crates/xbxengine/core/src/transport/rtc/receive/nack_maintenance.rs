@@ -16,8 +16,7 @@ use crate::transport::rtc::receive::nack_policy::{
     OOS_REPAIRABILITY_PENALTY,
 };
 use crate::transport::rtc::recovery::contract::{
-    displayed_idr_serving_allows_relaxed_controls_from_stats, gap_keyframe_only_mode_active,
-    resolve_gap_vs_keyframe_mode, GapVsKeyframeMode,
+    gap_keyframe_only_mode_active, resolve_gap_vs_keyframe_mode, GapVsKeyframeMode,
 };
 use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
 use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
@@ -56,10 +55,6 @@ impl RtcVideoFrameSource {
         use crate::media::video::types::FrameValue;
 
         let now = std::time::Instant::now();
-        let displayed_idr_relaxed = self
-            .runtime_stats
-            .read(|stats| displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms))
-            .unwrap_or(false);
         let effective_rtt_ms = self
             .runtime_stats
             .read(|stats| {
@@ -87,11 +82,15 @@ impl RtcVideoFrameSource {
                 .is_some_and(|(first, last)| {
                     last.wrapping_sub(*first) as u32 >= NACK_SPAN_KEYFRAME_ESCALATION_PACKETS
                 });
-        let keyframe_escalation_due = poll.keyframe_escalation_due && !displayed_idr_relaxed;
+        let reference_blocking_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal();
+        let keyframe_escalation_due = poll.keyframe_escalation_due && reference_blocking_gap;
         if keyframe_escalation_due {
             self.trace_ledger
                 .recovery_ledger_mut()
                 .note_nack_exhausted();
+            self.sync_recovery_ledger_to_stats();
+        } else if poll.keyframe_escalation_due {
+            self.trace_ledger.note_packet_recovery_progress();
             self.sync_recovery_ledger_to_stats();
         }
         let nack_snapshot = crate::transport::rtc::receive::feedback_arbiter::NackPollSnapshot {
@@ -115,9 +114,7 @@ impl RtcVideoFrameSource {
             effective_rtt_ms,
             nack_snapshot,
             None,
-            keyframe_escalation_due
-                || nack_snapshot.gap_span_too_large
-                || self.is_blocking_non_keyframe_admission(),
+            keyframe_escalation_due || nack_snapshot.gap_span_too_large,
             false,
         );
         use crate::transport::rtc::receive::feedback_arbiter::ReceiveFeedbackAction;
@@ -388,6 +385,8 @@ impl RtcVideoFrameSource {
                 observed_at_ms: now_ms,
             },
         );
+        self.trace_ledger.note_packet_recovery_progress();
+        self.sync_recovery_ledger_to_stats();
         if resolved.was_late {
             self.queue_transport_observation(TransportObservation::NackRecoveredLate);
         }

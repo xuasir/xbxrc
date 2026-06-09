@@ -1,11 +1,8 @@
 use super::decode_sync::{
-    decoder_reference_synced_from_stats, fresh_h264_idr_admission_from_stats,
-    receiver_nack_exhausted_from_stats,
+    decoder_reference_synced_from_stats, decoder_waiting_keyframe_control_active_from_stats,
+    fresh_h264_idr_admission_from_stats, receiver_nack_exhausted_from_stats,
 };
-use super::display::{
-    displayed_idr_serving_allows_relaxed_controls_from_stats,
-    is_soft_missing_idr_bootstrap_reject_reason,
-};
+use super::display::is_soft_missing_idr_bootstrap_reject_reason;
 use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -53,16 +50,13 @@ pub(crate) fn parameter_sets_change_strict_window_ms(effective_rtt_ms: f64) -> f
         .min(PARAMETER_SETS_CHANGE_STRICT_MAX_MS)
 }
 
-/// PS/config 变更后的短窗：修洞期应优先 IDR，不再宽进 soft missing-IDR delta。
+/// PS/config 变更后的短窗：修洞期应优先 IDR，不读 display projection。
 pub(crate) fn parameter_sets_change_strict_active_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
     effective_rtt_ms: f64,
 ) -> bool {
     if fresh_h264_idr_admission_from_stats(stats, now_ms) {
-        return false;
-    }
-    if !displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms) {
         return false;
     }
     if media_supply_priming_for_ps_strict(stats, now_ms) {
@@ -81,13 +75,10 @@ fn repairing_missing_idr_keyframe_pressure_from_stats(
     if fresh_h264_idr_admission_from_stats(stats, now_ms) {
         return false;
     }
-    if !displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms) {
-        return false;
-    }
     if decoder_reference_synced_from_stats(stats, now_ms) {
         return false;
     }
-    let decoder_waiting = stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
+    let decoder_waiting = decoder_waiting_keyframe_control_active_from_stats(stats, now_ms);
     if !decoder_waiting && !receiver_nack_exhausted_from_stats(stats) {
         return false;
     }
@@ -125,7 +116,7 @@ pub(crate) fn resolve_gap_vs_keyframe_mode(
     now_ms: f64,
     effective_rtt_ms: f64,
 ) -> GapVsKeyframeMode {
-    let decoder_waiting = stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
+    let decoder_waiting = decoder_waiting_keyframe_control_active_from_stats(stats, now_ms);
     let action_stage =
         derive_packet_recovery_action_stage_from_stats(stats, now_ms, effective_rtt_ms);
     let gap_age_ms = stats

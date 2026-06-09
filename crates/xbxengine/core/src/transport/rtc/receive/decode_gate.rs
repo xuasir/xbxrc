@@ -116,12 +116,17 @@ pub(crate) fn receiver_decode_context_from_stats(
     now_ms: f64,
 ) -> ReceiverDecodeContext {
     use crate::transport::rtc::recovery::contract::{
-        decoder_reference_synced_from_stats, has_current_clean_anchor_from_stats,
+        current_clean_anchor_observed_at_ms_from_stats, decoder_reference_synced_from_stats,
+        has_current_clean_anchor_from_stats,
     };
+    let decoder_reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
+    let current_media_anchor_committed = current_clean_anchor_observed_at_ms_from_stats(stats)
+        .is_some()
+        || stats.recovery_fresh_anchor_recovered_at_ms.is_some();
     let first_frame_acquired = has_current_clean_anchor_from_stats(stats)
         || stats.recovery_playback_recovered_at_ms.is_some()
         || stats.latest_video_decode_ok_time_ms.is_some();
-    let receiver_state = stats
+    let observed_receiver_state = stats
         .latest_video_receiver_observation
         .as_ref()
         .map(|obs| match obs.receiver_state.as_str() {
@@ -135,6 +140,18 @@ pub(crate) fn receiver_decode_context_from_stats(
         .as_ref()
         .and_then(|timeline| timeline.gap.as_ref())
         .is_some();
+    let receiver_state = if matches!(observed_receiver_state, ReceiverState::WaitingKeyframe)
+        && first_frame_acquired
+        && (current_media_anchor_committed || decoder_reference_synced)
+    {
+        if has_active_gap {
+            ReceiverState::Repairing
+        } else {
+            ReceiverState::Receiving
+        }
+    } else {
+        observed_receiver_state
+    };
     let nack_exhausted = stats
         .latest_video_receiver_observation
         .as_ref()
@@ -143,7 +160,6 @@ pub(crate) fn receiver_decode_context_from_stats(
                 && has_active_gap
                 && !matches!(receiver_state, ReceiverState::Repairing)
         });
-    let decoder_reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
     ReceiverDecodeContext {
         receiver_state,
         has_active_gap,

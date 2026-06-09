@@ -42,6 +42,14 @@
 - WebRTC / streaming / transport 继续沿当前 Rust 主线演进。
 - Gamepad navigation / focus routing / controller UX 继续使用 geometric pathfinding engine。参考 [`dev-docs/gamepad-navigation.md`](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/gamepad-navigation.md)。
 
+# Streaming / WebRTC Behavior Standard
+
+- 网络层优先贴近标准 WebRTC：TWCC、NACK、PLI/FIR、REMB/GCC、ICE/TURN 与反馈目标绑定遵循可互操作、可诊断、可回归的主线。
+- 恢复层以低延迟优先为目标：receive 侧事实权威、ReferenceChain、RecoveryLedger、cleanAnchorCommitted、DisplayStable 形成闭环，恢复判断必须能从 trace 中复盘。
+- 显示与上屏调度以远程游戏体验为目标：decode 后允许 latest-only、local drop、host refresh 快速释放，优先压低 glass-to-glass 与 submit-to-present 长尾。
+- 与标准 WebRTC 差异较大的策略必须写清目标、边界、风险与验证方式，使用 runtime trace gate、midsegment report、receive feedback report 证明它让延迟、恢复、显示健康度变好。
+- 分析网络、恢复、显示、上屏问题时，结论必须同时覆盖网络健康、恢复链健康、media supply、steady supply、submit/present 长尾与帧供给 delta。
+
 # Forbidden Drift
 
 - 不引入 Electron、React、Next.js、React Native、Flutter 等平行客户端路线

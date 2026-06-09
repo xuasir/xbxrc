@@ -81,7 +81,7 @@ def p95(values: list[float]) -> float | None:
 
 
 SURFACE_PHASE_ACTION_STAGES = frozenset(
-    {"priming", "steady", "repairing", "await-idr", "supply-break", "must-idr"}
+    {"priming", "repairing", "await-idr", "supply-break", "must-idr"}
 )
 
 
@@ -140,6 +140,7 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
     need_keyframe_non_idr_feed = 0
     session_violations = 0
     decoder_reset_violations = 0
+    local_control_keyframe_requests = 0
 
     terminal_remote_no_usable_idr = 0
     terminal_remote_continuation_only = 0
@@ -235,6 +236,17 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                     sparse_dwell_ms.append(float(ts) - sparse_active_start)
                 sparse_active_start = None
 
+        if name == "channelMessageCatalog":
+            direction = payload.get("direction") or payload.get("Direction")
+            channel = payload.get("channel")
+            kind_message = payload.get("kindMessage") or payload.get("kind_message")
+            if (
+                direction == "local"
+                and channel == "control"
+                and kind_message == "videoKeyframeRequested"
+            ):
+                local_control_keyframe_requests += 1
+
         if name == "keyframeRequestOutcome":
             keyframe_outcomes[payload.get("outcome") or "unknown"] += 1
 
@@ -295,8 +307,11 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                 need_keyframe_non_idr_feed += 1
 
         if is_display_stable_event(name, payload):
-            if not ledger_display_closure_ok(latest_control_facts):
+            display_control_facts = dict(latest_control_facts)
+            absorb_control_facts(payload, display_control_facts)
+            if not ledger_display_closure_ok(display_control_facts):
                 display_stable_without_ledger_closure += 1
+            absorb_control_facts(payload, latest_control_facts)
 
         if name == "cleanAnchorCommitted":
             chain_anchor_keys.add(chain_key(payload, current_ledger_generation))
@@ -318,6 +333,12 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                 if current_ledger_generation is not None:
                     decoded_by_ledger_generation[current_ledger_generation] += 1
             elif phase in ("CleanAnchorCommitted", "FreshAnchorRecovered"):
+                if phase == "CleanAnchorCommitted":
+                    chain_response_keys.add(key)
+                    chain_decoded_keys.add(key)
+                    if current_ledger_generation is not None:
+                        response_by_ledger_generation[current_ledger_generation] += 1
+                        decoded_by_ledger_generation[current_ledger_generation] += 1
                 chain_anchor_keys.add(key)
                 if current_ledger_generation is not None:
                     anchor_by_ledger_generation[current_ledger_generation] += 1
@@ -441,6 +462,9 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         "insertControlProjectionMismatch": insert_control_projection_mismatch,
         "sessionPictureRecoveryViolations": session_violations,
         "decoderResetViolations": decoder_reset_violations,
+        "controlKeyframeRequests": {
+            "localControlVideoKeyframeRequested": local_control_keyframe_requests,
+        },
         "rates": rates,
         "receiveFeedbackGate": receive_feedback_gate,
         "receiveFeedbackGateFailures": gate_failures,
@@ -477,12 +501,34 @@ def main() -> int:
         default=Path("runtime-logs/runtime-trace-1779953007765-1.jsonl"),
         help="runtime-trace JSONL path",
     )
+    parser.add_argument(
+        "--fail-on-gate",
+        action="store_true",
+        help="return exit code 2 when receiveFeedbackGate is FAIL",
+    )
+    parser.add_argument(
+        "--require-media-recovered",
+        action="store_true",
+        help="return exit code 2 unless cleanAnchorCommitted/media recovery is observed",
+    )
+    parser.add_argument(
+        "--require-display-stable",
+        action="store_true",
+        help="return exit code 2 unless DisplayStable is observed",
+    )
     args = parser.parse_args()
     if not args.trace.exists():
         print(f"trace not found: {args.trace}", file=sys.stderr)
         return 1
     report = analyze(load_events(args.trace))
     print(json.dumps(report, indent=2, ensure_ascii=False))
+    if args.fail_on_gate and report.get("receiveFeedbackGate") != "PASS":
+        return 2
+    chain = report.get("keyframeChain") or {}
+    if args.require_media_recovered and int(chain.get("cleanAnchorCommitted") or 0) <= 0:
+        return 2
+    if args.require_display_stable and int(chain.get("displayStable") or 0) <= 0:
+        return 2
     return 0
 
 

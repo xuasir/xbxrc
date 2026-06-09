@@ -1,6 +1,6 @@
 use super::data_channel::{
-    build_input_metadata_packet, build_message_handshake_payload, INPUT_CHANNEL_LABEL,
-    MESSAGE_CHANNEL_LABEL,
+    build_control_video_keyframe_requested_payload, build_input_metadata_packet,
+    build_message_handshake_payload, INPUT_CHANNEL_LABEL, MESSAGE_CHANNEL_LABEL,
 };
 
 #[test]
@@ -26,4 +26,19 @@ fn input_metadata_packet_has_fixed_header_layout() {
 fn default_channel_labels_are_stable() {
     assert_eq!(MESSAGE_CHANNEL_LABEL, "message");
     assert_eq!(INPUT_CHANNEL_LABEL, "input");
+}
+
+#[test]
+fn control_video_keyframe_payload_matches_browser_direct_request() {
+    let payload = build_control_video_keyframe_requested_payload();
+    let value: serde_json::Value = serde_json::from_str(&payload).expect("valid json payload");
+
+    assert_eq!(
+        value.get("message").and_then(|v| v.as_str()),
+        Some("videoKeyframeRequested")
+    );
+    assert_eq!(
+        value.get("ifrRequested").and_then(|v| v.as_bool()),
+        Some(true)
+    );
 }

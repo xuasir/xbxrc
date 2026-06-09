@@ -1101,6 +1101,16 @@ pub fn build_xbxengine_stats(
         inbound_bytes_total: runtime_stats.map(|stats| stats.inbound_bytes_total),
         inbound_video_bytes_total: runtime_stats.map(|stats| stats.inbound_video_bytes_total),
         inbound_audio_bytes_total: runtime_stats.map(|stats| stats.inbound_audio_bytes_total),
+        inbound_video_frame_count_total: runtime_stats
+            .map(|stats| stats.inbound_video_frame_count_total),
+        inbound_video_rtp_marker_count_total: runtime_stats
+            .map(|stats| stats.inbound_video_rtp_marker_count_total),
+        inbound_video_access_unit_count_total: runtime_stats
+            .map(|stats| stats.inbound_video_access_unit_count_total),
+        inbound_video_decode_gate_emit_count_total: runtime_stats
+            .map(|stats| stats.inbound_video_decode_gate_emit_count_total),
+        inbound_video_decode_gate_continue_count_total: runtime_stats
+            .map(|stats| stats.inbound_video_decode_gate_continue_count_total),
         inbound_video_packet_count_total: runtime_stats
             .map(|stats| stats.inbound_video_packet_count_total),
         latest_video_packet_arrival_rtp_timestamp: runtime_stats
@@ -1869,6 +1879,12 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.latest_observation_label.clone()),
         latest_observation_summary: runtime_stats
             .and_then(|stats| stats.latest_observation_summary.clone()),
+        latest_turn_relay_observation_seq: runtime_stats
+            .map(|stats| stats.latest_turn_relay_observation_seq),
+        latest_turn_relay_observation_label: runtime_stats
+            .and_then(|stats| stats.latest_turn_relay_observation_label.clone()),
+        latest_turn_relay_observation_summary: runtime_stats
+            .and_then(|stats| stats.latest_turn_relay_observation_summary.clone()),
         latest_target_remb_action: runtime_stats
             .and_then(|stats| stats.latest_target_remb_action.clone()),
         latest_target_remb_summary: runtime_stats
@@ -2128,7 +2144,7 @@ fn is_local_decoder_maintenance_decision(action_selected: &str) -> bool {
     matches!(
         action_selected,
         "requestDecoderReset"
-            | "requestPli"
+            | "delegatedToReceive"
             | "coalesced:keyframeInFlight"
             | "coalesced:decoderResetInFlight"
             | "waitForBurst"

@@ -16,13 +16,13 @@ describe('streamInputRouteController', () => {
   beforeEach(async () => {
     waitForPadNeutralMock.mockReset()
     waitForPadNeutralMock.mockImplementation(async () => {})
+    await streamInputRouteController.resetOnLeaveStream()
     businessInputArbiter.patch({
       appScene: 'stream',
       backendGate: 'open',
-      streamActive: true,
       overlayCapturing: false,
     })
-    await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(true)
   })
 
   afterEach(async () => {
@@ -56,7 +56,7 @@ describe('streamInputRouteController', () => {
     expect(businessInputArbiter.getOwner()).toBe('stream')
   })
 
-  it('syncStreamInputRoute activates stream input when session active and not capturing', async () => {
+  it('setStreamActive activates stream input when session starts and not capturing', async () => {
     const activate = vi.fn(async () => {})
     const deactivate = vi.fn(async () => {})
     await streamInputRouteController.resetOnLeaveStream()
@@ -64,7 +64,10 @@ describe('streamInputRouteController', () => {
       activateStreamInput: activate,
       deactivateStreamInput: deactivate,
     })
-    await streamInputRouteController.syncStreamInputRoute()
+    expect(activate).not.toHaveBeenCalled()
+
+    await streamInputRouteController.setStreamActive(true)
+
     expect(activate).toHaveBeenCalledTimes(1)
     expect(deactivate).not.toHaveBeenCalled()
   })
@@ -76,6 +79,7 @@ describe('streamInputRouteController', () => {
     const rustDeactivate = vi.fn(async () => {})
 
     await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(true)
     await streamInputRouteController.installStreamInputConsumerAdapter({
       activateStreamInput: browserActivate,
       deactivateStreamInput: browserDeactivate,
@@ -94,6 +98,7 @@ describe('streamInputRouteController', () => {
   it('does not release to stream when another overlay is still held', async () => {
     const activate = vi.fn(async () => {})
     await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(true)
     streamInputRouteController.installStreamInputConsumerAdapter({
       activateStreamInput: activate,
       deactivateStreamInput: vi.fn(async () => {}),
@@ -122,6 +127,7 @@ describe('streamInputRouteController', () => {
 
     const activate = vi.fn(async () => {})
     await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(true)
     streamInputRouteController.installStreamInputConsumerAdapter({
       activateStreamInput: activate,
       deactivateStreamInput: vi.fn(async () => {}),
@@ -180,6 +186,7 @@ describe('streamInputRouteController', () => {
   it('releasing sub-sheet after menu-to-sheet transition returns stream ownership', async () => {
     const activate = vi.fn(async () => {})
     await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(true)
     streamInputRouteController.installStreamInputConsumerAdapter({
       activateStreamInput: activate,
       deactivateStreamInput: vi.fn(async () => {}),
@@ -207,6 +214,7 @@ describe('streamInputRouteController', () => {
 
     const activate = vi.fn(async () => {})
     await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(true)
     streamInputRouteController.installStreamInputConsumerAdapter({
       activateStreamInput: activate,
       deactivateStreamInput: vi.fn(async () => {}),
@@ -223,8 +231,7 @@ describe('streamInputRouteController', () => {
       expect(waitForPadNeutralMock).toHaveBeenCalledTimes(1)
     })
 
-    businessInputArbiter.patch({ streamActive: false })
-    await streamInputRouteController.resetOnLeaveStream()
+    await streamInputRouteController.setStreamActive(false)
 
     resolveNeutral?.()
     await releasePromise

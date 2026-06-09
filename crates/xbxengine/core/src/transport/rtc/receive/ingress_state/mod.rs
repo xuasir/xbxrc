@@ -32,10 +32,7 @@ use crate::transport::rtc::capability::RtcTransportCapability;
 use crate::transport::rtc::receive::{
     receiver_state_from_runtime, ReceiveCoreBody, ReceiveEngine, ReceiverObservation,
 };
-use crate::transport::rtc::recovery::contract::{
-    displayed_idr_serving_allows_relaxed_controls_from_stats, displayed_idr_serving_from_stats,
-};
-use crate::transport::rtc::recovery::contract::{idr_recovery_active_from_stats, SparseIdrRhythm};
+use crate::transport::rtc::recovery::contract::SparseIdrRhythm;
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     VideoFramePipelineSources,
@@ -106,7 +103,7 @@ pub struct RtcVideoFrameSource {
     pub(crate) ingress_budget_fallback_count: u64,
     pub(crate) ingress_budget_unknown_rtt_count: u64,
     pub(crate) frame_boundary: Arc<Mutex<FrameBoundaryTracker>>,
-    pub(crate) last_consumed_clean_anchor_epoch: u64,
+    pub(crate) last_consumed_clean_anchor_epoch: Option<u64>,
     pub(crate) receiver_observation_id: u64,
 }
 
@@ -221,7 +218,7 @@ impl RtcVideoFrameSource {
             ingress_budget_fallback_count: 0,
             ingress_budget_unknown_rtt_count: 0,
             frame_boundary: Arc::new(Mutex::new(FrameBoundaryTracker::new())),
-            last_consumed_clean_anchor_epoch: 0,
+            last_consumed_clean_anchor_epoch: None,
             receiver_observation_id: 0,
         };
         source
@@ -411,10 +408,6 @@ impl RtcVideoFrameSource {
 
     pub(crate) fn receiver_local_state(&self) -> ReceiverState {
         let has_gap = self.receive_core().receive_engine.has_active_gap();
-        let displayed_idr_serving = self
-            .runtime_stats
-            .read(|stats| displayed_idr_serving_from_stats(stats))
-            .unwrap_or(false);
         receiver_state_from_runtime(
             self.waiting_recovery_keyframe_since_ms.is_some(),
             has_gap,
@@ -422,7 +415,6 @@ impl RtcVideoFrameSource {
                 .receive_engine
                 .frame_assembler
                 .assembled_count(),
-            displayed_idr_serving,
         )
     }
 
@@ -547,10 +539,6 @@ impl RtcVideoFrameSource {
 
     fn publish_receiver_observation(&mut self, now_ms: f64, bootstrap_reject: Option<String>) {
         let has_gap = self.receive_core().receive_engine.has_active_gap();
-        let displayed_idr_relaxed = self
-            .runtime_stats
-            .read(|stats| displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms))
-            .unwrap_or(false);
         let state = self.receiver_local_state();
         let gap_sequence = self
             .runtime_stats
@@ -564,8 +552,7 @@ impl RtcVideoFrameSource {
         self.receiver_observation_id = self.receiver_observation_id.saturating_add(1);
         let observation = ReceiverObservation {
             nack_in_flight: has_gap,
-            keyframe_request_pending: self.waiting_recovery_keyframe_since_ms.is_some()
-                && !displayed_idr_relaxed,
+            keyframe_request_pending: self.waiting_recovery_keyframe_since_ms.is_some(),
             bootstrap_reject_reason: bootstrap_reject,
         };
         self.runtime_stats.record_video_receiver_observation(
@@ -585,28 +572,16 @@ impl RtcVideoFrameSource {
     fn keyframe_request_force_required(
         &self,
         soft: bool,
-        now_ms: f64,
+        _now_ms: f64,
         rhythm: SparseIdrRhythm,
     ) -> bool {
         if !soft {
             return true;
         }
-        if self
-            .runtime_stats
-            .read(|stats| displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms))
-            .unwrap_or(false)
-        {
-            return false;
-        }
         if rhythm.active && rhythm.pli_due {
             return true;
         }
-        self.runtime_stats
-            .read(|stats| {
-                stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
-                    || idr_recovery_active_from_stats(stats, now_ms)
-            })
-            .unwrap_or(false)
+        false
     }
 
     /// 薄封装：所有 keyframe 决策经 `plan_receive_feedback` / `execute_receive_feedback_keyframe`。

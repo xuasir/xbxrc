@@ -16,6 +16,7 @@ import { createBrowserRuntime } from './browser-runtime'
 import {
   buildRuntimeAttemptSpec,
   canRetryFallbackTurn,
+  CONNECTING_FALLBACK_RETRY_MS,
   decideRecoveryArbiter,
   DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
 
@@ -69,6 +70,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   let activeConnected = false
   let fallbackRetryConsumed = false
   let recoveryGate: RecoveryGateState = {}
+  let connectingFallbackRetryTimer: BrowserInterval | null = null
 
   async function recordRuntimeTraceEvent(
     event: string,
@@ -91,6 +93,13 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     if (performanceTimer.value !== null) {
       clearInterval(performanceTimer.value)
       performanceTimer.value = null
+    }
+  }
+
+  function clearConnectingFallbackRetryTimer(): void {
+    if (connectingFallbackRetryTimer !== null) {
+      clearTimeout(connectingFallbackRetryTimer)
+      connectingFallbackRetryTimer = null
     }
   }
 
@@ -127,9 +136,14 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       if (event.type === 'connectionStateChanged') {
         if (event.state === 'connected') {
           activeConnected = true
+          clearConnectingFallbackRetryTimer()
           refreshStatsPolling()
         }
+        if (event.state === 'connecting') {
+          scheduleConnectingFallbackRetry(token)
+        }
         if (event.state === 'closed' || event.state === 'failed') {
+          clearConnectingFallbackRetryTimer()
           clearPerformancePolling()
           lastFrameAt.value = null
           void tryFallbackTurnRetry(token).then((retriedWithFallbackTurn) => {
@@ -322,8 +336,9 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
 
     // 仅在首轮直连失败时切一次 fallback TURN，避免和既有 recovery 重试叠加。
+    clearConnectingFallbackRetryTimer()
     fallbackRetryConsumed = true
-    debugLog('[streaming][runtime-host] home direct-first failed before connected, retrying with fallback TURN')
+    debugLog('[streaming][runtime-host] direct-first failed before connected, retrying with fallback TURN')
     void recordRuntimeTraceEvent('fallbackTurnRetry', {
       targetType: launchSpec.targetType,
       mode: launchSpec.runtime.mode,
@@ -355,6 +370,47 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
   }
 
+  function scheduleConnectingFallbackRetry(token: number): void {
+    if (!canRetryFallbackTurn({
+      isTokenActive: isRuntimeTokenActive(token),
+      launchSpec: activeLaunchSpec,
+      activeConnected,
+      fallbackRetryConsumed,
+    })) {
+      clearConnectingFallbackRetryTimer()
+      return
+    }
+    if (connectingFallbackRetryTimer !== null) {
+      return
+    }
+    void recordRuntimeTraceEvent('connectingFallbackTurnRetryScheduled', {
+      delayMs: CONNECTING_FALLBACK_RETRY_MS,
+      targetType: activeLaunchSpec?.targetType ?? null,
+      mode: activeLaunchSpec?.runtime.mode ?? null,
+    })
+    connectingFallbackRetryTimer = window.setTimeout(() => {
+      connectingFallbackRetryTimer = null
+      if (!isRuntimeTokenActive(token) || activeConnected) {
+        return
+      }
+      void recordRuntimeTraceEvent('connectingFallbackTurnRetryFired', {
+        delayMs: CONNECTING_FALLBACK_RETRY_MS,
+        targetType: activeLaunchSpec?.targetType ?? null,
+        mode: activeLaunchSpec?.runtime.mode ?? null,
+      })
+      void tryFallbackTurnRetry(token).catch((error) => {
+        void recordRuntimeTraceEvent('connectingFallbackTurnRetryFailed', {
+          error: error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+              }
+            : String(error),
+        })
+      })
+    }, CONNECTING_FALLBACK_RETRY_MS)
+  }
+
   function ensureRuntime(mode: RuntimeLaunchSpec['runtime']['mode']): RuntimePort {
     if (runtime.value !== null && activeMode === mode) {
       return runtime.value
@@ -370,6 +426,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     reason?: string
   }): Promise<void> {
     runtimeToken += 1
+    clearConnectingFallbackRetryTimer()
     clearPerformancePolling()
     runtimeCleanup?.()
     runtimeCleanup = null

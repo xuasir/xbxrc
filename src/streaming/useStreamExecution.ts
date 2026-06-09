@@ -19,7 +19,6 @@ import type {
   StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
-import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
 import { events } from '../services/events'
@@ -120,16 +119,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   let disposeStartupEvents: (() => void) | null = null
 
   function setStreamSessionPresent(active: boolean): void {
-    if (!active) {
-      businessInputArbiter.patch({
-        streamActive: false,
-        overlayCapturing: false,
-      })
-      streamInputRouteController.resetOnLeaveStream()
-      return
-    }
-    businessInputArbiter.patch({ streamActive: true })
-    void streamInputRouteController.syncStreamInputRoute()
+    void streamInputRouteController.setStreamActive(active)
   }
 
   async function recordExecutionTraceEvent(

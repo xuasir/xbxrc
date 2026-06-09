@@ -9,13 +9,83 @@ use crate::transport::rtc::receive::insert_gate::InsertContext;
 use crate::transport::rtc::receive::insert_gate::InsertDecision;
 use crate::transport::rtc::receive::keyframe_requester::KeyframeRequestDispatch;
 use crate::transport::rtc::receive::recovery_ledger::PictureRecoveryTerminalReason;
+use crate::transport::rtc::receive::recovery_ledger::ReceiveRecoveryLedger;
 use crate::transport::rtc::recovery::contract::{
-    sparse_idr_rhythm_from_recovery_ledger, sparse_must_idr_projection_mismatch, SparseIdrRhythm,
+    sparse_idr_rhythm_from_recovery_ledger, sparse_must_idr_projection_mismatch_from_reference,
+    PacketRecoveryActionStage, ReferenceChainObservation, SparseIdrRhythm,
 };
 
 use super::RtcVideoFrameSource;
 
+fn actual_feedback_action_for_keyframe_dispatch(
+    decision: ReceiveFeedbackDecision,
+    dispatch: KeyframeRequestDispatch,
+) -> Option<ReceiveFeedbackAction> {
+    match dispatch {
+        KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent) => Some(
+            if matches!(decision.action, ReceiveFeedbackAction::RequestFir) {
+                ReceiveFeedbackAction::RequestFir
+            } else {
+                ReceiveFeedbackAction::RequestPli
+            },
+        ),
+        KeyframeRequestDispatch::Throttled | KeyframeRequestDispatch::Coalesced => {
+            Some(ReceiveFeedbackAction::None)
+        }
+        KeyframeRequestDispatch::Sent(
+            KeyframeSendOutcome::FeedbackUnavailable
+            | KeyframeSendOutcome::FeedbackWarming
+            | KeyframeSendOutcome::TransportNotReady,
+        ) => None,
+    }
+}
+
+fn is_keyframe_feedback_action(action: ReceiveFeedbackAction) -> bool {
+    matches!(
+        action,
+        ReceiveFeedbackAction::RequestPli | ReceiveFeedbackAction::RequestFir
+    )
+}
+
+fn should_count_feedback_action_mismatch(
+    decision: ReceiveFeedbackDecision,
+    actual: ReceiveFeedbackAction,
+) -> bool {
+    is_keyframe_feedback_action(decision.action)
+        && is_keyframe_feedback_action(actual)
+        && actual != decision.action
+}
+
 impl RtcVideoFrameSource {
+    fn packet_recovery_action_stage_for_receive(
+        &self,
+        ledger: &ReceiveRecoveryLedger,
+        stats: &crate::XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+        effective_rtt_ms: f64,
+    ) -> PacketRecoveryActionStage {
+        let has_active_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal();
+        let gap_age_ms = has_active_gap
+            .then(|| {
+                stats
+                    .latest_video_timeline_observation
+                    .as_ref()
+                    .and_then(|timeline| timeline.gap.as_ref())
+                    .map(|gap| (now_ms - gap.observed_at_ms).max(0.0))
+            })
+            .flatten();
+        let nack_in_flight = stats
+            .latest_video_receiver_observation
+            .as_ref()
+            .is_some_and(|obs| obs.nack_in_flight);
+        ledger.derive_packet_recovery_action_stage(
+            has_active_gap,
+            nack_in_flight,
+            gap_age_ms,
+            effective_rtt_ms,
+        )
+    }
+
     pub(crate) fn build_insert_context(
         &self,
         decode: crate::transport::rtc::receive::decode_gate::ReceiverDecodeContext,
@@ -28,25 +98,10 @@ impl RtcVideoFrameSource {
                 let reference =
                     self.trace_ledger
                         .reference_chain_observation(stats, now_ms, effective_rtt_ms);
-                let gap_age_ms = stats
-                    .latest_video_timeline_observation
-                    .as_ref()
-                    .and_then(|timeline| timeline.gap.as_ref())
-                    .map(|gap| (now_ms - gap.observed_at_ms).max(0.0));
-                let has_active_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal()
-                    || stats
-                        .latest_video_timeline_observation
-                        .as_ref()
-                        .and_then(|timeline| timeline.gap.as_ref())
-                        .is_some();
-                let nack_in_flight = stats
-                    .latest_video_receiver_observation
-                    .as_ref()
-                    .is_some_and(|obs| obs.nack_in_flight);
-                let action_stage = ledger.derive_packet_recovery_action_stage(
-                    has_active_gap,
-                    nack_in_flight,
-                    gap_age_ms,
+                let action_stage = self.packet_recovery_action_stage_for_receive(
+                    ledger,
+                    stats,
+                    now_ms,
                     effective_rtt_ms,
                 );
                 InsertContext::from_ledger_inputs(
@@ -59,12 +114,18 @@ impl RtcVideoFrameSource {
                     effective_rtt_ms,
                 )
             })
-            .unwrap_or(InsertContext::from_runtime(
-                decode,
-                &crate::XbxEngineMediaRuntimeStats::default(),
-                now_ms,
-                effective_rtt_ms,
-            ))
+            .unwrap_or_else(|| {
+                let fallback_stats = crate::XbxEngineMediaRuntimeStats::default();
+                InsertContext::from_ledger_inputs(
+                    decode,
+                    ReferenceChainObservation::default(),
+                    PacketRecoveryActionStage::Steady,
+                    false,
+                    &fallback_stats,
+                    now_ms,
+                    effective_rtt_ms,
+                )
+            })
     }
 }
 
@@ -95,11 +156,18 @@ impl RtcVideoFrameSource {
                     self.trace_ledger
                         .reference_chain_observation(stats, now_ms, effective_rtt_ms);
                 let ledger = self.trace_ledger.recovery_ledger().clone();
+                let action_stage = self.packet_recovery_action_stage_for_receive(
+                    &ledger,
+                    stats,
+                    now_ms,
+                    effective_rtt_ms,
+                );
                 let sparse = sparse_idr_rhythm_from_recovery_ledger(
                     &ledger,
                     stats,
                     now_ms,
                     effective_rtt_ms,
+                    action_stage,
                 );
                 (
                     sparse,
@@ -151,7 +219,7 @@ impl RtcVideoFrameSource {
             .recovery_ledger_mut()
             .reset_for_transport_recovery_epoch(epoch);
         if epoch_changed {
-            self.last_consumed_clean_anchor_epoch = 0;
+            self.last_consumed_clean_anchor_epoch = None;
         }
     }
 
@@ -171,6 +239,12 @@ impl RtcVideoFrameSource {
                     stats,
                     now_ms,
                     effective_rtt_ms,
+                    self.packet_recovery_action_stage_for_receive(
+                        self.trace_ledger.recovery_ledger(),
+                        stats,
+                        now_ms,
+                        effective_rtt_ms,
+                    ),
                 )
             })
             .unwrap_or_default()
@@ -196,7 +270,9 @@ impl RtcVideoFrameSource {
         self.sync_recovery_ledger_to_stats();
         let sparse_mismatch = self
             .runtime_stats
-            .read(|stats| sparse_must_idr_projection_mismatch(stats, now_ms))
+            .read(|stats| {
+                sparse_must_idr_projection_mismatch_from_reference(observation.state, stats, now_ms)
+            })
             .unwrap_or(false);
         self.runtime_stats.update(|stats| {
             stats.latest_reference_chain_observation_source = Some("ledger".to_string());
@@ -250,14 +326,18 @@ impl RtcVideoFrameSource {
                 _ => {}
             }
             if let Some(actual) = actual_action {
-                if actual != decision.action {
+                if should_count_feedback_action_mismatch(decision, actual) {
                     stats.receive_feedback_arbiter_mismatch_total = stats
                         .receive_feedback_arbiter_mismatch_total
                         .saturating_add(1);
                 }
             }
-            if let Some(outcome) = stats.latest_keyframe_request_outcome.as_deref() {
-                stats.latest_receive_feedback_executor_outcome = Some(outcome.to_string());
+            if decision.should_touch_keyframe_executor() {
+                if let Some(outcome) = stats.latest_keyframe_request_outcome.as_deref() {
+                    stats.latest_receive_feedback_executor_outcome = Some(outcome.to_string());
+                }
+            } else {
+                stats.latest_receive_feedback_executor_outcome = None;
             }
         });
     }
@@ -303,6 +383,12 @@ impl RtcVideoFrameSource {
                     stats,
                     now_ms,
                     stats.recovery_effective_rtt_ms.unwrap_or(200.0),
+                    self.packet_recovery_action_stage_for_receive(
+                        self.trace_ledger.recovery_ledger(),
+                        stats,
+                        now_ms,
+                        stats.recovery_effective_rtt_ms.unwrap_or(200.0),
+                    ),
                 )
             })
             .unwrap_or_default();
@@ -311,26 +397,7 @@ impl RtcVideoFrameSource {
             .receive_engine
             .keyframe_requester
             .request_dispatch(capability.as_ref(), force, sparse_idr_rhythm);
-        let actual = match dispatch {
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent) => Some(
-                if matches!(decision.action, ReceiveFeedbackAction::RequestFir) {
-                    ReceiveFeedbackAction::RequestFir
-                } else {
-                    ReceiveFeedbackAction::RequestPli
-                },
-            ),
-            KeyframeRequestDispatch::Throttled => Some(ReceiveFeedbackAction::None),
-            KeyframeRequestDispatch::Coalesced => Some(ReceiveFeedbackAction::None),
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::FeedbackUnavailable) => {
-                Some(ReceiveFeedbackAction::None)
-            }
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::FeedbackWarming) => {
-                Some(ReceiveFeedbackAction::None)
-            }
-            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::TransportNotReady) => {
-                Some(ReceiveFeedbackAction::None)
-            }
-        };
+        let actual = actual_feedback_action_for_keyframe_dispatch(decision, dispatch);
         self.write_keyframe_request_outcome_stats(
             source_event,
             frame_rtp_timestamp,
@@ -470,13 +537,21 @@ impl RtcVideoFrameSource {
             KeyframeRequestDispatch::Throttled => "throttled",
             KeyframeRequestDispatch::Coalesced => "coalesced",
         };
-        if matches!(
+        let sent_keyframe_request = matches!(
             dispatch,
             KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent)
-        ) {
-            self.trace_ledger
-                .recovery_ledger_mut()
-                .note_keyframe_request_sent(now_ms);
+        );
+        let mut sent_hard_keyframe_request = false;
+        if sent_keyframe_request {
+            let has_active_hard_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal();
+            let ledger = self.trace_ledger.recovery_ledger_mut();
+            if has_active_hard_gap {
+                sent_hard_keyframe_request = !ledger.current_media_anchor_absorbs_repair_refresh();
+                ledger.note_keyframe_refresh_sent_for_active_gap(now_ms);
+            } else {
+                sent_hard_keyframe_request = true;
+                ledger.note_keyframe_request_sent(now_ms);
+            }
             self.sync_recovery_ledger_to_stats();
             if self.waiting_recovery_keyframe_since_ms.is_none() {
                 self.waiting_recovery_keyframe_since_ms = Some(now_ms);
@@ -499,10 +574,7 @@ impl RtcVideoFrameSource {
                 stats.receive_sparse_idr_pli_interval_ms = None;
                 stats.latest_receive_feedback_sparse_active = false;
             }
-            if matches!(
-                dispatch,
-                KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent)
-            ) {
+            if sent_hard_keyframe_request {
                 stats.receive_keyframe_last_sent_at_ms = Some(now_ms);
             }
             stats.latest_observation_label = Some("keyframeRequestOutcome".to_string());
@@ -511,7 +583,93 @@ impl RtcVideoFrameSource {
                 stats.keyframe_request_outcome_seq
             ));
         });
-        let _ = frame_rtp_timestamp;
-        self.publish_receiver_observation(now_ms, None);
+        if sent_keyframe_request {
+            self.record_video_timeline_observation(
+                "keyframe-request-sent",
+                None,
+                frame_rtp_timestamp,
+                now_ms,
+            );
+        } else {
+            self.publish_receiver_observation(now_ms, None);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport::rtc::receive::feedback_arbiter::ReceiveFeedbackCoalescing;
+    use crate::transport::rtc::receive::recovery_ledger::KeyframeRequiredCause;
+    use crate::transport::rtc::recovery::contract::ReferenceChainState;
+
+    fn keyframe_decision(action: ReceiveFeedbackAction) -> ReceiveFeedbackDecision {
+        ReceiveFeedbackDecision {
+            action,
+            reason: "need-keyframe",
+            coalescing: ReceiveFeedbackCoalescing::FreshSent,
+            sparse_active: true,
+            reference_state: ReferenceChainState::NeedKeyframe,
+            feedback_target_state: "ready",
+            gap_sequence: None,
+            nack_packet_count: 0,
+            keyframe_required: true,
+            keyframe_required_cause: KeyframeRequiredCause::FirstDelta,
+            response_state: "no-packet",
+            terminal_candidate: false,
+            ledger_generation: 1,
+        }
+    }
+
+    #[test]
+    fn transport_not_ready_outcome_does_not_count_as_arbiter_action_mismatch() {
+        let actual = actual_feedback_action_for_keyframe_dispatch(
+            keyframe_decision(ReceiveFeedbackAction::RequestFir),
+            KeyframeRequestDispatch::Sent(KeyframeSendOutcome::TransportNotReady),
+        );
+
+        assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn coalesced_outcome_still_reports_none_action_for_consistency_checks() {
+        let actual = actual_feedback_action_for_keyframe_dispatch(
+            keyframe_decision(ReceiveFeedbackAction::RequestPli),
+            KeyframeRequestDispatch::Coalesced,
+        );
+
+        assert_eq!(actual, Some(ReceiveFeedbackAction::None));
+    }
+
+    #[test]
+    fn nack_action_does_not_count_as_keyframe_arbiter_mismatch() {
+        let mut decision = keyframe_decision(ReceiveFeedbackAction::SendNack);
+        decision.reason = "gap-repair";
+        decision.keyframe_required = false;
+
+        assert!(!should_count_feedback_action_mismatch(
+            decision,
+            ReceiveFeedbackAction::None
+        ));
+    }
+
+    #[test]
+    fn keyframe_action_difference_counts_as_arbiter_mismatch() {
+        assert!(should_count_feedback_action_mismatch(
+            keyframe_decision(ReceiveFeedbackAction::RequestFir),
+            ReceiveFeedbackAction::RequestPli
+        ));
+    }
+
+    #[test]
+    fn coalesced_keyframe_executor_outcome_does_not_count_as_arbiter_mismatch() {
+        let mut decision = keyframe_decision(ReceiveFeedbackAction::None);
+        decision.reason = "forced-keyframe";
+        decision.coalescing = ReceiveFeedbackCoalescing::SameInterval;
+
+        assert!(!should_count_feedback_action_mismatch(
+            decision,
+            ReceiveFeedbackAction::RequestPli
+        ));
     }
 }

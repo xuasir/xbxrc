@@ -1,11 +1,10 @@
 //! 参考链状态：Insert/Decode 准入与 sparse IDR 的主输入。
 
 use super::decode_sync::{
-    decoder_reference_synced_from_stats, receiver_nack_exhausted_from_stats,
-    CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK,
+    decoder_no_output_request_idr_control_active_from_stats, decoder_reference_synced_from_stats,
+    decoder_waiting_keyframe_control_active_from_stats, receiver_nack_exhausted_from_stats,
 };
 use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
-use super::supply::{media_supply_submit_starved_from_stats, RECOVERY_SUPPLY_BREAK_SUBMIT_AGE_MS};
 use crate::XbxEngineMediaRuntimeStats;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -50,28 +49,16 @@ pub(crate) fn derive_reference_chain_state_from_stats(
     now_ms: f64,
     effective_rtt_ms: f64,
 ) -> ReferenceChainObservation {
-    let decoder_reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
-    let bootstrap_ready = stats
-        .latest_h264_inspection_observation
-        .as_ref()
-        .map(|obs| obs.bootstrap_ready)
-        .unwrap_or(false);
-    let has_active_gap = stats
-        .latest_video_timeline_observation
-        .as_ref()
-        .and_then(|timeline| timeline.gap.as_ref())
-        .is_some();
-    let nack_exhausted = receiver_nack_exhausted_from_stats(stats);
+    let facts = reference_chain_diagnostic_facts_from_stats(stats, now_ms);
+    let decoder_reference_synced = facts.decoder_reference_synced;
+    let bootstrap_ready = facts.bootstrap_ready;
+    let has_active_gap = facts.has_active_gap;
+    let nack_exhausted = facts.nack_exhausted;
     let action_stage =
         derive_packet_recovery_action_stage_from_stats(stats, now_ms, effective_rtt_ms);
-    let submit_starved = media_supply_submit_starved_from_stats(stats, now_ms);
-    let submit_age_ms = stats.submit_age_ms;
-    let decoder_waiting = stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
-    let no_output_streak = stats
-        .latest_decode_output_path_observation
-        .as_ref()
-        .and_then(|obs| obs.backend_no_output_streak)
-        .unwrap_or(0);
+    let submit_age_ms = facts.submit_age_ms;
+    let decoder_waiting = decoder_waiting_keyframe_control_active_from_stats(stats, now_ms);
+    let decoder_no_output = decoder_no_output_request_idr_control_active_from_stats(stats, now_ms);
 
     let base = || ReferenceChainObservation {
         decoder_reference_synced,
@@ -83,7 +70,7 @@ pub(crate) fn derive_reference_chain_state_from_stats(
     };
 
     if decoder_waiting
-        || no_output_streak >= CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK
+        || decoder_no_output
         || matches!(
             action_stage,
             PacketRecoveryActionStage::WaitKeyframe | PacketRecoveryActionStage::RequestIdr
@@ -93,7 +80,7 @@ pub(crate) fn derive_reference_chain_state_from_stats(
             state: ReferenceChainState::NeedKeyframe,
             cause: if decoder_waiting {
                 "decoder-waiting-keyframe"
-            } else if no_output_streak >= CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK {
+            } else if decoder_no_output {
                 "decoder-no-output-streak"
             } else {
                 "action-stage-wait-idr"
@@ -118,26 +105,12 @@ pub(crate) fn derive_reference_chain_state_from_stats(
         };
     }
 
-    if submit_starved {
-        return ReferenceChainObservation {
-            state: ReferenceChainState::NeedKeyframe,
-            cause: "supply-submit-starved",
-            ..base()
-        };
-    }
-
     if !decoder_reference_synced && !bootstrap_ready {
         let had_prior_output = had_prior_playback_output(stats);
-        let submit_stalled =
-            submit_age_ms.is_some_and(|age| age >= RECOVERY_SUPPLY_BREAK_SUBMIT_AGE_MS);
-        if had_prior_output && (nack_exhausted || submit_stalled) {
+        if had_prior_output && nack_exhausted {
             return ReferenceChainObservation {
                 state: ReferenceChainState::NeedKeyframe,
-                cause: if nack_exhausted {
-                    "post-reset-gap-exhausted"
-                } else {
-                    "post-reset-submit-starved"
-                },
+                cause: "post-reset-gap-exhausted",
                 ..base()
             };
         }
@@ -166,5 +139,28 @@ pub(crate) fn derive_reference_chain_state_from_stats(
         state: ReferenceChainState::Continuous,
         cause: "reference-continuous",
         ..base()
+    }
+}
+
+/// 供 receive ledger 投影补充 trace/debug 字段；不承载 reference chain 状态裁决。
+pub(crate) fn reference_chain_diagnostic_facts_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> ReferenceChainObservation {
+    ReferenceChainObservation {
+        decoder_reference_synced: decoder_reference_synced_from_stats(stats, now_ms),
+        bootstrap_ready: stats
+            .latest_h264_inspection_observation
+            .as_ref()
+            .map(|obs| obs.bootstrap_ready)
+            .unwrap_or(false),
+        has_active_gap: stats
+            .latest_video_timeline_observation
+            .as_ref()
+            .and_then(|timeline| timeline.gap.as_ref())
+            .is_some(),
+        nack_exhausted: receiver_nack_exhausted_from_stats(stats),
+        submit_age_ms: stats.submit_age_ms,
+        ..Default::default()
     }
 }

@@ -133,6 +133,11 @@ export interface StreamPerformanceSnapshot {
   inboundBytesTotal?: number
   inboundVideoBytesTotal?: number
   inboundAudioBytesTotal?: number
+  inboundVideoFrameCountTotal?: number
+  inboundVideoRtpMarkerCountTotal?: number
+  inboundVideoAccessUnitCountTotal?: number
+  inboundVideoDecodeGateEmitCountTotal?: number
+  inboundVideoDecodeGateContinueCountTotal?: number
   inboundVideoPacketCountTotal?: number
   latestVideoPacketArrivalRtpTimestamp?: number
   videoDecoderResetCount?: number

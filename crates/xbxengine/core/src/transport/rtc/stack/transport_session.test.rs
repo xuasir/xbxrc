@@ -11,7 +11,7 @@ use crate::transport::rtc::session::clock::SystemSessionClock;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stream::RtcMediaService;
 use crate::{
-    XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction, XbxEngineRuntimeError,
+    XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction,
     XbxEngineVideoEscalationObservation,
 };
 

@@ -1556,6 +1556,18 @@ impl MacOsVideoPresenter {
                         &render_loop_pending,
                         &render_loop_rerun_requested,
                     ) {
+                        record_native_video_timing_event_lazy(
+                            runtime_trace.as_ref(),
+                            "layer",
+                            "present_tick_dispatch_coalesced",
+                            &viewport_id,
+                            &window_label,
+                            || {
+                                serde_json::json!({
+                                    "source": "fallbackLoop",
+                                })
+                            },
+                        );
                         continue;
                     }
                     run_layer_present_tick(
@@ -1566,6 +1578,7 @@ impl MacOsVideoPresenter {
                         &telemetry,
                         &render_loop_pending,
                         &render_loop_rerun_requested,
+                        None,
                         runtime_trace.clone(),
                     );
                 }
@@ -1585,6 +1598,18 @@ impl MacOsVideoPresenter {
             &self.render_loop_pending,
             &self.render_loop_rerun_requested,
         ) {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "layer",
+                "present_tick_dispatch_coalesced",
+                &self.viewport_id,
+                &self.window_label,
+                || {
+                    serde_json::json!({
+                        "source": "immediateSubmit",
+                    })
+                },
+            );
             return;
         }
         let Some(window) = self.app_handle.get_window(&self.window_label) else {
@@ -1602,7 +1627,8 @@ impl MacOsVideoPresenter {
         let render_loop_pending = self.render_loop_pending.clone();
         let render_loop_rerun_requested = self.render_loop_rerun_requested.clone();
         let runtime_trace = self.runtime_trace.clone();
-        let _ = window.run_on_main_thread(move || {
+        let dispatch_requested_at_ms = now_ms_f64();
+        if let Err(error) = window.run_on_main_thread(move || {
             run_layer_present_tick(
                 &viewport_id,
                 &window_label,
@@ -1611,9 +1637,28 @@ impl MacOsVideoPresenter {
                 &telemetry,
                 &render_loop_pending,
                 &render_loop_rerun_requested,
+                Some(dispatch_requested_at_ms),
                 runtime_trace,
             );
-        });
+        }) {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "layer",
+                "run_on_main_thread_enqueue_failed",
+                &self.viewport_id,
+                &self.window_label,
+                || {
+                    serde_json::json!({
+                        "error": error.to_string(),
+                        "source": "immediateSubmit",
+                    })
+                },
+            );
+            clear_host_present_tick_dispatch(
+                &self.render_loop_pending,
+                &self.render_loop_rerun_requested,
+            );
+        }
     }
 }
 

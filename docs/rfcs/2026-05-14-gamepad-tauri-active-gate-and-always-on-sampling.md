@@ -7,7 +7,7 @@
 - Completion: gate + FSE + frontend routing implemented; Windows FSE 实机待验收
 - Current State: in progress
 - Owner: codex
-- Last Updated: 2026-05-19
+- Last Updated: 2026-06-09
 
 ## Background
 
@@ -28,6 +28,7 @@
   - focus / visibility 补同步
 - 这使“输入应该给谁”这件事被表达成一组跨页面、跨 consumer、跨焦点恢复链的组合状态。
 - 近期 FSE 冷启动现象说明：Xbox/FSE/窗口焦点不稳定相关恢复逻辑没有把冷启动输入问题真正收掉。Chiaki 在 FSE 冷启动有输入，说明主问题不在 routing 表达层做更多焦点补偿。
+- 2026-06-09 复核 Microsoft/GDK 与 SDL3 资料后，本任务中的 FSE 按 **Gaming Full Screen Experience / Full Screen Experience** 处理；冷启动无采样同时纳入 SDL3 source 设备发现时机修复。
 - 当前还存在明确故障：
   - 打开 diagnostics 或通过触屏打开菜单后再关闭，可能落入“UI 不再消费、Stream 也未恢复消费”的空窗
   - 这类空窗说明 routing 当前把 overlay 关闭、neutral release、route ack、consumer 副作用拆成了多拍状态
@@ -166,6 +167,37 @@ appIsForegroundCandidate = (GetForegroundWindow() == mainWindowHwnd)
 - FSE 下只显示一个窗口，系统明确按 foreground app 路由可交互行为
 - 因此应直接读取 Win32 foreground 事实
 - 不再把 Tauri `Focused` 事件缓存当作唯一真相源
+
+2026-06-09 follow-up：
+
+- FSE 触屏操作可能让 Tauri `Focused(false)` 与 Win32 foreground 事实短时不同步。
+- Win32 foreground gate 增加短宽限窗口，覆盖触屏后前台 HWND 短暂漂移。
+- 当 `Focused(false)` 但 shell gate 仍 active 时，壳层立即执行 foreground refresh，恢复 sampling lifecycle 与 gate。
+- `GetForegroundWindow()` 结果继续支持主 HWND、WebView 子 HWND、同进程 foreground HWND。
+- 前端 `touchstart` 通过 `rpc.gamepad.hintShellInteractive({ reason: "frontend-touchstart" })` 进入 shell interactive hint，覆盖触屏交互没有触发 focus/visibility 事件的窗口；trace 记录 `gamepadShellTouchInteractiveHint` 与返回 snapshot。
+
+### 2.1 SDL3 Source Follow-Up
+
+SDL3 source 在 2026-06-09 增加设备重枚举：
+
+- SDL3 初始化后立即枚举 `gamepads()` 并建立 connected baseline。
+- source loop 每 1s 低频重枚举，覆盖 Windows Xbox FSE 冷启动时输入栈晚于 app ready 的窗口。
+- `reopen + prime` 命令执行后同步重枚举，覆盖已跟踪句柄重开失败但 SDL 后续能看到设备的情况。
+- 重枚举会跳过已打开 joystick id，减少重复 open。
+- 事件 channel 关闭时 source 线程退出，保持原先“上游已释放则停止 source”的语义。
+- 历史 trace 同时显示过 `Active` / 设备事实成立但 `lastSampleProgressAtMs == 0` 的状态；因此冷启动问题不能只归因到设备列表晚到。
+- source trace 现补齐 `sdl3GamepadEnumerationObserved`：记录 `discoveredCount / openedDeviceCount / openedDeviceIds / failedOrIgnoredCount / skippedAlreadyOpenCount`，用于直接区分 SDL 物理设备未出现、出现但打开失败、已经打开但全零、以及 runtime 只看到 keyboard fallback 的情况。
+- `sdl3ReopenPrimeCommandApplied` 现记录 reopen 后已打开的 SDL device ids；snapshot trace 记录 `deviceName / VID / PID / gamepadType / classification / allZero`。
+- `gamepad-shell.runtimeSnapshotTransitionObserved` 与前端 `gamepadRuntimeSnapshotObserved` 现记录 `connectedDeviceIds / keyboardFallbackConnected / sdlPhysicalConnectedDevices / deviceSummaries`；`connectedDevices=1` 不再作为物理 SDL 手柄存在的单独证据。
+- core 层补 `all_zero_raw_sample_establishes_logical_progress`，锁住“全零 raw sample 进入 runtime 后必须推进 `sample_seq / lastSampleProgressAtMs`”的合同；若现场仍为 `lastSampleProgressAtMs == 0`，主线应继续追 source/backend raw sample 入口。
+- startup/stalled self-heal 与 shell startup rearm 现要求存在非 `virtual:keyboard` 的 connected device；纯 keyboard fallback 只保留诊断，不触发 SDL reopen/prime 自愈链。
+- core 层补 `backend_sample_timestamps_are_normalized_to_runtime_clock`，把 SDL `timestamp` 纳秒值、epoch ms 等明显不属于 runtime clock 的未来时间戳归一到本轮 runtime clock，避免污染 `lastBackendSampleActivityAtMs`、`sampledAtMs` 与 stalled/healthy 判定。
+
+资料依据：
+
+- Microsoft GDK handheld launcher 文档说明 PC handheld/Xbox 场景使用 Full Screen Experience，并提供 `IsGamingFullScreenExperienceActive` 与 `RegisterGamingFullScreenExperienceChangeNotification`。
+- SDL3 `SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS` 用于允许后台 joystick/gamepad 事件。
+- SDL3 `SDL_UpdateGamepads` / `SDL_GetGamepads` 文档说明 gamepad 状态与设备列表可通过事件泵更新，也可由应用显式更新后读取。
 
 ### 3. Routing State
 
@@ -352,6 +384,8 @@ releaseUiInputAfterNeutral(reason: 'menu-close' | 'diagnostics-close' | 'sheet-c
 - [x] `visible/minimized/document.visibilityState` 不再作为硬 gate 条件
 - [x] Windows FSE 可被显式检测，并能在切换时收到变更通知（`GamingExperience.dll` 可用时）
 - [x] Windows FSE 下 foreground window 事实可直接驱动 gate open/close
+- [x] FSE 触屏导致 `Focused(false)` 时，shell gate 仍 active 可触发 foreground refresh；前端触屏开始可显式提示 shell interactive refresh
+- [x] SDL3 source 具备冷启动后低频重枚举与 `reopen + prime` 后重枚举
 - [ ] delayed nudge 退出主恢复链后，冷启动输入不回退（需 Windows FSE 实机）
 - [x] owner 派生只依赖 `appScene/backendGate/streamActive/overlayCapturing`
 - [x] 打开任意 overlay 后 owner 稳定切到 `ui`
@@ -394,7 +428,23 @@ releaseUiInputAfterNeutral(reason: 'menu-close' | 'diagnostics-close' | 'sheet-c
 - Date: 2026-05-19 | Status: implementation landed (code + unit tests)
 - Date: 2026-05-19 | Status: follow-up fixes landed (`BackgroundWarm` foreground refresh, non-Windows gate simplification, cancellable neutral wait)
 - Date: 2026-05-19 | Status: refined
+- Date: 2026-06-09 | Status: FSE/SDL3 follow-up implemented
+- Date: 2026-06-09 | Status: sampling-layer evidence refined
+- Date: 2026-06-09 | Status: app/UI sampling switch simplification implemented
 - Update: 用户已将范围明确收窄到输入线路处理逻辑，要求精简前端模型，并将 Xbox/FSE/窗口焦点不稳定相关恢复逻辑移出 routing 主线。
 - Decision: 本 RFC 不再推动 consumer 边界重写；当前只处理 gate 简化、FSE 专线、routing model、overlay contract 与 route-side 恢复逻辑裁剪。
 - Decision: FSE 冷启动无输入问题继续视为 gate 信号与宿主前台判定问题，不在 routing 模型里继续叠补偿。
 - Decision: 延迟补救仅保留为临时 fallback；主恢复链必须由显式 FSE 检测与 foreground 事实承担。
+- Update: FSE 触屏后采样丢失按 Win32 foreground 短时漂移处理；冷启动无采样按“SDL 设备发现晚到 / 物理设备打开失败 / source 一直全零 / raw sample 未进入 runtime”四类证据链继续收敛。
+- Decision: SDL3 source 保持常驻 poll snapshot 主线，同时增加低频重枚举作为冷启动输入栈就绪补偿；新增枚举与 snapshot 诊断必须能区分 `virtual:keyboard` fallback 与 SDL 物理设备。
+- Decision: 纯 `virtual:keyboard` fallback 不再满足 startup rearm / sampling self-heal 的 connected-device 条件，避免恢复链在无物理 SDL 设备时空转。
+- Decision: runtime health 的时间基准以 runtime elapsed clock 为准；SDL event timestamp 仅作为后端原始事实，不再直接进入 `lastBackendSampleActivityAtMs` 的未来时间线。
+- Update: 前端触屏开始现在调用 `rpc.gamepad.hintShellInteractive`，Rust RPC 统一进入 `shell::hint_gamepad_shell_interactive()`，返回 snapshot 并记录 `gamepadShellTouchInteractiveHint`。
+- Update: Tauri 应用层将前台 refresh 与显式 interactive hint 收敛到 `apply_shell_gamepad_sampling_recovery()`；`lib.rs` 只保留窗口/应用事件意图，后台保温、前台恢复、恢复后 self-heal 执行统一由 `shell` 协调。
+- Update: Stream UI 输入切换将串行队列从手写 `queue/flushing` 状态机收成 Promise tail，并把 capture / replace capture 的重复状态变更收成 `beginUiCapture()`；neutral release、overlay 多占用、重开取消与 stream handoff 行为保持原合同。
+- Update: Tauri `lib.rs` 继续瘦身，只向 `shell::handle_gamepad_page_loaded / handle_gamepad_window_focus_changed / handle_gamepad_window_resized / handle_gamepad_app_resumed` 转发事件；`input_gate`、FSE 诊断、前后台采样恢复和冷启动 nudge 调度细节退出应用入口。
+- Update: Stream 会话 active 切换收进 `streamInputRouteController.setStreamActive()`，`useStreamExecution` 不再直接 patch `businessInputArbiter`；公开 `syncStreamInputRoute()` 删除，failed/warning overlay 的 capture/release watcher 收成 `syncOverlayCapture()`。
+- Update: AppShell 的触屏 interactive hint RPC、节流和 trace 更新收进 `useGamepadShellInteractiveHint()`；布局组件只在 `touchstart` 调用单个 hint action，采样恢复细节退出布局主逻辑。
+- Update: Tauri shell 采样协调从 `shell/mod.rs` 拆入 `shell/gamepad_sampling.rs`，外部只保留 `handle_gamepad_*`、`hint_gamepad_shell_interactive`、`refresh_gamepad_on_window_foreground` 三类入口；startup rearm、runtime snapshot trace 和 background task helper 继续留在 `shell/mod.rs` 的服务生命周期上下文里。
+- Update: 对照 chiaki-ng 的 SDL controller manager，确认其 FSE 冷启动稳定性来自早期声明 `SDL_SetMainReady()`、早期启动 SDL controller、默认允许后台 joystick events、4ms 常驻 `SDL_PollEvent`、按 controller availability 打开设备；本轮将同类输入运行时条件补进 SDL3 source：启动前调用 `SDL_SetMainReady()` 并设置 background / PS4 rumble / PS5 rumble / SteamDeck HIDAPI hints，同时启用 joystick + gamepad events，初始化枚举前先执行一次 joystick/gamepad update，poll loop 增加 `SDL_UpdateJoysticks`，启动前 2 秒按 100ms 快速重枚举，之后回到 1s 低频重枚举，并记录 `sdl3InputRuntimeHintsApplied` / `sdl3InputRuntimeInitialized` trace。
+- Validation: `cargo fmt -p ohmygamepad-sdl3 -p xbxrc`、`cargo test -p ohmygamepad-sdl3`、`cargo test -p xbxrc startup_rearm_ignores_keyboard_fallback_only_snapshot`、`cargo test -p xbxrc foreground_refresh_still_attempts_self_heal_when_active_gate_is_open_but_sampling_stalled`、`cargo check -p xbxrc`、`./node_modules/.bin/eslint src/components/layout/AppShellLayout.vue --fix`、`git diff --check` 通过；本轮追加 `cargo fmt -p xbxrc`、`cargo check -p xbxrc`、`cargo test -p xbxrc startup_rearm_ignores_keyboard_fallback_only_snapshot`、`cargo test -p xbxrc foreground_refresh_still_attempts_self_heal_when_active_gate_is_open_but_sampling_stalled`、`./node_modules/.bin/vitest run src/components/layout/useGamepadShellInteractiveHint.test.ts src/pages/stream/stream-input-route-controller.test.ts src/shared/gamepad/business-input-arbiter.test.ts`、`pnpm exec eslint src/components/layout/AppShellLayout.vue src/components/layout/useGamepadShellInteractiveHint.ts src/components/layout/useGamepadShellInteractiveHint.test.ts src/pages/stream/stream-input-route-controller.ts src/pages/stream/stream-input-route-controller.test.ts src/streaming/useStreamExecution.ts src/streaming/xstream-page-ui.ts --fix`、`cargo check -p ohmygamepad-sdl3`、`cargo test -p ohmygamepad-sdl3 sampling_self_heal_requires_non_keyboard_connected_device`、`cargo check -p xbxrc`、`git diff --check` 通过；`pnpm lint:fix` 仍受无关既有 lint 错误阻塞；`pnpm exec vue-tsc --noEmit` 仍受无关既有类型错误阻塞；`cargo xwin check -p xbxrc --target x86_64-pc-windows-msvc` 停在本机 CMake/Ninja/Opus 交叉构建环境。

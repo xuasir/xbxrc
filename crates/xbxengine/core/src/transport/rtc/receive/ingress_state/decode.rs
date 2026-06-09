@@ -75,36 +75,76 @@ impl RtcVideoFrameSource {
         let Some(committed_epoch) = self
             .runtime_stats
             .read(|stats| {
-                (stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
-                    && stats.recovery_displayed_idr_at_ms.is_some())
-                .then_some(stats.transport_recovery_epoch)
+                (stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch))
+                    .then_some(stats.transport_recovery_epoch)
             })
             .flatten()
         else {
             return;
         };
-        if committed_epoch == self.last_consumed_clean_anchor_epoch {
+        if self.last_consumed_clean_anchor_epoch == Some(committed_epoch) {
             return;
         }
-        self.last_consumed_clean_anchor_epoch = committed_epoch;
-        let (display_rtp, display_at_ms) = self
+        self.last_consumed_clean_anchor_epoch = Some(committed_epoch);
+        let (clean_anchor_rtp, clean_anchor_at_ms, display_rtp, display_at_ms) = self
             .runtime_stats
             .read(|stats| {
                 (
+                    stats
+                        .recovery_displayed_idr_rtp
+                        .or(stats.recovery_pending_displayed_idr_rtp)
+                        .or(stats.latest_video_decode_ok_rtp_timestamp),
+                    stats.video_anchor_clean_observed_at_ms,
                     stats.recovery_displayed_idr_rtp,
                     stats.recovery_displayed_idr_at_ms,
                 )
             })
-            .unwrap_or((None, None));
+            .unwrap_or((None, None, None, None));
+        let observed_at_ms = clean_anchor_at_ms.unwrap_or_else(now_ms_f64);
+        self.runtime_stats.update(|stats| {
+            if stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+                && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
+            {
+                stats.video_decoder_recovery_state = Some("nominal".to_string());
+                stats.video_decoder_recovery_event = Some("clean-anchor-committed".to_string());
+                stats.video_decoder_recovery_detail = None;
+                stats.video_decoder_recovery_status = None;
+                stats.video_decoder_recovery_state_changed_at_ms = Some(observed_at_ms);
+            }
+        });
+        let stats_snapshot = self
+            .runtime_stats
+            .read(|stats| stats.clone())
+            .unwrap_or_default();
+        if let Some(rtp) = clean_anchor_rtp {
+            self.trace_ledger
+                .recovery_ledger_mut()
+                .note_usable_idr_packet_accepted(
+                    rtp,
+                    clean_anchor_at_ms.unwrap_or_else(now_ms_f64),
+                );
+        }
         if let Some(at_ms) = display_at_ms {
             self.trace_ledger
                 .recovery_ledger_mut()
                 .note_display_stable(display_rtp, at_ms);
         }
         self.trace_ledger
+            .note_clean_anchor_committed(clean_anchor_rtp);
+        self.set_is_blocking_non_keyframe_admission(false);
+        self.receive_core_mut()
+            .receive_engine
+            .clear_recovery_state_after_decoded_anchor();
+        self.trace_ledger
             .recovery_ledger_mut()
-            .note_clean_anchor_committed(display_rtp);
+            .apply_decoder_facts_from_stats(&stats_snapshot, observed_at_ms);
         self.sync_recovery_ledger_to_stats();
+        self.record_video_timeline_observation(
+            "clean-anchor-committed",
+            None,
+            clean_anchor_rtp,
+            observed_at_ms,
+        );
     }
 
     pub(crate) async fn handle_drop_and_request_keyframe_action(
@@ -493,11 +533,13 @@ impl RtcVideoFrameSource {
                 )
             })
             .unwrap_or(false);
+        let reference_blocking_gap = self.trace_ledger.has_unresolved_hard_gap_for_internal();
         ReceiverDecodeContext {
             receiver_state: self.receiver_local_state(),
             has_active_gap: engine.has_active_gap(),
-            nack_exhausted: engine.nack_requester.nack_escalation_pending()
-                || engine.nack_requester.has_exhausted_gaps(),
+            nack_exhausted: reference_blocking_gap
+                && (engine.nack_requester.nack_escalation_pending()
+                    || engine.nack_requester.has_exhausted_gaps()),
             first_frame_acquired: self.receiver_local_first_frame_acquired(),
             decoder_reference_synced,
         }
@@ -630,8 +672,6 @@ impl RtcVideoFrameSource {
             }
         };
         self.record_video_timeline_observation(event_name, None, frame_rtp_timestamp, now_ms);
-        self.trace_ledger.recovery_ledger_mut().note_first_delta();
-        self.sync_recovery_ledger_to_stats();
         let source = match request_kind {
             FirstFrameAcquisitionRequestKind::Initial => "first-frame-acquisition",
             FirstFrameAcquisitionRequestKind::Followup => "first-frame-acquisition-followup",
@@ -1221,6 +1261,11 @@ impl RtcVideoFrameSource {
         }
         let is_blocking_non_keyframe_admission = self.is_blocking_non_keyframe_admission();
         let admission_accepted = matches!(inspection_admission, InspectionAdmission::Accept);
+        if admission_accepted {
+            // H264 tracker 属于 receive/packet 主链：完整 AU 准入后立即提交 SPS/PPS。
+            // 下游 scheduler/decode 仍可维护自己的流参数，但 continuation 判定不能等 display/host。
+            inspection.commit();
+        }
         let response_detail =
             keyframe_episode_response_detail(&inspection, inspection_admission, Some(&decode_ctx));
         let continuation_verdict =
@@ -1560,6 +1605,7 @@ impl RtcVideoFrameSource {
                 Some(is_keyframe),
                 recovery_importance,
             );
+            self.sync_recovery_ledger_to_stats();
             self.record_video_timeline_observation(
                 "frame-complete-candidate",
                 None,

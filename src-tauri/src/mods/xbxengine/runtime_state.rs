@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
@@ -32,6 +33,8 @@ use crate::mods::xbxengine::trace_projection::{
 };
 use crate::shell::bridge::{TauriEngineEventBridge, TauriEngineWindowHost};
 use crate::AppState;
+
+const XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// 推式 host present：`renderer` 线程调用；`route` 由 engine runtime 快照同步。
 struct NativeVideoHostRenderFramePush {
@@ -621,6 +624,9 @@ impl TauriXbxEngineHostBridge {
         restart: bool,
     ) -> Result<XbxEngineHostResponseDto, XbxEngineRuntimeError> {
         let state = self.app_state().map_err(map_app_error("exchangeOffer"))?;
+        let started_at = Instant::now();
+        let trace_session_id = session_id.clone();
+        let trace_channel = channel.clone();
         self.runtime_trace.record_event(
             "xbxengine-host",
             "exchangeOfferRequested",
@@ -632,20 +638,41 @@ impl TauriXbxEngineHostBridge {
                 "offerSdpCapabilities": summarize_sdp_capabilities(&sdp),
             }),
         );
-        let result = tauri::async_runtime::block_on(state.streaming.exchange_offer(
-            StreamingExchangeOfferParams {
+        let exchange = state
+            .streaming
+            .exchange_offer(StreamingExchangeOfferParams {
                 session_id,
                 channel: Some(channel),
                 sdp,
                 restart,
-            },
-        ))
-        .map_err(map_app_error("exchangeOffer"))?;
+            });
+        let result = match tauri::async_runtime::block_on(exchange_offer_with_timeout(
+            exchange,
+            XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT,
+        )) {
+            Ok(result) => result,
+            Err(error) => {
+                self.runtime_trace.record_event(
+                    "xbxengine-host",
+                    "exchangeOfferFailed",
+                    Some(&trace_session_id),
+                    serde_json::json!({
+                        "channel": trace_channel,
+                        "restart": restart,
+                        "durationMs": started_at.elapsed().as_millis(),
+                        "timeoutMs": XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT.as_millis(),
+                        "error": error.to_string(),
+                    }),
+                );
+                return Err(map_app_error("exchangeOffer")(error));
+            }
+        };
         self.runtime_trace.record_event(
             "xbxengine-host",
             "exchangeOfferResult",
-            None,
+            Some(&trace_session_id),
             serde_json::json!({
+                "durationMs": started_at.elapsed().as_millis(),
                 "answerSdp": result.answer.sdp,
                 "answerSdpCapabilities": summarize_sdp_capabilities(&result.answer.sdp),
             }),
@@ -1015,6 +1042,22 @@ pub(super) fn map_app_error(
     move |error| XbxEngineRuntimeError::new(format!("{action}:{error}"))
 }
 
+async fn exchange_offer_with_timeout<F>(
+    exchange: F,
+    timeout: Duration,
+) -> AppResult<crate::mods::streaming::StreamingExchangeOfferResult>
+where
+    F: Future<Output = AppResult<crate::mods::streaming::StreamingExchangeOfferResult>>,
+{
+    match tokio::time::timeout(timeout, exchange).await {
+        Ok(result) => result,
+        Err(_) => Err(AppError::XbxEngine(format!(
+            "exchange offer timed out after {}ms",
+            timeout.as_millis()
+        ))),
+    }
+}
+
 fn extract_command_session_id(command: &XbxEngineControlCommandDto) -> Option<String> {
     match command {
         XbxEngineControlCommandDto::StartRuntime { session, .. } => {
@@ -1104,13 +1147,35 @@ fn record_control_apply_trace(
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex as StdMutex};
+    use std::time::Duration;
 
     use super::{
-        summarize_sdp_capabilities, update_host_present_route_on_attach,
-        update_host_present_route_on_detach,
+        exchange_offer_with_timeout, summarize_sdp_capabilities,
+        update_host_present_route_on_attach, update_host_present_route_on_detach,
     };
+    use crate::mods::streaming::{StreamingAnswerPayload, StreamingExchangeOfferResult};
     use xbxengine::XbxEngineHostPresentRoute;
     use xbxengine_protocol::XbxEngineViewportDto;
+
+    #[tokio::test]
+    async fn exchange_offer_with_timeout_returns_error_when_future_stalls() {
+        let result = exchange_offer_with_timeout(
+            async {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                Ok(StreamingExchangeOfferResult {
+                    answer: StreamingAnswerPayload {
+                        sdp: "answer".to_string(),
+                        message_type: None,
+                    },
+                })
+            },
+            Duration::from_millis(5),
+        )
+        .await;
+
+        let error = result.expect_err("exchange offer should time out");
+        assert!(error.to_string().contains("exchange offer timed out"));
+    }
 
     #[test]
     fn summarize_sdp_capabilities_detects_video_repair_streams() {

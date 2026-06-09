@@ -95,7 +95,16 @@ impl RtcConnectionService {
         if let Ok(mut state) = self.state.lock() {
             bootstrap_default_channels(&mut peer_connection, &mut state)?;
         }
-        for candidate in self.io_runtime.gather_local_candidates(session)? {
+        for candidate in self
+            .io_runtime
+            .gather_local_candidates(session, runtime_stats.as_ref())?
+        {
+            let candidate_dto = XbxEngineIceCandidateDto {
+                candidate: candidate.candidate.clone(),
+                sdp_m_line_index: candidate.sdp_mline_index,
+                sdp_mid: candidate.sdp_mid.clone(),
+            };
+            let kind = classify_candidate_kind(&candidate_dto.candidate);
             peer_connection
                 .add_local_candidate(candidate)
                 .map_err(|err| {
@@ -103,6 +112,13 @@ impl RtcConnectionService {
                         "xbxEngineRtcAddLocalCandidateFailed: {err}"
                     ))
                 })?;
+            if let Ok(mut state) = self.state.lock() {
+                state.record_local_candidate(candidate_dto, kind);
+            } else {
+                return Err(XbxEngineRuntimeError::new(
+                    "xbxEngineRtcConnectionStateLockFailed",
+                ));
+            }
         }
         self.peer_connection = Some(peer_connection);
         self.drain_peer_events(runtime_stats)?;

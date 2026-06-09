@@ -52,7 +52,6 @@ mod tests {
         _sample_loss_burst_count: u8,
         media_dropped_packets: u16,
         is_keyframe: bool,
-        displayed_idr_serving: bool,
     ) -> (bool, RecoveryKeyframeAction) {
         if is_keyframe && media_dropped_packets > 0 {
             return (false, RecoveryKeyframeAction::DropAndRequestPli);
@@ -67,9 +66,6 @@ mod tests {
             return (false, RecoveryKeyframeAction::DropAndRequestPli);
         }
         if is_blocking_non_keyframe_admission {
-            if displayed_idr_serving && first_frame_acquired {
-                return (false, RecoveryKeyframeAction::Submit);
-            }
             if !first_frame_acquired {
                 return (true, RecoveryKeyframeAction::WaitKeyframe);
             }
@@ -85,19 +81,19 @@ mod tests {
     }
 
     #[test]
-    fn displayed_idr_serving_avoids_wait_keyframe_while_blocking() {
+    fn blocking_hard_gap_waits_for_keyframe_after_display_output() {
         let (blocking, action) =
-            resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false, true);
-        assert!(!blocking);
-        assert_eq!(action, RecoveryKeyframeAction::Submit);
+            resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false);
+        assert!(blocking);
+        assert_eq!(action, RecoveryKeyframeAction::WaitKeyframe);
     }
 
     #[test]
-    fn displayed_idr_serving_off_while_blocking_waits_for_keyframe_on_hard_gap() {
+    fn blocking_repairing_continuation_can_submit() {
         let (blocking, action) =
-            resolve_recovery_keyframe_action(true, true, false, false, true, 0, 0, false, false);
-        assert!(blocking);
-        assert_eq!(action, RecoveryKeyframeAction::WaitKeyframe);
+            resolve_recovery_keyframe_action(true, true, true, false, true, 0, 0, false);
+        assert!(!blocking);
+        assert_eq!(action, RecoveryKeyframeAction::Submit);
     }
 }
 

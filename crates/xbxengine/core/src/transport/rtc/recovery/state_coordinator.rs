@@ -135,6 +135,7 @@ impl RecoveryDecision {
             RecoveryAction::WaitForBurst
                 | RecoveryAction::WaitForDecoderResetBurst
                 | RecoveryAction::CooldownSuppressed
+                | RecoveryAction::DelegatedToReceive
                 | RecoveryAction::CoalescedKeyframeInFlight
                 | RecoveryAction::CoalescedDecoderResetInFlight
                 | RecoveryAction::StartupGraceSuppressed
@@ -177,9 +178,9 @@ mod tests {
         let decision = coordinator.on_observation(observation);
 
         assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
-        assert!(decision.should_execute());
+        assert!(!decision.should_execute());
         assert!(decision.is_keyframe_request());
-        assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
+        assert_eq!(coordinator.current_state(), RecoveryState::Healthy);
     }
 
     #[test]
@@ -193,7 +194,7 @@ mod tests {
             1000.0,
         );
         coordinator.on_observation(observation);
-        assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
+        assert_eq!(coordinator.current_state(), RecoveryState::Healthy);
 
         // 通知clean anchor
         coordinator.on_clean_anchor(true);
@@ -211,9 +212,8 @@ mod tests {
             1000.0,
         );
         let decision = coordinator.on_observation(observation);
-        assert!(decision.should_execute());
+        assert!(!decision.should_execute());
 
-        // 第二次请求应该被coalesce
         let observation = RecoveryObservation::from_reason(
             VideoEscalationReason::WaitKeyframe,
             "waitKeyframe".to_string(),
@@ -221,6 +221,6 @@ mod tests {
         );
         let decision = coordinator.on_observation(observation);
         assert!(!decision.should_execute());
-        assert_eq!(decision.action, RecoveryAction::CoalescedKeyframeInFlight);
+        assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
     }
 }

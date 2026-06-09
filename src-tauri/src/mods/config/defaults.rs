@@ -1,3 +1,4 @@
+use ohmygamepad_protocol::OhMyGamepadKeyboardMappingDto;
 use serde_json::{json, Map, Value};
 
 pub const APP_CONFIG_KEYS: [&str; 39] = [
@@ -94,14 +95,20 @@ pub fn default_config_map() -> Map<String, Value> {
         "runtime_trace_mode": null
         ,
         "gamepad_device_profiles": [],
-        "gamepad_keyboard_mapping": {
-            "bindings": []
-        }
+        "gamepad_keyboard_mapping": default_keyboard_mapping_value()
     });
 
     let mut map = value.as_object().cloned().unwrap_or_default();
     map.insert("runtime_trace_mode".to_string(), runtime_trace_mode_default);
     map
+}
+
+pub fn default_keyboard_mapping_value() -> Value {
+    serde_json::to_value(OhMyGamepadKeyboardMappingDto::default()).unwrap_or_else(|_| {
+        json!({
+            "bindings": []
+        })
+    })
 }
 
 pub fn allowed_key(key: &str) -> bool {

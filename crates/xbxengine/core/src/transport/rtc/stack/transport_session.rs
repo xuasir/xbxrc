@@ -847,13 +847,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     .then_with(|| left.requested_at_ms.total_cmp(&right.requested_at_ms))
                     .then_with(|| left.episode_id.cmp(&right.episode_id))
             })?;
-        let has_current_clean_anchor = stats.video_anchor_clean_epoch
-            == Some(stats.transport_recovery_epoch)
-            && stats.video_anchor_clean_observed_at_ms.is_some();
-        if has_current_clean_anchor {
-            return None;
-        }
-        if crate::transport::rtc::recovery::contract::displayed_idr_serving_from_stats(stats) {
+        if crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats(stats) {
             return None;
         }
         if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {

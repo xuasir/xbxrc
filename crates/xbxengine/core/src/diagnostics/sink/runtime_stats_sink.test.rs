@@ -271,7 +271,7 @@ fn keyframe_request_episode_packet_seen_and_decoded_resolve_verdict() {
         .latest_keyframe_request_episode
         .as_ref()
         .expect("episode should exist");
-    assert_eq!(episode.status, "decoded");
+    assert_eq!(episode.status, "succeeded");
     assert_eq!(episode.request_kind.as_deref(), Some("pli"));
     assert_eq!(episode.sent_at_ms, Some(120.0));
     assert_eq!(episode.deadline_at_ms, Some(200.0));
@@ -279,7 +279,10 @@ fn keyframe_request_episode_packet_seen_and_decoded_resolve_verdict() {
     assert_eq!(episode.first_keyframe_decoded_at_ms, Some(160.0));
     assert_eq!(episode.response_rtp_timestamp, Some(123456789));
     assert_eq!(episode.response_frame_seq, Some(42));
-    assert_eq!(episode.response_verdict.as_deref(), Some("on-time"));
+    assert_eq!(
+        episode.response_verdict.as_deref(),
+        Some("cleanAnchorCommitted")
+    );
     assert!(episode.transport_detail.as_deref().is_some_and(|detail| {
         detail.contains("firstFrameLatencyTrace")
             && detail.contains("controlReadyToPliSentMs=none")
@@ -589,7 +592,7 @@ fn stale_owner_decoded_does_not_update_current_transport_await_episode() {
 }
 
 #[test]
-fn stale_owner_frame_does_not_establish_fresh_anchor_until_displayed_pending_idr() {
+fn decoded_usable_idr_establishes_media_recovery_before_displayed_pending_idr() {
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
@@ -621,24 +624,42 @@ fn stale_owner_frame_does_not_establish_fresh_anchor_until_displayed_pending_idr
         false,
         false,
     );
-    sink.record_pending_displayed_idr_rtp(10_001);
+    sink.record_picture_recovery_episode_decoded(200.0, 10_101, 22);
+    sink.record_pending_displayed_idr_rtp(10_101);
 
     {
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(10_001));
-        assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(
+            stats.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(10_101));
+        assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(200.0));
     }
 
-    sink.seed_decoder_reference_sync_for_pending_idr(10_001, 200.0);
-    sink.record_displayed_idr_fact(250.0, 10_001, None);
+    sink.record_displayed_idr_fact(250.0, 10_101, None);
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, Some(1));
-    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(250.0));
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(200.0));
+    assert_eq!(stats.recovery_displayed_idr_rtp, Some(10_101));
+    assert_eq!(
+        stats.receive_display_state.as_deref(),
+        Some("display-stable")
+    );
+    let transition = stats
+        .latest_picture_recovery_transition_observation
+        .as_ref()
+        .expect("display stable transition");
+    assert_eq!(transition.to_phase, "DisplayStable");
+    assert_eq!(
+        transition.from_phase.as_deref(),
+        Some("CleanAnchorCommitted")
+    );
 }
 
 #[test]
-fn displayed_idr_fact_waits_for_host_qualifying_rtp() {
+fn decoded_keyframe_media_recovery_survives_host_display_lag() {
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
@@ -664,9 +685,13 @@ fn displayed_idr_fact_waits_for_host_qualifying_rtp() {
     sink.record_pending_displayed_idr_rtp(10_201);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
-    assert_eq!(stats.video_anchor_clean_epoch, None);
+    assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+    assert_eq!(
+        stats.video_anchor_clean_source_event.as_deref(),
+        Some("decoded-usable-idr")
+    );
     assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(10_201));
-    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, None);
+    assert_eq!(stats.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
 }
 
 #[test]
@@ -734,9 +759,12 @@ fn keyframe_request_episode_decoded_after_timeout_clears_missed_verdict() {
         .latest_keyframe_request_episode
         .as_ref()
         .expect("episode");
-    assert_eq!(episode.status, "decoded");
-    assert_eq!(episode.response_verdict.as_deref(), Some("late"));
-    assert_eq!(episode.lifecycle_phase.as_deref(), Some("decoded"));
+    assert_eq!(episode.status, "succeeded");
+    assert_eq!(
+        episode.response_verdict.as_deref(),
+        Some("cleanAnchorCommitted")
+    );
+    assert_eq!(episode.lifecycle_phase.as_deref(), Some("success"));
 }
 
 #[test]
@@ -790,10 +818,13 @@ fn first_frame_latency_prefers_clean_anchor_gap_over_missing_pli_when_decode_exi
         .latest_first_frame_latency_observation
         .as_ref()
         .expect("first frame latency observation");
-    assert_eq!(observation.terminal_phase.as_deref(), Some("Decoded"));
+    assert_eq!(
+        observation.terminal_phase.as_deref(),
+        Some("CleanAnchorCommitted")
+    );
     assert_eq!(
         observation.incomplete_reason.as_deref(),
-        Some("noCleanAnchorCommit")
+        Some("noDisplayStable")
     );
     assert_eq!(observation.control_ready_to_pli_sent_ms, None);
     assert_eq!(observation.pli_sent_to_first_idr_packet_ms, None);
@@ -835,11 +866,11 @@ fn first_frame_latency_observation_records_complete_stage_breakdown() {
     assert_eq!(observation.first_idr_packet_to_first_decode_ms, Some(15.0));
     assert_eq!(
         observation.first_decode_to_clean_anchor_committed_ms,
-        Some(15.0)
+        Some(0.0)
     );
     assert_eq!(
         observation.clean_anchor_committed_to_display_stable_ms,
-        Some(30.0)
+        Some(45.0)
     );
     assert_eq!(observation.terminal_phase.as_deref(), Some("DisplayStable"));
     assert_eq!(observation.incomplete_reason, None);
@@ -853,8 +884,8 @@ fn first_frame_latency_observation_records_complete_stage_breakdown() {
             && detail.contains("controlReadyToPliSentMs=20.0")
             && detail.contains("pliSentToFirstIdrPacketMs=30.0")
             && detail.contains("firstIdrPacketToFirstDecodeMs=15.0")
-            && detail.contains("firstDecodeToCleanAnchorCommittedMs=15.0")
-            && detail.contains("cleanAnchorCommittedToDisplayStableMs=30.0")
+            && detail.contains("firstDecodeToCleanAnchorCommittedMs=0.0")
+            && detail.contains("cleanAnchorCommittedToDisplayStableMs=45.0")
     }));
 }
 
@@ -1555,7 +1586,7 @@ fn transport_recovery_family_continuation_follows_latest_decoded_transport_expir
         .as_ref()
         .expect("h264 observation");
     assert_eq!(h264.bound_episode_id, Some(3593));
-    assert_eq!(h264.bound_episode_status.as_deref(), Some("decoded"));
+    assert_eq!(h264.bound_episode_status.as_deref(), Some("succeeded"));
     assert_eq!(h264.bound_response_rtp_timestamp, Some(2_441_661_257));
     assert!(h264.bound_as_recovery_response.unwrap_or(false));
     assert!(

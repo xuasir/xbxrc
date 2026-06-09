@@ -104,26 +104,54 @@ impl RuntimeStatsSink {
         frame_seq: Option<u64>,
     ) {
         self.update(|stats| {
-            if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch) {
-                return;
-            }
             if !host_display_rtp_qualifies_for_fresh_anchor(stats, rtp_timestamp, observed_at_ms) {
                 return;
             }
+            if stats.receive_display_state.as_deref() == Some("display-stable")
+                && stats.recovery_displayed_idr_rtp == Some(rtp_timestamp)
+            {
+                return;
+            }
+            let already_has_clean_anchor =
+                stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch);
             stats.recovery_displayed_idr_rtp = Some(rtp_timestamp);
             stats.recovery_displayed_idr_at_ms = Some(observed_at_ms);
             stats.receive_display_state = Some("display-stable".to_string());
             stats.recovery_pending_displayed_idr_rtp = None;
-            Self::apply_transport_clean_anchor(stats, observed_at_ms, "displayed-idr");
+            if !already_has_clean_anchor {
+                Self::apply_transport_clean_anchor(stats, observed_at_ms, "displayed-idr");
+            }
             let observation = XbxEnginePictureRecoveryTransitionObservation {
                 observation_id: Self::next_picture_recovery_transition_observation_id(stats),
                 episode_id: None,
                 recovery_epoch: Some(stats.transport_recovery_epoch),
-                phase: "FreshAnchorRecovered".to_string(),
-                from_phase: Some("Decoded".to_string()),
-                to_phase: "FreshAnchorRecovered".to_string(),
+                phase: if already_has_clean_anchor {
+                    "DisplayStable".to_string()
+                } else {
+                    "FreshAnchorRecovered".to_string()
+                },
+                from_phase: Some(
+                    if already_has_clean_anchor {
+                        "CleanAnchorCommitted"
+                    } else {
+                        "Decoded"
+                    }
+                    .to_string(),
+                ),
+                to_phase: if already_has_clean_anchor {
+                    "DisplayStable".to_string()
+                } else {
+                    "FreshAnchorRecovered".to_string()
+                },
                 cause: Some("displayed-idr".to_string()),
-                detail: Some("hostVisible".to_string()),
+                detail: Some(
+                    if already_has_clean_anchor {
+                        "displayGate"
+                    } else {
+                        "hostVisible"
+                    }
+                    .to_string(),
+                ),
                 rtp_timestamp: Some(rtp_timestamp),
                 frame_seq,
                 owner_state: stats.video_owner_state.clone(),

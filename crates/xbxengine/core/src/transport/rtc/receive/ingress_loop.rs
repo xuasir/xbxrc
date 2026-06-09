@@ -193,12 +193,17 @@ impl RtcVideoFrameSource {
                 .frame_assembler
                 .pop_access_unit()
             {
+                self.record_access_unit_popped();
                 match DecodeGate::default()
                     .evaluate_for_ingress(self, sample)
                     .await
                 {
-                    DecodeGateDecision::Emit(frame) => return Some(frame),
+                    DecodeGateDecision::Emit(frame) => {
+                        self.record_decode_gate_emit();
+                        return Some(frame);
+                    }
                     DecodeGateDecision::Continue => {
+                        self.record_decode_gate_continue();
                         access_unit_continue_spins = access_unit_continue_spins.saturating_add(1);
                         tokio::task::yield_now().await;
                         if self.rx.is_closed()
@@ -492,6 +497,7 @@ impl RtcVideoFrameSource {
                         self.note_ingress_waiting_rtp_marker();
                         self.jitter_marker_seen_count =
                             self.jitter_marker_seen_count.saturating_add(1);
+                        self.record_rtp_marker_observed();
                         self.pending_marker_boundary = Some(
                             crate::transport::rtc::receive::ingress_state::PendingMarkerBoundary {
                                 sequence: rtp.header.sequence_number,
@@ -525,12 +531,19 @@ impl RtcVideoFrameSource {
                         .frame_assembler
                         .pop_access_unit()
                     {
+                        self.record_access_unit_popped();
                         match DecodeGate::default()
                             .evaluate_for_ingress(self, sample)
                             .await
                         {
-                            DecodeGateDecision::Emit(frame) => return Some(frame),
-                            DecodeGateDecision::Continue => continue,
+                            DecodeGateDecision::Emit(frame) => {
+                                self.record_decode_gate_emit();
+                                return Some(frame);
+                            }
+                            DecodeGateDecision::Continue => {
+                                self.record_decode_gate_continue();
+                                continue;
+                            }
                         }
                     }
                     let cause = self.runtime_stats.current_video_ingress_close_cause();
@@ -548,6 +561,37 @@ impl RtcVideoFrameSource {
                 }
             }
         }
+    }
+
+    fn record_rtp_marker_observed(&self) {
+        self.runtime_stats.update(|stats| {
+            stats.inbound_video_rtp_marker_count_total =
+                stats.inbound_video_rtp_marker_count_total.saturating_add(1);
+        });
+    }
+
+    fn record_access_unit_popped(&self) {
+        self.runtime_stats.update(|stats| {
+            stats.inbound_video_access_unit_count_total = stats
+                .inbound_video_access_unit_count_total
+                .saturating_add(1);
+        });
+    }
+
+    fn record_decode_gate_emit(&self) {
+        self.runtime_stats.update(|stats| {
+            stats.inbound_video_decode_gate_emit_count_total = stats
+                .inbound_video_decode_gate_emit_count_total
+                .saturating_add(1);
+        });
+    }
+
+    fn record_decode_gate_continue(&self) {
+        self.runtime_stats.update(|stats| {
+            stats.inbound_video_decode_gate_continue_count_total = stats
+                .inbound_video_decode_gate_continue_count_total
+                .saturating_add(1);
+        });
     }
 }
 
@@ -589,7 +633,11 @@ pub(crate) fn should_absorb_idle_timeout_for_steady_gap(
         return false;
     }
     let has_current_clean_anchor = clean_anchor_epoch.is_some_and(|epoch| {
-        epoch == current_recovery_epoch && clean_anchor_source_event == Some("displayed-idr")
+        epoch == current_recovery_epoch
+            && matches!(
+                clean_anchor_source_event,
+                Some("decoded-usable-idr" | "clean-anchor-committed" | "displayed-idr")
+            )
     });
     if !has_current_clean_anchor {
         return false;

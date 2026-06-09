@@ -9,8 +9,7 @@ use crate::transport::rtc::policy::scheduling::TwccWarmupState;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
-    derive_recovery_surface_phase_from_stats, has_current_clean_anchor_from_stats,
-    has_current_transport_await_issue_from_stats, RecoverySurfacePhase,
+    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
 };
 use crate::transport::rtc::recovery::coordinator::{CoordinatorProposal, RecoveryCoordinator};
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
@@ -160,17 +159,6 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         if proposal.decision.action != RecoveryAction::RequestReconnectCandidate {
             return;
         }
-        if RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
-            matches!(
-                derive_recovery_surface_phase_from_stats(stats, observed_at_ms),
-                RecoverySurfacePhase::SupplyBreak
-            )
-        })
-        .unwrap_or(false)
-        {
-            proposal.decision.action = RecoveryAction::CooldownSuppressed;
-            return;
-        }
         let domain = resolve_session_fault_domain(owner_signal.reason);
         if !decode_or_display_fault_requires_transport_evidence(
             domain,
@@ -224,17 +212,6 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         }
         if owner_signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
             return Some("mediaGate:nonTransportAwait");
-        }
-        if RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
-            stats.recovery_surface_phase.as_deref() == Some("supply-break")
-                || matches!(
-                    derive_recovery_surface_phase_from_stats(stats, observed_at_ms),
-                    RecoverySurfacePhase::SupplyBreak
-                )
-        })
-        .unwrap_or(false)
-        {
-            return Some("mediaGate:supplyBreakSurface");
         }
         if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected {
             return Some("mediaGate:connectionNotConnected");

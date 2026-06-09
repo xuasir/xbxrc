@@ -373,20 +373,20 @@ impl XbxVideoDecodeState {
         self.pending_receive_keyframe_hint_at_ms.take()
     }
 
-    /// 与 recovery 合同同步：TimedFallback 时打通 displayed-idr delta 解码续播。
+    /// 与 recovery 合同同步：current clean anchor 后打通 delta 解码续播。
     pub(crate) fn sync_recovery_exit_policy_from_stats(
         &mut self,
         stats: &crate::XbxEngineMediaRuntimeStats,
         now_ms: f64,
     ) {
         use crate::transport::rtc::recovery::contract::{
-            displayed_idr_serving_from_stats, has_current_clean_anchor_from_stats,
-            recovery_supply_break_active_from_stats, recovery_timed_fallback_active_from_stats,
+            has_current_clean_anchor_from_stats, recovery_supply_break_active_from_stats,
+            recovery_timed_fallback_active_from_stats,
         };
-        let bypass = displayed_idr_serving_from_stats(stats)
+        let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
+        let bypass = current_clean_anchor
             && (recovery_timed_fallback_active_from_stats(stats, now_ms)
-                || (has_current_clean_anchor_from_stats(stats)
-                    && recovery_supply_break_active_from_stats(stats, now_ms)));
+                || recovery_supply_break_active_from_stats(stats, now_ms));
         if bypass && !self.timed_fallback_displayed_idr_bypass {
             self.waiting_keyframe_continuation_deadline_ms =
                 Some(now_ms + TIMED_FALLBACK_DISPLAYED_IDR_CONTINUATION_WINDOW_MS);
@@ -2196,6 +2196,61 @@ impl XbxVideoDecodeState {
             frame_unrecoverable_reason: None,
             surface: frame,
         });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_decoded_keyframe_config_change_for_test(
+        &mut self,
+        frame_rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) {
+        self.record_remote_frame_capture_observation(
+            "decoded-keyframe-config-change",
+            "SeqParameterSet|PicParameterSet|SliceLayerWithoutPartitioningIdr",
+            3,
+            frame_rtp_timestamp,
+            true,
+            1920,
+            1080,
+            1024,
+            42,
+            "00000001674d002a",
+            true,
+            true,
+            true,
+            Some("none".to_string()),
+            true,
+            true,
+            true,
+            Some(0),
+            Some(-35),
+            None,
+            Some(0),
+            Some(1),
+            observed_at_ms,
+        );
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_decoded_frame_output_for_test(
+        &mut self,
+        frame_rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) {
+        self.last_decode_ok_time_ms = Some(observed_at_ms);
+        self.record_decode_output_path_observation(
+            XbxDecodeOutputPathVerdict::DecodedFrame,
+            "decodedFrameReadyAfterContinuationBypass",
+            frame_rtp_timestamp,
+            false,
+            None,
+            Some(0),
+            Some(0),
+            Some(0),
+            Some(1),
+            None,
+            observed_at_ms,
+        );
     }
 }
 

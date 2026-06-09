@@ -37,9 +37,10 @@ export interface RecoveryGateState {
 export const DEFAULT_RECOVERY_ARBITER_WINDOW_MS = 6_000
 export const DIRECT_FIRST_FALLBACK_LAUNCH_DELAY_MS = 120
 export const DEFAULT_RUNTIME_LAUNCH_DELAY_MS = 500
+export const CONNECTING_FALLBACK_RETRY_MS = 12_000
 
 export function shouldUseDirectFirstFallback(spec: RuntimeLaunchSpec): boolean {
-  return spec.targetType === 'home'
+  return (spec.targetType === 'home' || spec.targetType === 'cloud')
     && spec.turnSource === 'fallback'
     && spec.runtime.turnServer !== null
 }

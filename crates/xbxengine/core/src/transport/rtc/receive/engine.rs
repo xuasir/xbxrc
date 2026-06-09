@@ -75,6 +75,11 @@ impl ReceiveEngine {
         self.packet_buffer.has_active_gap()
     }
 
+    pub fn clear_recovery_state_after_decoded_anchor(&mut self) {
+        self.packet_buffer.clear_gaps();
+        self.nack_requester.clear_recovery_state();
+    }
+
     pub fn poll_nack_maintenance(
         &mut self,
         now: Instant,

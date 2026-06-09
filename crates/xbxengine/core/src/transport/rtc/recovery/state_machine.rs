@@ -219,6 +219,7 @@ impl RecoveryStateMachine {
     }
 
     /// 转换到FrameRecovery状态
+    #[cfg(test)]
     pub(crate) fn transition_to_frame_recovery(&mut self) {
         self.transition_to(RecoveryState::FrameRecovery);
     }
@@ -234,6 +235,7 @@ impl RecoveryStateMachine {
     }
 
     /// 标记IDR请求已发送
+    #[cfg(test)]
     pub(crate) fn mark_idr_requested(&mut self) {
         self.last_idr_request_at = Some(Instant::now());
         self.keyframe_request_in_flight = true;

@@ -479,7 +479,7 @@ mod tests {
     }
 
     #[test]
-    fn host_present_of_matching_submission_commits_clean_anchor() {
+    fn host_present_of_matching_submission_preserves_decoded_clean_anchor() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -534,13 +534,15 @@ mod tests {
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(210.0));
+        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(180.0));
         assert_eq!(
             snapshot.video_anchor_clean_source_event.as_deref(),
-            Some("displayed-idr")
+            Some("decoded-usable-idr")
         );
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
+        assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(210.0));
     }
 
     #[test]
@@ -599,14 +601,16 @@ mod tests {
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(210.0));
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
-        assert_eq!(snapshot.recovery_displayed_idr_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
+        assert_eq!(snapshot.recovery_displayed_idr_at_ms, None);
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
         assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(210.0));
     }
 
     #[test]
-    fn host_present_of_serviceable_continuation_commits_clean_anchor_without_response_frame_seq() {
+    fn host_present_of_serviceable_continuation_preserves_decoded_clean_anchor_without_response_frame_seq(
+    ) {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -682,13 +686,15 @@ mod tests {
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(210.0));
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
-        assert_eq!(snapshot.recovery_displayed_idr_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
+        assert_eq!(snapshot.recovery_displayed_idr_at_ms, None);
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
     }
 
     #[test]
-    fn host_present_of_submitted_anchor_commits_after_owner_advances_within_same_episode() {
+    fn host_present_of_submitted_anchor_keeps_decoded_owner_after_owner_advances_within_same_episode(
+    ) {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -753,11 +759,17 @@ mod tests {
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(180.0));
+        assert_eq!(
+            snapshot.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
     }
 
     #[test]
-    fn host_present_without_pending_idr_does_not_establish_fresh_anchor_after_episode_advances() {
+    fn host_present_without_pending_idr_does_not_overwrite_decoded_anchor_after_episode_advances() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -819,7 +831,12 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_clean_epoch, None);
+        assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
+        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(180.0));
+        assert_eq!(
+            snapshot.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
         let latest_episode = snapshot
             .latest_keyframe_request_episode
             .expect("latest keyframe request episode should exist");
@@ -828,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn host_present_of_decoded_recovery_owner_does_not_commit_clean_anchor_without_submission() {
+    fn host_present_of_decoded_recovery_owner_preserves_media_recovery_without_submission() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -880,15 +897,21 @@ mod tests {
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
-        assert_eq!(snapshot.video_anchor_clean_epoch, None);
-        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, None);
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, None);
-        assert_eq!(snapshot.video_anchor_clean_source_event, None);
+        assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
+        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(180.0));
+        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
+        assert_eq!(
+            snapshot.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
         let episode = snapshot
             .latest_keyframe_request_episode
             .expect("keyframe request episode should exist");
-        assert_eq!(episode.status, "decoded");
-        assert_eq!(episode.response_verdict.as_deref(), Some("on-time"));
+        assert_eq!(episode.status, "succeeded");
+        assert_eq!(
+            episode.response_verdict.as_deref(),
+            Some("cleanAnchorCommitted")
+        );
     }
 
     #[test]

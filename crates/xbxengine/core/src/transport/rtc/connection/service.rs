@@ -93,6 +93,7 @@ pub(crate) enum VideoRecoveryRequestOutcome {
     FeedbackTransportNotReady,
     FeedbackTargetPending,
     RequestedPli,
+    RequestedControlKeyframe,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -114,6 +115,7 @@ pub(crate) struct RtcConnectionService {
     pub(super) last_transport_metrics_sample_inbound_video_bytes_total: u64,
     pub(super) lifecycle_observation_id: u64,
     pub(super) remote_rtcp_twcc_observation_id: u64,
+    pub(super) data_channel_catalog_observation_id: u64,
     pub(super) controlled_twcc_feedback: ControlledTwccFeedbackController,
     pub(super) pump_failure_injected: bool,
     pub(super) read_counters: RtcReadIngressCounters,
@@ -150,6 +152,7 @@ impl Default for RtcConnectionService {
             last_transport_metrics_sample_inbound_video_bytes_total: 0,
             lifecycle_observation_id: 0,
             remote_rtcp_twcc_observation_id: 0,
+            data_channel_catalog_observation_id: 0,
             controlled_twcc_feedback: ControlledTwccFeedbackController::new(
                 webrtc_runtime_config.video_pipeline.feedback_interval_ms,
             ),
@@ -233,6 +236,19 @@ impl RtcConnectionService {
             VideoFeedbackState::Ready
         } else {
             VideoFeedbackState::Warming
+        }
+    }
+
+    pub(crate) fn video_keyframe_feedback_state(
+        &mut self,
+    ) -> crate::transport::rtc::capability::VideoFeedbackState {
+        use crate::transport::rtc::capability::VideoFeedbackState;
+        let rtcp_state = self.video_feedback_state();
+        if matches!(rtcp_state, VideoFeedbackState::Ready) || self.control_keyframe_request_ready()
+        {
+            VideoFeedbackState::Ready
+        } else {
+            rtcp_state
         }
     }
 
@@ -332,8 +348,16 @@ impl RtcConnectionService {
                 "unbound",
                 VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON,
             );
+            if self.control_keyframe_request_ready() {
+                self.request_video_keyframe_control_direct(runtime_stats)?;
+                self.sync_control_replay_runtime_stats(runtime_stats);
+                return Ok(VideoRecoveryRequestOutcome::RequestedControlKeyframe);
+            }
             self.sync_control_replay_runtime_stats(runtime_stats);
             return Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending);
+        }
+        if self.control_keyframe_request_ready() {
+            self.request_video_keyframe_control_direct(runtime_stats)?;
         }
         self.send_video_picture_loss_indication(runtime_stats)?;
         self.sync_control_replay_runtime_stats(runtime_stats);

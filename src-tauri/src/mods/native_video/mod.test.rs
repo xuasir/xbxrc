@@ -135,6 +135,14 @@ fn host_timing_record_policy_samples_high_frequency_present_path() {
         HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
+        resolve_host_timing_record_policy("present_tick_dispatch_coalesced"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
+        resolve_host_timing_record_policy("present_tick_rerun"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
         resolve_host_timing_record_policy("hostMailboxUpdateFailed"),
         HostTimingRecordPolicy::Sampled
     );

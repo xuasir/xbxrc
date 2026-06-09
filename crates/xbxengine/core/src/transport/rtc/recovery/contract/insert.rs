@@ -1,5 +1,6 @@
 use super::decode_sync::{
-    receiver_nack_exhausted_from_stats, CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK,
+    decoder_no_output_request_idr_control_active_from_stats, decoder_reference_synced_from_stats,
+    decoder_waiting_keyframe_control_active_from_stats, receiver_nack_exhausted_from_stats,
 };
 use super::gap::GAP_KEYFRAME_ONLY_MAX_AGE_MS;
 use super::reference_chain::ReferenceChainState;
@@ -49,15 +50,11 @@ pub(crate) fn derive_packet_recovery_action_stage_from_stats(
     now_ms: f64,
     effective_rtt_ms: f64,
 ) -> PacketRecoveryActionStage {
-    let decoder_waiting = stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
-    let no_output_streak = stats
-        .latest_decode_output_path_observation
-        .as_ref()
-        .and_then(|obs| obs.backend_no_output_streak)
-        .unwrap_or(0);
-    if decoder_waiting || no_output_streak >= CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK {
+    let decoder_waiting = decoder_waiting_keyframe_control_active_from_stats(stats, now_ms);
+    if decoder_waiting || decoder_no_output_request_idr_control_active_from_stats(stats, now_ms) {
         return PacketRecoveryActionStage::RequestIdr;
     }
+    let reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
     let gap_age_ms = stats
         .latest_video_timeline_observation
         .as_ref()
@@ -66,6 +63,16 @@ pub(crate) fn derive_packet_recovery_action_stage_from_stats(
     let gap_open = gap_age_ms.is_some();
     let gap_stale = gap_age_ms
         .is_some_and(|age| age >= GAP_KEYFRAME_ONLY_MAX_AGE_MS.max(effective_rtt_ms * 2.0));
+    if reference_synced && gap_open {
+        if stats
+            .latest_video_receiver_observation
+            .as_ref()
+            .is_some_and(|obs| obs.nack_in_flight)
+        {
+            return PacketRecoveryActionStage::NackPending;
+        }
+        return PacketRecoveryActionStage::NackMissed;
+    }
     if gap_stale {
         return PacketRecoveryActionStage::WaitKeyframe;
     }
@@ -76,6 +83,9 @@ pub(crate) fn derive_packet_recovery_action_stage_from_stats(
             .is_some_and(|obs| obs.nack_in_flight)
         {
             return PacketRecoveryActionStage::NackPending;
+        }
+        if reference_synced {
+            return PacketRecoveryActionStage::NackMissed;
         }
         if receiver_nack_exhausted_from_stats(stats) {
             return PacketRecoveryActionStage::WaitKeyframe;

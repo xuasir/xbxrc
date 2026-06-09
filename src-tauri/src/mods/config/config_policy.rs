@@ -75,6 +75,22 @@ fn normalize_display_options(key: &str, value: &Value, fallback: &Value) -> Valu
     })
 }
 
+fn normalize_keyboard_mapping(value: &Value, fallback: &Value) -> Value {
+    let Some(map) = value.as_object() else {
+        return fallback.clone();
+    };
+    let has_bindings = map
+        .get("bindings")
+        .and_then(Value::as_array)
+        .map(|bindings| !bindings.is_empty())
+        .unwrap_or(false);
+    if has_bindings {
+        value.clone()
+    } else {
+        fallback.clone()
+    }
+}
+
 fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
     match key {
         "locale"
@@ -154,13 +170,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
                 fallback.clone()
             }
         }
-        "gamepad_keyboard_mapping" => {
-            if value.is_object() {
-                value.clone()
-            } else {
-                fallback.clone()
-            }
-        }
+        "gamepad_keyboard_mapping" => normalize_keyboard_mapping(value, fallback),
         _ => fallback.clone(),
     }
 }
@@ -189,4 +199,37 @@ pub fn filter_patch(patch: &Map<String, Value>) -> Map<String, Value> {
 
 pub fn split_groups(config: &Map<String, Value>) -> Value {
     split_config_groups(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn default_keyboard_mapping_is_non_empty() {
+        let defaults = default_config_map();
+        let bindings = defaults["gamepad_keyboard_mapping"]["bindings"]
+            .as_array()
+            .expect("default keyboard bindings");
+        assert!(!bindings.is_empty());
+    }
+
+    #[test]
+    fn normalize_config_replaces_empty_keyboard_mapping_with_default() {
+        let mut source = Map::new();
+        source.insert(
+            "gamepad_keyboard_mapping".to_owned(),
+            json!({
+                "bindings": []
+            }),
+        );
+
+        let normalized = normalize_config(source);
+        let bindings = normalized["gamepad_keyboard_mapping"]["bindings"]
+            .as_array()
+            .expect("normalized keyboard bindings");
+        assert!(!bindings.is_empty());
+    }
 }

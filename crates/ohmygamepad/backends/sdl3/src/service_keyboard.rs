@@ -103,6 +103,10 @@ pub(crate) struct ServiceKeyboardListenerHandle {
 }
 
 impl ServiceKeyboardListenerHandle {
+    pub(crate) fn is_finished(&self) -> bool {
+        self.join_handle.is_finished()
+    }
+
     pub(crate) fn replace_mapping(&self, mapping: OhMyGamepadKeyboardMappingDto) -> Result<(), ()> {
         self.command_tx
             .send(KeyboardListenerCommand::ReplaceMapping(mapping))

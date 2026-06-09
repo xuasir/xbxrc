@@ -917,6 +917,16 @@ pub struct XbxEngineStatsDto {
     pub inbound_bytes_total: Option<u64>,
     pub inbound_video_bytes_total: Option<u64>,
     pub inbound_audio_bytes_total: Option<u64>,
+    #[serde(default)]
+    pub inbound_video_frame_count_total: Option<u64>,
+    #[serde(default)]
+    pub inbound_video_rtp_marker_count_total: Option<u64>,
+    #[serde(default)]
+    pub inbound_video_access_unit_count_total: Option<u64>,
+    #[serde(default)]
+    pub inbound_video_decode_gate_emit_count_total: Option<u64>,
+    #[serde(default)]
+    pub inbound_video_decode_gate_continue_count_total: Option<u64>,
     pub inbound_video_packet_count_total: Option<u64>,
     #[serde(default)]
     pub latest_video_packet_arrival_rtp_timestamp: Option<u32>,
@@ -1112,6 +1122,12 @@ pub struct XbxEngineStatsDto {
         Option<XbxEngineDataChannelMessageCatalogObservationDto>,
     pub latest_observation_label: Option<String>,
     pub latest_observation_summary: Option<String>,
+    #[serde(default)]
+    pub latest_turn_relay_observation_seq: Option<u64>,
+    #[serde(default)]
+    pub latest_turn_relay_observation_label: Option<String>,
+    #[serde(default)]
+    pub latest_turn_relay_observation_summary: Option<String>,
     pub latest_target_remb_action: Option<String>,
     pub latest_target_remb_summary: Option<String>,
     pub build_fingerprint: Option<XbxEngineBuildFingerprintDto>,

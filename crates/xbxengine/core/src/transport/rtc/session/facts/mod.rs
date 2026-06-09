@@ -50,6 +50,8 @@ pub(crate) struct RtcSessionPolicyOrchestrationInput {
     /// 与 `owner_input.demand` 同源；按 RFC 字段表保留，供顶层只读聚合扩展。
     #[allow(dead_code)]
     pub(crate) demand: SchedulingDemandSignal,
+    /// 与 `owner_input` 同源；按 RFC 字段表保留，供顶层只读聚合扩展。
+    #[allow(dead_code)]
     pub(crate) owner_facts: OwnerRuntimeFacts,
     pub(crate) owner_input: VideoSchedulingOwnerInput,
     pub(crate) recovery_profile_kind: ScenarioPolicyProfileKind,
@@ -263,8 +265,11 @@ pub(crate) fn build_owner_input(
     observed_at_ms: f64,
     absorb_first_frame_acquisition_anchor_issue: bool,
 ) -> VideoSchedulingOwnerInput {
-    let anchor_reason_label =
-        resolve_anchor_reason_label(owner_facts, absorb_first_frame_acquisition_anchor_issue);
+    let anchor_reason_label = resolve_anchor_reason_label(
+        owner_facts,
+        observed_at_ms,
+        absorb_first_frame_acquisition_anchor_issue,
+    );
     let latest_timeline_chain_state = owner_facts
         .latest_video_timeline_observation
         .as_ref()
@@ -281,10 +286,7 @@ pub(crate) fn build_owner_input(
         .latest_video_track_status
         .as_ref()
         .map(|status| status.video_bytes_total);
-    let receiver_state = owner_facts
-        .latest_video_receiver_observation
-        .as_ref()
-        .map(|observation| observation.receiver_state.clone());
+    let receiver_state = normalized_receiver_state_for_owner(owner_facts, observed_at_ms);
     VideoSchedulingOwnerInput {
         connection_state: snapshot.connection.lifecycle_state,
         recovery_epoch: owner_facts.recovery_epoch,
@@ -345,15 +347,62 @@ pub(crate) fn build_owner_input(
     }
 }
 
+const OWNER_DECODER_REFERENCE_SYNCED_FRESH_MS: f64 = 2_000.0;
+
+fn owner_clean_anchor_or_decoder_sync_clears_waiting(
+    owner_facts: &OwnerRuntimeFacts,
+    observed_at_ms: f64,
+) -> bool {
+    if owner_facts.clean_anchor_epoch == Some(owner_facts.recovery_epoch)
+        && owner_facts.clean_anchor_observed_at_ms.is_some()
+    {
+        return true;
+    }
+    if owner_facts.recovery_fresh_anchor_recovered_at_ms.is_some() {
+        return true;
+    }
+    owner_facts
+        .recovery_decoder_reference_synced_at_ms
+        .is_some_and(|at_ms| {
+            (observed_at_ms - at_ms).max(0.0) <= OWNER_DECODER_REFERENCE_SYNCED_FRESH_MS
+        })
+}
+
+fn normalized_receiver_state_for_owner(
+    owner_facts: &OwnerRuntimeFacts,
+    observed_at_ms: f64,
+) -> Option<String> {
+    let receiver = owner_facts.latest_video_receiver_observation.as_ref()?;
+    if receiver.receiver_state != "waiting-keyframe"
+        || !owner_clean_anchor_or_decoder_sync_clears_waiting(owner_facts, observed_at_ms)
+    {
+        return Some(receiver.receiver_state.clone());
+    }
+    let has_active_gap = owner_facts
+        .latest_video_timeline_observation
+        .as_ref()
+        .and_then(|timeline| timeline.gap.as_ref())
+        .is_some();
+    Some(
+        if has_active_gap {
+            "repairing"
+        } else {
+            "receiving"
+        }
+        .to_string(),
+    )
+}
+
 fn resolve_anchor_reason_label(
     owner_facts: &OwnerRuntimeFacts,
+    observed_at_ms: f64,
     absorb_first_frame_acquisition_anchor_issue: bool,
 ) -> Option<String> {
     if absorb_first_frame_acquisition_anchor_issue {
         return None;
     }
-    let receiver = owner_facts.latest_video_receiver_observation.as_ref()?;
-    let label = match receiver.receiver_state.as_str() {
+    let receiver_state = normalized_receiver_state_for_owner(owner_facts, observed_at_ms)?;
+    let label = match receiver_state.as_str() {
         "waiting-keyframe" => "receiverWaitingKeyframe",
         _ => return None,
     };
@@ -398,7 +447,7 @@ mod tests {
             ..OwnerRuntimeFacts::default()
         };
 
-        assert_eq!(resolve_anchor_reason_label(&facts, false), None);
+        assert_eq!(resolve_anchor_reason_label(&facts, 120.0, false), None);
     }
 
     #[test]
@@ -410,9 +459,26 @@ mod tests {
         };
 
         assert_eq!(
-            resolve_anchor_reason_label(&facts, false),
+            resolve_anchor_reason_label(&facts, 120.0, false),
             Some("receiverWaitingKeyframe".to_string())
         );
+    }
+
+    #[test]
+    fn clean_anchor_masks_stale_receiver_waiting_for_owner_input() {
+        let facts = OwnerRuntimeFacts {
+            recovery_epoch: 7,
+            clean_anchor_epoch: Some(7),
+            clean_anchor_observed_at_ms: Some(100.0),
+            latest_video_receiver_observation: Some(receiver_observation("waiting-keyframe")),
+            ..OwnerRuntimeFacts::default()
+        };
+
+        assert_eq!(
+            normalized_receiver_state_for_owner(&facts, 120.0).as_deref(),
+            Some("receiving")
+        );
+        assert_eq!(resolve_anchor_reason_label(&facts, 120.0, false), None);
     }
 
     #[test]

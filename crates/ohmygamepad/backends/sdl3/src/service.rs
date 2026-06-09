@@ -40,6 +40,7 @@ use crate::{
 const EMPTY_SAMPLING_DEVICE_ID: &str = "__service:none__";
 const SERVICE_SYNC_RETRY_COUNT: usize = 40;
 const SERVICE_SYNC_RETRY_DELAY_MS: u64 = 2;
+const SAMPLING_SELF_HEAL_COOLDOWN: Duration = Duration::from_secs(2);
 
 pub type MultiControllerSamplingMode = MultiControllerSamplingModeDto;
 pub type MultiControllerSamplingStrategy = MultiControllerSamplingStrategyDto;
@@ -80,6 +81,7 @@ struct OhMyGamepadServiceState {
     sampling_strategy: MultiControllerSamplingStrategy,
     virtual_input_tx: Sender<Vec<Sdl3InputEvent>>,
     virtual_descriptors: HashMap<String, SimulatedGamepadDescriptor>,
+    desktop_keyboard_config: Option<OhMyGamepadDesktopKeyboardListenerConfig>,
     keyboard_listener: Option<ServiceKeyboardListenerHandle>,
     source_handle: Option<crate::Sdl3RumbleHandle>,
     rumble_backend: Option<Box<dyn ServiceRumbleBackend>>,
@@ -181,8 +183,9 @@ impl OhMyGamepadService {
             NoopUiSink,
             NoopStreamSink,
         );
+        let desktop_keyboard_config = config.desktop_keyboard.clone();
         let keyboard_listener = if config.sampling_strategy.enable_keyboard_fallback {
-            config.desktop_keyboard.map(|keyboard_config| {
+            desktop_keyboard_config.clone().map(|keyboard_config| {
                 spawn_keyboard_listener_thread(keyboard_config, virtual_input_tx.clone(), now_ms)
             })
         } else {
@@ -195,6 +198,7 @@ impl OhMyGamepadService {
                 sampling_strategy: config.sampling_strategy,
                 virtual_input_tx,
                 virtual_descriptors: HashMap::new(),
+                desktop_keyboard_config,
                 keyboard_listener,
                 source_handle,
                 rumble_backend,
@@ -225,6 +229,50 @@ impl OhMyGamepadService {
             }
         }
         self.runtime.refresh_snapshot()
+    }
+
+    fn ensure_keyboard_listener_running(&self, reason: &str) -> bool {
+        let mut state = self.state.lock().expect("lock service state");
+        if !state.sampling_strategy.enable_keyboard_fallback {
+            return false;
+        }
+        let Some(config) = state.desktop_keyboard_config.clone() else {
+            return false;
+        };
+        if let Some(listener) = state.keyboard_listener.as_ref() {
+            if !listener.is_finished() {
+                return false;
+            }
+        }
+
+        if let Some(listener) = state.keyboard_listener.take() {
+            listener.shutdown();
+        }
+        state.keyboard_listener = Some(spawn_keyboard_listener_thread(
+            config,
+            state.virtual_input_tx.clone(),
+            now_ms,
+        ));
+        log::info!(
+            "ohmygamepad_keyboard_fallback_listener_restarted reason={}",
+            reason
+        );
+        true
+    }
+
+    fn try_mark_sampling_self_heal_attempt(&self) -> bool {
+        let now = Instant::now();
+        let mut last = self
+            .last_sampling_self_heal_at
+            .lock()
+            .expect("lock sampling self heal");
+        if let Some(prev) = *last {
+            if now.duration_since(prev) < SAMPLING_SELF_HEAL_COOLDOWN {
+                return false;
+            }
+        }
+        *last = Some(now);
+        true
     }
 
     pub fn snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
@@ -356,29 +404,50 @@ impl OhMyGamepadService {
         let is_stalled = snapshot.sampling_health == OhMyGamepadSamplingHealthDto::Stalled;
         let is_awaiting_baseline =
             snapshot.sampling_health == OhMyGamepadSamplingHealthDto::AwaitingBaseline;
-        let has_connected = snapshot.devices.iter().any(|device| device.connected);
+        let has_non_keyboard_connected = has_non_keyboard_connected_device(snapshot);
+        let has_keyboard_fallback_connected = has_keyboard_fallback_connected_device(snapshot);
         // `AwaitingBaseline`：仅在逻辑层仍未写入 progress 时触发（与 `evaluate_sampling_health` 的 lp==0 语义一致）。
         // `Stalled`：逻辑 progress 长时间停顿；`last_sample_progress_at_ms` 可能已在首轮 seq bump 被置为非 0，
         // 若仍要求 lp==0 则 prime/reopen 自愈链永远不会执行（蓝牙/虚拟手柄冷启动 SDL 签名冻结等 case）。
-        let should_apply = has_connected
-            && ((is_awaiting_baseline && snapshot.last_sample_progress_at_ms == 0) || is_stalled);
-        if !should_apply {
+        let sampling_needs_recovery =
+            (is_awaiting_baseline && snapshot.last_sample_progress_at_ms == 0) || is_stalled;
+        let should_apply_physical = has_non_keyboard_connected && sampling_needs_recovery;
+        let should_apply_keyboard = has_keyboard_fallback_connected
+            && !has_non_keyboard_connected
+            && sampling_needs_recovery;
+
+        if should_apply_keyboard {
+            if !self.try_mark_sampling_self_heal_attempt() {
+                return Ok(false);
+            }
+            let restarted =
+                self.ensure_keyboard_listener_running("keyboard-fallback-sampling-self-heal");
+            log::info!(
+                "ohmygamepad_sampling_self_heal_keyboard_fallback health={:?} lifecycle={:?} listener_restarted={}",
+                snapshot.sampling_health,
+                snapshot.sampling_lifecycle,
+                restarted
+            );
+            if restarted {
+                self.runtime.bump_sampling_self_heal_count()?;
+            }
+            return Ok(restarted);
+        }
+
+        if !should_apply_physical {
+            if snapshot.devices.iter().any(|device| device.connected) && !has_non_keyboard_connected
+            {
+                log::info!(
+                    "ohmygamepad_sampling_self_heal_skipped reason=keyboard-fallback-only health={:?} lifecycle={:?}",
+                    snapshot.sampling_health,
+                    snapshot.sampling_lifecycle
+                );
+            }
             return Ok(false);
         }
 
-        const COOLDOWN: Duration = Duration::from_secs(2);
-        let now = Instant::now();
-        {
-            let mut last = self
-                .last_sampling_self_heal_at
-                .lock()
-                .expect("lock sampling self heal");
-            if let Some(prev) = *last {
-                if now.duration_since(prev) < COOLDOWN {
-                    return Ok(false);
-                }
-            }
-            *last = Some(now);
+        if !self.try_mark_sampling_self_heal_attempt() {
+            return Ok(false);
         }
 
         log::info!(
@@ -531,11 +600,21 @@ impl OhMyGamepadService {
         &self,
         mapping: OhMyGamepadKeyboardMappingDto,
     ) -> Result<(), OhMyGamepadServiceError> {
-        let state = self.state.lock().expect("lock service state");
-        if let Some(listener) = state.keyboard_listener.as_ref() {
-            listener
-                .replace_mapping(mapping)
-                .map_err(|_| OhMyGamepadServiceError::InputChannelClosed)?;
+        let mapping = normalize_keyboard_mapping(mapping);
+        let send_result = {
+            let mut state = self.state.lock().expect("lock service state");
+            if let Some(config) = state.desktop_keyboard_config.as_mut() {
+                config.mapping = mapping.clone();
+            }
+            state
+                .keyboard_listener
+                .as_ref()
+                .map(|listener| listener.replace_mapping(mapping))
+        };
+        if let Some(Err(_)) = send_result {
+            if !self.ensure_keyboard_listener_running("replace-keyboard-mapping") {
+                return Err(OhMyGamepadServiceError::InputChannelClosed);
+            }
         }
         Ok(())
     }
@@ -688,6 +767,9 @@ impl OhMyGamepadService {
             reason,
             should_force_lifecycle_rearm,
         );
+        if has_keyboard_fallback_connected_device(&initial_snapshot) {
+            self.ensure_keyboard_listener_running("resume-recovery");
+        }
         // 恢复 API 的语义是重新进入可操作采样态；仅 prime/refresh 不足以让
         // BackgroundWarm 下的 slotSnapshot/input action 重新对外发布。
         if should_force_lifecycle_rearm {
@@ -1064,6 +1146,30 @@ fn contains_axis(actual: f32, expected: f32) -> bool {
     }
 }
 
+fn has_non_keyboard_connected_device(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> bool {
+    snapshot
+        .devices
+        .iter()
+        .any(|device| device.connected && device.device_id != KEYBOARD_FALLBACK_DEVICE_ID)
+}
+
+fn has_keyboard_fallback_connected_device(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> bool {
+    snapshot
+        .devices
+        .iter()
+        .any(|device| device.connected && device.device_id == KEYBOARD_FALLBACK_DEVICE_ID)
+}
+
+fn normalize_keyboard_mapping(
+    mapping: OhMyGamepadKeyboardMappingDto,
+) -> OhMyGamepadKeyboardMappingDto {
+    if mapping.bindings.is_empty() {
+        OhMyGamepadKeyboardMappingDto::default()
+    } else {
+        mapping
+    }
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1075,7 +1181,9 @@ fn now_ms() -> u64 {
 mod tests {
     use super::*;
     use crate::NoopSdl3Source;
-    use ohmygamepad_protocol::{OhMyGamepadInputGateModeDto, OhMyGamepadSamplingLifecycleDto};
+    use ohmygamepad_protocol::{
+        OhMyGamepadInputGateModeDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    };
 
     #[test]
     fn derive_input_gate_matches_lifecycle_and_foreground_candidate() {
@@ -1121,5 +1229,98 @@ mod tests {
             snapshot.sampling_lifecycle,
             OhMyGamepadSamplingLifecycleDto::Active
         );
+    }
+
+    #[test]
+    fn sampling_self_heal_requires_non_keyboard_connected_device() {
+        let keyboard_only = OhMyGamepadRuntimeSnapshotDto {
+            sampling_health: OhMyGamepadSamplingHealthDto::AwaitingBaseline,
+            devices: vec![OhMyGamepadDeviceDto {
+                device_id: KEYBOARD_FALLBACK_DEVICE_ID.to_owned(),
+                connected: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(!has_non_keyboard_connected_device(&keyboard_only));
+
+        let physical = OhMyGamepadRuntimeSnapshotDto {
+            sampling_health: OhMyGamepadSamplingHealthDto::AwaitingBaseline,
+            devices: vec![OhMyGamepadDeviceDto {
+                device_id: "sdl3:1".to_owned(),
+                connected: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(has_non_keyboard_connected_device(&physical));
+    }
+
+    #[test]
+    fn keyboard_fallback_self_heal_restarts_missing_listener() {
+        let service = OhMyGamepadService::spawn_with_source(
+            OhMyGamepadServiceConfig::default(),
+            NoopSdl3Source,
+        );
+        if let Some(listener) = service
+            .state
+            .lock()
+            .expect("lock service state")
+            .keyboard_listener
+            .take()
+        {
+            listener.shutdown();
+        }
+
+        let keyboard_only = OhMyGamepadRuntimeSnapshotDto {
+            sampling_health: OhMyGamepadSamplingHealthDto::AwaitingBaseline,
+            devices: vec![OhMyGamepadDeviceDto {
+                device_id: KEYBOARD_FALLBACK_DEVICE_ID.to_owned(),
+                connected: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        assert!(service
+            .try_sampling_self_heal_with_snapshot(&keyboard_only)
+            .expect("keyboard fallback self heal"));
+        assert!(service
+            .state
+            .lock()
+            .expect("lock service state")
+            .keyboard_listener
+            .is_some());
+        service.shutdown().expect("shutdown service");
+    }
+
+    #[test]
+    fn empty_keyboard_mapping_resets_to_default_mapping() {
+        let service = OhMyGamepadService::spawn_with_source(
+            OhMyGamepadServiceConfig::default(),
+            NoopSdl3Source,
+        );
+
+        service
+            .replace_keyboard_mapping(OhMyGamepadKeyboardMappingDto {
+                bindings: Vec::new(),
+            })
+            .expect("replace keyboard mapping");
+
+        let bindings_len = service
+            .state
+            .lock()
+            .expect("lock service state")
+            .desktop_keyboard_config
+            .as_ref()
+            .expect("desktop keyboard config")
+            .mapping
+            .bindings
+            .len();
+        assert_eq!(
+            bindings_len,
+            OhMyGamepadKeyboardMappingDto::default().bindings.len()
+        );
+        service.shutdown().expect("shutdown service");
     }
 }

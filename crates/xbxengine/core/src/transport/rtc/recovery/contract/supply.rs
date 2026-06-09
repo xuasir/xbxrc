@@ -1,10 +1,6 @@
-use super::display::{
-    displayed_idr_serving_allows_relaxed_controls_from_stats, displayed_idr_serving_from_stats,
-};
-use super::gap::{
-    gap_keyframe_only_mode_active, parameter_sets_change_strict_active_from_stats,
-    resolve_gap_vs_keyframe_mode,
-};
+use super::decode_sync::decoder_waiting_keyframe_control_active_from_stats;
+use super::display::displayed_idr_serving_from_stats;
+use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
 use super::snapshot::DerivedDecoderHealth;
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -53,22 +49,20 @@ impl RecoverySurfacePhase {
 
 /// diagnostics / UI / trace 投影；Insert Hold/Emit 由 `ReferenceChainState` 裁决。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum MediaSupplyPhase {
+pub(crate) enum PresentationSupplyPhase {
     #[default]
     Priming,
     Steady,
     Repairing,
-    MustIdr,
     SupplyBreak,
 }
 
-impl MediaSupplyPhase {
+impl PresentationSupplyPhase {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Priming => "priming",
             Self::Steady => "steady",
             Self::Repairing => "repairing",
-            Self::MustIdr => "must-idr",
             Self::SupplyBreak => "supply-break",
         }
     }
@@ -139,35 +133,18 @@ pub(crate) fn recovery_effective_rtt_ms_from_stats(stats: &XbxEngineMediaRuntime
         .clamp(20.0, 400.0)
 }
 
-pub(crate) fn derive_media_supply_phase_from_stats(
+pub(crate) fn derive_presentation_supply_phase_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
-) -> MediaSupplyPhase {
-    let effective_rtt_ms = recovery_effective_rtt_ms_from_stats(stats);
-    let waiting_keyframe = stats.video_decoder_recovery_state.as_deref()
-        == Some("waiting-keyframe")
-        || stats
-            .latest_video_receiver_observation
-            .as_ref()
-            .is_some_and(|obs| obs.receiver_state == "waiting-keyframe");
-    // 参考链等 IDR 优先于 supply-break / priming（WebRTC：先 RTCP PLI，不在无望 delta 上耗解码）。
-    if waiting_keyframe {
-        return MediaSupplyPhase::MustIdr;
-    }
+) -> PresentationSupplyPhase {
     if media_supply_submit_starved_from_stats(stats, now_ms) {
-        return MediaSupplyPhase::MustIdr;
+        return PresentationSupplyPhase::SupplyBreak;
     }
     if recovery_supply_break_active_from_stats(stats, now_ms) {
-        return MediaSupplyPhase::SupplyBreak;
+        return PresentationSupplyPhase::SupplyBreak;
     }
     if media_supply_priming_from_stats(stats, now_ms) {
-        return MediaSupplyPhase::Priming;
-    }
-    let ps_strict = parameter_sets_change_strict_active_from_stats(stats, now_ms, effective_rtt_ms);
-    let gap_mode = resolve_gap_vs_keyframe_mode(stats, now_ms, effective_rtt_ms);
-    let keyframe_only = gap_keyframe_only_mode_active(gap_mode);
-    if ps_strict || keyframe_only {
-        return MediaSupplyPhase::MustIdr;
+        return PresentationSupplyPhase::Priming;
     }
     let timeline_repairing = stats
         .latest_video_timeline_observation
@@ -183,9 +160,24 @@ pub(crate) fn derive_media_supply_phase_from_stats(
         .as_ref()
         .is_some_and(|obs| obs.receiver_state == "repairing");
     if timeline_repairing || receiver_repairing {
-        return MediaSupplyPhase::Repairing;
+        return PresentationSupplyPhase::Repairing;
     }
-    MediaSupplyPhase::Steady
+    PresentationSupplyPhase::Steady
+}
+
+pub(crate) fn receive_keyframe_surface_await_idr_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let effective_rtt_ms = recovery_effective_rtt_ms_from_stats(stats);
+    let action_stage =
+        derive_packet_recovery_action_stage_from_stats(stats, now_ms, effective_rtt_ms);
+    stats.receive_keyframe_required.unwrap_or(false)
+        || decoder_waiting_keyframe_control_active_from_stats(stats, now_ms)
+        || matches!(
+            action_stage,
+            PacketRecoveryActionStage::WaitKeyframe | PacketRecoveryActionStage::RequestIdr
+        )
 }
 
 /// 控制面应走 receive PLI / await-idr；这里只读 receive-local `keyframe_required`
@@ -194,21 +186,16 @@ pub(crate) fn idr_recovery_active_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    let _ = now_ms;
     stats.receive_keyframe_required.unwrap_or(false)
-        || stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+        || decoder_waiting_keyframe_control_active_from_stats(stats, now_ms)
 }
 
-/// Session / suspect 门控：receive ledger + 供给断裂控制事实，不读 `derived_decoder_health` 投影。
+/// Session / suspect 门控：只读 receive-local IDR 恢复事实。
 pub(crate) fn receive_media_recovery_pressure_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    if idr_recovery_active_from_stats(stats, now_ms) {
-        return true;
-    }
-    recovery_supply_break_active_from_stats(stats, now_ms)
-        && stats.receive_display_state.as_deref() != Some("display-stable")
+    idr_recovery_active_from_stats(stats, now_ms)
 }
 
 /// SessionPhase::Steady 保持：host 可见供给仍可服务，即使 receive media recovery 仍 open。
@@ -233,20 +220,21 @@ pub(crate) fn receive_presentation_holds_steady_session_phase_from_stats(
             .is_some_and(|at| (now_ms - at).max(0.0) < 600.0)
 }
 
-pub(crate) fn recovery_surface_phase_from_media_supply_phase(
-    phase: MediaSupplyPhase,
+pub(crate) fn recovery_surface_phase_from_presentation_supply_phase(
+    phase: PresentationSupplyPhase,
 ) -> RecoverySurfacePhase {
     match phase {
-        MediaSupplyPhase::SupplyBreak => RecoverySurfacePhase::SupplyBreak,
-        MediaSupplyPhase::MustIdr => RecoverySurfacePhase::AwaitIdr,
-        MediaSupplyPhase::Repairing => RecoverySurfacePhase::Repairing,
-        MediaSupplyPhase::Priming | MediaSupplyPhase::Steady => RecoverySurfacePhase::Steady,
+        PresentationSupplyPhase::SupplyBreak => RecoverySurfacePhase::SupplyBreak,
+        PresentationSupplyPhase::Repairing => RecoverySurfacePhase::Repairing,
+        PresentationSupplyPhase::Priming | PresentationSupplyPhase::Steady => {
+            RecoverySurfacePhase::Steady
+        }
     }
 }
 
 pub(crate) const RECOVERY_SUPPLY_BREAK_SUBMIT_AGE_MS: f64 = 1_500.0;
 
-/// 曾上屏但 Host mailbox submit 停供：须 PLI/IDR，禁止 continuation emit。
+/// 曾上屏但 Host mailbox submit 停供：presentation supply 诊断，不能反灌 picture recovery。
 pub(crate) fn media_supply_submit_starved_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     _now_ms: f64,
@@ -271,13 +259,6 @@ pub(crate) fn recovery_supply_break_active_from_stats(
     if !had_present {
         return false;
     }
-    if stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe") {
-        if !(displayed_idr_serving_allows_relaxed_controls_from_stats(stats, now_ms)
-            || stats.recovery_playback_recovered_at_ms.is_some())
-        {
-            return false;
-        }
-    }
     let submit_stalled = stats
         .submit_age_ms
         .is_some_and(|age| age >= RECOVERY_SUPPLY_BREAK_SUBMIT_AGE_MS);
@@ -290,9 +271,12 @@ pub(crate) fn derive_recovery_surface_phase_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> RecoverySurfacePhase {
-    recovery_surface_phase_from_media_supply_phase(derive_media_supply_phase_from_stats(
-        stats, now_ms,
-    ))
+    if receive_keyframe_surface_await_idr_from_stats(stats, now_ms) {
+        return RecoverySurfacePhase::AwaitIdr;
+    }
+    recovery_surface_phase_from_presentation_supply_phase(
+        derive_presentation_supply_phase_from_stats(stats, now_ms),
+    )
 }
 
 pub(crate) fn derive_decoder_health_from_stats(
@@ -304,15 +288,18 @@ pub(crate) fn derive_decoder_health_from_stats(
     {
         return DerivedDecoderHealth::SupplyStalled;
     }
-    match stats.video_decoder_recovery_state.as_deref() {
-        Some("waiting-keyframe") => DerivedDecoderHealth::AwaitIdr,
-        Some("recovering") => DerivedDecoderHealth::RepairingDecode,
-        _ => DerivedDecoderHealth::Nominal,
+    if decoder_waiting_keyframe_control_active_from_stats(stats, now_ms) {
+        DerivedDecoderHealth::AwaitIdr
+    } else {
+        match stats.video_decoder_recovery_state.as_deref() {
+            Some("recovering") => DerivedDecoderHealth::RepairingDecode,
+            _ => DerivedDecoderHealth::Nominal,
+        }
     }
 }
 
-/// owner / suspect_anchor / fast-path 门控：解码器处于等 IDR 或供给断裂派生态。
-pub(crate) fn derived_decoder_health_indicates_await_idr_or_supply_stall(
+/// owner / suspect_anchor / fast-path 门控：只读 receive-local IDR 恢复事实。
+pub(crate) fn derived_decoder_health_indicates_await_idr(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
     receive_media_recovery_pressure_from_stats(stats, 0.0)

@@ -18,6 +18,9 @@ pub enum GamepadCommand {
     },
     ActivateSampling,
     ResumeShellSampling,
+    HintShellInteractive {
+        reason: String,
+    },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
     },
@@ -76,6 +79,10 @@ pub async fn handle_rpc(
         GamepadCommand::ActivateSampling => Ok(serde_json::to_value(service.activate_sampling()?)?),
         GamepadCommand::ResumeShellSampling => {
             Ok(serde_json::to_value(service.resume_shell_sampling()?)?)
+        }
+        GamepadCommand::HintShellInteractive { reason } => {
+            crate::shell::hint_gamepad_shell_interactive(&app_handle, &reason);
+            Ok(serde_json::to_value(service.get_runtime_snapshot()?)?)
         }
         GamepadCommand::UpdateSampling { sampling } => {
             Ok(serde_json::to_value(service.update_sampling(sampling)?)?)

@@ -770,13 +770,23 @@ where
         } else {
             true
         };
-        if frame.is_keyframe && decoded_owner_matches_latest_episode {
+        let decoded_recovery_epoch_matches = runtime_stats
+            .read(|stats| {
+                frame
+                    .recovery_epoch_tag
+                    .or(frame.clean_anchor_commit_recovery_epoch)
+                    .is_none_or(|epoch| epoch == stats.transport_recovery_epoch)
+            })
+            .unwrap_or(true);
+        let decoded_keyframe_commits_recovery = frame.is_keyframe
+            && decoded_owner_matches_latest_episode
+            && decoded_recovery_epoch_matches;
+        if decoded_keyframe_commits_recovery {
             runtime_stats.record_picture_recovery_episode_decoded(
                 now_ms,
                 frame.rtp_timestamp,
                 frame.surface.frame_seq,
             );
-            runtime_stats.record_pending_displayed_idr_rtp(frame.rtp_timestamp);
         }
         let frame_rtp_timestamp = frame.rtp_timestamp;
         let recovery_owner_rtp_timestamp = frame.recovery_owner_rtp_timestamp;
@@ -810,7 +820,11 @@ where
             decode_state.decoded_frame_queue_len(),
         );
         match submit_result {
-            PendingDecodedSubmitResult::Submitted => {}
+            PendingDecodedSubmitResult::Submitted => {
+                if decoded_keyframe_commits_recovery {
+                    runtime_stats.record_pending_displayed_idr_rtp(frame_rtp_timestamp);
+                }
+            }
             PendingDecodedSubmitResult::Coalesced(frame) => {
                 runtime_stats.update(|stats| {
                     stats.latest_observation_label = Some("decodePacerSubmitCoalesced".to_string());
@@ -923,6 +937,35 @@ fn sync_decode_runtime_stats(
     runtime_stats.read(|stats| {
         decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
     });
+    if let Some(observation) = decode_state
+        .latest_remote_frame_capture_observation()
+        .cloned()
+    {
+        if observation.trigger == "decoded-keyframe-config-change"
+            && observation.is_keyframe
+            && observation.bootstrap_ready
+        {
+            let already_committed = runtime_stats
+                .read(|stats| {
+                    stats.latest_clean_anchor_submission_rtp_timestamp
+                        == Some(observation.frame_rtp_timestamp)
+                        && stats.video_anchor_clean_source_event.as_deref()
+                            == Some("decoded-usable-idr")
+                })
+                .unwrap_or(false);
+            if !already_committed {
+                runtime_stats.record_picture_recovery_episode_decoded(
+                    observation.observed_at_ms,
+                    observation.frame_rtp_timestamp,
+                    0,
+                );
+            }
+        }
+    }
+    let decoded_frame_observation = decode_state
+        .latest_decode_output_path_observation()
+        .filter(|observation| observation.verdict.as_str() == "decoded-frame")
+        .cloned();
     runtime_stats.update(|stats| {
         stats.video_decoder_backend_name = Some(decode_state.decoder_backend_name().to_string());
         stats.video_decoder_reset_count = decode_state.decoder_reset_count();
@@ -974,6 +1017,15 @@ fn sync_decode_runtime_stats(
                     observed_at_ms: observation.observed_at_ms,
                 },
             );
+        if let Some(observation) = decoded_frame_observation.as_ref() {
+            if stats
+                .latest_video_decode_ok_time_ms
+                .is_none_or(|at_ms| observation.observed_at_ms >= at_ms)
+            {
+                stats.latest_video_decode_ok_time_ms = Some(observation.observed_at_ms);
+                stats.latest_video_decode_ok_rtp_timestamp = Some(observation.frame_rtp_timestamp);
+            }
+        }
         stats.latest_decode_output_path_observation = decode_state
             .latest_decode_output_path_observation()
             .map(|observation| crate::XbxEngineDecodeOutputPathObservation {
@@ -1051,14 +1103,14 @@ mod tests {
 
     use super::{
         drain_pending_decoded_output_with_submit, format_decode_backpressure_summary,
-        EncodedFrameRecoveryClass, PendingDecodedSubmitResult, PreDecodeRecoveryFenceVerdict,
-        StaleRecoveryBridge,
+        sync_decode_runtime_stats, EncodedFrameRecoveryClass, PendingDecodedSubmitResult,
+        PreDecodeRecoveryFenceVerdict, StaleRecoveryBridge,
     };
     use crate::media::video::decode::video_decode::XbxVideoDecodeState;
     use crate::media::video::render::renderer::XbxRenderFrame;
     use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
     use crate::runtime_stats_sink::RuntimeStatsSink;
-    use crate::{XbxEngineAnchorCandidateState, XbxEngineRenderPixelData};
+    use crate::XbxEngineRenderPixelData;
 
     fn make_render_frame(frame_seq: u64) -> XbxRenderFrame {
         XbxRenderFrame {
@@ -1236,7 +1288,7 @@ mod tests {
     }
 
     #[test]
-    fn decoded_keyframe_records_pending_displayed_idr_after_decode() {
+    fn decoded_keyframe_commits_media_recovery_before_host_display() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1270,8 +1322,75 @@ mod tests {
 
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(
+            stats.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
+        assert_eq!(
+            stats.receive_keyframe_response_state.as_deref(),
+            Some("usable-idr")
+        );
+        assert_eq!(stats.receive_keyframe_required, Some(false));
         assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
+    }
+
+    #[test]
+    fn decoded_keyframe_config_capture_commits_media_recovery_before_render_drain() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.record_decoded_keyframe_config_change_for_test(90_001, 180.0);
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+
+        sync_decode_runtime_stats(&sink, &mut state, 200.0);
+        sync_decode_runtime_stats(&sink, &mut state, 220.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(
+            stats.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
+        assert_eq!(
+            stats.latest_clean_anchor_submission_rtp_timestamp,
+            Some(90_001)
+        );
+        assert_eq!(
+            stats.receive_keyframe_response_state.as_deref(),
+            Some("usable-idr")
+        );
+    }
+
+    #[test]
+    fn decoded_frame_observation_refreshes_global_decode_freshness() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.record_decoded_frame_output_for_test(91_001, 1_250.0);
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.update(|stats| {
+            stats.latest_video_decode_ok_time_ms = Some(100.0);
+            stats.latest_video_decode_ok_rtp_timestamp = Some(90_001);
+        });
+
+        sync_decode_runtime_stats(&sink, &mut state, 1_260.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.latest_video_decode_ok_time_ms, Some(1_250.0));
+        assert_eq!(stats.latest_video_decode_ok_rtp_timestamp, Some(91_001));
+        assert_eq!(
+            stats
+                .latest_decode_output_path_observation
+                .as_ref()
+                .map(|observation| observation.verdict.as_str()),
+            Some("decoded-frame")
+        );
     }
 
     #[test]
@@ -1310,7 +1429,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_displayed_idr_does_not_commit_fresh_anchor_after_epoch_advances() {
+    fn stale_epoch_decoded_keyframe_does_not_commit_media_recovery() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
         state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
 
@@ -1329,7 +1448,7 @@ mod tests {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.transport_recovery_epoch, 2);
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
@@ -1348,7 +1467,12 @@ mod tests {
         });
         assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(1));
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(
+            stats.video_anchor_clean_source_event.as_deref(),
+            Some("decoded-usable-idr")
+        );
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
         assert!(stats.latest_anchor_candidate_ledger.is_none());
     }
 
@@ -1417,7 +1541,7 @@ mod tests {
         assert!(second.is_none());
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
         assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(2));
     }
 
@@ -1444,7 +1568,7 @@ mod tests {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.transport_recovery_epoch, 2);
         assert_eq!(stats.video_anchor_clean_epoch, None);
-        assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(1));
+        assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
@@ -1604,7 +1728,7 @@ mod tests {
 
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
         assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
@@ -1657,7 +1781,7 @@ mod tests {
 
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
         assert_eq!(stats.recovery_pending_displayed_idr_rtp, None);
     }
 
@@ -1681,6 +1805,6 @@ mod tests {
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.recovery_pending_displayed_idr_rtp, Some(2));
-        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
     }
 }

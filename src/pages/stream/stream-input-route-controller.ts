@@ -30,8 +30,7 @@ function releaseReasonToCaptureKey(reason: UiReleaseReason): UiCaptureReason | n
 class StreamInputRouteControllerImpl {
   private adapter: StreamInputConsumerAdapter | null = null
   private streamInputActive = false
-  private queue: Array<() => Promise<void>> = []
-  private flushing = false
+  private routeQueue: Promise<void> = Promise.resolve()
   private heldCaptures = new Set<UiCaptureReason>()
   private routeGeneration = 0
   private pendingNeutralRelease = false
@@ -57,24 +56,30 @@ class StreamInputRouteControllerImpl {
       if (from !== null) {
         this.heldCaptures.delete(from)
       }
-      this.cancelPendingNeutralReleaseWait()
-      this.routeGeneration += 1
-      this.pendingNeutralRelease = false
-      this.heldCaptures.add(to)
-      this.syncOverlayCapturingFlag()
-      requestGamepadUiListenerReset(`capture:${to}`)
-      await this.deactivateStreamInput()
+      await this.beginUiCapture(to)
     })
   }
 
   captureUiInput(reason: UiCaptureReason): Promise<void> {
+    return this.enqueue(() => this.beginUiCapture(reason))
+  }
+
+  setStreamActive(active: boolean): Promise<void> {
     return this.enqueue(async () => {
+      if (active) {
+        businessInputArbiter.patch({ streamActive: true })
+        await this.syncStreamInputRouteTask()
+        return
+      }
+
       this.cancelPendingNeutralReleaseWait()
       this.routeGeneration += 1
+      this.heldCaptures.clear()
       this.pendingNeutralRelease = false
-      this.heldCaptures.add(reason)
-      this.syncOverlayCapturingFlag()
-      requestGamepadUiListenerReset(`capture:${reason}`)
+      businessInputArbiter.patch({
+        streamActive: false,
+        overlayCapturing: false,
+      })
       await this.deactivateStreamInput()
     })
   }
@@ -131,18 +136,7 @@ class StreamInputRouteControllerImpl {
   }
 
   resetOnLeaveStream(): Promise<void> {
-    return this.enqueue(async () => {
-      this.cancelPendingNeutralReleaseWait()
-      this.routeGeneration += 1
-      this.heldCaptures.clear()
-      this.pendingNeutralRelease = false
-      this.syncOverlayCapturingFlag()
-      await this.deactivateStreamInput()
-    })
-  }
-
-  syncStreamInputRoute(): Promise<void> {
-    return this.enqueue(() => this.syncStreamInputRouteTask())
+    return this.setStreamActive(false)
   }
 
   private abortPendingNeutralRelease(): void {
@@ -179,38 +173,25 @@ class StreamInputRouteControllerImpl {
   }
 
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.queue.push(async () => {
-        try {
-          resolve(await task())
-        }
-        catch (error) {
-          reject(error)
-        }
-      })
-      void this.flushQueue()
-    })
+    const run = this.routeQueue.then(
+      () => task(),
+      () => task(),
+    )
+    this.routeQueue = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
   }
 
-  private async flushQueue(): Promise<void> {
-    if (this.flushing) {
-      return
-    }
-    this.flushing = true
-    try {
-      while (this.queue.length > 0) {
-        const task = this.queue.shift()
-        if (task) {
-          await task()
-        }
-      }
-    }
-    finally {
-      this.flushing = false
-      if (this.queue.length > 0) {
-        await this.flushQueue()
-      }
-    }
+  private async beginUiCapture(reason: UiCaptureReason): Promise<void> {
+    this.cancelPendingNeutralReleaseWait()
+    this.routeGeneration += 1
+    this.pendingNeutralRelease = false
+    this.heldCaptures.add(reason)
+    this.syncOverlayCapturingFlag()
+    requestGamepadUiListenerReset(`capture:${reason}`)
+    await this.deactivateStreamInput()
   }
 
   private async syncStreamInputRouteTask(): Promise<void> {

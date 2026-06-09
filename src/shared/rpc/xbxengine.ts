@@ -135,6 +135,9 @@ export interface XbxEngineStatsDto {
   transport_protocol?: string
   transport_address_family?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
   transport_state?: string
+  latest_turn_relay_observation_seq?: number | null
+  latest_turn_relay_observation_label?: string | null
+  latest_turn_relay_observation_summary?: string | null
   ice_policy_mode?: string
   ice_policy_digest?: string
   ice_policy_source?: string
@@ -163,6 +166,11 @@ export interface XbxEngineStatsDto {
   inbound_bytes_total?: number
   inbound_video_bytes_total?: number
   inbound_audio_bytes_total?: number
+  inbound_video_frame_count_total?: number
+  inbound_video_rtp_marker_count_total?: number
+  inbound_video_access_unit_count_total?: number
+  inbound_video_decode_gate_emit_count_total?: number
+  inbound_video_decode_gate_continue_count_total?: number
   inbound_video_packet_count_total?: number
   latest_video_packet_arrival_rtp_timestamp?: number
   latest_video_track_status?: {

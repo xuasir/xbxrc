@@ -1,6 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket};
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -19,7 +20,9 @@ use url::Url;
 
 use crate::transport::rtc::connection::builder::{build_ice_servers, ControlledPeerConnection};
 use crate::transport::rtc::connection::turn_runtime::TurnRuntime;
-use crate::XbxEngineRuntimeError;
+use crate::{
+    runtime_stats_sink::RuntimeStatsSink, XbxEngineMediaRuntimeStats, XbxEngineRuntimeError,
+};
 use xbxengine_protocol::XbxEngineSessionDto;
 
 const RTC_IO_PUMP_MAX_PASSES: usize = 8;
@@ -110,6 +113,7 @@ impl RtcIoRuntime {
     pub(crate) fn gather_local_candidates(
         &mut self,
         session: &XbxEngineSessionDto,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     ) -> Result<Vec<RTCIceCandidateInit>, XbxEngineRuntimeError> {
         let mut candidates = self.local_host_candidates()?;
         if cfg!(test) {
@@ -167,7 +171,7 @@ impl RtcIoRuntime {
         }
 
         let advertised_ips_snapshot = self.advertised_ips.clone();
-        if let Some(relay_runtime) = self.ensure_relay_runtime(session)? {
+        if let Some(relay_runtime) = self.ensure_relay_runtime(session, runtime_stats)? {
             let relay_addr = relay_runtime.local_addr();
             let relay_related_addr =
                 resolve_relay_related_addr(relay_runtime.base_addr(), &advertised_ips_snapshot);
@@ -194,6 +198,7 @@ impl RtcIoRuntime {
                         "xbxEngineRtcRelayCandidateJsonFailed: {err}"
                     ))
                 })?;
+            candidate_init.url = Some(relay_runtime.url().to_string());
             candidate_init.sdp_mid = Some("0".to_string());
             candidate_init.sdp_mline_index = Some(0);
             crate::xbx_log_warn!(
@@ -291,6 +296,7 @@ impl RtcIoRuntime {
     fn ensure_relay_runtime(
         &mut self,
         session: &XbxEngineSessionDto,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     ) -> Result<Option<&TurnRuntime>, XbxEngineRuntimeError> {
         if self.relay_runtime.is_some() {
             return Ok(self.relay_runtime.as_ref());
@@ -298,12 +304,28 @@ impl RtcIoRuntime {
         if let Some(turn_server) = session.turn_server.as_ref() {
             match TurnRuntime::try_create(turn_server) {
                 Ok(runtime) => {
+                    record_turn_relay_observation(
+                        runtime_stats,
+                        "rtcTurnRelayAllocationSucceeded",
+                        format!(
+                            "url={} serverAddr={} baseAddr={} relayAddr={}",
+                            turn_server.url,
+                            runtime.server_addr(),
+                            runtime.base_addr(),
+                            runtime.local_addr()
+                        ),
+                    );
                     self.relay_runtime = Some(runtime);
                 }
                 Err(error) => {
                     crate::xbx_log_warn!(
                         "[xbxengine][rtc-connection] turn relay allocation failed error={}",
                         error
+                    );
+                    record_turn_relay_observation(
+                        runtime_stats,
+                        "rtcTurnRelayAllocationFailed",
+                        format!("url={} error={}", turn_server.url, error),
                     );
                 }
             }
@@ -678,6 +700,21 @@ impl RtcIoRuntime {
         }
         Ok(progressed)
     }
+}
+
+fn record_turn_relay_observation(
+    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    label: &str,
+    summary: String,
+) {
+    RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+        stats.latest_observation_label = Some(label.to_string());
+        stats.latest_observation_summary = Some(summary.clone());
+        stats.latest_turn_relay_observation_seq =
+            stats.latest_turn_relay_observation_seq.saturating_add(1);
+        stats.latest_turn_relay_observation_label = Some(label.to_string());
+        stats.latest_turn_relay_observation_summary = Some(summary);
+    });
 }
 
 fn build_host_candidate(

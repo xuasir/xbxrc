@@ -6,10 +6,37 @@ use crate::transport::rtc::session::facts::{
     RecoveryProgressLevel,
 };
 use crate::{
-    XbxEngineH264InspectionObservation, XbxEngineMediaRuntimeStats,
-    XbxEngineVideoReceiverObservation, XbxEngineVideoTimelineChainSnapshot,
-    XbxEngineVideoTimelineGapSnapshot, XbxEngineVideoTimelineObservation,
+    XbxEngineDecodeOutputPathObservation, XbxEngineH264InspectionObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineVideoReceiverObservation,
+    XbxEngineVideoTimelineChainSnapshot, XbxEngineVideoTimelineGapSnapshot,
+    XbxEngineVideoTimelineObservation,
 };
+
+#[test]
+fn clean_anchor_masks_stale_insert_gate_waiting_transport_await_issue() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 3;
+    stats.video_anchor_clean_epoch = Some(3);
+    stats.video_anchor_clean_observed_at_ms = Some(1_000.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".into());
+    stats.recovery_fresh_anchor_recovered_at_ms = Some(1_000.0);
+    stats.receive_keyframe_required = Some(false);
+    stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+        observation_id: 1,
+        source_event: "insert-gate-need-keyframe".into(),
+        gap: None,
+        frame: None,
+        chain: XbxEngineVideoTimelineChainSnapshot {
+            state: "waiting-keyframe".into(),
+            reason: Some("receiverWaitingKeyframe".into()),
+            chain_break_evidence: None,
+            observed_at_ms: 1_010.0,
+        },
+        observed_at_ms: 1_010.0,
+    });
+
+    assert!(!has_current_transport_await_issue_from_stats(&stats));
+}
 
 #[test]
 fn timeline_gap_without_reference_evidence_maps_to_repairable_gap() {
@@ -299,6 +326,23 @@ fn recovery_display_facts_projects_from_stats() {
 }
 
 #[test]
+fn decoded_clean_anchor_counts_as_current_anchor_without_display_fact() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 7;
+    stats.video_anchor_clean_epoch = Some(7);
+    stats.video_anchor_clean_observed_at_ms = Some(1_200.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".into());
+
+    let display = RecoveryDisplayFacts::from_stats(&stats);
+    assert_eq!(display.displayed_idr_at_ms, None);
+    assert_eq!(
+        current_clean_anchor_observed_at_ms_from_stats(&stats),
+        Some(1_200.0)
+    );
+    assert!(has_current_clean_anchor_from_stats(&stats));
+}
+
+#[test]
 fn transport_await_hard_bootstrap_evidence_uses_non_idr_reject() {
     let now_ms = 2_000.0;
     let stats = XbxEngineMediaRuntimeStats {
@@ -347,6 +391,34 @@ fn transport_await_hard_bootstrap_evidence_uses_non_idr_reject() {
 }
 
 #[test]
+fn decoded_clean_anchor_pipeline_absorbs_soft_non_idr_transport_await() {
+    let now_ms = 2_000.0;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_recovery_epoch: 7,
+        video_anchor_clean_epoch: Some(7),
+        video_anchor_clean_observed_at_ms: Some(now_ms - 10.0),
+        video_anchor_clean_source_event: Some("decoded-usable-idr".into()),
+        latest_video_decode_ok_time_ms: Some(now_ms - 8.0),
+        latest_video_host_present_time_ms: Some(now_ms - 6.0),
+        latest_h264_inspection_observation: Some(XbxEngineH264InspectionObservation {
+            observation_id: 2,
+            frame_rtp_timestamp: Some(3_334),
+            is_idr: false,
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some("NonIdrVcl".into()),
+            admission_accepted: true,
+            observed_at_ms: now_ms - 4.0,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    assert!(!transport_await_has_hard_bootstrap_evidence_from_stats(
+        &stats, now_ms
+    ));
+}
+
+#[test]
 fn displayed_idr_serving_true_when_pending_idr_and_host_has_presented() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.recovery_pending_displayed_idr_rtp = Some(77_001);
@@ -370,10 +442,10 @@ fn displayed_idr_serving_false_without_host_present_epoch() {
 fn collapse_waiting_keyframe_when_displayed_idr_serving_without_gap() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.recovery_displayed_idr_at_ms = Some(100.0);
-    assert!(!should_collapse_receiver_waiting_keyframe_to_repairing(
+    assert!(!displayed_idr_projection_can_show_repairing(
         &stats, 200.0, false, 0
     ));
-    assert!(should_collapse_receiver_waiting_keyframe_to_repairing(
+    assert!(displayed_idr_projection_can_show_repairing(
         &stats, 200.0, false, 10
     ));
 }
@@ -384,7 +456,7 @@ fn collapse_enabled_when_clean_anchor_and_decoder_waiting_keyframe() {
     stats.recovery_displayed_idr_at_ms = Some(100.0);
     stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
-    assert!(should_collapse_receiver_waiting_keyframe_to_repairing(
+    assert!(displayed_idr_projection_can_show_repairing(
         &stats, 200.0, true, 10
     ));
 }
@@ -397,12 +469,10 @@ fn relaxation_unblocked_under_supply_break_when_submit_stale() {
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
     stats.submit_age_ms = Some(1_500.0);
     stats.video_renderer_stalled = Some(true);
-    assert!(!displayed_idr_serving_relaxation_blocked_from_stats(
+    assert!(!displayed_idr_presentation_continuation_blocked_from_stats(
         &stats, 200.0
     ));
-    assert!(displayed_idr_serving_allows_relaxed_controls_from_stats(
-        &stats, 200.0
-    ));
+    assert!(displayed_idr_presentation_continuation_serviceable_from_stats(&stats, 200.0));
 }
 
 #[test]
@@ -421,9 +491,7 @@ fn relaxation_not_blocked_by_soft_bootstrap_missing_idr_when_displayed_idr_servi
     assert!(!transport_await_has_hard_bootstrap_evidence_from_stats(
         &stats, 200.0
     ));
-    assert!(displayed_idr_serving_allows_relaxed_controls_from_stats(
-        &stats, 200.0
-    ));
+    assert!(displayed_idr_presentation_continuation_serviceable_from_stats(&stats, 200.0));
 }
 
 #[test]
@@ -440,9 +508,7 @@ fn stale_displayed_idr_does_not_suppress_hard_bootstrap_evidence_under_supply_br
         bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
         ..Default::default()
     });
-    assert!(!displayed_idr_serving_allows_relaxed_controls_from_stats(
-        &stats, 200.0
-    ));
+    assert!(!displayed_idr_presentation_continuation_serviceable_from_stats(&stats, 200.0));
     assert!(transport_await_has_hard_bootstrap_evidence_from_stats(
         &stats, 200.0
     ));
@@ -472,16 +538,14 @@ fn clean_anchor_keeps_displayed_idr_relaxation_under_waiting_keyframe() {
     stats.recovery_displayed_idr_at_ms = Some(100.0);
     stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
-    assert!(!displayed_idr_serving_relaxation_blocked_from_stats(
+    assert!(!displayed_idr_presentation_continuation_blocked_from_stats(
         &stats, 5_000.0
     ));
-    assert!(displayed_idr_serving_allows_relaxed_controls_from_stats(
-        &stats, 5_000.0
-    ));
+    assert!(displayed_idr_presentation_continuation_serviceable_from_stats(&stats, 5_000.0));
 }
 
 #[test]
-fn submit_starved_after_present_forces_must_idr_without_waiting_keyframe() {
+fn submit_starved_after_present_projects_supply_break_without_waiting_keyframe() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.video_decoder_recovery_state = Some("nominal".to_string());
     stats.host_frame_present_epoch = 100;
@@ -489,8 +553,8 @@ fn submit_starved_after_present_forces_must_idr_without_waiting_keyframe() {
     stats.submit_age_ms = Some(5_000.0);
     assert!(media_supply_submit_starved_from_stats(&stats, 10_000.0));
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 10_000.0),
-        MediaSupplyPhase::MustIdr
+        derive_presentation_supply_phase_from_stats(&stats, 10_000.0),
+        PresentationSupplyPhase::SupplyBreak
     );
     assert_eq!(
         derive_decoder_health_from_stats(&stats, 10_000.0),
@@ -508,7 +572,10 @@ fn supply_break_when_waiting_keyframe_and_submit_stalled() {
     let snap =
         RecoveryContractSnapshot::from_stats(&stats, 10_000.0, RecoveryExitThresholds::default());
     assert!(snap.supply_break_active);
-    assert_eq!(snap.media_supply_phase, MediaSupplyPhase::MustIdr);
+    assert_eq!(
+        snap.presentation_supply_phase,
+        PresentationSupplyPhase::SupplyBreak
+    );
     assert_eq!(snap.surface_phase, RecoverySurfacePhase::AwaitIdr);
     assert_eq!(
         derive_recovery_surface_phase_from_stats(&stats, 10_000.0),
@@ -555,26 +622,34 @@ fn trace_tail_starved_stats(decoder_state: &str) -> XbxEngineMediaRuntimeStats {
     stats
 }
 
-fn assert_trace_tail_must_idr(stats: &XbxEngineMediaRuntimeStats) {
+fn assert_trace_tail_supply_break(stats: &XbxEngineMediaRuntimeStats) {
     const NOW_MS: f64 = 148_000.0;
     assert!(media_supply_submit_starved_from_stats(stats, NOW_MS));
     assert_eq!(
-        derive_media_supply_phase_from_stats(stats, NOW_MS),
-        MediaSupplyPhase::MustIdr
+        derive_presentation_supply_phase_from_stats(stats, NOW_MS),
+        PresentationSupplyPhase::SupplyBreak
     );
 }
 
 #[test]
-fn trace_tail_submit_starved_recovering_must_idr_without_sparse_rhythm() {
+fn trace_tail_submit_starved_recovering_supply_break_without_sparse_rhythm() {
     let stats = trace_tail_starved_stats("recovering");
-    assert_trace_tail_must_idr(&stats);
+    assert_trace_tail_supply_break(&stats);
     assert!(!sparse_idr_rhythm_from_stats(&stats, 148_000.0).active);
 }
 
 #[test]
-fn trace_tail_submit_starved_waiting_keyframe_must_idr_and_sparse_rhythm() {
+fn trace_tail_submit_starved_waiting_keyframe_supply_break_and_sparse_rhythm() {
     let stats = trace_tail_starved_stats("waiting-keyframe");
-    assert_trace_tail_must_idr(&stats);
+    assert!(media_supply_submit_starved_from_stats(&stats, 148_000.0));
+    assert_eq!(
+        derive_presentation_supply_phase_from_stats(&stats, 148_000.0),
+        PresentationSupplyPhase::SupplyBreak
+    );
+    assert_eq!(
+        derive_recovery_surface_phase_from_stats(&stats, 148_000.0),
+        RecoverySurfacePhase::AwaitIdr
+    );
     assert!(sparse_idr_rhythm_from_stats(&stats, 148_000.0).active);
 }
 
@@ -608,19 +683,20 @@ fn sparse_idr_rhythm_pli_not_due_immediately_after_sent() {
 }
 
 #[test]
-fn post_reset_without_bootstrap_maps_to_need_keyframe_when_submit_starved() {
+fn submit_starved_without_bootstrap_stays_out_of_reference_chain_control() {
     use super::reference_chain::{derive_reference_chain_state_from_stats, ReferenceChainState};
 
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.host_frame_present_epoch = 1;
+    stats.recovery_decoder_reference_synced_at_ms = Some(4_990.0);
     stats.submit_age_ms = Some(2_000.0);
     stats.latest_h264_inspection_observation = Some(crate::XbxEngineH264InspectionObservation {
         bootstrap_ready: false,
         ..Default::default()
     });
     let obs = derive_reference_chain_state_from_stats(&stats, 5_000.0, 100.0);
-    assert_eq!(obs.state, ReferenceChainState::NeedKeyframe);
-    assert_eq!(obs.cause, "supply-submit-starved");
+    assert_eq!(obs.state, ReferenceChainState::Continuous);
+    assert_eq!(obs.cause, "reference-continuous");
 }
 
 #[test]
@@ -676,6 +752,7 @@ fn sparse_idr_rhythm_nack_accel_requires_wait_keyframe_stage() {
     assert!(rhythm.nack_escalation_immediate_eligible());
 }
 
+#[test]
 fn recovery_exit_timed_fallback_when_submit_stalled_without_anchor() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
@@ -694,7 +771,7 @@ fn displayed_idr_relaxation_unblocked_under_timed_fallback() {
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
     stats.submit_age_ms = Some(2_000.0);
     stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-    assert!(!displayed_idr_serving_relaxation_blocked_from_stats(
+    assert!(!displayed_idr_presentation_continuation_blocked_from_stats(
         &stats, 5_000.0
     ));
 }
@@ -707,7 +784,7 @@ fn stale_submit_break_disabled_under_timed_fallback() {
     stats.submit_age_ms = Some(10_000.0);
     stats.video_decoder_stalled = Some(true);
     stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-    assert!(!displayed_idr_serving_relaxation_blocked_from_stats(
+    assert!(!displayed_idr_presentation_continuation_blocked_from_stats(
         &stats, 20_000.0
     ));
 }
@@ -766,13 +843,13 @@ fn parameter_sets_change_strict_inactive_during_priming() {
         &stats, 1_200.0, 50.0
     ));
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 1_200.0),
-        MediaSupplyPhase::Priming
+        derive_presentation_supply_phase_from_stats(&stats, 1_200.0),
+        PresentationSupplyPhase::Priming
     );
 }
 
 #[test]
-fn must_idr_stays_diagnostic_when_reference_chain_is_continuous() {
+fn presentation_supply_stays_steady_when_reference_chain_is_continuous() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.host_frame_present_epoch = 2;
     stats.recovery_displayed_idr_at_ms = Some(100.0);
@@ -787,8 +864,12 @@ fn must_idr_stays_diagnostic_when_reference_chain_is_continuous() {
     let reference = derive_reference_chain_state_from_stats(&stats, 1_000.0, 50.0);
     assert_eq!(reference.state, ReferenceChainState::Continuous);
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 1_000.0),
-        MediaSupplyPhase::MustIdr
+        derive_presentation_supply_phase_from_stats(&stats, 1_000.0),
+        PresentationSupplyPhase::Steady
+    );
+    assert_eq!(
+        derive_recovery_surface_phase_from_stats(&stats, 1_000.0),
+        RecoverySurfacePhase::Steady
     );
     assert!(!sparse_idr_rhythm_from_stats(&stats, 1_000.0).active);
 }
@@ -848,24 +929,24 @@ fn media_supply_priming_absorbs_repairing_until_segment_ages_healthy() {
         observed_at_ms: 1_900.0,
     });
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 2_000.0),
-        MediaSupplyPhase::Priming
+        derive_presentation_supply_phase_from_stats(&stats, 2_000.0),
+        PresentationSupplyPhase::Priming
     );
     stats.submit_age_ms = Some(120.0);
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 2_000.0),
-        MediaSupplyPhase::Priming
+        derive_presentation_supply_phase_from_stats(&stats, 2_000.0),
+        PresentationSupplyPhase::Priming
     );
     stats.latest_video_decode_ok_time_ms = Some(6_950.0);
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 7_000.0),
-        MediaSupplyPhase::MustIdr,
-        "active gap in keyframe-only mode maps to MustIdr before repairing sub-phase"
+        derive_presentation_supply_phase_from_stats(&stats, 7_000.0),
+        PresentationSupplyPhase::Repairing,
+        "active gap stays in presentation repairing; keyframe policy remains receive-local"
     );
 }
 
 #[test]
-fn waiting_keyframe_overrides_priming_during_acquisition_window() {
+fn waiting_keyframe_projects_surface_await_idr_during_acquisition_window() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.host_frame_present_epoch = 84;
     stats.media_supply_host_first_present_at_ms = Some(46_000.0);
@@ -874,8 +955,12 @@ fn waiting_keyframe_overrides_priming_during_acquisition_window() {
     stats.submit_age_ms = Some(2_000.0);
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 46_200.0),
-        MediaSupplyPhase::MustIdr
+        derive_presentation_supply_phase_from_stats(&stats, 46_200.0),
+        PresentationSupplyPhase::SupplyBreak
+    );
+    assert_eq!(
+        derive_recovery_surface_phase_from_stats(&stats, 46_200.0),
+        RecoverySurfacePhase::AwaitIdr
     );
 }
 
@@ -886,6 +971,55 @@ fn idr_recovery_active_from_stats_when_decoder_waiting_keyframe() {
     stats.recovery_displayed_idr_at_ms = Some(1_000.0);
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
     assert!(idr_recovery_active_from_stats(&stats, 2_000.0));
+}
+
+#[test]
+fn clean_anchor_masks_stale_decoder_waiting_for_recovery_contract() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 7;
+    stats.video_anchor_clean_epoch = Some(7);
+    stats.video_anchor_clean_observed_at_ms = Some(1_100.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
+    stats.recovery_fresh_anchor_recovered_at_ms = Some(1_100.0);
+    stats.recovery_decoder_reference_synced_at_ms = Some(1_100.0);
+    stats.latest_video_decode_ok_time_ms = Some(1_100.0);
+    stats.latest_video_decode_ok_rtp_timestamp = Some(88_001);
+    stats.host_frame_present_epoch = 1;
+    stats.submit_age_ms = Some(16.0);
+    stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+    stats.latest_decode_output_path_observation = Some(XbxEngineDecodeOutputPathObservation {
+        observation_id: 1,
+        verdict: "backend-no-output".to_string(),
+        detail: "backendNoOutputAfterWaitingKeyframeContinuation".to_string(),
+        frame_rtp_timestamp: 88_001,
+        is_keyframe: false,
+        status: None,
+        send_packet_status: None,
+        receive_frame_status: None,
+        backend_no_output_streak: Some(CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK),
+        input_frames_since_last_decoded: Some(8),
+        bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+        observed_at_ms: 1_090.0,
+    });
+
+    assert!(!decoder_waiting_keyframe_control_active_from_stats(
+        &stats, 1_120.0
+    ));
+    assert!(!decoder_no_output_request_idr_control_active_from_stats(
+        &stats, 1_120.0
+    ));
+    assert_eq!(
+        derive_packet_recovery_action_stage_from_stats(&stats, 1_120.0, 50.0),
+        PacketRecoveryActionStage::Steady
+    );
+    let reference = derive_reference_chain_state_from_stats(&stats, 1_120.0, 50.0);
+    assert_eq!(reference.state, ReferenceChainState::Continuous);
+    assert_eq!(reference.cause, "reference-continuous");
+    assert!(!idr_recovery_active_from_stats(&stats, 1_120.0));
+    assert_eq!(
+        derive_presentation_supply_phase_from_stats(&stats, 1_120.0),
+        PresentationSupplyPhase::Steady
+    );
 }
 
 #[test]
@@ -934,7 +1068,8 @@ fn sync_derived_fields_sets_active_recovery_session_phase() {
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
     sync_derived_recovery_contract_fields(&mut stats, 2_000.0);
     assert_eq!(stats.session_phase.as_deref(), Some("active-recovery"));
-    assert_eq!(stats.media_supply_phase.as_deref(), Some("must-idr"));
+    assert_eq!(stats.media_supply_phase.as_deref(), Some("priming"));
+    assert_eq!(stats.recovery_surface_phase.as_deref(), Some("await-idr"));
 }
 
 #[test]
@@ -955,13 +1090,13 @@ fn media_supply_acquisition_window_forces_priming_despite_healthy_segment_ages()
         observed_at_ms: 46_100.0,
     });
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 46_200.0),
-        MediaSupplyPhase::Priming
+        derive_presentation_supply_phase_from_stats(&stats, 46_200.0),
+        PresentationSupplyPhase::Priming
     );
 }
 
 #[test]
-fn media_supply_must_idr_when_waiting_with_ps_strict() {
+fn media_supply_stays_presentation_only_when_waiting_with_ps_strict() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.host_frame_present_epoch = 2;
     stats.recovery_playback_recovered_at_ms = Some(100.0);
@@ -971,11 +1106,11 @@ fn media_supply_must_idr_when_waiting_with_ps_strict() {
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
     stats.video_parameter_sets_changed_at_ms = Some(900.0);
     assert_eq!(
-        derive_media_supply_phase_from_stats(&stats, 1_000.0),
-        MediaSupplyPhase::MustIdr
+        derive_presentation_supply_phase_from_stats(&stats, 1_000.0),
+        PresentationSupplyPhase::Steady
     );
     assert_eq!(
-        recovery_surface_phase_from_media_supply_phase(MediaSupplyPhase::MustIdr),
+        derive_recovery_surface_phase_from_stats(&stats, 1_000.0),
         RecoverySurfacePhase::AwaitIdr
     );
 }
@@ -1045,7 +1180,5 @@ fn relaxation_still_blocked_by_invalid_bootstrap_when_displayed_idr_serving() {
     assert!(transport_await_has_hard_bootstrap_evidence_from_stats(
         &stats, 200.0
     ));
-    assert!(!displayed_idr_serving_allows_relaxed_controls_from_stats(
-        &stats, 200.0
-    ));
+    assert!(!displayed_idr_presentation_continuation_serviceable_from_stats(&stats, 200.0));
 }

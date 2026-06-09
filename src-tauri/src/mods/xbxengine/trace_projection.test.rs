@@ -400,6 +400,33 @@ fn build_observability_snapshot_projects_latest_twcc_sample_gate_fields() {
 }
 
 #[test]
+fn build_observability_snapshot_projects_inbound_frame_supply_counters() {
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "inbound_video_frame_count_total": 321,
+        "inbound_video_rtp_marker_count_total": 123,
+        "inbound_video_access_unit_count_total": 120,
+        "inbound_video_decode_gate_emit_count_total": 118,
+        "inbound_video_decode_gate_continue_count_total": 2
+    }));
+
+    let snapshot = build_observability_snapshot(&stats);
+
+    assert_eq!(snapshot["video"]["inboundFrameCountTotal"], 321);
+    assert_eq!(snapshot["video"]["inboundRtpMarkerCountTotal"], 123);
+    assert_eq!(snapshot["video"]["inboundAccessUnitCountTotal"], 120);
+    assert_eq!(snapshot["video"]["inboundDecodeGateEmitCountTotal"], 118);
+    assert_eq!(snapshot["video"]["inboundDecodeGateContinueCountTotal"], 2);
+}
+
+#[test]
 fn build_observability_snapshot_projects_owner_contract_from_stats() {
     let stats = test_stats(json!({
         "resolution": "",
@@ -512,6 +539,49 @@ fn record_runtime_trace_observations_uses_twcc_event_name_by_source() {
         .join("\n");
     assert!(contents.contains("\"event\":\"twccFeedbackSent\""));
     assert!(contents.contains("\"event\":\"twccFeedbackObserved\""));
+}
+
+#[test]
+fn record_runtime_trace_observations_projects_channel_message_catalog_once() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_data_channel_message_catalog_observation": {
+            "observation_id": 41,
+            "direction": "local",
+            "channel": "control",
+            "kind_type": null,
+            "kind_message": "videoKeyframeRequested",
+            "target": "control",
+            "keys": ["ifrRequested", "message"],
+            "payload_len": 56,
+            "observed_at_ms": 2048.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payloads = event_payloads(&entries, "channelMessageCatalog");
+    assert_eq!(payloads.len(), 1);
+    assert_eq!(payloads[0]["observationId"], 41);
+    assert_eq!(payloads[0]["direction"], "local");
+    assert_eq!(payloads[0]["channel"], "control");
+    assert_eq!(payloads[0]["kindMessage"], "videoKeyframeRequested");
+    assert_eq!(payloads[0]["target"], "control");
+    assert_eq!(payloads[0]["keys"], json!(["ifrRequested", "message"]));
+    assert_eq!(payloads[0]["payloadLen"], 56);
 }
 
 #[test]
@@ -1287,6 +1357,304 @@ fn record_runtime_trace_observations_emits_recovery_collection_events() {
         find_event_payload(&entries, "firstFrameLatencyObserved")["terminalPhase"],
         "DisplayStable"
     );
+}
+
+#[test]
+fn record_runtime_trace_observations_projects_clean_anchor_from_fresh_anchor_stats() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "recovery_fresh_anchor_recovered_at_ms": 180.0,
+        "latest_video_decode_ok_rtp_timestamp": 123456,
+        "latest_keyframe_request_episode": {
+            "episode_id": 7,
+            "request_reason": "receiverWaitingKeyframe",
+            "request_kind": "pli",
+            "status": "decoded",
+            "requested_at_ms": 100.0
+        },
+        "latest_picture_recovery_transition_observation": {
+            "observation_id": 12,
+            "episode_id": 7,
+            "recovery_epoch": 3,
+            "phase": "PlaybackRecovered",
+            "from_phase": "Decoded",
+            "to_phase": "PlaybackRecovered",
+            "cause": "hostPresent",
+            "detail": "presentFps=60.0",
+            "rtp_timestamp": null,
+            "frame_seq": null,
+            "owner_state": "stable-serving",
+            "transport_state": "Connected",
+            "observed_at_ms": 188.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let transitions = event_payloads(&entries, "pictureRecoveryTransition");
+
+    assert!(transitions
+        .iter()
+        .any(|payload| payload["toPhase"] == "CleanAnchorCommitted"));
+    assert!(transitions
+        .iter()
+        .any(|payload| payload["toPhase"] == "PlaybackRecovered"));
+    assert_eq!(
+        find_event_payload(&entries, "cleanAnchorCommitted")["rtpTimestamp"],
+        123456
+    );
+}
+
+#[test]
+fn record_runtime_trace_observations_projects_display_stable_from_receive_state() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": false,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 12,
+        "recovery_displayed_idr_rtp": 123456,
+        "recovery_displayed_idr_at_ms": 220.0,
+        "last_displayed_frame_seq": 9,
+        "transport_state": "Connected"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let transitions = event_payloads(&entries, "pictureRecoveryTransition");
+
+    assert!(transitions
+        .iter()
+        .any(|payload| payload["toPhase"] == "DisplayStable"));
+    let stable = find_event_payload(&entries, "stableServingSettled");
+    assert_eq!(stable["receiveDisplayState"], "display-stable");
+    assert_eq!(stable["keyframeRequired"], false);
+    assert_eq!(stable["responseState"], "usable-idr");
+    assert_eq!(stable["ledgerGeneration"], 12);
+}
+
+#[test]
+fn display_stable_projection_waits_until_keyframe_required_clears() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let still_waiting = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 12,
+        "recovery_displayed_idr_rtp": 123456,
+        "recovery_displayed_idr_at_ms": 220.0,
+        "last_displayed_frame_seq": 9,
+        "transport_state": "Connected"
+    }));
+    let closed = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": false,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 12,
+        "recovery_displayed_idr_rtp": 123456,
+        "recovery_displayed_idr_at_ms": 220.0,
+        "last_displayed_frame_seq": 9,
+        "transport_state": "Connected"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &still_waiting);
+    assert!(!has_event(
+        &read_trace_lines(recorder.as_ref()),
+        "stableServingSettled"
+    ));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &closed);
+    let entries = read_trace_lines(recorder.as_ref());
+    let stable = find_event_payload(&entries, "stableServingSettled");
+    assert_eq!(stable["keyframeRequired"], false);
+}
+
+#[test]
+fn display_stable_projection_waits_until_usable_idr_response() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let waiting_response = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": false,
+        "receive_keyframe_response_state": "no-packet",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 12,
+        "recovery_displayed_idr_rtp": 123456,
+        "recovery_displayed_idr_at_ms": 220.0,
+        "last_displayed_frame_seq": 9,
+        "transport_state": "Connected"
+    }));
+    let closed = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": false,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 12,
+        "recovery_displayed_idr_rtp": 123456,
+        "recovery_displayed_idr_at_ms": 220.0,
+        "last_displayed_frame_seq": 9,
+        "transport_state": "Connected"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &waiting_response);
+    assert!(!has_event(
+        &read_trace_lines(recorder.as_ref()),
+        "stableServingSettled"
+    ));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &closed);
+    let entries = read_trace_lines(recorder.as_ref());
+    let stable = find_event_payload(&entries, "stableServingSettled");
+    assert_eq!(stable["responseState"], "usable-idr");
+}
+
+#[test]
+fn display_stable_transition_projection_includes_receive_control_facts() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": false,
+        "receive_keyframe_response_state": "usable-idr",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 18,
+        "latest_picture_recovery_transition_observation": {
+            "observation_id": 77,
+            "episode_id": null,
+            "recovery_epoch": 0,
+            "phase": "DisplayStable",
+            "from_phase": "CleanAnchorCommitted",
+            "to_phase": "DisplayStable",
+            "cause": "displayed-idr",
+            "detail": "displayGate",
+            "rtp_timestamp": 123456,
+            "frame_seq": 42,
+            "owner_state": "stable-serving",
+            "transport_state": "Connected",
+            "observed_at_ms": 2048.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let transition = event_payloads(&entries, "pictureRecoveryTransition")
+        .into_iter()
+        .find(|payload| payload["observationId"] == 77)
+        .expect("display stable transition");
+    assert_eq!(transition["cause"], "displayed-idr");
+    assert_eq!(transition["keyframeRequired"], false);
+    assert_eq!(transition["responseState"], "usable-idr");
+    assert_eq!(transition["receiveDisplayState"], "display-stable");
+    assert_eq!(transition["ledgerGeneration"], 18);
+}
+
+#[test]
+fn display_stable_transition_projection_waits_for_ledger_closure() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let waiting_response = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "receive_keyframe_required": false,
+        "receive_keyframe_response_state": "no-packet",
+        "receive_display_state": "display-stable",
+        "receive_recovery_ledger_generation": 18,
+        "latest_picture_recovery_transition_observation": {
+            "observation_id": 77,
+            "episode_id": null,
+            "recovery_epoch": 0,
+            "phase": "DisplayStable",
+            "from_phase": "CleanAnchorCommitted",
+            "to_phase": "DisplayStable",
+            "cause": "displayed-idr",
+            "detail": "displayGate",
+            "rtp_timestamp": 123456,
+            "frame_seq": 42,
+            "owner_state": "stable-serving",
+            "transport_state": "Connected",
+            "observed_at_ms": 2048.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &waiting_response);
+    assert!(!has_event(
+        &read_trace_lines(recorder.as_ref()),
+        "pictureRecoveryTransition"
+    ));
 }
 
 #[test]
@@ -3821,6 +4189,39 @@ fn insert_gate_decision_trace_emits_control_facts_and_diagnostic_projection() {
     assert_eq!(insert["mediaSupplyPhaseDiagnostic"], "must-idr");
     assert!(insert.get("mediaSupplyPhase").is_none());
     assert!(insert.get("actionStage").is_none());
+}
+
+#[test]
+fn insert_gate_decision_projection_suppresses_stale_emit_under_need_keyframe() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "1280x720",
+        "rtt": "50.0ms",
+        "fps": 60.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "1.0ms",
+        "br": "8.5Mbps",
+        "decode": "",
+        "latest_insert_decision": "emit",
+        "latest_insert_decision_reason": "decodableToFeed",
+        "latest_packet_recovery_action_stage": "nack_pending",
+        "receive_keyframe_required": true,
+        "receive_keyframe_response_state": "no-packet",
+        "receive_display_state": "none",
+        "receive_recovery_ledger_generation": 260,
+        "reference_chain_state": "need-keyframe",
+        "media_supply_phase": "priming",
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    assert!(!has_event(
+        &read_trace_lines(&recorder),
+        "insertGateDecision"
+    ));
 }
 
 #[test]

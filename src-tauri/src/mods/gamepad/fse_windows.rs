@@ -3,10 +3,12 @@
 //! GDK：FSE 或 Tauri 全屏下 gate 以 Win32 前台 HWND 归属为准；窗口化非 FSE 仍用 Tauri focus 事件。
 
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ohmygamepad_sdl3::ShellWindowGateHints;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, WebviewWindow};
 use windows::core::PCSTR;
 use windows::Win32::Foundation::HWND;
@@ -20,11 +22,13 @@ use crate::shell::refresh_gamepad_on_window_foreground;
 use crate::shell::win_hwnd::try_main_window_hwnd;
 
 static FSE_ACTIVE: AtomicBool = AtomicBool::new(false);
+static LAST_WIN32_FOREGROUND_OK_AT_MS: AtomicU64 = AtomicU64::new(0);
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 static REGISTRATION_TOKEN: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
 
 const GAMING_EXPERIENCE_API_SET: &str = "api-ms-win-gaming-experience-l1-1-0";
 const GAMING_EXPERIENCE_API_SET_CSTR: &[u8] = b"api-ms-win-gaming-experience-l1-1-0\0";
+const WIN32_FOREGROUND_TOUCH_GRACE_MS: u64 = 1500;
 
 type IsFseActiveFn = unsafe extern "system" fn() -> i32;
 type RegisterFseChangeFn = unsafe extern "system" fn(
@@ -88,10 +92,26 @@ fn refresh_fse_active_flag() {
     FSE_ACTIVE.store(active, Ordering::Relaxed);
 }
 
+fn record_fse_trace(app: &AppHandle, event: &str, payload: Value) {
+    let Some(app_state) = app.try_state::<crate::AppState>() else {
+        return;
+    };
+    app_state
+        .runtime_trace
+        .record_event("gamepad-shell", event, None, payload);
+}
+
 extern "system" fn fse_change_callback(_context: *mut c_void) {
     refresh_fse_active_flag();
     if let Some(app) = APP_HANDLE.get().cloned() {
         tauri::async_runtime::spawn(async move {
+            record_fse_trace(
+                &app,
+                "fseChangeObserved",
+                json!({
+                    "active": is_fse_active(),
+                }),
+            );
             sync_gamepad_input_gate(&app);
             refresh_gamepad_on_window_foreground(&app, "fse-change");
         });
@@ -104,28 +124,36 @@ pub fn is_fse_active() -> bool {
 
 pub fn init_fse_monitor(app: &AppHandle) {
     let _ = APP_HANDLE.set(app.clone());
-    let apis = match load_fse_apis() {
-        Ok(apis) => Some(apis),
+    let (apis, api_status) = match load_fse_apis() {
+        Ok(apis) => (Some(apis), "available"),
         Err(FseApiLoadError::ApiSetUnavailable) => {
             log::info!(
                 "fse_windows Gaming Experience API set unavailable ({}); using desktop foreground path",
                 GAMING_EXPERIENCE_API_SET
             );
-            None
+            (None, "api-set-unavailable")
         }
         Err(FseApiLoadError::LibraryUnavailable) => {
             log::info!(
                 "fse_windows GamingExperience.dll unavailable; using desktop foreground path"
             );
-            None
+            (None, "library-unavailable")
         }
         Err(FseApiLoadError::SymbolUnavailable) => {
             log::warn!("fse_windows GamingExperience.dll missing required symbols; using desktop foreground path");
-            None
+            (None, "symbol-unavailable")
         }
     };
     let _ = FSE_APIS.set(apis);
     refresh_fse_active_flag();
+    record_fse_trace(
+        app,
+        "fseMonitorInitialized",
+        json!({
+            "apiStatus": api_status,
+            "active": FSE_ACTIVE.load(Ordering::Relaxed),
+        }),
+    );
 
     if let Some(apis) = FSE_APIS.get().and_then(|entry| entry.as_ref()) {
         let mut token: *mut c_void = std::ptr::null_mut();
@@ -136,11 +164,28 @@ pub fn init_fse_monitor(app: &AppHandle) {
             log::warn!(
                 "fse_windows RegisterGamingFullScreenExperienceChangeNotification failed hr={hr}"
             );
+            record_fse_trace(
+                app,
+                "fseMonitorRegistrationCompleted",
+                json!({
+                    "outcome": "failed",
+                    "hr": hr,
+                    "active": FSE_ACTIVE.load(Ordering::Relaxed),
+                }),
+            );
         } else {
             REGISTRATION_TOKEN.store(token, Ordering::Relaxed);
             log::info!(
                 "fse_windows monitor registered active={}",
                 FSE_ACTIVE.load(Ordering::Relaxed)
+            );
+            record_fse_trace(
+                app,
+                "fseMonitorRegistrationCompleted",
+                json!({
+                    "outcome": "registered",
+                    "active": FSE_ACTIVE.load(Ordering::Relaxed),
+                }),
             );
         }
     }
@@ -163,6 +208,16 @@ fn schedule_win32_foreground_gate_resync(app: &AppHandle) {
             if !uses_win32_foreground_gate(&window) {
                 continue;
             }
+            record_fse_trace(
+                &app,
+                "win32ForegroundGateResync",
+                json!({
+                    "phaseIndex": phase_index,
+                    "delayMs": delay_ms,
+                    "isFseActive": is_fse_active(),
+                    "isFullscreen": window.is_fullscreen().unwrap_or(false),
+                }),
+            );
             sync_gamepad_input_gate(&app);
             refresh_gamepad_on_window_foreground(
                 &app,
@@ -240,8 +295,17 @@ fn win32_foreground_shell_app_active(
     foreground_ok: bool,
     window_visible: bool,
     window_minimized: bool,
+    now_ms: u64,
 ) -> bool {
-    window_visible && !window_minimized && foreground_ok
+    if !window_visible || window_minimized {
+        return false;
+    }
+    if foreground_ok {
+        LAST_WIN32_FOREGROUND_OK_AT_MS.store(now_ms, Ordering::Relaxed);
+        return true;
+    }
+    let last_ok_at_ms = LAST_WIN32_FOREGROUND_OK_AT_MS.load(Ordering::Relaxed);
+    last_ok_at_ms > 0 && now_ms.saturating_sub(last_ok_at_ms) <= WIN32_FOREGROUND_TOUCH_GRACE_MS
 }
 
 pub fn build_gate_hints(window: &WebviewWindow, focused_from_event: bool) -> ShellWindowGateHints {
@@ -262,13 +326,25 @@ pub fn build_gate_hints(window: &WebviewWindow, focused_from_event: bool) -> She
             foreground_ok,
             window_visible,
             window_minimized,
+            now_ms(),
         ),
     }
 }
 
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{FseApiLoadError, GAMING_EXPERIENCE_API_SET, GAMING_EXPERIENCE_API_SET_CSTR};
+    use super::{
+        FseApiLoadError, GAMING_EXPERIENCE_API_SET, GAMING_EXPERIENCE_API_SET_CSTR,
+        LAST_WIN32_FOREGROUND_OK_AT_MS, WIN32_FOREGROUND_TOUCH_GRACE_MS,
+    };
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn gaming_experience_api_set_name_matches_microsoft_contract() {
@@ -306,13 +382,28 @@ mod tests {
 
     #[test]
     fn win32_foreground_gate_follows_foreground_and_window_visibility() {
-        assert!(super::win32_foreground_shell_app_active(true, true, false));
-        assert!(!super::win32_foreground_shell_app_active(
-            false, true, false
+        LAST_WIN32_FOREGROUND_OK_AT_MS.store(0, Ordering::Relaxed);
+
+        assert!(super::win32_foreground_shell_app_active(
+            true, true, false, 1000
+        ));
+        assert!(super::win32_foreground_shell_app_active(
+            false,
+            true,
+            false,
+            1000 + WIN32_FOREGROUND_TOUCH_GRACE_MS,
         ));
         assert!(!super::win32_foreground_shell_app_active(
-            true, false, false
+            false,
+            true,
+            false,
+            1000 + WIN32_FOREGROUND_TOUCH_GRACE_MS + 1,
         ));
-        assert!(!super::win32_foreground_shell_app_active(true, true, true));
+        assert!(!super::win32_foreground_shell_app_active(
+            true, false, false, 2000,
+        ));
+        assert!(!super::win32_foreground_shell_app_active(
+            true, true, true, 2000
+        ));
     }
 }

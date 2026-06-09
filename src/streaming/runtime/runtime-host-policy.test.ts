@@ -9,10 +9,13 @@ import {
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'
 
-function createLaunchSpec(mode: RuntimeLaunchSpec['runtime']['mode']): RuntimeLaunchSpec {
+function createLaunchSpec(
+  mode: RuntimeLaunchSpec['runtime']['mode'],
+  targetType: RuntimeLaunchSpec['targetType'] = 'home',
+): RuntimeLaunchSpec {
   return {
     sessionId: 'session-1',
-    targetType: 'home',
+    targetType,
     turnSource: 'fallback',
     runtime: {
       mode,
@@ -47,6 +50,13 @@ describe('runtime-host-policy', () => {
       activeConnected: false,
       fallbackRetryConsumed: false,
     })).toBe(true)
+  })
+
+  it('allows direct-first fallback for cloud fallback TURN', () => {
+    const spec = createLaunchSpec('rust-owned', 'cloud')
+    expect(shouldUseDirectFirstFallback(spec)).toBe(true)
+    expect(buildRuntimeAttemptSpec(spec, false).runtime.turnServer).toBeNull()
+    expect(buildRuntimeAttemptSpec(spec, true).runtime.turnServer).not.toBeNull()
   })
 
   it('keeps fallback attempt on retry and reduces launch delay', () => {

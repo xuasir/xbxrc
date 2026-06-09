@@ -40,7 +40,7 @@ impl RtcTransportCapability for ConnectionTransportCapability {
         let Ok(mut connection) = self.connection.lock() else {
             return VideoFeedbackState::Unavailable;
         };
-        connection.video_feedback_state()
+        connection.video_keyframe_feedback_state()
     }
 
     fn send_nack_rtcp(&self, payload: &[u8]) -> Result<(), TransportCapabilityError> {
@@ -67,13 +67,19 @@ impl RtcTransportCapability for ConnectionTransportCapability {
             return KeyframeSendOutcome::FeedbackUnavailable;
         };
         let stats = self.runtime_stats.clone();
-        let result = match kind {
+        let control_result = if connection.control_keyframe_request_ready() {
+            Some(connection.request_video_keyframe_control_direct(&stats))
+        } else {
+            None
+        };
+        let rtcp_result = match kind {
             KeyframeRequestKind::Pli => connection.request_video_pli_direct(&stats),
             KeyframeRequestKind::Fir => connection.request_video_fir_direct(&stats),
         };
-        match result {
-            Ok(()) => KeyframeSendOutcome::Sent,
-            Err(_) => KeyframeSendOutcome::FeedbackUnavailable,
+        if rtcp_result.is_ok() || control_result.as_ref().is_some_and(Result::is_ok) {
+            KeyframeSendOutcome::Sent
+        } else {
+            KeyframeSendOutcome::FeedbackUnavailable
         }
     }
 

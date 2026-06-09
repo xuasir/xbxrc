@@ -657,6 +657,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_frame: Option<XbxEngineVideoFrameStats>,
     pub latest_observation_label: Option<String>,
     pub latest_observation_summary: Option<String>,
+    pub latest_turn_relay_observation_seq: u64,
+    pub latest_turn_relay_observation_label: Option<String>,
+    pub latest_turn_relay_observation_summary: Option<String>,
     pub latest_feedback_target_availability_state: Option<String>,
     pub latest_feedback_target_availability_reason: Option<String>,
     pub latest_feedback_target_availability_target: Option<String>,
@@ -686,6 +689,16 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_audio_playout_time_ms: Option<f64>,
     pub audio_playout_latency_ms: Option<f64>,
     pub inbound_video_frame_rate_fps: f64,
+    /// DecodeGate Emit 后进入媒体 supervisor 的完整视频帧计数。
+    pub inbound_video_frame_count_total: u64,
+    /// RTP marker 包计数，用于判断远端实际帧边界输入节拍。
+    pub inbound_video_rtp_marker_count_total: u64,
+    /// SampleBuilder 弹出的 access unit 计数。
+    pub inbound_video_access_unit_count_total: u64,
+    /// DecodeGate 放行到 media supervisor 的 access unit 计数。
+    pub inbound_video_decode_gate_emit_count_total: u64,
+    /// DecodeGate 消费但继续等待/修复的 access unit 计数。
+    pub inbound_video_decode_gate_continue_count_total: u64,
     pub latest_video_packet_sequence: Option<u16>,
     pub latest_video_packet_gap: Option<XbxEngineVideoPacketGapObservation>,
     pub inbound_video_packet_count_total: u64,
@@ -958,6 +971,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_frame: None,
             latest_observation_label: None,
             latest_observation_summary: None,
+            latest_turn_relay_observation_seq: 0,
+            latest_turn_relay_observation_label: None,
+            latest_turn_relay_observation_summary: None,
             latest_feedback_target_availability_state: None,
             latest_feedback_target_availability_reason: None,
             latest_feedback_target_availability_target: None,
@@ -983,6 +999,11 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_audio_playout_time_ms: None,
             audio_playout_latency_ms: None,
             inbound_video_frame_rate_fps: 0.0,
+            inbound_video_frame_count_total: 0,
+            inbound_video_rtp_marker_count_total: 0,
+            inbound_video_access_unit_count_total: 0,
+            inbound_video_decode_gate_emit_count_total: 0,
+            inbound_video_decode_gate_continue_count_total: 0,
             latest_video_packet_sequence: None,
             latest_video_packet_gap: None,
             inbound_video_packet_count_total: 0,

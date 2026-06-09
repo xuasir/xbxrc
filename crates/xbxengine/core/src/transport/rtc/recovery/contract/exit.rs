@@ -1,4 +1,6 @@
-use super::decode_sync::fresh_h264_idr_admission_from_stats;
+use super::decode_sync::{
+    decoder_waiting_keyframe_control_active_from_stats, fresh_h264_idr_admission_from_stats,
+};
 use super::display::RecoveryDisplayFacts;
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -47,16 +49,15 @@ pub(crate) fn recovery_exit_path_from_stats(
     now_ms: f64,
     thresholds: RecoveryExitThresholds,
 ) -> RecoveryExitPath {
-    let waiting_keyframe =
-        stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe");
+    if recovery_exit_host_idr_path_active(stats, now_ms) {
+        return RecoveryExitPath::HostIdr;
+    }
+    let waiting_keyframe = decoder_waiting_keyframe_control_active_from_stats(stats, now_ms);
     let submit_stalled = stats
         .submit_age_ms
         .is_some_and(|age| age >= thresholds.timed_fallback_submit_age_ms);
     if waiting_keyframe && submit_stalled && twcc_healthy_for_recovery_fallback(stats) {
         return RecoveryExitPath::TimedFallback;
-    }
-    if recovery_exit_host_idr_path_active(stats, now_ms) {
-        return RecoveryExitPath::HostIdr;
     }
     let decode_fresh = stats
         .latest_video_decode_ok_time_ms

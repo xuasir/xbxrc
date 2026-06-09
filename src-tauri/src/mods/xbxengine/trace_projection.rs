@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{json, Value};
 use xbxengine_protocol::XbxEngineStatsDto;
 
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
@@ -116,6 +116,24 @@ fn derive_episode_projection_state(stats: &XbxEngineStatsDto) -> &'static str {
         return "legacy-only";
     }
     "matched"
+}
+
+fn display_stable_ledger_closure_ok(stats: &XbxEngineStatsDto) -> bool {
+    stats.receive_keyframe_required != Some(true)
+        && stats.receive_keyframe_response_state.as_deref() == Some("usable-idr")
+        && stats.receive_display_state.as_deref() == Some("display-stable")
+}
+
+fn stale_insert_projection_under_must_idr(stats: &XbxEngineStatsDto) -> bool {
+    let decision = stats.latest_insert_decision.as_deref();
+    let reason = stats
+        .latest_insert_decision_reason
+        .as_deref()
+        .unwrap_or_default();
+    let must_idr_control = stats.receive_keyframe_required == Some(true)
+        || stats.reference_chain_state.as_deref() == Some("need-keyframe");
+
+    decision == Some("emit") && must_idr_control && !reason.to_ascii_lowercase().contains("idr")
 }
 
 #[derive(Default)]
@@ -236,6 +254,7 @@ pub(super) struct RuntimeTraceObservationState {
     host_descriptor_cpu_upload_count_total: Option<u64>,
     actual_video_bitrate_source: Option<String>,
     twcc_observation_state: Option<String>,
+    latest_turn_relay_observation_seq: Option<u64>,
     latest_observation_label: Option<String>,
     latest_observation_summary: Option<String>,
     keyframe_request_outcome_seq: u64,
@@ -253,6 +272,8 @@ pub(super) struct RuntimeTraceObservationState {
     timeline_chain_reason: Option<String>,
     receiver_state_signature: Option<(String, Option<String>, f64)>,
     displayed_idr_signature: Option<(Option<u32>, Option<f64>)>,
+    clean_anchor_committed_signature: Option<(Option<f64>, Option<u32>)>,
+    display_stable_signature: Option<(Option<f64>, Option<u32>)>,
     playback_recovered_signature: Option<(Option<f64>, Option<String>)>,
     video_decoder_stalled: Option<bool>,
     video_renderer_stalled: Option<bool>,
@@ -439,6 +460,11 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
                 .as_ref()
                 .map(|status| status.video_bytes_total)
                 .or(stats.inbound_video_bytes_total),
+            "inboundFrameCountTotal": stats.inbound_video_frame_count_total,
+            "inboundRtpMarkerCountTotal": stats.inbound_video_rtp_marker_count_total,
+            "inboundAccessUnitCountTotal": stats.inbound_video_access_unit_count_total,
+            "inboundDecodeGateEmitCountTotal": stats.inbound_video_decode_gate_emit_count_total,
+            "inboundDecodeGateContinueCountTotal": stats.inbound_video_decode_gate_continue_count_total,
             "inboundVideoPacketsTotal": stats
                 .latest_video_track_status
                 .as_ref()
@@ -1430,6 +1456,110 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
+    let clean_anchor_committed_signature = (
+        stats.recovery_fresh_anchor_recovered_at_ms,
+        stats
+            .recovery_displayed_idr_rtp
+            .or(stats.latest_video_decode_ok_rtp_timestamp),
+    );
+    if observation_state.clean_anchor_committed_signature.as_ref()
+        != Some(&clean_anchor_committed_signature)
+        && stats.recovery_fresh_anchor_recovered_at_ms.is_some()
+    {
+        observation_state.clean_anchor_committed_signature = Some(clean_anchor_committed_signature);
+        runtime_trace.record_event(
+            "xbxengine",
+            "pictureRecoveryTransition",
+            session_id,
+            json!({
+                "episodeId": stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .map(|episode| episode.episode_id),
+                "phase": "CleanAnchorCommitted",
+                "fromPhase": "Decoded",
+                "toPhase": "CleanAnchorCommitted",
+                "cause": "fresh-anchor-recovered",
+                "detail": "mediaRecovered",
+                "rtpTimestamp": stats
+                    .recovery_displayed_idr_rtp
+                    .or(stats.latest_video_decode_ok_rtp_timestamp),
+                "frameSeq": stats.last_displayed_frame_seq,
+                "ownerState": stats.recovery_owner_state,
+                "transportState": stats.transport_state,
+                "observedAtMs": stats.recovery_fresh_anchor_recovered_at_ms,
+            }),
+        );
+        runtime_trace.record_event(
+            "xbxengine",
+            "cleanAnchorCommitted",
+            session_id,
+            json!({
+                "rtpTimestamp": stats
+                    .recovery_displayed_idr_rtp
+                    .or(stats.latest_video_decode_ok_rtp_timestamp),
+                "observedAtMs": stats.recovery_fresh_anchor_recovered_at_ms,
+            }),
+        );
+    }
+
+    let display_stable_signature = (
+        stats
+            .recovery_displayed_idr_at_ms
+            .or(stats.last_displayed_at_ms),
+        stats
+            .recovery_displayed_idr_rtp
+            .or(stats.last_displayed_frame_rtp_timestamp),
+    );
+    if observation_state.display_stable_signature.as_ref() != Some(&display_stable_signature)
+        && stats.receive_display_state.as_deref() == Some("display-stable")
+        && display_stable_ledger_closure_ok(stats)
+    {
+        observation_state.display_stable_signature = Some(display_stable_signature);
+        runtime_trace.record_event(
+            "xbxengine",
+            "pictureRecoveryTransition",
+            session_id,
+            json!({
+                "episodeId": stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .map(|episode| episode.episode_id),
+                "phase": "DisplayStable",
+                "fromPhase": "CleanAnchorCommitted",
+                "toPhase": "DisplayStable",
+                "cause": "stableServingSettled",
+                "detail": "displayGate",
+                "rtpTimestamp": stats
+                    .recovery_displayed_idr_rtp
+                    .or(stats.last_displayed_frame_rtp_timestamp),
+                "frameSeq": stats.last_displayed_frame_seq,
+                "ownerState": stats.recovery_owner_state,
+                "transportState": stats.transport_state,
+                "observedAtMs": stats.recovery_displayed_idr_at_ms.or(stats.last_displayed_at_ms),
+                "keyframeRequired": stats.receive_keyframe_required,
+                "responseState": stats.receive_keyframe_response_state,
+                "receiveDisplayState": stats.receive_display_state,
+                "ledgerGeneration": stats.receive_recovery_ledger_generation,
+            }),
+        );
+        runtime_trace.record_event(
+            "xbxengine",
+            "stableServingSettled",
+            session_id,
+            json!({
+                "rtpTimestamp": stats
+                    .recovery_displayed_idr_rtp
+                    .or(stats.last_displayed_frame_rtp_timestamp),
+                "observedAtMs": stats.recovery_displayed_idr_at_ms.or(stats.last_displayed_at_ms),
+                "keyframeRequired": stats.receive_keyframe_required,
+                "responseState": stats.receive_keyframe_response_state,
+                "receiveDisplayState": stats.receive_display_state,
+                "ledgerGeneration": stats.receive_recovery_ledger_generation,
+            }),
+        );
+    }
+
     let playback_recovered_signature = (
         stats.recovery_playback_recovered_at_ms,
         stats.recovery_playback_recovered_phase.clone(),
@@ -1542,20 +1672,25 @@ pub(super) fn record_runtime_trace_observations(
             .latest_picture_recovery_transition_observation
             .as_ref()
         {
-            let payload = picture_recovery_transition_payload(observation);
-            runtime_trace.record_event(
-                "xbxengine",
-                "pictureRecoveryTransition",
-                session_id,
-                payload.clone(),
-            );
-            if observation.phase == "FreshAnchorRecovered" {
+            let display_stable_without_ledger_closure =
+                observation.to_phase == "DisplayStable" && !display_stable_ledger_closure_ok(stats);
+            if !display_stable_without_ledger_closure {
+                let mut payload = picture_recovery_transition_payload(observation);
+                enrich_display_stable_transition_payload(&mut payload, stats);
                 runtime_trace.record_event(
                     "xbxengine",
-                    "freshAnchorRecovered",
+                    "pictureRecoveryTransition",
                     session_id,
-                    payload,
+                    payload.clone(),
                 );
+                if observation.phase == "FreshAnchorRecovered" {
+                    runtime_trace.record_event(
+                        "xbxengine",
+                        "freshAnchorRecovered",
+                        session_id,
+                        payload,
+                    );
+                }
             }
         }
     }
@@ -2294,7 +2429,8 @@ pub(super) fn record_runtime_trace_observations(
     );
     if observation_state.insert_gate_signature.as_ref() != Some(&insert_gate_signature) {
         observation_state.insert_gate_signature = Some(insert_gate_signature.clone());
-        if stats.latest_insert_decision.is_some() {
+        if stats.latest_insert_decision.is_some() && !stale_insert_projection_under_must_idr(stats)
+        {
             runtime_trace.record_event(
                 "xbxengine",
                 "insertGateDecision",
@@ -2416,6 +2552,25 @@ pub(super) fn record_runtime_trace_observations(
                 );
             }
             _ => {}
+        }
+    }
+
+    if stats
+        .latest_turn_relay_observation_seq
+        .is_some_and(|seq| observation_state.latest_turn_relay_observation_seq != Some(seq))
+    {
+        observation_state.latest_turn_relay_observation_seq =
+            stats.latest_turn_relay_observation_seq;
+        if let Some(label) = stats.latest_turn_relay_observation_label.as_deref() {
+            runtime_trace.record_event(
+                "xbxengine",
+                label,
+                session_id,
+                json!({
+                    "summary": stats.latest_turn_relay_observation_summary,
+                    "observationSeq": stats.latest_turn_relay_observation_seq,
+                }),
+            );
         }
     }
 
@@ -2718,6 +2873,31 @@ fn picture_recovery_transition_payload(
         "transportState": observation.transport_state,
         "observedAtMs": observation.observed_at_ms,
     })
+}
+
+fn enrich_display_stable_transition_payload(payload: &mut Value, stats: &XbxEngineStatsDto) {
+    if payload.get("toPhase").and_then(Value::as_str) != Some("DisplayStable") {
+        return;
+    }
+    let Some(object) = payload.as_object_mut() else {
+        return;
+    };
+    object.insert(
+        "keyframeRequired".to_string(),
+        json!(stats.receive_keyframe_required),
+    );
+    object.insert(
+        "responseState".to_string(),
+        json!(stats.receive_keyframe_response_state),
+    );
+    object.insert(
+        "receiveDisplayState".to_string(),
+        json!(stats.receive_display_state),
+    );
+    object.insert(
+        "ledgerGeneration".to_string(),
+        json!(stats.receive_recovery_ledger_generation),
+    );
 }
 
 fn picture_recovery_blocker_payload(

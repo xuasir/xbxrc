@@ -24,7 +24,6 @@ use crate::{
     media::video::test_fixtures::{make_bootstrap_assembled_frame, send_bootstrap_access_unit},
     media::video::types::{DecodedFrame, EncodedFrame, FrameRecoveryDisposition},
     transport::rtc::stream::adapter_types::FrameSource,
-    transport::rtc::stream::nack_contract::NackSchedulerConfig,
     XbxEngineRenderPixelData,
 };
 use bytes::Bytes;
@@ -702,6 +701,56 @@ fn waiting_keyframe_continuation_rejects_again_after_frame_budget_exhausted() {
         XbxDecodeOutputPathVerdict::BootstrapGateRejected
     );
     assert_eq!(observation.detail, "bootstrapGateRejected");
+}
+
+#[test]
+fn current_clean_anchor_supply_break_allows_waiting_keyframe_continuation_without_displayed_idr() {
+    let decode_calls = Arc::new(AtomicUsize::new(0));
+    let decoder = SpyHardwareDecoder;
+    let decode_calls_for_factory = decode_calls.clone();
+    let mut scripted_results_for_factory = Some(VecDeque::from(vec![Ok(None)]));
+    let decoder_factory = Box::new(move || {
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "scripted-replacement",
+                decode_calls: decode_calls_for_factory.clone(),
+                scripted_results: scripted_results_for_factory.take().unwrap_or_default(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "scripted-replacement".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 1,
+                fallback_summary: Some("external-reset-recreate".to_string()),
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+    state
+        .request_local_decoder_reset()
+        .expect("decoder reset should succeed");
+
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 9;
+    stats.video_anchor_clean_epoch = Some(9);
+    stats.video_anchor_clean_observed_at_ms = Some(3_000.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
+    stats.host_frame_present_epoch = 1;
+    stats.recovery_playback_recovered_at_ms = Some(3_000.0);
+    stats.submit_age_ms = Some(1_500.0);
+    stats.video_renderer_stalled = Some(true);
+    stats.display_age_ms = Some(600.0);
+    state.sync_recovery_exit_policy_from_stats(&stats, 3_010.0);
+    assert!(state.timed_fallback_displayed_idr_bypass);
+
+    let bootstrap = make_bootstrap_assembled_frame(3_100)
+        .into_encoded_frame(Instant::now() + Duration::from_millis(16));
+    let committed_parameter_sets = bootstrap.h264.commit_state.clone();
+    bootstrap.h264.commit();
+    let mut continuation = make_non_idr_continuation_frame(3_101);
+    continuation.h264.commit_state = committed_parameter_sets;
+    assert!(state.process_encoded_frame(continuation, 3_012.0).is_none());
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
 }
 
 #[test]
@@ -3523,7 +3572,7 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
 
     assert!(latest_rendered_at_ms.is_some());
     assert!(renderer_submit_count >= 2);
-    let mut render_state_guard = render_state.lock().expect("render state lock");
+    let render_state_guard = render_state.lock().expect("render state lock");
     // Render mailbox keeps a single latest handoff slot (`RENDER_MAILBOX_CAPACITY = 1`).
     let latest_frame = render_state_guard
         .peek_latest_frame()

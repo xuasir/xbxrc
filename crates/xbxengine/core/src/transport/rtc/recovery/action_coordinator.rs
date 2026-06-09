@@ -10,7 +10,6 @@ use super::escalation::RecoveryAction;
 use super::observation::{RecoveryObservation, RecoverySeverity};
 use super::policy::RecoveryScenarioProfile;
 use super::state_machine::{RecoveryState, RecoveryStateMachine};
-use super::suppress::suppress_session_picture_recovery_action;
 use super::timing::RecoveryDynamicTiming;
 
 /// 恢复决策结果
@@ -101,15 +100,18 @@ impl ActionCoordinator {
     pub(crate) fn decide(&mut self, observation: RecoveryObservation) -> RecoveryDecision {
         let current_state = self.state_machine.current_state();
 
-        let mut decision = match current_state {
+        match current_state {
             RecoveryState::Healthy => self.decide_from_healthy(observation),
             RecoveryState::LocalRepair => self.decide_from_local_repair(observation),
             RecoveryState::FrameRecovery => self.decide_from_frame_recovery(observation),
             RecoveryState::DecoderRecovery => self.decide_from_decoder_recovery(observation),
             RecoveryState::TransportRecovery => self.decide_from_transport_recovery(observation),
-        };
-        decision.action = suppress_session_picture_recovery_action(decision.action);
-        decision
+        }
+    }
+
+    fn delegate_picture_recovery_to_receive(&mut self, reason: String) -> RecoveryDecision {
+        self.state_machine.transition_to_healthy();
+        RecoveryDecision::new(RecoveryAction::DelegatedToReceive, reason)
     }
 
     /// 从Healthy状态决策
@@ -134,25 +136,19 @@ impl ActionCoordinator {
         }
 
         if observation.severity >= RecoverySeverity::ChainBroken {
-            self.state_machine.transition_to_frame_recovery();
-            self.state_machine.mark_idr_requested();
-            return RecoveryDecision::new(
-                RecoveryAction::RequestPli,
-                format!("chain broken: {}", observation.reason_label),
-            )
-            .with_state_transition(RecoveryState::FrameRecovery);
+            return self.delegate_picture_recovery_to_receive(format!(
+                "chain broken: {}",
+                observation.reason_label
+            ));
         }
 
         if observation.severity >= RecoverySeverity::PacketLoss {
             // 检查repairability决定是NACK还是IDR
             if observation.should_escalate_to_idr(self.repairability_threshold) {
-                self.state_machine.transition_to_frame_recovery();
-                self.state_machine.mark_idr_requested();
-                return RecoveryDecision::new(
-                    RecoveryAction::RequestPli,
-                    format!("low repairability: {}", observation.reason_label),
-                )
-                .with_state_transition(RecoveryState::FrameRecovery);
+                return self.delegate_picture_recovery_to_receive(format!(
+                    "low repairability: {}",
+                    observation.reason_label
+                ));
             } else {
                 self.state_machine.transition_to_local_repair();
                 return RecoveryDecision::new(
@@ -172,13 +168,20 @@ impl ActionCoordinator {
 
     /// 从LocalRepair状态决策
     fn decide_from_local_repair(&mut self, observation: RecoveryObservation) -> RecoveryDecision {
-        // In-flight门控：如果IDR已在飞行中，coalesce
+        // 旧状态可能残留 keyframe in-flight；picture recovery 统一交回 receive。
         if self.state_machine.is_idr_in_flight() {
+            return self
+                .delegate_picture_recovery_to_receive("IDR already in flight".to_string())
+                .with_coalescing(CoalescingMode::Merge);
+        }
+
+        if observation.requires_reconnect() {
+            self.state_machine.transition_to_transport_recovery();
             return RecoveryDecision::new(
-                RecoveryAction::CoalescedKeyframeInFlight,
-                "IDR already in flight".to_string(),
+                RecoveryAction::RequestReconnectCandidate,
+                format!("reconnect required: {}", observation.reason_label),
             )
-            .with_coalescing(CoalescingMode::Merge);
+            .with_state_transition(RecoveryState::TransportRecovery);
         }
 
         // 检查NACK是否超时或repairability过低
@@ -186,14 +189,12 @@ impl ActionCoordinator {
             || observation.should_escalate_to_idr(self.repairability_threshold);
 
         if should_escalate {
-            self.state_machine.transition_to_frame_recovery();
-            self.state_machine.mark_idr_requested();
-            return RecoveryDecision::new(
-                RecoveryAction::RequestPli,
-                format!("NACK failed, escalate to IDR: {}", observation.reason_label),
-            )
-            .with_state_transition(RecoveryState::FrameRecovery)
-            .with_preempt_reason("nack_timeout".to_string());
+            return self
+                .delegate_picture_recovery_to_receive(format!(
+                    "NACK failed, escalate to IDR: {}",
+                    observation.reason_label
+                ))
+                .with_preempt_reason("nack_timeout".to_string());
         }
 
         // 继续NACK
@@ -202,8 +203,7 @@ impl ActionCoordinator {
 
     /// 从FrameRecovery状态决策
     fn decide_from_frame_recovery(&mut self, observation: RecoveryObservation) -> RecoveryDecision {
-        // FrameRecovery 只承担 owner 缺失域与 transport 坏窗域；
-        // decoder reset 只在 owner 已到但 decode 迟迟不出时开放。
+        // FrameRecovery 是旧状态残留；picture recovery 的重试/合并由 receive ledger 执行。
         if observation.requires_reconnect() {
             self.state_machine.transition_to_transport_recovery();
             return RecoveryDecision::new(
@@ -226,39 +226,34 @@ impl ActionCoordinator {
         // In-flight门控
         if self.state_machine.is_keyframe_request_in_flight() {
             if self.state_machine.can_retry_idr() {
-                self.state_machine.mark_idr_requested();
                 let unlock_reason = if self.state_machine.idr_response_timeout_elapsed() {
                     "responseTimeout"
                 } else {
                     "refreshIntervalElapsed"
                 };
-                return RecoveryDecision::new(
-                    RecoveryAction::RequestPli,
-                    "IDR still unresolved, refresh pli".to_string(),
-                )
-                .with_coalescing(CoalescingMode::Refresh)
-                .with_unlock_reason(unlock_reason.to_string());
+                return self
+                    .delegate_picture_recovery_to_receive(
+                        "IDR still unresolved, refresh pli".to_string(),
+                    )
+                    .with_coalescing(CoalescingMode::Refresh)
+                    .with_unlock_reason(unlock_reason.to_string());
             }
 
             // IDR仍在飞行中，coalesce
-            return RecoveryDecision::new(
-                RecoveryAction::CoalescedKeyframeInFlight,
-                "IDR in flight, coalescing".to_string(),
-            )
-            .with_coalescing(CoalescingMode::Merge);
+            return self
+                .delegate_picture_recovery_to_receive("IDR in flight, coalescing".to_string())
+                .with_coalescing(CoalescingMode::Merge);
         }
 
         if self.state_machine.is_keyframe_decode_pending() {
-            return RecoveryDecision::new(
-                RecoveryAction::CoalescedKeyframeInFlight,
-                "owner observed, waiting decode progress".to_string(),
-            )
-            .with_coalescing(CoalescingMode::Merge);
+            return self
+                .delegate_picture_recovery_to_receive(
+                    "owner observed, waiting decode progress".to_string(),
+                )
+                .with_coalescing(CoalescingMode::Merge);
         }
 
-        // IDR未在飞行中，发送新的IDR
-        self.state_machine.mark_idr_requested();
-        RecoveryDecision::new(RecoveryAction::RequestPli, "request new IDR".to_string())
+        self.delegate_picture_recovery_to_receive("request new IDR".to_string())
     }
 
     /// 从DecoderRecovery状态决策
@@ -393,11 +388,11 @@ mod tests {
 
         let decision = coordinator.decide(obs);
         assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
-        assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
+        assert_eq!(coordinator.current_state(), RecoveryState::Healthy);
     }
 
     #[test]
-    fn test_in_flight_coalescing() {
+    fn test_picture_recovery_delegation_does_not_create_in_flight_state() {
         let mut coordinator = ActionCoordinator::new(test_profile(), 1);
 
         // 第一次请求IDR
@@ -408,24 +403,28 @@ mod tests {
         );
         let decision = coordinator.decide(obs.clone());
         assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
+        assert!(!coordinator.state_machine().is_idr_in_flight());
+        assert_eq!(coordinator.current_state(), RecoveryState::Healthy);
 
-        // 第二次请求应该被coalesce
         let decision = coordinator.decide(obs);
-        assert_eq!(decision.action, RecoveryAction::CoalescedKeyframeInFlight);
+        assert_eq!(decision.action, RecoveryAction::DelegatedToReceive);
+        assert!(!coordinator.state_machine().is_idr_in_flight());
+        assert_eq!(coordinator.current_state(), RecoveryState::Healthy);
     }
 
     #[test]
-    fn test_frame_recovery_refreshes_pli_after_short_interval() {
+    fn test_stale_frame_recovery_refresh_delegates_and_clears_state() {
         let mut coordinator = ActionCoordinator::new(test_profile(), 1);
+        coordinator
+            .state_machine_mut()
+            .transition_to_frame_recovery();
+        coordinator.state_machine_mut().mark_idr_requested();
 
         let obs = RecoveryObservation::from_reason(
             VideoEscalationReason::WaitKeyframe,
             "waitKeyframe".to_string(),
             1000.0,
         );
-        let first = coordinator.decide(obs.clone());
-        assert_eq!(first.action, RecoveryAction::DelegatedToReceive);
-
         std::thread::sleep(std::time::Duration::from_millis(120));
 
         let second = coordinator.decide(obs);
@@ -435,24 +434,15 @@ mod tests {
             second.unlock_reason.as_deref(),
             Some("refreshIntervalElapsed")
         );
+        assert!(!coordinator.state_machine().is_idr_in_flight());
+        assert_eq!(coordinator.current_state(), RecoveryState::Healthy);
     }
 
     #[test]
     fn test_escalation_path() {
         let mut coordinator = ActionCoordinator::new(test_profile(), 1);
 
-        // Healthy → FrameRecovery
-        let obs = RecoveryObservation::from_reason(
-            VideoEscalationReason::WaitKeyframe,
-            "waitKeyframe".to_string(),
-            1000.0,
-        );
-        coordinator.decide(obs);
-        assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
-
-        coordinator.state_machine_mut().mark_idr_response_observed();
-
-        // FrameRecovery(owner observed) → DecoderRecovery
+        // Decoder recovery 仍归 session 执行。
         let obs = RecoveryObservation::from_reason(
             VideoEscalationReason::DecoderBackendFailure,
             "decoderBackendFailure".to_string(),

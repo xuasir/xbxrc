@@ -14,7 +14,7 @@ fn should_record_h264_inspection_as_picture_blocker(
     stats: &crate::XbxEngineMediaRuntimeStats,
 ) -> bool {
     use crate::transport::rtc::recovery::contract::{
-        displayed_idr_serving_from_stats, is_soft_missing_idr_bootstrap_reject_reason,
+        has_current_clean_anchor_from_stats, is_soft_missing_idr_bootstrap_reject_reason,
     };
     if observation.admission_accepted
         && observation.committed_sps_present
@@ -26,7 +26,7 @@ fn should_record_h264_inspection_as_picture_blocker(
     {
         return false;
     }
-    if displayed_idr_serving_from_stats(stats)
+    if has_current_clean_anchor_from_stats(stats)
         && observation.reject_classification.as_deref() == Some("receiverLocalContinuation")
     {
         return false;
@@ -558,9 +558,8 @@ impl RuntimeStatsSink {
     ) {
         self.update(|stats| {
             let mut updated_episode = None;
-            let mut should_probe = false;
-            let mut pending_transition: Option<(u64, u32, u64)> = None;
-            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+            let (pending_transition, should_probe) =
+                if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if request_reason_is_transport_recovery_keyframe_family(
                     episode.request_reason.as_deref(),
                 )
@@ -612,23 +611,47 @@ impl RuntimeStatsSink {
                     "episodeId={} rtpTimestamp={} frameSeq={} observedAtMs={:.1}",
                     episode.episode_id, rtp_timestamp, frame_seq, observed_at_ms
                 ));
-                pending_transition = Some((episode.episode_id, rtp_timestamp, frame_seq));
+                let pending_transition = Some((Some(episode.episode_id), rtp_timestamp, frame_seq));
                 updated_episode = Some(episode.clone());
-                should_probe = true;
-            }
+                (pending_transition, true)
+            } else {
+                stats.latest_observation_label = Some("keyframeDecodedMediaRecovered".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "rtpTimestamp={} frameSeq={} observedAtMs={:.1}",
+                    rtp_timestamp, frame_seq, observed_at_ms
+                ));
+                (Some((None, rtp_timestamp, frame_seq)), true)
+            };
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            stats.receive_keyframe_response_state = Some("usable-idr".to_string());
+            stats.receive_keyframe_required = Some(false);
+            stats.receive_keyframe_required_cause = Some("none".to_string());
+            stats.receive_picture_recovery_terminal_candidate = Some(false);
+            stats.latest_receive_picture_recovery_terminal_reason = None;
+            stats.receive_keyframe_sent_count_unresolved = 0;
+            stats.recovery_decoder_reference_synced_at_ms = Some(observed_at_ms);
+            stats.latest_video_decode_ok_time_ms = Some(observed_at_ms);
+            stats.latest_video_decode_ok_rtp_timestamp = Some(rtp_timestamp);
+            stats.latest_clean_anchor_submission_epoch = Some(stats.transport_recovery_epoch);
+            stats.latest_clean_anchor_submission_episode_id =
+                pending_transition.and_then(|(episode_id, _, _)| episode_id);
+            stats.latest_clean_anchor_submission_rtp_timestamp = Some(rtp_timestamp);
+            stats.latest_clean_anchor_submission_observed_at_ms = Some(observed_at_ms);
+            stats.latest_clean_anchor_submission_source_event =
+                Some("decoded-usable-idr".to_string());
+            Self::apply_transport_clean_anchor(stats, observed_at_ms, "decoded-usable-idr");
             if let Some((episode_id, rtp_timestamp, frame_seq)) = pending_transition {
                 let observation = XbxEnginePictureRecoveryTransitionObservation {
                     observation_id: Self::next_picture_recovery_transition_observation_id(stats),
-                    episode_id: Some(episode_id),
+                    episode_id,
                     recovery_epoch: Some(stats.transport_recovery_epoch),
-                    phase: "Decoded".to_string(),
-                    from_phase: Some("PacketSeen".to_string()),
-                    to_phase: "Decoded".to_string(),
-                    cause: Some("firstKeyframeAccepted".to_string()),
-                    detail: Some("decoded".to_string()),
+                    phase: "CleanAnchorCommitted".to_string(),
+                    from_phase: Some("Decoded".to_string()),
+                    to_phase: "CleanAnchorCommitted".to_string(),
+                    cause: Some("decoded-usable-idr".to_string()),
+                    detail: Some("mediaRecovered".to_string()),
                     rtp_timestamp: Some(rtp_timestamp),
                     frame_seq: Some(frame_seq),
                     owner_state: stats.video_owner_state.clone(),
