@@ -17,6 +17,10 @@ WEBRTC_GATE_PATH = (
     REPO_ROOT
     / ".agents/skills/analyze-runtime-logs/scripts/trace_webrtc_acceptance_gate.py"
 )
+MIDSEGMENT_PATH = (
+    REPO_ROOT
+    / ".agents/skills/analyze-runtime-logs/scripts/trace_midsegment_report.py"
+)
 
 
 def write_trace(rows: list[dict]) -> Path:
@@ -48,6 +52,15 @@ def run_report(trace_path: Path, *args: str) -> subprocess.CompletedProcess[str]
 def run_webrtc_gate(trace_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-B", str(WEBRTC_GATE_PATH), *args, str(trace_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def run_midsegment(trace_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-B", str(MIDSEGMENT_PATH), str(trace_path), *args],
         capture_output=True,
         text=True,
         check=False,
@@ -387,6 +400,87 @@ class TraceReceiveFeedbackReportTest(unittest.TestCase):
         self.assertEqual(report["midsegment"]["globalLatencyGate"], "PASS")
         self.assertEqual(report["midsegment"]["mediaSupplyGate"], "PASS")
         self.assertEqual(report["midsegment"]["steadySupplyGate"], "PASS")
+
+    def test_midsegment_auto_window_anchors_at_first_steady_snapshot(self) -> None:
+        rows = [
+            {"seq": 1, "tsMs": 1_000, "event": "traceStarted", "payload": {}},
+            {
+                "seq": 2,
+                "tsMs": 80_000,
+                "event": "statsSnapshot",
+                "payload": {
+                    "stats": {
+                        "sessionPhase": "connecting",
+                        "submitAgeMs": 0.0,
+                        "presentAgeMs": 0.0,
+                        "submitToPresentMs": 0.0,
+                        "decodeFps": 0.0,
+                        "presentFps": 0.0,
+                        "hostFramePresentEpoch": 1,
+                    }
+                },
+            },
+            {
+                "seq": 3,
+                "tsMs": 85_000,
+                "event": "statsSnapshot",
+                "payload": {
+                    "stats": {
+                        "sessionPhase": "connecting",
+                        "submitAgeMs": 0.0,
+                        "presentAgeMs": 0.0,
+                        "submitToPresentMs": 0.0,
+                        "decodeFps": 0.0,
+                        "presentFps": 0.0,
+                        "hostFramePresentEpoch": 1,
+                    }
+                },
+            },
+            {
+                "seq": 4,
+                "tsMs": 100_000,
+                "event": "statsSnapshot",
+                "payload": {
+                    "stats": {
+                        "sessionPhase": "steady",
+                        "submitAgeMs": 10.0,
+                        "presentAgeMs": 8.0,
+                        "submitToPresentMs": 18.0,
+                        "decodeFps": 30.0,
+                        "presentFps": 30.0,
+                        "hostFramePresentEpoch": 2,
+                        "hostMailboxEnqueueCountTotal": 10,
+                    }
+                },
+            },
+            {
+                "seq": 5,
+                "tsMs": 110_000,
+                "event": "statsSnapshot",
+                "payload": {
+                    "stats": {
+                        "sessionPhase": "steady",
+                        "submitAgeMs": 11.0,
+                        "presentAgeMs": 8.0,
+                        "submitToPresentMs": 19.0,
+                        "decodeFps": 30.0,
+                        "presentFps": 30.0,
+                        "hostFramePresentEpoch": 12,
+                        "hostMailboxEnqueueCountTotal": 20,
+                    }
+                },
+            },
+        ]
+        trace_path = write_trace(rows)
+        try:
+            result = run_midsegment(trace_path)
+        finally:
+            trace_path.unlink(missing_ok=True)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("source=auto-steady", result.stdout)
+        self.assertIn("session_phase steady ratio: 100.0%", result.stdout)
+        self.assertIn("STEADY_SUPPLY_GATE: PASS", result.stdout)
 
     def test_combined_webrtc_gate_selects_latest_trace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

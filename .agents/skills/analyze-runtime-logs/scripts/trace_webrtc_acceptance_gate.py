@@ -70,19 +70,20 @@ def run_receive_gate(trace: Path) -> tuple[int, dict[str, Any]]:
     return result.returncode, report
 
 
-def run_midsegment_gate(trace: Path, start_s: float, end_s: float) -> tuple[int, dict[str, Any]]:
-    result = run_command(
-        [
-            sys.executable,
-            "-B",
-            str(MIDSEGMENT_REPORT),
-            str(trace),
-            "--start-s",
-            str(start_s),
-            "--end-s",
-            str(end_s),
-        ]
-    )
+def run_midsegment_gate(
+    trace: Path, start_s: float | None, end_s: float | None
+) -> tuple[int, dict[str, Any]]:
+    command = [
+        sys.executable,
+        "-B",
+        str(MIDSEGMENT_REPORT),
+        str(trace),
+    ]
+    if start_s is not None:
+        command.extend(["--start-s", str(start_s)])
+    if end_s is not None:
+        command.extend(["--end-s", str(end_s)])
+    result = run_command(command)
     report = {
         "globalLatencyGate": parse_midsegment_gate(stdout=result.stdout, label="GLOBAL_LATENCY_GATE"),
         "mediaSupplyGate": parse_midsegment_gate(stdout=result.stdout, label="MEDIA_SUPPLY_GATE"),
@@ -112,8 +113,18 @@ def main() -> int:
         default=None,
         help="fail unless the selected trace file was modified within this many seconds",
     )
-    parser.add_argument("--start-s", type=float, default=79.0)
-    parser.add_argument("--end-s", type=float, default=150.0)
+    parser.add_argument(
+        "--start-s",
+        type=float,
+        default=None,
+        help="manual midsegment start seconds; default auto-anchors at first steady statsSnapshot after +79s",
+    )
+    parser.add_argument(
+        "--end-s",
+        type=float,
+        default=None,
+        help="manual midsegment end seconds; default keeps the midsegment script's auto window",
+    )
     args = parser.parse_args()
 
     trace = args.trace

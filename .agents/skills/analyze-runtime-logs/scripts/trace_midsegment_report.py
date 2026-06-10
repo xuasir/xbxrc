@@ -18,6 +18,9 @@ STEADY_SUPPLY_GAP_MAX = 6.0
 STEADY_PHASE_RATIO_MIN = 95.0
 READY_RATIO_MIN = 0.85
 SUBMIT_TO_PRESENT_P95_MAX_MS = 80.0
+DEFAULT_START_S = 79.0
+DEFAULT_END_S = 150.0
+DEFAULT_WINDOW_DURATION_S = DEFAULT_END_S - DEFAULT_START_S
 
 
 def load_events(path: Path) -> list[dict[str, Any]]:
@@ -61,6 +64,45 @@ def in_window(event: dict[str, Any], origin: float, start_s: float, end_s: float
     return start_s <= rel <= end_s
 
 
+def stats_snapshot_payload(event: dict[str, Any]) -> dict[str, Any] | None:
+    if (event.get("event") or event.get("name") or "") != "statsSnapshot":
+        return None
+    payload = event.get("payload") or event
+    stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else payload
+    return stats if isinstance(stats, dict) else None
+
+
+def resolve_midsegment_window(
+    events: list[dict[str, Any]],
+    origin: float,
+    start_s: float | None,
+    end_s: float | None,
+) -> tuple[float, float, str]:
+    if start_s is not None:
+        resolved_start = start_s
+        resolved_end = end_s if end_s is not None else start_s + DEFAULT_WINDOW_DURATION_S
+        return resolved_start, resolved_end, "manual"
+    if end_s is not None:
+        return DEFAULT_START_S, end_s, "manual"
+
+    resolved_start = DEFAULT_START_S
+    for event in events:
+        ts = event_ts_ms(event)
+        if ts is None:
+            continue
+        rel = (ts - origin) / 1000.0
+        if rel < DEFAULT_START_S:
+            continue
+        stats = stats_snapshot_payload(event)
+        if stats is None:
+            continue
+        phase = stats.get("sessionPhase") or stats.get("session_phase")
+        if phase == "steady":
+            resolved_start = rel
+            break
+    return resolved_start, resolved_start + DEFAULT_WINDOW_DURATION_S, "auto-steady"
+
+
 def nested_get(obj: dict[str, Any], *keys: str) -> Any:
     cur: Any = obj
     for key in keys:
@@ -97,12 +139,8 @@ def collect_stats_snapshot_metrics(
     for event in events:
         if not in_window(event, origin, start_s, end_s):
             continue
-        name = event.get("event") or event.get("name") or ""
-        if name != "statsSnapshot":
-            continue
-        payload = event.get("payload") or event
-        stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else payload
-        if not isinstance(stats, dict):
+        stats = stats_snapshot_payload(event)
+        if stats is None:
             continue
         stats_snapshots.append(stats)
         for field, bucket in (
@@ -382,8 +420,18 @@ def collect_startup_supply_metrics(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("trace", type=Path, help="Path to runtime-trace-*.jsonl")
-    parser.add_argument("--start-s", type=float, default=79.0)
-    parser.add_argument("--end-s", type=float, default=150.0)
+    parser.add_argument(
+        "--start-s",
+        type=float,
+        default=None,
+        help="manual window start seconds from trace origin; default auto-anchors at first steady statsSnapshot after +79s",
+    )
+    parser.add_argument(
+        "--end-s",
+        type=float,
+        default=None,
+        help="manual window end seconds from trace origin; default keeps a 71s window after the resolved start",
+    )
     args = parser.parse_args()
 
     if not args.trace.is_file():
@@ -393,9 +441,12 @@ def main() -> int:
     events = load_events(args.trace)
     trace_mode = next((e.get("traceMode") for e in events[:5] if e.get("traceMode")), "unknown")
     origin = origin_ms(events)
-    metrics = collect_stats_snapshot_metrics(events, origin, args.start_s, args.end_s)
-    take_metrics = collect_host_take_metrics(events, origin, args.start_s, args.end_s)
-    drops = collect_frame_drops(events, origin, args.start_s, args.end_s)
+    start_s, end_s, window_source = resolve_midsegment_window(
+        events, origin, args.start_s, args.end_s
+    )
+    metrics = collect_stats_snapshot_metrics(events, origin, start_s, end_s)
+    take_metrics = collect_host_take_metrics(events, origin, start_s, end_s)
+    drops = collect_frame_drops(events, origin, start_s, end_s)
 
     submit_p95 = p95(metrics["submit_ages"])
     present_p95 = p95(metrics["present_ages"])
@@ -416,8 +467,8 @@ def main() -> int:
         gaps = [d - p for d, p in metrics["steady_supply_rows"]]
         steady_supply_gap = statistics.mean(gaps)
 
-    recovering_count = count_recovery_pulses(events, origin, args.start_s, args.end_s)
-    recovering_streak_s = max_recovering_streak_s(events, origin, args.start_s, args.end_s)
+    recovering_count = count_recovery_pulses(events, origin, start_s, end_s)
+    recovering_streak_s = max_recovering_streak_s(events, origin, start_s, end_s)
     startup = collect_startup_supply_metrics(events, origin)
     media_supply_gates: list[str] = []
     media_verdict = "SKIPPED"
@@ -446,7 +497,10 @@ def main() -> int:
 
     print(f"trace: {args.trace}")
     print(f"traceMode: {trace_mode}")
-    print(f"window: +{args.start_s:.0f}s – +{args.end_s:.0f}s (origin_ts_ms={origin:.0f})")
+    print(
+        f"window: +{start_s:.3f}s – +{end_s:.3f}s "
+        f"(source={window_source}, origin_ts_ms={origin:.0f})"
+    )
     print(f"statsSnapshots in window: {phase_total}")
     print(f"session_phase steady ratio: {steady_ratio:.1f}%")
     print(f"recovering / receiverWaitingKeyframe signals: {recovering_count}")
