@@ -126,6 +126,11 @@ impl NackRequester {
         }
     }
 
+    pub fn suppress_keyframe_escalation_for_repairable_gap(&mut self) {
+        self.keyframe_escalation.clear();
+        self.exhausted_sequences.clear();
+    }
+
     pub fn poll(
         &mut self,
         params: &NackSchedulingParams,
@@ -313,6 +318,31 @@ mod tests {
         let r2 = requester.poll(&params, t_exhaust, Default::default());
         assert!(r2.sequences.is_empty());
         assert!(r2.keyframe_escalation_due);
+        assert!(!requester.keyframe_escalation_armed());
+    }
+
+    #[test]
+    fn suppressing_repairable_gap_escalation_prevents_immediate_rearm() {
+        let mut requester = NackRequester::new(cloud_timing());
+        requester.register_gaps([42_u16]);
+        let start = Instant::now();
+        let mut params = cloud_timing().nack_scheduling_params(10.0);
+        params.first_nack = Duration::from_millis(1);
+        params.retry_interval = Duration::from_millis(1);
+        params.max_retries = 0;
+        params.nack_timeout = Duration::from_millis(5);
+        params.reorder_wait = Duration::from_millis(1);
+
+        let t1 = start + Duration::from_millis(3);
+        let _ = requester.poll(&params, t1, Default::default());
+        let r2 = requester.poll(&params, t1 + Duration::from_millis(8), Default::default());
+        assert!(r2.keyframe_escalation_due);
+
+        requester.suppress_keyframe_escalation_for_repairable_gap();
+        requester.register_gaps([42_u16]);
+        let r3 = requester.poll(&params, t1 + Duration::from_millis(12), Default::default());
+
+        assert!(!r3.keyframe_escalation_due);
         assert!(!requester.keyframe_escalation_armed());
     }
 }

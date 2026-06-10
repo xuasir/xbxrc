@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{XbxEngineH264InspectionObservation, XbxEngineMediaRuntimeStats};
+use crate::{
+    XbxEngineH264InspectionObservation, XbxEngineMediaRuntimeStats,
+    XbxEngineVideoTimelineChainSnapshot, XbxEngineVideoTimelineObservation,
+};
 
 use super::RuntimeStatsSink;
 
@@ -149,6 +152,32 @@ fn advancing_transport_recovery_episode_clears_stale_anchor() {
     sink.record_pending_displayed_idr_rtp(77_001);
     sink.seed_decoder_reference_sync_for_pending_idr(77_001, 15.0);
     sink.record_displayed_idr_fact(20.0, 77_001, None);
+    sink.update(|stats| {
+        stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+            observation_id: 7,
+            source_event: "stale-gap".to_string(),
+            gap: None,
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "broken".to_string(),
+                reason: Some("staleReferenceGap".to_string()),
+                chain_break_evidence: Some("oldEpoch".to_string()),
+                observed_at_ms: 20.0,
+            },
+            observed_at_ms: 20.0,
+        });
+        stats.reference_chain_state = Some("need-keyframe".to_string());
+        stats.reference_chain_state_cause = Some("staleReferenceGap".to_string());
+        stats.reference_chain_decoder_reference_synced = Some(true);
+        stats.reference_chain_bootstrap_ready = Some(true);
+        stats.reference_chain_has_active_gap = Some(true);
+        stats.reference_chain_nack_exhausted = Some(true);
+        stats.reference_chain_submit_age_ms = Some(1200.0);
+        stats.latest_reference_chain_observation_source = Some("ledger".to_string());
+        stats.latest_reference_chain_sparse_must_idr_mismatch = Some(true);
+        stats.receive_sparse_must_idr_mismatch_total = 1690;
+        stats.reference_stats_fallback_total = 3;
+    });
     assert_eq!(sink.advance_transport_recovery_episode(30.0), 2);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -166,6 +195,20 @@ fn advancing_transport_recovery_episode_clears_stale_anchor() {
     assert!(stats.recovery_decoder_reference_synced_at_ms.is_none());
     assert!(stats.latest_video_decode_ok_time_ms.is_none());
     assert!(stats.latest_video_decode_ok_rtp_timestamp.is_none());
+    assert!(stats.latest_video_timeline_observation.is_none());
+    assert!(stats.reference_chain_state.is_none());
+    assert!(stats.reference_chain_state_cause.is_none());
+    assert!(stats.reference_chain_decoder_reference_synced.is_none());
+    assert!(stats.reference_chain_bootstrap_ready.is_none());
+    assert!(stats.reference_chain_has_active_gap.is_none());
+    assert!(stats.reference_chain_nack_exhausted.is_none());
+    assert!(stats.reference_chain_submit_age_ms.is_none());
+    assert!(stats.latest_reference_chain_observation_source.is_none());
+    assert!(stats
+        .latest_reference_chain_sparse_must_idr_mismatch
+        .is_none());
+    assert_eq!(stats.receive_sparse_must_idr_mismatch_total, 0);
+    assert_eq!(stats.reference_stats_fallback_total, 0);
 }
 
 #[test]

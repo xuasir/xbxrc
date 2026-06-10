@@ -35,6 +35,7 @@ use crate::shell::bridge::{TauriEngineEventBridge, TauriEngineWindowHost};
 use crate::AppState;
 
 const XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT: Duration = Duration::from_secs(20);
+static XBXENGINE_HOST_EXCHANGE_OFFER_REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
 
 /// 推式 host present：`renderer` 线程调用；`route` 由 engine runtime 快照同步。
 struct NativeVideoHostRenderFramePush {
@@ -625,6 +626,7 @@ impl TauriXbxEngineHostBridge {
     ) -> Result<XbxEngineHostResponseDto, XbxEngineRuntimeError> {
         let state = self.app_state().map_err(map_app_error("exchangeOffer"))?;
         let started_at = Instant::now();
+        let request_id = XBXENGINE_HOST_EXCHANGE_OFFER_REQUEST_SEQ.fetch_add(1, Ordering::Relaxed);
         let trace_session_id = session_id.clone();
         let trace_channel = channel.clone();
         self.runtime_trace.record_event(
@@ -632,10 +634,12 @@ impl TauriXbxEngineHostBridge {
             "exchangeOfferRequested",
             Some(&session_id),
             serde_json::json!({
+                "requestId": request_id,
                 "channel": channel,
                 "restart": restart,
                 "offerSdp": sdp,
                 "offerSdpCapabilities": summarize_sdp_capabilities(&sdp),
+                "timeoutMs": XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT.as_millis(),
             }),
         );
         let exchange = state
@@ -652,15 +656,20 @@ impl TauriXbxEngineHostBridge {
         )) {
             Ok(result) => result,
             Err(error) => {
+                let failure_kind = exchange_offer_failure_kind(&error);
                 self.runtime_trace.record_event(
                     "xbxengine-host",
                     "exchangeOfferFailed",
                     Some(&trace_session_id),
                     serde_json::json!({
+                        "requestId": request_id,
                         "channel": trace_channel,
                         "restart": restart,
                         "durationMs": started_at.elapsed().as_millis(),
                         "timeoutMs": XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT.as_millis(),
+                        "failureKind": failure_kind,
+                        "phase": "exchangeOffer",
+                        "answerReceived": false,
                         "error": error.to_string(),
                     }),
                 );
@@ -672,7 +681,11 @@ impl TauriXbxEngineHostBridge {
             "exchangeOfferResult",
             Some(&trace_session_id),
             serde_json::json!({
+                "requestId": request_id,
+                "channel": trace_channel,
+                "restart": restart,
                 "durationMs": started_at.elapsed().as_millis(),
+                "answerReceived": true,
                 "answerSdp": result.answer.sdp,
                 "answerSdpCapabilities": summarize_sdp_capabilities(&result.answer.sdp),
             }),
@@ -1089,6 +1102,18 @@ fn extract_command_target_type(command: &XbxEngineControlCommandDto) -> Option<&
     }
 }
 
+fn exchange_offer_failure_kind(error: &AppError) -> &'static str {
+    exchange_offer_failure_kind_from_message(&error.to_string())
+}
+
+fn exchange_offer_failure_kind_from_message(message: &str) -> &'static str {
+    if message.contains("timed out") {
+        "timeout"
+    } else {
+        "error"
+    }
+}
+
 fn control_apply_event_name(
     command: &XbxEngineControlCommandDto,
     stage: &'static str,
@@ -1150,8 +1175,9 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        exchange_offer_with_timeout, summarize_sdp_capabilities,
-        update_host_present_route_on_attach, update_host_present_route_on_detach,
+        exchange_offer_failure_kind_from_message, exchange_offer_with_timeout,
+        summarize_sdp_capabilities, update_host_present_route_on_attach,
+        update_host_present_route_on_detach,
     };
     use crate::mods::streaming::{StreamingAnswerPayload, StreamingExchangeOfferResult};
     use xbxengine::XbxEngineHostPresentRoute;
@@ -1175,6 +1201,18 @@ mod tests {
 
         let error = result.expect_err("exchange offer should time out");
         assert!(error.to_string().contains("exchange offer timed out"));
+    }
+
+    #[test]
+    fn exchange_offer_failure_kind_marks_timeout() {
+        assert_eq!(
+            exchange_offer_failure_kind_from_message("exchange offer timed out after 20000ms"),
+            "timeout"
+        );
+        assert_eq!(
+            exchange_offer_failure_kind_from_message("remote session rejected offer"),
+            "error"
+        );
     }
 
     #[test]

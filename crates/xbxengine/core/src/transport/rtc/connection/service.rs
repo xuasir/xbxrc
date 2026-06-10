@@ -12,6 +12,9 @@ pub(super) use crate::transport::rtc::connection::builder::{
     build_owned_h264_codec_preferences, register_owned_h264_codecs, ControlledPeerConnection,
 };
 use crate::transport::rtc::connection::control_channel::RtcControlChannelService;
+use crate::transport::rtc::connection::data_channel::{
+    build_dimensions_changed_message_payload, StreamViewportDimensions, MESSAGE_CHANNEL_LABEL,
+};
 use crate::transport::rtc::connection::io_runtime::RtcIoRuntime;
 use crate::transport::rtc::connection::runtime_state::RtcConnectionRuntimeState;
 use crate::transport::rtc::connection::transport_metrics::describe_selected_candidate_pair;
@@ -28,6 +31,8 @@ const TWCC_WARMUP_FEEDBACK_INTERVAL_MS: u64 = 50;
 const TWCC_STABLE_FEEDBACK_INTERVAL_MS: u64 = 100;
 pub(crate) const VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON: &str = "videoRtcpFeedbackTargetPending";
 const VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY_REASON: &str = "videoRtcpFeedbackTransportNotReady";
+const LOW_RESOLUTION_REASSERT_MIN_TARGET_WIDTH: u32 = 1920;
+const LOW_RESOLUTION_REASSERT_MIN_TARGET_HEIGHT: u32 = 1080;
 
 /// PLI/FIR 依赖 TWCC 反馈目标；重连或轨未绑定时无目标，返回 pending 让上层按 deferred 语义处理。
 fn video_rtcp_recovery_feedback_media_ssrc_ready(
@@ -135,6 +140,7 @@ pub(crate) struct RtcConnectionService {
     pub(super) last_selected_pair_diagnostic: Option<String>,
     pub(super) selected_pair_snapshot_emitted: bool,
     pub(super) video_recovery_transport_state: VideoRecoveryTransportState,
+    pub(super) last_low_resolution_recovery_config_change_rtp: Option<u32>,
 }
 
 impl Default for RtcConnectionService {
@@ -172,6 +178,7 @@ impl Default for RtcConnectionService {
             last_selected_pair_diagnostic: None,
             selected_pair_snapshot_emitted: false,
             video_recovery_transport_state: VideoRecoveryTransportState::default(),
+            last_low_resolution_recovery_config_change_rtp: None,
         }
     }
 }
@@ -687,6 +694,7 @@ impl RtcConnectionService {
         crate::xbx_log_debug!("[xbxengine][rtc-connection] pump after drain peer events/reads");
         self.try_send_message_handshake(runtime_stats)?;
         self.maybe_adjust_twcc_feedback_interval(runtime_stats);
+        self.maybe_reassert_runtime_resolution_after_low_resolution_recovery(runtime_stats)?;
         self.run_delayed_control_actions(runtime_stats)?;
         // delayed action 可能刚把 decoder reset pending 记入控制层，此处再尝试 flush。
         self.observe_control_replay_if_ready(runtime_stats)?;
@@ -758,6 +766,108 @@ fn desired_target_remb_kbps(runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats
 impl RtcConnectionService {
     fn should_refresh_target_remb(&self, target_kbps: u32) -> bool {
         self.last_target_remb_requested_kbps != Some(target_kbps)
+    }
+
+    pub(super) fn maybe_reassert_runtime_resolution_after_low_resolution_recovery(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let target_width = self
+            .webrtc_runtime_config
+            .negotiation
+            .target_resolution_width
+            .max(1);
+        let target_height = self
+            .webrtc_runtime_config
+            .negotiation
+            .target_resolution_height
+            .max(1);
+        if target_width < LOW_RESOLUTION_REASSERT_MIN_TARGET_WIDTH
+            || target_height < LOW_RESOLUTION_REASSERT_MIN_TARGET_HEIGHT
+        {
+            return Ok(());
+        }
+
+        let Some((rtp_timestamp, observed_width, observed_height)) =
+            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+                let inspection = stats.latest_h264_inspection_observation.as_ref()?;
+                if !inspection.is_idr
+                    || !(inspection.config_changed || inspection.parameter_sets_changed)
+                {
+                    return None;
+                }
+                let observed_width = inspection.sample_width?;
+                let observed_height = inspection.sample_height?;
+                let rtp_timestamp = inspection.frame_rtp_timestamp?;
+                if observed_width >= target_width && observed_height >= target_height {
+                    return None;
+                }
+                Some((rtp_timestamp, observed_width, observed_height))
+            })
+            .flatten()
+        else {
+            return Ok(());
+        };
+
+        if self.last_low_resolution_recovery_config_change_rtp == Some(rtp_timestamp) {
+            return Ok(());
+        }
+        self.last_low_resolution_recovery_config_change_rtp = Some(rtp_timestamp);
+
+        let viewport = StreamViewportDimensions {
+            width: target_width,
+            height: target_height,
+        };
+        let dimensions_outcome = match self.data_channel_id_for_label(MESSAGE_CHANNEL_LABEL) {
+            Some(channel_id) => match self.send_text_on_channel_id(
+                channel_id,
+                build_dimensions_changed_message_payload(viewport),
+                "rtcRuntimeResolutionReasserted",
+                &format!(
+                    "runtime resolution reasserted observed={}x{} target={}x{} rtp={}",
+                    observed_width, observed_height, target_width, target_height, rtp_timestamp
+                ),
+                runtime_stats,
+            ) {
+                Ok(()) => "sent".to_string(),
+                Err(error) => format!("sendFailed({error})"),
+            },
+            None => "messageChannelMissing".to_string(),
+        };
+
+        let target_remb_kbps = desired_target_remb_kbps(runtime_stats)
+            .or(self.active_target_remb_kbps)
+            .unwrap_or_else(|| {
+                self.webrtc_runtime_config
+                    .remb_ceiling_kbps
+                    .max(self.webrtc_runtime_config.negotiation.video_bitrate_kbps)
+            });
+        let remb_outcome = match self.request_target_remb_kbps(target_remb_kbps, runtime_stats) {
+            Ok(()) => "requested".to_string(),
+            Err(error) => format!("requestFailed({error})"),
+        };
+        let keyframe_outcome = match self.request_video_pli_with_outcome(runtime_stats) {
+            Ok(outcome) => format!("{outcome:?}"),
+            Err(error) => format!("requestFailed({error})"),
+        };
+
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.latest_observation_label = Some("rtcRuntimeResolutionReasserted".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "observed={}x{} target={}x{} rtp={} dimensions={} remb={}kbps:{} keyframe={}",
+                observed_width,
+                observed_height,
+                target_width,
+                target_height,
+                rtp_timestamp,
+                dimensions_outcome,
+                target_remb_kbps,
+                remb_outcome,
+                keyframe_outcome
+            ));
+        });
+
+        Ok(())
     }
 }
 

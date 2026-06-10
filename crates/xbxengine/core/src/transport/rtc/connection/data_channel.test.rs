@@ -1,6 +1,7 @@
 use super::data_channel::{
     build_control_video_keyframe_requested_payload, build_input_metadata_packet,
-    build_message_handshake_payload, INPUT_CHANNEL_LABEL, MESSAGE_CHANNEL_LABEL,
+    build_message_handshake_payload, build_post_handshake_message_payloads,
+    StreamViewportDimensions, INPUT_CHANNEL_LABEL, MESSAGE_CHANNEL_LABEL,
 };
 
 #[test]
@@ -39,6 +40,60 @@ fn control_video_keyframe_payload_matches_browser_direct_request() {
     );
     assert_eq!(
         value.get("ifrRequested").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+}
+
+#[test]
+fn post_handshake_dimensions_follow_runtime_target_resolution() {
+    let payloads = build_post_handshake_message_payloads(StreamViewportDimensions {
+        width: 2560,
+        height: 1440,
+    });
+    let dimensions = payloads
+        .iter()
+        .find_map(|payload| {
+            let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+            if value.get("target").and_then(|v| v.as_str())
+                != Some("/streaming/characteristics/dimensionschanged")
+            {
+                return None;
+            }
+            value
+                .get("content")
+                .and_then(|v| v.as_str())
+                .and_then(|content| serde_json::from_str::<serde_json::Value>(content).ok())
+        })
+        .expect("dimensionschanged payload");
+
+    assert_eq!(
+        dimensions.get("horizontal").and_then(|v| v.as_u64()),
+        Some(2560)
+    );
+    assert_eq!(
+        dimensions.get("vertical").and_then(|v| v.as_u64()),
+        Some(1440)
+    );
+    assert_eq!(
+        dimensions.get("preferredWidth").and_then(|v| v.as_u64()),
+        Some(2560)
+    );
+    assert_eq!(
+        dimensions.get("preferredHeight").and_then(|v| v.as_u64()),
+        Some(1440)
+    );
+    assert_eq!(
+        dimensions.get("safeAreaRight").and_then(|v| v.as_u64()),
+        Some(2560)
+    );
+    assert_eq!(
+        dimensions.get("safeAreaBottom").and_then(|v| v.as_u64()),
+        Some(1440)
+    );
+    assert_eq!(
+        dimensions
+            .get("supportsCustomResolution")
+            .and_then(|v| v.as_bool()),
         Some(true)
     );
 }

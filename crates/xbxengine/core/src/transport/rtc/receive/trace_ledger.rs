@@ -747,6 +747,16 @@ impl ReceiverTraceLedger {
         self.has_unresolved_hard_gap()
     }
 
+    pub(crate) fn should_escalate_nack_exhaustion_to_keyframe(&self) -> bool {
+        self.has_unresolved_hard_gap()
+            || self.frame_recovery_ledger.values().any(|entry| {
+                matches!(
+                    entry.frame_recovery_disposition,
+                    FrameRecoveryDisposition::UnrecoverableReferenceChain
+                )
+            })
+    }
+
     #[cfg(test)]
     pub(crate) fn has_unresolved_hard_gap_for_test(&self) -> bool {
         self.has_unresolved_hard_gap()
@@ -1177,6 +1187,22 @@ mod inline_recovery_tests {
             observation.state,
             crate::transport::rtc::recovery::contract::ReferenceChainState::Continuous
         );
+    }
+
+    #[test]
+    fn disposable_transport_gap_nack_exhaustion_is_not_keyframe_escalation_worthy() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[804], 1.0, Some(90_004), "disposable", "unknown");
+
+        assert!(!state.should_escalate_nack_exhaustion_to_keyframe());
+    }
+
+    #[test]
+    fn hard_reference_gap_nack_exhaustion_is_keyframe_escalation_worthy() {
+        let mut state = ReceiverTraceLedger::new();
+        state.mark_gap_nack_candidate(&[805], 1.0, Some(90_005), "supply", "supply");
+
+        assert!(state.should_escalate_nack_exhaustion_to_keyframe());
     }
 
     #[test]

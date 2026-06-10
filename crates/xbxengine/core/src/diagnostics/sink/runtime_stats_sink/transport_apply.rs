@@ -70,6 +70,18 @@ impl RuntimeStatsSink {
         stats.recovery_decoder_reference_synced_at_ms = None;
         stats.latest_video_decode_ok_time_ms = None;
         stats.latest_video_decode_ok_rtp_timestamp = None;
+        stats.latest_video_timeline_observation = None;
+        stats.reference_chain_state = None;
+        stats.reference_chain_state_cause = None;
+        stats.reference_chain_decoder_reference_synced = None;
+        stats.reference_chain_bootstrap_ready = None;
+        stats.reference_chain_has_active_gap = None;
+        stats.reference_chain_nack_exhausted = None;
+        stats.reference_chain_submit_age_ms = None;
+        stats.latest_reference_chain_observation_source = None;
+        stats.latest_reference_chain_sparse_must_idr_mismatch = None;
+        stats.receive_sparse_must_idr_mismatch_total = 0;
+        stats.reference_stats_fallback_total = 0;
     }
 
     pub(crate) fn apply_complete_transport_recovery_episode(

@@ -3065,6 +3065,126 @@ fn request_video_pli_does_not_suppress_sustaining_recovery_when_fresh_non_idr_bl
     );
 }
 
+#[test]
+fn low_resolution_recovery_idr_reasserts_runtime_resolution_once_per_rtp() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.video_remb_bps = Some(32_000_000);
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 88,
+                frame_rtp_timestamp: Some(44_200),
+                nal_types: vec![
+                    "SequenceParameterSet".to_string(),
+                    "PictureParameterSet".to_string(),
+                    "SliceLayerWithoutPartitioningIdr".to_string(),
+                ],
+                nal_count: 3,
+                vcl_nal_count: 1,
+                has_inband_sps: true,
+                has_inband_pps: true,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: true,
+                config_changed: true,
+                is_idr: true,
+                sample_width: Some(1280),
+                sample_height: Some(720),
+                bootstrap_ready: true,
+                admission_accepted: true,
+                observed_at_ms: 210.0,
+                ..Default::default()
+            });
+    });
+
+    service
+        .maybe_reassert_runtime_resolution_after_low_resolution_recovery(&runtime_stats)
+        .unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(
+        service.last_low_resolution_recovery_config_change_rtp,
+        Some(44_200)
+    );
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcRuntimeResolutionReasserted")
+    );
+    assert!(stats
+        .latest_observation_summary
+        .as_deref()
+        .is_some_and(
+            |summary| summary.contains("observed=1280x720 target=1920x1080")
+                && summary.contains("rtp=44200")
+                && summary.contains("dimensions=messageChannelMissing")
+                && summary.contains("remb=32000kbps")
+        ));
+
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.latest_observation_label = Some("sentinel".to_string());
+        stats.latest_observation_summary = Some("unchanged".to_string());
+    });
+    service
+        .maybe_reassert_runtime_resolution_after_low_resolution_recovery(&runtime_stats)
+        .unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(stats.latest_observation_label.as_deref(), Some("sentinel"));
+    assert_eq!(
+        stats.latest_observation_summary.as_deref(),
+        Some("unchanged")
+    );
+}
+
+#[test]
+fn low_resolution_recovery_idr_is_ignored_for_720p_target() {
+    let mut service = RtcConnectionService::default();
+    let mut config = crate::api::runtime::XbxEngineWebRtcRuntimeConfig::default();
+    config.negotiation.target_resolution_width = 1280;
+    config.negotiation.target_resolution_height = 720;
+    service.sync_runtime_config(config);
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 89,
+                frame_rtp_timestamp: Some(44_201),
+                nal_types: vec!["SliceLayerWithoutPartitioningIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: true,
+                has_inband_pps: true,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: true,
+                config_changed: true,
+                is_idr: true,
+                sample_width: Some(1280),
+                sample_height: Some(720),
+                bootstrap_ready: true,
+                admission_accepted: true,
+                observed_at_ms: 220.0,
+                ..Default::default()
+            });
+        stats.latest_observation_label = Some("sentinel".to_string());
+    });
+
+    service
+        .maybe_reassert_runtime_resolution_after_low_resolution_recovery(&runtime_stats)
+        .unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(service.last_low_resolution_recovery_config_change_rtp, None);
+    assert_eq!(stats.latest_observation_label.as_deref(), Some("sentinel"));
+}
+
 // ============================================================================
 // Task 2 Step 1: 主链回归测试 - 锁住显式 outcome / 显式 ledger / replay 真实语义
 // ============================================================================

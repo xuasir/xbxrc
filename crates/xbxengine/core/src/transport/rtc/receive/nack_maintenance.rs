@@ -82,13 +82,20 @@ impl RtcVideoFrameSource {
                 .is_some_and(|(first, last)| {
                     last.wrapping_sub(*first) as u32 >= NACK_SPAN_KEYFRAME_ESCALATION_PACKETS
                 });
-        let keyframe_escalation_due = poll.keyframe_escalation_due;
+        let keyframe_escalation_due = poll.keyframe_escalation_due
+            && self
+                .trace_ledger
+                .should_escalate_nack_exhaustion_to_keyframe();
         if keyframe_escalation_due {
             self.trace_ledger
                 .recovery_ledger_mut()
                 .note_nack_exhausted();
             self.sync_recovery_ledger_to_stats();
         } else if poll.keyframe_escalation_due {
+            self.receive_core_mut()
+                .receive_engine
+                .nack_requester
+                .suppress_keyframe_escalation_for_repairable_gap();
             self.trace_ledger.note_packet_recovery_progress();
             self.sync_recovery_ledger_to_stats();
         }

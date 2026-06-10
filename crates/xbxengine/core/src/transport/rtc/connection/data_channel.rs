@@ -41,6 +41,30 @@ const DEFAULT_VIEWPORT_HEIGHT: u32 = 1080;
 const INPUT_METADATA_SEQ: u32 = 0;
 const INPUT_METADATA_MAX_TOUCHPOINTS: u8 = 64;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct StreamViewportDimensions {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl StreamViewportDimensions {
+    fn sanitized(self) -> Self {
+        Self {
+            width: self.width.max(1),
+            height: self.height.max(1),
+        }
+    }
+}
+
+impl Default for StreamViewportDimensions {
+    fn default() -> Self {
+        Self {
+            width: DEFAULT_VIEWPORT_WIDTH,
+            height: DEFAULT_VIEWPORT_HEIGHT,
+        }
+    }
+}
+
 // phase-1 先只把控制面 channel 拓扑建进 rtc，真正的 ready/handshake 由后续事件循环接管。
 pub(crate) fn bootstrap_default_channels(
     peer_connection: &mut ControlledPeerConnection,
@@ -83,7 +107,10 @@ pub(crate) fn build_message_handshake_payload() -> String {
     .to_string()
 }
 
-pub(crate) fn build_post_handshake_message_payloads() -> Vec<String> {
+pub(crate) fn build_post_handshake_message_payloads(
+    viewport: StreamViewportDimensions,
+) -> Vec<String> {
+    let viewport = viewport.sanitized();
     vec![
         build_message_payload(
             "/streaming/systemUi/configuration",
@@ -114,21 +141,28 @@ pub(crate) fn build_post_handshake_message_payloads() -> Vec<String> {
             "/streaming/characteristics/clientdevicecapabilities",
             serde_json::json!({}),
         ),
-        build_message_payload(
-            "/streaming/characteristics/dimensionschanged",
-            serde_json::json!({
-                "horizontal": DEFAULT_VIEWPORT_WIDTH,
-                "vertical": DEFAULT_VIEWPORT_HEIGHT,
-                "preferredWidth": DEFAULT_VIEWPORT_WIDTH,
-                "preferredHeight": DEFAULT_VIEWPORT_HEIGHT,
-                "safeAreaLeft": 0,
-                "safeAreaTop": 0,
-                "safeAreaRight": DEFAULT_VIEWPORT_WIDTH,
-                "safeAreaBottom": DEFAULT_VIEWPORT_HEIGHT,
-                "supportsCustomResolution": true,
-            }),
-        ),
+        build_dimensions_changed_message_payload(viewport),
     ]
+}
+
+pub(crate) fn build_dimensions_changed_message_payload(
+    viewport: StreamViewportDimensions,
+) -> String {
+    let viewport = viewport.sanitized();
+    build_message_payload(
+        "/streaming/characteristics/dimensionschanged",
+        serde_json::json!({
+            "horizontal": viewport.width,
+            "vertical": viewport.height,
+            "preferredWidth": viewport.width,
+            "preferredHeight": viewport.height,
+            "safeAreaLeft": 0,
+            "safeAreaTop": 0,
+            "safeAreaRight": viewport.width,
+            "safeAreaBottom": viewport.height,
+            "supportsCustomResolution": true,
+        }),
+    )
 }
 
 pub(crate) fn is_handshake_ack_payload(payload: &str) -> bool {
@@ -316,7 +350,17 @@ impl RtcConnectionService {
                 "xbxEngineRtcMessageChannelMissing",
             ));
         };
-        for payload in build_post_handshake_message_payloads() {
+        let viewport = StreamViewportDimensions {
+            width: self
+                .webrtc_runtime_config
+                .negotiation
+                .target_resolution_width,
+            height: self
+                .webrtc_runtime_config
+                .negotiation
+                .target_resolution_height,
+        };
+        for payload in build_post_handshake_message_payloads(viewport) {
             crate::xbx_log_debug!(
                 "[xbxengine][rtc] sending post-handshake payload channel_id={} len={}",
                 channel_id,
