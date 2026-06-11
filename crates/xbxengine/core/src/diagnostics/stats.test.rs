@@ -1765,6 +1765,39 @@ fn transport_details_fields_are_projected_from_runtime_stats() {
 }
 
 #[test]
+fn ice_connectivity_probe_is_projected_from_runtime_stats() {
+    let stats = XbxEngineMediaRuntimeStats {
+        latest_ice_connectivity_probe: Some(crate::XbxEngineIceConnectivityProbeObservation {
+            candidate_pair_count: 4,
+            nominated_pair_count: 0,
+            succeeded_pair_count: 0,
+            in_progress_pair_count: 4,
+            failed_pair_count: 0,
+            max_requests_sent: 35,
+            max_responses_received: 0,
+            responses_received_total: 0,
+            has_selected_or_nominated_pair: false,
+            direct_checks_without_response: true,
+            local_candidate_type_summary: "host=1 srflx=1 prflx=0 relay=0 unknown=0".to_string(),
+            remote_candidate_type_summary: "host=2 srflx=1 prflx=0 relay=0 unknown=0".to_string(),
+            address_family_summary: "ipv4=2 ipv6=1 mixed=1 unknown=0".to_string(),
+            observed_at_ms: 12_345.0,
+        }),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    let probe = dto
+        .latest_ice_connectivity_probe
+        .expect("ice connectivity probe");
+    assert_eq!(probe.candidate_pair_count, 4);
+    assert_eq!(probe.max_requests_sent, 35);
+    assert_eq!(probe.responses_received_total, 0);
+    assert!(probe.direct_checks_without_response);
+    assert_eq!(probe.observed_at_ms, 12_345.0);
+}
+
+#[test]
 fn actual_video_bitrate_uses_transport_metrics_when_local_twcc_is_guarded() {
     let stats = XbxEngineMediaRuntimeStats {
         transport_state: XbxEngineTransportStateDto::Connected,

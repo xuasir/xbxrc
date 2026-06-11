@@ -10,13 +10,11 @@ use crate::transport::rtc::connection::builder::{
     build_peer_connection, configure_offer_primitives,
 };
 use crate::transport::rtc::connection::data_channel::bootstrap_default_channels;
-#[cfg(test)]
-use crate::transport::rtc::connection::runtime_state::RtcIceCandidateKind;
 use crate::transport::rtc::connection::{
     add_remote_candidate_to_peer, build_remote_answer_observation, candidate_identity_key,
     candidate_ip_family, classify_candidate_kind, collect_candidate_ip_families,
     extract_local_candidates_from_offer_sdp, is_end_of_candidates_candidate,
-    is_end_of_candidates_marker, should_skip_remote_candidate_for_family_mismatch,
+    is_end_of_candidates_marker, is_remote_candidate_family_mismatch,
 };
 use crate::transport::rtc::events::{RtcConnectionLifecycleState, RtcTransportEvent};
 use crate::transport::rtc::stats::now_ms_f64;
@@ -191,7 +189,7 @@ impl RtcConnectionService {
 
         let local_ip_families = collect_candidate_ip_families(&state.local_candidates);
         let mut merged_remote_candidates = Vec::new();
-        let mut skipped_incompatible_count = 0u64;
+        let mut observed_family_mismatch_count = 0u64;
         let mut seen_keys = HashSet::new();
         for candidate in pending_remote_candidates
             .iter()
@@ -207,29 +205,15 @@ impl RtcConnectionService {
                 continue;
             }
             if let Some(is_ipv6) = candidate_ip_family(candidate) {
-                let family_mismatch =
-                    !local_ip_families.is_empty() && !local_ip_families.contains(&is_ipv6);
-                if family_mismatch {
-                    if should_skip_remote_candidate_for_family_mismatch(
-                        &local_ip_families,
+                if is_remote_candidate_family_mismatch(&local_ip_families, is_ipv6) {
+                    observed_family_mismatch_count =
+                        observed_family_mismatch_count.saturating_add(1);
+                    crate::xbx_log_info!(
+                        "[xbxengine][rtc-connection] observed remote candidate family mismatch family={} kind={:?} candidate={}",
+                        if is_ipv6 { "ipv6" } else { "ipv4" },
                         kind,
-                        is_ipv6,
-                    ) {
-                        skipped_incompatible_count = skipped_incompatible_count.saturating_add(1);
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc-connection] skip remote candidate due to local family mismatch family={} candidate={}",
-                            if is_ipv6 { "ipv6" } else { "ipv4" },
-                            candidate.candidate
-                        );
-                        continue;
-                    } else {
-                        crate::xbx_log_info!(
-                            "[xbxengine][rtc-connection] observed remote candidate family mismatch but not skipping family={} kind={:?} candidate={}",
-                            if is_ipv6 { "ipv6" } else { "ipv4" },
-                            kind,
-                            candidate.candidate
-                        );
-                    }
+                        candidate.candidate
+                    );
                 }
             }
             state.record_remote_candidate(candidate.clone(), kind, false, false);
@@ -243,10 +227,10 @@ impl RtcConnectionService {
             .record_remote_answer_observation(remote_answer_observation);
         self.controlled_twcc_feedback
             .apply_remote_answer_bootstrap(answer_sdp, runtime_stats);
-        if skipped_incompatible_count > 0 {
-            crate::xbx_log_warn!(
-                "[xbxengine][rtc-connection] skipped incompatible remote candidates count={}",
-                skipped_incompatible_count
+        if observed_family_mismatch_count > 0 {
+            crate::xbx_log_info!(
+                "[xbxengine][rtc-connection] observed remote candidate family mismatch count={}",
+                observed_family_mismatch_count
             );
         }
         for (key, candidate, _kind) in merged_remote_candidates {
@@ -276,7 +260,7 @@ impl RtcConnectionService {
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionStateLockFailed"))?;
         let local_ip_families = collect_candidate_ip_families(&state.local_candidates);
         let mut candidates_to_apply = Vec::new();
-        let mut skipped_incompatible_count = 0u64;
+        let mut observed_family_mismatch_count = 0u64;
         for candidate in remote_candidates {
             if is_end_of_candidates_candidate(candidate) {
                 state.record_remote_end_of_candidates();
@@ -285,29 +269,15 @@ impl RtcConnectionService {
             let kind = classify_candidate_kind(&candidate.candidate);
             let key = candidate_identity_key(candidate);
             if let Some(is_ipv6) = candidate_ip_family(candidate) {
-                let family_mismatch =
-                    !local_ip_families.is_empty() && !local_ip_families.contains(&is_ipv6);
-                if family_mismatch {
-                    if should_skip_remote_candidate_for_family_mismatch(
-                        &local_ip_families,
+                if is_remote_candidate_family_mismatch(&local_ip_families, is_ipv6) {
+                    observed_family_mismatch_count =
+                        observed_family_mismatch_count.saturating_add(1);
+                    crate::xbx_log_info!(
+                        "[xbxengine][rtc-connection] observed remote candidate family mismatch family={} kind={:?} candidate={}",
+                        if is_ipv6 { "ipv6" } else { "ipv4" },
                         kind,
-                        is_ipv6,
-                    ) {
-                        skipped_incompatible_count = skipped_incompatible_count.saturating_add(1);
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc-connection] skip remote candidate due to local family mismatch family={} candidate={}",
-                            if is_ipv6 { "ipv6" } else { "ipv4" },
-                            candidate.candidate
-                        );
-                        continue;
-                    } else {
-                        crate::xbx_log_info!(
-                            "[xbxengine][rtc-connection] observed remote candidate family mismatch but not skipping family={} kind={:?} candidate={}",
-                            if is_ipv6 { "ipv6" } else { "ipv4" },
-                            kind,
-                            candidate.candidate
-                        );
-                    }
+                        candidate.candidate
+                    );
                 }
             }
             state.record_remote_candidate(candidate.clone(), kind, should_cache_only, false);
@@ -333,10 +303,10 @@ impl RtcConnectionService {
             }
             self.pump(runtime_stats)?;
         }
-        if skipped_incompatible_count > 0 {
-            crate::xbx_log_warn!(
-                "[xbxengine][rtc-connection] skipped incompatible remote candidates count={}",
-                skipped_incompatible_count
+        if observed_family_mismatch_count > 0 {
+            crate::xbx_log_info!(
+                "[xbxengine][rtc-connection] observed remote candidate family mismatch count={}",
+                observed_family_mismatch_count
             );
         }
         self.publish_ice_snapshot(runtime_stats, "rtcRemoteCandidateAdded");
@@ -387,29 +357,22 @@ impl RtcConnectionService {
 mod tests {
     use std::collections::HashSet;
 
-    use super::RtcIceCandidateKind;
-    use crate::transport::rtc::connection::should_skip_remote_candidate_for_family_mismatch;
+    use crate::transport::rtc::connection::is_remote_candidate_family_mismatch;
 
     #[test]
-    fn host_candidates_are_skipped_when_families_mismatch() {
-        assert!(should_skip_remote_candidate_for_family_mismatch(
+    fn remote_candidate_family_mismatch_is_observed() {
+        assert!(is_remote_candidate_family_mismatch(
             &HashSet::from([false]),
-            RtcIceCandidateKind::Host,
             true,
         ));
     }
 
     #[test]
-    fn non_host_candidates_are_not_skipped() {
-        assert!(!should_skip_remote_candidate_for_family_mismatch(
+    fn matching_or_unknown_local_family_is_not_mismatch() {
+        assert!(!is_remote_candidate_family_mismatch(
             &HashSet::from([false]),
-            RtcIceCandidateKind::Srflx,
-            true,
+            false,
         ));
-        assert!(!should_skip_remote_candidate_for_family_mismatch(
-            &HashSet::from([false]),
-            RtcIceCandidateKind::Relay,
-            true,
-        ));
+        assert!(!is_remote_candidate_family_mismatch(&HashSet::new(), true));
     }
 }

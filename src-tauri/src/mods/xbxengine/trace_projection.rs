@@ -166,6 +166,7 @@ pub(super) struct RuntimeTraceObservationState {
         Option<String>,
     )>,
     bwe_observation_id: Option<u64>,
+    ice_connectivity_probe_observed_at_ms: Option<u64>,
     twcc_observation_id: Option<u64>,
     rtc_builder_observation_id: Option<u64>,
     twcc_remote_stream_observation_id: Option<u64>,
@@ -552,6 +553,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "escalation": stats.latest_video_escalation_observation,
             "recoveryDecisionLedger": stats.latest_recovery_decision_ledger,
             "bwe": stats.latest_video_bwe_observation,
+            "iceConnectivityProbe": stats.latest_ice_connectivity_probe,
             "twcc": stats.latest_video_twcc_observation,
         },
     })
@@ -1202,6 +1204,34 @@ pub(super) fn record_runtime_trace_observations(
                     "twccDeliveryRatio": bwe.twcc_delivery_ratio,
                     "twccLossRatio": bwe.twcc_loss_ratio,
                     "observedAtMs": bwe.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(probe) = stats.latest_ice_connectivity_probe.as_ref() {
+        let observed_at_ms_key = probe.observed_at_ms.max(0.0).round() as u64;
+        if observation_state.ice_connectivity_probe_observed_at_ms != Some(observed_at_ms_key) {
+            observation_state.ice_connectivity_probe_observed_at_ms = Some(observed_at_ms_key);
+            runtime_trace.record_event(
+                "xbxengine",
+                "iceConnectivityProbe",
+                session_id,
+                json!({
+                    "candidatePairCount": probe.candidate_pair_count,
+                    "nominatedPairCount": probe.nominated_pair_count,
+                    "succeededPairCount": probe.succeeded_pair_count,
+                    "inProgressPairCount": probe.in_progress_pair_count,
+                    "failedPairCount": probe.failed_pair_count,
+                    "maxRequestsSent": probe.max_requests_sent,
+                    "maxResponsesReceived": probe.max_responses_received,
+                    "responsesReceivedTotal": probe.responses_received_total,
+                    "hasSelectedOrNominatedPair": probe.has_selected_or_nominated_pair,
+                    "directChecksWithoutResponse": probe.direct_checks_without_response,
+                    "localCandidateTypeSummary": probe.local_candidate_type_summary,
+                    "remoteCandidateTypeSummary": probe.remote_candidate_type_summary,
+                    "addressFamilySummary": probe.address_family_summary,
+                    "observedAtMs": probe.observed_at_ms,
                 }),
             );
         }

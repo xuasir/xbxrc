@@ -322,11 +322,15 @@ impl RtcIoRuntime {
                         "[xbxengine][rtc-connection] turn relay allocation failed error={}",
                         error
                     );
+                    let summary = format!("url={} error={}", turn_server.url, error);
                     record_turn_relay_observation(
                         runtime_stats,
                         "rtcTurnRelayAllocationFailed",
-                        format!("url={} error={}", turn_server.url, error),
+                        summary.clone(),
                     );
+                    return Err(XbxEngineRuntimeError::new(format!(
+                        "xbxEngineRtcTurnRelayAllocationFailed: {summary}"
+                    )));
                 }
             }
         }

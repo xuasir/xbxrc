@@ -478,6 +478,22 @@ export interface XbxEngineStatsDto {
     twcc_loss_ratio?: number | null
     observed_at_ms: number
   }
+  latest_ice_connectivity_probe?: {
+    candidate_pair_count: number
+    nominated_pair_count: number
+    succeeded_pair_count: number
+    in_progress_pair_count: number
+    failed_pair_count: number
+    max_requests_sent: number
+    max_responses_received: number
+    responses_received_total: number
+    has_selected_or_nominated_pair: boolean
+    direct_checks_without_response: boolean
+    local_candidate_type_summary: string
+    remote_candidate_type_summary: string
+    address_family_summary: string
+    observed_at_ms: number
+  }
   latest_video_twcc_observation?: {
     observation_id: number
     source: string

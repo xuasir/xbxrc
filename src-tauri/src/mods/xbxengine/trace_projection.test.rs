@@ -2001,6 +2001,51 @@ fn bwe_updated_event_uses_top_level_actual_video_bitrate() {
 }
 
 #[test]
+fn ice_connectivity_probe_is_recorded_as_structured_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_ice_connectivity_probe": {
+            "candidate_pair_count": 4,
+            "nominated_pair_count": 0,
+            "succeeded_pair_count": 0,
+            "in_progress_pair_count": 4,
+            "failed_pair_count": 0,
+            "max_requests_sent": 35,
+            "max_responses_received": 0,
+            "responses_received_total": 0,
+            "has_selected_or_nominated_pair": false,
+            "direct_checks_without_response": true,
+            "local_candidate_type_summary": "host=1 srflx=1 prflx=0 relay=0 unknown=0",
+            "remote_candidate_type_summary": "host=2 srflx=1 prflx=0 relay=0 unknown=0",
+            "address_family_summary": "ipv4=2 ipv6=1 mixed=1 unknown=0",
+            "observed_at_ms": 12345.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "iceConnectivityProbe");
+    assert_eq!(payload["candidatePairCount"], 4);
+    assert_eq!(payload["maxRequestsSent"], 35);
+    assert_eq!(payload["responsesReceivedTotal"], 0);
+    assert_eq!(payload["hasSelectedOrNominatedPair"], false);
+    assert_eq!(payload["directChecksWithoutResponse"], true);
+    assert_eq!(payload["observedAtMs"], 12345.0);
+}
+
+#[test]
 fn frame_recovery_observation_projects_ledger_events() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),

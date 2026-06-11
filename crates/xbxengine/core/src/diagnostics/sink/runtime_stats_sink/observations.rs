@@ -53,6 +53,42 @@ impl RuntimeStatsSink {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn record_ice_connectivity_probe(
+        &self,
+        candidate_pair_count: u16,
+        nominated_pair_count: u16,
+        succeeded_pair_count: u16,
+        in_progress_pair_count: u16,
+        failed_pair_count: u16,
+        max_requests_sent: u64,
+        max_responses_received: u64,
+        responses_received_total: u64,
+        has_selected_or_nominated_pair: bool,
+        direct_checks_without_response: bool,
+        local_candidate_type_summary: String,
+        remote_candidate_type_summary: String,
+        address_family_summary: String,
+        observed_at_ms: f64,
+    ) {
+        self.publish(ObservationEvent::IceConnectivityProbe {
+            candidate_pair_count,
+            nominated_pair_count,
+            succeeded_pair_count,
+            in_progress_pair_count,
+            failed_pair_count,
+            max_requests_sent,
+            max_responses_received,
+            responses_received_total,
+            has_selected_or_nominated_pair,
+            direct_checks_without_response,
+            local_candidate_type_summary,
+            remote_candidate_type_summary,
+            address_family_summary,
+            observed_at_ms,
+        });
+    }
+
     pub(crate) fn record_rtc_builder_observation(
         &self,
         observation: XbxEngineRtcBuilderObservation,

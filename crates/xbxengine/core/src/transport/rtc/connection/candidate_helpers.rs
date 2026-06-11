@@ -85,46 +85,31 @@ pub(crate) fn collect_candidate_ip_families(
         .collect::<HashSet<_>>()
 }
 
-pub(crate) fn should_skip_remote_candidate_for_family_mismatch(
+pub(crate) fn is_remote_candidate_family_mismatch(
     local_ip_families: &HashSet<bool>,
-    candidate_kind: RtcIceCandidateKind,
     candidate_is_ipv6: bool,
 ) -> bool {
-    if local_ip_families.is_empty() || local_ip_families.contains(&candidate_is_ipv6) {
-        return false;
-    }
-
-    // 对 host 候选保持 4/6 对应关系，避免把单栈本地候选与异族 host 强行混用。
-    // srflx/relay 仍允许跨族，交给 ICE 做最终连通性裁决。
-    matches!(candidate_kind, RtcIceCandidateKind::Host)
+    !local_ip_families.is_empty() && !local_ip_families.contains(&candidate_is_ipv6)
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use crate::transport::rtc::connection::runtime_state::RtcIceCandidateKind;
-
-    use super::should_skip_remote_candidate_for_family_mismatch;
+    use super::is_remote_candidate_family_mismatch;
 
     #[test]
-    fn skips_only_host_candidates_when_family_mismatches() {
+    fn observes_family_mismatch_without_deciding_candidate_skip() {
         let local_ip_families = HashSet::from([false]);
 
-        assert!(should_skip_remote_candidate_for_family_mismatch(
+        assert!(is_remote_candidate_family_mismatch(
             &local_ip_families,
-            RtcIceCandidateKind::Host,
-            true,
+            true
         ));
-        assert!(!should_skip_remote_candidate_for_family_mismatch(
+        assert!(!is_remote_candidate_family_mismatch(
             &local_ip_families,
-            RtcIceCandidateKind::Srflx,
-            true,
+            false
         ));
-        assert!(!should_skip_remote_candidate_for_family_mismatch(
-            &local_ip_families,
-            RtcIceCandidateKind::Relay,
-            true,
-        ));
+        assert!(!is_remote_candidate_family_mismatch(&HashSet::new(), true));
     }
 }

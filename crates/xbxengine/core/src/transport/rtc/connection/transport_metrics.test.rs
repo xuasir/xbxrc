@@ -9,10 +9,10 @@ use rtc_rtcp::transport_feedbacks::transport_layer_cc::{SymbolTypeTcc, Transport
 use super::{
     build_transport_candidate_pair, build_twcc_observation,
     build_twcc_observation_with_packet_bytes, classify_transport_path,
-    estimate_recent_inbound_bitrate_kbps, is_video_inbound_stream_by_hints,
-    resolve_candidate_address_family, resolve_transport_address_family, resolve_transport_protocol,
-    TransportAddressFamily, TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
-    TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
+    direct_checks_without_response_from_probe, estimate_recent_inbound_bitrate_kbps,
+    is_video_inbound_stream_by_hints, resolve_candidate_address_family,
+    resolve_transport_address_family, resolve_transport_protocol, TransportAddressFamily,
+    TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK, TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
 };
 use crate::XbxEngineMediaRuntimeStats;
 use rtc::peer_connection::transport::RTCIceCandidateType;
@@ -45,6 +45,17 @@ fn direct_path_is_kept_for_non_relay_pairs() {
             Some(RTCIceCandidateType::Srflx),
         ),
         Some("Direct (host->srflx)".to_string())
+    );
+}
+
+#[test]
+fn peer_reflexive_to_server_reflexive_is_reported_as_direct_nat_path() {
+    assert_eq!(
+        classify_transport_path(
+            Some(RTCIceCandidateType::Prflx),
+            Some(RTCIceCandidateType::Srflx),
+        ),
+        Some("Direct (prflx->srflx)".to_string())
     );
 }
 
@@ -119,6 +130,14 @@ fn candidate_address_family_detects_ipv4_ipv6_and_unknown() {
         resolve_candidate_address_family(Some("")),
         TransportAddressFamily::Unknown
     );
+}
+
+#[test]
+fn direct_probe_marks_zero_response_checks_as_exhausted() {
+    assert!(direct_checks_without_response_from_probe(4, 35, 0, false));
+    assert!(!direct_checks_without_response_from_probe(4, 35, 1, false));
+    assert!(!direct_checks_without_response_from_probe(4, 35, 0, true));
+    assert!(!direct_checks_without_response_from_probe(4, 0, 0, false));
 }
 
 #[test]

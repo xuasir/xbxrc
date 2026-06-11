@@ -1,3 +1,4 @@
+import type { StreamStats } from '../../player'
 import type { RuntimeLaunchSpec } from '../types'
 
 interface RecoveryAttemptInput {
@@ -12,6 +13,19 @@ interface FallbackTurnRetryInput {
   launchSpec: RuntimeLaunchSpec | null
   activeConnected: boolean
   fallbackRetryConsumed: boolean
+  directPathExhausted: boolean
+}
+
+type DirectPathExhaustionSnapshot = Pick<
+  StreamStats,
+  | 'transportState'
+  | 'transportCandidatePair'
+  | 'inboundVideoPacketCountTotal'
+  | 'inboundVideoBytesTotal'
+>
+
+interface DirectPathExhaustionInput {
+  snapshot: DirectPathExhaustionSnapshot | null
 }
 
 interface RecoveryArbiterInput {
@@ -35,9 +49,9 @@ export interface RecoveryGateState {
 }
 
 export const DEFAULT_RECOVERY_ARBITER_WINDOW_MS = 6_000
+export const RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS = 8_000
 export const DIRECT_FIRST_FALLBACK_LAUNCH_DELAY_MS = 120
 export const DEFAULT_RUNTIME_LAUNCH_DELAY_MS = 500
-export const CONNECTING_FALLBACK_RETRY_MS = 12_000
 
 export function shouldUseDirectFirstFallback(spec: RuntimeLaunchSpec): boolean {
   return (spec.targetType === 'home' || spec.targetType === 'cloud')
@@ -79,11 +93,27 @@ export function shouldAttemptRecovery(input: RecoveryAttemptInput): boolean {
 }
 
 export function canRetryFallbackTurn(input: FallbackTurnRetryInput): boolean {
-  return input.isTokenActive
+  return input.directPathExhausted
+    && input.isTokenActive
     && input.launchSpec !== null
     && !input.activeConnected
     && !input.fallbackRetryConsumed
     && shouldUseDirectFirstFallback(input.launchSpec)
+}
+
+export function hasDirectPathExhausted(input: DirectPathExhaustionInput): boolean {
+  const snapshot = input.snapshot
+  if (snapshot === null) {
+    return false
+  }
+  const transportState = snapshot.transportState?.toLowerCase()
+  const hasCandidatePair = (snapshot.transportCandidatePair ?? '').trim() !== ''
+  const inboundVideoPackets = snapshot.inboundVideoPacketCountTotal ?? 0
+  const inboundVideoBytes = snapshot.inboundVideoBytesTotal ?? 0
+  return transportState === 'connecting'
+    && !hasCandidatePair
+    && inboundVideoPackets === 0
+    && inboundVideoBytes === 0
 }
 
 export function decideRecoveryArbiter(input: RecoveryArbiterInput): RecoveryArbiterDecision {

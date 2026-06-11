@@ -22,7 +22,7 @@ pub(crate) use candidate_helpers::dto_to_rtc_candidate;
 pub(crate) use candidate_helpers::{
     add_remote_candidate_to_peer, candidate_identity_key, candidate_ip_family,
     classify_candidate_kind, collect_candidate_ip_families, is_end_of_candidates_candidate,
-    should_skip_remote_candidate_for_family_mismatch,
+    is_remote_candidate_family_mismatch,
 };
 #[cfg(test)]
 pub(crate) use data_channel::build_control_decoder_reset_payload;

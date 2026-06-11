@@ -97,6 +97,9 @@ const CLOUD_RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 2_500.0;
 const CLOUD_BUILDER_CONFIGURED_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 4_500.0;
 const CLOUD_MISSING_LOCAL_FEEDBACK_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 3_500.0;
 const RECOVERY_NO_PROGRESS_RECONNECT_FALLBACK_MS: f64 = 4_000.0;
+const ICE_DIRECT_NO_RESPONSE_RECONNECT_MIN_MS: f64 = 12_000.0;
+const ICE_DIRECT_NO_RESPONSE_MIN_REQUESTS: u64 = 8;
+const ICE_DIRECT_NO_RESPONSE_PROBE_FRESH_MS: f64 = 2_500.0;
 const CONNECTING_PRE_FIRST_FRAME_FAILED_TERMINAL_MIN_MS: f64 = 90_000.0;
 const CONNECTED_PRESENT_STALL_RECONNECT_FALLBACK_MS: f64 = 10_000.0;
 const CONNECTED_PRESENT_STALL_MIN_AGE_MS: f64 = 1_500.0;
@@ -1999,6 +2002,10 @@ impl RtcSessionPolicy {
             }
         }
 
+        if self.should_force_direct_ice_no_response_reconnect(snapshot, observed_at_ms) {
+            return true;
+        }
+
         // 首帧前统一走保守阈值，避免“无明显 transport 进展”被 4s 上界过早误杀。
         let fallback_threshold_ms = if snapshot.media.frame_count == 0 {
             self.pre_first_frame_reconnect_fallback_ms()
@@ -2009,6 +2016,47 @@ impl RtcSessionPolicy {
             .recovery_no_progress_since_ms
             .get_or_insert(observed_at_ms);
         observed_at_ms - *stalled_since >= fallback_threshold_ms
+    }
+
+    fn should_force_direct_ice_no_response_reconnect(
+        &self,
+        snapshot: &TransportSnapshot,
+        observed_at_ms: f64,
+    ) -> bool {
+        if snapshot.media.frame_count != 0 {
+            return false;
+        }
+        if !matches!(
+            snapshot.connection.lifecycle_state,
+            ConnectionLifecycleStateFact::Connecting | ConnectionLifecycleStateFact::Recovering
+        ) {
+            return false;
+        }
+        if !snapshot.connection.ice_direct_checks_without_response {
+            return false;
+        }
+        if snapshot.connection.ice_has_selected_or_nominated_pair {
+            return false;
+        }
+        if snapshot.connection.ice_max_requests_sent < ICE_DIRECT_NO_RESPONSE_MIN_REQUESTS {
+            return false;
+        }
+        if snapshot.connection.ice_responses_received_total != 0 {
+            return false;
+        }
+        let probe_fresh = snapshot
+            .connection
+            .ice_probe_observed_at_ms
+            .is_some_and(|at_ms| {
+                (observed_at_ms - at_ms).max(0.0) <= ICE_DIRECT_NO_RESPONSE_PROBE_FRESH_MS
+            });
+        if !probe_fresh {
+            return false;
+        }
+        self.recovery_no_progress_since_ms
+            .is_some_and(|stalled_since| {
+                (observed_at_ms - stalled_since).max(0.0) >= ICE_DIRECT_NO_RESPONSE_RECONNECT_MIN_MS
+            })
     }
 
     fn should_force_connected_render_stall_reconnect(

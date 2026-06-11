@@ -25,6 +25,7 @@ export interface IceCandidatePolicyTrace {
   filteredCount: number
   derivedCount: number
   skippedByFamilyMismatchCount: number
+  familyMismatchObservedCount: number
   endOfCandidatesSeen: boolean
   digest: string
   orderPreview: string[]
@@ -272,6 +273,7 @@ export function applyIceCandidatePolicy(input: {
         filteredCount: 0,
         derivedCount: 0,
         skippedByFamilyMismatchCount: 0,
+        familyMismatchObservedCount: 0,
         endOfCandidatesSeen: parsed.some(item => item.isEndOfCandidates),
         digest: buildDigest(parsed.filter(item => !item.isEndOfCandidates)),
         orderPreview: parsed
@@ -301,37 +303,33 @@ export function applyIceCandidatePolicy(input: {
 
   const withDerivation = [...baseCandidates, ...derived]
 
-  let skippedByFamilyMismatchCount = 0
+  let familyMismatchObservedCount = 0
   const localFamily = input.config.localAddressFamily ?? 'unknown'
-  const gated = withDerivation.filter((item) => {
-    if (input.config.enableFamilyMismatchGate === false) {
-      return true
+  if (input.config.enableFamilyMismatchGate !== false) {
+    for (const item of withDerivation) {
+      if (item.type !== 'host') {
+        continue
+      }
+      if (item.family !== 'ipv4' && item.family !== 'ipv6') {
+        continue
+      }
+      if (
+        (localFamily === 'ipv4' && item.family === 'ipv6')
+        || (localFamily === 'ipv6' && item.family === 'ipv4')
+      ) {
+        familyMismatchObservedCount += 1
+      }
     }
-    if (item.type !== 'host') {
-      return true
-    }
-    if (item.family !== 'ipv4' && item.family !== 'ipv6') {
-      return true
-    }
-    if (localFamily === 'ipv4' && item.family === 'ipv6') {
-      skippedByFamilyMismatchCount += 1
-      return false
-    }
-    if (localFamily === 'ipv6' && item.family === 'ipv4') {
-      skippedByFamilyMismatchCount += 1
-      return false
-    }
-    return true
-  })
+  }
 
-  const filteredTransport = gated.filter((item) => {
+  const filteredTransport = withDerivation.filter((item) => {
     if (item.transport === 'tcp' && !input.config.allowTcpFallback) {
       return false
     }
     return true
   })
 
-  const base = filteredTransport.length > 0 ? filteredTransport : gated
+  const base = filteredTransport.length > 0 ? filteredTransport : withDerivation
   const sorted = [...base].sort((a, b) => compareStable(a, b, {
     ...input.config,
     relayBias: normalizeRelayBias(input.config.relayBias),
@@ -346,7 +344,8 @@ export function applyIceCandidatePolicy(input: {
       outputCount: sorted.length + endOfCandidates.length,
       filteredCount: Math.max(0, input.candidates.length - filteredTransport.length),
       derivedCount: derived.length,
-      skippedByFamilyMismatchCount,
+      skippedByFamilyMismatchCount: 0,
+      familyMismatchObservedCount,
       endOfCandidatesSeen,
       digest: buildDigest(sorted),
       orderPreview: sorted.slice(0, 3).map(item => `${item.type}/${item.transport}/${item.family}`),

@@ -65,6 +65,17 @@ pub enum PeerFact {
         transport_path: Option<String>,
         observed_at_ms: f64,
     },
+    IceConnectivityProbeSampled {
+        candidate_pair_count: u16,
+        nominated_pair_count: u16,
+        succeeded_pair_count: u16,
+        max_requests_sent: u64,
+        max_responses_received: u64,
+        responses_received_total: u64,
+        has_selected_or_nominated_pair: bool,
+        direct_checks_without_response: bool,
+        observed_at_ms: f64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

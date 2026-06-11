@@ -1819,32 +1819,22 @@ fn normalize_remote_ice_candidates_in_place(
     }
     parsed.extend(derived);
 
-    let mut skipped_by_family_mismatch = 0u32;
-    let gated = parsed
-        .into_iter()
-        .filter(|entry| {
-            if !policy.enable_family_mismatch_gate {
-                return true;
+    let mut family_mismatch_observed = 0u32;
+    if policy.enable_family_mismatch_gate {
+        for entry in &parsed {
+            if entry.kind == CandidateKind::Host
+                && matches!(
+                    (local_family, entry.family),
+                    ("ipv4", CandidateFamily::Ipv6) | ("ipv6", CandidateFamily::Ipv4)
+                )
+            {
+                family_mismatch_observed = family_mismatch_observed.saturating_add(1);
             }
-            if entry.kind != CandidateKind::Host {
-                return true;
-            }
-            match (local_family, entry.family) {
-                ("ipv4", CandidateFamily::Ipv6) => {
-                    skipped_by_family_mismatch += 1;
-                    false
-                }
-                ("ipv6", CandidateFamily::Ipv4) => {
-                    skipped_by_family_mismatch += 1;
-                    false
-                }
-                _ => true,
-            }
-        })
-        .collect::<Vec<_>>();
+        }
+    }
 
     let mut filtered_count = 0u32;
-    let filtered_transport = gated
+    let filtered_transport = parsed
         .into_iter()
         .filter(|entry| {
             if entry.transport == CandidateTransport::Tcp && !policy.allow_tcp_fallback {
@@ -1891,7 +1881,7 @@ fn normalize_remote_ice_candidates_in_place(
     snapshot.ice_policy_mode = Some(mode.to_string());
     snapshot.ice_policy_source = Some(policy.source.clone());
     snapshot.ice_policy_filtered_count = Some(filtered_count);
-    snapshot.ice_policy_skipped_by_family_mismatch_count = Some(skipped_by_family_mismatch);
+    snapshot.ice_policy_skipped_by_family_mismatch_count = Some(0);
     snapshot.ice_policy_derived_count = Some(if policy.enable_teredo_derivation {
         // derived candidates are a subset; using filtered_count is hard now, so approximate by diff
         0
@@ -1899,13 +1889,14 @@ fn normalize_remote_ice_candidates_in_place(
         0
     });
     snapshot.ice_policy_digest = Some(format!(
-        "local={local_family}|preferIpv6={}|preferUdp={}|allowTcpFallback={}|relayBias={}|teredo={}|familyGate={}|out={}",
+        "local={local_family}|preferIpv6={}|preferUdp={}|allowTcpFallback={}|relayBias={}|teredo={}|familyGate={}|familyMismatchObserved={}|out={}",
         negotiation.prefer_ipv6,
         policy.prefer_udp,
         policy.allow_tcp_fallback,
         policy.relay_bias,
         policy.enable_teredo_derivation,
         policy.enable_family_mismatch_gate,
+        family_mismatch_observed,
         applied_candidates.len()
     ));
 
@@ -2042,9 +2033,20 @@ fn classify_keyframe_request_deferred_reason(
 mod tests {
     use super::{
         build_local_end_of_candidates_candidate, collect_local_offer_ice_candidates,
-        resolve_ice_exchange_timeout_ms, should_allow_stable_exchange_settle,
-        should_submit_controlled_local_end_of_candidates, ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS,
+        normalize_remote_ice_candidates_in_place, resolve_ice_exchange_timeout_ms,
+        should_allow_stable_exchange_settle, should_submit_controlled_local_end_of_candidates,
+        ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS,
     };
+    use crate::api::runtime::{XbxEngineNegotiationRuntimeConfig, XbxEngineRuntimeSnapshot};
+    use xbxengine_protocol::XbxEngineIceCandidateDto;
+
+    fn ice_candidate(raw: &str) -> XbxEngineIceCandidateDto {
+        XbxEngineIceCandidateDto {
+            candidate: raw.to_string(),
+            sdp_m_line_index: Some(0),
+            sdp_mid: Some("0".to_string()),
+        }
+    }
 
     #[test]
     fn collects_offer_sdp_candidates_from_realistic_sdp() {
@@ -2068,6 +2070,35 @@ mod tests {
         assert_eq!(candidates[0].sdp_m_line_index, Some(0));
         assert_eq!(candidates[2].sdp_mid.as_deref(), Some("1"));
         assert_eq!(candidates[2].sdp_m_line_index, Some(1));
+    }
+
+    #[test]
+    fn remote_ice_policy_keeps_cross_family_host_candidates() {
+        let mut snapshot = XbxEngineRuntimeSnapshot::default();
+        let mut negotiation = XbxEngineNegotiationRuntimeConfig::default();
+        negotiation.prefer_ipv6 = true;
+        negotiation.ice_policy.enable_family_mismatch_gate = true;
+        let ipv6 = ice_candidate("a=candidate:2 1 UDP 1 2603:1040:405:A::AF8:902F 9002 typ host");
+        let ipv4 = ice_candidate("a=candidate:1 1 UDP 100 13.104.104.12 1069 typ host");
+
+        let trace = normalize_remote_ice_candidates_in_place(
+            &mut snapshot,
+            &negotiation,
+            Some("ipv4"),
+            vec![ipv6.clone(), ipv4.clone()],
+        );
+
+        assert_eq!(trace.applied_count, 2);
+        assert_eq!(trace.applied_candidates, vec![ipv6, ipv4]);
+        assert_eq!(
+            snapshot.ice_policy_skipped_by_family_mismatch_count,
+            Some(0)
+        );
+        assert!(snapshot
+            .ice_policy_digest
+            .as_deref()
+            .unwrap_or_default()
+            .contains("familyMismatchObserved=1"));
     }
 
     #[test]

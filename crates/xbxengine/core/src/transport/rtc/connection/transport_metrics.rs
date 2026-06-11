@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt::Write as _};
 use rtc::peer_connection::transport::RTCIceCandidateType;
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
+use rtc::statistics::stats::ice_candidate_pair::RTCStatsIceCandidatePairState;
 use rtc::statistics::StatsSelector;
 use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 
@@ -35,6 +36,23 @@ pub(crate) struct RtcTransportMetricsSnapshot {
     pub(crate) inbound_primary_video_bytes_total: u64,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct IceConnectivityProbeSnapshot {
+    pub(crate) candidate_pair_count: u16,
+    pub(crate) nominated_pair_count: u16,
+    pub(crate) succeeded_pair_count: u16,
+    pub(crate) in_progress_pair_count: u16,
+    pub(crate) failed_pair_count: u16,
+    pub(crate) max_requests_sent: u64,
+    pub(crate) max_responses_received: u64,
+    pub(crate) responses_received_total: u64,
+    pub(crate) has_selected_or_nominated_pair: bool,
+    pub(crate) direct_checks_without_response: bool,
+    pub(crate) local_candidate_type_summary: String,
+    pub(crate) remote_candidate_type_summary: String,
+    pub(crate) address_family_summary: String,
+}
+
 pub(crate) fn collect_transport_metrics(
     peer_connection: &mut ControlledPeerConnection,
     connected_at_ms: Option<f64>,
@@ -50,6 +68,13 @@ pub(crate) fn collect_transport_metrics(
     )
 }
 
+pub(crate) fn collect_ice_connectivity_probe(
+    peer_connection: &mut ControlledPeerConnection,
+) -> Option<IceConnectivityProbeSnapshot> {
+    let report = peer_connection.get_stats(Instant::now(), StatsSelector::None);
+    collect_ice_connectivity_probe_from_report(&report)
+}
+
 pub(crate) fn describe_selected_candidate_pair(
     peer_connection: &mut ControlledPeerConnection,
 ) -> Option<String> {
@@ -61,6 +86,67 @@ pub(crate) fn describe_selected_candidate_pair(
         "state={:?} nominated={} local={} remote={}",
         pair.state, pair.nominated, local, remote,
     ))
+}
+
+fn collect_ice_connectivity_probe_from_report(
+    report: &RTCStatsReport,
+) -> Option<IceConnectivityProbeSnapshot> {
+    let selected_pair_id = report.transport().and_then(|transport| {
+        (!transport.selected_candidate_pair_id.is_empty())
+            .then_some(transport.selected_candidate_pair_id.as_str())
+    });
+    let mut snapshot = IceConnectivityProbeSnapshot::default();
+    let mut local_type_counts = CandidateTypeCounts::default();
+    let mut remote_type_counts = CandidateTypeCounts::default();
+    let mut family_counts = CandidateFamilyCounts::default();
+
+    for pair in report.candidate_pairs() {
+        snapshot.candidate_pair_count = snapshot.candidate_pair_count.saturating_add(1);
+        if pair.nominated {
+            snapshot.nominated_pair_count = snapshot.nominated_pair_count.saturating_add(1);
+        }
+        match pair.state {
+            RTCStatsIceCandidatePairState::Succeeded => {
+                snapshot.succeeded_pair_count = snapshot.succeeded_pair_count.saturating_add(1)
+            }
+            RTCStatsIceCandidatePairState::InProgress => {
+                snapshot.in_progress_pair_count = snapshot.in_progress_pair_count.saturating_add(1)
+            }
+            RTCStatsIceCandidatePairState::Failed => {
+                snapshot.failed_pair_count = snapshot.failed_pair_count.saturating_add(1)
+            }
+            _ => {}
+        }
+        snapshot.max_requests_sent = snapshot.max_requests_sent.max(pair.requests_sent);
+        snapshot.max_responses_received =
+            snapshot.max_responses_received.max(pair.responses_received);
+        snapshot.responses_received_total = snapshot
+            .responses_received_total
+            .saturating_add(pair.responses_received);
+        if selected_pair_id == Some(pair.stats.id.as_str()) || pair.nominated {
+            snapshot.has_selected_or_nominated_pair = true;
+        }
+        local_type_counts.observe(candidate_type_for(report, &pair.local_candidate_id));
+        remote_type_counts.observe(candidate_type_for(report, &pair.remote_candidate_id));
+        family_counts.observe(
+            candidate_address_family_for(report, &pair.local_candidate_id),
+            candidate_address_family_for(report, &pair.remote_candidate_id),
+        );
+    }
+
+    if snapshot.candidate_pair_count == 0 {
+        return None;
+    }
+    snapshot.direct_checks_without_response = direct_checks_without_response_from_probe(
+        snapshot.candidate_pair_count,
+        snapshot.max_requests_sent,
+        snapshot.responses_received_total,
+        snapshot.has_selected_or_nominated_pair,
+    );
+    snapshot.local_candidate_type_summary = local_type_counts.summary();
+    snapshot.remote_candidate_type_summary = remote_type_counts.summary();
+    snapshot.address_family_summary = family_counts.summary();
+    Some(snapshot)
 }
 
 fn collect_transport_metrics_from_report(
@@ -128,6 +214,29 @@ pub(crate) fn publish_transport_metrics_sample(
         snapshot.transport_address_family.clone(),
         snapshot.inbound_video_bitrate_kbps,
         snapshot.inbound_primary_video_bytes_total,
+    );
+}
+
+pub(crate) fn publish_ice_connectivity_probe_sample(
+    runtime_stats: &RuntimeStatsSink,
+    snapshot: &IceConnectivityProbeSnapshot,
+    observed_at_ms: f64,
+) {
+    runtime_stats.record_ice_connectivity_probe(
+        snapshot.candidate_pair_count,
+        snapshot.nominated_pair_count,
+        snapshot.succeeded_pair_count,
+        snapshot.in_progress_pair_count,
+        snapshot.failed_pair_count,
+        snapshot.max_requests_sent,
+        snapshot.max_responses_received,
+        snapshot.responses_received_total,
+        snapshot.has_selected_or_nominated_pair,
+        snapshot.direct_checks_without_response,
+        snapshot.local_candidate_type_summary.clone(),
+        snapshot.remote_candidate_type_summary.clone(),
+        snapshot.address_family_summary.clone(),
+        observed_at_ms,
     );
 }
 
@@ -266,10 +375,6 @@ impl super::RtcConnectionService {
         }
         self.last_transport_metrics_sample_at_ms = now_ms;
 
-        let Some(peer_connection) = self.peer_connection.as_mut() else {
-            return;
-        };
-
         let connected_at_ms =
             matches!(self.lifecycle_state, RtcConnectionLifecycleState::Connected)
                 .then_some(self.lifecycle_state_since_ms);
@@ -278,18 +383,41 @@ impl super::RtcConnectionService {
         let previous_sample_at_ms = (previous_sample_at_ms > 0.0).then_some(previous_sample_at_ms);
         let previous_inbound_video_bytes_total =
             (previous_inbound_video_bytes_total > 0).then_some(previous_inbound_video_bytes_total);
-        let Some(snapshot) = collect_transport_metrics(
-            peer_connection,
-            connected_at_ms,
-            previous_sample_at_ms,
-            previous_inbound_video_bytes_total,
-        ) else {
+        let (probe, snapshot) = {
+            let Some(peer_connection) = self.peer_connection.as_mut() else {
+                return;
+            };
+            (
+                collect_ice_connectivity_probe(peer_connection),
+                collect_transport_metrics(
+                    peer_connection,
+                    connected_at_ms,
+                    previous_sample_at_ms,
+                    previous_inbound_video_bytes_total,
+                ),
+            )
+        };
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+        if let Some(probe) = probe {
+            publish_ice_connectivity_probe_sample(&runtime_stats_sink, &probe, now_ms);
+            self.push_transport_fact(TransportFact::Peer(PeerFact::IceConnectivityProbeSampled {
+                candidate_pair_count: probe.candidate_pair_count,
+                nominated_pair_count: probe.nominated_pair_count,
+                succeeded_pair_count: probe.succeeded_pair_count,
+                max_requests_sent: probe.max_requests_sent,
+                max_responses_received: probe.max_responses_received,
+                responses_received_total: probe.responses_received_total,
+                has_selected_or_nominated_pair: probe.has_selected_or_nominated_pair,
+                direct_checks_without_response: probe.direct_checks_without_response,
+                observed_at_ms: now_ms,
+            }));
+        }
+        let Some(snapshot) = snapshot else {
             return;
         };
+        publish_transport_metrics_sample(&runtime_stats_sink, &snapshot);
         self.last_transport_metrics_sample_inbound_video_bytes_total =
             snapshot.inbound_primary_video_bytes_total;
-        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
-        publish_transport_metrics_sample(&runtime_stats_sink, &snapshot);
         self.push_transport_fact(TransportFact::Peer(PeerFact::TransportMetricsSampled {
             video_rtt_ms: snapshot.video_rtt_ms,
             loss_ratio_1s: snapshot.inbound_video_loss_ratio_1s,
@@ -601,6 +729,72 @@ fn resolve_candidate_address_family(address: Option<&str>) -> TransportAddressFa
     TransportAddressFamily::Unknown
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct CandidateTypeCounts {
+    host: u16,
+    srflx: u16,
+    prflx: u16,
+    relay: u16,
+    unknown: u16,
+}
+
+impl CandidateTypeCounts {
+    fn observe(&mut self, candidate_type: Option<RTCIceCandidateType>) {
+        match candidate_type {
+            Some(RTCIceCandidateType::Host) => self.host = self.host.saturating_add(1),
+            Some(RTCIceCandidateType::Srflx) => self.srflx = self.srflx.saturating_add(1),
+            Some(RTCIceCandidateType::Prflx) => self.prflx = self.prflx.saturating_add(1),
+            Some(RTCIceCandidateType::Relay) => self.relay = self.relay.saturating_add(1),
+            _ => self.unknown = self.unknown.saturating_add(1),
+        }
+    }
+
+    fn summary(&self) -> String {
+        format!(
+            "host={} srflx={} prflx={} relay={} unknown={}",
+            self.host, self.srflx, self.prflx, self.relay, self.unknown
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct CandidateFamilyCounts {
+    ipv4: u16,
+    ipv6: u16,
+    mixed: u16,
+    unknown: u16,
+}
+
+impl CandidateFamilyCounts {
+    fn observe(&mut self, local: TransportAddressFamily, remote: TransportAddressFamily) {
+        match resolve_transport_address_family(local, remote) {
+            "ipv4" => self.ipv4 = self.ipv4.saturating_add(1),
+            "ipv6" => self.ipv6 = self.ipv6.saturating_add(1),
+            "mixed" => self.mixed = self.mixed.saturating_add(1),
+            _ => self.unknown = self.unknown.saturating_add(1),
+        }
+    }
+
+    fn summary(&self) -> String {
+        format!(
+            "ipv4={} ipv6={} mixed={} unknown={}",
+            self.ipv4, self.ipv6, self.mixed, self.unknown
+        )
+    }
+}
+
+fn direct_checks_without_response_from_probe(
+    candidate_pair_count: u16,
+    max_requests_sent: u64,
+    responses_received_total: u64,
+    has_selected_or_nominated_pair: bool,
+) -> bool {
+    candidate_pair_count > 0
+        && max_requests_sent > 0
+        && responses_received_total == 0
+        && !has_selected_or_nominated_pair
+}
+
 fn normalize_candidate_type(candidate_type: RTCIceCandidateType) -> &'static str {
     match candidate_type {
         RTCIceCandidateType::Host => "host",
@@ -714,6 +908,10 @@ fn classify_transport_path(
         (Some(RTCIceCandidateType::Host), Some(RTCIceCandidateType::Srflx))
         | (Some(RTCIceCandidateType::Srflx), Some(RTCIceCandidateType::Host)) => {
             Some("Direct (host->srflx)".to_string())
+        }
+        (Some(RTCIceCandidateType::Prflx), Some(RTCIceCandidateType::Srflx))
+        | (Some(RTCIceCandidateType::Srflx), Some(RTCIceCandidateType::Prflx)) => {
+            Some("Direct (prflx->srflx)".to_string())
         }
         (Some(RTCIceCandidateType::Srflx), Some(RTCIceCandidateType::Srflx)) => {
             Some("Direct (srflx->srflx)".to_string())

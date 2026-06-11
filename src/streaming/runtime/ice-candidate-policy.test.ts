@@ -90,4 +90,24 @@ describe('applyIceCandidatePolicy', () => {
     expect(result.candidates).toHaveLength(2)
     expect(result.trace.outputCount).toBe(2)
   })
+
+  it('keeps cross-family host candidates so direct ICE can exhaust every path', () => {
+    const ipv6 = buildCandidate('candidate:2 1 UDP 1 2603:1040:405:A::AF8:902F 9002 typ host')
+    const ipv4 = buildCandidate('candidate:1 1 UDP 100 13.104.104.12 1069 typ host')
+    const result = applyIceCandidatePolicy({
+      candidates: [ipv6, ipv4],
+      config: {
+        enabled: true,
+        preferIpv6: true,
+        preferUdp: true,
+        allowTcpFallback: true,
+        relayBias: 'neutral',
+        enableFamilyMismatchGate: true,
+        localAddressFamily: 'ipv4',
+      },
+    })
+    expect(result.candidates).toEqual([ipv6, ipv4])
+    expect(result.trace.skippedByFamilyMismatchCount).toBe(0)
+    expect(result.trace.familyMismatchObservedCount).toBe(1)
+  })
 })

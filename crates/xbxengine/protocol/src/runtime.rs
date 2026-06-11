@@ -472,6 +472,24 @@ pub struct XbxEngineVideoBweObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineIceConnectivityProbeDto {
+    pub candidate_pair_count: u16,
+    pub nominated_pair_count: u16,
+    pub succeeded_pair_count: u16,
+    pub in_progress_pair_count: u16,
+    pub failed_pair_count: u16,
+    pub max_requests_sent: u64,
+    pub max_responses_received: u64,
+    pub responses_received_total: u64,
+    pub has_selected_or_nominated_pair: bool,
+    pub direct_checks_without_response: bool,
+    pub local_candidate_type_summary: String,
+    pub remote_candidate_type_summary: String,
+    pub address_family_summary: String,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineRtcBuilderObservationDto {
     pub observation_id: u64,
     pub controlled_twcc_registry: bool,
@@ -1113,6 +1131,8 @@ pub struct XbxEngineStatsDto {
     pub latest_video_receiver_observation: Option<XbxEngineVideoReceiverObservationDto>,
     pub latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedgerDto>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservationDto>,
+    #[serde(default)]
+    pub latest_ice_connectivity_probe: Option<XbxEngineIceConnectivityProbeDto>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservationDto>,
     pub latest_rtc_builder_observation: Option<XbxEngineRtcBuilderObservationDto>,
     pub latest_twcc_remote_stream_observation: Option<XbxEngineTwccRemoteStreamObservationDto>,

@@ -1750,6 +1750,26 @@ pub fn build_xbxengine_stats(
                 }
             })
         }),
+        latest_ice_connectivity_probe: runtime_stats.and_then(|stats| {
+            stats.latest_ice_connectivity_probe.as_ref().map(|probe| {
+                xbxengine_protocol::XbxEngineIceConnectivityProbeDto {
+                    candidate_pair_count: probe.candidate_pair_count,
+                    nominated_pair_count: probe.nominated_pair_count,
+                    succeeded_pair_count: probe.succeeded_pair_count,
+                    in_progress_pair_count: probe.in_progress_pair_count,
+                    failed_pair_count: probe.failed_pair_count,
+                    max_requests_sent: probe.max_requests_sent,
+                    max_responses_received: probe.max_responses_received,
+                    responses_received_total: probe.responses_received_total,
+                    has_selected_or_nominated_pair: probe.has_selected_or_nominated_pair,
+                    direct_checks_without_response: probe.direct_checks_without_response,
+                    local_candidate_type_summary: probe.local_candidate_type_summary.clone(),
+                    remote_candidate_type_summary: probe.remote_candidate_type_summary.clone(),
+                    address_family_summary: probe.address_family_summary.clone(),
+                    observed_at_ms: probe.observed_at_ms,
+                }
+            })
+        }),
         latest_video_twcc_observation: runtime_stats.and_then(|stats| {
             stats.latest_video_twcc_observation.as_ref().map(|twcc| {
                 xbxengine_protocol::XbxEngineVideoTwccObservationDto {

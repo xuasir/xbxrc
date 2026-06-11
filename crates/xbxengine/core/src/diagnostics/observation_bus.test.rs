@@ -46,3 +46,41 @@ fn inbound_packet_loss_estimate_increments_total() {
     let locked = stats.lock().expect("stats lock");
     assert_eq!(locked.inbound_video_packet_loss_estimate_total, 5);
 }
+
+#[test]
+fn ice_connectivity_probe_updates_structured_stats() {
+    let stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let bus = ObservationBus::new(stats.clone());
+
+    bus.publish(ObservationEvent::IceConnectivityProbe {
+        candidate_pair_count: 4,
+        nominated_pair_count: 0,
+        succeeded_pair_count: 0,
+        in_progress_pair_count: 4,
+        failed_pair_count: 0,
+        max_requests_sent: 35,
+        max_responses_received: 0,
+        responses_received_total: 0,
+        has_selected_or_nominated_pair: false,
+        direct_checks_without_response: true,
+        local_candidate_type_summary: "host=1 srflx=1 prflx=0 relay=0 unknown=0".to_string(),
+        remote_candidate_type_summary: "host=2 srflx=1 prflx=0 relay=0 unknown=0".to_string(),
+        address_family_summary: "ipv4=2 ipv6=1 mixed=1 unknown=0".to_string(),
+        observed_at_ms: 12_345.0,
+    });
+
+    let locked = stats.lock().expect("stats lock");
+    let probe = locked
+        .latest_ice_connectivity_probe
+        .as_ref()
+        .expect("ice probe");
+    assert_eq!(probe.candidate_pair_count, 4);
+    assert_eq!(probe.max_requests_sent, 35);
+    assert_eq!(probe.responses_received_total, 0);
+    assert!(probe.direct_checks_without_response);
+    assert_eq!(probe.observed_at_ms, 12_345.0);
+    assert_eq!(
+        locked.latest_observation_label.as_deref(),
+        Some("iceConnectivityProbe")
+    );
+}

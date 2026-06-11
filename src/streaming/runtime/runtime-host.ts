@@ -16,17 +16,18 @@ import { createBrowserRuntime } from './browser-runtime'
 import {
   buildRuntimeAttemptSpec,
   canRetryFallbackTurn,
-  CONNECTING_FALLBACK_RETRY_MS,
   decideRecoveryArbiter,
   DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
-
+  hasDirectPathExhausted,
   resolveLaunchDelayMs,
+  RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS,
   shouldAttemptRecovery,
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'
 import { createXbxEngineRuntime } from './xbxengine-runtime'
 
 type BrowserInterval = number
+type BrowserTimeout = number
 
 function debugLog(..._args: Array<unknown>): void {}
 
@@ -53,6 +54,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const runtime = shallowRef<RuntimePort | null>(null)
   const runtimeStarted = ref(false)
   const performanceTimer = ref<BrowserInterval | null>(null)
+  let directExhaustionProbeTimer: BrowserTimeout | null = null
   const audioVolume = ref(1)
   const microphoneState = ref<StreamMicrophoneSnapshot>(createIdleMicrophoneState('browser'))
   const experienceMetricsEnabled = ref(false)
@@ -70,7 +72,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   let activeConnected = false
   let fallbackRetryConsumed = false
   let recoveryGate: RecoveryGateState = {}
-  let connectingFallbackRetryTimer: BrowserInterval | null = null
 
   async function recordRuntimeTraceEvent(
     event: string,
@@ -96,10 +97,10 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
   }
 
-  function clearConnectingFallbackRetryTimer(): void {
-    if (connectingFallbackRetryTimer !== null) {
-      clearTimeout(connectingFallbackRetryTimer)
-      connectingFallbackRetryTimer = null
+  function clearDirectExhaustionProbe(): void {
+    if (directExhaustionProbeTimer !== null) {
+      clearTimeout(directExhaustionProbeTimer)
+      directExhaustionProbeTimer = null
     }
   }
 
@@ -136,17 +137,14 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       if (event.type === 'connectionStateChanged') {
         if (event.state === 'connected') {
           activeConnected = true
-          clearConnectingFallbackRetryTimer()
+          clearDirectExhaustionProbe()
           refreshStatsPolling()
         }
-        if (event.state === 'connecting') {
-          scheduleConnectingFallbackRetry(token)
-        }
         if (event.state === 'closed' || event.state === 'failed') {
-          clearConnectingFallbackRetryTimer()
+          clearDirectExhaustionProbe()
           clearPerformancePolling()
           lastFrameAt.value = null
-          void tryFallbackTurnRetry(token).then((retriedWithFallbackTurn) => {
+          void tryFallbackTurnRetry(token, { directPathExhausted: true }).then((retriedWithFallbackTurn) => {
             if (retriedWithFallbackTurn) {
               return
             }
@@ -321,13 +319,17 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
   }
 
-  async function tryFallbackTurnRetry(token: number): Promise<boolean> {
+  async function tryFallbackTurnRetry(
+    token: number,
+    input: { directPathExhausted: boolean },
+  ): Promise<boolean> {
     const launchSpec = activeLaunchSpec
     if (!canRetryFallbackTurn({
       isTokenActive: isRuntimeTokenActive(token),
       launchSpec,
       activeConnected,
       fallbackRetryConsumed,
+      directPathExhausted: input.directPathExhausted,
     })) {
       return false
     }
@@ -336,7 +338,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
 
     // 仅在首轮直连失败时切一次 fallback TURN，避免和既有 recovery 重试叠加。
-    clearConnectingFallbackRetryTimer()
+    clearDirectExhaustionProbe()
     fallbackRetryConsumed = true
     debugLog('[streaming][runtime-host] direct-first failed before connected, retrying with fallback TURN')
     void recordRuntimeTraceEvent('fallbackTurnRetry', {
@@ -344,6 +346,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       mode: launchSpec.runtime.mode,
       activeConnected,
       fallbackRetryConsumed,
+      directPathExhausted: input.directPathExhausted,
     })
     try {
       await launchRuntimeAttempt(launchSpec, { useFallbackTurn: true })
@@ -370,47 +373,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
   }
 
-  function scheduleConnectingFallbackRetry(token: number): void {
-    if (!canRetryFallbackTurn({
-      isTokenActive: isRuntimeTokenActive(token),
-      launchSpec: activeLaunchSpec,
-      activeConnected,
-      fallbackRetryConsumed,
-    })) {
-      clearConnectingFallbackRetryTimer()
-      return
-    }
-    if (connectingFallbackRetryTimer !== null) {
-      return
-    }
-    void recordRuntimeTraceEvent('connectingFallbackTurnRetryScheduled', {
-      delayMs: CONNECTING_FALLBACK_RETRY_MS,
-      targetType: activeLaunchSpec?.targetType ?? null,
-      mode: activeLaunchSpec?.runtime.mode ?? null,
-    })
-    connectingFallbackRetryTimer = window.setTimeout(() => {
-      connectingFallbackRetryTimer = null
-      if (!isRuntimeTokenActive(token) || activeConnected) {
-        return
-      }
-      void recordRuntimeTraceEvent('connectingFallbackTurnRetryFired', {
-        delayMs: CONNECTING_FALLBACK_RETRY_MS,
-        targetType: activeLaunchSpec?.targetType ?? null,
-        mode: activeLaunchSpec?.runtime.mode ?? null,
-      })
-      void tryFallbackTurnRetry(token).catch((error) => {
-        void recordRuntimeTraceEvent('connectingFallbackTurnRetryFailed', {
-          error: error instanceof Error
-            ? {
-                name: error.name,
-                message: error.message,
-              }
-            : String(error),
-        })
-      })
-    }, CONNECTING_FALLBACK_RETRY_MS)
-  }
-
   function ensureRuntime(mode: RuntimeLaunchSpec['runtime']['mode']): RuntimePort {
     if (runtime.value !== null && activeMode === mode) {
       return runtime.value
@@ -426,7 +388,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     reason?: string
   }): Promise<void> {
     runtimeToken += 1
-    clearConnectingFallbackRetryTimer()
+    clearDirectExhaustionProbe()
     clearPerformancePolling()
     runtimeCleanup?.()
     runtimeCleanup = null
@@ -522,6 +484,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       useFallbackTurn: attempt.useFallbackTurn,
     }, input.sessionId)
     await nextRuntime.launch(launchSpec)
+    scheduleRustDirectFirstExhaustionProbe(token, input, launchSpec)
     nextRuntime.applyDisplayState({
       displayOptions: displayOptions.value,
       render: input.render,
@@ -541,6 +504,73 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         }
       })
     }
+  }
+
+  function scheduleRustDirectFirstExhaustionProbe(
+    token: number,
+    input: RuntimeLaunchSpec,
+    launchSpec: RuntimeLaunchSpec,
+  ): void {
+    clearDirectExhaustionProbe()
+    if (
+      input.runtime.mode !== 'rust-owned'
+      || launchSpec.runtime.turnServer !== null
+      || !shouldUseDirectFirstFallback(input)
+    ) {
+      return
+    }
+    directExhaustionProbeTimer = window.setTimeout(() => {
+      directExhaustionProbeTimer = null
+      void probeRustDirectFirstExhaustion(token)
+    }, RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS)
+    void recordRuntimeTraceEvent('directFirstExhaustionProbeScheduled', {
+      source: 'runtime-host',
+      delayMs: RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS,
+      mode: input.runtime.mode,
+      targetType: input.targetType,
+    }, input.sessionId)
+  }
+
+  async function probeRustDirectFirstExhaustion(token: number): Promise<void> {
+    const currentRuntime = runtime.value
+    const sessionId = activeSessionId
+    if (
+      currentRuntime === null
+      || sessionId === null
+      || activeConnected
+      || !isRuntimeTokenActive(token)
+    ) {
+      return
+    }
+    let snapshot: StreamStats | null = null
+    try {
+      snapshot = await currentRuntime.snapshotStats()
+    }
+    catch (error) {
+      void recordRuntimeTraceEvent('directFirstExhaustionProbe', {
+        source: 'runtime-host',
+        result: 'snapshotFailed',
+        error: error instanceof Error ? error.message : String(error),
+      }, sessionId)
+      return
+    }
+    if (!isRuntimeTokenActive(token) || activeConnected) {
+      return
+    }
+    const directPathExhausted = hasDirectPathExhausted({ snapshot })
+    void recordRuntimeTraceEvent('directFirstExhaustionProbe', {
+      source: 'runtime-host',
+      result: directPathExhausted ? 'exhausted' : 'stillPending',
+      transportState: snapshot.transportState ?? null,
+      transportCandidatePair: snapshot.transportCandidatePair ?? null,
+      inboundVideoPacketCountTotal: snapshot.inboundVideoPacketCountTotal ?? null,
+      inboundVideoBytesTotal: snapshot.inboundVideoBytesTotal ?? null,
+      icePolicyDigest: snapshot.icePolicyDigest ?? null,
+    }, sessionId)
+    if (!directPathExhausted) {
+      return
+    }
+    await tryFallbackTurnRetry(token, { directPathExhausted: true })
   }
 
   async function startRuntime(input: RuntimeLaunchSpec): Promise<void> {
@@ -584,7 +614,10 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
             }
           : error,
       })
-      const retriedWithFallbackTurn = await tryFallbackTurnRetry(runtimeToken).catch(() => false)
+      const retriedWithFallbackTurn = await tryFallbackTurnRetry(
+        runtimeToken,
+        { directPathExhausted: false },
+      ).catch(() => false)
       if (retriedWithFallbackTurn) {
         return
       }

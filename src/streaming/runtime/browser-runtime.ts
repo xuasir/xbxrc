@@ -2872,6 +2872,7 @@ export function createBrowserRuntime(options: {
         filteredCount: policyResult.trace.filteredCount,
         derivedCount: policyResult.trace.derivedCount,
         skippedByFamilyMismatchCount: policyResult.trace.skippedByFamilyMismatchCount,
+        familyMismatchObservedCount: policyResult.trace.familyMismatchObservedCount,
         endOfCandidatesSeen: policyResult.trace.endOfCandidatesSeen,
         digest: policyResult.trace.digest,
         orderPreview: policyResult.trace.orderPreview,

@@ -454,6 +454,24 @@ pub struct XbxEngineVideoBweObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineIceConnectivityProbeObservation {
+    pub candidate_pair_count: u16,
+    pub nominated_pair_count: u16,
+    pub succeeded_pair_count: u16,
+    pub in_progress_pair_count: u16,
+    pub failed_pair_count: u16,
+    pub max_requests_sent: u64,
+    pub max_responses_received: u64,
+    pub responses_received_total: u64,
+    pub has_selected_or_nominated_pair: bool,
+    pub direct_checks_without_response: bool,
+    pub local_candidate_type_summary: String,
+    pub remote_candidate_type_summary: String,
+    pub address_family_summary: String,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineRtcBuilderObservation {
     pub observation_id: u64,
     pub controlled_twcc_registry: bool,

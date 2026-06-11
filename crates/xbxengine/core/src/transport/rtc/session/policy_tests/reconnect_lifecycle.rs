@@ -220,6 +220,125 @@ fn pre_first_frame_connecting_remote_answer_progress_resets_liveness_timeout() {
 }
 
 #[test]
+fn direct_ice_zero_response_probe_accelerates_pre_first_frame_reconnect() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home);
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+    let mut connection = ConnectionProjection {
+        lifecycle_state: ConnectionLifecycleStateFact::Connecting,
+        ice_candidate_pair_count: 4,
+        ice_max_requests_sent: 35,
+        ice_responses_received_total: 0,
+        ice_has_selected_or_nominated_pair: false,
+        ice_direct_checks_without_response: true,
+        ice_probe_observed_at_ms: Some(100.0),
+        ..ConnectionProjection::default()
+    };
+    let media = MediaProjection::default();
+    let recovery = RecoveryProjection::default();
+
+    let first = TransportSnapshot::new(
+        1,
+        100.0,
+        connection.clone(),
+        media.clone(),
+        recovery.clone(),
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(transport_commands(policy.on_snapshot(&first)).is_empty());
+
+    connection.ice_probe_observed_at_ms = Some(11_900.0);
+    let second = TransportSnapshot::new(
+        2,
+        11_900.0,
+        connection.clone(),
+        media.clone(),
+        recovery.clone(),
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(
+        transport_commands(policy.on_snapshot(&second))
+            .iter()
+            .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })),
+        "official zero-response evidence is still held before the 12s direct ICE window"
+    );
+
+    connection.ice_probe_observed_at_ms = Some(12_200.0);
+    let third = TransportSnapshot::new(
+        3,
+        12_200.0,
+        connection,
+        media,
+        recovery,
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(
+        transport_commands(policy.on_snapshot(&third))
+            .iter()
+            .any(|command| matches!(command, TransportCommand::RequestReconnectCandidate { .. })),
+        "official zero-response candidate-pair evidence should accelerate reconnect"
+    );
+}
+
+#[test]
+fn direct_ice_probe_with_responses_keeps_waiting_for_first_frame() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home);
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+    let connection = ConnectionProjection {
+        lifecycle_state: ConnectionLifecycleStateFact::Connecting,
+        ice_candidate_pair_count: 1,
+        ice_nominated_pair_count: 1,
+        ice_succeeded_pair_count: 1,
+        ice_max_requests_sent: 133,
+        ice_max_responses_received: 133,
+        ice_responses_received_total: 133,
+        ice_has_selected_or_nominated_pair: true,
+        ice_direct_checks_without_response: false,
+        ice_probe_observed_at_ms: Some(12_200.0),
+        ..ConnectionProjection::default()
+    };
+    let media = MediaProjection::default();
+    let recovery = RecoveryProjection::default();
+
+    let first = TransportSnapshot::new(
+        1,
+        100.0,
+        connection.clone(),
+        media.clone(),
+        recovery.clone(),
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(transport_commands(policy.on_snapshot(&first)).is_empty());
+
+    let second = TransportSnapshot::new(
+        2,
+        12_200.0,
+        connection,
+        media,
+        recovery,
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(
+        transport_commands(policy.on_snapshot(&second))
+            .iter()
+            .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })),
+        "candidate-pair responses and nomination are valid connectivity progress"
+    );
+}
+
+#[test]
 fn disconnected_surface_emits_lifecycle_reconnect_without_waiting_no_progress_timeout() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
