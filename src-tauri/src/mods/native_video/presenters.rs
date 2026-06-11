@@ -13,8 +13,6 @@ use xbxengine::{
     XbxEngineRenderPixelData,
 };
 
-#[cfg(target_os = "windows")]
-use super::scheduling::ScheduledFrameTakeOutcome;
 use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics};
 use super::{
     clear_host_present_tick_dispatch, now_ms_f64, record_native_video_timing_event_lazy,
@@ -28,9 +26,11 @@ use super::{
     MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState,
 };
 #[cfg(target_os = "windows")]
+use super::{process_wgpu_render_take_outcome, take_wgpu_scheduled_frame};
+#[cfg(target_os = "windows")]
 use super::{HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS};
 
-fn apply_host_mailbox_viewport_diagnostics(
+pub(super) fn apply_host_mailbox_viewport_diagnostics(
     viewport: &mut NativeVideoViewportState,
     telemetry: &HostCadenceTelemetry,
     slot_diag: Option<&ScheduledFrameSlotDiagnostics>,
@@ -752,62 +752,28 @@ fn run_windows_wgpu_render_tick(
     let view_generation_changed = state.view_generation != view_generation_before_tick;
 
     let now_ms = now_ms_f64();
-    let (take_outcome, take_slot_diag, take_telemetry_diag) = {
-        let Ok(mut telemetry) = telemetry.lock() else {
-            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
-                run_windows_wgpu_render_tick(
-                    window,
-                    viewport_id,
-                    renderer_state,
-                    frame_slot,
-                    telemetry,
-                    render_loop_pending,
-                    render_loop_rerun_requested,
-                    dispatch_requested_at_ms,
-                    runtime_trace.clone(),
-                );
-            });
-            return;
-        };
-        telemetry.record_display_tick(now_ms);
-        let Ok(mut frame_slot) = frame_slot.lock() else {
-            finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
-                run_windows_wgpu_render_tick(
-                    window,
-                    viewport_id,
-                    renderer_state,
-                    frame_slot,
-                    telemetry,
-                    render_loop_pending,
-                    render_loop_rerun_requested,
-                    dispatch_requested_at_ms,
-                    runtime_trace.clone(),
-                );
-            });
-            return;
-        };
-        if view_generation_changed {
-            frame_slot.begin_view_epoch();
-        }
-        let outcome = frame_slot.take_ready_frame(now_ms, &mut telemetry);
-        let slot_diag = frame_slot.diagnostics_snapshot();
-        let telemetry_diag = telemetry.diagnostics_snapshot();
-        (outcome, slot_diag, telemetry_diag)
+    let Some(take_result) =
+        take_wgpu_scheduled_frame(&frame_slot, &telemetry, view_generation_changed, now_ms)
+    else {
+        finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
+            run_windows_wgpu_render_tick(
+                window,
+                viewport_id,
+                renderer_state,
+                frame_slot,
+                telemetry,
+                render_loop_pending,
+                render_loop_rerun_requested,
+                dispatch_requested_at_ms,
+                runtime_trace.clone(),
+            );
+        });
+        return;
     };
-    record_host_mailbox_take_decision(
-        runtime_trace.as_ref(),
-        "wgpu-windows",
-        viewport_id,
-        window.label(),
-        &take_outcome,
-        &take_slot_diag,
-        &take_telemetry_diag,
-    );
     if size_changed {
         state.last_surface_size = Some((surface_width, surface_height));
     }
-    let cached_frame_for_repaint = state.latest_frame.clone();
-    let has_cached_frame = cached_frame_for_repaint.is_some();
+    let has_cached_frame = state.latest_frame.is_some();
     let Some(renderer) = state.renderer.as_mut() else {
         finish_host_present_tick_guard_and_maybe_rerun(&mut tick_dispatch_guard, || {
             run_windows_wgpu_render_tick(
@@ -827,49 +793,28 @@ fn run_windows_wgpu_render_tick(
     if size_changed {
         renderer.update_surface_size(surface_width, surface_height);
     }
-    match take_outcome {
-        ScheduledFrameTakeOutcome::Ready(frame) => {
-            renderer.update_frame(frame.clone());
-            if let Err(error) = renderer.render() {
-                log::warn!(
-                    "[native_video][windows][wgpu] render failed for viewport={} window={} error={}",
-                    viewport_id,
-                    window.label(),
-                    error
-                );
-            } else {
-                let descriptor_upload = renderer.descriptor_upload_telemetry();
-                state.latest_frame = Some(frame);
-                state.descriptor_upload_mode = descriptor_upload.last_mode;
-                state.descriptor_metal_import_count_total =
-                    descriptor_upload.metal_import_count_total;
-                state.descriptor_cpu_upload_count_total = descriptor_upload.cpu_upload_count_total;
-                if let Ok(mut telemetry) = telemetry.lock() {
-                    telemetry.record_present(now_ms);
-                }
-            }
-        }
-        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
-            if let Some(frame) = cached_frame_for_repaint {
-                renderer.update_frame(frame);
-                if let Err(error) = renderer.render() {
-                    log::warn!(
-                        "[native_video][windows][wgpu] retained frame render failed for viewport={} window={} error={}",
-                        viewport_id,
-                        window.label(),
-                        error
-                    );
-                } else if let Ok(mut telemetry) = telemetry.lock() {
-                    telemetry.record_present_refresh(now_ms);
-                }
-            }
-        }
-        ScheduledFrameTakeOutcome::NoPendingFrame => {
-            if !has_cached_frame && size_changed {
-                let _ = renderer.render();
-            }
-        }
-        ScheduledFrameTakeOutcome::DroppedStale { .. } => {}
+    let render_take_result = process_wgpu_render_take_outcome(
+        renderer,
+        take_result.outcome,
+        has_cached_frame,
+        size_changed,
+        &telemetry,
+        runtime_trace.as_ref(),
+        "wgpu-windows",
+        "windows][wgpu",
+        viewport_id,
+        window.label(),
+        &take_result.slot_diag,
+        &take_result.telemetry_diag,
+        now_ms,
+    );
+    if let Some(frame) = render_take_result.presented_frame {
+        state.latest_frame = Some(frame);
+    }
+    if let Some(descriptor_upload) = render_take_result.descriptor_upload {
+        state.descriptor_upload_mode = descriptor_upload.last_mode;
+        state.descriptor_metal_import_count_total = descriptor_upload.metal_import_count_total;
+        state.descriptor_cpu_upload_count_total = descriptor_upload.cpu_upload_count_total;
     }
     let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
     if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {

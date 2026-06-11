@@ -8,7 +8,7 @@ pub fn resolve_video_pipeline_plan(
     requested_surface_id: Option<&str>,
     capabilities: VideoPlatformCapabilities,
 ) -> VideoPipelinePlan {
-    match capabilities.platform {
+    normalize_video_pipeline_plan(match capabilities.platform {
         // macOS：CVPixelBuffer 走 CALayer；CPU/软件解码面走 wgpu，避免 layer 拒收。
         VideoPlatformKind::MacOs if capabilities.supports_native_direct => {
             if surface.native_kind == VideoNativeSurfaceKind::MacOsCvPixelBuffer {
@@ -25,12 +25,19 @@ pub fn resolve_video_pipeline_plan(
                 }
             }
         }
-        // Windows 现阶段先把 GPU direct 定成默认方向；
-        // presenter/effect 能力位先收进 policy，后续补真实实现时不再改合同。
+        // Windows D3D11VA 解码纹理由 D3D11 native presenter 直出；
+        // CPU surface 继续保留 WGPU/effect 路径。
         VideoPlatformKind::Windows
-            if capabilities.supports_gpu_direct
-                && (surface.native_kind == VideoNativeSurfaceKind::WindowsD3d11Texture
-                    || !surface.is_native_handle()) =>
+            if capabilities.supports_native_direct
+                && surface.native_kind == VideoNativeSurfaceKind::WindowsD3d11Texture =>
+        {
+            VideoPipelinePlan {
+                presenter_mode: VideoPresenterMode::NativeDirect,
+                effect_pipeline: VideoEffectPipelineKind::Noop,
+            }
+        }
+        VideoPlatformKind::Windows
+            if capabilities.supports_gpu_direct && !surface.is_native_handle() =>
         {
             resolve_windows_gpu_plan(surface, requested_surface_id, capabilities)
         }
@@ -45,14 +52,14 @@ pub fn resolve_video_pipeline_plan(
             presenter_mode: VideoPresenterMode::GpuDirect,
             effect_pipeline: VideoEffectPipelineKind::Noop,
         },
-    }
+    })
 }
 
 pub fn resolve_initial_video_pipeline_plan(
     requested_surface_id: Option<&str>,
     capabilities: VideoPlatformCapabilities,
 ) -> VideoPipelinePlan {
-    match capabilities.platform {
+    normalize_video_pipeline_plan(match capabilities.platform {
         VideoPlatformKind::MacOs if capabilities.supports_native_direct => VideoPipelinePlan {
             presenter_mode: VideoPresenterMode::NativeDirect,
             effect_pipeline: VideoEffectPipelineKind::Noop,
@@ -71,7 +78,7 @@ pub fn resolve_initial_video_pipeline_plan(
             presenter_mode: VideoPresenterMode::GpuDirect,
             effect_pipeline: VideoEffectPipelineKind::Noop,
         },
-    }
+    })
 }
 
 fn resolve_gpu_plan(
@@ -98,16 +105,28 @@ fn resolve_windows_gpu_plan(
     requested_surface_id: Option<&str>,
     capabilities: VideoPlatformCapabilities,
 ) -> VideoPipelinePlan {
-    // Windows D3D11 纹理已经由 presenter 直接导入并渲染，
-    // 这里不能再错误地挂到仅支持 CPU surface 的 wgpu effect pipeline，
-    // 否则 present_frame 会在 can_process(native_handle)=false 处被提前短路。
+    // Windows D3D11 纹理必须停留在 native direct 主线。
     if surface.native_kind == VideoNativeSurfaceKind::WindowsD3d11Texture {
         return VideoPipelinePlan {
-            presenter_mode: VideoPresenterMode::GpuDirect,
+            presenter_mode: VideoPresenterMode::NativeDirect,
             effect_pipeline: VideoEffectPipelineKind::Noop,
         };
     }
     resolve_gpu_plan(requested_surface_id, capabilities)
+}
+
+fn normalize_video_pipeline_plan(plan: VideoPipelinePlan) -> VideoPipelinePlan {
+    if plan
+        .effect_pipeline
+        .required_presenter_mode()
+        .is_some_and(|required_mode| required_mode != plan.presenter_mode)
+    {
+        return VideoPipelinePlan {
+            presenter_mode: plan.presenter_mode,
+            effect_pipeline: VideoEffectPipelineKind::Noop,
+        };
+    }
+    plan
 }
 
 #[cfg(test)]
@@ -120,7 +139,7 @@ mod tests {
     fn windows_caps() -> VideoPlatformCapabilities {
         VideoPlatformCapabilities {
             platform: VideoPlatformKind::Windows,
-            supports_native_direct: false,
+            supports_native_direct: true,
             supports_gpu_direct: true,
             supports_wgpu_effects: true,
         }
@@ -206,14 +225,25 @@ mod tests {
     }
 
     #[test]
-    fn windows_d3d11_surface_skips_wgpu_effect_pipeline() {
+    fn windows_d3d11_surface_uses_native_direct_zero_copy() {
         let plan = resolve_video_pipeline_plan(
             &windows_d3d11_surface(),
             Some("wgpu:stream-page-video"),
             windows_caps(),
         );
 
-        assert_eq!(plan.presenter_mode, VideoPresenterMode::GpuDirect);
+        assert_eq!(plan.presenter_mode, VideoPresenterMode::NativeDirect);
+        assert_eq!(plan.effect_pipeline, VideoEffectPipelineKind::Noop);
+    }
+
+    #[test]
+    fn non_noop_effect_requires_matching_presenter_mode() {
+        let plan = normalize_video_pipeline_plan(VideoPipelinePlan {
+            presenter_mode: VideoPresenterMode::NativeDirect,
+            effect_pipeline: VideoEffectPipelineKind::Wgpu,
+        });
+
+        assert_eq!(plan.presenter_mode, VideoPresenterMode::NativeDirect);
         assert_eq!(plan.effect_pipeline, VideoEffectPipelineKind::Noop);
     }
 }

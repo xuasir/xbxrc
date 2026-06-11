@@ -546,7 +546,7 @@ pub enum ScheduledFrameSubmitOutcome {
 #[derive(Debug)]
 pub enum ScheduledFrameTakeOutcome {
     Ready(XbxEngineRenderFrame),
-    RetainedDisplayedFrame,
+    RetainedDisplayedFrame(XbxEngineRenderFrame),
     NoPendingFrame,
     DroppedStale {
         frame: XbxEngineRenderFrame,
@@ -559,7 +559,7 @@ impl ScheduledFrameTakeOutcome {
     pub fn mailbox_take_decision(&self) -> &'static str {
         match self {
             Self::Ready(_) => "ready",
-            Self::RetainedDisplayedFrame => "retainedDisplayed",
+            Self::RetainedDisplayedFrame(_) => "retainedDisplayed",
             Self::NoPendingFrame => "noPending",
             Self::DroppedStale { .. } => "droppedStale",
         }
@@ -567,6 +567,7 @@ impl ScheduledFrameTakeOutcome {
 }
 
 impl ScheduledFrameSlot {
+    #[cfg(test)]
     pub fn displayed_frame(&self) -> Option<XbxEngineRenderFrame> {
         self.displayed_frame.clone()
     }
@@ -853,6 +854,11 @@ impl ScheduledFrameSlot {
             return ScheduledFrameTakeOutcome::Ready(frame);
         }
         if self.displayed_frame.is_some() {
+            let displayed_frame = self
+                .displayed_frame
+                .as_ref()
+                .expect("displayed frame should exist when retaining display")
+                .clone();
             telemetry.record_display_hold();
             // pending 已在上面的 take 分支消费；此处仅持帧，不刷新 present 时钟以免压过下一帧 submit。
             if self.pending_frame.is_none() {
@@ -868,7 +874,7 @@ impl ScheduledFrameSlot {
                 0.0,
                 telemetry,
             );
-            return ScheduledFrameTakeOutcome::RetainedDisplayedFrame;
+            return ScheduledFrameTakeOutcome::RetainedDisplayedFrame(displayed_frame);
         }
         telemetry.record_no_pending_take();
         self.log_host_flow(

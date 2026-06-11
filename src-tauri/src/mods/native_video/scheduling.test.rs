@@ -78,7 +78,7 @@ fn take_ready_frame_presents_latest_pending_frame() {
         other => panic!("expected latest pending frame to present, got {other:?}"),
     }
     match slot.take_ready_frame(1_040.0, &mut telemetry) {
-        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame(frame) => assert_eq!(frame.frame_seq, 21),
         other => panic!("expected displayed frame retention after pending drain, got {other:?}"),
     }
 }
@@ -227,7 +227,9 @@ fn retained_displayed_frame_does_not_enter_starved_or_no_pending_streak() {
 
     for offset in [0.0, 50.0, 100.0, 150.0] {
         match slot.take_ready_frame(1_030.0 + offset, &mut telemetry) {
-            ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+            ScheduledFrameTakeOutcome::RetainedDisplayedFrame(frame) => {
+                assert_eq!(frame.frame_seq, 30)
+            }
             other => panic!("expected retained displayed frame, got {other:?}"),
         }
     }
@@ -343,7 +345,7 @@ fn take_discards_duplicate_pending_without_presenting_it() {
     };
     slot.set_pending_for_test(stale_duplicate, 1_032.0);
     match slot.take_ready_frame(1_040.0, &mut telemetry) {
-        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame(frame) => assert_eq!(frame.frame_seq, 80),
         other => panic!("expected duplicate pending discard with displayed hold, got {other:?}"),
     }
     assert!(
@@ -432,8 +434,37 @@ fn begin_view_epoch_replays_displayed_frame_once() {
         other => panic!("expected displayed frame replay, got {other:?}"),
     }
     match slot.take_ready_frame(1_040.0, &mut telemetry) {
-        ScheduledFrameTakeOutcome::RetainedDisplayedFrame
-        | ScheduledFrameTakeOutcome::NoPendingFrame => {}
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame(frame) => assert_eq!(frame.frame_seq, 40),
+        ScheduledFrameTakeOutcome::NoPendingFrame => {}
         other => panic!("expected replay to finish after one take, got {other:?}"),
+    }
+}
+
+#[test]
+fn retained_displayed_outcome_carries_current_displayed_frame() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let frame = XbxEngineRenderFrame {
+        rtp_timestamp: Some(1234),
+        frame_recovery_disposition: Some("steady".to_string()),
+        ..mk_frame(123, 1_000.0)
+    };
+    let _ = slot.submit_frame(&frame, 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 123),
+        other => panic!("expected initial present, got {other:?}"),
+    }
+
+    match slot.take_ready_frame(1_040.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame(retained) => {
+            assert_eq!(retained.frame_seq, 123);
+            assert_eq!(retained.rtp_timestamp, Some(1234));
+            assert_eq!(
+                retained.frame_recovery_disposition.as_deref(),
+                Some("steady")
+            );
+        }
+        other => panic!("expected retained displayed frame, got {other:?}"),
     }
 }

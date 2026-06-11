@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::{Arc, Mutex as StdMutex, TryLockError};
 use std::time::{Duration, Instant};
 
 use ohmygamepad_protocol::OhMyGamepadRumbleRequestDto;
@@ -36,6 +36,15 @@ use crate::AppState;
 
 const XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT: Duration = Duration::from_secs(20);
 static XBXENGINE_HOST_EXCHANGE_OFFER_REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
+const XBXENGINE_RUNTIME_LOCK_TRACE_INTERVAL: Duration = Duration::from_millis(1_000);
+
+struct PendingControlGuard<'a>(&'a AtomicU64);
+
+impl Drop for PendingControlGuard<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 /// 推式 host present：`renderer` 线程调用；`route` 由 engine runtime 快照同步。
 struct NativeVideoHostRenderFramePush {
@@ -127,6 +136,9 @@ pub struct XbxEngineRuntimeState {
     last_trace_observation_at: StdMutex<Option<Instant>>,
     last_trace_observation: StdMutex<RuntimeTraceObservationState>,
     active_session_id: StdMutex<Option<String>>,
+    pending_control_count: AtomicU64,
+    last_runtime_lock_wait_trace_at: StdMutex<Option<Instant>>,
+    last_tick_lock_busy_trace_at: StdMutex<Option<Instant>>,
     cancellation_epoch: Arc<AtomicU64>,
     rumble_worker: GamepadRumbleWorkerHandle,
 }
@@ -188,6 +200,9 @@ impl XbxEngineRuntimeState {
             last_trace_observation_at: StdMutex::new(None),
             last_trace_observation: StdMutex::new(RuntimeTraceObservationState::default()),
             active_session_id: StdMutex::new(None),
+            pending_control_count: AtomicU64::new(0),
+            last_runtime_lock_wait_trace_at: StdMutex::new(None),
+            last_tick_lock_busy_trace_at: StdMutex::new(None),
             cancellation_epoch,
             rumble_worker,
         }
@@ -196,6 +211,69 @@ impl XbxEngineRuntimeState {
     pub fn set_stats_snapshot_interval(&self, interval: Duration) {
         self.stats_snapshot_interval_ms
             .store(interval.as_millis() as u64, Ordering::Relaxed);
+    }
+
+    fn enter_pending_control(&self) -> PendingControlGuard<'_> {
+        self.pending_control_count.fetch_add(1, Ordering::SeqCst);
+        PendingControlGuard(&self.pending_control_count)
+    }
+
+    fn should_record_lock_trace(last_trace_at: &StdMutex<Option<Instant>>) -> bool {
+        let Ok(mut last_trace_at) = last_trace_at.lock() else {
+            return true;
+        };
+        let now = Instant::now();
+        let due = last_trace_at
+            .map(|last| now.duration_since(last) >= XBXENGINE_RUNTIME_LOCK_TRACE_INTERVAL)
+            .unwrap_or(true);
+        if due {
+            *last_trace_at = Some(now);
+        }
+        due
+    }
+
+    fn record_control_waiting_for_runtime_lock(
+        &self,
+        command: &XbxEngineControlCommandDto,
+        wait_ms: u128,
+    ) {
+        if !Self::should_record_lock_trace(&self.last_runtime_lock_wait_trace_at) {
+            return;
+        }
+        self.runtime_trace.record_event(
+            "xbxengine-host",
+            "runtimeControlWaitingForRuntimeLock",
+            extract_command_session_id(command).as_deref(),
+            serde_json::json!({
+                "command": control_command_name(command),
+                "sessionId": extract_command_session_id(command),
+                "viewportId": extract_command_viewport_id(command),
+                "targetType": extract_command_target_type(command),
+                "waitMs": wait_ms,
+                "pendingControlCount": self.pending_control_count.load(Ordering::SeqCst),
+            }),
+        );
+    }
+
+    fn record_tick_skipped_for_runtime_lock(&self, stage: &'static str, reason: &'static str) {
+        if !Self::should_record_lock_trace(&self.last_tick_lock_busy_trace_at) {
+            return;
+        }
+        let session_id = self
+            .active_session_id
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone());
+        self.runtime_trace.record_event(
+            "xbxengine-host",
+            "runtimeTickSkippedRuntimeLockBusy",
+            session_id.as_deref(),
+            serde_json::json!({
+                "stage": stage,
+                "reason": reason,
+                "pendingControlCount": self.pending_control_count.load(Ordering::SeqCst),
+            }),
+        );
     }
 
     fn sync_host_present_route_from_runtime(&self, runtime: &TauriXbxEngineRuntime) {
@@ -210,6 +288,7 @@ impl XbxEngineRuntimeState {
         &self,
         command: XbxEngineControlCommandDto,
     ) -> Result<(), XbxEngineRuntimeError> {
+        let _pending_control = self.enter_pending_control();
         let command_value = serde_json::to_value(&command).unwrap_or(serde_json::Value::Null);
         let session_id = extract_command_session_id(&command);
         record_control_apply_trace(&self.runtime_trace, &command, "entered", None, None);
@@ -242,11 +321,29 @@ impl XbxEngineRuntimeState {
                 _ => {}
             }
         }
-        let mut runtime = self
-            .runtime
-            .lock()
-            .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
-        record_control_apply_trace(&self.runtime_trace, &command, "lockAcquired", None, None);
+        let lock_started_at = Instant::now();
+        let mut runtime = match self.runtime.try_lock() {
+            Ok(runtime) => runtime,
+            Err(TryLockError::WouldBlock) => {
+                self.record_control_waiting_for_runtime_lock(
+                    &command,
+                    lock_started_at.elapsed().as_millis(),
+                );
+                self.runtime
+                    .lock()
+                    .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"));
+            }
+        };
+        record_control_apply_trace(
+            &self.runtime_trace,
+            &command,
+            "lockAcquired",
+            Some(lock_started_at.elapsed().as_millis()),
+            None,
+        );
         let started_at = Instant::now();
         let command_for_trace = command.clone();
         let result = runtime.apply_control(command);
@@ -262,13 +359,30 @@ impl XbxEngineRuntimeState {
     }
 
     pub fn tick(&self) -> Result<(), XbxEngineRuntimeError> {
-        let viewport_id = self.current_viewport_id()?;
+        if self.pending_control_count.load(Ordering::SeqCst) > 0 {
+            self.record_tick_skipped_for_runtime_lock("beforeViewport", "controlPending");
+            return Ok(());
+        }
+        let viewport_id = match self.try_current_viewport_id_for_tick()? {
+            Some(viewport_id) => viewport_id,
+            None => return Ok(()),
+        };
         let native_video_feedback = self.collect_native_video_host_feedback(viewport_id.as_deref());
         let stats_snapshot = {
-            let mut runtime = self
-                .runtime
-                .lock()
-                .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
+            if self.pending_control_count.load(Ordering::SeqCst) > 0 {
+                self.record_tick_skipped_for_runtime_lock("beforeLock", "controlPending");
+                return Ok(());
+            }
+            let mut runtime = match self.runtime.try_lock() {
+                Ok(runtime) => runtime,
+                Err(TryLockError::WouldBlock) => {
+                    self.record_tick_skipped_for_runtime_lock("tryLock", "runtimeBusy");
+                    return Ok(());
+                }
+                Err(TryLockError::Poisoned(_)) => {
+                    return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"));
+                }
+            };
             self.sync_host_present_route_from_runtime(&runtime);
             self.apply_native_video_host_feedback(&mut runtime, native_video_feedback);
             runtime.tick();
@@ -400,6 +514,27 @@ impl XbxEngineRuntimeState {
             .viewport
             .as_ref()
             .map(|viewport| viewport.viewport_id.clone()))
+    }
+
+    fn try_current_viewport_id_for_tick(
+        &self,
+    ) -> Result<Option<Option<String>>, XbxEngineRuntimeError> {
+        match self.runtime.try_lock() {
+            Ok(runtime) => Ok(Some(
+                runtime
+                    .snapshot()
+                    .viewport
+                    .as_ref()
+                    .map(|viewport| viewport.viewport_id.clone()),
+            )),
+            Err(TryLockError::WouldBlock) => {
+                self.record_tick_skipped_for_runtime_lock("viewportLock", "runtimeBusy");
+                Ok(None)
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                Err(XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))
+            }
+        }
     }
 
     fn collect_native_video_host_feedback(
@@ -1099,6 +1234,23 @@ fn extract_command_target_type(command: &XbxEngineControlCommandDto) -> Option<&
             })
         }
         _ => None,
+    }
+}
+
+fn control_command_name(command: &XbxEngineControlCommandDto) -> &'static str {
+    match command {
+        XbxEngineControlCommandDto::StartRuntime { .. } => "StartRuntime",
+        XbxEngineControlCommandDto::StopRuntime { .. } => "StopRuntime",
+        XbxEngineControlCommandDto::RequestReconnect { .. } => "RequestReconnect",
+        XbxEngineControlCommandDto::AttachViewport { .. } => "AttachViewport",
+        XbxEngineControlCommandDto::DetachViewport => "DetachViewport",
+        XbxEngineControlCommandDto::ApplyDisplayState { .. } => "ApplyDisplayState",
+        XbxEngineControlCommandDto::SetAudioVolume { .. } => "SetAudioVolume",
+        XbxEngineControlCommandDto::StartMicrophone => "StartMicrophone",
+        XbxEngineControlCommandDto::StopMicrophone => "StopMicrophone",
+        XbxEngineControlCommandDto::PressControllerButton { .. } => "PressControllerButton",
+        XbxEngineControlCommandDto::SetKeyboardPointerEnabled { .. } => "SetKeyboardPointerEnabled",
+        XbxEngineControlCommandDto::PushKeyboardPointerInput { .. } => "PushKeyboardPointerInput",
     }
 }
 

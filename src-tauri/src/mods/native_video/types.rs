@@ -194,7 +194,7 @@ impl VideoPlatformCapabilities {
             },
             VideoPlatformKind::Windows => Self {
                 platform: VideoPlatformKind::Windows,
-                supports_native_direct: false,
+                supports_native_direct: true,
                 supports_gpu_direct: true,
                 supports_wgpu_effects: true,
             },
@@ -218,6 +218,22 @@ pub enum VideoPresenterMode {
 pub enum VideoEffectPipelineKind {
     Noop,
     Wgpu,
+}
+
+impl VideoEffectPipelineKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Noop => "noop",
+            Self::Wgpu => "wgpu",
+        }
+    }
+
+    pub fn required_presenter_mode(self) -> Option<VideoPresenterMode> {
+        match self {
+            Self::Noop => None,
+            Self::Wgpu => Some(VideoPresenterMode::GpuDirect),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

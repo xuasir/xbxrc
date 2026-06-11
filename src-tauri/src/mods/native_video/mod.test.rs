@@ -1,13 +1,37 @@
+use super::types::{VideoPlatformCapabilities, VideoPlatformKind};
 use super::{
     clear_host_present_tick_dispatch, finish_host_present_tick_dispatch,
     request_host_present_tick_dispatch, reset_viewport_present_runtime_state,
     resolve_display_layer_layout, resolve_host_timing_record_policy,
     should_emit_sampled_host_timing, should_reattach_viewport, should_update_scale,
-    HostPresentTickGuard, HostTimingRecordPolicy, MacOsDisplayLayerGravity, MacOsWgpuTelemetry,
-    NativeVideoDisplayState, NativeVideoRegistry, NativeVideoViewportState,
+    take_wgpu_scheduled_frame, HostPresentTickGuard, HostTimingRecordPolicy,
+    MacOsDisplayLayerGravity, MacOsWgpuTelemetry, NativeVideoDisplayState, NativeVideoRegistry,
+    NativeVideoViewportState,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
+
+use super::scheduling::{ScheduledFrameSlot, ScheduledFrameTakeOutcome};
+
+fn rgba_frame(frame_seq: u64, width: u32, height: u32) -> XbxEngineRenderFrame {
+    XbxEngineRenderFrame {
+        width,
+        height,
+        frame_seq,
+        rendered_at_ms: 1_000.0,
+        rtp_timestamp: Some(frame_seq as u32),
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: frame_seq == 1,
+        frame_recovery_disposition: None,
+        frame_unrecoverable_reason: None,
+        presentation_value_role: None,
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::from(vec![0_u8; 4].into_boxed_slice()),
+        },
+    }
+}
 
 #[test]
 fn scale_update_ignores_tiny_jitter() {
@@ -52,6 +76,88 @@ fn registry_persists_display_state_for_future_presenter_attach() {
         .snapshot("stream-page-video")
         .expect("viewport should exist");
     assert_eq!(viewport.video_format.as_deref(), Some("Zoom"));
+}
+
+#[test]
+fn registry_records_wgpu_effect_passthrough_diagnostics() {
+    let mut registry = NativeVideoRegistry::default();
+    registry.platform_capabilities = VideoPlatformCapabilities {
+        platform: VideoPlatformKind::Windows,
+        supports_native_direct: false,
+        supports_gpu_direct: true,
+        supports_wgpu_effects: true,
+    };
+
+    assert!(registry.present_frame(
+        "stream-page-video",
+        Some("wgpu:stream-page-video"),
+        &rgba_frame(7, 1280, 720),
+    ));
+
+    let viewport = registry
+        .snapshot("stream-page-video")
+        .expect("viewport should exist");
+    assert_eq!(viewport.effect_pipeline_kind.as_deref(), Some("wgpu"));
+    assert!(!viewport.effect_active);
+    assert_eq!(
+        viewport.effect_fallback_reason.as_deref(),
+        Some("passthroughPendingEffectRenderer")
+    );
+    assert_eq!(viewport.latest_effect_input_width, Some(1280));
+    assert_eq!(viewport.latest_effect_input_height, Some(720));
+    assert_eq!(viewport.latest_effect_output_width, Some(1280));
+    assert_eq!(viewport.latest_effect_output_height, Some(720));
+    assert!(viewport.latest_effect_render_cost_ms.is_some());
+}
+
+#[test]
+fn wgpu_scheduled_frame_take_records_display_tick_and_ready_diagnostics() {
+    let frame_slot = Arc::new(Mutex::new(ScheduledFrameSlot::default()));
+    let telemetry = Arc::new(Mutex::new(MacOsWgpuTelemetry::default()));
+    {
+        let mut slot = frame_slot.lock().expect("slot lock should succeed");
+        let mut telemetry_state = telemetry.lock().expect("telemetry lock should succeed");
+        let _ = slot.submit_frame(&rgba_frame(11, 1280, 720), 1_010.0, &mut telemetry_state);
+    }
+
+    let take = take_wgpu_scheduled_frame(&frame_slot, &telemetry, false, 1_020.0)
+        .expect("take should succeed");
+
+    match take.outcome {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 11),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+    assert_eq!(take.telemetry_diag.display_tick_epoch, 1);
+    assert_eq!(take.slot_diag.displayed_frame_seq, Some(11));
+    assert_eq!(
+        take.slot_diag.displayed_view_epoch,
+        take.slot_diag.view_epoch
+    );
+    assert_eq!(take.slot_diag.pending_queue_depth, 0);
+}
+
+#[test]
+fn wgpu_scheduled_frame_take_replays_displayed_frame_for_view_epoch_change() {
+    let frame_slot = Arc::new(Mutex::new(ScheduledFrameSlot::default()));
+    let telemetry = Arc::new(Mutex::new(MacOsWgpuTelemetry::default()));
+    {
+        let mut slot = frame_slot.lock().expect("slot lock should succeed");
+        let mut telemetry_state = telemetry.lock().expect("telemetry lock should succeed");
+        let _ = slot.submit_frame(&rgba_frame(12, 1280, 720), 1_010.0, &mut telemetry_state);
+        let _ = slot.take_ready_frame(1_020.0, &mut telemetry_state);
+    }
+
+    let take = take_wgpu_scheduled_frame(&frame_slot, &telemetry, true, 1_040.0)
+        .expect("take should succeed");
+
+    match take.outcome {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 12),
+        other => panic!("expected displayed replay after view epoch change, got {other:?}"),
+    }
+    assert_eq!(take.telemetry_diag.display_tick_epoch, 1);
+    assert_eq!(take.slot_diag.view_epoch, 1);
+    assert_eq!(take.slot_diag.displayed_view_epoch, 1);
+    assert_eq!(take.slot_diag.displayed_frame_seq, Some(12));
 }
 
 #[test]
@@ -185,6 +291,14 @@ fn reset_viewport_present_runtime_state_clears_display_runtime_metrics() {
         host_cadence_phase: Some("steady".to_string()),
         host_display_interval_ms: Some(16.6),
         host_frame_age_budget_ms: Some(32.0),
+        effect_pipeline_kind: Some("wgpu".to_string()),
+        effect_active: true,
+        effect_fallback_reason: Some("test".to_string()),
+        latest_effect_render_cost_ms: Some(2.0),
+        latest_effect_input_width: Some(1280),
+        latest_effect_input_height: Some(720),
+        latest_effect_output_width: Some(1920),
+        latest_effect_output_height: Some(1080),
         ..Default::default()
     };
 
@@ -198,6 +312,11 @@ fn reset_viewport_present_runtime_state_clears_display_runtime_metrics() {
     assert_eq!(viewport.host_display_tick_epoch, 0);
     assert_eq!(viewport.host_frame_present_epoch, 0);
     assert_eq!(viewport.host_cadence_phase, None);
+    assert_eq!(viewport.effect_pipeline_kind, None);
+    assert!(!viewport.effect_active);
+    assert_eq!(viewport.effect_fallback_reason, None);
+    assert_eq!(viewport.latest_effect_render_cost_ms, None);
+    assert_eq!(viewport.latest_effect_output_width, None);
 }
 
 #[test]
