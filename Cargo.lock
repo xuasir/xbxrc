@@ -4015,6 +4015,7 @@ dependencies = [
  "ohmygamepad-protocol",
  "sdl3",
  "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
