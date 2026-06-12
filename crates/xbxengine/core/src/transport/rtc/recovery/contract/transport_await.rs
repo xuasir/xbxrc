@@ -229,6 +229,53 @@ pub(crate) fn current_clean_anchor_bridge_observed_at_ms(
 }
 
 const TRANSPORT_AWAIT_HARD_BOOTSTRAP_FRESH_MS: f64 = 1_500.0;
+pub(crate) const REMOTE_TERMINAL_LATCH_MIN_UNRESOLVED_KEYFRAMES: u32 = 5;
+
+pub(crate) fn is_remote_picture_recovery_terminal_reason(reason: Option<&str>) -> bool {
+    matches!(
+        reason,
+        Some("remote-no-response" | "remote-continuation-only" | "remote-idr-unusable")
+    )
+}
+
+pub(crate) fn remote_picture_recovery_terminal_latched_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> bool {
+    if is_remote_picture_recovery_terminal_reason(
+        stats
+            .latest_receive_picture_recovery_terminal_reason
+            .as_deref(),
+    ) {
+        return true;
+    }
+    stats.receive_picture_recovery_terminal_total > 0
+        && stats.receive_display_state.as_deref() != Some("display-stable")
+        && stats.receive_keyframe_sent_count_unresolved
+            >= REMOTE_TERMINAL_LATCH_MIN_UNRESOLVED_KEYFRAMES
+        && matches!(
+            stats.receive_keyframe_response_state.as_deref(),
+            Some("no-packet" | "non-idr-only" | "idr-unusable")
+        )
+        && stats.reference_chain_state.as_deref() == Some("need-keyframe")
+}
+
+pub(crate) fn remote_picture_recovery_terminal_active_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> bool {
+    if stats.receive_display_state.as_deref() == Some("display-stable") {
+        return false;
+    }
+    let remote_terminal = remote_picture_recovery_terminal_latched_from_stats(stats);
+    if !remote_terminal || stats.receive_keyframe_required != Some(true) {
+        return false;
+    }
+    if !super::display::has_current_clean_anchor_from_stats(stats) {
+        return true;
+    }
+    stats.receive_keyframe_response_state.as_deref() == Some("no-packet")
+        || stats.reference_chain_state.as_deref() == Some("need-keyframe")
+        || stats.receive_keyframe_sent_count_unresolved > 0
+}
 
 /// transport-await 硬证据：仅 receiver/inspection/display 事实，不读 keyframe episode terminal。
 pub(crate) fn transport_await_has_hard_bootstrap_evidence_from_stats(

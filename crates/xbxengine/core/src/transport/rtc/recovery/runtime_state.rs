@@ -4,6 +4,10 @@ use std::time::{Duration, Instant};
 
 use xbxengine_protocol::{XbxEngineRemoteProfileKindDto, XbxEngineTransportStateDto};
 
+use crate::media::video::present_cadence::{
+    PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS, PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS,
+    PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP,
+};
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::policy::{RecoveryScenarioProfile, ScenarioPolicyResolver};
@@ -20,9 +24,6 @@ use crate::XbxEngineMediaRuntimeStats;
 const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
 const HARD_STALL_RECONNECT_MS: f64 = 3_000.0;
 const AUDIO_ONLY_RECOVERY_LABEL_WINDOW_MS: f64 = HARD_STALL_RECONNECT_MS;
-const PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS: f64 = 18.0;
-const PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS: f64 = 14.0;
-const PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP: f64 = 8.0;
 const PRESENT_PIPELINE_DECODE_FRESH_WINDOW_MS: f64 = 300.0;
 const PRESENT_PIPELINE_PRESENT_LAG_WINDOW_MS: f64 = 180.0;
 
@@ -913,7 +914,7 @@ fn resolve_runtime_recovery_profile_at(
 #[cfg(test)]
 mod tests {
     use super::{
-        current_owner_mode_from_stats, recovery_stage_label,
+        current_owner_mode_from_stats, decode_present_pipeline_stressed, recovery_stage_label,
         resolve_effective_diagnosis_label_from_stats, unix_now_ms, RecoveryOwnerMode,
     };
     use crate::transport::rtc::recovery::startup::SessionPhase;
@@ -1012,6 +1013,22 @@ mod tests {
             "displaySupplyDegraded"
         );
         assert_eq!(recovery_stage_label(&stats), "display-constrained");
+    }
+
+    #[test]
+    fn decode_present_pipeline_stress_matches_cloud_decode_present_gap() {
+        let now_ms = unix_now_ms();
+        let mut stats = XbxEngineMediaRuntimeStats {
+            latest_video_host_present_time_ms: Some(now_ms - 40.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 24.0),
+            video_decode_fps: 30.0,
+            video_present_fps: 18.0,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(decode_present_pipeline_stressed(&stats, now_ms));
+        stats.video_present_fps = 24.0;
+        assert!(!decode_present_pipeline_stressed(&stats, now_ms));
     }
 
     #[test]

@@ -237,6 +237,8 @@ pub struct XbxEngineRuntimeSnapshot {
     pub last_recovery_action_at_ms: Option<f64>,
     pub last_recovery_reason: Option<String>,
     pub reconnect_trigger_source: Option<String>,
+    pub latest_runtime_observation_label: Option<String>,
+    pub latest_runtime_observation_summary: Option<String>,
     /// 连续 `take_latest_render_frame` 得到 `None` 的 tick 数（仅 Running 态递增）。
     pub host_present_take_empty_streak: u32,
     /// 最近一次成功从 render mailbox 取到帧并提交给 host 的时间（ms）。

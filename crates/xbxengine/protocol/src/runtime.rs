@@ -984,6 +984,10 @@ pub struct XbxEngineStatsDto {
     pub inspection_pulse_active: Option<bool>,
     pub video_decode_input_drop_count_total: Option<u64>,
     pub video_decode_output_drop_count_total: Option<u64>,
+    #[serde(default)]
+    pub video_decode_output_mailbox_depth: Option<u32>,
+    #[serde(default)]
+    pub video_decode_output_present_pipeline_stressed: Option<bool>,
     pub video_pacer_submit_count_total: Option<u64>,
     pub video_pacer_drop_count_total: Option<u64>,
     pub video_renderer_submit_count_total: Option<u64>,

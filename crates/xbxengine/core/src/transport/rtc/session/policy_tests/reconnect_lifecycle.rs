@@ -418,6 +418,108 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
 }
 
 #[test]
+fn pre_first_frame_remote_terminal_waits_for_receive_recovery() {
+    let mut harness =
+        RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
+    let commands = harness.apply(
+        2_000.0,
+        ConnectionLifecycleStateFact::Connected,
+        "receiverWaitingKeyframe",
+        0,
+        |stats| {
+            seed_pre_first_frame_acquisition_stats(stats, "receiverWaitingKeyframe", 2_000.0);
+            stats.receive_picture_recovery_terminal_total = 63;
+            stats.receive_keyframe_required = Some(true);
+            stats.receive_keyframe_response_state = Some("no-packet".to_string());
+            stats.receive_display_state = Some("none".to_string());
+            stats.reference_chain_state = Some("need-keyframe".to_string());
+            stats.receive_keyframe_sent_count_unresolved = 7;
+        },
+    );
+
+    assert!(
+        commands
+            .iter()
+            .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })),
+        "pre-first-frame receiverWaitingKeyframe should stay in receive recovery, commands={commands:?}"
+    );
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert!(
+            matches!(
+                ledger.action_selected.as_str(),
+                "delegatedToReceive" | "cooldownSuppressed" | "coalesced:keyframeInFlight"
+            ),
+            "unexpected action_selected: {}",
+            ledger.action_selected
+        );
+    });
+}
+
+#[test]
+fn latched_remote_terminal_home_recovery_stages_reconnect_candidate() {
+    let mut harness =
+        RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
+    let commands = harness.apply(
+        2_000.0,
+        ConnectionLifecycleStateFact::Connected,
+        "receiverWaitingKeyframe",
+        1_016,
+        |stats| {
+            stats.session_phase = Some("recovering".to_string());
+            stats.video_owner_state = Some("supply-starved".to_string());
+            stats.video_owner_reason = Some("supplyStarved".to_string());
+            stats.receive_picture_recovery_terminal_total = 63;
+            stats.receive_keyframe_required = Some(true);
+            stats.receive_keyframe_response_state = Some("no-packet".to_string());
+            stats.receive_display_state = Some("none".to_string());
+            stats.reference_chain_state = Some("need-keyframe".to_string());
+            stats.receive_keyframe_sent_count_unresolved = 7;
+            stats.recovery_displayed_idr_at_ms = Some(100.0);
+            stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
+            stats.latest_video_host_present_time_ms = Some(270.0);
+            stats.latest_video_decode_ok_time_ms = Some(250.0);
+            stats.first_video_packet_arrival_time_ms = Some(100.0);
+            stats.inbound_primary_video_bytes_total = 54_232_076;
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(1920),
+                video_height: Some(1080),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 54_232_076,
+                video_packet_count_total: 47_253,
+                audio_bytes_total: 181_063,
+                observed_at_ms: 2_000.0,
+            });
+        },
+    );
+
+    assert!(
+        commands
+            .iter()
+            .any(|command| matches!(command, TransportCommand::RequestReconnectCandidate { .. })),
+        "remote terminal should stage reconnect immediately, commands={commands:?}"
+    );
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert!(
+            ledger.input_signal.ends_with(":receiverWaitingKeyframe"),
+            "unexpected input signal: {}",
+            ledger.input_signal
+        );
+        assert_eq!(ledger.action_selected, "requestReconnectCandidate");
+        assert_eq!(ledger.escalation_basis.as_deref(), Some("anchor_missing"));
+    });
+}
+
+#[test]
 fn pre_first_frame_bootstrap_missing_sps_records_local_keyframe_probe_in_ledger() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));

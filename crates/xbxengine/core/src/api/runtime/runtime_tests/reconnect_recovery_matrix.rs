@@ -98,6 +98,15 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some("transportReconnectCandidate:transportExpiredDeadline")
     );
+    let stats = runtime.snapshot_stats();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("runtimeReconnectConsumed")
+    );
+    assert_eq!(
+        stats.latest_observation_summary.as_deref(),
+        Some("observationId=42 reason=transportExpiredDeadline reasonDomain=connectivity-transport transportRecovering=false")
+    );
 
     runtime.tick();
     let reconnect_request_count_after_second_tick = requests

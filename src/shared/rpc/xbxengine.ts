@@ -205,6 +205,8 @@ export interface XbxEngineStatsDto {
   packet_to_present_ms?: number
   video_decode_input_drop_count_total?: number
   video_decode_output_drop_count_total?: number
+  video_decode_output_mailbox_depth?: number
+  video_decode_output_present_pipeline_stressed?: boolean
   video_pacer_submit_count_total?: number
   video_pacer_drop_count_total?: number
   video_renderer_submit_count_total?: number

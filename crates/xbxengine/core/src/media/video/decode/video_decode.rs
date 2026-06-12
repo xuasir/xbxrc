@@ -18,7 +18,8 @@ use crate::{
     XbxEngineRuntimeError,
 };
 
-const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 2;
+const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 3;
+const DECODE_OUTPUT_MAILBOX_BASE_CAPACITY: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 2;
 const D3D11VA_NO_OUTPUT_REBUILD_THRESHOLD: u32 = 2;
@@ -260,6 +261,7 @@ pub(crate) struct XbxVideoDecodeState {
     latest_decoded_seq: u64,
     first_video_packet_logged: bool,
     decoded_inflight_current: Option<DecodedFrame>,
+    decoded_stressed_next_candidate: Option<DecodedFrame>,
     decoded_latest_candidate: Option<DecodedFrame>,
     last_decode_ok_time_ms: Option<f64>,
     last_encoded_frame_time_ms: Option<f64>,
@@ -294,6 +296,8 @@ pub(crate) struct XbxVideoDecodeState {
     last_decode_latest_replace_at_ms: Option<f64>,
     /// 与 pacer 共用的呈现节拍尺（host 刷新与流帧率取较慢侧）。
     mailbox_present_cadence_interval_ms: f64,
+    /// present 明显落后 decode 时启用 current + next + latest 三槽，提升 decode→pacer 供给。
+    present_pipeline_stressed: bool,
     /// TimedFallback + displayed-idr：允许 bootstrapMissingIdr 的 delta 进入解码器续播。
     timed_fallback_displayed_idr_bypass: bool,
     /// 与 InsertGate Emit 对齐：ingress 已裁决可提交的 soft continuation。
@@ -320,6 +324,7 @@ impl XbxVideoDecodeState {
             latest_decoded_seq: 0,
             first_video_packet_logged: false,
             decoded_inflight_current: None,
+            decoded_stressed_next_candidate: None,
             decoded_latest_candidate: None,
             last_decode_ok_time_ms: None,
             last_encoded_frame_time_ms: None,
@@ -358,6 +363,7 @@ impl XbxVideoDecodeState {
             last_decode_latest_replace_at_ms: None,
             mailbox_present_cadence_interval_ms:
                 crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            present_pipeline_stressed: false,
             timed_fallback_displayed_idr_bypass: false,
             insert_emit_bootstrap_bypass: false,
             pending_receive_keyframe_hint_at_ms: None,
@@ -401,6 +407,14 @@ impl XbxVideoDecodeState {
             DECODE_MAILBOX_REPLACE_MIN_INTERVAL_FLOOR_MS,
             DECODE_MAILBOX_REPLACE_MIN_INTERVAL_CEILING_MS,
         );
+    }
+
+    pub(crate) fn set_present_pipeline_stressed(&mut self, stressed: bool) {
+        self.present_pipeline_stressed = stressed;
+    }
+
+    pub(crate) fn present_pipeline_stressed(&self) -> bool {
+        self.present_pipeline_stressed
     }
 
     fn resolve_decode_mailbox_replace_min_interval_ms(&self) -> f64 {
@@ -1139,19 +1153,28 @@ impl XbxVideoDecodeState {
 
     pub(crate) fn pop_decoded_frame(&mut self, _now_ms: f64) -> Option<DecodedFrame> {
         if self.decoded_inflight_current.is_none() {
-            self.decoded_inflight_current = self.decoded_latest_candidate.take();
+            self.decoded_inflight_current = self
+                .decoded_stressed_next_candidate
+                .take()
+                .or_else(|| self.decoded_latest_candidate.take());
         }
         self.decoded_inflight_current.take()
     }
 
     pub(crate) fn has_decoded_frame(&self) -> bool {
-        self.decoded_inflight_current.is_some() || self.decoded_latest_candidate.is_some()
+        self.decoded_inflight_current.is_some()
+            || self.decoded_stressed_next_candidate.is_some()
+            || self.decoded_latest_candidate.is_some()
+    }
+
+    pub(crate) fn decoded_output_mailbox_depth(&self) -> u32 {
+        self.decoded_output_mailbox_len() as u32
     }
 
     #[allow(dead_code)]
     pub(crate) fn workload_snapshot(&self) -> XbxDecodeWorkloadSnapshot {
         let pending_output_queue_depth = self.decoded_output_mailbox_len();
-        let state = if pending_output_queue_depth >= DECODE_OUTPUT_MAILBOX_CAPACITY {
+        let state = if pending_output_queue_depth >= self.decoded_output_mailbox_capacity() {
             XbxDecodeWorkloadState::DrainOutput
         } else {
             XbxDecodeWorkloadState::AwaitingInput
@@ -1180,6 +1203,7 @@ impl XbxVideoDecodeState {
     pub(crate) fn peek_decoded_frame(&self) -> Option<&DecodedFrame> {
         self.decoded_inflight_current
             .as_ref()
+            .or(self.decoded_stressed_next_candidate.as_ref())
             .or(self.decoded_latest_candidate.as_ref())
     }
 
@@ -1187,16 +1211,10 @@ impl XbxVideoDecodeState {
         self.decoded_output_mailbox_len()
     }
 
-    /// 根据host cadence phase动态调整解码输出队列容量
-    ///
-    /// 策略：
-    /// - Starved: 1帧（激进收紧，host消费过快）
-    /// - Priming: 2帧（适度收紧，正在建立节奏）
-    /// - Steady: 3帧（正常容量）
-    /// - Idle/Unknown: 4帧（放宽，允许更多缓冲）
+    /// 普通路径保持 current+latest 两槽；present pipeline stressed 时启用三槽。
     #[cfg(test)]
     pub(crate) fn decoded_frame_queue_is_full(&self) -> bool {
-        self.decoded_output_mailbox_len() >= DECODE_OUTPUT_MAILBOX_CAPACITY
+        self.decoded_output_mailbox_len() >= self.decoded_output_mailbox_capacity()
     }
 
     #[cfg(test)]
@@ -1226,6 +1244,52 @@ impl XbxVideoDecodeState {
                 observed_at_ms,
             );
             return Some(frame);
+        }
+
+        if self.present_pipeline_stressed
+            && self.decoded_inflight_current.is_none()
+            && self.decoded_stressed_next_candidate.is_none()
+            && self.decoded_latest_candidate.is_none()
+        {
+            self.decoded_inflight_current = Some(frame);
+            self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
+            if matches!(
+                self.decode_candidate_state,
+                XbxDecodeCandidateState::Backpressure
+            ) {
+                self.record_decode_candidate_decision(
+                    XbxDecodeCandidateState::Nominal,
+                    "accept",
+                    "mailboxRecovered",
+                    Some(incoming_frame_seq),
+                    None,
+                    observed_at_ms,
+                );
+            }
+            return None;
+        }
+
+        if self.present_pipeline_stressed
+            && self.decoded_stressed_next_candidate.is_none()
+            && self.decoded_latest_candidate.is_some()
+        {
+            self.decoded_stressed_next_candidate = self.decoded_latest_candidate.take();
+            self.decoded_latest_candidate = Some(frame);
+            self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
+            if matches!(
+                self.decode_candidate_state,
+                XbxDecodeCandidateState::Backpressure
+            ) {
+                self.record_decode_candidate_decision(
+                    XbxDecodeCandidateState::Nominal,
+                    "accept",
+                    "mailboxRecovered",
+                    Some(incoming_frame_seq),
+                    None,
+                    observed_at_ms,
+                );
+            }
+            return None;
         }
 
         let Some(existing) = self.decoded_latest_candidate.take() else {
@@ -1347,6 +1411,7 @@ impl XbxVideoDecodeState {
         let mut hint_ms = None;
         for existing in [
             self.decoded_inflight_current.as_ref(),
+            self.decoded_stressed_next_candidate.as_ref(),
             self.decoded_latest_candidate.as_ref(),
         ]
         .into_iter()
@@ -1374,11 +1439,21 @@ impl XbxVideoDecodeState {
 
     fn decoded_output_mailbox_len(&self) -> usize {
         usize::from(self.decoded_inflight_current.is_some())
+            + usize::from(self.decoded_stressed_next_candidate.is_some())
             + usize::from(self.decoded_latest_candidate.is_some())
+    }
+
+    fn decoded_output_mailbox_capacity(&self) -> usize {
+        if self.present_pipeline_stressed {
+            DECODE_OUTPUT_MAILBOX_CAPACITY
+        } else {
+            DECODE_OUTPUT_MAILBOX_BASE_CAPACITY
+        }
     }
 
     fn clear_decoded_output_mailbox(&mut self) {
         self.decoded_inflight_current = None;
+        self.decoded_stressed_next_candidate = None;
         self.decoded_latest_candidate = None;
     }
 
@@ -2087,6 +2162,7 @@ impl XbxVideoDecodeState {
             latest_decoded_seq: 0,
             first_video_packet_logged: false,
             decoded_inflight_current: None,
+            decoded_stressed_next_candidate: None,
             decoded_latest_candidate: None,
             last_decode_ok_time_ms: None,
             last_encoded_frame_time_ms: None,
@@ -2121,6 +2197,7 @@ impl XbxVideoDecodeState {
             last_decode_latest_replace_at_ms: None,
             mailbox_present_cadence_interval_ms:
                 crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            present_pipeline_stressed: false,
             timed_fallback_displayed_idr_bypass: false,
             insert_emit_bootstrap_bypass: false,
             pending_receive_keyframe_hint_at_ms: None,

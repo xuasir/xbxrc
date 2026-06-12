@@ -367,9 +367,10 @@ impl<'a> RtcTransportSessionBridge<'a> {
                                 stats.latest_observation_label =
                                     Some("rtcReconnectCandidateStaged".to_string());
                                 stats.latest_observation_summary = Some(format!(
-                                    "observationId={} reason={} pendingReason={}",
+                                    "observationId={} reason={} reasonDomain={} pendingReason={}",
                                     observation_id,
                                     reason,
+                                    reason_domain.as_str(),
                                     pending_reason.as_deref().unwrap_or("none")
                                 ));
                             }
@@ -377,9 +378,10 @@ impl<'a> RtcTransportSessionBridge<'a> {
                                 stats.latest_observation_label =
                                     Some("rtcReconnectCandidateRejected".to_string());
                                 stats.latest_observation_summary = Some(format!(
-                                    "observationId={} reason={} pendingReason={} staged=false",
+                                    "observationId={} reason={} reasonDomain={} pendingReason={} staged=false",
                                     observation_id,
                                     reason,
+                                    reason_domain.as_str(),
                                     pending_reason.as_deref().unwrap_or("none")
                                 ));
                             }

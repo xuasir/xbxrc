@@ -20,7 +20,7 @@ use crate::transport::rtc::receive::{
 const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
 const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
 const DECODE_MAILBOX_CAPACITY: usize = 2;
-const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 2;
+const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 3;
 const PENDING_PACER_RETRY_TIMEOUT_MS: u64 = 4;
 const STALE_RECOVERY_CONTINUATION_WINDOW_MS: f64 = 80.0;
 const STALE_RECOVERY_CONTINUATION_MAX_FRAMES: u32 = 3;
@@ -925,15 +925,22 @@ fn sync_decode_runtime_stats(
     now_ms: f64,
 ) {
     let video_decoder_stalled = derive_decoder_stalled(runtime_stats, now_ms);
-    let present_cadence_interval_ms = runtime_stats
+    let (present_cadence_interval_ms, present_pipeline_stressed) = runtime_stats
         .read(|stats| {
-            crate::media::video::present_cadence::resolve_present_cadence_interval_ms(
-                stats,
-                crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            (
+                crate::media::video::present_cadence::resolve_present_cadence_interval_ms(
+                    stats,
+                    crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+                ),
+                crate::media::video::present_cadence::present_pipeline_stressed_from_stats(stats),
             )
         })
-        .unwrap_or(crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS);
+        .unwrap_or((
+            crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
+            false,
+        ));
     decode_state.set_mailbox_present_cadence(present_cadence_interval_ms);
+    decode_state.set_present_pipeline_stressed(present_pipeline_stressed);
     runtime_stats.read(|stats| {
         decode_state.sync_recovery_exit_policy_from_stats(stats, now_ms);
     });
@@ -971,6 +978,9 @@ fn sync_decode_runtime_stats(
         stats.video_decoder_reset_count = decode_state.decoder_reset_count();
         stats.latest_video_decoder_reset_time_ms = decode_state.latest_decoder_reset_time_ms();
         stats.video_decode_output_drop_count_total = decode_state.decoded_frame_drop_count();
+        stats.video_decode_output_mailbox_depth = decode_state.decoded_output_mailbox_depth();
+        stats.video_decode_output_present_pipeline_stressed =
+            decode_state.present_pipeline_stressed();
         stats.video_decoder_hardware_failure_streak = decode_state.hardware_decode_failure_streak();
         stats.latest_video_decoder_hardware_failure_time_ms =
             decode_state.latest_hardware_decode_failure_time_ms();
@@ -1391,6 +1401,29 @@ mod tests {
                 .map(|observation| observation.verdict.as_str()),
             Some("decoded-frame")
         );
+    }
+
+    #[test]
+    fn sync_decode_runtime_stats_exports_mailbox_depth_and_present_stress() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.set_present_pipeline_stressed(true);
+        state.enqueue_decoded_frame_for_test(make_render_frame(2));
+        state.enqueue_decoded_frame_for_test(make_render_frame(3));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.update(|stats| {
+            stats.video_decode_fps = 30.0;
+            stats.video_present_fps = 18.0;
+        });
+
+        sync_decode_runtime_stats(&sink, &mut state, 1_260.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_decode_output_mailbox_depth, 2);
+        assert!(stats.video_decode_output_present_pipeline_stressed);
     }
 
     #[test]

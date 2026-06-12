@@ -704,9 +704,13 @@ impl RecoveryCoordinator {
     ) -> bool {
         use crate::transport::rtc::recovery::contract::{
             has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
+            remote_picture_recovery_terminal_active_from_stats,
             transport_await_has_hard_bootstrap_evidence_from_stats,
         };
 
+        if remote_picture_recovery_terminal_active_from_stats(stats) {
+            return true;
+        }
         if !has_current_transport_await_issue_from_stats(stats) {
             return false;
         }
@@ -1211,6 +1215,34 @@ mod tests {
                 &stats, now_ms
             ),
             "decoded 后迟迟没有 clean anchor 提交，应作为 transport-await 的硬失败证据"
+        );
+    }
+
+    #[test]
+    fn remote_terminal_counts_as_hard_recovery_evidence_with_stale_display_anchor() {
+        let now_ms = 2_000.0;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 31,
+            receive_picture_recovery_terminal_total: 63,
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_display_state: Some("none".to_string()),
+            reference_chain_state: Some("need-keyframe".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            video_anchor_clean_epoch: Some(31),
+            video_anchor_clean_observed_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("displayed-idr".to_string()),
+            latest_video_packet_arrival_time_ms: Some(now_ms),
+            ..Default::default()
+        };
+
+        assert!(
+            RecoveryCoordinator::transport_await_has_hard_recovery_evidence_from_stats(
+                &stats, now_ms
+            ),
+            "远端长期 no-packet 终止应覆盖旧 displayed-idr anchor，进入 reconnect hard evidence"
         );
     }
 

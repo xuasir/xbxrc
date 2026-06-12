@@ -1,3 +1,7 @@
+use crate::media::video::present_cadence::{
+    PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS, PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS,
+    PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP,
+};
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 
@@ -38,9 +42,6 @@ pub(crate) struct SchedulingDemandSignal {
     pub(crate) submit_age_ms: Option<f64>,
 }
 
-const PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS: f64 = 18.0;
-const PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS: f64 = 14.0;
-const PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP: f64 = 8.0;
 const PRESENT_PIPELINE_PRESENT_AGE_OVER_DECODE_RATIO: f64 = 1.35;
 
 impl SchedulingDemandSignal {
@@ -255,8 +256,8 @@ mod tests {
         let demand = SchedulingDemandSignal {
             present_age_ms: Some(40.0),
             decode_age_ms: Some(20.0),
-            smoothed_present_fps: Some(10.0),
-            smoothed_decode_fps: Some(31.0),
+            smoothed_present_fps: Some(18.0),
+            smoothed_decode_fps: Some(30.0),
             ..SchedulingDemandSignal::default()
         };
         assert!(demand.present_pipeline_stressed(&cloud_thresholds()));

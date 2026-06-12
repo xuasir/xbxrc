@@ -1668,6 +1668,202 @@ fn decoded_output_mailbox_keeps_only_latest_candidate_under_pressure() {
 }
 
 #[test]
+fn present_pipeline_stressed_decode_mailbox_keeps_current_and_latest_candidate() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+    state.set_present_pipeline_stressed(true);
+
+    for seq in 1..=2 {
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: seq,
+            rendered_at_ms: seq as f64,
+            rtp_timestamp: Some(seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("steady".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([seq as u8; 16]),
+            },
+        });
+    }
+
+    assert_eq!(state.decoded_frame_queue_len(), 2);
+    assert_eq!(
+        state
+            .pop_decoded_frame(3.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(1)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(4.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(2)
+    );
+}
+
+#[test]
+fn present_pipeline_stressed_decode_mailbox_keeps_current_next_and_latest_candidate() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+    state.set_present_pipeline_stressed(true);
+
+    for seq in 1..=3 {
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: seq,
+            rendered_at_ms: seq as f64,
+            rtp_timestamp: Some(seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("steady".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([seq as u8; 16]),
+            },
+        });
+    }
+
+    assert_eq!(state.decoded_frame_queue_len(), 3);
+    assert_eq!(
+        state
+            .pop_decoded_frame(4.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(1)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(5.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(2)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(6.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(3)
+    );
+}
+
+#[test]
+fn present_pipeline_stressed_decode_mailbox_supersedes_latest_when_three_slots_full() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+    state.set_present_pipeline_stressed(true);
+
+    for seq in 1..=4 {
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: seq,
+            rendered_at_ms: seq as f64,
+            rtp_timestamp: Some(seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("steady".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([seq as u8; 16]),
+            },
+        });
+    }
+
+    assert_eq!(state.decoded_frame_queue_len(), 3);
+    assert_eq!(state.decoded_frame_drop_count(), 1);
+    assert_eq!(
+        state
+            .pop_decoded_frame(5.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(1)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(6.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(2)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(7.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(4)
+    );
+}
+
+#[test]
+fn present_pipeline_stressed_decode_mailbox_preserves_order_after_partial_drain() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+    state.set_present_pipeline_stressed(true);
+
+    for seq in 1..=2 {
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: seq,
+            rendered_at_ms: seq as f64,
+            rtp_timestamp: Some(seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("steady".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([seq as u8; 16]),
+            },
+        });
+    }
+
+    assert_eq!(
+        state
+            .pop_decoded_frame(3.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(1)
+    );
+
+    state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+        width: 2,
+        height: 2,
+        frame_seq: 3,
+        rendered_at_ms: 3.0,
+        rtp_timestamp: Some(3),
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        frame_recovery_disposition: Some("steady".to_string()),
+        frame_unrecoverable_reason: None,
+        presentation_value_role: None,
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::<[u8]>::from([3u8; 16]),
+        },
+    });
+
+    assert_eq!(
+        state
+            .pop_decoded_frame(4.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(2)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(5.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(3)
+    );
+}
+
+#[test]
 fn peek_decoded_frame_keeps_head_of_queue_intact() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));

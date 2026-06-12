@@ -37,6 +37,8 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         last_recovery_action_at_ms: None,
         last_recovery_reason: None,
         reconnect_trigger_source: None,
+        latest_runtime_observation_label: None,
+        latest_runtime_observation_summary: None,
         host_present_take_empty_streak: 0,
         host_mailbox_latest_submit_at_ms: None,
         ice_policy_mode: None,
@@ -46,6 +48,47 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         ice_policy_derived_count: None,
         ice_policy_skipped_by_family_mismatch_count: None,
     }
+}
+
+#[test]
+fn runtime_observation_snapshot_overrides_media_observation_for_stats() {
+    let mut snapshot = test_snapshot();
+    snapshot.latest_runtime_observation_label = Some("runtimeReconnectConsumed".to_string());
+    snapshot.latest_runtime_observation_summary =
+        Some("observationId=7 reason=remote-terminal".to_string());
+
+    let mut stats = XbxEngineMediaRuntimeStats {
+        latest_observation_label: Some("mediaObservation".to_string()),
+        latest_observation_summary: Some("media summary".to_string()),
+        ..Default::default()
+    };
+
+    let dto = build_xbxengine_stats(&snapshot, Some(&stats));
+
+    assert_eq!(
+        dto.latest_observation_label.as_deref(),
+        Some("runtimeReconnectConsumed")
+    );
+    assert_eq!(
+        dto.latest_observation_summary.as_deref(),
+        Some("observationId=7 reason=remote-terminal")
+    );
+
+    snapshot.latest_runtime_observation_label = None;
+    snapshot.latest_runtime_observation_summary = None;
+    stats.latest_observation_label = Some("mediaObservation".to_string());
+    stats.latest_observation_summary = Some("media summary".to_string());
+
+    let dto = build_xbxengine_stats(&snapshot, Some(&stats));
+
+    assert_eq!(
+        dto.latest_observation_label.as_deref(),
+        Some("mediaObservation")
+    );
+    assert_eq!(
+        dto.latest_observation_summary.as_deref(),
+        Some("media summary")
+    );
 }
 
 #[test]

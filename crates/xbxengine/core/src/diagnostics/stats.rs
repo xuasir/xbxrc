@@ -1258,6 +1258,10 @@ pub fn build_xbxengine_stats(
             .map(|stats| stats.video_decode_input_drop_count_total),
         video_decode_output_drop_count_total: runtime_stats
             .map(|stats| stats.video_decode_output_drop_count_total),
+        video_decode_output_mailbox_depth: runtime_stats
+            .map(|stats| stats.video_decode_output_mailbox_depth),
+        video_decode_output_present_pipeline_stressed: runtime_stats
+            .map(|stats| stats.video_decode_output_present_pipeline_stressed),
         video_pacer_submit_count_total: runtime_stats
             .map(|stats| stats.video_pacer_submit_count_total),
         video_pacer_drop_count_total: runtime_stats.map(|stats| stats.video_pacer_drop_count_total),
@@ -1895,10 +1899,14 @@ pub fn build_xbxengine_stats(
                     }
                 })
         }),
-        latest_observation_label: runtime_stats
-            .and_then(|stats| stats.latest_observation_label.clone()),
-        latest_observation_summary: runtime_stats
-            .and_then(|stats| stats.latest_observation_summary.clone()),
+        latest_observation_label: snapshot
+            .latest_runtime_observation_label
+            .clone()
+            .or_else(|| runtime_stats.and_then(|stats| stats.latest_observation_label.clone())),
+        latest_observation_summary: snapshot
+            .latest_runtime_observation_summary
+            .clone()
+            .or_else(|| runtime_stats.and_then(|stats| stats.latest_observation_summary.clone())),
         latest_turn_relay_observation_seq: runtime_stats
             .map(|stats| stats.latest_turn_relay_observation_seq),
         latest_turn_relay_observation_label: runtime_stats

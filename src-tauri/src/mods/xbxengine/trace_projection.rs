@@ -265,6 +265,7 @@ pub(super) struct RuntimeTraceObservationState {
     host_descriptor_upload_mode: Option<String>,
     host_descriptor_metal_import_count_total: Option<u64>,
     host_descriptor_cpu_upload_count_total: Option<u64>,
+    decode_output_mailbox_signature: Option<(Option<u32>, Option<bool>)>,
     actual_video_bitrate_source: Option<String>,
     twcc_observation_state: Option<String>,
     latest_turn_relay_observation_seq: Option<u64>,
@@ -515,6 +516,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "rendererStalled": stats.video_renderer_stalled,
             "decodeInputDropCountTotal": stats.video_decode_input_drop_count_total,
             "decodeOutputDropCountTotal": stats.video_decode_output_drop_count_total,
+            "decodeOutputMailboxDepth": stats.video_decode_output_mailbox_depth,
+            "decodeOutputPresentPipelineStressed": stats.video_decode_output_present_pipeline_stressed,
             "pacerSubmitCountTotal": stats.video_pacer_submit_count_total,
             "pacerDropCountTotal": stats.video_pacer_drop_count_total,
             "rendererSubmitCountTotal": stats.video_renderer_submit_count_total,
@@ -2101,6 +2104,44 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
+    let decode_output_mailbox_signature = (
+        stats.video_decode_output_mailbox_depth,
+        stats.video_decode_output_present_pipeline_stressed,
+    );
+    if session_id.is_some()
+        && observation_state.decode_output_mailbox_signature
+            != Some(decode_output_mailbox_signature)
+        && (stats.video_decode_output_mailbox_depth.is_some()
+            || stats
+                .video_decode_output_present_pipeline_stressed
+                .is_some())
+    {
+        observation_state.decode_output_mailbox_signature = Some(decode_output_mailbox_signature);
+        let decode_present_fps_gap = stats
+            .decode_fps
+            .zip(stats.present_fps)
+            .map(|(decode_fps, present_fps)| decode_fps - present_fps);
+        runtime_trace.record_event(
+            "xbxengine",
+            "decodeOutputMailboxState",
+            session_id,
+            json!({
+                "mailboxDepth": stats.video_decode_output_mailbox_depth,
+                "presentPipelineStressed": stats.video_decode_output_present_pipeline_stressed,
+                "decodeFps": stats.decode_fps,
+                "presentFps": stats.present_fps,
+                "decodePresentFpsGap": decode_present_fps_gap,
+                "pacerSubmitCountTotal": stats.video_pacer_submit_count_total,
+                "pacerDropCountTotal": stats.video_pacer_drop_count_total,
+                "rendererSubmitCountTotal": stats.video_renderer_submit_count_total,
+                "hostFramePresentEpoch": stats.host_frame_present_epoch,
+                "hostMailboxEnqueueCountTotal": stats.host_mailbox_enqueue_count_total,
+                "sessionPhase": stats.session_phase,
+                "hostCadencePhase": stats.host_cadence_phase,
+            }),
+        );
+    }
+
     if observation_state.recovery_keyframe_request_count != stats.recovery_keyframe_request_count {
         observation_state.recovery_keyframe_request_count = stats.recovery_keyframe_request_count;
         if let Some(count) = stats.recovery_keyframe_request_count {
@@ -2592,6 +2633,30 @@ pub(super) fn record_runtime_trace_observations(
                         "summary": stats.latest_observation_summary,
                         "authority": stats.recovery_picture_recovery_authority,
                         "sessionKeyframeInFlight": stats.recovery_session_keyframe_in_flight,
+                    }),
+                );
+            }
+            Some("runtimeReconnectConsumed") => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "runtimeReconnectConsumed",
+                    session_id,
+                    json!({
+                        "summary": stats.latest_observation_summary,
+                    }),
+                );
+            }
+            Some(
+                label @ ("rtcReconnectCandidateStaged"
+                | "rtcReconnectCandidateRejected"
+                | "rtcReconnectCandidateStageFailed"),
+            ) => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    label,
+                    session_id,
+                    json!({
+                        "summary": stats.latest_observation_summary,
                     }),
                 );
             }

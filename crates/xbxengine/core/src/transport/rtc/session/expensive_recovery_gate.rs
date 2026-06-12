@@ -10,6 +10,7 @@ use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerS
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
     has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
+    remote_picture_recovery_terminal_active_from_stats,
 };
 use crate::transport::rtc::recovery::coordinator::{CoordinatorProposal, RecoveryCoordinator};
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
@@ -170,7 +171,8 @@ impl<'a> ExpensiveRecoveryGate<'a> {
             (observed_at_ms - since).max(0.0) >= recovery_no_progress_fallback_ms
         }) || (local_self_healing_attempted && media_progress_stalled);
         let hard_evidence = RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
-            stats.recovery_transport_await_unresolved == Some(true)
+            remote_picture_recovery_terminal_active_from_stats(stats)
+                || stats.recovery_transport_await_unresolved == Some(true)
                 || stats_has_unresolved_transport_await_issue(stats)
         })
         .unwrap_or(false)
@@ -249,19 +251,22 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         if awaiting_success_edge_after_grant {
             return Some("mediaGate:awaitSuccessEdge");
         }
-        let current_clean_anchor =
-            RuntimeStatsSink::read_shared(self.runtime_stats, has_current_clean_anchor_from_stats)
-                .unwrap_or(false);
-        let local_progress_active = current_clean_anchor
-            || RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
-                has_fresh_media_output(stats, observed_at_ms)
+        let (current_clean_anchor, remote_terminal_active, has_fresh_media_output) =
+            RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
+                (
+                    has_current_clean_anchor_from_stats(stats),
+                    remote_picture_recovery_terminal_active_from_stats(stats),
+                    has_fresh_media_output(stats, observed_at_ms),
+                )
             })
-            .unwrap_or(false)
-            || RecoveryCoordinator::transport_await_local_recovery_active(
-                self.runtime_stats,
-                recovery_epoch,
-                observed_at_ms,
-            );
+            .unwrap_or((false, false, false));
+        let local_recovery_active = RecoveryCoordinator::transport_await_local_recovery_active(
+            self.runtime_stats,
+            recovery_epoch,
+            observed_at_ms,
+        );
+        let local_progress_active = !remote_terminal_active
+            && (current_clean_anchor || has_fresh_media_output || local_recovery_active);
         if local_progress_active {
             return Some("mediaGate:localRecoveryActive");
         }

@@ -30,7 +30,8 @@ use crate::transport::rtc::recovery::contract::{
     has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
     idr_recovery_active_from_stats, is_media_healthy_baseline,
     is_terminal_transport_await_deferred_episode, is_timeline_chain_receiving_from_stats,
-    receive_media_recovery_pressure_from_stats, sync_derived_recovery_contract_fields,
+    receive_media_recovery_pressure_from_stats, remote_picture_recovery_terminal_active_from_stats,
+    sync_derived_recovery_contract_fields,
 };
 use crate::transport::rtc::recovery::coordinator::{
     CoordinatorProposal, RecoveryCoordinator, RecoveryOwnerSignal,
@@ -116,6 +117,16 @@ const RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS: f64 = 1_200.0;
 const RECOVERY_OBSERVATION_KEYFRAME_WINDOW_MS: f64 = 900.0;
 /// receiver-local 等待关键帧诊断链；避免同 epoch 内其它 keyframe/decoder 自愈污染 reconnect 门控。
 const TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS: &str = "receiverWaitingKeyframe";
+
+fn remote_terminal_transport_reconnect_domain_override(
+    stats: &XbxEngineMediaRuntimeStats,
+    reason: VideoEscalationReason,
+    action: RecoveryAction,
+) -> bool {
+    reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        && action == RecoveryAction::RequestReconnectCandidate
+        && remote_picture_recovery_terminal_active_from_stats(stats)
+}
 
 fn recovery_decision_ledger_recovery_epoch(
     ledger: &XbxEngineRecoveryDecisionLedgerObservation,
@@ -295,13 +306,16 @@ struct RecoveryObservationSnapshot {
     last_keyframe_decoded_at: Option<f64>,
     local_decoder_reset_count_in_window: u32,
     keyframe_request_count_in_window: u32,
+    remote_recovery_terminal_active: bool,
 }
 
 impl RecoveryObservationSnapshot {
     /// 仅计入与 `receiverWaitingKeyframe` 链对齐的 decoder reset / keyframe；不包含 NACK skip：
     /// `latest_video_nack_observation` 无恢复链语义，同 epoch 内任意 skip 会误满足「已尝试局部自愈」。
     fn local_self_healing_attempted(&self) -> bool {
-        self.local_decoder_reset_count_in_window > 0 || self.keyframe_request_count_in_window > 0
+        self.local_decoder_reset_count_in_window > 0
+            || self.keyframe_request_count_in_window > 0
+            || self.remote_recovery_terminal_active
     }
 
     fn media_progress_is_stalled_long_enough(&self, observed_at_ms: f64) -> bool {
@@ -316,6 +330,11 @@ impl RecoveryObservationSnapshot {
         latest_progress.is_some_and(|last| {
             (observed_at_ms - last).max(0.0) >= RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS
         })
+    }
+
+    fn reconnect_fallback_progress_stalled(&self, observed_at_ms: f64) -> bool {
+        self.remote_recovery_terminal_active
+            || self.media_progress_is_stalled_long_enough(observed_at_ms)
     }
 
     fn outside_keyframe_recovery_window(&self, observed_at_ms: f64) -> bool {
@@ -334,8 +353,9 @@ impl RecoveryObservationSnapshot {
             && !self.stable_serving
             && has_media_stage_signal
             && self.local_self_healing_attempted()
-            && self.media_progress_is_stalled_long_enough(observed_at_ms)
-            && self.outside_keyframe_recovery_window(observed_at_ms)
+            && self.reconnect_fallback_progress_stalled(observed_at_ms)
+            && (self.remote_recovery_terminal_active
+                || self.outside_keyframe_recovery_window(observed_at_ms))
     }
 }
 
@@ -847,6 +867,7 @@ impl RtcSessionPolicy {
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
         let recovery_observation =
             self.capture_recovery_observation_snapshot(snapshot, owner_state, observed_at_ms);
+        let remote_terminal_active = recovery_observation.remote_recovery_terminal_active;
         let (
             _owner_signal_frame_value,
             owner_signal_gap_severity,
@@ -858,6 +879,12 @@ impl RtcSessionPolicy {
             owner_signal_recovery_episode_stage
                 .as_deref()
                 .and_then(recovery_progress_level_from_str),
+        );
+        let first_frame_acquisition_priority = first_frame_acquisition_priority_active(
+            snapshot,
+            observed_at_ms,
+            self.runtime_stats.as_ref(),
+            self.pre_first_frame_reconnect_fallback_ms(),
         );
         let twcc_warmup_state = self.resolve_twcc_warmup_state();
         let has_media_recovery_surface = recovery_intent.is_some();
@@ -1067,7 +1094,10 @@ impl RtcSessionPolicy {
         };
         let owner_signal =
             self.apply_local_supply_suspect_anchor_gate(owner_signal, observed_at_ms);
-        if owner_signal.reason_label == "receiverWaitingKeyframe" && !owner_signal_missing_anchor {
+        if owner_signal.reason_label == "receiverWaitingKeyframe"
+            && !owner_signal_missing_anchor
+            && !remote_terminal_active
+        {
             let media_recovery_open =
                 RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
                     receive_media_recovery_pressure_from_stats(stats, observed_at_ms)
@@ -1082,7 +1112,8 @@ impl RtcSessionPolicy {
         // 吸收 stale replay 必须以 snapshot 诊断为准，而不能只看 `owner_signal.reason`。
         let stale_transport_await_diag =
             control_label.as_deref() == Some("receiverWaitingKeyframe");
-        let stale_transport_await_absorb = stale_transport_await_diag
+        let stale_transport_await_absorb = !remote_terminal_active
+            && stale_transport_await_diag
             && self.should_absorb_stale_transport_await_replay(
                 snapshot,
                 owner_state,
@@ -1195,11 +1226,19 @@ impl RtcSessionPolicy {
             self.recovery_no_progress_since_ms,
             RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS,
             recovery_observation.local_self_healing_attempted(),
-            recovery_observation.media_progress_is_stalled_long_enough(observed_at_ms),
+            recovery_observation.reconnect_fallback_progress_stalled(observed_at_ms),
             self.has_connected_connectivity_failure_evidence(snapshot, observed_at_ms),
             &mut proposal,
             &owner_signal,
         );
+        if remote_terminal_active
+            && owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && !first_frame_acquisition_priority
+            && recovery_observation.allows_transport_await_reconnect_fallback(observed_at_ms)
+        {
+            // receive 侧已经判定远端无有效响应，继续等待本地 picture recovery 会保留黑屏/旧帧。
+            proposal.decision.action = RecoveryAction::RequestReconnectCandidate;
+        }
         let transport_await_diagnosis_is_short = snapshot
             .recovery
             .last_observed_at_ms
@@ -1268,7 +1307,8 @@ impl RtcSessionPolicy {
             }
         }
 
-        if snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
+        if !remote_terminal_active
+            && snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
             && should_absorb_light_recovery_signal_during_ramp_up(
                 self.runtime_stats.as_ref(),
                 owner_state,
@@ -1326,6 +1366,9 @@ impl RtcSessionPolicy {
             preempt_reason: proposal.preempt_reason,
         }
         .with_runtime_reason_domain();
+        if self.should_promote_remote_terminal_transport_reconnect_domain(&proposal) {
+            proposal.reason_domain = crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport;
+        }
         if proposal.decision.action == RecoveryAction::RequestReconnectCandidate {
             self.recovery_coordinator.on_reconnect_candidate_accepted();
             proposal.budget_after = self.recovery_coordinator.current_budget_state();
@@ -1429,6 +1472,9 @@ impl RtcSessionPolicy {
                         observed_at_ms,
                         RECOVERY_OBSERVATION_WINDOW_MS,
                     ),
+                remote_recovery_terminal_active: remote_picture_recovery_terminal_active_from_stats(
+                    stats,
+                ),
             }
         })
         .unwrap_or_else(|| RecoveryObservationSnapshot {
@@ -1445,7 +1491,22 @@ impl RtcSessionPolicy {
             last_keyframe_decoded_at: None,
             local_decoder_reset_count_in_window: 0,
             keyframe_request_count_in_window: 0,
+            remote_recovery_terminal_active: false,
         })
+    }
+
+    fn should_promote_remote_terminal_transport_reconnect_domain(
+        &self,
+        proposal: &RecoveryPolicyProposal,
+    ) -> bool {
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            remote_terminal_transport_reconnect_domain_override(
+                stats,
+                proposal.reason,
+                proposal.decision.action,
+            )
+        })
+        .unwrap_or(false)
     }
 
     fn count_recent_transport_await_decoder_resets(
@@ -2776,20 +2837,7 @@ impl RtcSessionPolicy {
         repairability: Option<f64>,
     ) -> Option<RecoveryOwnerSignal> {
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-            let terminal_reason = stats
-                .latest_receive_picture_recovery_terminal_reason
-                .as_deref();
-            let remote_terminal = matches!(
-                terminal_reason,
-                Some("remote-no-response" | "remote-continuation-only" | "remote-idr-unusable")
-            );
-            if !remote_terminal {
-                return None;
-            }
-            if has_current_clean_anchor_from_stats(stats) {
-                return None;
-            }
-            if !receive_media_recovery_pressure_from_stats(stats, observed_at_ms) {
+            if !remote_picture_recovery_terminal_active_from_stats(stats) {
                 return None;
             }
             Some(RecoveryOwnerSignal {
@@ -2937,9 +2985,14 @@ fn map_budget_snapshot(
 mod unit_tests {
     use std::sync::{Arc, Mutex};
 
-    use super::RtcSessionPolicy;
+    use super::{
+        remote_terminal_transport_reconnect_domain_override, RecoveryObservationSnapshot,
+        RtcSessionPolicy,
+    };
     use crate::api::backend::XbxEngineMediaRuntimeStats;
     use crate::api::runtime::XbxEngineRuntimeConfig;
+    use crate::transport::rtc::recovery::contract::remote_picture_recovery_terminal_active_from_stats;
+    use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
     use crate::transport::rtc::session::facts::GapSeverity;
 
     #[test]
@@ -2963,11 +3016,183 @@ mod unit_tests {
         let signal = signal.expect("remote terminal should promote transport-await");
         assert_eq!(
             signal.reason,
-            crate::transport::rtc::recovery::escalation::VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe
         );
         assert_eq!(signal.reason_label, "receiverWaitingKeyframe");
         assert_eq!(signal.gap_severity, Some(GapSeverity::RepairableGap));
         assert_eq!(signal.repairability, Some(0.5));
+    }
+
+    #[test]
+    fn latched_remote_terminal_promotes_transport_await_owner_signal_when_reason_cleared() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.receive_picture_recovery_terminal_total = 63;
+            stats.receive_keyframe_required = Some(true);
+            stats.receive_keyframe_response_state = Some("no-packet".to_string());
+            stats.receive_display_state = Some("none".to_string());
+            stats.reference_chain_state = Some("need-keyframe".to_string());
+            stats.receive_keyframe_sent_count_unresolved = 7;
+            stats.recovery_displayed_idr_at_ms = Some(1_000.0);
+            stats.recovery_fresh_anchor_recovered_at_ms = Some(1_000.0);
+        }
+        let policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+
+        let signal = policy.maybe_remote_no_usable_idr_transport_await_owner_signal(
+            2_000.0,
+            Some(GapSeverity::RepairableGap),
+            Some(0.5),
+        );
+
+        let signal = signal.expect("latched remote terminal should promote transport-await");
+        assert_eq!(
+            signal.reason,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        );
+        assert_eq!(signal.reason_label, "receiverWaitingKeyframe");
+    }
+
+    #[test]
+    fn remote_terminal_transport_await_reconnect_promotes_connectivity_domain() {
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(remote_terminal_transport_reconnect_domain_override(
+            &stats,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::RequestReconnectCandidate,
+        ));
+        assert!(!remote_terminal_transport_reconnect_domain_override(
+            &stats,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::RequestFir,
+        ));
+    }
+
+    #[test]
+    fn latched_remote_terminal_reconnect_uses_terminal_total_when_reason_cleared() {
+        let stats = XbxEngineMediaRuntimeStats {
+            receive_picture_recovery_terminal_total: 63,
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_display_state: Some("none".to_string()),
+            reference_chain_state: Some("need-keyframe".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(remote_picture_recovery_terminal_active_from_stats(&stats));
+        assert!(remote_terminal_transport_reconnect_domain_override(
+            &stats,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::RequestReconnectCandidate,
+        ));
+    }
+
+    #[test]
+    fn latched_remote_terminal_waits_for_unresolved_keyframe_threshold() {
+        let stats = XbxEngineMediaRuntimeStats {
+            receive_picture_recovery_terminal_total: 1,
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_display_state: Some("none".to_string()),
+            reference_chain_state: Some("need-keyframe".to_string()),
+            receive_keyframe_sent_count_unresolved: 1,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(!remote_picture_recovery_terminal_active_from_stats(&stats));
+    }
+
+    #[test]
+    fn remote_terminal_transport_reconnect_ignores_stale_display_anchor_when_receive_needs_keyframe(
+    ) {
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_display_state: Some("none".to_string()),
+            reference_chain_state: Some("need-keyframe".to_string()),
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(remote_terminal_transport_reconnect_domain_override(
+            &stats,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::RequestReconnectCandidate,
+        ));
+    }
+
+    #[test]
+    fn latched_remote_terminal_keeps_display_stable_anchor_local() {
+        let stats = XbxEngineMediaRuntimeStats {
+            receive_picture_recovery_terminal_total: 63,
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_display_state: Some("display-stable".to_string()),
+            reference_chain_state: Some("need-keyframe".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(!remote_picture_recovery_terminal_active_from_stats(&stats));
+        assert!(!remote_terminal_transport_reconnect_domain_override(
+            &stats,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::RequestReconnectCandidate,
+        ));
+    }
+
+    #[test]
+    fn remote_terminal_transport_reconnect_keeps_display_stable_anchor_local() {
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("usable-idr".to_string()),
+            receive_display_state: Some("display-stable".to_string()),
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(!remote_terminal_transport_reconnect_domain_override(
+            &stats,
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::RequestReconnectCandidate,
+        ));
+    }
+
+    #[test]
+    fn remote_terminal_reconnect_fallback_ignores_recent_packet_progress() {
+        let snapshot = RecoveryObservationSnapshot {
+            ingress_active: true,
+            reassembly_active: true,
+            decode_active: false,
+            render_active: false,
+            rtc_connectivity_connected: true,
+            reconnect_in_flight: false,
+            stable_serving: false,
+            last_media_progress_at: Some(2_000.0),
+            last_video_decode_ok_at: Some(250.0),
+            last_keyframe_requested_at: Some(1_950.0),
+            last_keyframe_decoded_at: None,
+            local_decoder_reset_count_in_window: 0,
+            keyframe_request_count_in_window: 0,
+            remote_recovery_terminal_active: true,
+        };
+
+        assert!(snapshot.allows_transport_await_reconnect_fallback(2_000.0));
     }
 }
 

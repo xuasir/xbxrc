@@ -414,7 +414,9 @@ fn build_observability_snapshot_projects_inbound_frame_supply_counters() {
         "inbound_video_rtp_marker_count_total": 123,
         "inbound_video_access_unit_count_total": 120,
         "inbound_video_decode_gate_emit_count_total": 118,
-        "inbound_video_decode_gate_continue_count_total": 2
+        "inbound_video_decode_gate_continue_count_total": 2,
+        "video_decode_output_mailbox_depth": 2,
+        "video_decode_output_present_pipeline_stressed": true
     }));
 
     let snapshot = build_observability_snapshot(&stats);
@@ -424,6 +426,11 @@ fn build_observability_snapshot_projects_inbound_frame_supply_counters() {
     assert_eq!(snapshot["video"]["inboundAccessUnitCountTotal"], 120);
     assert_eq!(snapshot["video"]["inboundDecodeGateEmitCountTotal"], 118);
     assert_eq!(snapshot["video"]["inboundDecodeGateContinueCountTotal"], 2);
+    assert_eq!(snapshot["video"]["decodeOutputMailboxDepth"], 2);
+    assert_eq!(
+        snapshot["video"]["decodeOutputPresentPipelineStressed"],
+        true
+    );
 }
 
 #[test]
@@ -2939,6 +2946,62 @@ fn decoder_local_reset_failed_projects_runtime_trace_event() {
 }
 
 #[test]
+fn runtime_reconnect_consumed_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "runtimeReconnectConsumed",
+        "latest_observation_summary": "observationId=7 reason=remote-terminal reasonDomain=connectivity-transport"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "runtimeReconnectConsumed");
+    assert_eq!(
+        payload["summary"],
+        "observationId=7 reason=remote-terminal reasonDomain=connectivity-transport"
+    );
+}
+
+#[test]
+fn rtc_reconnect_candidate_staged_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "rtcReconnectCandidateStaged",
+        "latest_observation_summary": "observationId=9 reason=remote-terminal reasonDomain=connectivity-transport"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "rtcReconnectCandidateStaged");
+    assert_eq!(
+        payload["summary"],
+        "observationId=9 reason=remote-terminal reasonDomain=connectivity-transport"
+    );
+}
+
+#[test]
 fn feedback_target_availability_changed_projects_runtime_trace_event() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
@@ -3337,6 +3400,51 @@ fn host_mailbox_state_projects_no_pending_supply_signals() {
     assert_eq!(payload["noPendingPressureLevel"], "high");
     assert_eq!(payload["hostMailboxEnqueueCountTotal"], 301);
     assert_eq!(payload.get("presentEnqueueCountTotal"), None);
+}
+
+#[test]
+fn decode_output_mailbox_state_projects_present_pipeline_stress_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 20.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "session_phase": "steady",
+        "decode_fps": 30.0,
+        "present_fps": 20.0,
+        "video_decode_output_mailbox_depth": 3,
+        "video_decode_output_present_pipeline_stressed": true,
+        "video_pacer_submit_count_total": 120,
+        "video_pacer_drop_count_total": 4,
+        "video_renderer_submit_count_total": 118,
+        "host_mailbox_enqueue_count_total": 117,
+        "host_frame_present_epoch": 96,
+        "host_cadence_phase": "steady"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payloads = event_payloads(&entries, "decodeOutputMailboxState");
+    assert_eq!(payloads.len(), 1);
+    let payload = &payloads[0];
+    assert_eq!(payload["mailboxDepth"], 3);
+    assert_eq!(payload["presentPipelineStressed"], true);
+    assert_eq!(payload["decodeFps"], 30.0);
+    assert_eq!(payload["presentFps"], 20.0);
+    assert_eq!(payload["decodePresentFpsGap"], 10.0);
+    assert_eq!(payload["pacerSubmitCountTotal"], 120);
+    assert_eq!(payload["hostFramePresentEpoch"], 96);
+    assert_eq!(payload["sessionPhase"], "steady");
 }
 
 #[test]

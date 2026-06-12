@@ -419,6 +419,21 @@ fn decoded_clean_anchor_pipeline_absorbs_soft_non_idr_transport_await() {
 }
 
 #[test]
+fn display_stable_suppresses_stale_remote_terminal_reason() {
+    let stats = XbxEngineMediaRuntimeStats {
+        latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+        receive_keyframe_required: Some(true),
+        receive_keyframe_response_state: Some("no-packet".to_string()),
+        receive_display_state: Some("display-stable".to_string()),
+        reference_chain_state: Some("need-keyframe".to_string()),
+        receive_keyframe_sent_count_unresolved: 7,
+        ..Default::default()
+    };
+
+    assert!(!remote_picture_recovery_terminal_active_from_stats(&stats));
+}
+
+#[test]
 fn displayed_idr_serving_true_when_pending_idr_and_host_has_presented() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.recovery_pending_displayed_idr_rtp = Some(77_001);

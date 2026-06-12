@@ -547,7 +547,17 @@ where
         self.snapshot.last_recovery_action = Some("reconnectCandidateConsumed".to_string());
         self.snapshot.last_recovery_action_at_ms = Some(now_ms_f64());
         self.snapshot.last_recovery_reason = Some(format!(
-            "transportReconnectCandidateConsumed:{reason}:transportRecovering={}",
+            "transportReconnectCandidateConsumed:{reason}:domain={}:transportRecovering={}",
+            reason_domain.as_str(),
+            runtime_stats_indicate_transport_recovering(runtime_stats)
+        ));
+        self.snapshot.latest_runtime_observation_label =
+            Some("runtimeReconnectConsumed".to_string());
+        self.snapshot.latest_runtime_observation_summary = Some(format!(
+            "observationId={} reason={} reasonDomain={} transportRecovering={}",
+            observation_id,
+            reason,
+            reason_domain.as_str(),
             runtime_stats_indicate_transport_recovering(runtime_stats)
         ));
         if let Err(error) = self.request_reconnect(
