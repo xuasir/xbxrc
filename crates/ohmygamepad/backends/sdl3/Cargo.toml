@@ -23,5 +23,8 @@ sdl3 = { version = "0.18.0", features = [
   "hidapi"
 ] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_Input_XboxController"] }
+
 [lib]
 path = "src/lib.rs"

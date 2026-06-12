@@ -1481,7 +1481,61 @@ fn snapshot_summary_signature(summary: &SnapshotSummary) -> String {
     )
 }
 
+#[cfg(target_os = "windows")]
+fn try_capture_xinput_state(player_index: Option<i32>) -> Option<(Vec<f32>, Vec<f32>)> {
+    use windows_sys::Win32::UI::Input::XboxController::{XInputGetState, XINPUT_STATE};
+
+    let index = player_index? as u32;
+    if index > 3 {
+        return None;
+    }
+
+    let mut state: XINPUT_STATE = unsafe { std::mem::zeroed() };
+    let result = unsafe { XInputGetState(index, &mut state) };
+    if result != 0 {
+        return None;
+    }
+
+    let pad = state.Gamepad;
+    let mut buttons = vec![0.0; 17];
+    let mut axes = vec![0.0; 6];
+
+    buttons[0] = if pad.wButtons & 0x1000 != 0 { 1.0 } else { 0.0 };
+    buttons[1] = if pad.wButtons & 0x2000 != 0 { 1.0 } else { 0.0 };
+    buttons[2] = if pad.wButtons & 0x4000 != 0 { 1.0 } else { 0.0 };
+    buttons[3] = if pad.wButtons & 0x8000 != 0 { 1.0 } else { 0.0 };
+    buttons[4] = if pad.wButtons & 0x0100 != 0 { 1.0 } else { 0.0 };
+    buttons[5] = if pad.wButtons & 0x0200 != 0 { 1.0 } else { 0.0 };
+    buttons[8] = if pad.wButtons & 0x0020 != 0 { 1.0 } else { 0.0 };
+    buttons[9] = if pad.wButtons & 0x0010 != 0 { 1.0 } else { 0.0 };
+    buttons[10] = if pad.wButtons & 0x0040 != 0 { 1.0 } else { 0.0 };
+    buttons[11] = if pad.wButtons & 0x0080 != 0 { 1.0 } else { 0.0 };
+    buttons[12] = if pad.wButtons & 0x0001 != 0 { 1.0 } else { 0.0 };
+    buttons[13] = if pad.wButtons & 0x0002 != 0 { 1.0 } else { 0.0 };
+    buttons[14] = if pad.wButtons & 0x0004 != 0 { 1.0 } else { 0.0 };
+    buttons[15] = if pad.wButtons & 0x0008 != 0 { 1.0 } else { 0.0 };
+
+    axes[0] = (pad.sThumbLX as f32 / 32767.0).clamp(-1.0, 1.0);
+    axes[1] = (pad.sThumbLY as f32 / 32767.0).clamp(-1.0, 1.0);
+    axes[2] = (pad.sThumbRX as f32 / 32767.0).clamp(-1.0, 1.0);
+    axes[3] = (pad.sThumbRY as f32 / 32767.0).clamp(-1.0, 1.0);
+
+    let lt = (pad.bLeftTrigger as f32 / 255.0) * 2.0 - 1.0;
+    let rt = (pad.bRightTrigger as f32 / 255.0) * 2.0 - 1.0;
+    axes[4] = lt;
+    axes[5] = rt;
+    buttons[6] = ((lt + 1.0) * 0.5).clamp(0.0, 1.0);
+    buttons[7] = ((rt + 1.0) * 0.5).clamp(0.0, 1.0);
+
+    Some((buttons, axes))
+}
+
 fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> (Vec<f32>, Vec<f32>) {
+    #[cfg(target_os = "windows")]
+    if let Some(state) = try_capture_xinput_state(gamepad.player_index()) {
+        return state;
+    }
+
     let mut buttons = vec![0.0; 17];
     let mut axes = vec![0.0; 6];
 
