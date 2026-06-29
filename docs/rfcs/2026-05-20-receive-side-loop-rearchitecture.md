@@ -180,7 +180,7 @@
 
 ### 2. `RtcReceiveCore` 里的最小状态机
 
-旧设计里的 `Healthy / Broken / Recovering / SustainingRecovery / Stalled` 过宽。  
+旧设计里的 `Healthy / Broken / Recovering / SustainingRecovery / Stalled` 过宽。
 新设计只保留 receiver-local 状态：
 
 - `Priming`
@@ -206,7 +206,7 @@
 
 ### 3. Packet Buffer 与组帧
 
-当前 `timeline.rs` 既维护 gap，又维护 chain debt，又维护 clean-anchor/building phase，职责过宽。  
+当前 `timeline.rs` 既维护 gap，又维护 chain debt，又维护 clean-anchor/building phase，职责过宽。
 重构后：
 
 - `PacketBuffer`
@@ -332,7 +332,7 @@
 
 ### 7. `feedback target` 降级为 transport capability
 
-当前 `videoRtcpFeedbackTargetPending` 会被系统读成恢复原因。  
+当前 `videoRtcpFeedbackTargetPending` 会被系统读成恢复原因。
 重构后明确改为：
 
 - `FeedbackReady`

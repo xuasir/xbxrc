@@ -1,7 +1,7 @@
 # WebRTC 调度/恢复硬收口 — 实施报告
 
-**日期**：2026-05-25  
-**关联计划**：`.cursor/plans/webrtc_调度硬收口_412bf341.plan.md`（未改 plan 文件）  
+**日期**：2026-05-25
+**关联计划**：`.cursor/plans/webrtc_调度硬收口_412bf341.plan.md`（未改 plan 文件）
 **关联 RFC**：`docs/rfcs/2026-04-29-playback-recovery-single-line-convergence.md`、`docs/rfcs/2026-05-20-receive-side-loop-rearchitecture.md`
 
 ## 摘要

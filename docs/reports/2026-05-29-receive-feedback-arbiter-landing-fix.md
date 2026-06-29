@@ -1,6 +1,6 @@
 # Report：Receive Feedback Arbiter 简化落地修复
 
-**Checklist：** [`rfcs/2026-05-29-receive-feedback-arbiter-landing-fix-checklist.md`](../rfcs/2026-05-29-receive-feedback-arbiter-landing-fix-checklist.md)  
+**Checklist：** [`rfcs/2026-05-29-receive-feedback-arbiter-landing-fix-checklist.md`](../rfcs/2026-05-29-receive-feedback-arbiter-landing-fix-checklist.md)
 **接续 RFC：** [`rfcs/2026-05-28-receive-feedback-arbiter-webrtc-alignment.md`](../rfcs/2026-05-28-receive-feedback-arbiter-webrtc-alignment.md)
 
 ## 摘要

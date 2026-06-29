@@ -1,8 +1,8 @@
 # RFC Checklist：Receive Feedback Arbiter 简化落地修复
 
-**关联 RFC：** [2026-05-28 Receive Feedback Arbiter 与 WebRTC 接收侧对齐](2026-05-28-receive-feedback-arbiter-webrtc-alignment.md)  
-**关联 Report：** [2026-05-29 Receive Feedback Arbiter 简化落地修复](../reports/2026-05-29-receive-feedback-arbiter-landing-fix.md)  
-**状态：** Done（代码与单测已闭合；live trace 回放待补采）  
+**关联 RFC：** [2026-05-28 Receive Feedback Arbiter 与 WebRTC 接收侧对齐](2026-05-28-receive-feedback-arbiter-webrtc-alignment.md)
+**关联 Report：** [2026-05-29 Receive Feedback Arbiter 简化落地修复](../reports/2026-05-29-receive-feedback-arbiter-landing-fix.md)
+**状态：** Done（代码与单测已闭合；live trace 回放待补采）
 **目标：** 按 WebRTC-like receive 模型完成减法：核心恢复由 receive-local ledger、`keyframe_required`、packet/frame dependency、decoder result 驱动；`episode` 降级为 trace effectiveness / legacy projection。
 
 ## 完成情况摘要

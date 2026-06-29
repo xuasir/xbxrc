@@ -1,7 +1,7 @@
 # RFC：恢复链减法与 libwebrtc 对齐
 
-**状态：** 已实施（2026-05-27）  
-**范围：** `xbxengine` receive / recovery / session policy  
+**状态：** 已实施（2026-05-27）
+**范围：** `xbxengine` receive / recovery / session policy
 **Supersedes（部分）：** [2026-05-26 Receive InsertGate 与恢复链收敛](2026-05-26-receive-insert-gate-and-recovery-convergence.md) 中的 fast-path / timed-fallback decoder unstick 分支
 
 ## 问题

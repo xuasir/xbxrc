@@ -1,6 +1,6 @@
 # Report：MediaSupply 生命周期单轨
 
-**日期：** 2026-05-27  
+**日期：** 2026-05-27
 **RFC：** [2026-05-27-media-supply-lifecycle-single-track.md](../rfcs/2026-05-27-media-supply-lifecycle-single-track.md)
 
 ## 实施摘要

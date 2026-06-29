@@ -1,6 +1,6 @@
 # Report：恢复链减法验证（2026-05-27）
 
-**RFC：** [2026-05-27-recovery-subtraction-libwebrtc-alignment.md](../rfcs/2026-05-27-recovery-subtraction-libwebrtc-alignment.md)  
+**RFC：** [2026-05-27-recovery-subtraction-libwebrtc-alignment.md](../rfcs/2026-05-27-recovery-subtraction-libwebrtc-alignment.md)
 **参考 trace：** `runtime-logs/runtime-trace-1779945208404-1.jsonl`（减法前基线）
 
 ## 代码变更验证

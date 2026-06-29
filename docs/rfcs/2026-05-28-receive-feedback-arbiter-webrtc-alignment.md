@@ -1,7 +1,7 @@
 # RFC：Receive Feedback Arbiter 与 WebRTC 接收侧对齐
 
-**状态：** Done（代码与单测闭合；live healthy 新采见 [`reports/2026-05-29-receive-feedback-arbiter-trace-validation.md`](../reports/2026-05-29-receive-feedback-arbiter-trace-validation.md)）  
-**范围：** `xbxengine` receive / recovery contract / session policy / trace projection  
+**状态：** Done（代码与单测闭合；live healthy 新采见 [`reports/2026-05-29-receive-feedback-arbiter-trace-validation.md`](../reports/2026-05-29-receive-feedback-arbiter-trace-validation.md)）
+**范围：** `xbxengine` receive / recovery contract / session policy / trace projection
 **接续：** [2026-05-27 恢复链减法与 libwebrtc 对齐](2026-05-27-recovery-subtraction-libwebrtc-alignment.md)
 
 ## 背景

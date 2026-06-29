@@ -1,7 +1,7 @@
 # RFC：Receive InsertGate 与恢复链收敛
 
-**状态：** 已实施（2026-05-26）；fast-path / timed-fallback reset 分支已由 [2026-05-27 恢复链减法](2026-05-27-recovery-subtraction-libwebrtc-alignment.md) supersede  
-**范围：** 仅客户端（`xbxengine`、`src-tauri`）  
+**状态：** 已实施（2026-05-26）；fast-path / timed-fallback reset 分支已由 [2026-05-27 恢复链减法](2026-05-27-recovery-subtraction-libwebrtc-alignment.md) supersede
+**范围：** 仅客户端（`xbxengine`、`src-tauri`）
 **关联：** [2026-05-25 低延迟显示调度](2026-05-25-low-latency-display-scheduling-optimization.md)、[2026-05-12 传输修复语义统一](2026-05-12-transport-repair-and-recovery-semantic-unification.md)
 
 ## 问题

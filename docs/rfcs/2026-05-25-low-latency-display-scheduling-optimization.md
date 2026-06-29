@@ -273,7 +273,7 @@ cargo test -p xbxrc --lib native_video::mod::tests::host_timing
 
 #### Steady Supply Present Contract（仅供给健康窗口）
 
-**适用**：连续 ≥30s、`session_phase=steady` 占比 >95%、`decode_fps∈[28,32]`、`nackExpired=0`、无密集 recovering。  
+**适用**：连续 ≥30s、`session_phase=steady` 占比 >95%、`decode_fps∈[28,32]`、`nackExpired=0`、无密集 recovering。
 **不适用**（`STEADY_SUPPLY_SKIPPED`）：gap repair、decode 塌方、recovering 主导会话（如 `runtime-trace-1779783888031`）。
 
 | KPI | 通过标准 |

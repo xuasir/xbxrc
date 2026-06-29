@@ -1,6 +1,6 @@
 # RFC：MediaSupply 生命周期单轨
 
-**状态：** 实施中（2026-05-27）  
+**状态：** 实施中（2026-05-27）
 **关联：** [2026-05-25 低延迟显示调度](2026-05-25-low-latency-display-scheduling-optimization.md)、[2026-05-26 Receive InsertGate 收敛](2026-05-26-receive-insert-gate-and-recovery-convergence.md)
 
 ## 问题
