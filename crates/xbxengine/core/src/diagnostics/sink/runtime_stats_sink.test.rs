@@ -257,6 +257,56 @@ fn lifecycle_recovering_completes_active_episode() {
 }
 
 #[test]
+fn playback_recovered_rejects_retained_host_present_from_previous_episode() {
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(1_000.0);
+    sink.update(|stats| {
+        stats.display_age_ms = Some(1_200.0);
+        stats.last_displayed_at_ms = Some(900.0);
+        stats.latest_video_host_present_time_ms = Some(900.0);
+        stats.last_displayed_frame_seq = Some(407);
+        stats.video_owner_state = Some("supply-starved".to_string());
+        stats.video_owner_reason = Some("displaySupplyCritical".to_string());
+    });
+    sink.record_playback_recovered_fact(900.0, 15.0);
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.recovery_playback_recovered_at_ms, None);
+    assert!(stats
+        .latest_picture_recovery_transition_observation
+        .is_none());
+}
+
+#[test]
+fn playback_recovered_accepts_current_fresh_host_present() {
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(1_000.0);
+    sink.update(|stats| {
+        stats.display_age_ms = Some(16.0);
+        stats.last_displayed_at_ms = Some(1_020.0);
+        stats.latest_video_host_present_time_ms = Some(1_020.0);
+        stats.last_displayed_frame_seq = Some(408);
+        stats.video_owner_state = Some("stable-serving".to_string());
+        stats.video_owner_reason = Some("steady".to_string());
+    });
+    sink.record_playback_recovered_fact(1_020.0, 60.0);
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.recovery_playback_recovered_at_ms, Some(1_020.0));
+    let transition = stats
+        .latest_picture_recovery_transition_observation
+        .as_ref()
+        .expect("playback recovered transition");
+    assert_eq!(transition.phase, "PlaybackRecovered");
+    assert_eq!(transition.recovery_epoch, Some(1));
+    assert_eq!(transition.frame_seq, Some(408));
+}
+
+#[test]
 fn stable_settle_completes_active_episode_after_clean_anchor() {
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let sink = RuntimeStatsSink::new(runtime_stats.clone());
@@ -1497,6 +1547,115 @@ fn playback_recovered_keeps_unresolved_sent_transport_await_continuation_bound()
     assert_eq!(h264.bound_episode_status.as_deref(), Some("sent"));
     assert_eq!(h264.bound_recovery_epoch, Some(1));
     assert!(h264.bound_as_recovery_response.unwrap_or(false));
+}
+
+#[test]
+fn stale_playback_recovered_does_not_bind_unresolved_transport_await_continuation() {
+    use crate::XbxEngineH264InspectionObservation;
+
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(10.0);
+    sink.record_picture_recovery_episode_requested(
+        9203,
+        Some("receiverWaitingKeyframe".to_string()),
+        100.0,
+        None,
+    );
+    sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+    sink.update(|stats| {
+        stats.recovery_playback_recovered_at_ms = Some(80.0);
+        stats.recovery_playback_recovered_phase = Some("PlaybackRecovered".to_string());
+    });
+    sink.record_h264_inspection_observation(XbxEngineH264InspectionObservation {
+        observation_id: 8,
+        frame_rtp_timestamp: Some(30_334),
+        nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+        nal_count: 1,
+        vcl_nal_count: 1,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        committed_sps_present: true,
+        committed_pps_present: true,
+        slice_headers_valid: true,
+        delta_continuation_ready: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        is_idr: false,
+        sample_width: None,
+        sample_height: None,
+        bootstrap_ready: false,
+        bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+        continuation_verdict: Some("receiverLocalContinuation".to_string()),
+        admission_accepted: true,
+        observed_at_ms: 15_200.0,
+        ..Default::default()
+    });
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let h264 = stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .expect("h264 observation");
+    assert_ne!(h264.bound_episode_id, Some(9203));
+    assert_ne!(h264.bound_recovery_epoch, Some(1));
+    assert_ne!(h264.bound_as_recovery_response, Some(true));
+}
+
+#[test]
+fn playback_recovered_before_current_episode_does_not_bind_transport_await_continuation() {
+    use crate::XbxEngineH264InspectionObservation;
+
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+    sink.begin_transport_recovery_episode(10.0);
+    sink.record_picture_recovery_episode_requested(
+        9204,
+        Some("receiverWaitingKeyframe".to_string()),
+        100.0,
+        None,
+    );
+    sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+    sink.update(|stats| {
+        stats.transport_recovery_episode_opened_at_ms = Some(500.0);
+        stats.recovery_playback_recovered_at_ms = Some(260.0);
+        stats.recovery_playback_recovered_phase = Some("PlaybackRecovered".to_string());
+    });
+    sink.record_h264_inspection_observation(XbxEngineH264InspectionObservation {
+        observation_id: 9,
+        frame_rtp_timestamp: Some(30_335),
+        nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+        nal_count: 1,
+        vcl_nal_count: 1,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        committed_sps_present: true,
+        committed_pps_present: true,
+        slice_headers_valid: true,
+        delta_continuation_ready: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        is_idr: false,
+        sample_width: None,
+        sample_height: None,
+        bootstrap_ready: false,
+        bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+        continuation_verdict: Some("receiverLocalContinuation".to_string()),
+        admission_accepted: true,
+        observed_at_ms: 15_200.0,
+        ..Default::default()
+    });
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let h264 = stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .expect("h264 observation");
+    assert_ne!(h264.bound_episode_id, Some(9204));
+    assert_ne!(h264.bound_recovery_epoch, Some(1));
+    assert_ne!(h264.bound_as_recovery_response, Some(true));
 }
 
 #[test]

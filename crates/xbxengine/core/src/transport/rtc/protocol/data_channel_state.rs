@@ -279,13 +279,21 @@ pub(crate) fn drain_pending_input_frames(
 pub(crate) fn build_metadata_frame(
     stats: &XbxEngineMediaRuntimeStats,
     last_metadata_frame_seq: &mut u64,
+    last_metadata_frame_rtp_timestamp: &mut Option<u32>,
 ) -> Option<VideoMetadataFrame> {
     let frame = stats.latest_video_frame.as_ref()?;
-    if frame.frame_seq <= *last_metadata_frame_seq {
+    let frame_rtp_timestamp = frame.rtp_timestamp;
+    let frame_advanced = frame.frame_seq > *last_metadata_frame_seq
+        || match (frame_rtp_timestamp, *last_metadata_frame_rtp_timestamp) {
+            (Some(candidate), Some(current)) => rtp_timestamp_is_after(candidate, current),
+            _ => false,
+        };
+    if !frame_advanced {
         return None;
     }
     let packet_arrival = stats.latest_video_packet_arrival_time_ms?;
     *last_metadata_frame_seq = frame.frame_seq;
+    *last_metadata_frame_rtp_timestamp = frame_rtp_timestamp;
     let frame_time = frame.rendered_at_ms;
     Some(VideoMetadataFrame {
         server_data_key: frame.frame_seq.min(u32::MAX as u64) as u32,
@@ -296,6 +304,10 @@ pub(crate) fn build_metadata_frame(
         ),
         frame_rendered_time_ms: clamp_u32_ms(frame_time),
     })
+}
+
+fn rtp_timestamp_is_after(candidate: u32, current: u32) -> bool {
+    candidate != current && candidate.wrapping_sub(current) < (1_u32 << 31)
 }
 
 fn build_pointer_event(
@@ -513,7 +525,8 @@ fn clamp_u32_ms(value: f64) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::build_input_stream_packet;
+    use super::{build_input_stream_packet, build_metadata_frame};
+    use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoFrameStats};
     use ohmygamepad_protocol::{
         LogicalButtonsStateDto, LogicalPadId, LogicalPadSnapshotDto, LogicalPadStateDto,
         LogicalStickDto,
@@ -540,5 +553,128 @@ mod tests {
 
         assert_eq!(i16::from_le_bytes([packet[20], packet[21]]), 16384);
         assert_eq!(i16::from_le_bytes([packet[24], packet[25]]), -24575);
+    }
+
+    #[test]
+    fn metadata_frame_allows_rewound_seq_when_rtp_advances() {
+        let mut last_seq = 350;
+        let mut last_rtp = Some(u32::MAX - 40);
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_frame: Some(XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 7,
+                rtp_timestamp: Some(32),
+                fps: 60.0,
+                rendered_at_ms: 1_100.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_080.0),
+            latest_video_decode_ok_time_ms: Some(1_090.0),
+            latest_video_decode_ok_rtp_timestamp: Some(32),
+            ..Default::default()
+        };
+
+        let frame = build_metadata_frame(&stats, &mut last_seq, &mut last_rtp)
+            .expect("rewound frame seq should advance by rtp");
+
+        assert_eq!(frame.server_data_key, 7);
+        assert_eq!(last_seq, 7);
+        assert_eq!(last_rtp, Some(32));
+    }
+
+    #[test]
+    fn metadata_frame_rejects_rewound_seq_without_rtp_advance() {
+        let mut last_seq = 350;
+        let mut last_rtp = Some(2_000);
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_frame: Some(XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 7,
+                rtp_timestamp: Some(1_900),
+                fps: 60.0,
+                rendered_at_ms: 1_100.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_080.0),
+            latest_video_decode_ok_time_ms: Some(1_090.0),
+            latest_video_decode_ok_rtp_timestamp: Some(1_900),
+            ..Default::default()
+        };
+
+        let frame = build_metadata_frame(&stats, &mut last_seq, &mut last_rtp);
+
+        assert!(frame.is_none());
+        assert_eq!(last_seq, 350);
+        assert_eq!(last_rtp, Some(2_000));
+    }
+
+    #[test]
+    fn metadata_frame_ignores_packet_only_rtp_advance_for_same_video_frame() {
+        let mut last_seq = 7;
+        let mut last_rtp = Some(32);
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_frame: Some(XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 7,
+                rtp_timestamp: None,
+                fps: 60.0,
+                rendered_at_ms: 1_200.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_190.0),
+            latest_video_packet_arrival_rtp_timestamp: Some(2_856_576_214),
+            ..Default::default()
+        };
+
+        let frame = build_metadata_frame(&stats, &mut last_seq, &mut last_rtp);
+
+        assert!(frame.is_none());
+        assert_eq!(last_seq, 7);
+        assert_eq!(last_rtp, Some(32));
+    }
+
+    #[test]
+    fn metadata_frame_clears_rtp_baseline_when_advanced_frame_has_no_rtp() {
+        let mut last_seq = 50;
+        let mut last_rtp = Some(u32::MAX - 40);
+        let no_rtp_stats = XbxEngineMediaRuntimeStats {
+            latest_video_frame: Some(XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 100,
+                rtp_timestamp: None,
+                fps: 60.0,
+                rendered_at_ms: 1_100.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_080.0),
+            ..Default::default()
+        };
+
+        let frame = build_metadata_frame(&no_rtp_stats, &mut last_seq, &mut last_rtp)
+            .expect("higher frame seq should still emit metadata without rtp");
+
+        assert_eq!(frame.server_data_key, 100);
+        assert_eq!(last_seq, 100);
+        assert_eq!(last_rtp, None);
+
+        let rewound_stats = XbxEngineMediaRuntimeStats {
+            latest_video_frame: Some(XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 80,
+                rtp_timestamp: Some(32),
+                fps: 60.0,
+                rendered_at_ms: 1_200.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_180.0),
+            latest_video_decode_ok_rtp_timestamp: Some(32),
+            ..Default::default()
+        };
+
+        let frame = build_metadata_frame(&rewound_stats, &mut last_seq, &mut last_rtp);
+
+        assert!(frame.is_none());
+        assert_eq!(last_seq, 100);
+        assert_eq!(last_rtp, None);
     }
 }

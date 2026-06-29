@@ -44,7 +44,6 @@ pub(super) fn upsert_picture_recovery_episode(
     episode
 }
 
-#[cfg(test)]
 pub(super) fn reuse_active_transport_recovery_episode_id(
     stats: &XbxEngineMediaRuntimeStats,
     request_reason: Option<&str>,
@@ -499,7 +498,11 @@ pub(super) fn unresolved_transport_await_episode_keeps_serviceable_continuation_
     {
         return false;
     }
-    if stats.recovery_playback_recovered_at_ms.is_some() {
+    if current_episode_playback_recovered_bridges_continuation(
+        stats,
+        bridge_started_at_ms,
+        observation.observed_at_ms,
+    ) {
         return true;
     }
     stats
@@ -511,6 +514,38 @@ pub(super) fn unresolved_transport_await_episode_keeps_serviceable_continuation_
                 && latest.observed_at_ms <= observation.observed_at_ms
                 && transport_recovery_serviceable_continuation(latest)
         })
+}
+
+fn current_episode_playback_recovered_bridges_continuation(
+    stats: &XbxEngineMediaRuntimeStats,
+    bridge_started_at_ms: f64,
+    observed_at_ms: f64,
+) -> bool {
+    let Some(recovered_at_ms) = stats.recovery_playback_recovered_at_ms else {
+        return false;
+    };
+    if recovered_at_ms < bridge_started_at_ms || recovered_at_ms > observed_at_ms {
+        return false;
+    }
+    if stats
+        .transport_recovery_episode_opened_at_ms
+        .is_some_and(|opened_at_ms| recovered_at_ms < opened_at_ms)
+    {
+        return false;
+    }
+    if stats.display_age_ms.is_some_and(|age_ms| age_ms > 300.0) {
+        return false;
+    }
+    if matches!(stats.video_owner_state.as_deref(), Some("supply-starved")) {
+        return false;
+    }
+    if matches!(
+        stats.video_owner_reason.as_deref(),
+        Some("displaySupplyCritical" | "hostPresentStalled")
+    ) {
+        return false;
+    }
+    true
 }
 
 pub(super) fn transport_await_episode_matches_serviceable_continuation(

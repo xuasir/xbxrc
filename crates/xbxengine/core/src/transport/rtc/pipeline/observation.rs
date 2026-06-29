@@ -281,6 +281,7 @@ pub(crate) fn record_pipeline_frame_drop(
         height,
         is_keyframe,
         queue_depth,
+        ingress_queue_depth_breakdown: None,
     });
 }
 

@@ -51,12 +51,9 @@ def picture_recovery_phase(payload: dict[str, Any]) -> str:
 
 def chain_key(
     payload: dict[str, Any], current_ledger_generation: Any = None
-) -> tuple[str, Any]:
-    ledger_generation = (
-        payload.get("ledgerGeneration")
-        or payload.get("ledger_generation")
-        or current_ledger_generation
-    )
+) -> tuple[str, Any] | None:
+    del current_ledger_generation
+    ledger_generation = payload.get("ledgerGeneration") or payload.get("ledger_generation")
     if ledger_generation is not None:
         return ("ledgerGeneration", ledger_generation)
     episode = payload.get("episodeId") or payload.get("episode_id")
@@ -69,7 +66,9 @@ def chain_key(
         return ("epoch", epoch)
     if rtp is not None:
         return ("rtp", rtp)
-    return ("observation", observation)
+    if observation is not None:
+        return None
+    return None
 
 
 def p95(values: list[float]) -> float | None:
@@ -155,6 +154,8 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
     chain_anchor_keys: set[tuple[str, Any]] = set()
     chain_display_keys: set[tuple[str, Any]] = set()
     current_ledger_generation: Any = None
+    current_ledger_segment = 0
+    previous_explicit_ledger_generation: Any = None
     sent_by_ledger_generation: Counter[Any] = Counter()
     response_by_ledger_generation: Counter[Any] = Counter()
     decoded_by_ledger_generation: Counter[Any] = Counter()
@@ -180,18 +181,27 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         payload = event_payload(event)
         gen = payload.get("ledgerGeneration") or payload.get("ledger_generation")
         if gen is not None:
+            if (
+                previous_explicit_ledger_generation is not None
+                and isinstance(gen, (int, float))
+                and isinstance(previous_explicit_ledger_generation, (int, float))
+                and gen < previous_explicit_ledger_generation
+            ):
+                current_ledger_segment += 1
+            previous_explicit_ledger_generation = gen
             current_ledger_generation = gen
+        ledger_counter_key = (current_ledger_segment, gen) if gen is not None else None
         recovery_epoch = payload.get("recoveryEpoch") or payload.get("recovery_epoch")
         if recovery_epoch is not None:
             if (
                 current_recovery_epoch is not None
                 and recovery_epoch != current_recovery_epoch
-                and current_ledger_generation is not None
+                and gen is not None
             ):
                 previous_max = max_ledger_generation_by_epoch.get(current_recovery_epoch)
                 if (
                     previous_max is not None
-                    and current_ledger_generation == previous_max
+                    and gen == previous_max
                     and name
                     in (
                         "pictureRecoveryTransition",
@@ -204,10 +214,10 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                 ):
                     epoch_isolation_violations += 1
             current_recovery_epoch = recovery_epoch
-            if current_ledger_generation is not None:
+            if gen is not None:
                 previous = max_ledger_generation_by_epoch.get(recovery_epoch)
-                if previous is None or current_ledger_generation > previous:
-                    max_ledger_generation_by_epoch[recovery_epoch] = current_ledger_generation
+                if previous is None or gen > previous:
+                    max_ledger_generation_by_epoch[recovery_epoch] = gen
 
         if name == "receiveFeedbackDecision":
             absorb_control_facts(payload, latest_control_facts)
@@ -266,8 +276,8 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
             absorb_control_facts(payload, latest_control_facts)
             reason = str(payload.get("reason") or "")
             terminal_any += 1
-            if current_ledger_generation is not None:
-                terminal_by_ledger_generation[current_ledger_generation] += 1
+            if ledger_counter_key is not None:
+                terminal_by_ledger_generation[ledger_counter_key] += 1
             if reason == "remote-no-usable-idr":
                 terminal_remote_no_usable_idr += 1
             elif reason == "remote-continuation-only":
@@ -314,72 +324,86 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
             absorb_control_facts(payload, latest_control_facts)
 
         if name == "cleanAnchorCommitted":
-            chain_anchor_keys.add(chain_key(payload, current_ledger_generation))
-            if current_ledger_generation is not None:
-                anchor_by_ledger_generation[current_ledger_generation] += 1
+            key = chain_key(payload, current_ledger_generation)
+            if key is not None:
+                chain_anchor_keys.add(key)
+            if ledger_counter_key is not None:
+                anchor_by_ledger_generation[ledger_counter_key] += 1
         if name == "pictureRecoveryTransition":
             phase = picture_recovery_phase(payload)
             key = chain_key(payload, current_ledger_generation)
             if phase == "ResponseObserved":
-                chain_response_keys.add(key)
-                if current_ledger_generation is not None:
-                    response_by_ledger_generation[current_ledger_generation] += 1
+                if key is not None:
+                    chain_response_keys.add(key)
+                if ledger_counter_key is not None:
+                    response_by_ledger_generation[ledger_counter_key] += 1
             elif phase == "AnchorSeen":
-                chain_response_keys.add(key)
-                if current_ledger_generation is not None:
-                    response_by_ledger_generation[current_ledger_generation] += 1
+                if key is not None:
+                    chain_response_keys.add(key)
+                if ledger_counter_key is not None:
+                    response_by_ledger_generation[ledger_counter_key] += 1
             elif phase in ("Decoded", "PlaybackRecovered"):
-                chain_decoded_keys.add(key)
-                if current_ledger_generation is not None:
-                    decoded_by_ledger_generation[current_ledger_generation] += 1
+                if key is not None:
+                    chain_decoded_keys.add(key)
+                if ledger_counter_key is not None:
+                    decoded_by_ledger_generation[ledger_counter_key] += 1
             elif phase in ("CleanAnchorCommitted", "FreshAnchorRecovered"):
                 if phase == "CleanAnchorCommitted":
-                    chain_response_keys.add(key)
-                    chain_decoded_keys.add(key)
-                    if current_ledger_generation is not None:
-                        response_by_ledger_generation[current_ledger_generation] += 1
-                        decoded_by_ledger_generation[current_ledger_generation] += 1
-                chain_anchor_keys.add(key)
-                if current_ledger_generation is not None:
-                    anchor_by_ledger_generation[current_ledger_generation] += 1
+                    if key is not None:
+                        chain_response_keys.add(key)
+                        chain_decoded_keys.add(key)
+                    if ledger_counter_key is not None:
+                        response_by_ledger_generation[ledger_counter_key] += 1
+                        decoded_by_ledger_generation[ledger_counter_key] += 1
+                if key is not None:
+                    chain_anchor_keys.add(key)
+                if ledger_counter_key is not None:
+                    anchor_by_ledger_generation[ledger_counter_key] += 1
             elif phase == "DisplayStable":
-                chain_display_keys.add(key)
-                if current_ledger_generation is not None:
-                    display_by_ledger_generation[current_ledger_generation] += 1
+                if key is not None:
+                    chain_display_keys.add(key)
+                if ledger_counter_key is not None:
+                    display_by_ledger_generation[ledger_counter_key] += 1
         if name == "stableServingSettled":
-            chain_display_keys.add(chain_key(payload, current_ledger_generation))
-            if current_ledger_generation is not None:
-                display_by_ledger_generation[current_ledger_generation] += 1
+            key = chain_key(payload, current_ledger_generation)
+            if key is not None:
+                chain_display_keys.add(key)
+            if ledger_counter_key is not None:
+                display_by_ledger_generation[ledger_counter_key] += 1
         if name == "firstFrameLatencyObserved":
             key = chain_key(payload, current_ledger_generation)
             terminal = str(payload.get("terminalPhase") or payload.get("terminal_phase") or "")
-            if payload.get("pliSentToFirstIdrPacketMs") is not None:
+            if key is not None and payload.get("pliSentToFirstIdrPacketMs") is not None:
                 chain_response_keys.add(key)
-            if payload.get("firstIdrPacketToFirstDecodeMs") is not None:
+            if key is not None and payload.get("firstIdrPacketToFirstDecodeMs") is not None:
                 chain_decoded_keys.add(key)
-            if payload.get("firstDecodeToCleanAnchorCommittedMs") is not None:
+            if key is not None and payload.get("firstDecodeToCleanAnchorCommittedMs") is not None:
                 chain_anchor_keys.add(key)
-            if (
+            if key is not None and (
                 payload.get("cleanAnchorCommittedToDisplayStableMs") is not None
                 or terminal == "DisplayStable"
             ):
                 chain_display_keys.add(key)
         if name == "keyframeRequestOutcome" and payload.get("outcome") == "sent":
             chain_sent += 1
-            if current_ledger_generation is not None:
-                sent_by_ledger_generation[current_ledger_generation] += 1
+            if ledger_counter_key is not None:
+                sent_by_ledger_generation[ledger_counter_key] += 1
         if name in ("h264InspectionObserved", "h264InspectionObservation"):
             if payload.get("isIdr") or payload.get("is_idr"):
-                chain_response_keys.add(chain_key(payload, current_ledger_generation))
-                if current_ledger_generation is not None:
-                    response_by_ledger_generation[current_ledger_generation] += 1
+                key = chain_key(payload, current_ledger_generation)
+                if key is not None:
+                    chain_response_keys.add(key)
+                if ledger_counter_key is not None:
+                    response_by_ledger_generation[ledger_counter_key] += 1
                 if payload.get("bootstrapReady") or payload.get("bootstrap_ready"):
                     usable_idr_observations += 1
         if name in ("decodeOutputPathObserved", "decodeOutputPathObservation"):
             if payload.get("decoded") or payload.get("verdict") == "decoded-frame":
-                chain_decoded_keys.add(chain_key(payload, current_ledger_generation))
-                if current_ledger_generation is not None:
-                    decoded_by_ledger_generation[current_ledger_generation] += 1
+                key = chain_key(payload, current_ledger_generation)
+                if key is not None:
+                    chain_decoded_keys.add(key)
+                if ledger_counter_key is not None:
+                    decoded_by_ledger_generation[ledger_counter_key] += 1
 
     if sparse_active_start is not None:
         sparse_dwell_ms.append(0.0)

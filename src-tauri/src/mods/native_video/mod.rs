@@ -150,6 +150,7 @@ fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
         | "tick_total"
         | "hostMailboxSubmitGap"
         | "present_tick_dispatch_coalesced"
+        | "present_tick_immediate_deferred"
         | "present_tick_rerun"
         | "hostMailboxUpdateFailed"
         | "present_tick_failed"
@@ -879,6 +880,77 @@ pub(super) fn clear_host_present_tick_dispatch(
     render_loop_pending.store(false, Ordering::Relaxed);
 }
 
+const HOST_PRESENT_DISPATCH_RESCUE_STALE_MS: f64 = 250.0;
+
+pub(super) fn host_present_tick_dispatch_diagnostics(
+    source: &str,
+    render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
+    telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
+    now_ms: f64,
+) -> serde_json::Value {
+    let telemetry_snapshot = telemetry.lock().ok().map(|telemetry| {
+        (
+            telemetry.diagnostics_snapshot(),
+            telemetry.display_interval_ms(),
+        )
+    });
+    if let Some((diagnostics, display_interval_ms)) = telemetry_snapshot {
+        let present_age_ms = diagnostics
+            .latest_present_time_ms
+            .map(|presented_at_ms| (now_ms - presented_at_ms).max(0.0));
+        let submit_age_ms = diagnostics
+            .latest_submit_time_ms
+            .map(|submitted_at_ms| (now_ms - submitted_at_ms).max(0.0));
+        serde_json::json!({
+            "source": source,
+            "pendingBefore": render_loop_pending.load(Ordering::Relaxed),
+            "rerunBefore": rerun_requested.load(Ordering::Relaxed),
+            "presentAgeMs": present_age_ms,
+            "submitAgeMs": submit_age_ms,
+            "latestPresentTimeMs": diagnostics.latest_present_time_ms,
+            "latestSubmitTimeMs": diagnostics.latest_submit_time_ms,
+            "displayIntervalMs": display_interval_ms,
+            "hostDisplayTickEpoch": diagnostics.display_tick_epoch,
+            "hostFramePresentEpoch": diagnostics.present_epoch,
+            "hostCadencePhase": diagnostics.cadence_phase.as_str(),
+            "noPendingStreak": diagnostics.no_pending_streak,
+            "hostMailboxEnqueueCountTotal": diagnostics.present_enqueue_count_total,
+            "hostMailboxOverwriteCountTotal": diagnostics.present_overwrite_count_total,
+        })
+    } else {
+        serde_json::json!({
+            "source": source,
+            "pendingBefore": render_loop_pending.load(Ordering::Relaxed),
+            "rerunBefore": rerun_requested.load(Ordering::Relaxed),
+            "telemetryLockFailed": true,
+        })
+    }
+}
+
+pub(super) fn rescue_stale_host_present_tick_dispatch(
+    render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
+    telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
+    now_ms: f64,
+) -> bool {
+    if !render_loop_pending.load(Ordering::Relaxed) {
+        return false;
+    }
+    let stale_present = telemetry
+        .lock()
+        .ok()
+        .and_then(|telemetry| telemetry.latest_present_time_ms)
+        .is_some_and(|presented_at_ms| {
+            (now_ms - presented_at_ms).max(0.0) >= HOST_PRESENT_DISPATCH_RESCUE_STALE_MS
+        });
+    if !stale_present {
+        return false;
+    }
+    clear_host_present_tick_dispatch(render_loop_pending, rerun_requested);
+    true
+}
+
 /// 保证 tick 任意出口都会释放 pending；否则 display link / render loop 会永久不再调度。
 pub(super) struct HostPresentTickGuard {
     render_loop_pending: Arc<AtomicBool>,
@@ -990,6 +1062,47 @@ pub(super) fn record_host_mailbox_retained_displayed(
                 "noPendingStreak": telemetry_diag.no_pending_streak,
             })
         },
+    );
+}
+
+pub(super) fn record_host_mailbox_retained_displayed_stale(
+    runtime_trace: Option<&RuntimeTraceRecorderRef>,
+    pipeline: &str,
+    viewport_id: &str,
+    window_label: &str,
+    frame: &XbxEngineRenderFrame,
+    frame_age_ms: f64,
+    frame_age_budget_ms: f64,
+    slot_diag: &scheduling::ScheduledFrameSlotDiagnostics,
+    telemetry_diag: &HostCadenceTelemetryDiagnostics,
+) {
+    record_native_video_timing_event(
+        runtime_trace,
+        pipeline,
+        "hostMailboxRetainedDisplayedStale",
+        viewport_id,
+        window_label,
+        json!({
+            "reason": "retainedDisplayedFrameStale",
+            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+            "displayedFrameRtpTimestamp": slot_diag.displayed_frame_rtp_timestamp,
+            "displayedFrameRecoveryDisposition": slot_diag.displayed_frame_recovery_disposition,
+            "displayedFrameAgeMs": frame_age_ms,
+            "displayedFrameAgeBudgetMs": frame_age_budget_ms,
+            "frameSeq": frame.frame_seq,
+            "frameAgeMs": frame_age_ms,
+            "frameAgeBudgetMs": frame_age_budget_ms,
+            "pendingFrameSeq": slot_diag.pending_frame_seqs.first().copied(),
+            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
+            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+            "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
+            "queueDepth": slot_diag.queue_depth,
+            "pendingQueueDepth": slot_diag.pending_queue_depth,
+            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+            "noPendingStreak": telemetry_diag.no_pending_streak,
+        }),
     );
 }
 
@@ -1214,6 +1327,27 @@ pub(super) fn process_wgpu_render_take_outcome(
                     now_ms,
                 );
             }
+            WgpuRenderTakeResult {
+                presented_frame: None,
+                descriptor_upload: None,
+            }
+        }
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrameStale {
+            frame,
+            frame_age_ms,
+            frame_age_budget_ms,
+        } => {
+            record_host_mailbox_retained_displayed_stale(
+                runtime_trace,
+                pipeline,
+                viewport_id,
+                window_label,
+                &frame,
+                frame_age_ms,
+                frame_age_budget_ms,
+                take_slot_diag,
+                take_telemetry_diag,
+            );
             WgpuRenderTakeResult {
                 presented_frame: None,
                 descriptor_upload: None,
@@ -2069,6 +2203,43 @@ unsafe extern "C" fn macos_layer_display_link_callback(
                 })
             },
         );
+        let rescue_now_ms = now_ms_f64();
+        let rescue_details = host_present_tick_dispatch_diagnostics(
+            "displayLink",
+            &context.render_loop_pending,
+            &context.rerun_requested,
+            &context.telemetry,
+            rescue_now_ms,
+        );
+        if rescue_stale_host_present_tick_dispatch(
+            &context.render_loop_pending,
+            &context.rerun_requested,
+            &context.telemetry,
+            rescue_now_ms,
+        ) && request_host_present_tick_dispatch(
+            &context.render_loop_pending,
+            &context.rerun_requested,
+        ) {
+            record_native_video_timing_event_lazy(
+                context.runtime_trace.as_ref(),
+                "layer",
+                "present_tick_dispatch_rescued",
+                &context.viewport_id,
+                &context.window_label,
+                || rescue_details,
+            );
+            run_layer_present_tick(
+                &context.viewport_id,
+                &context.window_label,
+                &context.layer_state,
+                &context.frame_slot,
+                &context.telemetry,
+                &context.render_loop_pending,
+                &context.rerun_requested,
+                None,
+                context.runtime_trace.clone(),
+            );
+        }
         return 0;
     }
     run_layer_present_tick(
@@ -2611,6 +2782,24 @@ pub(super) fn prepare_layer_sample_for_present(
                 now_ms,
             );
             (displayed_frame, true)
+        }
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrameStale {
+            frame,
+            frame_age_ms,
+            frame_age_budget_ms,
+        } => {
+            record_host_mailbox_retained_displayed_stale(
+                runtime_trace,
+                "layer",
+                viewport_id,
+                window_label,
+                &frame,
+                frame_age_ms,
+                frame_age_budget_ms,
+                &frame_slot_diag,
+                &telemetry_diag,
+            );
+            return LayerSamplePrepareOutcome::SkippedNoReadyFrame;
         }
         ScheduledFrameTakeOutcome::NoPendingFrame => {
             record_host_mailbox_idle(

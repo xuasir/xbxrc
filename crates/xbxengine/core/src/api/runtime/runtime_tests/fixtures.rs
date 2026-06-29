@@ -583,7 +583,11 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
     ) -> Result<(), XbxEngineRuntimeError> {
         let mut runtime_stats = self.runtime_stats.lock().expect("lock runtime stats");
         runtime_stats.latest_host_mailbox_submit_time_ms = metrics.latest_host_submit_time_ms;
+        runtime_stats.latest_video_host_submit_rtp_timestamp =
+            metrics.latest_host_submit_rtp_timestamp;
         runtime_stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
+        runtime_stats.host_view_generation = metrics.host_view_generation;
+        runtime_stats.latest_host_view_created_at_ms = metrics.latest_host_view_created_at_ms;
         runtime_stats.host_mailbox_submit_epoch = metrics.host_mailbox_submit_epoch;
         runtime_stats.host_display_tick_epoch = metrics.host_display_tick_epoch;
         runtime_stats.host_frame_present_epoch = metrics.host_frame_present_epoch;
@@ -605,6 +609,10 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
         } else {
             "normal".to_string()
         });
+        runtime_stats.last_displayed_frame_seq = metrics.last_displayed_frame_seq;
+        runtime_stats.last_displayed_frame_rtp_timestamp =
+            metrics.last_displayed_frame_rtp_timestamp;
+        runtime_stats.last_displayed_at_ms = metrics.last_displayed_at_ms;
         runtime_stats.video_present_descriptor_upload_mode = metrics.descriptor_upload_mode;
         runtime_stats.video_present_descriptor_metal_import_count_total =
             metrics.descriptor_metal_import_count_total;

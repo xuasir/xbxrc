@@ -5,8 +5,13 @@ use crate::XbxEngineMediaRuntimeStats;
 pub const PRESENT_CADENCE_INTERVAL_FALLBACK_MS: f64 = 33.0;
 /// Steady 供给健康但 present 明显落后 decode（与 display_supply / runtime_state 口径对齐）。
 pub const PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS: f64 = 28.0;
-pub const PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS: f64 = 22.0;
+pub const PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS: f64 = 25.0;
 pub const PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP: f64 = 6.0;
+pub const PRESENT_PIPELINE_STRESSED_EXIT_FPS_GAP: f64 = 3.0;
+pub const PRESENT_PIPELINE_STRESSED_EXIT_AGE_MS: f64 = 80.0;
+pub const PRESENT_PIPELINE_SEVERE_LOW_PRESENT_MIN_DECODE_FPS: f64 = 24.0;
+pub const PRESENT_PIPELINE_SEVERE_LOW_PRESENT_MAX_PRESENT_FPS: f64 = 12.0;
+pub const PRESENT_PIPELINE_SEVERE_LOW_PRESENT_MIN_FPS_GAP: f64 = 12.0;
 pub const PRESENT_PIPELINE_LATENCY_STRESSED_MIN_DECODE_FPS: f64 = 18.0;
 pub const PRESENT_PIPELINE_LATENCY_STRESSED_MAX_PRESENT_FPS: f64 = 24.0;
 pub const PRESENT_PIPELINE_LATENCY_STRESSED_MIN_FPS_GAP: f64 = 3.0;
@@ -15,6 +20,7 @@ pub const PRESENT_PIPELINE_LATENCY_STRESSED_MIN_PRESENT_AGE_MS: f64 = 150.0;
 pub const PRESENT_PIPELINE_HIGH_FPS_LATENCY_STRESSED_MIN_FPS: f64 = 45.0;
 pub const PRESENT_PIPELINE_HIGH_FPS_LATENCY_STRESSED_MIN_SUBMIT_AGE_MS: f64 = 120.0;
 pub const PRESENT_PIPELINE_HIGH_FPS_LATENCY_STRESSED_MIN_DISPLAY_AGE_MS: f64 = 64.0;
+const HOST_MAILBOX_SERVICEABLE_MAX_DISPLAY_AGE_MS: f64 = 300.0;
 const FRAME_INTERVAL_MIN_MS: f64 = 8.0;
 const FRAME_INTERVAL_MAX_MS: f64 = 100.0;
 const STRESSED_RELEASE_INTERVAL_MIN_MS: u64 = 8;
@@ -63,23 +69,75 @@ pub(crate) fn resolve_present_cadence_interval_ms(
 /// 显示提交链已经落后，允许 pacer 按更快 host/流间隔释放。
 pub(crate) fn present_pipeline_stressed_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
     let decode_fps = stats.video_decode_fps;
-    let present_fps = stats.video_present_fps;
+    let present_fps = stats.video_present_fps.max(0.0);
+    let host_display_age_serviceable = host_display_age_serviceable(stats);
     let high_decode_present_gap = decode_fps >= PRESENT_PIPELINE_STRESSED_MIN_DECODE_FPS
         && present_fps > 0.0
         && present_fps <= PRESENT_PIPELINE_STRESSED_MAX_PRESENT_FPS
-        && (decode_fps - present_fps) >= PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP;
+        && (decode_fps - present_fps) >= PRESENT_PIPELINE_STRESSED_MIN_FPS_GAP
+        && host_display_age_serviceable;
     high_decode_present_gap
+        || present_pipeline_severe_low_present_from_stats(stats)
         || present_pipeline_latency_stressed_from_stats(stats)
         || present_pipeline_high_fps_latency_stressed_from_stats(stats)
 }
 
-fn present_pipeline_latency_stressed_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    let decode_fps = stats.video_decode_fps;
-    let present_fps = stats.video_present_fps;
-    let host_mailbox_serviceable = stats.host_frame_present_epoch > 0
+pub(crate) fn present_pipeline_stressed_with_hysteresis(
+    stats: &XbxEngineMediaRuntimeStats,
+    previously_stressed: bool,
+) -> bool {
+    if present_pipeline_stressed_from_stats(stats) {
+        return true;
+    }
+    if !previously_stressed {
+        return false;
+    }
+    present_pipeline_still_lagging_from_stats(stats)
+}
+
+fn host_mailbox_serviceable(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.host_frame_present_epoch > 0
         && stats.host_cadence_phase.as_deref() == Some("steady")
         && stats.host_no_pending_streak == 0
-        && stats.host_mailbox_enqueue_count_total >= stats.host_frame_present_epoch;
+        && host_display_age_serviceable(stats)
+}
+
+fn host_display_age_serviceable(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats
+        .display_age_ms
+        .map(|age_ms| age_ms < HOST_MAILBOX_SERVICEABLE_MAX_DISPLAY_AGE_MS)
+        .unwrap_or(true)
+}
+
+fn present_pipeline_still_lagging_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    if !host_mailbox_serviceable(stats) {
+        return false;
+    }
+    let decode_fps = stats.video_decode_fps;
+    let present_fps = stats.video_present_fps.max(0.0);
+    let fps_gap = (decode_fps - present_fps) >= PRESENT_PIPELINE_STRESSED_EXIT_FPS_GAP;
+    let age_late = stats
+        .submit_age_ms
+        .is_some_and(|age_ms| age_ms >= PRESENT_PIPELINE_STRESSED_EXIT_AGE_MS)
+        || stats
+            .display_age_ms
+            .is_some_and(|age_ms| age_ms >= PRESENT_PIPELINE_STRESSED_EXIT_AGE_MS);
+    fps_gap || age_late
+}
+
+fn present_pipeline_severe_low_present_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    let decode_fps = stats.video_decode_fps;
+    let present_fps = stats.video_present_fps.max(0.0);
+
+    host_mailbox_serviceable(stats)
+        && decode_fps >= PRESENT_PIPELINE_SEVERE_LOW_PRESENT_MIN_DECODE_FPS
+        && present_fps <= PRESENT_PIPELINE_SEVERE_LOW_PRESENT_MAX_PRESENT_FPS
+        && (decode_fps - present_fps) >= PRESENT_PIPELINE_SEVERE_LOW_PRESENT_MIN_FPS_GAP
+}
+
+fn present_pipeline_latency_stressed_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    let decode_fps = stats.video_decode_fps;
+    let present_fps = stats.video_present_fps.max(0.0);
     let submit_or_present_late = stats
         .submit_age_ms
         .is_some_and(|age_ms| age_ms >= PRESENT_PIPELINE_LATENCY_STRESSED_MIN_SUBMIT_AGE_MS)
@@ -87,10 +145,9 @@ fn present_pipeline_latency_stressed_from_stats(stats: &XbxEngineMediaRuntimeSta
             .display_age_ms
             .is_some_and(|age_ms| age_ms >= PRESENT_PIPELINE_LATENCY_STRESSED_MIN_PRESENT_AGE_MS);
 
-    host_mailbox_serviceable
+    host_mailbox_serviceable(stats)
         && submit_or_present_late
         && decode_fps >= PRESENT_PIPELINE_LATENCY_STRESSED_MIN_DECODE_FPS
-        && present_fps > 0.0
         && present_fps <= PRESENT_PIPELINE_LATENCY_STRESSED_MAX_PRESENT_FPS
         && (decode_fps - present_fps) >= PRESENT_PIPELINE_LATENCY_STRESSED_MIN_FPS_GAP
 }
@@ -100,10 +157,6 @@ fn present_pipeline_high_fps_latency_stressed_from_stats(
 ) -> bool {
     let decode_fps = stats.video_decode_fps;
     let present_fps = stats.video_present_fps;
-    let host_mailbox_serviceable = stats.host_frame_present_epoch > 0
-        && stats.host_cadence_phase.as_deref() == Some("steady")
-        && stats.host_no_pending_streak == 0
-        && stats.host_mailbox_enqueue_count_total >= stats.host_frame_present_epoch;
     let submit_late = stats.submit_age_ms.is_some_and(|age_ms| {
         age_ms >= PRESENT_PIPELINE_HIGH_FPS_LATENCY_STRESSED_MIN_SUBMIT_AGE_MS
     });
@@ -111,7 +164,7 @@ fn present_pipeline_high_fps_latency_stressed_from_stats(
         age_ms >= PRESENT_PIPELINE_HIGH_FPS_LATENCY_STRESSED_MIN_DISPLAY_AGE_MS
     });
 
-    host_mailbox_serviceable
+    host_mailbox_serviceable(stats)
         && submit_late
         && display_late
         && decode_fps >= PRESENT_PIPELINE_HIGH_FPS_LATENCY_STRESSED_MIN_FPS
@@ -187,8 +240,25 @@ mod tests {
         stats.video_decode_fps = 30.0;
         stats.video_present_fps = 18.0;
         assert!(present_pipeline_stressed_from_stats(&stats));
+        stats.video_present_fps = 24.0;
+        assert!(present_pipeline_stressed_from_stats(&stats));
         stats.video_present_fps = 26.0;
         assert!(!present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
+    fn stale_host_display_age_blocks_decode_present_gap_stress() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 31.0;
+        stats.video_present_fps = 21.0;
+        stats.display_age_ms = Some(360.0);
+        stats.submit_age_ms = Some(360.0);
+        stats.host_frame_present_epoch = 288;
+        stats.host_cadence_phase = Some("starved".to_string());
+        stats.host_no_pending_streak = 15;
+
+        assert!(!present_pipeline_stressed_from_stats(&stats));
+        assert!(!present_pipeline_stressed_with_hysteresis(&stats, true));
     }
 
     #[test]
@@ -220,6 +290,66 @@ mod tests {
     }
 
     #[test]
+    fn present_pipeline_stressed_when_present_fps_hits_zero_after_host_started() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 29.0;
+        stats.video_present_fps = 0.0;
+        stats.submit_age_ms = Some(1_200.0);
+        stats.host_frame_present_epoch = 1_700;
+        stats.host_mailbox_enqueue_count_total = 1_700;
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.host_no_pending_streak = 0;
+
+        assert!(present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
+    fn present_pipeline_zero_present_does_not_stress_before_host_started() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 29.0;
+        stats.video_present_fps = 0.0;
+        stats.submit_age_ms = Some(1_200.0);
+        stats.host_cadence_phase = Some("steady".to_string());
+
+        assert!(!present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
+    fn present_pipeline_stressed_when_tail_present_fps_collapses_but_decode_continues() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 26.6;
+        stats.video_present_fps = 4.6;
+        stats.host_frame_present_epoch = 3_802;
+        stats.host_mailbox_enqueue_count_total = 3_804;
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.host_no_pending_streak = 0;
+
+        assert!(present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
+    fn host_serviceable_allows_view_replay_present_epoch_ahead_of_enqueue_count() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 26.6;
+        stats.video_present_fps = 4.6;
+        stats.host_frame_present_epoch = 101;
+        stats.host_mailbox_enqueue_count_total = 100;
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.host_no_pending_streak = 0;
+
+        assert!(present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
+    fn present_pipeline_severe_low_present_requires_host_serviceable() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 26.6;
+        stats.video_present_fps = 4.6;
+
+        assert!(!present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
     fn present_pipeline_stressed_when_high_fps_submit_latency_spikes() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.video_decode_fps = 52.2;
@@ -232,5 +362,24 @@ mod tests {
         stats.host_no_pending_streak = 0;
 
         assert!(present_pipeline_stressed_from_stats(&stats));
+    }
+
+    #[test]
+    fn present_pipeline_hysteresis_holds_until_gap_and_latency_recover() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.video_decode_fps = 29.0;
+        stats.video_present_fps = 26.0;
+        stats.host_frame_present_epoch = 100;
+        stats.host_mailbox_enqueue_count_total = 100;
+        stats.host_cadence_phase = Some("steady".to_string());
+        stats.host_no_pending_streak = 0;
+
+        assert!(!present_pipeline_stressed_from_stats(&stats));
+        assert!(present_pipeline_stressed_with_hysteresis(&stats, true));
+
+        stats.video_present_fps = 28.0;
+        stats.submit_age_ms = Some(40.0);
+        stats.display_age_ms = Some(50.0);
+        assert!(!present_pipeline_stressed_with_hysteresis(&stats, true));
     }
 }

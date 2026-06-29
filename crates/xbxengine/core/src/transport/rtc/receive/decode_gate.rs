@@ -91,8 +91,6 @@ pub(crate) fn decodable_feed_context_from_receiver(
         decoder_reference_synced: ctx.decoder_reference_synced,
         first_frame_acquired: ctx.first_frame_acquired,
         hard_gap_blocks_delta: ctx.hard_gap_blocks_delta(),
-        receiver_repairing: matches!(ctx.receiver_state, ReceiverState::Repairing),
-        has_active_gap: ctx.has_active_gap,
     }
 }
 
@@ -116,16 +114,21 @@ pub(crate) fn receiver_decode_context_from_stats(
     now_ms: f64,
 ) -> ReceiverDecodeContext {
     use crate::transport::rtc::recovery::contract::{
-        current_clean_anchor_observed_at_ms_from_stats, decoder_reference_synced_from_stats,
+        current_clean_anchor_observed_at_ms_from_stats,
+        current_fresh_anchor_recovered_at_ms_from_stats, decoder_reference_synced_from_stats,
         has_current_clean_anchor_from_stats,
     };
     let decoder_reference_synced = decoder_reference_synced_from_stats(stats, now_ms);
     let current_media_anchor_committed = current_clean_anchor_observed_at_ms_from_stats(stats)
         .is_some()
-        || stats.recovery_fresh_anchor_recovered_at_ms.is_some();
+        || current_fresh_anchor_recovered_at_ms_from_stats(stats).is_some();
     let first_frame_acquired = has_current_clean_anchor_from_stats(stats)
-        || stats.recovery_playback_recovered_at_ms.is_some()
-        || stats.latest_video_decode_ok_time_ms.is_some();
+        || playback_recovered_current_for_active_recovery_episode(stats)
+        || stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(|decode_ok_ms| {
+                progress_time_current_for_active_recovery_episode(stats, decode_ok_ms)
+            });
     let observed_receiver_state = stats
         .latest_video_receiver_observation
         .as_ref()
@@ -169,6 +172,28 @@ pub(crate) fn receiver_decode_context_from_stats(
     }
 }
 
+fn playback_recovered_current_for_active_recovery_episode(
+    stats: &crate::XbxEngineMediaRuntimeStats,
+) -> bool {
+    stats
+        .recovery_playback_recovered_at_ms
+        .is_some_and(|recovered_at_ms| {
+            progress_time_current_for_active_recovery_episode(stats, recovered_at_ms)
+        })
+}
+
+fn progress_time_current_for_active_recovery_episode(
+    stats: &crate::XbxEngineMediaRuntimeStats,
+    progress_ms: f64,
+) -> bool {
+    if !stats.transport_recovery_episode_active {
+        return true;
+    }
+    stats
+        .transport_recovery_episode_opened_at_ms
+        .is_none_or(|opened_at_ms| progress_ms >= opened_at_ms)
+}
+
 pub fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'static str {
     match inspection.bootstrap_reject_reason {
         Some(H264BootstrapRejectReason::NoVcl) => "inspectionRejectNoVcl",
@@ -204,5 +229,40 @@ pub fn keyframe_episode_response_detail(
     match admission {
         InspectionAdmission::Accept => "firstKeyframeAccepted",
         InspectionAdmission::AwaitRecoveryKeyframe => inspection_bootstrap_reason(inspection),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::receiver_decode_context_from_stats;
+    use crate::XbxEngineMediaRuntimeStats;
+
+    #[test]
+    fn receiver_decode_context_ignores_stale_playback_recovered_for_active_episode() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_episode_active: true,
+            transport_recovery_episode_opened_at_ms: Some(2_000.0),
+            recovery_playback_recovered_at_ms: Some(1_000.0),
+            latest_video_decode_ok_time_ms: Some(1_500.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let context = receiver_decode_context_from_stats(&stats, 2_100.0);
+
+        assert!(!context.first_frame_acquired);
+    }
+
+    #[test]
+    fn receiver_decode_context_accepts_current_episode_playback_recovered() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_episode_active: true,
+            transport_recovery_episode_opened_at_ms: Some(2_000.0),
+            recovery_playback_recovered_at_ms: Some(2_050.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let context = receiver_decode_context_from_stats(&stats, 2_100.0);
+
+        assert!(context.first_frame_acquired);
     }
 }

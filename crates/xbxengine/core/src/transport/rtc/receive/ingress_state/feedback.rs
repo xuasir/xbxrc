@@ -47,6 +47,14 @@ fn is_keyframe_feedback_action(action: ReceiveFeedbackAction) -> bool {
     )
 }
 
+fn request_kind_for_feedback_action(action: ReceiveFeedbackAction) -> &'static str {
+    if matches!(action, ReceiveFeedbackAction::RequestFir) {
+        "fir"
+    } else {
+        "pli"
+    }
+}
+
 fn should_count_feedback_action_mismatch(
     decision: ReceiveFeedbackDecision,
     actual: ReceiveFeedbackAction,
@@ -404,6 +412,7 @@ impl RtcVideoFrameSource {
             now_ms,
             dispatch,
             sparse_idr_rhythm,
+            request_kind_for_feedback_action(decision.action),
         );
         self.record_receive_feedback_decision(decision, source_event, actual);
         let effective_rtt_ms = self
@@ -522,6 +531,7 @@ impl RtcVideoFrameSource {
         now_ms: f64,
         dispatch: KeyframeRequestDispatch,
         sparse_idr_rhythm: crate::transport::rtc::recovery::contract::SparseIdrRhythm,
+        request_kind: &'static str,
     ) {
         let outcome_name = match dispatch {
             KeyframeRequestDispatch::Sent(KeyframeSendOutcome::Sent) => "sent",
@@ -553,6 +563,25 @@ impl RtcVideoFrameSource {
                 ledger.note_keyframe_request_sent(now_ms);
             }
             self.sync_recovery_ledger_to_stats();
+            if sent_hard_keyframe_request {
+                let episode_id = self
+                    .runtime_stats
+                    .read(|stats| {
+                        stats
+                            .receive_recovery_ledger_generation
+                            .unwrap_or_else(|| stats.keyframe_request_outcome_seq.saturating_add(1))
+                    })
+                    .unwrap_or(0);
+                self.runtime_stats
+                    .record_picture_recovery_episode_requested(
+                        episode_id,
+                        Some("receiverWaitingKeyframe".to_string()),
+                        now_ms,
+                        None,
+                    );
+                self.runtime_stats
+                    .record_picture_recovery_episode_sent(request_kind, now_ms, None);
+            }
             if self.waiting_recovery_keyframe_since_ms.is_none() {
                 self.waiting_recovery_keyframe_since_ms = Some(now_ms);
             }

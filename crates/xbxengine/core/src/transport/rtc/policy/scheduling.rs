@@ -192,6 +192,10 @@ mod tests {
             reason: VideoEscalationReason::AdapterIdleTimeout,
             reason_label: "adapterIdleTimeout".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            reason_domain_before_runtime_resolution: None,
+            reason_domain_after_runtime_resolution: None,
+            remote_terminal_domain_promoted: false,
+            remote_terminal_active: false,
             reconnect_gate_detail: None,
             budget_before: RecoveryActionBudgetState {
                 recovery_epoch: 1,
@@ -277,6 +281,10 @@ mod tests {
                 reason: VideoEscalationReason::LifecycleRecovering,
                 reason_label: "rtcConnectionRecovering".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+                reason_domain_before_runtime_resolution: None,
+                reason_domain_after_runtime_resolution: None,
+                remote_terminal_domain_promoted: false,
+                remote_terminal_active: false,
                 reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
@@ -382,6 +390,10 @@ mod tests {
                 reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
                 reason_label: "receiverWaitingKeyframe".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+                reason_domain_before_runtime_resolution: None,
+                reason_domain_after_runtime_resolution: None,
+                remote_terminal_domain_promoted: false,
+                remote_terminal_active: false,
                 reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,

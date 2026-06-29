@@ -372,6 +372,7 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
                 width: 1920,
                 height: 1080,
                 frame_seq: 1,
+                rtp_timestamp: Some(1),
                 fps: 60.0,
                 rendered_at_ms: frame_time_ms,
             }),
@@ -415,6 +416,145 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
                 && *first_render_at_ms == frame_time_ms
                 && *from_first_packet_to_first_render_ms == Some(0.0)
                 && *from_first_decode_to_first_render_ms == Some(0.0)
+    )));
+}
+
+#[test]
+fn runtime_sync_accepts_rewound_frame_seq_when_rtp_advances() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    let runtime_stats = backend.runtime_stats.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    events.borrow_mut().clear();
+    runtime.health.last_frame_seq = 350;
+    runtime.health.last_frame_rtp_timestamp = Some(u32::MAX - 40);
+    runtime.health.last_frame_rendered_at_ms = Some(1_000.0);
+    runtime.snapshot.frame_rendered_time_ms = Some(1_000.0);
+
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_frame: Some(crate::XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 7,
+                rtp_timestamp: Some(32),
+                fps: 60.0,
+                rendered_at_ms: 1_100.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_080.0),
+            latest_video_decode_ok_time_ms: Some(1_090.0),
+            latest_video_decode_ok_rtp_timestamp: Some(32),
+            ..Default::default()
+        },
+    );
+
+    runtime.tick();
+
+    assert_eq!(runtime.health.last_frame_seq, 7);
+    assert_eq!(runtime.health.last_frame_rtp_timestamp, Some(32));
+    assert_eq!(runtime.snapshot().frame_rendered_time_ms, Some(1_100.0));
+    assert!(events.borrow().iter().any(|event| matches!(
+        event,
+        XbxEngineRuntimeEventDto::StatsVideoFrameRendered {
+            renderer_frame_time_ms,
+            ..
+        } if *renderer_frame_time_ms == 1_100.0
+    )));
+}
+
+#[test]
+fn runtime_sync_ignores_packet_only_rtp_advance_for_same_video_frame() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    let runtime_stats = backend.runtime_stats.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    events.borrow_mut().clear();
+    runtime.health.last_frame_seq = 7;
+    runtime.health.last_frame_rtp_timestamp = Some(32);
+    runtime.health.last_frame_rendered_at_ms = Some(1_100.0);
+    runtime.snapshot.frame_rendered_time_ms = Some(1_100.0);
+
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_frame: Some(crate::XbxEngineVideoFrameStats {
+                width: 1280,
+                height: 720,
+                frame_seq: 7,
+                rtp_timestamp: None,
+                fps: 60.0,
+                rendered_at_ms: 1_200.0,
+            }),
+            latest_video_packet_arrival_time_ms: Some(1_190.0),
+            latest_video_packet_arrival_rtp_timestamp: Some(2_856_576_214),
+            inbound_video_packet_count_total: 1,
+            ..Default::default()
+        },
+    );
+
+    runtime.tick();
+
+    assert_eq!(runtime.health.last_frame_seq, 7);
+    assert_eq!(runtime.health.last_frame_rtp_timestamp, Some(32));
+    assert_eq!(runtime.snapshot().frame_rendered_time_ms, Some(1_100.0));
+    assert!(!events.borrow().iter().any(|event| matches!(
+        event,
+        XbxEngineRuntimeEventDto::StatsVideoFrameRendered { .. }
     )));
 }
 

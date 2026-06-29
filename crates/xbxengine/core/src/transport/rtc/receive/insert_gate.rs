@@ -35,6 +35,7 @@ pub(crate) enum InsertDecisionReason {
     FreshIdr,
     PostPsStrict,
     MustIdrHold,
+    ActiveRepairHold,
     DecodableToFeed,
     FirstFrameFreshOrBootstrapIdr,
     FirstFrameHold,
@@ -48,6 +49,7 @@ impl InsertDecisionReason {
             Self::FreshIdr => "freshIdr",
             Self::PostPsStrict => "postPsStrict",
             Self::MustIdrHold => "mustIdrHold",
+            Self::ActiveRepairHold => "activeRepairHold",
             Self::DecodableToFeed => "decodableToFeed",
             Self::FirstFrameFreshOrBootstrapIdr => "firstFrameFreshOrBootstrapIdr",
             Self::FirstFrameHold => "firstFrameHold",
@@ -131,9 +133,6 @@ impl InsertContext {
                 .as_ref()
                 .and_then(|timeline| timeline.gap.as_ref())
                 .map(|gap| (now_ms - gap.observed_at_ms).max(0.0)),
-            receive_display_stable: stats.receive_display_state.as_deref()
-                == Some("display-stable")
-                && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch),
             decoder_waiting_keyframe: decoder_waiting_keyframe_control_active_from_stats(
                 stats, now_ms,
             ),
@@ -252,6 +251,19 @@ pub(crate) fn resolve_insert_decision_with_reason_enum(
                 InsertDecisionReason::MustIdrHold,
             );
         }
+    }
+    if matches!(ctx.reference_chain_state, ReferenceChainState::Repairing)
+        && matches!(
+            ctx.action_stage,
+            PacketRecoveryActionStage::NackPending | PacketRecoveryActionStage::NackMissed
+        )
+        && !inspection.is_idr
+        && !inspection.bootstrap_ready
+    {
+        return (
+            InsertDecision::HoldRepair,
+            InsertDecisionReason::ActiveRepairHold,
+        );
     }
     if insert_decodable_to_feed(
         inspection,
@@ -373,14 +385,14 @@ mod tests {
     fn ctx_decoder_synced() -> InsertContext {
         InsertContext {
             decode: ReceiverDecodeContext {
-                receiver_state: ReceiverState::Repairing,
-                has_active_gap: true,
+                receiver_state: ReceiverState::Receiving,
+                has_active_gap: false,
                 nack_exhausted: false,
                 first_frame_acquired: true,
                 decoder_reference_synced: true,
             },
             gap_mode: GapVsKeyframeMode::RepairFirst,
-            action_stage: PacketRecoveryActionStage::NackPending,
+            action_stage: PacketRecoveryActionStage::Steady,
             fresh_idr_admission: false,
             post_parameter_sets_change_strict: false,
             supply_break_continuation: false,
@@ -431,7 +443,7 @@ mod tests {
     }
 
     #[test]
-    fn continuous_reference_masks_request_idr_action_stage_for_insert_gate() {
+    fn continuous_reference_masks_repair_action_stage_for_insert_gate() {
         let decode = ReceiverDecodeContext {
             receiver_state: ReceiverState::Repairing,
             has_active_gap: true,
@@ -459,7 +471,7 @@ mod tests {
             50.0,
         );
 
-        assert_eq!(ctx.action_stage, PacketRecoveryActionStage::NackMissed);
+        assert_eq!(ctx.action_stage, PacketRecoveryActionStage::Steady);
         assert_eq!(ctx.gap_mode, GapVsKeyframeMode::RepairFirst);
         let inspection = non_idr_inspection();
         let (decision, reason) = resolve_insert_decision_with_reason(
@@ -857,6 +869,48 @@ mod tests {
     }
 
     #[test]
+    fn post_parameter_sets_strict_uses_packet_reference_decoder_evidence_without_display_stable() {
+        let decode = ReceiverDecodeContext {
+            receiver_state: ReceiverState::Repairing,
+            has_active_gap: true,
+            nack_exhausted: false,
+            first_frame_acquired: true,
+            decoder_reference_synced: false,
+        };
+        let reference = ReferenceChainObservation {
+            state: ReferenceChainState::Unknown,
+            cause: "bootstrap-missing-priming",
+            decoder_reference_synced: false,
+            has_active_gap: false,
+            bootstrap_ready: false,
+            ..Default::default()
+        };
+        let ctx = InsertContext::from_ledger_control(
+            decode,
+            reference,
+            PacketRecoveryActionStage::Steady,
+            false,
+            InsertControlTiming {
+                parameter_sets_changed_at_ms: Some(9_980.0),
+                ..Default::default()
+            },
+            10_000.0,
+            40.0,
+        );
+        let inspection = non_idr_inspection();
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert!(ctx.post_parameter_sets_change_strict);
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "postPsStrict");
+    }
+
+    #[test]
     fn submit_starved_stats_context_emits_non_idr_when_decoder_synced() {
         use crate::transport::rtc::receive::decode_gate::receiver_decode_context_from_stats;
         use crate::XbxEngineMediaRuntimeStats;
@@ -942,14 +996,102 @@ mod tests {
     }
 
     #[test]
-    fn repairing_with_decoder_sync_emits_soft_missing_idr_delta() {
+    fn repairing_with_decoder_sync_holds_soft_missing_idr_delta_during_active_repair() {
         let mut ctx = ctx_decoder_synced();
         ctx.decode.receiver_state = ReceiverState::Repairing;
         ctx.decode.has_active_gap = true;
+        ctx.reference_chain_state = ReferenceChainState::Repairing;
+        ctx.action_stage = PacketRecoveryActionStage::NackPending;
         let inspection = non_idr_inspection();
-        assert_eq!(
-            resolve_insert_decision(&inspection, &ctx, DecodeCorruptionPolicy::StandardWebRtc, 0),
-            InsertDecision::Emit
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
         );
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "activeRepairHold");
+    }
+
+    #[test]
+    fn continuous_synced_active_gap_keeps_steady_and_emits_continuation() {
+        let decode = ReceiverDecodeContext {
+            receiver_state: ReceiverState::Repairing,
+            has_active_gap: true,
+            nack_exhausted: false,
+            first_frame_acquired: true,
+            decoder_reference_synced: true,
+        };
+        let reference = ReferenceChainObservation {
+            state: ReferenceChainState::Continuous,
+            cause: "reference-continuous",
+            decoder_reference_synced: true,
+            has_active_gap: true,
+            ..Default::default()
+        };
+        let ctx = InsertContext::from_ledger_control(
+            decode,
+            reference,
+            PacketRecoveryActionStage::Steady,
+            false,
+            InsertControlTiming {
+                gap_age_ms: Some(120.0),
+                ..Default::default()
+            },
+            10_000.0,
+            40.0,
+        );
+        let inspection = non_idr_inspection();
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(ctx.action_stage, PacketRecoveryActionStage::Steady);
+        assert_eq!(decision, InsertDecision::Emit);
+        assert_eq!(reason, "decodableToFeed");
+    }
+
+    #[test]
+    fn repairing_synced_active_gap_normalizes_steady_stage_to_active_repair_hold() {
+        let decode = ReceiverDecodeContext {
+            receiver_state: ReceiverState::Repairing,
+            has_active_gap: true,
+            nack_exhausted: false,
+            first_frame_acquired: true,
+            decoder_reference_synced: true,
+        };
+        let reference = ReferenceChainObservation {
+            state: ReferenceChainState::Repairing,
+            cause: "receive-ledger-hard-gap-repairing",
+            decoder_reference_synced: true,
+            has_active_gap: true,
+            ..Default::default()
+        };
+        let ctx = InsertContext::from_ledger_control(
+            decode,
+            reference,
+            PacketRecoveryActionStage::Steady,
+            false,
+            InsertControlTiming {
+                gap_age_ms: Some(120.0),
+                ..Default::default()
+            },
+            10_000.0,
+            40.0,
+        );
+        let inspection = non_idr_inspection();
+        let (decision, reason) = resolve_insert_decision_with_reason(
+            &inspection,
+            &ctx,
+            DecodeCorruptionPolicy::StandardWebRtc,
+            0,
+        );
+
+        assert_eq!(ctx.action_stage, PacketRecoveryActionStage::NackMissed);
+        assert_eq!(decision, InsertDecision::HoldRepair);
+        assert_eq!(reason, "activeRepairHold");
     }
 }

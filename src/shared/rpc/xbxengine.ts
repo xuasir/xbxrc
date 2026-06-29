@@ -327,6 +327,18 @@ export interface XbxEngineStatsDto {
     height: number
     is_keyframe: boolean
     queue_depth: number
+    ingress_queue_depth_breakdown?: {
+      sender_queue_depth: number
+      sender_max_capacity: number
+      sender_queue_limit: number
+      sender_remaining_capacity: number
+      pending_priority_primary_len: number
+      pending_priority_primary_limit: number
+      pending_repair_len: number
+      pending_repair_limit: number
+      pending_best_effort_len: number
+      pending_best_effort_limit: number
+    } | null
   }
   latest_video_frame_recovery_observation?: {
     observation_id: number

@@ -14,10 +14,17 @@ publish = false
 
 [dependencies]
 serde.workspace = true
+
 serde_json.workspace = true
+
 thiserror.workspace = true
+
 url.workspace = true
+
 uuid.workspace = true
+
+log.workspace = true
+
 xbox-webapi = { path = "../xbox-webapi" }
 
 [lib]

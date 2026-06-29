@@ -41,8 +41,6 @@ pub(crate) struct DecodableFeedContext {
     pub decoder_reference_synced: bool,
     pub first_frame_acquired: bool,
     pub hard_gap_blocks_delta: bool,
-    pub receiver_repairing: bool,
-    pub has_active_gap: bool,
 }
 
 pub(crate) fn derive_packet_recovery_action_stage_from_stats(
@@ -127,8 +125,8 @@ pub(crate) fn decodable_to_feed(
         return false;
     }
     match stage {
-        PacketRecoveryActionStage::Steady | PacketRecoveryActionStage::NackPending => true,
-        PacketRecoveryActionStage::NackMissed => ctx.receiver_repairing || !ctx.has_active_gap,
+        PacketRecoveryActionStage::Steady => true,
+        PacketRecoveryActionStage::NackPending | PacketRecoveryActionStage::NackMissed => false,
         PacketRecoveryActionStage::WaitKeyframe | PacketRecoveryActionStage::RequestIdr => false,
     }
 }

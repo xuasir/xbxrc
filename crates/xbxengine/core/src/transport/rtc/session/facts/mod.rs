@@ -9,9 +9,9 @@ use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerI
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
     current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms_from_stats,
-    has_current_clean_anchor_from_stats, sync_derived_recovery_contract_fields,
-    DerivedDecoderHealth, RecoveryContractSnapshot, RecoveryDisplayFacts, RecoveryExitPath,
-    RecoveryExitThresholds, RecoverySurfacePhase,
+    current_fresh_anchor_recovered_at_ms_from_stats, has_current_clean_anchor_from_stats,
+    sync_derived_recovery_contract_fields, DerivedDecoderHealth, RecoveryContractSnapshot,
+    RecoveryDisplayFacts, RecoveryExitPath, RecoveryExitThresholds, RecoverySurfacePhase,
 };
 
 pub(crate) mod gap_severity;
@@ -358,7 +358,14 @@ fn owner_clean_anchor_or_decoder_sync_clears_waiting(
     {
         return true;
     }
-    if owner_facts.recovery_fresh_anchor_recovered_at_ms.is_some() {
+    if owner_facts
+        .recovery_fresh_anchor_recovered_at_ms
+        .is_some_and(|anchor_at_ms| {
+            owner_facts
+                .transport_recovery_episode_opened_at_ms
+                .is_some_and(|opened_at_ms| anchor_at_ms >= opened_at_ms)
+        })
+    {
         return true;
     }
     owner_facts
@@ -479,6 +486,26 @@ mod tests {
             Some("receiving")
         );
         assert_eq!(resolve_anchor_reason_label(&facts, 120.0, false), None);
+    }
+
+    #[test]
+    fn stale_fresh_anchor_before_current_episode_does_not_mask_receiver_waiting() {
+        let facts = OwnerRuntimeFacts {
+            recovery_epoch: 8,
+            recovery_fresh_anchor_recovered_at_ms: Some(100.0),
+            transport_recovery_episode_opened_at_ms: Some(200.0),
+            latest_video_receiver_observation: Some(receiver_observation("waiting-keyframe")),
+            ..OwnerRuntimeFacts::default()
+        };
+
+        assert_eq!(
+            normalized_receiver_state_for_owner(&facts, 220.0).as_deref(),
+            Some("waiting-keyframe")
+        );
+        assert_eq!(
+            resolve_anchor_reason_label(&facts, 220.0, false),
+            Some("receiverWaitingKeyframe".to_string())
+        );
     }
 
     #[test]
@@ -759,15 +786,17 @@ fn reconcile_recovery_progress_from_current_bootstrap(
     profile: &crate::transport::rtc::recovery::policy::RecoveryScenarioProfile,
 ) -> (Option<RecoveryProgressLevel>, Option<f64>) {
     if has_current_clean_anchor {
-        let fresh_at_ms = stats
-            .recovery_fresh_anchor_recovered_at_ms
-            .or(stats.recovery_displayed_idr_at_ms);
+        let fresh_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats)
+            .or_else(|| current_fresh_anchor_recovered_at_ms_from_stats(stats));
         return (
             Some(RecoveryProgressLevel::CleanAnchorCommitted),
             fresh_at_ms,
         );
     }
-    if stats.recovery_playback_recovered_at_ms.is_some()
+    let current_episode_playback_recovered_at_ms = stats
+        .recovery_playback_recovered_at_ms
+        .filter(|at_ms| recovery_episode.is_none_or(|episode| *at_ms >= episode.requested_at_ms));
+    if current_episode_playback_recovered_at_ms.is_some()
         && matches!(
             progress,
             Some(
@@ -779,7 +808,7 @@ fn reconcile_recovery_progress_from_current_bootstrap(
     {
         return (
             Some(RecoveryProgressLevel::PlaybackRecovered),
-            stats.recovery_playback_recovered_at_ms,
+            current_episode_playback_recovered_at_ms,
         );
     }
     let Some(episode) = recovery_episode else {

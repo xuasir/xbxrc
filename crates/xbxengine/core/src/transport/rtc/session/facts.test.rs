@@ -140,6 +140,39 @@ mod tests {
     }
 
     #[test]
+    fn current_clean_anchor_progress_time_ignores_stale_displayed_idr() {
+        let timeline = XbxEngineVideoTimelineObservation {
+            observation_id: 30,
+            source_event: "frame-await-recovery-anchor".to_string(),
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 2_200.0,
+            },
+            gap: None,
+            frame: None,
+            observed_at_ms: 2_200.0,
+        };
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 9,
+            video_anchor_clean_epoch: Some(9),
+            video_anchor_clean_source_event: Some("decoded-usable-idr".to_string()),
+            video_anchor_clean_observed_at_ms: Some(2_100.0),
+            recovery_displayed_idr_at_ms: Some(1_000.0),
+            ..Default::default()
+        };
+
+        let facts = compute_recovery_facts(&timeline, &stats);
+
+        assert_eq!(
+            facts.recovery_progress_level,
+            Some(RecoveryProgressLevel::CleanAnchorCommitted)
+        );
+        assert_eq!(facts.recovery_episode_progress_at_ms, Some(2_100.0));
+    }
+
+    #[test]
     fn retired_success_episode_does_not_mask_new_transport_await_progress() {
         let timeline = XbxEngineVideoTimelineObservation {
             observation_id: 4,
@@ -421,5 +454,55 @@ mod tests {
             Some(RecoveryProgressLevel::PlaybackRecovered)
         );
         assert_eq!(facts.recovery_episode_progress_at_ms, Some(2_400.0));
+    }
+
+    #[test]
+    fn stale_playback_recovered_before_episode_does_not_advance_progress() {
+        let timeline = crate::XbxEngineVideoTimelineObservation {
+            observation_id: 13,
+            source_event: "frame-observed".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "waiting-keyframe".to_string(),
+                reason: Some("receiverWaitingKeyframe".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 2_420.0,
+            },
+            observed_at_ms: 2_420.0,
+        };
+        let mut stats = crate::XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 4;
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 9,
+                request_reason: Some("receiverWaitingKeyframe".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "decoded".to_string(),
+                status_detail: None,
+                requested_at_ms: 2_000.0,
+                sent_at_ms: Some(2_010.0),
+                deadline_at_ms: Some(2_900.0),
+                transport_detail: None,
+                first_video_packet_at_ms: Some(2_120.0),
+                first_video_packet_rtp_timestamp: Some(111),
+                first_video_packet_is_keyframe: Some(true),
+                first_keyframe_packet_at_ms: Some(2_120.0),
+                first_keyframe_decoded_at_ms: Some(2_140.0),
+                response_rtp_timestamp: Some(111),
+                response_frame_seq: Some(5),
+                response_verdict: Some("on-time".to_string()),
+                lifecycle_phase: Some("decoded".to_string()),
+                retired_at_ms: None,
+            });
+        stats.recovery_playback_recovered_at_ms = Some(1_500.0);
+        stats.latest_video_decode_ok_time_ms = Some(2_140.0);
+
+        let facts = compute_recovery_facts(&timeline, &stats);
+        assert_eq!(
+            facts.recovery_progress_level,
+            Some(RecoveryProgressLevel::Decoded)
+        );
+        assert_eq!(facts.recovery_episode_progress_at_ms, Some(2_140.0));
     }
 }

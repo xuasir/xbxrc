@@ -1263,21 +1263,13 @@
             "label": "关闭",
             "description": "不记录"
           },
-          "minimal": {
-            "label": "最少",
-            "description": "低"
+          "production": {
+            "label": "生产",
+            "description": "关键事件"
           },
-          "standard": {
-            "label": "标准",
-            "description": "普通"
-          },
-          "verbose": {
-            "label": "详细",
-            "description": "更多"
-          },
-          "trace": {
-            "label": "追踪",
-            "description": "最多"
+          "dev": {
+            "label": "开发",
+            "description": "详细"
           }
         }
       }

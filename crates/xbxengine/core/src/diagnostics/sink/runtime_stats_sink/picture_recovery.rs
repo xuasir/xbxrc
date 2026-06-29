@@ -793,6 +793,51 @@ impl RuntimeStatsSink {
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::XbxEngineMediaRuntimeStats;
+
+    #[test]
+    fn stale_displayed_idr_does_not_suppress_receiver_local_continuation_blocker() {
+        let stats = XbxEngineMediaRuntimeStats {
+            recovery_displayed_idr_at_ms: Some(120.0),
+            ..Default::default()
+        };
+        let observation = XbxEngineH264InspectionObservation {
+            admission_accepted: false,
+            reject_classification: Some("receiverLocalContinuation".to_string()),
+            ..Default::default()
+        };
+
+        assert!(should_record_h264_inspection_as_picture_blocker(
+            &observation,
+            &stats
+        ));
+    }
+
+    #[test]
+    fn current_clean_anchor_suppresses_receiver_local_continuation_blocker() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 3,
+            video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_observed_at_ms: Some(120.0),
+            video_anchor_clean_source_event: Some("decoded-usable-idr".to_string()),
+            ..Default::default()
+        };
+        let observation = XbxEngineH264InspectionObservation {
+            admission_accepted: false,
+            reject_classification: Some("receiverLocalContinuation".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!should_record_h264_inspection_as_picture_blocker(
+            &observation,
+            &stats
+        ));
+    }
+}
+
+#[cfg(test)]
 impl RuntimeStatsSink {
     pub(crate) fn record_video_rtcp_send_failure(&self, observed_at_ms: f64, reason: &str) {
         let availability_state = if reason.contains("FeedbackTargetUnavailable")
@@ -820,7 +865,9 @@ impl RuntimeStatsSink {
             ));
         });
     }
+}
 
+impl RuntimeStatsSink {
     pub(crate) fn record_picture_recovery_episode_requested(
         &self,
         episode_id: u64,
@@ -910,7 +957,10 @@ impl RuntimeStatsSink {
             );
         });
     }
+}
 
+#[cfg(test)]
+impl RuntimeStatsSink {
     pub(crate) fn record_picture_recovery_episode_unsent_expired(&self, observed_at_ms: f64) {
         self.update(|stats| {
             let transport_recovery_epoch = stats.transport_recovery_epoch;

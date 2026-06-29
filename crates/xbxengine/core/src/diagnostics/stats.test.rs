@@ -98,6 +98,7 @@ fn panel_fps_prefers_present_then_decode_over_legacy_frame_fps() {
         width: 1920,
         height: 1080,
         frame_seq: 1,
+        rtp_timestamp: Some(1),
         fps: 0.0,
         rendered_at_ms: 0.0,
     });
@@ -306,6 +307,7 @@ fn latest_decision_summary_surfaces_reconnect_gate_detail_when_present() {
             command_result: None,
             command_detail: None,
             observed_at_ms: 1000.0,
+            ..Default::default()
         }),
         ..XbxEngineMediaRuntimeStats::default()
     };
@@ -348,6 +350,7 @@ fn latest_decision_summary_marks_local_decoder_maintenance_family() {
             command_result: None,
             command_detail: None,
             observed_at_ms: 1_000.0,
+            ..Default::default()
         }),
         ..XbxEngineMediaRuntimeStats::default()
     };
@@ -390,6 +393,7 @@ fn latest_recovery_decision_ledger_projects_extended_observability_fields() {
             command_result: None,
             command_detail: None,
             observed_at_ms: 1_100.0,
+            ..Default::default()
         }),
         ..XbxEngineMediaRuntimeStats::default()
     };
@@ -1089,6 +1093,31 @@ fn build_stats_projects_chain_presentation_health_and_last_displayed_frame() {
     assert_eq!(dto.last_displayed_frame_seq, Some(77));
     assert_eq!(dto.last_displayed_frame_rtp_timestamp, Some(22334455));
     assert_eq!(dto.last_displayed_at_ms, Some(now_ms - 2_200.0));
+}
+
+#[test]
+fn presentation_health_ignores_enqueue_counter_without_present_history() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        session_phase: Some("recovering".to_string()),
+        latest_video_decode_ok_time_ms: Some(now_ms - 24.0),
+        host_mailbox_enqueue_count_total: 120,
+        host_no_pending_pressure_level: Some("critical".to_string()),
+        host_no_pending_streak: 1_280,
+        video_owner_state: Some("rebuilding-supply".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 10.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.chain_health.as_deref(), Some("recovering"));
+    assert_eq!(dto.presentation_health.as_deref(), Some("recovering"));
+    assert_eq!(dto.video_health.as_deref(), Some("recovering"));
 }
 
 #[test]

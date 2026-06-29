@@ -1037,7 +1037,7 @@ describe('renderers', () => {
       videoWidth = 1920
       videoHeight = 1080
       insertAdjacentElement = vi.fn()
-      requestVideoFrameCallback(callback: () => void): number {
+      requestVideoFrameCallback(_callback: () => void): number {
         return 1
       }
 

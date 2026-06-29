@@ -1263,21 +1263,13 @@
             "label": "Off",
             "description": "No logs"
           },
-          "minimal": {
-            "label": "Minimal",
-            "description": "Low"
+          "production": {
+            "label": "Production",
+            "description": "Key events"
           },
-          "standard": {
-            "label": "Standard",
-            "description": "Normal"
-          },
-          "verbose": {
-            "label": "Verbose",
-            "description": "More"
-          },
-          "trace": {
-            "label": "Trace",
-            "description": "Most"
+          "dev": {
+            "label": "Dev",
+            "description": "Detailed"
           }
         }
       }

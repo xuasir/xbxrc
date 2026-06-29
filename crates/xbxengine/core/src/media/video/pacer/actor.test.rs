@@ -369,8 +369,20 @@ fn next_wait_duration_ignores_host_release_gate() {
     let policy = FramePacingPolicy::new(16);
     let mut frame = make_decoded_frame(3);
     frame.pts = Instant::now();
-    let wait = next_wait_duration(Some(&frame), &policy, false, Some(Duration::from_millis(7)));
+    let wait = next_wait_duration(Some(&frame), &policy, Some(Duration::from_millis(7)));
     assert_eq!(wait, Duration::ZERO);
+}
+
+#[test]
+fn next_wait_duration_holds_future_frame_until_deadline() {
+    let policy = FramePacingPolicy::new(16);
+    let mut frame = make_decoded_frame(4);
+    frame.pts = Instant::now() + Duration::from_millis(40);
+
+    let wait = next_wait_duration(Some(&frame), &policy, None);
+
+    assert!(wait > Duration::ZERO);
+    assert!(wait <= Duration::from_millis(16));
 }
 
 #[test]
@@ -459,7 +471,6 @@ fn drive_ready_frames_submits_due_frame_without_host_release_window() {
     let mut pacing_queue = VecDeque::from([make_decoded_frame(11)]);
     let mut render_queue = VecDeque::new();
     let mut frame_drop_observation_id = 0;
-    let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
@@ -491,7 +502,6 @@ fn drive_ready_frames_submits_due_frame_without_host_release_window() {
         &pacing_policy,
         &host_context,
         &mut last_consumed_host_tick_epoch,
-        &mut catch_up_mode,
         &mut render_backpressure_active,
         |_render_queue| {
             submit_calls += 1;
@@ -506,6 +516,60 @@ fn drive_ready_frames_submits_due_frame_without_host_release_window() {
 }
 
 #[test]
+fn drive_ready_frames_holds_future_frame_instead_of_fast_releasing_backlog() {
+    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
+        XbxEngineMediaRuntimeStats::default(),
+    )));
+    let mut future_frame = make_decoded_frame(12);
+    future_frame.pts = Instant::now() + Duration::from_millis(40);
+    let mut pacing_queue = VecDeque::from([future_frame]);
+    let mut render_queue = VecDeque::new();
+    let mut frame_drop_observation_id = 0;
+    let mut last_consumed_host_tick_epoch = None;
+    let mut render_backpressure_active = false;
+    let host_context = HostPacingContext {
+        release_interval_ms: 16,
+        host_frame_age_budget_ms: Some(36.0),
+        display_tick_epoch: 0,
+        present_epoch: 0,
+        cadence_phase: HostCadencePhaseHint::Unknown,
+        pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+    let pacing_policy = FramePacingPolicy::with_dynamic_budget(
+        host_context.release_interval_ms,
+        host_context
+            .host_frame_age_budget_ms
+            .map(|budget_ms| budget_ms.round() as u64),
+        resolve_cadence_sleep_guard_override_ms(&host_context),
+        host_context.video_rtt_ms,
+        host_context.video_nack_recovery_rtt_ms,
+    );
+    let mut submit_calls = 0usize;
+
+    let dropped = drive_ready_frames_with_submit(
+        &mut pacing_queue,
+        &mut render_queue,
+        &runtime_stats,
+        &mut frame_drop_observation_id,
+        &pacing_policy,
+        &host_context,
+        &mut last_consumed_host_tick_epoch,
+        &mut render_backpressure_active,
+        |_render_queue| {
+            submit_calls += 1;
+            PendingRenderSubmitResult::Idle
+        },
+    );
+
+    assert!(dropped.is_none());
+    assert_eq!(submit_calls, 1);
+    assert_eq!(pacing_queue.len(), 1);
+    assert!(render_queue.is_empty());
+}
+
+#[test]
 fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() {
     let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
         XbxEngineMediaRuntimeStats::default(),
@@ -513,7 +577,6 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
     let mut pacing_queue = VecDeque::from([make_decoded_frame(21)]);
     let mut render_queue = VecDeque::new();
     let mut frame_drop_observation_id = 0;
-    let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
@@ -546,7 +609,6 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
         &pacing_policy,
         &host_context,
         &mut last_consumed_host_tick_epoch,
-        &mut catch_up_mode,
         &mut render_backpressure_active,
         |render_queue| {
             flush_calls += 1;
@@ -575,7 +637,6 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
         &pacing_policy,
         &host_context,
         &mut last_consumed_host_tick_epoch,
-        &mut catch_up_mode,
         &mut render_backpressure_active,
         |render_queue| {
             let frame = render_queue
@@ -609,7 +670,6 @@ fn recovery_keyframe_bypasses_deadline_drop_until_clean_anchor_can_continue() {
     let mut pacing_queue = VecDeque::from([frame]);
     let mut render_queue = VecDeque::new();
     let mut frame_drop_observation_id = 0;
-    let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
@@ -641,7 +701,6 @@ fn recovery_keyframe_bypasses_deadline_drop_until_clean_anchor_can_continue() {
         &pacing_policy,
         &host_context,
         &mut last_consumed_host_tick_epoch,
-        &mut catch_up_mode,
         &mut render_backpressure_active,
         |render_queue| {
             if let Some(frame) = render_queue.pop_front() {
@@ -657,6 +716,141 @@ fn recovery_keyframe_bypasses_deadline_drop_until_clean_anchor_can_continue() {
     assert!(pacing_queue.is_empty());
     assert!(render_queue.is_empty());
     assert_eq!(submitted_seqs, vec![41]);
+}
+
+#[test]
+fn starved_host_no_pending_releases_late_continuation_once() {
+    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
+        XbxEngineMediaRuntimeStats::default(),
+    )));
+    let mut frame = make_decoded_frame(42);
+    frame.is_keyframe = false;
+    frame.surface.is_keyframe = false;
+    frame.clean_anchor_commit_recovery_epoch = None;
+    frame.frame_unrecoverable_reason = None;
+    frame.pts = Instant::now() - Duration::from_millis(120);
+
+    let mut pacing_queue = VecDeque::from([frame]);
+    let mut render_queue = VecDeque::new();
+    let mut frame_drop_observation_id = 0;
+    let mut last_consumed_host_tick_epoch = None;
+    let mut render_backpressure_active = false;
+    let host_context = HostPacingContext {
+        release_interval_ms: 16,
+        host_frame_age_budget_ms: Some(36.0),
+        display_tick_epoch: 120,
+        present_epoch: 118,
+        cadence_phase: HostCadencePhaseHint::Starved,
+        pressure: HostPacingPressure {
+            cadence_phase: HostCadencePhaseHint::Starved,
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: 64,
+            host_mailbox_overwrite_count_total: 0,
+            host_mailbox_enqueue_count_total: 118,
+            present_fps: Some(0.0),
+            display_fps: Some(60.0),
+        },
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+    let pacing_policy = FramePacingPolicy::with_dynamic_budget(
+        host_context.release_interval_ms,
+        host_context
+            .host_frame_age_budget_ms
+            .map(|budget_ms| budget_ms.round() as u64),
+        resolve_cadence_sleep_guard_override_ms(&host_context),
+        host_context.video_rtt_ms,
+        host_context.video_nack_recovery_rtt_ms,
+    );
+    let mut submitted_seqs = Vec::new();
+
+    let dropped = drive_ready_frames_with_submit(
+        &mut pacing_queue,
+        &mut render_queue,
+        &runtime_stats,
+        &mut frame_drop_observation_id,
+        &pacing_policy,
+        &host_context,
+        &mut last_consumed_host_tick_epoch,
+        &mut render_backpressure_active,
+        |render_queue| {
+            if let Some(frame) = render_queue.pop_front() {
+                submitted_seqs.push(frame.surface.frame_seq);
+                PendingRenderSubmitResult::Submitted(frame)
+            } else {
+                PendingRenderSubmitResult::Idle
+            }
+        },
+    );
+
+    assert!(dropped.is_none());
+    assert!(pacing_queue.is_empty());
+    assert!(render_queue.is_empty());
+    assert_eq!(submitted_seqs, vec![42]);
+}
+
+#[test]
+fn steady_host_still_drops_late_continuation_by_deadline() {
+    let stats = Arc::new(std::sync::Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let runtime_stats = RuntimeStatsSink::new(stats.clone());
+    let mut frame = make_decoded_frame(43);
+    frame.is_keyframe = false;
+    frame.surface.is_keyframe = false;
+    frame.clean_anchor_commit_recovery_epoch = None;
+    frame.frame_unrecoverable_reason = None;
+    frame.pts = Instant::now() - Duration::from_millis(120);
+
+    let mut pacing_queue = VecDeque::from([frame]);
+    let mut render_queue = VecDeque::new();
+    let mut frame_drop_observation_id = 0;
+    let mut last_consumed_host_tick_epoch = None;
+    let mut render_backpressure_active = false;
+    let host_context = HostPacingContext {
+        release_interval_ms: 16,
+        host_frame_age_budget_ms: Some(36.0),
+        display_tick_epoch: 120,
+        present_epoch: 120,
+        cadence_phase: HostCadencePhaseHint::Steady,
+        pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+    let pacing_policy = FramePacingPolicy::with_dynamic_budget(
+        host_context.release_interval_ms,
+        host_context
+            .host_frame_age_budget_ms
+            .map(|budget_ms| budget_ms.round() as u64),
+        resolve_cadence_sleep_guard_override_ms(&host_context),
+        host_context.video_rtt_ms,
+        host_context.video_nack_recovery_rtt_ms,
+    );
+    let mut submitted_seqs = Vec::new();
+
+    let dropped = drive_ready_frames_with_submit(
+        &mut pacing_queue,
+        &mut render_queue,
+        &runtime_stats,
+        &mut frame_drop_observation_id,
+        &pacing_policy,
+        &host_context,
+        &mut last_consumed_host_tick_epoch,
+        &mut render_backpressure_active,
+        |render_queue| {
+            if let Some(frame) = render_queue.pop_front() {
+                submitted_seqs.push(frame.surface.frame_seq);
+                PendingRenderSubmitResult::Submitted(frame)
+            } else {
+                PendingRenderSubmitResult::Idle
+            }
+        },
+    );
+
+    assert!(dropped.is_none());
+    assert!(pacing_queue.is_empty());
+    assert!(render_queue.is_empty());
+    assert!(submitted_seqs.is_empty());
+    let stats = stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_pacer_drop_count_total, 1);
 }
 
 #[test]

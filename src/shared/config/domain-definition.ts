@@ -104,24 +104,14 @@ const RUNTIME_TRACE_MODE_OPTIONS = [
     description: 'No logs',
   },
   {
-    value: 'minimal',
-    label: 'Minimal',
-    description: 'Low',
+    value: 'production',
+    label: 'Production',
+    description: 'Key events',
   },
   {
-    value: 'standard',
-    label: 'Standard',
-    description: 'Normal',
-  },
-  {
-    value: 'verbose',
-    label: 'Verbose',
-    description: 'More',
-  },
-  {
-    value: 'trace',
-    label: 'Trace',
-    description: 'Most',
+    value: 'dev',
+    label: 'Dev',
+    description: 'Detailed',
   },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 

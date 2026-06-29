@@ -14,11 +14,18 @@ use super::{
     XbxEngineVideoPipelineRuntimeConfig,
 };
 use crate::session::recovery::STALL_SIGNAL_STABILITY_MS;
+use crate::transport::rtc::recovery::contract::{
+    current_clean_anchor_observed_at_ms_from_stats,
+    current_fresh_anchor_recovered_at_ms_from_stats,
+    remote_picture_recovery_terminal_active_from_stats,
+    REMOTE_TERMINAL_LATCH_MIN_UNRESOLVED_KEYFRAMES,
+};
 use crate::transport::rtc::recovery::runtime_state::renderer_shadow_blocks_serviceability;
 use crate::{
     XbxEngineDecodeRenderSignal, XbxEngineMediaBackend, XbxEngineMediaNegotiationRequest,
-    XbxEngineMediaSignal, XbxEngineRecoveryAction, XbxEngineRecoveryRuntimeConfig,
-    XbxEngineRecoverySignals, XbxEngineTransportSignal,
+    XbxEngineMediaRuntimeStats, XbxEngineMediaSignal, XbxEngineRecoveryAction,
+    XbxEngineRecoveryReasonDomain, XbxEngineRecoveryRuntimeConfig, XbxEngineRecoverySignals,
+    XbxEngineTransportSignal, XbxEngineTwccObservationQuality,
 };
 
 const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 10_000.0;
@@ -28,6 +35,12 @@ const ICE_EXCHANGE_IDLE_BACKOFF_MS: u64 = 60;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
 const RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS: f64 = 800.0;
 const LOCAL_DISPLAY_RECOVERY_POST_DECODE_FRESH_MS: f64 = 750.0;
+const RUNTIME_RECONNECT_HEALTHY_SIGNAL_FRESH_MS: f64 = 3_000.0;
+const RUNTIME_RECONNECT_SERVICEABLE_OUTPUT_FRESH_MS: f64 = 4_000.0;
+const RUNTIME_RECONNECT_NO_PENDING_LOCAL_MIN_STREAK: u32 = 48;
+const RUNTIME_RECONNECT_STALE_DISPLAY_LOCAL_MS: f64 = 600.0;
+const RUNTIME_RECONNECT_HEALTHY_MIN_TWCC_DELIVERY_RATIO: f64 = 0.95;
+const RUNTIME_RECONNECT_HEALTHY_MAX_TWCC_LOSS_RATIO: f64 = 0.05;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -205,8 +218,7 @@ where
         last_keyframe_request_at_ms: Option<f64>,
     ) {
         if keyframe_in_flight {
-            self.snapshot.last_recovery_reason =
-                Some("reconnectSettled:keyframeDeferred:keyframeInFlight".to_string());
+            self.mark_reconnect_settled_keyframe_deferred(now_ms, "keyframeInFlight");
             return;
         }
         let transport_ready = self
@@ -215,26 +227,22 @@ where
             .map(|stats| stats.transport_state == XbxEngineTransportStateDto::Connected)
             .unwrap_or(false);
         if !transport_ready {
-            self.snapshot.last_recovery_reason =
-                Some("reconnectSettled:keyframeDeferred:transportNotReady".to_string());
+            self.mark_reconnect_settled_keyframe_deferred(now_ms, "transportNotReady");
             return;
         }
         if last_keyframe_request_at_ms.is_some_and(|last| {
             (now_ms - last).max(0.0) < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
         }) {
-            self.snapshot.last_recovery_reason =
-                Some("reconnectSettled:keyframeDeferred:cooldown".to_string());
+            self.mark_reconnect_settled_keyframe_deferred(now_ms, "cooldown");
             return;
         }
         if let Err(error) = self.media_backend.request_video_keyframe() {
             if is_control_channel_not_ready_error(&error) {
-                self.snapshot.last_recovery_reason =
-                    Some("reconnectSettled:keyframeDeferred:controlNotReady".to_string());
+                self.mark_reconnect_settled_keyframe_deferred(now_ms, "controlNotReady");
                 return;
             }
             if let Some(reason) = classify_keyframe_request_deferred_reason(&error) {
-                self.snapshot.last_recovery_reason =
-                    Some(format!("reconnectSettled:keyframeDeferred:{reason}"));
+                self.mark_reconnect_settled_keyframe_deferred(now_ms, reason);
                 return;
             }
             self.emit_error("requestReconnectSettledKeyframeFailed", error.to_string());
@@ -245,7 +253,50 @@ where
             .snapshot
             .recovery_keyframe_request_count
             .saturating_add(1);
+        self.snapshot.last_recovery_action = Some("requestPli".to_string());
+        self.snapshot.last_recovery_action_at_ms = Some(now_ms);
         self.snapshot.last_recovery_reason = Some("reconnectSettled:keyframeRequested".to_string());
+    }
+
+    fn mark_reconnect_settled_keyframe_deferred(&mut self, now_ms: f64, reason: &str) {
+        self.snapshot.last_recovery_action = Some("reconnectSettledKeyframeDeferred".to_string());
+        self.snapshot.last_recovery_action_at_ms = Some(now_ms);
+        self.snapshot.last_recovery_reason =
+            Some(format!("reconnectSettled:keyframeDeferred:{reason}"));
+    }
+
+    fn maybe_retry_reconnect_settled_keyframe(
+        &mut self,
+        runtime_stats: &XbxEngineMediaRuntimeStats,
+    ) {
+        if !matches!(self.state, XbxEngineRuntimeState::Running) {
+            return;
+        }
+        let Some(reason) = self.snapshot.last_recovery_reason.as_deref() else {
+            return;
+        };
+        if !is_reconnect_settled_keyframe_deferred_reason(reason) {
+            return;
+        }
+        if runtime_stats.transport_state != XbxEngineTransportStateDto::Connected {
+            return;
+        }
+        let now_ms = now_ms_f64();
+        if self.snapshot.last_recovery_action.as_deref() == Some("reconnectSettledKeyframeDeferred")
+            && self
+                .snapshot
+                .last_recovery_action_at_ms
+                .is_some_and(|last| {
+                    (now_ms - last).max(0.0) < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
+                })
+        {
+            return;
+        }
+        self.request_keyframe_after_reconnect_settled(
+            now_ms,
+            false,
+            self.health.last_keyframe_request_at_ms,
+        );
     }
 
     pub fn tick(&mut self) {
@@ -268,6 +319,7 @@ where
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+        self.maybe_retry_reconnect_settled_keyframe(&runtime_stats);
         self.maybe_reset_native_presenter_for_host_stall(&runtime_stats);
         self.drive_pending_gamepad_rumble_requests();
         if self.maybe_handle_terminal_session_kick(&runtime_stats) {
@@ -324,6 +376,19 @@ where
         {
             self.snapshot.last_recovery_reason =
                 Some("displayRecoverySkipped:presentLoopNotRunning".to_string());
+            return;
+        }
+        if runtime_stats.host_no_pending_streak > 0 {
+            self.snapshot.last_recovery_reason = Some(
+                match owner_reason {
+                    Some("hostPresentStalled") => "hostPresentStalled:noPendingHostMailbox",
+                    Some("displaySupplyCritical" | "displaySupplyDegraded") => {
+                        "displayRecoverySkipped:noPendingHostMailbox"
+                    }
+                    _ => "displayRecoverySkipped:noPendingHostMailbox",
+                }
+                .to_string(),
+            );
             return;
         }
         if matches!(self.state, XbxEngineRuntimeState::Reconnecting) {
@@ -425,9 +490,8 @@ where
         }
         let keyframe_request_stall_ms =
             self.config.webrtc.recovery.keyframe_request_stall_ms as f64;
-        let fresh_clean_anchor = runtime_stats
-            .video_anchor_clean_observed_at_ms
-            .or(runtime_stats.recovery_displayed_idr_at_ms)
+        let fresh_clean_anchor = current_clean_anchor_observed_at_ms_from_stats(runtime_stats)
+            .or_else(|| current_fresh_anchor_recovered_at_ms_from_stats(runtime_stats))
             .is_some_and(|anchor_at_ms| {
                 self.health
                     .last_keyframe_request_at_ms
@@ -439,12 +503,16 @@ where
         if fresh_clean_anchor {
             return false;
         }
-        if !self.health.keyframe_requested_for_current_stall
-            || self
+        let receive_keyframe_pressure =
+            remote_picture_recovery_terminal_active_from_stats(runtime_stats)
+                && runtime_stats.receive_keyframe_sent_count_unresolved
+                    >= REMOTE_TERMINAL_LATCH_MIN_UNRESOLVED_KEYFRAMES;
+        let runtime_keyframe_request_stalled = self.health.keyframe_requested_for_current_stall
+            && self
                 .health
                 .last_keyframe_request_at_ms
-                .is_none_or(|last| now_ms - last < keyframe_request_stall_ms)
-        {
+                .is_some_and(|last| now_ms - last >= keyframe_request_stall_ms);
+        if !runtime_keyframe_request_stalled && !receive_keyframe_pressure {
             return false;
         }
         let decoder_fresh = runtime_stats
@@ -542,23 +610,56 @@ where
             );
             return true;
         }
+        let consume_at_ms = now_ms_f64();
+        if let Some(block_reason) = runtime_reconnect_candidate_block_reason(
+            runtime_stats,
+            &reason,
+            reason_domain,
+            consume_at_ms,
+        ) {
+            self.snapshot.last_recovery_action = Some("reconnectCandidateBlocked".to_string());
+            self.snapshot.last_recovery_action_at_ms = Some(consume_at_ms);
+            self.snapshot.last_recovery_reason = Some(format!("reconnectBlocked:{block_reason}"));
+            self.snapshot.latest_runtime_observation_label =
+                Some("runtimeReconnectBlocked".to_string());
+            self.snapshot.latest_runtime_observation_summary = Some(format!(
+                "observationId={} reason={} reasonDomain={} blockReason={} lastRecoveryActionAtMs={:.3}",
+                observation_id,
+                reason,
+                reason_domain.as_str(),
+                block_reason,
+                consume_at_ms
+            ));
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime] block pending reconnect candidate observationId={} domain={} reason={} blockReason={}",
+                observation_id,
+                reason_domain.as_str(),
+                reason,
+                block_reason
+            );
+            return true;
+        }
         // 只要 transport 已经产出 pending reconnect candidate，就应立即消费执行，
         // 不能再依赖外层连接态门控，否则会出现“已决策但不落地”。
+        let runtime_state = format!("{:?}", self.state);
+        let transport_recovering = runtime_stats_indicate_transport_recovering(runtime_stats);
         self.snapshot.last_recovery_action = Some("reconnectCandidateConsumed".to_string());
-        self.snapshot.last_recovery_action_at_ms = Some(now_ms_f64());
+        self.snapshot.last_recovery_action_at_ms = Some(consume_at_ms);
         self.snapshot.last_recovery_reason = Some(format!(
             "transportReconnectCandidateConsumed:{reason}:domain={}:transportRecovering={}",
             reason_domain.as_str(),
-            runtime_stats_indicate_transport_recovering(runtime_stats)
+            transport_recovering
         ));
         self.snapshot.latest_runtime_observation_label =
             Some("runtimeReconnectConsumed".to_string());
         self.snapshot.latest_runtime_observation_summary = Some(format!(
-            "observationId={} reason={} reasonDomain={} transportRecovering={}",
+            "observationId={} reason={} reasonDomain={} transportRecovering={} runtimeState={} lastRecoveryActionAtMs={:.3}",
             observation_id,
             reason,
             reason_domain.as_str(),
-            runtime_stats_indicate_transport_recovering(runtime_stats)
+            transport_recovering,
+            runtime_state,
+            consume_at_ms
         ));
         if let Err(error) = self.request_reconnect(
             XbxEngineReconnectReasonDto::MediaStalled,
@@ -766,6 +867,25 @@ where
                 true
             }
             XbxEngineRecoveryAction::RequestReconnect(reason) => {
+                if let Some(block_reason) =
+                    runtime_direct_reconnect_block_reason(runtime_stats, &reason, now_ms)
+                {
+                    self.snapshot.last_recovery_action = Some("directReconnectBlocked".to_string());
+                    self.snapshot.last_recovery_action_at_ms = Some(now_ms);
+                    self.snapshot.last_recovery_reason =
+                        Some(format!("reconnectBlocked:{block_reason}:reason={reason:?}"));
+                    self.snapshot.latest_runtime_observation_label =
+                        Some("runtimeReconnectBlocked".to_string());
+                    self.snapshot.latest_runtime_observation_summary = Some(format!(
+                        "reason={reason:?} triggerSource=other blockReason={} lastRecoveryActionAtMs={:.3}",
+                        block_reason, now_ms
+                    ));
+                    crate::xbx_log_warn!(
+                        "[xbxengine][runtime] block direct reconnect reason={reason:?} blockReason={}",
+                        block_reason
+                    );
+                    return true;
+                }
                 if let Err(error) =
                     self.request_reconnect(reason, XbxEngineReconnectTriggerSource::Other)
                 {
@@ -2039,13 +2159,240 @@ fn classify_keyframe_request_deferred_reason(
     None
 }
 
+fn is_reconnect_settled_keyframe_deferred_reason(reason: &str) -> bool {
+    matches!(
+        reason,
+        "reconnectSettled:keyframeDeferred:keyframeInFlight"
+            | "reconnectSettled:keyframeDeferred:transportNotReady"
+            | "reconnectSettled:keyframeDeferred:cooldown"
+            | "reconnectSettled:keyframeDeferred:controlNotReady"
+            | "reconnectSettled:keyframeDeferred:feedbackTargetPending"
+    )
+}
+
+fn runtime_reconnect_candidate_block_reason(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    reason: &str,
+    reason_domain: XbxEngineRecoveryReasonDomain,
+    now_ms: f64,
+) -> Option<&'static str> {
+    if reason_domain != XbxEngineRecoveryReasonDomain::ConnectivityTransport {
+        return None;
+    }
+    if !matches!(
+        reason,
+        "receiverWaitingKeyframe" | "livenessNoProgressTimeout" | "rtcConnectionDisconnected"
+    ) {
+        return None;
+    }
+    if runtime_stats
+        .latest_receive_picture_recovery_terminal_reason
+        .as_ref()
+        .is_some()
+        || runtime_stats.receive_picture_recovery_terminal_candidate == Some(true)
+    {
+        return None;
+    }
+    if runtime_reconnect_transport_rebuild_in_flight_without_direct_failure(runtime_stats, now_ms) {
+        return Some("lifecycleGate:transportRebuildInFlightNoProgress");
+    }
+    if reason == "rtcConnectionDisconnected"
+        && runtime_reconnect_recent_media_progress(runtime_stats, now_ms)
+        && !runtime_reconnect_fresh_direct_ice_no_response(runtime_stats, now_ms)
+    {
+        return Some("lifecycleGate:transientDisconnectedWithFreshMedia");
+    }
+    if runtime_stats.transport_state != XbxEngineTransportStateDto::Connected {
+        return None;
+    }
+    if runtime_reconnect_display_no_pending_local(runtime_stats, now_ms) {
+        return Some("lifecycleGate:displaySupplyNoPendingLocal");
+    }
+    if runtime_reconnect_media_serviceable(runtime_stats, now_ms)
+        && runtime_reconnect_transport_healthy(runtime_stats, now_ms)
+    {
+        return Some("lifecycleGate:connectedHealthyNoProgress");
+    }
+    None
+}
+
+fn runtime_direct_reconnect_block_reason(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    reason: &XbxEngineReconnectReasonDto,
+    now_ms: f64,
+) -> Option<&'static str> {
+    if !matches!(reason, XbxEngineReconnectReasonDto::MediaStalled) {
+        return None;
+    }
+    if runtime_stats
+        .latest_receive_picture_recovery_terminal_reason
+        .as_ref()
+        .is_some()
+        || runtime_stats.receive_picture_recovery_terminal_candidate == Some(true)
+    {
+        return None;
+    }
+    if runtime_reconnect_transport_rebuild_in_flight_without_direct_failure(runtime_stats, now_ms) {
+        return Some("lifecycleGate:transportRebuildInFlightNoProgress");
+    }
+    if runtime_stats.transport_state != XbxEngineTransportStateDto::Connected {
+        return None;
+    }
+    if runtime_reconnect_display_no_pending_local(runtime_stats, now_ms) {
+        return Some("lifecycleGate:displaySupplyNoPendingLocal");
+    }
+    if runtime_reconnect_media_serviceable(runtime_stats, now_ms)
+        && runtime_reconnect_transport_healthy(runtime_stats, now_ms)
+    {
+        return Some("lifecycleGate:connectedHealthyNoProgress");
+    }
+    None
+}
+
+fn runtime_reconnect_transport_rebuild_in_flight_without_direct_failure(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    runtime_stats.transport_state == XbxEngineTransportStateDto::Connecting
+        && (runtime_reconnect_has_prior_media_edge(runtime_stats)
+            || runtime_reconnect_has_recent_rebuild_termination(runtime_stats))
+        && !runtime_reconnect_fresh_direct_ice_no_response(runtime_stats, now_ms)
+}
+
+fn runtime_reconnect_has_prior_media_edge(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+) -> bool {
+    runtime_stats.latest_video_decode_ok_time_ms.is_some()
+        || runtime_stats.latest_video_host_present_time_ms.is_some()
+}
+
+fn runtime_reconnect_has_recent_rebuild_termination(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+) -> bool {
+    runtime_stats
+        .latest_video_ingress_termination_observation
+        .as_ref()
+        .is_some_and(|termination| {
+            termination.cause == "rebuildPeerConnection"
+                || termination.upstream_cause.as_deref() == Some("rebuildPeerConnection")
+        })
+}
+
+fn runtime_reconnect_fresh_direct_ice_no_response(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    runtime_stats
+        .latest_ice_connectivity_probe
+        .as_ref()
+        .is_some_and(|probe| {
+            probe.direct_checks_without_response
+                && !probe.has_selected_or_nominated_pair
+                && probe.max_requests_sent >= 8
+                && probe.responses_received_total == 0
+                && (now_ms - probe.observed_at_ms).max(0.0)
+                    <= RUNTIME_RECONNECT_HEALTHY_SIGNAL_FRESH_MS
+        })
+}
+
+fn runtime_reconnect_media_serviceable(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let fresh =
+        |at_ms: f64| (now_ms - at_ms).max(0.0) <= RUNTIME_RECONNECT_SERVICEABLE_OUTPUT_FRESH_MS;
+    runtime_stats
+        .latest_video_decode_ok_time_ms
+        .is_some_and(fresh)
+        || runtime_stats
+            .latest_video_host_present_time_ms
+            .is_some_and(fresh)
+}
+
+fn runtime_reconnect_recent_media_progress(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let fresh = |at_ms: f64| (now_ms - at_ms).max(0.0) <= RUNTIME_RECONNECT_HEALTHY_SIGNAL_FRESH_MS;
+    runtime_stats
+        .latest_video_packet_arrival_time_ms
+        .is_some_and(fresh)
+        || runtime_stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(fresh)
+        || runtime_stats
+            .latest_video_host_present_time_ms
+            .is_some_and(fresh)
+        || runtime_stats
+            .latest_host_mailbox_submit_time_ms
+            .is_some_and(fresh)
+        || runtime_stats.last_displayed_at_ms.is_some_and(fresh)
+}
+
+fn runtime_reconnect_display_no_pending_local(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    if runtime_reconnect_fresh_direct_ice_no_response(runtime_stats, now_ms) {
+        return false;
+    }
+    let no_pending_pressure = matches!(
+        runtime_stats.host_no_pending_pressure_level.as_deref(),
+        Some("elevated" | "high" | "critical")
+    );
+    let no_pending_local = runtime_stats.host_no_pending_streak
+        >= RUNTIME_RECONNECT_NO_PENDING_LOCAL_MIN_STREAK
+        || (no_pending_pressure && runtime_stats.host_no_pending_streak > 0);
+    if !no_pending_local {
+        return false;
+    }
+    let has_displayed_frame = runtime_stats.last_displayed_frame_seq.is_some()
+        || runtime_stats.last_displayed_frame_rtp_timestamp.is_some()
+        || runtime_stats.latest_video_host_present_time_ms.is_some();
+    if !has_displayed_frame {
+        return false;
+    }
+    let stale = |at_ms: f64| (now_ms - at_ms).max(0.0) >= RUNTIME_RECONNECT_STALE_DISPLAY_LOCAL_MS;
+    runtime_stats.last_displayed_at_ms.is_some_and(stale)
+        || runtime_stats
+            .latest_video_host_present_time_ms
+            .is_some_and(stale)
+}
+
+fn runtime_reconnect_transport_healthy(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let twcc_healthy = runtime_stats
+        .latest_video_twcc_observation
+        .as_ref()
+        .is_some_and(|twcc| {
+            (now_ms - twcc.observed_at_ms).max(0.0) <= RUNTIME_RECONNECT_HEALTHY_SIGNAL_FRESH_MS
+                && twcc.is_local_feedback()
+                && twcc.twcc_sample_valid
+                && twcc.quality == XbxEngineTwccObservationQuality::Stable
+                && twcc.delivery_ratio >= RUNTIME_RECONNECT_HEALTHY_MIN_TWCC_DELIVERY_RATIO
+                && twcc.packet_loss_ratio <= RUNTIME_RECONNECT_HEALTHY_MAX_TWCC_LOSS_RATIO
+        });
+    let ice_healthy = runtime_stats
+        .latest_ice_connectivity_probe
+        .as_ref()
+        .is_some_and(|probe| {
+            (now_ms - probe.observed_at_ms).max(0.0) <= RUNTIME_RECONNECT_HEALTHY_SIGNAL_FRESH_MS
+                && probe.has_selected_or_nominated_pair
+                && !probe.direct_checks_without_response
+                && probe.failed_pair_count == 0
+        });
+    twcc_healthy || ice_healthy
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         build_local_end_of_candidates_candidate, collect_local_offer_ice_candidates,
-        normalize_remote_ice_candidates_in_place, resolve_ice_exchange_timeout_ms,
-        should_allow_stable_exchange_settle, should_submit_controlled_local_end_of_candidates,
-        ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS,
+        is_terminal_remote_session_inactive_error, normalize_remote_ice_candidates_in_place,
+        resolve_ice_exchange_timeout_ms, should_allow_stable_exchange_settle,
+        should_submit_controlled_local_end_of_candidates, ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS,
     };
     use crate::api::runtime::{XbxEngineNegotiationRuntimeConfig, XbxEngineRuntimeSnapshot};
     use xbxengine_protocol::XbxEngineIceCandidateDto;
@@ -2056,6 +2403,14 @@ mod tests {
             sdp_m_line_index: Some(0),
             sdp_mid: Some("0".to_string()),
         }
+    }
+
+    #[test]
+    fn keepalive_not_accepted_error_is_terminal_session_inactive() {
+        let error =
+            crate::XbxEngineRuntimeError::new("keepAliveRemoteSession:streaming:SessionNotActive");
+
+        assert!(is_terminal_remote_session_inactive_error(&error));
     }
 
     #[test]

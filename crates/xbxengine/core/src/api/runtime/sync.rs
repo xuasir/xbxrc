@@ -149,12 +149,16 @@ where
         let Some(frame) = stats.latest_video_frame.as_ref() else {
             return;
         };
-        let had_advanced_frame = frame.frame_seq > self.health.last_frame_seq;
+        let frame_rtp_timestamp = frame.rtp_timestamp;
+        let had_advanced_frame = self
+            .health
+            .is_video_frame_advance(frame.frame_seq, frame_rtp_timestamp);
         let first_render_observed = self.snapshot.frame_rendered_time_ms.is_none();
         let video_size_changed = self.health.record_video_frame(
             frame.width,
             frame.height,
             frame.frame_seq,
+            frame_rtp_timestamp,
             frame.rendered_at_ms,
         );
         if !had_advanced_frame {

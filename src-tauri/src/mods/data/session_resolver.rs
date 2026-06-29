@@ -86,6 +86,7 @@ impl DataSessionResolver {
 pub struct WebTokenClaims {
     pub user_token: String,
     pub uhs: String,
+    pub xid: Option<String>,
 }
 
 // 从 webToken 快照中提取 xbox-webapi 初始化与 console 命令所需声明。
@@ -93,13 +94,19 @@ pub fn resolve_web_token_claims(raw: &Value) -> Option<WebTokenClaims> {
     let token = raw.get("data").unwrap_or(raw);
 
     let user_token = token.get("Token").and_then(|value| value.as_str())?;
-    let uhs = token
+    let xui = token
         .get("DisplayClaims")
         .and_then(|value| value.get("xui"))
         .and_then(|value| value.as_array())
-        .and_then(|xui| xui.first())
-        .and_then(|value| value.get("uhs"))
-        .and_then(|value| value.as_str())?;
+        .and_then(|xui| xui.first())?;
+
+    let uhs = xui.get("uhs").and_then(|value| value.as_str())?;
+    let xid = xui
+        .get("xid")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
 
     if user_token.is_empty() || uhs.is_empty() {
         return None;
@@ -108,5 +115,6 @@ pub fn resolve_web_token_claims(raw: &Value) -> Option<WebTokenClaims> {
     Some(WebTokenClaims {
         user_token: user_token.to_string(),
         uhs: uhs.to_string(),
+        xid,
     })
 }

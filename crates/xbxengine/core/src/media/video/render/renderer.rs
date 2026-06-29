@@ -73,6 +73,7 @@ impl XbxRenderFrame {
             width: self.width,
             height: self.height,
             frame_seq: self.frame_seq,
+            rtp_timestamp: self.rtp_timestamp,
             fps: 0.0,
             rendered_at_ms: self.rendered_at_ms,
         }

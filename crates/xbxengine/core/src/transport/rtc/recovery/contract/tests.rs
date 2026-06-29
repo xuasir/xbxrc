@@ -317,12 +317,41 @@ fn recovery_progress_gap_helpers_match_contract() {
 #[test]
 fn recovery_display_facts_projects_from_stats() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 1;
+    stats.video_anchor_clean_epoch = Some(1);
+    stats.video_anchor_clean_observed_at_ms = Some(120.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
     stats.recovery_displayed_idr_at_ms = Some(120.0);
     stats.recovery_fresh_anchor_recovered_at_ms = Some(120.0);
     let display = RecoveryDisplayFacts::from_stats(&stats);
     assert_eq!(display.displayed_idr_at_ms, Some(120.0));
     assert!(display.has_established_displayed_idr());
     assert!(has_current_clean_anchor_from_stats(&stats));
+}
+
+#[test]
+fn displayed_idr_alone_does_not_count_as_current_clean_anchor() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.recovery_displayed_idr_at_ms = Some(120.0);
+
+    let display = RecoveryDisplayFacts::from_stats(&stats);
+    assert!(display.has_established_displayed_idr());
+    assert!(displayed_idr_serving_from_stats(&stats));
+    assert_eq!(current_clean_anchor_observed_at_ms_from_stats(&stats), None);
+    assert!(!has_current_clean_anchor_from_stats(&stats));
+}
+
+#[test]
+fn stale_displayed_idr_before_current_episode_is_not_serving() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(2_000.0);
+    stats.recovery_displayed_idr_at_ms = Some(1_200.0);
+
+    let display = RecoveryDisplayFacts::from_stats(&stats);
+    assert_eq!(display.displayed_idr_at_ms, None);
+    assert!(!display.has_established_displayed_idr());
+    assert!(!displayed_idr_serving_from_stats(&stats));
 }
 
 #[test]
@@ -340,6 +369,30 @@ fn decoded_clean_anchor_counts_as_current_anchor_without_display_fact() {
         Some(1_200.0)
     );
     assert!(has_current_clean_anchor_from_stats(&stats));
+}
+
+#[test]
+fn fresh_anchor_counts_as_current_anchor_without_display_fact() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(1_000.0);
+    stats.recovery_fresh_anchor_recovered_at_ms = Some(1_200.0);
+
+    let display = RecoveryDisplayFacts::from_stats(&stats);
+    assert_eq!(display.displayed_idr_at_ms, None);
+    assert_eq!(display.fresh_anchor_recovered_at_ms, Some(1_200.0));
+    assert!(has_current_clean_anchor_from_stats(&stats));
+}
+
+#[test]
+fn stale_fresh_anchor_before_current_episode_does_not_count_as_current_anchor() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(2_000.0);
+    stats.recovery_fresh_anchor_recovered_at_ms = Some(1_200.0);
+
+    assert_eq!(current_clean_anchor_observed_at_ms_from_stats(&stats), None);
+    assert!(!has_current_clean_anchor_from_stats(&stats));
 }
 
 #[test]
@@ -419,8 +472,12 @@ fn decoded_clean_anchor_pipeline_absorbs_soft_non_idr_transport_await() {
 }
 
 #[test]
-fn display_stable_suppresses_stale_remote_terminal_reason() {
+fn current_display_stable_suppresses_stale_remote_terminal_reason() {
     let stats = XbxEngineMediaRuntimeStats {
+        transport_recovery_epoch: 3,
+        video_anchor_clean_epoch: Some(3),
+        video_anchor_clean_observed_at_ms: Some(120.0),
+        video_anchor_clean_source_event: Some("decoded-usable-idr".to_string()),
         latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
         receive_keyframe_required: Some(true),
         receive_keyframe_response_state: Some("no-packet".to_string()),
@@ -434,15 +491,76 @@ fn display_stable_suppresses_stale_remote_terminal_reason() {
 }
 
 #[test]
+fn stale_display_stable_without_current_clean_anchor_keeps_remote_terminal_active() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_recovery_epoch: 4,
+        receive_display_state: Some("display-stable".to_string()),
+        latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+        receive_keyframe_required: Some(true),
+        receive_keyframe_response_state: Some("no-packet".to_string()),
+        reference_chain_state: Some("need-keyframe".to_string()),
+        receive_keyframe_sent_count_unresolved: 7,
+        receive_picture_recovery_terminal_total: 1,
+        ..Default::default()
+    };
+
+    assert!(remote_picture_recovery_terminal_active_from_stats(&stats));
+}
+
+#[test]
+fn displayed_idr_alone_keeps_remote_terminal_active_without_current_clean_anchor() {
+    let stats = XbxEngineMediaRuntimeStats {
+        recovery_displayed_idr_at_ms: Some(120.0),
+        latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+        receive_keyframe_required: Some(true),
+        receive_keyframe_response_state: Some("no-packet".to_string()),
+        receive_display_state: Some("recovering".to_string()),
+        reference_chain_state: Some("need-keyframe".to_string()),
+        receive_keyframe_sent_count_unresolved: 7,
+        receive_picture_recovery_terminal_total: 1,
+        ..Default::default()
+    };
+
+    assert!(remote_picture_recovery_terminal_active_from_stats(&stats));
+}
+
+#[test]
+fn display_stable_without_clean_anchor_observed_at_does_not_complete_recovery() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_recovery_epoch: 3,
+        recovery_displayed_idr_at_ms: Some(120.0),
+        video_anchor_clean_epoch: Some(3),
+        receive_keyframe_required: Some(false),
+        receive_keyframe_response_state: Some("usable-idr".to_string()),
+        receive_display_state: Some("display-stable".to_string()),
+        ..Default::default()
+    };
+
+    assert!(!receive_picture_recovery_complete_at(3, &stats, 130.0));
+}
+
+#[test]
 fn displayed_idr_serving_true_when_pending_idr_and_host_has_presented() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.recovery_pending_displayed_idr_rtp = Some(77_001);
     stats.host_frame_present_epoch = 1;
+    stats.latest_video_host_present_time_ms = Some(1_000.0);
+    stats.display_age_ms = Some(16.0);
     assert!(displayed_idr_serving_from_stats(&stats));
     assert_eq!(
         resolve_host_display_idr_anchor_rtp(&stats, Some(77_002)),
         Some(77_001)
     );
+}
+
+#[test]
+fn displayed_idr_serving_false_when_pending_idr_has_only_stale_present_epoch() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.recovery_pending_displayed_idr_rtp = Some(77_001);
+    stats.host_frame_present_epoch = 1;
+    stats.latest_video_host_present_time_ms = Some(1_000.0);
+    stats.display_age_ms = Some(1_200.0);
+    assert!(!displayed_idr_serving_from_stats(&stats));
 }
 
 #[test]
@@ -468,6 +586,10 @@ fn collapse_waiting_keyframe_when_displayed_idr_serving_without_gap() {
 #[test]
 fn collapse_enabled_when_clean_anchor_and_decoder_waiting_keyframe() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 1;
+    stats.video_anchor_clean_epoch = Some(1);
+    stats.video_anchor_clean_observed_at_ms = Some(100.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
     stats.recovery_displayed_idr_at_ms = Some(100.0);
     stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
@@ -493,7 +615,12 @@ fn relaxation_unblocked_under_supply_break_when_submit_stale() {
 #[test]
 fn relaxation_not_blocked_by_soft_bootstrap_missing_idr_when_displayed_idr_serving() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 3;
+    stats.video_anchor_clean_epoch = Some(3);
+    stats.video_anchor_clean_observed_at_ms = Some(100.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
     stats.recovery_displayed_idr_at_ms = Some(100.0);
+    stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
     stats.host_frame_present_epoch = 1;
     stats.latest_video_host_present_time_ms = Some(180.0);
     stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
@@ -550,6 +677,10 @@ fn waiting_keyframe_without_idr_progress_blocks_decoder_reset() {
 #[test]
 fn clean_anchor_keeps_displayed_idr_relaxation_under_waiting_keyframe() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 1;
+    stats.video_anchor_clean_epoch = Some(1);
+    stats.video_anchor_clean_observed_at_ms = Some(100.0);
+    stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
     stats.recovery_displayed_idr_at_ms = Some(100.0);
     stats.recovery_fresh_anchor_recovered_at_ms = Some(100.0);
     stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
@@ -715,6 +846,44 @@ fn submit_starved_without_bootstrap_stays_out_of_reference_chain_control() {
 }
 
 #[test]
+fn stale_prior_output_before_current_episode_keeps_reference_chain_priming_unknown() {
+    use super::reference_chain::{derive_reference_chain_state_from_stats, ReferenceChainState};
+
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(2_000.0);
+    stats.recovery_displayed_idr_at_ms = Some(1_000.0);
+    stats.recovery_playback_recovered_at_ms = Some(1_000.0);
+    stats.latest_video_receiver_observation = Some(XbxEngineVideoReceiverObservation {
+        observation_id: 1,
+        receiver_state: "waiting-keyframe".to_string(),
+        gap_sequence: Some(10),
+        gap_span: Some(4),
+        nack_in_flight: true,
+        keyframe_request_pending: true,
+        bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+        observed_at_ms: 2_100.0,
+    });
+    stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+        observation_id: 1,
+        source_event: "gap".to_string(),
+        gap: None,
+        frame: None,
+        chain: XbxEngineVideoTimelineChainSnapshot {
+            state: "waiting-keyframe".to_string(),
+            reason: Some("receiverWaitingKeyframe".to_string()),
+            chain_break_evidence: None,
+            observed_at_ms: 2_100.0,
+        },
+        observed_at_ms: 2_100.0,
+    });
+
+    let obs = derive_reference_chain_state_from_stats(&stats, 2_100.0, 100.0);
+    assert_eq!(obs.state, ReferenceChainState::Unknown);
+    assert_eq!(obs.cause, "bootstrap-missing-priming");
+}
+
+#[test]
 fn need_keyframe_reference_state_blocks_non_idr_decodable_to_feed() {
     use super::insert::{decodable_to_feed, DecodableFeedContext};
     use super::reference_chain::ReferenceChainState;
@@ -740,8 +909,6 @@ fn need_keyframe_reference_state_blocks_non_idr_decodable_to_feed() {
         decoder_reference_synced: true,
         first_frame_acquired: true,
         hard_gap_blocks_delta: false,
-        receiver_repairing: false,
-        has_active_gap: false,
     };
     assert!(!decodable_to_feed(
         &inspection,
@@ -824,11 +991,26 @@ fn recovery_exit_decode_output_when_decode_and_host_output_fresh() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.latest_video_decode_ok_time_ms = Some(4_900.0);
     stats.host_frame_present_epoch = 3;
-    stats.recovery_playback_recovered_at_ms = Some(100.0);
+    stats.latest_video_host_present_time_ms = Some(4_920.0);
+    stats.recovery_playback_recovered_at_ms = Some(4_920.0);
     stats.submit_age_ms = Some(400.0);
     assert_eq!(
         recovery_exit_path_from_stats(&stats, 5_000.0, RecoveryExitThresholds::default()),
         RecoveryExitPath::DecodeOutput
+    );
+}
+
+#[test]
+fn recovery_exit_awaits_anchor_when_playback_recovered_is_stale() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.latest_video_decode_ok_time_ms = Some(4_900.0);
+    stats.host_frame_present_epoch = 3;
+    stats.latest_video_host_present_time_ms = Some(3_000.0);
+    stats.recovery_playback_recovered_at_ms = Some(100.0);
+    stats.submit_age_ms = Some(400.0);
+    assert_eq!(
+        recovery_exit_path_from_stats(&stats, 5_000.0, RecoveryExitThresholds::default()),
+        RecoveryExitPath::AwaitingAnchor
     );
 }
 
@@ -1038,6 +1220,41 @@ fn clean_anchor_masks_stale_decoder_waiting_for_recovery_contract() {
 }
 
 #[test]
+fn stale_fresh_anchor_before_current_episode_does_not_clear_decoder_debt() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 8;
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(2_000.0);
+    stats.recovery_fresh_anchor_recovered_at_ms = Some(1_100.0);
+    stats.video_decoder_recovery_state = Some("waiting-keyframe".to_string());
+    stats.latest_decode_output_path_observation = Some(XbxEngineDecodeOutputPathObservation {
+        observation_id: 2,
+        verdict: "backend-no-output".to_string(),
+        detail: "backendNoOutputAfterWaitingKeyframeContinuation".to_string(),
+        frame_rtp_timestamp: 88_002,
+        is_keyframe: false,
+        status: None,
+        send_packet_status: None,
+        receive_frame_status: None,
+        backend_no_output_streak: Some(CONTINUATION_NO_OUTPUT_REQUEST_IDR_STREAK),
+        input_frames_since_last_decoded: Some(8),
+        bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+        observed_at_ms: 2_090.0,
+    });
+
+    assert!(decoder_waiting_keyframe_control_active_from_stats(
+        &stats, 2_120.0
+    ));
+    assert!(decoder_no_output_request_idr_control_active_from_stats(
+        &stats, 2_120.0
+    ));
+    assert_eq!(
+        derive_packet_recovery_action_stage_from_stats(&stats, 2_120.0, 50.0),
+        PacketRecoveryActionStage::RequestIdr
+    );
+}
+
+#[test]
 fn idr_recovery_active_tracks_receive_keyframe_required_only() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.host_frame_present_epoch = 1;
@@ -1073,6 +1290,32 @@ fn receive_presentation_holds_steady_without_displayed_idr_projection() {
         &stats, 2_000.0
     ));
     assert!(!displayed_idr_serving_from_stats(&stats));
+}
+
+#[test]
+fn stale_playback_recovered_does_not_hold_steady_session_phase() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.host_frame_present_epoch = 1;
+    stats.latest_video_host_present_time_ms = Some(1_000.0);
+    stats.recovery_playback_recovered_at_ms = Some(1_000.0);
+
+    assert!(!receive_presentation_holds_steady_session_phase_from_stats(
+        &stats, 2_000.0
+    ));
+}
+
+#[test]
+fn stale_playback_recovered_before_current_episode_does_not_hold_steady_session_phase() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(2_000.0);
+    stats.host_frame_present_epoch = 1;
+    stats.latest_video_host_present_time_ms = Some(2_050.0);
+    stats.recovery_playback_recovered_at_ms = Some(1_000.0);
+
+    assert!(!receive_presentation_holds_steady_session_phase_from_stats(
+        &stats, 2_100.0
+    ));
 }
 
 #[test]

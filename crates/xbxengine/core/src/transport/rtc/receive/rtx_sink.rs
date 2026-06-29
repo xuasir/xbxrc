@@ -5,17 +5,21 @@ use crate::transport::rtc::stream::packet_types::{
     RtcVideoRtpPacket,
 };
 use crate::transport::rtc::stream::sink::RtcMediaSink;
-use crate::{XbxEngineVideoFrameDropObservation, XbxEngineVideoRtxReinjectObservation};
+use crate::{
+    XbxEngineIngressQueueDepthBreakdownObservation, XbxEngineVideoFrameDropObservation,
+    XbxEngineVideoRtxReinjectObservation,
+};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::transport::rtc::receive::ingress_state::FrameBoundaryTracker;
 
-const DEFAULT_PRIORITY_BACKLOG_LIMIT: usize = 32;
-const MAX_BEST_EFFORT_BACKLOG_LIMIT: usize = 8;
-const MIN_REPAIR_BACKLOG_LIMIT: usize = 5;
-const MAX_REPAIR_BURST_BEFORE_BEST_EFFORT: u8 = 4;
+const DEFAULT_PRIORITY_BACKLOG_LIMIT: usize = 16;
+const MAX_EFFECTIVE_SENDER_QUEUE_DEPTH: usize = 64;
+const BEST_EFFORT_SENDER_QUEUE_SOFT_WATERMARK: usize = 48;
+const MAX_BEST_EFFORT_BACKLOG_LIMIT: usize = 2;
+const MIN_REPAIR_BACKLOG_LIMIT: usize = 4;
 const SCHEDULED_FLUSH_TICK_MS: u64 = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,6 +27,13 @@ enum IngressBackpressureClass {
     PriorityPrimary,
     PriorityRepair,
     BestEffort,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IngressSendResult {
+    Sent,
+    Backpressure,
+    Dropped,
 }
 
 pub(crate) struct RtcVideoSourceSink {
@@ -35,7 +46,6 @@ pub(crate) struct RtcVideoSourceSink {
     priority_backlog_limit: usize,
     repair_backlog_limit: usize,
     best_effort_backlog_limit: usize,
-    repair_burst_streak: u8,
     next_drop_observation_id: u64,
     flush_tick: Duration,
     next_flush_due_at: Option<Instant>,
@@ -63,7 +73,6 @@ impl RtcVideoSourceSink {
             priority_backlog_limit,
             repair_backlog_limit,
             best_effort_backlog_limit,
-            repair_burst_streak: 0,
             next_drop_observation_id: 0,
             flush_tick: Duration::from_millis(SCHEDULED_FLUSH_TICK_MS),
             next_flush_due_at: None,
@@ -74,28 +83,21 @@ impl RtcVideoSourceSink {
     fn flush_pending(&mut self, now: Instant) {
         loop {
             if let Some(packet) = self.pending_priority_primary.pop_front() {
-                if self.try_send_packet(packet.clone()) {
-                    self.repair_burst_streak = 0;
+                if self.try_flush_pending_packet(
+                    packet.clone(),
+                    IngressBackpressureClass::PriorityPrimary,
+                ) {
                     continue;
                 }
                 self.pending_priority_primary.push_front(packet);
                 break;
             }
 
-            if self.repair_burst_streak >= MAX_REPAIR_BURST_BEFORE_BEST_EFFORT {
-                if let Some(packet) = self.pending_best_effort.pop_front() {
-                    if self.try_send_packet(packet.clone()) {
-                        self.repair_burst_streak = 0;
-                        continue;
-                    }
-                    self.pending_best_effort.push_front(packet);
-                    break;
-                }
-            }
-
             if let Some(packet) = self.pending_repair.pop_front() {
-                if self.try_send_packet(packet.clone()) {
-                    self.repair_burst_streak = self.repair_burst_streak.saturating_add(1);
+                if self.try_flush_pending_packet(
+                    packet.clone(),
+                    IngressBackpressureClass::PriorityRepair,
+                ) {
                     continue;
                 }
                 self.pending_repair.push_front(packet);
@@ -103,8 +105,9 @@ impl RtcVideoSourceSink {
             }
 
             if let Some(packet) = self.pending_best_effort.pop_front() {
-                if self.try_send_packet(packet.clone()) {
-                    self.repair_burst_streak = 0;
+                if self
+                    .try_flush_pending_packet(packet.clone(), IngressBackpressureClass::BestEffort)
+                {
                     continue;
                 }
                 self.pending_best_effort.push_front(packet);
@@ -114,6 +117,21 @@ impl RtcVideoSourceSink {
             break;
         }
         self.update_flush_schedule_after_attempt(now);
+    }
+
+    fn try_flush_pending_packet(
+        &mut self,
+        packet: RtcVideoRtpPacket,
+        class: IngressBackpressureClass,
+    ) -> bool {
+        match self.try_send_packet_with_class(packet.clone(), class) {
+            IngressSendResult::Sent => {
+                self.update_frame_boundary_for_accepted_packet(&packet);
+                true
+            }
+            IngressSendResult::Dropped => true,
+            IngressSendResult::Backpressure => false,
+        }
     }
 
     #[cfg(test)]
@@ -195,13 +213,13 @@ impl RtcVideoSourceSink {
         &mut self,
         packet: RtcVideoRtpPacket,
         class: IngressBackpressureClass,
-    ) {
+    ) -> bool {
         match class {
             IngressBackpressureClass::PriorityPrimary => {
                 if self.pending_priority_primary.len() >= self.priority_backlog_limit {
                     if self.try_evict_best_effort_for_priority_packet(&packet) {
                         self.pending_priority_primary.push_back(packet);
-                        return;
+                        return true;
                     }
                     // 统一策略：基于 timestamp 判断新旧，优先保留当前帧
                     if let Some(oldest) = self.pending_priority_primary.front() {
@@ -212,7 +230,7 @@ impl RtcVideoSourceSink {
                                     "localBackpressurePriorityOverflow",
                                     "priorityQueueDropStaleProtected",
                                 );
-                                return;
+                                return false;
                             }
                             if let Some(evicted) = self.pending_priority_primary.pop_front() {
                                 self.record_local_backpressure_drop(
@@ -227,7 +245,7 @@ impl RtcVideoSourceSink {
                                 "localBackpressurePriorityOverflow",
                                 "priorityQueueDropStale",
                             );
-                            return;
+                            return false;
                         }
                     } else {
                         self.record_local_backpressure_drop(
@@ -235,10 +253,11 @@ impl RtcVideoSourceSink {
                             "localBackpressurePriorityOverflow",
                             "priorityQueueFull",
                         );
-                        return;
+                        return false;
                     }
                 }
                 self.pending_priority_primary.push_back(packet);
+                true
             }
             IngressBackpressureClass::PriorityRepair => {
                 if self.pending_repair.len() >= self.repair_backlog_limit {
@@ -258,11 +277,12 @@ impl RtcVideoSourceSink {
                                 "localBackpressureRepairOverflow",
                                 "repairQueueDropStale",
                             );
-                            return;
+                            return false;
                         }
                     }
                 }
                 self.pending_repair.push_back(packet);
+                true
             }
             IngressBackpressureClass::BestEffort => {
                 if self.pending_best_effort.len() >= self.best_effort_backlog_limit {
@@ -282,11 +302,12 @@ impl RtcVideoSourceSink {
                                 "localBackpressureBestEffortOverflow",
                                 "bestEffortQueueDropStale",
                             );
-                            return;
+                            return false;
                         }
                     }
                 }
                 self.pending_best_effort.push_back(packet);
+                true
             }
         }
     }
@@ -299,6 +320,7 @@ impl RtcVideoSourceSink {
     ) {
         self.next_drop_observation_id = self.next_drop_observation_id.saturating_add(1);
         let class = classify_backpressure_class(packet, &self.frame_boundary).label();
+        let queue_breakdown = self.pending_depth_breakdown();
         self.runtime_stats
             .record_video_frame_drop(XbxEngineVideoFrameDropObservation {
                 observation_id: self.next_drop_observation_id,
@@ -316,16 +338,72 @@ impl RtcVideoSourceSink {
                 width: 0,
                 height: 0,
                 is_keyframe: is_priority_primary_packet(packet),
-                queue_depth: self.pending_depth_estimate(),
+                queue_depth: queue_breakdown.total_queue_depth(),
+                ingress_queue_depth_breakdown: Some(queue_breakdown),
             });
     }
 
     fn pending_depth_estimate(&self) -> usize {
-        let sender_depth = self.tx.max_capacity().saturating_sub(self.tx.capacity());
-        sender_depth
-            + self.pending_priority_primary.len()
-            + self.pending_repair.len()
-            + self.pending_best_effort.len()
+        self.pending_depth_breakdown().total_queue_depth()
+    }
+
+    fn pending_depth_breakdown(&self) -> XbxEngineIngressQueueDepthBreakdownObservation {
+        let sender_max_capacity = self.tx.max_capacity();
+        let sender_remaining_capacity = self.tx.capacity();
+        XbxEngineIngressQueueDepthBreakdownObservation {
+            sender_queue_depth: sender_max_capacity.saturating_sub(sender_remaining_capacity),
+            sender_max_capacity,
+            sender_queue_limit: self.sender_queue_limit(),
+            sender_remaining_capacity,
+            pending_priority_primary_len: self.pending_priority_primary.len(),
+            pending_priority_primary_limit: self.priority_backlog_limit,
+            pending_repair_len: self.pending_repair.len(),
+            pending_repair_limit: self.repair_backlog_limit,
+            pending_best_effort_len: self.pending_best_effort.len(),
+            pending_best_effort_limit: self.best_effort_backlog_limit,
+        }
+    }
+
+    fn sender_queue_limit(&self) -> usize {
+        self.tx
+            .max_capacity()
+            .min(MAX_EFFECTIVE_SENDER_QUEUE_DEPTH)
+            .max(1)
+    }
+
+    fn sender_queue_depth(&self) -> usize {
+        self.tx.max_capacity().saturating_sub(self.tx.capacity())
+    }
+
+    fn best_effort_sender_soft_watermark(&self) -> usize {
+        self.sender_queue_limit()
+            .min(BEST_EFFORT_SENDER_QUEUE_SOFT_WATERMARK)
+            .max(1)
+    }
+
+    fn sender_best_effort_soft_pressure_active(&self) -> bool {
+        self.sender_queue_depth() >= self.best_effort_sender_soft_watermark()
+    }
+
+    fn repair_backpressure_high(&self) -> bool {
+        self.sender_queue_limit() > self.repair_backlog_limit
+            && (self.sender_best_effort_soft_pressure_active()
+                || self.pending_repair.len() >= self.repair_backlog_limit.saturating_sub(1).max(1))
+    }
+
+    fn effective_backpressure_class(
+        &self,
+        packet: &RtcVideoRtpPacket,
+        class: IngressBackpressureClass,
+    ) -> IngressBackpressureClass {
+        if class == IngressBackpressureClass::PriorityRepair
+            && self.repair_backpressure_high()
+            && !is_priority_primary_packet(packet)
+        {
+            IngressBackpressureClass::BestEffort
+        } else {
+            class
+        }
     }
 
     fn has_pending_packets(&self) -> bool {
@@ -351,7 +429,19 @@ impl RtcVideoSourceSink {
         }
     }
 
-    fn try_send_packet(&mut self, packet: RtcVideoRtpPacket) -> bool {
+    fn try_send_packet_with_class(
+        &mut self,
+        packet: RtcVideoRtpPacket,
+        class: IngressBackpressureClass,
+    ) -> IngressSendResult {
+        if self.sender_queue_depth() >= self.sender_queue_limit() {
+            return IngressSendResult::Backpressure;
+        }
+        if class == IngressBackpressureClass::BestEffort
+            && self.sender_best_effort_soft_pressure_active()
+        {
+            return IngressSendResult::Backpressure;
+        }
         match self.tx.try_send(packet.clone()) {
             Ok(()) => {
                 if let Some(observation) =
@@ -359,9 +449,9 @@ impl RtcVideoSourceSink {
                 {
                     self.runtime_stats.record_video_rtx_reinject(observation);
                 }
-                true
+                IngressSendResult::Sent
             }
-            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => false,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => IngressSendResult::Backpressure,
             Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                 crate::xbx_log_warn!("[xbxengine][rtc] video source sink channel closed");
                 self.record_local_backpressure_drop(
@@ -369,8 +459,19 @@ impl RtcVideoSourceSink {
                     "localIngressChannelClosed",
                     "sourceChannelClosed",
                 );
-                true
+                IngressSendResult::Dropped
             }
+        }
+    }
+
+    fn update_frame_boundary_for_accepted_packet(&mut self, packet: &RtcVideoRtpPacket) {
+        if let Ok(mut tracker) = self.frame_boundary.lock() {
+            tracker.on_packet_arrived(
+                packet.meta.sequence_number,
+                packet.meta.timestamp,
+                packet.meta.marker,
+                is_likely_h264_recovery_priority(&packet.payload),
+            );
         }
     }
 }
@@ -418,17 +519,30 @@ impl RtcMediaSink for RtcVideoSourceSink {
             return;
         }
 
-        if self.try_send_packet(normalized.clone()) {
-            return;
+        let is_priority = is_likely_h264_recovery_priority(&normalized.payload);
+        let class = classify_backpressure_class_with_priority(
+            &normalized,
+            &self.frame_boundary,
+            is_priority,
+        );
+        let class = self.effective_backpressure_class(&normalized, class);
+        match self.try_send_packet_with_class(normalized.clone(), class) {
+            IngressSendResult::Sent => {
+                self.update_frame_boundary_for_accepted_packet(&normalized);
+                return;
+            }
+            IngressSendResult::Dropped => return,
+            IngressSendResult::Backpressure => {}
         }
-        let class = classify_backpressure_class(&normalized, &self.frame_boundary);
         crate::xbx_log_warn!(
             "[xbxengine][rtc] video source sink backpressure class={} seq={} ts={}",
             class.label(),
             normalized.meta.sequence_number,
             normalized.meta.timestamp
         );
-        self.enqueue_local_backpressure(normalized, class);
+        if self.enqueue_local_backpressure(normalized.clone(), class) {
+            self.update_frame_boundary_for_accepted_packet(&normalized);
+        }
         self.schedule_flush_if_needed(now);
         self.flush_pending(now);
     }
@@ -576,10 +690,22 @@ fn classify_backpressure_class(
     packet: &RtcVideoRtpPacket,
     frame_boundary: &Arc<Mutex<FrameBoundaryTracker>>,
 ) -> IngressBackpressureClass {
+    classify_backpressure_class_with_priority(
+        packet,
+        frame_boundary,
+        is_likely_h264_recovery_priority(&packet.payload),
+    )
+}
+
+fn classify_backpressure_class_with_priority(
+    packet: &RtcVideoRtpPacket,
+    frame_boundary: &Arc<Mutex<FrameBoundaryTracker>>,
+    is_priority_packet: bool,
+) -> IngressBackpressureClass {
     match packet.ingress_kind {
         RtcVideoIngressKind::Primary => {
             // 首包是高优先级 → PriorityPrimary
-            if is_priority_primary_packet(packet) {
+            if is_priority_packet {
                 return IngressBackpressureClass::PriorityPrimary;
             }
 
@@ -597,7 +723,7 @@ fn classify_backpressure_class(
         RtcVideoIngressKind::RepairPrimaryPassThrough { .. } => {
             // repair 路由上的 primary payload 也需要检查 NAL type
             // IDR/SPS/PPS 应进 PriorityPrimary，其余进 PriorityRepair
-            if is_priority_primary_packet(packet) {
+            if is_priority_packet {
                 return IngressBackpressureClass::PriorityPrimary;
             }
 

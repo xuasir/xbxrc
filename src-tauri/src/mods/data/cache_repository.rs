@@ -162,6 +162,7 @@ impl DataCacheRepository {
             .store()
             .get(Self::base_store_key(scope))
             .and_then(|value| serde_json::from_value(value.clone()).ok());
+        let snapshot = snapshot.or_else(|| Self::find_compatible_base_snapshot(&store, scope));
         if let Some(snapshot) = &snapshot {
             self.memory_base_cache_guard()
                 .insert(scoped_key, snapshot.clone());
@@ -382,7 +383,133 @@ impl DataCacheRepository {
             .store()
             .get(Self::overlay_store_key(scope))
             .and_then(|value| serde_json::from_value(value.clone()).ok());
-        Ok((base_snapshot, overlay_snapshot))
+        if Self::is_overlay_snapshot_usable(overlay_snapshot.as_ref()) {
+            return Ok((base_snapshot, overlay_snapshot));
+        }
+
+        Ok(Self::find_compatible_catalog_pair(&store, scope)
+            .unwrap_or((base_snapshot, overlay_snapshot)))
+    }
+
+    fn find_compatible_catalog_pair(
+        store: &crate::settings_store::ResolvedSettingsStore,
+        scope: &XcloudCatalogCacheScope,
+    ) -> Option<(
+        Option<CachedXcloudCatalogBaseSnapshot>,
+        Option<CachedXcloudCatalogOverlaySnapshot>,
+    )> {
+        let suffix = Self::compatible_scope_suffix(scope);
+        let entries = store.store().entries();
+        let (stem, overlay_snapshot, base_snapshot) =
+            Self::select_compatible_catalog_pair_from_entries(&entries, &suffix)?;
+
+        log::info!(
+            "[Data][xcloud] using compatible catalog cache fallback stem={}",
+            stem
+        );
+        Some((base_snapshot, Some(overlay_snapshot)))
+    }
+
+    fn select_compatible_catalog_pair_from_entries(
+        entries: &[(String, Value)],
+        suffix: &str,
+    ) -> Option<(
+        String,
+        CachedXcloudCatalogOverlaySnapshot,
+        Option<CachedXcloudCatalogBaseSnapshot>,
+    )> {
+        let mut best: Option<(
+            String,
+            CachedXcloudCatalogOverlaySnapshot,
+            Option<CachedXcloudCatalogBaseSnapshot>,
+        )> = None;
+
+        for (key, value) in entries {
+            let Some(stem) = key.strip_suffix(".overlay") else {
+                continue;
+            };
+            if !stem.starts_with(XCLOUD_CATALOG_CACHE_PREFIX) || !stem.ends_with(&suffix) {
+                continue;
+            }
+
+            let Ok(overlay_snapshot) =
+                serde_json::from_value::<CachedXcloudCatalogOverlaySnapshot>(value.clone())
+            else {
+                continue;
+            };
+            if !Self::is_overlay_snapshot_usable(Some(&overlay_snapshot)) {
+                continue;
+            }
+
+            let base_key = format!("{stem}.base");
+            let base_snapshot = entries
+                .iter()
+                .find(|(key, _)| key == &base_key)
+                .map(|(_, value)| value)
+                .and_then(|value| serde_json::from_value(value.clone()).ok());
+            let should_replace = best
+                .as_ref()
+                .map(|(_, best_overlay, _)| overlay_snapshot.updated_at > best_overlay.updated_at)
+                .unwrap_or(true);
+            if should_replace {
+                best = Some((stem.to_string(), overlay_snapshot, base_snapshot));
+            }
+        }
+
+        best
+    }
+
+    fn find_compatible_base_snapshot(
+        store: &crate::settings_store::ResolvedSettingsStore,
+        scope: &XcloudCatalogCacheScope,
+    ) -> Option<CachedXcloudCatalogBaseSnapshot> {
+        let suffix = Self::compatible_scope_suffix(scope);
+        let mut best: Option<CachedXcloudCatalogBaseSnapshot> = None;
+
+        for (key, value) in store.store().entries() {
+            let Some(stem) = key.strip_suffix(".base") else {
+                continue;
+            };
+            if !stem.starts_with(XCLOUD_CATALOG_CACHE_PREFIX) || !stem.ends_with(&suffix) {
+                continue;
+            }
+
+            let Ok(snapshot) =
+                serde_json::from_value::<CachedXcloudCatalogBaseSnapshot>(value.clone())
+            else {
+                continue;
+            };
+            if !Self::is_base_renderable(&snapshot) {
+                continue;
+            }
+
+            let should_replace = best
+                .as_ref()
+                .map(|best_snapshot| snapshot.updated_at > best_snapshot.updated_at)
+                .unwrap_or(true);
+            if should_replace {
+                best = Some(snapshot);
+            }
+        }
+
+        best
+    }
+
+    fn is_overlay_snapshot_usable(snapshot: Option<&CachedXcloudCatalogOverlaySnapshot>) -> bool {
+        snapshot
+            .filter(|snapshot| {
+                Self::is_overlay_renderable(snapshot) && !snapshot.entries.is_empty()
+            })
+            .is_some()
+    }
+
+    fn compatible_scope_suffix(scope: &XcloudCatalogCacheScope) -> String {
+        format!(
+            ".{}.{}.{}",
+            Self::sanitize_cache_segment(&scope.region_host),
+            Self::sanitize_cache_segment(&scope.language),
+            Self::sanitize_cache_segment(&scope.market),
+        )
     }
 
     fn memory_base_cache_guard(
@@ -507,6 +634,101 @@ mod tests {
         assert!(loaded.needs_refresh);
         assert_eq!(loaded.missing_product_ids, vec!["B".to_string()]);
         assert_eq!(loaded.titles.len(), 2);
+    }
+
+    #[test]
+    fn compatible_catalog_fallback_selects_latest_renderable_overlay() {
+        let suffix = ".wus-core-gssv-play-prod-xboxlive-com.en-US.US";
+        let old_stem =
+            "data.xcloudCatalog.v2.old-user.wus-core-gssv-play-prod-xboxlive-com.en-US.US";
+        let new_stem =
+            "data.xcloudCatalog.v2.new-user.wus-core-gssv-play-prod-xboxlive-com.en-US.US";
+        let other_region_stem =
+            "data.xcloudCatalog.v2.other-user.ejp-core-gssv-play-prod-xboxlive-com.en-US.US";
+        let now = DataCacheRepository::now_ms();
+
+        let entries = vec![
+            (
+                format!("{new_stem}.base"),
+                serde_json::json!(CachedXcloudCatalogBaseSnapshot {
+                    updated_at: now,
+                    entries: HashMap::from([(
+                        "NEW".to_string(),
+                        CachedXcloudCatalogBaseEntry {
+                            product_id: "NEW".to_string(),
+                            name: "Newest".to_string(),
+                            publisher_name: String::new(),
+                            description: String::new(),
+                            tile_image_url: String::new(),
+                            poster_image_url: String::new(),
+                            categories: Vec::new(),
+                        }
+                    )]),
+                }),
+            ),
+            (
+                format!("{old_stem}.overlay"),
+                serde_json::json!(CachedXcloudCatalogOverlaySnapshot {
+                    updated_at: now - 10,
+                    entries: vec![CachedXcloudCatalogOverlayEntry {
+                        product_id: "OLD".to_string(),
+                        title_id: "old-title".to_string(),
+                        xbox_title_id: None,
+                        fallback_name: "Old".to_string(),
+                        supported_input_types: Vec::new(),
+                        has_entitlement: true,
+                        is_recently_played: false,
+                        is_new: false,
+                    }],
+                }),
+            ),
+            (
+                format!("{new_stem}.overlay"),
+                serde_json::json!(CachedXcloudCatalogOverlaySnapshot {
+                    updated_at: now,
+                    entries: vec![CachedXcloudCatalogOverlayEntry {
+                        product_id: "NEW".to_string(),
+                        title_id: "new-title".to_string(),
+                        xbox_title_id: None,
+                        fallback_name: "Newest".to_string(),
+                        supported_input_types: Vec::new(),
+                        has_entitlement: true,
+                        is_recently_played: false,
+                        is_new: false,
+                    }],
+                }),
+            ),
+            (
+                format!("{other_region_stem}.overlay"),
+                serde_json::json!(CachedXcloudCatalogOverlaySnapshot {
+                    updated_at: now + 1,
+                    entries: vec![CachedXcloudCatalogOverlayEntry {
+                        product_id: "OTHER".to_string(),
+                        title_id: "other-title".to_string(),
+                        xbox_title_id: None,
+                        fallback_name: "Other".to_string(),
+                        supported_input_types: Vec::new(),
+                        has_entitlement: true,
+                        is_recently_played: false,
+                        is_new: false,
+                    }],
+                }),
+            ),
+        ];
+
+        let (stem, overlay, base) =
+            DataCacheRepository::select_compatible_catalog_pair_from_entries(&entries, suffix)
+                .expect("compatible overlay should be selected");
+
+        assert_eq!(stem, new_stem);
+        assert_eq!(overlay.entries[0].product_id, "NEW");
+        assert_eq!(
+            base.expect("matching base should be included")
+                .entries
+                .get("NEW")
+                .map(|entry| entry.name.as_str()),
+            Some("Newest")
+        );
     }
 
     #[test]

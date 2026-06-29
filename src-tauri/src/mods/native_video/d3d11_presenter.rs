@@ -37,14 +37,18 @@ use xbxengine::{
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 
 use super::presenters::{NativeVideoPresenter, NativeVideoPresenterKind};
-use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome};
+use super::scheduling::{
+    submitted_frame_is_stale_for_host_mailbox, HostCadenceTelemetry, ScheduledFrameSlot,
+    ScheduledFrameSubmitOutcome,
+};
 use super::{
     clear_host_present_tick_dispatch, finish_host_present_tick_guard_and_maybe_rerun, now_ms_f64,
     record_host_frame_presented, record_host_mailbox_idle, record_host_mailbox_rejected_stale,
-    record_host_mailbox_retained_displayed, record_host_mailbox_take_decision,
-    record_native_video_timing_event_lazy, request_host_present_tick_dispatch,
-    HostFramePresentedFacts, HostPresentTickGuard, NativeVideoDisplayState,
-    NativeVideoViewportState, HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS,
+    record_host_mailbox_retained_displayed, record_host_mailbox_retained_displayed_stale,
+    record_host_mailbox_take_decision, record_native_video_timing_event_lazy,
+    request_host_present_tick_dispatch, HostFramePresentedFacts, HostPresentTickGuard,
+    NativeVideoDisplayState, NativeVideoViewportState, HOST_TIMING_QUEUE_WARN_MS,
+    HOST_TIMING_TICK_WARN_MS,
 };
 
 use super::presenters::apply_host_mailbox_viewport_diagnostics;
@@ -160,12 +164,20 @@ impl WindowsD3d11Presenter {
         }
     }
 
-    fn ensure_render_loop(&mut self) {
-        let Ok(mut state) = self.renderer_state.lock() else {
-            return;
+    fn ensure_render_loop(&mut self) -> bool {
+        let Ok(mut state) = self.renderer_state.try_lock() else {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                D3D11_NATIVE_PIPELINE,
+                "hostMailboxUpdateFailed",
+                &self.viewport_id,
+                &self.window_label,
+                || serde_json::json!({ "reason": "rendererStateBusy" }),
+            );
+            return false;
         };
         if state.render_loop_started {
-            return;
+            return true;
         }
         state.render_loop_started = true;
         self.render_loop_stop.store(false, Ordering::Relaxed);
@@ -210,6 +222,7 @@ impl WindowsD3d11Presenter {
                 }
             })
             .expect("Failed to spawn Windows D3D11 render loop");
+        true
     }
 
     fn request_immediate_render_tick(&self) {
@@ -234,10 +247,10 @@ impl WindowsD3d11Presenter {
     }
 
     fn should_drop_submitted_frame(&self, frame: &XbxEngineRenderFrame, now_ms: f64) -> bool {
-        let Ok(telemetry) = self.telemetry.lock() else {
+        let Ok(telemetry) = self.telemetry.try_lock() else {
             return false;
         };
-        now_ms - frame.rendered_at_ms > telemetry.frame_age_budget_ms()
+        submitted_frame_is_stale_for_host_mailbox(&telemetry, frame, now_ms)
     }
 
     fn present_d3d11_descriptor(
@@ -248,12 +261,12 @@ impl WindowsD3d11Presenter {
         self.surface_id = surface_id
             .map(str::to_string)
             .or_else(|| self.surface_id.clone());
-        self.ensure_render_loop();
+        if !self.ensure_render_loop() {
+            return false;
+        }
         let now_ms = now_ms_f64();
         if self.should_drop_submitted_frame(frame, now_ms) {
-            if let Ok(mut telemetry) = self.telemetry.lock() {
-                telemetry.present_enqueue_count_total =
-                    telemetry.present_enqueue_count_total.saturating_add(1);
+            if let Ok(mut telemetry) = self.telemetry.try_lock() {
                 telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
             record_native_video_timing_event_lazy(
@@ -272,19 +285,16 @@ impl WindowsD3d11Presenter {
             );
             return false;
         }
-        let Ok(mut telemetry) = self.telemetry.lock() else {
+        let Ok(mut telemetry) = self.telemetry.try_lock() else {
             self.record_mailbox_update_failed("telemetryLockFailed", frame.frame_seq);
             return false;
         };
-        let previous_submit_time_ms = telemetry.latest_submit_time_ms;
-        let submit_gap_ms = telemetry.record_submit(now_ms);
+        let submit_gap_ms = telemetry.submit_gap_ms(now_ms);
         let no_pending_streak_before_submit = telemetry.no_pending_streak;
         let should_warn_submit_gap =
             submit_gap_ms.is_some_and(|gap_ms| telemetry.should_warn_submit_gap(gap_ms));
-        telemetry.present_enqueue_count_total =
-            telemetry.present_enqueue_count_total.saturating_add(1);
         let telemetry_diag = telemetry.diagnostics_snapshot();
-        let Ok(mut frame_slot) = self.frame_slot.lock() else {
+        let Ok(mut frame_slot) = self.frame_slot.try_lock() else {
             self.record_mailbox_update_failed("frameSlotLockFailed", frame.frame_seq);
             return false;
         };
@@ -311,6 +321,7 @@ impl WindowsD3d11Presenter {
                             "frameRecoveryEpoch": frame.recovery_epoch_tag,
                             "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
                             "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "framePresentationValueRole": frame.presentation_value_role,
                             "frameIsKeyframe": frame.is_keyframe,
                             "frameAgeMs": frame_age_ms,
                             "frameAgeBudgetMs": frame_age_budget_ms,
@@ -383,6 +394,7 @@ impl WindowsD3d11Presenter {
                             "frameRecoveryEpoch": frame.recovery_epoch_tag,
                             "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
                             "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "framePresentationValueRole": frame.presentation_value_role,
                             "frameIsKeyframe": frame.is_keyframe,
                             "frameAgeMs": frame_age_ms,
                             "frameAgeBudgetMs": frame_age_budget_ms,
@@ -400,7 +412,6 @@ impl WindowsD3d11Presenter {
                         })
                     },
                 );
-                telemetry.latest_submit_time_ms = previous_submit_time_ms;
                 false
             }
             ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
@@ -422,6 +433,7 @@ impl WindowsD3d11Presenter {
                             "frameRecoveryEpoch": frame.recovery_epoch_tag,
                             "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
                             "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "framePresentationValueRole": frame.presentation_value_role,
                             "frameIsKeyframe": frame.is_keyframe,
                             "lastPresentedFrameSeq": last_presented_frame_seq,
                             "submitGapMs": submit_gap_ms,
@@ -438,7 +450,6 @@ impl WindowsD3d11Presenter {
                         })
                     },
                 );
-                telemetry.latest_submit_time_ms = previous_submit_time_ms;
                 false
             }
         }
@@ -464,7 +475,7 @@ impl NativeVideoPresenter for WindowsD3d11Presenter {
     fn attach(&mut self, surface_id: Option<&str>) {
         self.begin_media_epoch();
         self.surface_id = surface_id.map(str::to_string);
-        self.ensure_render_loop();
+        let _ = self.ensure_render_loop();
     }
 
     fn begin_media_epoch(&mut self) {
@@ -489,7 +500,7 @@ impl NativeVideoPresenter for WindowsD3d11Presenter {
     fn reset_mailbox_for_host_stall_recovery(&mut self) -> bool {
         self.begin_media_epoch();
         self.render_loop_stop.store(false, Ordering::Relaxed);
-        self.ensure_render_loop();
+        let _ = self.ensure_render_loop();
         true
     }
 
@@ -927,6 +938,24 @@ fn process_d3d11_render_take_outcome(
                     now_ms,
                 );
             }
+            None
+        }
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrameStale {
+            frame,
+            frame_age_ms,
+            frame_age_budget_ms,
+        } => {
+            record_host_mailbox_retained_displayed_stale(
+                runtime_trace,
+                D3D11_NATIVE_PIPELINE,
+                viewport_id,
+                window_label,
+                &frame,
+                frame_age_ms,
+                frame_age_budget_ms,
+                take_slot_diag,
+                take_telemetry_diag,
+            );
             None
         }
         ScheduledFrameTakeOutcome::NoPendingFrame => {

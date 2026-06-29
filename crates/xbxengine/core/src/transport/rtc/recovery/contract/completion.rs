@@ -3,6 +3,10 @@
 use crate::XbxEngineMediaRuntimeStats;
 
 use super::decode_sync::decoder_reference_synced_from_stats;
+use super::display::{
+    current_clean_anchor_observed_at_ms_from_stats, current_displayed_idr_at_ms_from_stats,
+    current_fresh_anchor_recovered_at_ms_from_stats,
+};
 
 /// Owner / stats 共用的 receive picture recovery 闭合字段。
 pub(crate) struct ReceivePictureRecoveryCompleteFields<'a> {
@@ -12,6 +16,7 @@ pub(crate) struct ReceivePictureRecoveryCompleteFields<'a> {
     pub receive_display_state: Option<&'a str>,
     pub recovery_displayed_idr_at_ms: Option<f64>,
     pub clean_anchor_epoch: Option<u64>,
+    pub clean_anchor_observed_at_ms: Option<f64>,
     pub decoder_reference_synced: bool,
 }
 
@@ -27,19 +32,21 @@ pub(crate) fn receive_picture_recovery_complete_from_fields(
     if fields.receive_display_state == Some("display-stable")
         && fields.recovery_displayed_idr_at_ms.is_some()
         && fields.clean_anchor_epoch == Some(fields.recovery_epoch)
+        && fields.clean_anchor_observed_at_ms.is_some()
     {
         return true;
     }
-    fields.clean_anchor_epoch == Some(fields.recovery_epoch) && fields.decoder_reference_synced
+    fields.clean_anchor_epoch == Some(fields.recovery_epoch)
+        && fields.clean_anchor_observed_at_ms.is_some()
+        && fields.decoder_reference_synced
 }
 
 const DECODER_REFERENCE_SYNCED_FRESH_MS: f64 = 2_000.0;
 
 fn picture_recovery_evaluation_now_ms(stats: &XbxEngineMediaRuntimeStats) -> f64 {
-    stats
-        .recovery_displayed_idr_at_ms
-        .or(stats.recovery_fresh_anchor_recovered_at_ms)
-        .or(stats.video_anchor_clean_observed_at_ms)
+    current_clean_anchor_observed_at_ms_from_stats(stats)
+        .or_else(|| current_fresh_anchor_recovered_at_ms_from_stats(stats))
+        .or_else(|| current_displayed_idr_at_ms_from_stats(stats))
         .or(stats
             .latest_h264_inspection_observation
             .as_ref()
@@ -97,12 +104,14 @@ pub(crate) fn receive_picture_recovery_complete_at(
         return false;
     }
     if stats.receive_display_state.as_deref() == Some("display-stable")
-        && stats.recovery_displayed_idr_at_ms.is_some()
+        && current_displayed_idr_at_ms_from_stats(stats).is_some()
         && stats.video_anchor_clean_epoch == Some(recovery_epoch)
+        && stats.video_anchor_clean_observed_at_ms.is_some()
     {
         return true;
     }
     stats.video_anchor_clean_epoch == Some(recovery_epoch)
+        && stats.video_anchor_clean_observed_at_ms.is_some()
         && decoder_reference_synced_for_recovery_epoch(recovery_epoch, stats, now_ms)
 }
 

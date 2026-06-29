@@ -245,8 +245,7 @@ fn resolve_presentation_health(
     if stats.video_owner_reason.as_deref() == Some("hostPresentStalled") {
         return Some("hostPresentStalled".to_string());
     }
-    let has_present_history = stats.latest_video_host_present_time_ms.is_some()
-        || stats.host_mailbox_enqueue_count_total > 0;
+    let has_present_history = stats.latest_video_host_present_time_ms.is_some();
     let supply_pressure = matches!(
         stats.host_no_pending_pressure_level.as_deref(),
         Some("high" | "critical")
@@ -1537,6 +1536,24 @@ pub fn build_xbxengine_stats(
                     height: drop.height,
                     is_keyframe: drop.is_keyframe,
                     queue_depth: drop.queue_depth,
+                    ingress_queue_depth_breakdown: drop.ingress_queue_depth_breakdown.as_ref().map(
+                        |breakdown| {
+                            xbxengine_protocol::XbxEngineIngressQueueDepthBreakdownObservationDto {
+                                sender_queue_depth: breakdown.sender_queue_depth,
+                                sender_max_capacity: breakdown.sender_max_capacity,
+                                sender_queue_limit: breakdown.sender_queue_limit,
+                                sender_remaining_capacity: breakdown.sender_remaining_capacity,
+                                pending_priority_primary_len: breakdown
+                                    .pending_priority_primary_len,
+                                pending_priority_primary_limit: breakdown
+                                    .pending_priority_primary_limit,
+                                pending_repair_len: breakdown.pending_repair_len,
+                                pending_repair_limit: breakdown.pending_repair_limit,
+                                pending_best_effort_len: breakdown.pending_best_effort_len,
+                                pending_best_effort_limit: breakdown.pending_best_effort_limit,
+                            }
+                        },
+                    ),
                 }
             })
         }),
@@ -1626,6 +1643,18 @@ pub fn build_xbxengine_stats(
                         anchor_evidence: ledger.anchor_evidence.clone(),
                         keyframe_episode_health: ledger.keyframe_episode_health.clone(),
                         escalation_basis: ledger.escalation_basis.clone(),
+                        proposal_reason: ledger.proposal_reason.clone(),
+                        proposal_reason_label: ledger.proposal_reason_label.clone(),
+                        proposal_reason_domain: ledger.proposal_reason_domain.clone(),
+                        proposal_reason_domain_before_runtime_resolution: ledger
+                            .proposal_reason_domain_before_runtime_resolution
+                            .clone(),
+                        proposal_reason_domain_after_runtime_resolution: ledger
+                            .proposal_reason_domain_after_runtime_resolution
+                            .clone(),
+                        remote_terminal_domain_promoted: ledger.remote_terminal_domain_promoted,
+                        remote_terminal_active: ledger.remote_terminal_active,
+                        reconnect_gate_detail: ledger.reconnect_gate_detail.clone(),
                         budget_before: ledger.budget_before.as_ref().map(|budget| {
                             xbxengine_protocol::XbxEngineRecoveryBudgetSnapshotDto {
                                 recovery_epoch: budget.recovery_epoch,

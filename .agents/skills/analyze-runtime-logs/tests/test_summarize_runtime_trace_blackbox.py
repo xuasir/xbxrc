@@ -38,6 +38,51 @@ def summarize_rows(rows: list[dict]) -> dict:
 
 
 class SummarizeRuntimeTraceBlackboxTest(unittest.TestCase):
+    def test_schema_v3_profile_dimension_importance_counts_are_reported(self) -> None:
+        summary = summarize_rows(
+            [
+                {
+                    "schemaVersion": 3,
+                    "seq": 1,
+                    "tsMs": 100,
+                    "traceMode": "production",
+                    "traceProfile": "production",
+                    "dimension": "recovery",
+                    "importance": "key",
+                    "category": "decision",
+                    "domain": "xbxengine",
+                    "event": "recoveryDecisionLedger",
+                    "payload": {"gateResult": "accepted"},
+                },
+                {
+                    "schemaVersion": 3,
+                    "seq": 2,
+                    "tsMs": 120,
+                    "traceMode": "production",
+                    "traceProfile": "production",
+                    "dimension": "core",
+                    "importance": "essential",
+                    "category": "state",
+                    "domain": "trace",
+                    "event": "traceBudgetNotice",
+                    "payload": {
+                        "reason": "writerQueuePressure",
+                        "debugDropped": 3,
+                        "rawDropped": 7,
+                    },
+                },
+            ]
+        )
+        counts = summary["counts"]
+
+        self.assertEqual(counts["traceProfiles"]["production"], 2)
+        self.assertEqual(counts["traceModes"]["production"], 2)
+        self.assertEqual(counts["dimensions"]["recovery"], 1)
+        self.assertEqual(counts["dimensions"]["core"], 1)
+        self.assertEqual(counts["importance"]["key"], 1)
+        self.assertEqual(counts["importance"]["essential"], 1)
+        self.assertEqual(counts["traceBudgetNotices"], 1)
+
     def test_first_frame_health_keeps_continuation_seen_phase(self) -> None:
         summary = summarize_rows(
             [

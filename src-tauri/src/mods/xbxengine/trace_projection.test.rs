@@ -1891,6 +1891,14 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
             "anchor_evidence": "fresh-post-suspect",
             "keyframe_episode_health": "continuation-only",
             "escalation_basis": "anchor_missing",
+            "proposal_reason": "receiverWaitingKeyframe",
+            "proposal_reason_label": "receiverWaitingKeyframe",
+            "proposal_reason_domain": "local",
+            "proposal_reason_domain_before_runtime_resolution": "local",
+            "proposal_reason_domain_after_runtime_resolution": "local",
+            "remote_terminal_domain_promoted": false,
+            "remote_terminal_active": true,
+            "reconnect_gate_detail": "stage=rejected gate=local-domain",
             "budget_after": {
                 "recovery_epoch": 9,
                 "keyframe_budget_used": 1,
@@ -1927,6 +1935,25 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
         "familyUpgrade:keyframeInFlight->decoderReset"
     );
     assert_eq!(recovery_payload["recoveryPrimaryAction"], "requestPli");
+    assert_eq!(
+        recovery_payload["proposalReason"],
+        "receiverWaitingKeyframe"
+    );
+    assert_eq!(recovery_payload["proposalReasonDomain"], "local");
+    assert_eq!(
+        recovery_payload["proposalReasonDomainBeforeRuntimeResolution"],
+        "local"
+    );
+    assert_eq!(
+        recovery_payload["proposalReasonDomainAfterRuntimeResolution"],
+        "local"
+    );
+    assert_eq!(recovery_payload["remoteTerminalDomainPromoted"], false);
+    assert_eq!(recovery_payload["remoteTerminalActive"], true);
+    assert_eq!(
+        recovery_payload["reconnectGateDetail"],
+        "stage=rejected gate=local-domain"
+    );
     let payload = find_event_payload(&entries, "keyframeRequestEpisode");
     assert_eq!(
         payload["diagnosticPendingReason"],
@@ -2961,7 +2988,7 @@ fn runtime_reconnect_consumed_projects_runtime_trace_event() {
         "br": "",
         "decode": "",
         "latest_observation_label": "runtimeReconnectConsumed",
-        "latest_observation_summary": "observationId=7 reason=remote-terminal reasonDomain=connectivity-transport"
+        "latest_observation_summary": "observationId=7 reason=remote-terminal reasonDomain=connectivity-transport transportRecovering=true runtimeState=Running lastRecoveryActionAtMs=1234.500"
     }));
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
@@ -2969,8 +2996,50 @@ fn runtime_reconnect_consumed_projects_runtime_trace_event() {
     let payload = find_event_payload(&entries, "runtimeReconnectConsumed");
     assert_eq!(
         payload["summary"],
-        "observationId=7 reason=remote-terminal reasonDomain=connectivity-transport"
+        "observationId=7 reason=remote-terminal reasonDomain=connectivity-transport transportRecovering=true runtimeState=Running lastRecoveryActionAtMs=1234.500"
     );
+    assert_eq!(payload["observationId"], 7);
+    assert_eq!(payload["reason"], "remote-terminal");
+    assert_eq!(payload["reasonDomain"], "connectivity-transport");
+    assert_eq!(payload["transportRecovering"], true);
+    assert_eq!(payload["runtimeState"], "Running");
+    assert_eq!(payload["lastRecoveryActionAtMs"], 1234.5);
+}
+
+#[test]
+fn runtime_reconnect_blocked_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "runtimeReconnectBlocked",
+        "latest_observation_summary": "observationId=8 reason=receiverWaitingKeyframe reasonDomain=connectivity-transport blockReason=lifecycleGate:connectedHealthyNoProgress lastRecoveryActionAtMs=2345.500"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "runtimeReconnectBlocked");
+    assert_eq!(
+        payload["summary"],
+        "observationId=8 reason=receiverWaitingKeyframe reasonDomain=connectivity-transport blockReason=lifecycleGate:connectedHealthyNoProgress lastRecoveryActionAtMs=2345.500"
+    );
+    assert_eq!(payload["observationId"], 8);
+    assert_eq!(payload["reason"], "receiverWaitingKeyframe");
+    assert_eq!(payload["reasonDomain"], "connectivity-transport");
+    assert_eq!(
+        payload["blockReason"],
+        "lifecycleGate:connectedHealthyNoProgress"
+    );
+    assert_eq!(payload["lastRecoveryActionAtMs"], 2345.5);
 }
 
 #[test]
@@ -2989,7 +3058,7 @@ fn rtc_reconnect_candidate_staged_projects_runtime_trace_event() {
         "br": "",
         "decode": "",
         "latest_observation_label": "rtcReconnectCandidateStaged",
-        "latest_observation_summary": "observationId=9 reason=remote-terminal reasonDomain=connectivity-transport"
+        "latest_observation_summary": "observationId=9 reason=remote-terminal reasonDomain=connectivity-transport pendingObservationId=9 pendingReason=remote-terminal pendingReasonDomain=connectivity-transport stageOutcome=staged-new"
     }));
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
@@ -2997,8 +3066,15 @@ fn rtc_reconnect_candidate_staged_projects_runtime_trace_event() {
     let payload = find_event_payload(&entries, "rtcReconnectCandidateStaged");
     assert_eq!(
         payload["summary"],
-        "observationId=9 reason=remote-terminal reasonDomain=connectivity-transport"
+        "observationId=9 reason=remote-terminal reasonDomain=connectivity-transport pendingObservationId=9 pendingReason=remote-terminal pendingReasonDomain=connectivity-transport stageOutcome=staged-new"
     );
+    assert_eq!(payload["observationId"], 9);
+    assert_eq!(payload["reason"], "remote-terminal");
+    assert_eq!(payload["reasonDomain"], "connectivity-transport");
+    assert_eq!(payload["pendingObservationId"], 9);
+    assert_eq!(payload["pendingReason"], "remote-terminal");
+    assert_eq!(payload["pendingReasonDomain"], "connectivity-transport");
+    assert_eq!(payload["stageOutcome"], "staged-new");
 }
 
 #[test]

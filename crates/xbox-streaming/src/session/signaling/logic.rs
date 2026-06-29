@@ -48,8 +48,10 @@ pub fn has_usable_ice_candidates(candidates: &[IceCandidate]) -> bool {
 }
 
 const ERROR_CODE_UNEXPECTED_STATE: &str = "SessionUnexpectedState";
+const ERROR_CODE_SESSION_IN_UNEXPECTED_STATE: &str = "SessionInUnexpectedState";
 const ERROR_MESSAGE_SDP_EXCHANGE_SENT: &str = "ServerSdpExchangeCommandSent";
 const ERROR_MESSAGE_UNEXPECTED_STATE: &str = "UnexpectedState";
+const ERROR_MESSAGE_KEEPALIVE_FAILED: &str = "KeepAlive";
 
 /// keepalive 错误忽略策略：404 直接忽略；400 仅忽略已知状态冲突。
 pub fn should_ignore_keepalive_error(status: Option<u16>, body: Option<&str>) -> bool {
@@ -71,9 +73,14 @@ pub fn should_ignore_keepalive_error(status: Option<u16>, body: Option<&str>) ->
     let code = parsed.get("code").and_then(Value::as_str).unwrap_or("");
     let message = parsed.get("message").and_then(Value::as_str).unwrap_or("");
 
-    code == ERROR_CODE_UNEXPECTED_STATE
-        && (message.contains(ERROR_MESSAGE_SDP_EXCHANGE_SENT)
-            || message.contains(ERROR_MESSAGE_UNEXPECTED_STATE))
+    match code {
+        ERROR_CODE_UNEXPECTED_STATE => {
+            message.contains(ERROR_MESSAGE_SDP_EXCHANGE_SENT)
+                || message.contains(ERROR_MESSAGE_UNEXPECTED_STATE)
+        }
+        ERROR_CODE_SESSION_IN_UNEXPECTED_STATE => message.contains(ERROR_MESSAGE_KEEPALIVE_FAILED),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +131,10 @@ mod tests {
         assert!(should_ignore_keepalive_error(
             Some(400),
             Some("{\"code\":\"SessionUnexpectedState\",\"message\":\"ServerSdpExchangeCommandSent\"}")
+        ));
+        assert!(should_ignore_keepalive_error(
+            Some(400),
+            Some("{\"code\":\"SessionInUnexpectedState\",\"statusCode\":400,\"message\":\"KeepAlive : Failed\"}")
         ));
         assert!(!should_ignore_keepalive_error(Some(400), Some("{}")));
         assert!(!should_ignore_keepalive_error(Some(500), Some("boom")));

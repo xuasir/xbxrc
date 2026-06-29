@@ -696,12 +696,411 @@ async fn replacing_pending_best_effort_records_local_backpressure_drop() {
         drop.frame_unrecoverable_reason.as_deref(),
         Some("localBackpressure")
     );
+    let breakdown = drop
+        .ingress_queue_depth_breakdown
+        .as_ref()
+        .expect("ingress queue depth breakdown should be recorded");
+    assert_eq!(breakdown.sender_max_capacity, 1);
+    assert_eq!(breakdown.sender_queue_limit, 1);
+    assert_eq!(breakdown.sender_queue_depth, 1);
+    assert_eq!(breakdown.sender_remaining_capacity, 0);
+    assert_eq!(breakdown.pending_priority_primary_limit, 4);
+    assert_eq!(breakdown.pending_repair_limit, 4);
+    assert_eq!(breakdown.pending_best_effort_limit, 1);
+    assert_eq!(drop.queue_depth, breakdown.total_queue_depth());
 }
 
 #[tokio::test]
-async fn repair_burst_yields_to_best_effort_after_burst_cap() {
-    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-    let mut sink = build_sink(tx);
+async fn oversized_sender_channel_is_clamped_to_low_latency_depth() {
+    let (runtime_stats, sink_stats) = runtime_stats_pair();
+    let (tx, _rx) = tokio::sync::mpsc::channel(128);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
+
+    for sequence_number in 1u16..=67 {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 3_000 + u32::from(sequence_number),
+            marker: false,
+        };
+        sink.on_raw_packet(
+            &packet,
+            RtcMediaRouteLabel::PrimaryVideo,
+            "route=primaryVideo",
+            Some(&meta),
+        );
+    }
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let drop = stats
+        .latest_video_frame_drop
+        .as_ref()
+        .expect("oversized sender should still enter local backpressure");
+    assert_eq!(drop.reason, "localBackpressureBestEffortOverflow");
+    let breakdown = drop
+        .ingress_queue_depth_breakdown
+        .as_ref()
+        .expect("ingress queue depth breakdown should be recorded");
+    assert_eq!(breakdown.sender_max_capacity, 128);
+    assert_eq!(breakdown.sender_queue_limit, 64);
+    assert_eq!(breakdown.sender_queue_depth, 48);
+    assert_eq!(breakdown.pending_best_effort_limit, 2);
+    assert_eq!(drop.queue_depth, breakdown.total_queue_depth());
+    assert!(drop.queue_depth < 128);
+}
+
+#[tokio::test]
+async fn best_effort_uses_soft_watermark_before_sender_hard_limit() {
+    let (runtime_stats, sink_stats) = runtime_stats_pair();
+    let (tx, _rx) = tokio::sync::mpsc::channel(128);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
+
+    for sequence_number in 1u16..=51 {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 3_500 + u32::from(sequence_number),
+            marker: false,
+        };
+        sink.on_raw_packet(
+            &packet,
+            RtcMediaRouteLabel::PrimaryVideo,
+            "route=primaryVideo",
+            Some(&meta),
+        );
+    }
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let drop = stats
+        .latest_video_frame_drop
+        .as_ref()
+        .expect("best-effort soft watermark should record overflow");
+    assert_eq!(drop.reason, "localBackpressureBestEffortOverflow");
+    let breakdown = drop
+        .ingress_queue_depth_breakdown
+        .as_ref()
+        .expect("ingress queue depth breakdown should be recorded");
+    assert_eq!(breakdown.sender_max_capacity, 128);
+    assert_eq!(breakdown.sender_queue_limit, 64);
+    assert_eq!(breakdown.sender_queue_depth, 48);
+    assert_eq!(breakdown.pending_best_effort_limit, 2);
+    assert_eq!(breakdown.pending_best_effort_len, 1);
+    assert!(drop.queue_depth < breakdown.sender_queue_limit);
+}
+
+#[tokio::test]
+async fn keyframe_fu_continuation_inherits_priority_before_ingress_loop_consumes_head() {
+    let (runtime_stats, sink_stats) = runtime_stats_pair();
+    let (tx, mut rx) = tokio::sync::mpsc::channel(128);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
+
+    for sequence_number in 1u16..=48 {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 9_000 + u32::from(sequence_number),
+            marker: false,
+        };
+        sink.on_raw_packet(
+            &packet,
+            RtcMediaRouteLabel::PrimaryVideo,
+            "route=primaryVideo",
+            Some(&meta),
+        );
+    }
+
+    let idr_start = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x7c, 0x85, 0x11, 0x22]);
+    let idr_start_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 100,
+        timestamp: 42_000,
+        marker: false,
+    };
+    sink.on_raw_packet(
+        &idr_start,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&idr_start_meta),
+    );
+
+    let idr_continuation = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x7c, 0x05, 0x33, 0x44]);
+    let idr_continuation_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 101,
+        timestamp: 42_000,
+        marker: true,
+    };
+    sink.on_raw_packet(
+        &idr_continuation,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&idr_continuation_meta),
+    );
+
+    assert_eq!(sink.test_pending_best_effort_front_sequence(), None);
+    assert_eq!(sink.test_pending_priority_primary_len(), 0);
+    let mut received_sequences = Vec::new();
+    while let Ok(packet) = rx.try_recv() {
+        received_sequences.push(packet.meta.sequence_number);
+    }
+    assert!(received_sequences.contains(&100));
+    assert!(received_sequences.contains(&101));
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert!(stats.latest_video_frame_drop.is_none());
+}
+
+#[tokio::test]
+async fn keyframe_fu_continuation_inherits_priority_when_sender_queue_is_full() {
+    let (_runtime_stats, sink_stats) = runtime_stats_pair();
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
+
+    let fill_packet = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+    let fill_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 1,
+        timestamp: 12_000,
+        marker: false,
+    };
+    sink.on_raw_packet(
+        &fill_packet,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&fill_meta),
+    );
+
+    let idr_start = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x7c, 0x85, 0x11, 0x22]);
+    let idr_start_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 100,
+        timestamp: 43_000,
+        marker: false,
+    };
+    sink.on_raw_packet(
+        &idr_start,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&idr_start_meta),
+    );
+
+    let idr_continuation = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x7c, 0x05, 0x33, 0x44]);
+    let idr_continuation_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 101,
+        timestamp: 43_000,
+        marker: true,
+    };
+    sink.on_raw_packet(
+        &idr_continuation,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&idr_continuation_meta),
+    );
+
+    assert_eq!(sink.test_pending_priority_primary_len(), 2);
+    assert_eq!(
+        sink.test_pending_priority_primary_front_sequence(),
+        Some(100)
+    );
+    assert_eq!(sink.test_pending_best_effort_front_sequence(), None);
+}
+
+#[tokio::test]
+async fn dropped_keyframe_head_does_not_pollute_priority_for_later_continuation() {
+    let (_runtime_stats, sink_stats) = runtime_stats_pair();
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
+
+    let fill_packet = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+    let fill_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 1,
+        timestamp: 20_000,
+        marker: false,
+    };
+    sink.on_raw_packet(
+        &fill_packet,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&fill_meta),
+    );
+
+    for offset in 0u16..4 {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x65, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number: 100 + offset,
+            timestamp: 44_000 + u32::from(offset),
+            marker: true,
+        };
+        sink.on_raw_packet(
+            &packet,
+            RtcMediaRouteLabel::PrimaryVideo,
+            "route=primaryVideo",
+            Some(&meta),
+        );
+    }
+
+    let dropped_idr_head = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x7c, 0x85, 0x11, 0x22]);
+    let dropped_idr_head_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 200,
+        timestamp: 45_000,
+        marker: false,
+    };
+    sink.on_raw_packet(
+        &dropped_idr_head,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&dropped_idr_head_meta),
+    );
+
+    let continuation = RtcMediaIngressPacket::new(
+        MediaPacketKind::Rtp,
+        4,
+        RtcMediaPacketSource::Track {
+            track_id: "video-main".to_string(),
+        },
+    )
+    .with_rtp_payload(vec![0x7c, 0x05, 0x33, 0x44]);
+    let continuation_meta = RtcRtpPacketMeta {
+        ssrc: 7,
+        payload_type: 124,
+        sequence_number: 201,
+        timestamp: 45_000,
+        marker: true,
+    };
+    sink.on_raw_packet(
+        &continuation,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&continuation_meta),
+    );
+
+    assert_eq!(sink.test_pending_priority_primary_len(), 4);
+    assert_eq!(sink.test_pending_best_effort_front_sequence(), Some(201));
+}
+
+#[tokio::test]
+async fn repair_noise_downgrades_to_best_effort_under_sender_pressure() {
+    let (runtime_stats, sink_stats) = runtime_stats_pair();
+    let (tx, _rx) = tokio::sync::mpsc::channel(128);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
     sink.payload_route_map = parse_payload_route_map_from_answer(concat!(
         "v=0\r\n",
         "m=video 9 UDP/TLS/RTP/SAVPF 124 97\r\n",
@@ -711,84 +1110,71 @@ async fn repair_burst_yields_to_best_effort_after_burst_cap() {
         "a=ssrc-group:FID 1111 99\r\n",
     ));
 
-    let best_effort_packet = RtcMediaIngressPacket::new(
-        MediaPacketKind::Rtp,
-        4,
-        RtcMediaPacketSource::Track {
-            track_id: "video-main".to_string(),
-        },
-    )
-    .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
-
-    let base_meta = RtcRtpPacketMeta {
-        ssrc: 7,
-        payload_type: 124,
-        sequence_number: 1,
-        timestamp: 1001,
-        marker: false,
-    };
-    sink.on_raw_packet(
-        &best_effort_packet,
-        RtcMediaRouteLabel::PrimaryVideo,
-        "route=primaryVideo",
-        Some(&base_meta),
-    );
-
-    let pending_best_effort_meta = RtcRtpPacketMeta {
-        ssrc: 7,
-        payload_type: 124,
-        sequence_number: 2,
-        timestamp: 1002,
-        marker: false,
-    };
-    sink.on_raw_packet(
-        &best_effort_packet,
-        RtcMediaRouteLabel::PrimaryVideo,
-        "route=primaryVideo",
-        Some(&pending_best_effort_meta),
-    );
-
-    let repair_packet = RtcMediaIngressPacket::new(
-        MediaPacketKind::Rtp,
-        4,
-        RtcMediaPacketSource::Track {
-            track_id: "video-repair".to_string(),
-        },
-    )
-    .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
-
-    for seq in 10u16..=14 {
-        let repair_meta = RtcRtpPacketMeta {
-            ssrc: 99,
+    for sequence_number in 1u16..=48 {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 1111,
             payload_type: 124,
-            sequence_number: seq,
-            timestamp: 2000 + u32::from(seq),
+            sequence_number,
+            timestamp: 4_500 + u32::from(sequence_number),
             marker: false,
         };
         sink.on_raw_packet(
-            &repair_packet,
-            RtcMediaRouteLabel::RepairVideo,
-            "route=repairVideo",
-            Some(&repair_meta),
+            &packet,
+            RtcMediaRouteLabel::PrimaryVideo,
+            "route=primaryVideo",
+            Some(&meta),
         );
     }
 
-    let first = rx.recv().await.expect("base packet should be queued first");
-    assert_eq!(first.meta.sequence_number, 1);
-
-    let mut flushed = Vec::new();
-    for _ in 0..6 {
-        sink.test_flush_pending();
-        let packet = tokio::time::timeout(Duration::from_millis(50), rx.recv())
-            .await
-            .expect("flush should enqueue packet")
-            .expect("packet should exist");
-        flushed.push(packet.meta.sequence_number);
+    for sequence_number in 49u16..=51 {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-repair".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 99,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 4_500 + u32::from(sequence_number),
+            marker: false,
+        };
+        sink.on_raw_packet(
+            &packet,
+            RtcMediaRouteLabel::RepairVideo,
+            "route=repairVideo",
+            Some(&meta),
+        );
     }
 
-    assert_eq!(&flushed[..4], &[10, 11, 12, 13]);
-    assert_eq!(flushed[4], 2);
-    assert_eq!(flushed[5], 14);
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let drop = stats
+        .latest_video_frame_drop
+        .as_ref()
+        .expect("repair pressure should downgrade into best-effort overflow");
+    assert_eq!(drop.reason, "localBackpressureBestEffortOverflow");
+    assert_eq!(
+        drop.detail.as_deref(),
+        Some("bestEffortQueueDropOldest:priority-repair")
+    );
+    let breakdown = drop
+        .ingress_queue_depth_breakdown
+        .as_ref()
+        .expect("ingress queue depth breakdown should be recorded");
+    assert_eq!(breakdown.pending_repair_len, 0);
+    assert_eq!(breakdown.pending_best_effort_len, 1);
+    assert_eq!(breakdown.sender_queue_depth, 48);
 }
 
 #[tokio::test]
@@ -1083,7 +1469,7 @@ async fn repair_overflow_drops_oldest_repair_and_records_backpressure() {
         drop.detail.as_deref(),
         Some("repairQueueDropOldest:priority-repair")
     );
-    assert_eq!(drop.frame_rtp_timestamp, Some(3011));
+    assert_eq!(drop.frame_rtp_timestamp, Some(3012));
     assert_eq!(
         drop.frame_unrecoverable_reason.as_deref(),
         Some("localBackpressure")

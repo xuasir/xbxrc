@@ -38,6 +38,29 @@ pub struct XbxEngineFrameBudgetObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineIngressQueueDepthBreakdownObservation {
+    pub sender_queue_depth: usize,
+    pub sender_max_capacity: usize,
+    pub sender_queue_limit: usize,
+    pub sender_remaining_capacity: usize,
+    pub pending_priority_primary_len: usize,
+    pub pending_priority_primary_limit: usize,
+    pub pending_repair_len: usize,
+    pub pending_repair_limit: usize,
+    pub pending_best_effort_len: usize,
+    pub pending_best_effort_limit: usize,
+}
+
+impl XbxEngineIngressQueueDepthBreakdownObservation {
+    pub fn total_queue_depth(&self) -> usize {
+        self.sender_queue_depth
+            + self.pending_priority_primary_len
+            + self.pending_repair_len
+            + self.pending_best_effort_len
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineVideoFrameDropObservation {
     pub observation_id: u64,
     pub reason: String,
@@ -55,6 +78,7 @@ pub struct XbxEngineVideoFrameDropObservation {
     pub height: u32,
     pub is_keyframe: bool,
     pub queue_depth: usize,
+    pub ingress_queue_depth_breakdown: Option<XbxEngineIngressQueueDepthBreakdownObservation>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -266,6 +290,22 @@ pub struct XbxEngineRecoveryDecisionLedgerObservation {
     pub keyframe_episode_health: Option<String>,
     /// RFC 2026-05-13：升级依据（local_supply / anchor_missing / connectivity_bad）。
     pub escalation_basis: Option<String>,
+    /// reconnect/proposal 诊断：策略层枚举 reason。
+    pub proposal_reason: Option<String>,
+    /// reconnect/proposal 诊断：对外 wire label。
+    pub proposal_reason_label: Option<String>,
+    /// reconnect/proposal 诊断：最终进入 command 的 domain。
+    pub proposal_reason_domain: Option<String>,
+    /// reconnect/proposal 诊断：运行时 domain 收口前的初始 domain。
+    pub proposal_reason_domain_before_runtime_resolution: Option<String>,
+    /// reconnect/proposal 诊断：`with_runtime_reason_domain` 后的 domain。
+    pub proposal_reason_domain_after_runtime_resolution: Option<String>,
+    /// reconnect/proposal 诊断：remote terminal 是否把 domain 提升到 connectivity。
+    pub remote_terminal_domain_promoted: Option<bool>,
+    /// reconnect/proposal 诊断：当拍 remote terminal 是否活跃。
+    pub remote_terminal_active: Option<bool>,
+    /// reconnect/proposal 诊断：expensive gate 的详细原因。
+    pub reconnect_gate_detail: Option<String>,
     pub budget_before: Option<XbxEngineRecoveryBudgetSnapshot>,
     pub budget_after: Option<XbxEngineRecoveryBudgetSnapshot>,
     pub trigger_observation_label: Option<String>,
@@ -564,6 +604,10 @@ impl XbxEngineTwccObservationQuality {
 }
 
 impl XbxEngineVideoTwccObservation {
+    pub fn is_local_feedback(&self) -> bool {
+        self.source == "local-feedback"
+    }
+
     pub fn is_bootstrap_sparse_local_feedback(
         source: &str,
         feedback_interval_ms: Option<f64>,
@@ -582,7 +626,7 @@ impl XbxEngineVideoTwccObservation {
         stable_feedback_interval_ms: f64,
         stable_feedback_min_packets: u16,
     ) -> XbxEngineTwccObservationQuality {
-        if self.source != "local-feedback" {
+        if !self.is_local_feedback() {
             return XbxEngineTwccObservationQuality::RemoteObserved;
         }
         if Self::is_bootstrap_sparse_local_feedback(

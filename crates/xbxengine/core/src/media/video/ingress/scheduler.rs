@@ -76,18 +76,29 @@ impl VideoIngress {
         self.queue.front()
     }
 
-    /// Host present 解码节流：丢弃队首连续非关键帧（最多 `max_total`），避免队头 delta 挡住后续 IDR（HOL）。
+    /// Host present 解码节流：有 keyframe 时丢弃队首 delta 让 keyframe 先出；没有 keyframe 时保留最新
+    /// delta continuation，避免 host no-pending 时把可续播供给全部清空。
     pub fn discard_non_keyframe_prefix_for_host_stall(&mut self, max_total: usize) -> usize {
-        let mut discarded = 0usize;
-        while discarded < max_total {
-            match self.queue.front() {
-                None => break,
-                Some(f) if f.is_keyframe => break,
-                Some(_) => {
-                    self.queue.pop_front();
-                    discarded += 1;
-                }
+        if self.queue.front().is_none_or(|frame| frame.is_keyframe) {
+            return 0;
+        }
+        if let Some(keyframe_index) = self
+            .queue
+            .iter()
+            .take(max_total.saturating_add(1))
+            .position(|frame| frame.is_keyframe)
+        {
+            let discard_count = keyframe_index.min(max_total);
+            for _ in 0..discard_count {
+                self.queue.pop_front();
             }
+            return discard_count;
+        }
+        let discard_count = self.queue.len().saturating_sub(1).min(max_total);
+        let mut discarded = 0usize;
+        while discarded < discard_count {
+            self.queue.pop_front();
+            discarded += 1;
         }
         discarded
     }
@@ -812,5 +823,26 @@ mod tests {
         assert_eq!(ingress.discard_non_keyframe_prefix_for_host_stall(512), 2);
         let popped = FrameScheduler::pop(&mut ingress).expect("keyframe after discard");
         assert!(popped.is_keyframe);
+    }
+
+    #[test]
+    fn discard_non_keyframe_prefix_for_host_stall_preserves_latest_delta_without_keyframe() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(8, Duration::from_millis(250));
+        let mut first = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, -120);
+        first.rtp_timestamp = 10;
+        let mut second = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, -80);
+        second.rtp_timestamp = 11;
+        let mut third = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, -40);
+        third.rtp_timestamp = 12;
+        ingress.test_push_back_unchecked(first);
+        ingress.test_push_back_unchecked(second);
+        ingress.test_push_back_unchecked(third);
+
+        assert_eq!(ingress.discard_non_keyframe_prefix_for_host_stall(512), 2);
+        assert_eq!(ingress.queue_depth(), 1);
+        let popped = FrameScheduler::pop(&mut ingress).expect("latest delta is preserved");
+        assert!(!popped.is_keyframe);
+        assert_eq!(popped.rtp_timestamp, 12);
     }
 }

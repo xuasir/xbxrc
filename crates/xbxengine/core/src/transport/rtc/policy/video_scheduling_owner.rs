@@ -178,6 +178,7 @@ impl VideoSchedulingOwnerInput {
     fn displayed_idr_control_plane_active(&self) -> bool {
         self.receive_display_state.as_deref() == Some("display-stable")
             && self.clean_anchor_epoch == Some(self.recovery_epoch)
+            && self.clean_anchor_observed_at_ms.is_some()
     }
 
     fn control_decoder_reference_synced(&self) -> bool {
@@ -191,8 +192,14 @@ impl VideoSchedulingOwnerInput {
     }
 
     fn has_established_displayed_idr_fact(&self) -> bool {
-        self.recovery_displayed_idr_at_ms.is_some()
-            || self.recovery_fresh_anchor_recovered_at_ms.is_some()
+        self.current_displayed_idr_at_ms().is_some()
+    }
+
+    fn current_displayed_idr_at_ms(&self) -> Option<f64> {
+        let displayed_at_ms = self.recovery_displayed_idr_at_ms?;
+        self.transport_recovery_episode_opened_at_ms
+            .filter(|opened_at_ms| displayed_at_ms < *opened_at_ms)
+            .map_or(Some(displayed_at_ms), |_| None)
     }
 
     fn effective_receiver_state(&self) -> Option<&str> {
@@ -863,9 +870,10 @@ impl VideoSchedulingOwner {
 
     /// decode 新鲜但 present 吞吐偏低时，host tick 会快于 present epoch，不应判 host present stall。
     fn chronic_low_present_throughput(input: &VideoSchedulingOwnerInput) -> bool {
-        input
-            .demand
-            .present_pipeline_stressed(&input.display_supply_thresholds)
+        matches!(input.demand.host_cadence_phase.as_deref(), Some("steady"))
+            && input
+                .demand
+                .present_pipeline_stressed(&input.display_supply_thresholds)
     }
 
     fn host_present_stall_signal_active(
@@ -993,6 +1001,19 @@ impl VideoSchedulingOwner {
             return RecoveryCompletionEvidence::NotReady;
         }
         if Self::receive_ledger_media_recovery_complete(input) {
+            if Self::first_present_feedback_gap_active(input) {
+                return RecoveryCompletionEvidence::ServingReady;
+            }
+            if Self::has_first_present_feedback_gap(input) {
+                return RecoveryCompletionEvidence::NotReady;
+            }
+            let present_age_stale = input
+                .demand
+                .present_age_ms
+                .is_some_and(|age| age > input.display_supply_thresholds.critical_present_age_ms);
+            if present_age_stale {
+                return RecoveryCompletionEvidence::NotReady;
+            }
             if matches!(classified_supply_state, DisplaySupplyState::Healthy) {
                 return RecoveryCompletionEvidence::Ready;
             }
@@ -1076,8 +1097,11 @@ impl VideoSchedulingOwner {
                 has_clean_anchor_evidence,
                 chain_healthy,
             );
+        if can_bridge_present_feedback_gap {
+            return RecoveryCompletionEvidence::ServingReady;
+        }
         // 恢复到 stable-serving 需要比“可播放”更稳：单点 freshness 不足以说明供给已真正降压。
-        if (!present_fresh || !decode_fresh) && !can_bridge_present_feedback_gap {
+        if !present_fresh || !decode_fresh {
             if matches!(
                 current,
                 VideoSchedulingOwnerState::RebuildingSupply
@@ -1278,13 +1302,33 @@ impl VideoSchedulingOwner {
     }
 
     fn first_present_feedback_gap_active(input: &VideoSchedulingOwnerInput) -> bool {
+        if !Self::has_first_present_feedback_gap(input) {
+            return false;
+        }
+        if !input.demand.host_is_priming_without_present() {
+            return false;
+        }
+        if input
+            .demand
+            .host_mailbox_enqueue_count_total
+            .unwrap_or_default()
+            == 0
+        {
+            return false;
+        }
+        if matches!(
+            input.demand.no_pending_pressure_level.as_deref(),
+            Some("high" | "critical")
+        ) {
+            return false;
+        }
+        input.demand.no_pending_streak.unwrap_or(u32::MAX) <= 2
+    }
+
+    fn has_first_present_feedback_gap(input: &VideoSchedulingOwnerInput) -> bool {
         input.demand.host_display_tick_epoch.unwrap_or_default() > 0
             && input.demand.host_frame_present_epoch.unwrap_or_default() == 0
-            && input
-                .demand
-                .host_mailbox_enqueue_count_total
-                .unwrap_or_default()
-                == 0
+            && input.demand.present_age_ms.is_none()
     }
 
     fn host_presentation_serviceable(input: &VideoSchedulingOwnerInput) -> bool {
@@ -1536,17 +1580,18 @@ impl VideoSchedulingOwner {
         if !decode_serviceable {
             return false;
         }
-        input
+        let present_critical_fresh = input
             .demand
             .present_age_ms
-            .is_some_and(|age| age <= input.display_supply_thresholds.critical_present_age_ms)
-            || Self::can_close_recovery_with_transient_present_feedback_gap(
+            .is_some_and(|age| age <= input.display_supply_thresholds.critical_present_age_ms);
+        let present_feedback_gap_can_bridge = input.demand.present_age_ms.is_none()
+            && (Self::can_close_recovery_with_transient_present_feedback_gap(
                 input,
                 supply_state,
                 has_clean_anchor_evidence,
                 chain_healthy,
-            )
-            || media_continuity_ready
+            ) || media_continuity_ready);
+        present_critical_fresh || present_feedback_gap_can_bridge
     }
 
     fn has_recent_serviceable_media_continuity(
@@ -1609,8 +1654,9 @@ impl VideoSchedulingOwner {
                 receive_keyframe_required: input.receive_keyframe_required,
                 receive_keyframe_response_state: input.receive_keyframe_response_state.as_deref(),
                 receive_display_state: input.receive_display_state.as_deref(),
-                recovery_displayed_idr_at_ms: input.recovery_displayed_idr_at_ms,
+                recovery_displayed_idr_at_ms: input.current_displayed_idr_at_ms(),
                 clean_anchor_epoch: input.clean_anchor_epoch,
+                clean_anchor_observed_at_ms: input.clean_anchor_observed_at_ms,
                 decoder_reference_synced: input.control_decoder_reference_synced(),
             },
         )
@@ -1647,7 +1693,7 @@ impl VideoSchedulingOwner {
         // 临时诊断：只在 displayed-idr / fresh-anchor 已建立但 owner 仍未回稳时打点。
         let has_visible_clean_anchor_fact = has_clean_anchor_evidence
             || input.has_established_displayed_idr_fact()
-            || input.recovery_fresh_anchor_recovered_at_ms.is_some()
+            || Self::current_fresh_anchor_recovered_at_ms(input).is_some()
             || matches!(
                 input.clean_anchor_source_event.as_deref(),
                 Some("displayed-idr")
@@ -2478,8 +2524,7 @@ impl VideoSchedulingOwner {
             .decode_age_ms
             .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
         let host_presentation_steady =
-            matches!(input.demand.host_cadence_phase.as_deref(), Some("steady"))
-                || input.demand.host_frame_present_epoch.unwrap_or(0) > 0;
+            matches!(input.demand.host_cadence_phase.as_deref(), Some("steady")) && present_fresh;
         if input.displayed_idr_control_plane_active() {
             if is_receiver_state_waiting_keyframe(input.effective_receiver_state()) {
                 if !input.control_decoder_reference_synced() {
@@ -2516,17 +2561,21 @@ impl VideoSchedulingOwner {
     }
 
     fn latest_clean_anchor_submitted_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {
+        Self::current_release_anchor_observed_at_ms(input)
+            .or_else(|| Self::current_fresh_anchor_recovered_at_ms(input))
+    }
+
+    fn current_fresh_anchor_recovered_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {
+        let anchor_at_ms = input.recovery_fresh_anchor_recovered_at_ms?;
+        if input.clean_anchor_epoch == Some(input.recovery_epoch)
+            && input.clean_anchor_observed_at_ms.is_some()
+        {
+            return Some(anchor_at_ms);
+        }
         input
-            .recovery_fresh_anchor_recovered_at_ms
-            .or(input.recovery_displayed_idr_at_ms)
-            .or_else(|| {
-                current_clean_anchor_observed_at_ms(
-                    input.clean_anchor_epoch,
-                    input.clean_anchor_observed_at_ms,
-                    input.clean_anchor_source_event.as_deref(),
-                    input.recovery_epoch,
-                )
-            })
+            .transport_recovery_episode_opened_at_ms
+            .filter(|opened_at_ms| anchor_at_ms >= *opened_at_ms)
+            .map(|_| anchor_at_ms)
     }
 
     fn has_unresolved_invalid_bootstrap_blocker(input: &VideoSchedulingOwnerInput) -> bool {

@@ -7,6 +7,79 @@ use super::{
 use xbxengine_protocol::XbxEngineTransportStateDto;
 
 #[test]
+fn runtime_health_accepts_rewound_frame_seq_when_rtp_advances() {
+    let mut health = XbxEngineRuntimeHealth {
+        last_frame_seq: 350,
+        last_frame_rtp_timestamp: Some(u32::MAX - 40),
+        last_frame_rendered_at_ms: Some(1_000.0),
+        keyframe_requested_for_current_stall: true,
+        decoder_reset_requested_for_current_stall: true,
+        stall_candidate_started_at_ms: Some(1_000.0),
+        video_size: Some((1280, 720)),
+        ..Default::default()
+    };
+
+    let changed = health.record_video_frame(1280, 720, 7, Some(32), 1_100.0);
+
+    assert_eq!(changed, None);
+    assert_eq!(health.last_frame_seq, 7);
+    assert_eq!(health.last_frame_rtp_timestamp, Some(32));
+    assert_eq!(health.last_frame_rendered_at_ms, Some(1_100.0));
+    assert!(!health.keyframe_requested_for_current_stall);
+    assert!(!health.decoder_reset_requested_for_current_stall);
+    assert_eq!(health.stall_candidate_started_at_ms, None);
+}
+
+#[test]
+fn runtime_health_rejects_rewound_frame_seq_without_rtp_advance() {
+    let mut health = XbxEngineRuntimeHealth {
+        last_frame_seq: 350,
+        last_frame_rtp_timestamp: Some(2_000),
+        last_frame_rendered_at_ms: Some(1_000.0),
+        keyframe_requested_for_current_stall: true,
+        decoder_reset_requested_for_current_stall: true,
+        stall_candidate_started_at_ms: Some(1_000.0),
+        video_size: Some((1280, 720)),
+        ..Default::default()
+    };
+
+    let changed = health.record_video_frame(1280, 720, 7, Some(1_900), 1_100.0);
+
+    assert_eq!(changed, None);
+    assert_eq!(health.last_frame_seq, 350);
+    assert_eq!(health.last_frame_rtp_timestamp, Some(2_000));
+    assert_eq!(health.last_frame_rendered_at_ms, Some(1_000.0));
+    assert!(health.keyframe_requested_for_current_stall);
+    assert!(health.decoder_reset_requested_for_current_stall);
+    assert_eq!(health.stall_candidate_started_at_ms, Some(1_000.0));
+}
+
+#[test]
+fn runtime_health_clears_rtp_baseline_when_advanced_frame_has_no_rtp() {
+    let mut health = XbxEngineRuntimeHealth {
+        last_frame_seq: 50,
+        last_frame_rtp_timestamp: Some(u32::MAX - 40),
+        last_frame_rendered_at_ms: Some(1_000.0),
+        video_size: Some((1280, 720)),
+        ..Default::default()
+    };
+
+    let changed = health.record_video_frame(1280, 720, 100, None, 1_100.0);
+
+    assert_eq!(changed, None);
+    assert_eq!(health.last_frame_seq, 100);
+    assert_eq!(health.last_frame_rtp_timestamp, None);
+    assert_eq!(health.last_frame_rendered_at_ms, Some(1_100.0));
+
+    let changed = health.record_video_frame(1280, 720, 80, Some(32), 1_200.0);
+
+    assert_eq!(changed, None);
+    assert_eq!(health.last_frame_seq, 100);
+    assert_eq!(health.last_frame_rtp_timestamp, None);
+    assert_eq!(health.last_frame_rendered_at_ms, Some(1_100.0));
+}
+
+#[test]
 fn recovery_signals_request_keyframe_before_reconnect() {
     let health = XbxEngineRuntimeHealth {
         connected_at_ms: Some(1_000.0),

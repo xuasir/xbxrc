@@ -337,17 +337,29 @@ impl<'a> RtcTransportSessionBridge<'a> {
                                 reason.clone(),
                                 *reason_domain,
                             );
-                            let pending_reason = pending.as_ref().map(|action| {
-                                match action {
-                            XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
-                                reason,
-                                ..
-                            } => reason.clone(),
-                        }
-                            });
-                            (stage_outcome, pending_reason)
+                            let pending_snapshot = pending.as_ref().map(
+                                |XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+                                     observation_id,
+                                     reason,
+                                     reason_domain,
+                                 }| {
+                                    (*observation_id, reason.clone(), *reason_domain)
+                                },
+                            );
+                            let (pending_observation_id, pending_reason, pending_reason_domain) =
+                                pending_snapshot
+                                    .map(|(observation_id, reason, reason_domain)| {
+                                        (Some(observation_id), Some(reason), Some(reason_domain))
+                                    })
+                                    .unwrap_or((None, None, None));
+                            (
+                                stage_outcome,
+                                pending_observation_id,
+                                pending_reason,
+                                pending_reason_domain,
+                            )
                         });
-                    if result.as_ref().is_ok_and(|(stage_outcome, _)| {
+                    if result.as_ref().is_ok_and(|(stage_outcome, _, _, _)| {
                         !matches!(stage_outcome, StageReconnectCandidateOutcome::Unchanged)
                     }) {
                         self.record_recovery_escalation_observation(
@@ -360,36 +372,61 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     RuntimeStatsSink::update_shared(self.runtime_stats, |stats| {
                         match result.as_ref() {
                             Ok((
-                                StageReconnectCandidateOutcome::StagedNew
-                                | StageReconnectCandidateOutcome::StagedUpdated,
+                                stage_outcome @ (StageReconnectCandidateOutcome::StagedNew
+                                | StageReconnectCandidateOutcome::StagedUpdated),
+                                pending_observation_id,
                                 pending_reason,
+                                pending_reason_domain,
                             )) => {
                                 stats.latest_observation_label =
                                     Some("rtcReconnectCandidateStaged".to_string());
                                 stats.latest_observation_summary = Some(format!(
-                                    "observationId={} reason={} reasonDomain={} pendingReason={}",
+                                    "observationId={} reason={} reasonDomain={} pendingObservationId={} pendingReason={} pendingReasonDomain={} stageOutcome={}",
                                     observation_id,
                                     reason,
                                     reason_domain.as_str(),
-                                    pending_reason.as_deref().unwrap_or("none")
+                                    pending_observation_id
+                                        .map(|id| id.to_string())
+                                        .unwrap_or_else(|| "none".to_string()),
+                                    pending_reason.as_deref().unwrap_or("none"),
+                                    pending_reason_domain
+                                        .map(|domain| domain.as_str())
+                                        .unwrap_or("none"),
+                                    stage_outcome.as_str()
                                 ));
                             }
-                            Ok((StageReconnectCandidateOutcome::Unchanged, pending_reason)) => {
+                            Ok((
+                                StageReconnectCandidateOutcome::Unchanged,
+                                pending_observation_id,
+                                pending_reason,
+                                pending_reason_domain,
+                            )) => {
                                 stats.latest_observation_label =
                                     Some("rtcReconnectCandidateRejected".to_string());
                                 stats.latest_observation_summary = Some(format!(
-                                    "observationId={} reason={} reasonDomain={} pendingReason={} staged=false",
+                                    "observationId={} reason={} reasonDomain={} pendingObservationId={} pendingReason={} pendingReasonDomain={} stageOutcome=unchanged",
                                     observation_id,
                                     reason,
                                     reason_domain.as_str(),
-                                    pending_reason.as_deref().unwrap_or("none")
+                                    pending_observation_id
+                                        .map(|id| id.to_string())
+                                        .unwrap_or_else(|| "none".to_string()),
+                                    pending_reason.as_deref().unwrap_or("none"),
+                                    pending_reason_domain
+                                        .map(|domain| domain.as_str())
+                                        .unwrap_or("none")
                                 ));
                             }
                             Err(error) => {
                                 stats.latest_observation_label =
                                     Some("rtcReconnectCandidateStageFailed".to_string());
                                 stats.latest_observation_summary =
-                                    Some(format!("reason={} error={error}", reason));
+                                    Some(format!(
+                                        "observationId={} reason={} reasonDomain={} pendingObservationId=none pendingReason=none pendingReasonDomain=none stageOutcome=failed error={error}",
+                                        observation_id,
+                                        reason,
+                                        reason_domain.as_str()
+                                    ));
                             }
                         }
                     });
@@ -398,8 +435,10 @@ impl<'a> RtcTransportSessionBridge<'a> {
                             StageReconnectCandidateOutcome::StagedNew
                             | StageReconnectCandidateOutcome::StagedUpdated,
                             _,
+                            _,
+                            _,
                         )) => CommandResultStatus::Succeeded,
-                        Ok((StageReconnectCandidateOutcome::Unchanged, pending_reason)) => {
+                        Ok((StageReconnectCandidateOutcome::Unchanged, _, pending_reason, _)) => {
                             CommandResultStatus::Deferred {
                                 reason: format!(
                                     "pendingReason={}",

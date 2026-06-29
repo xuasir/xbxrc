@@ -248,17 +248,47 @@ impl AuthFlow {
             .auth_api
             .get_streaming_token(&gssv_token, "xhome", force_region_ip)
             .await?;
-        let xcloud_token = match self
+        let xgpuweb_result = self
             .auth_api
             .get_streaming_token(&gssv_token, "xgpuweb", force_region_ip)
-            .await
-        {
-            Ok(token) => Some(token),
-            Err(_) => self
-                .auth_api
-                .get_streaming_token(&gssv_token, "xgpuwebf2p", force_region_ip)
-                .await
-                .ok(),
+            .await;
+        let (xcloud_token, xcloud_token_diagnostics) = match xgpuweb_result {
+            Ok(token) => (Some(token), None),
+            Err(xgpuweb_error) => {
+                let xgpuweb_error = xgpuweb_error.to_string();
+                match self
+                    .auth_api
+                    .get_streaming_token(&gssv_token, "xgpuwebf2p", force_region_ip)
+                    .await
+                {
+                    Ok(token) => {
+                        log::warn!(
+                            "Auth: xgpuweb token failed, using xgpuwebf2p fallback: {}",
+                            xgpuweb_error
+                        );
+                        (Some(token), None)
+                    }
+                    Err(xgpuwebf2p_error) => {
+                        let xgpuwebf2p_error = xgpuwebf2p_error.to_string();
+                        log::warn!(
+                            "Auth: xCloud token unavailable, xgpuweb={}, xgpuwebf2p={}",
+                            xgpuweb_error,
+                            xgpuwebf2p_error
+                        );
+                        let force_region_ip = force_region_ip.trim();
+                        let diagnostics = json!({
+                            "xgpuwebError": xgpuweb_error,
+                            "xgpuwebf2pError": xgpuwebf2p_error,
+                            "forceRegionIp": if force_region_ip.is_empty() {
+                                Value::Null
+                            } else {
+                                Value::String(force_region_ip.to_string())
+                            },
+                        });
+                        (None, Some(diagnostics))
+                    }
+                }
+            }
         };
 
         let token_update_time = now_ms();
@@ -276,6 +306,14 @@ impl AuthFlow {
                 json!({
                     "_objectCreateTime": token_update_time as i64,
                     "data": token.data
+                }),
+            );
+        }
+        if let Some(diagnostics) = xcloud_token_diagnostics {
+            stream_tokens.insert(
+                "_diagnostics".to_string(),
+                json!({
+                    "xCloudToken": diagnostics,
                 }),
             );
         }

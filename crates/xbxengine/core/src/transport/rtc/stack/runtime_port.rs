@@ -210,14 +210,18 @@ impl<'a> RtcStackRuntimePort<'a> {
             && metrics
                 .latest_host_present_time_ms
                 .is_some_and(|present_at_ms| (now_ms - present_at_ms).max(0.0) <= 600.0);
+        let host_submit_pending_display =
+            metrics
+                .latest_host_submit_rtp_timestamp
+                .is_some_and(|submit_rtp| {
+                    Some(submit_rtp) != metrics.last_displayed_frame_rtp_timestamp
+                });
         let host_visibility_stalled = !host_display_hold
             && metrics
                 .latest_host_present_time_ms
                 .map(|present_at_ms| (now_ms - present_at_ms).max(0.0) >= 1_500.0)
                 .unwrap_or(false)
-            && (metrics.host_mailbox_enqueue_count_total > metrics.host_frame_present_epoch
-                || metrics.latest_host_submit_rtp_timestamp
-                    != metrics.last_displayed_frame_rtp_timestamp
+            && (host_submit_pending_display
                 || host_submit_gap_ms.is_some_and(|gap_ms| gap_ms >= 250.0)
                 || host_view_pending_present);
 
@@ -299,6 +303,7 @@ impl<'a> RtcStackRuntimePort<'a> {
             height: event.height,
             is_keyframe: event.is_keyframe,
             queue_depth: event.queue_depth,
+            ingress_queue_depth_breakdown: None,
         };
         RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_frame_drop(observation);
     }
@@ -957,6 +962,84 @@ mod tests {
             snapshot.latest_video_host_submit_rtp_timestamp,
             Some(90_001)
         );
+    }
+
+    #[test]
+    fn host_visibility_stall_ignores_overwrite_enqueue_present_count_residue() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let media = Arc::new(Mutex::new(RtcMediaService::default()));
+        let (tx, _rx) = mpsc::sync_channel(1);
+        let local_decoder_reset_handle = Arc::new(Mutex::new(Some(Arc::new(
+            DecodeActorHandle::from_test_sender(tx),
+        ))));
+        let local_decoder_reset_policy =
+            Arc::new(Mutex::new(LocalDecoderResetPolicyState::default()));
+        let runtime_port = RtcStackRuntimePort::new(
+            &runtime_stats,
+            &render_state,
+            &media,
+            &local_decoder_reset_handle,
+            &local_decoder_reset_policy,
+        );
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+
+        runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
+            latest_host_submit_time_ms: Some(now_ms - 2_000.0),
+            latest_host_submit_rtp_timestamp: Some(88_888),
+            latest_host_present_time_ms: Some(now_ms - 1_900.0),
+            host_mailbox_submit_epoch: 120,
+            host_display_tick_epoch: 240,
+            host_frame_present_epoch: 115,
+            host_mailbox_enqueue_count_total: 120,
+            last_displayed_frame_seq: Some(77),
+            last_displayed_frame_rtp_timestamp: Some(88_888),
+            last_displayed_at_ms: Some(now_ms - 1_900.0),
+            ..Default::default()
+        });
+
+        let snapshot = runtime_port.snapshot_runtime_stats();
+        assert_eq!(snapshot.video_renderer_stalled, Some(false));
+        assert_eq!(snapshot.host_mailbox_enqueue_count_total, 120);
+        assert_eq!(snapshot.host_frame_present_epoch, 115);
+    }
+
+    #[test]
+    fn host_visibility_stall_ignores_missing_submit_rtp_when_displayed_frame_is_known() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let media = Arc::new(Mutex::new(RtcMediaService::default()));
+        let (tx, _rx) = mpsc::sync_channel(1);
+        let local_decoder_reset_handle = Arc::new(Mutex::new(Some(Arc::new(
+            DecodeActorHandle::from_test_sender(tx),
+        ))));
+        let local_decoder_reset_policy =
+            Arc::new(Mutex::new(LocalDecoderResetPolicyState::default()));
+        let runtime_port = RtcStackRuntimePort::new(
+            &runtime_stats,
+            &render_state,
+            &media,
+            &local_decoder_reset_handle,
+            &local_decoder_reset_policy,
+        );
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+
+        runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
+            latest_host_submit_time_ms: None,
+            latest_host_submit_rtp_timestamp: None,
+            latest_host_present_time_ms: Some(now_ms - 1_900.0),
+            host_display_tick_epoch: 240,
+            host_frame_present_epoch: 115,
+            last_displayed_frame_seq: Some(77),
+            last_displayed_frame_rtp_timestamp: Some(88_888),
+            last_displayed_at_ms: Some(now_ms - 1_900.0),
+            ..Default::default()
+        });
+
+        let snapshot = runtime_port.snapshot_runtime_stats();
+        assert_eq!(snapshot.video_renderer_stalled, Some(false));
+        assert_eq!(snapshot.latest_video_host_submit_rtp_timestamp, None);
+        assert_eq!(snapshot.last_displayed_frame_rtp_timestamp, Some(88_888));
     }
 
     #[test]

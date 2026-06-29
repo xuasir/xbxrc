@@ -192,6 +192,20 @@ pub struct XbxEngineReplacementDecisionObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineIngressQueueDepthBreakdownObservationDto {
+    pub sender_queue_depth: usize,
+    pub sender_max_capacity: usize,
+    pub sender_queue_limit: usize,
+    pub sender_remaining_capacity: usize,
+    pub pending_priority_primary_len: usize,
+    pub pending_priority_primary_limit: usize,
+    pub pending_repair_len: usize,
+    pub pending_repair_limit: usize,
+    pub pending_best_effort_len: usize,
+    pub pending_best_effort_limit: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineFrameDropObservationDto {
     pub observation_id: u64,
     pub reason: String,
@@ -210,6 +224,8 @@ pub struct XbxEngineFrameDropObservationDto {
     pub height: u32,
     pub is_keyframe: bool,
     pub queue_depth: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ingress_queue_depth_breakdown: Option<XbxEngineIngressQueueDepthBreakdownObservationDto>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -371,6 +387,14 @@ pub struct XbxEngineRecoveryDecisionLedgerObservationDto {
     pub anchor_evidence: Option<String>,
     pub keyframe_episode_health: Option<String>,
     pub escalation_basis: Option<String>,
+    pub proposal_reason: Option<String>,
+    pub proposal_reason_label: Option<String>,
+    pub proposal_reason_domain: Option<String>,
+    pub proposal_reason_domain_before_runtime_resolution: Option<String>,
+    pub proposal_reason_domain_after_runtime_resolution: Option<String>,
+    pub remote_terminal_domain_promoted: Option<bool>,
+    pub remote_terminal_active: Option<bool>,
+    pub reconnect_gate_detail: Option<String>,
     pub budget_before: Option<XbxEngineRecoveryBudgetSnapshotDto>,
     pub budget_after: Option<XbxEngineRecoveryBudgetSnapshotDto>,
     pub trigger_observation_label: Option<String>,

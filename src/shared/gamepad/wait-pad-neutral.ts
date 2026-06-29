@@ -43,6 +43,7 @@ export function waitForPadNeutral(options: WaitForPadNeutralOptions = {}): Promi
     let disposeRuntime = () => {}
     let disposeSlot = () => {}
     let finished = false
+    let abort = () => {}
 
     const cleanup = () => {
       if (finished) {
@@ -58,7 +59,7 @@ export function waitForPadNeutral(options: WaitForPadNeutralOptions = {}): Promi
       options.signal?.removeEventListener('abort', abort)
     }
 
-    const abort = () => {
+    abort = () => {
       cleanup()
       reject(createAbortError())
     }

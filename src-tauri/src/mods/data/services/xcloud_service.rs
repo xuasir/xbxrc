@@ -36,8 +36,14 @@ impl XcloudService {
     ) -> Option<XcloudCatalogCacheScope> {
         let claims = resolve_web_token_claims(&session.web_token)?;
         let region = Self::resolve_xcloud_region(session)?;
+        let account_id = claims
+            .xid
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&claims.uhs);
         Some(XcloudCatalogCacheScope {
-            account_id: claims.uhs,
+            account_id: account_id.to_string(),
             region_host: region.host,
             language: Self::resolve_catalog_language(),
             market: XCLOUD_CATALOG_DEFAULT_MARKET.to_string(),
@@ -534,4 +540,50 @@ impl XcloudService {
 struct ResolvedXcloudRegion {
     host: String,
     bearer_token: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn cache_scope_uses_stable_xid_when_available() {
+        let session = DataSessionContext {
+            provider: "xbox".to_string(),
+            app_level: 2,
+            streaming_tokens: json!({
+                "xCloudToken": {
+                    "data": {
+                        "gsToken": "token",
+                        "offeringSettings": {
+                            "regions": [{
+                                "isDefault": true,
+                                "baseUri": "https://wus.core.gssv-play-prod.xboxlive.com"
+                            }]
+                        }
+                    }
+                }
+            }),
+            web_token: json!({
+                "data": {
+                    "Token": "web-token",
+                    "DisplayClaims": {
+                        "xui": [{
+                            "uhs": "volatile-uhs",
+                            "xid": "stable-xid"
+                        }]
+                    }
+                }
+            }),
+        };
+
+        let scope = XcloudService::new()
+            .resolve_cache_scope(&session)
+            .expect("xcloud scope should resolve");
+
+        assert_eq!(scope.account_id, "stable-xid");
+        assert_eq!(scope.region_host, "wus.core.gssv-play-prod.xboxlive.com");
+        assert_eq!(scope.market, "US");
+    }
 }

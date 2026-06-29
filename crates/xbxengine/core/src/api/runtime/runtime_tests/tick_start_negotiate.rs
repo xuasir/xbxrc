@@ -954,6 +954,80 @@ fn reconnect_settled_keyframe_is_deferred_when_transport_is_still_connecting() {
 }
 
 #[test]
+fn reconnect_settled_deferred_keyframe_retries_after_transport_connects() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connecting,
+            ..Default::default()
+        },
+    );
+    let runtime_stats = backend.runtime_stats.clone();
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .expect("runtime reconnect should succeed");
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeDeferred:transportNotReady")
+    );
+
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    runtime.snapshot.last_recovery_action_at_ms = Some(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as f64)
+            .unwrap_or(0.0)
+            - 1_000.0,
+    );
+
+    runtime.tick();
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 1);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeRequested")
+    );
+    assert_eq!(
+        runtime.snapshot().last_recovery_action.as_deref(),
+        Some("requestPli")
+    );
+}
+
+#[test]
 fn reconnect_settled_keyframe_is_deferred_when_feedback_target_is_pending() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -1001,6 +1075,77 @@ fn reconnect_settled_keyframe_is_deferred_when_feedback_target_is_pending() {
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some("reconnectSettled:keyframeDeferred:feedbackTargetPending")
+    );
+}
+
+#[test]
+fn reconnect_settled_deferred_keyframe_retries_after_feedback_target_recovers() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    let keyframe_failure = backend.fail_video_keyframe.clone();
+    keyframe_failure
+        .lock()
+        .expect("lock keyframe failure message")
+        .replace("xbxEngineRtcVideoKeyframeDeferred:videoRtcpFeedbackTargetPending".to_string());
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .expect("runtime reconnect should succeed");
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeDeferred:feedbackTargetPending")
+    );
+
+    keyframe_failure
+        .lock()
+        .expect("lock keyframe failure message")
+        .take();
+    runtime.snapshot.last_recovery_action_at_ms = Some(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as f64)
+            .unwrap_or(0.0)
+            - 1_000.0,
+    );
+
+    runtime.tick();
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 1);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeRequested")
     );
 }
 

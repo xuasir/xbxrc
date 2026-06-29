@@ -10,6 +10,22 @@
 
 ## Analysis Procedure
 
+### 0. Check Trace Profile
+
+Run `summarize_runtime_trace.py` and read:
+
+- `counts.traceProfiles`
+- `counts.dimensions`
+- `counts.importance`
+- `counts.traceBudgetNotices`
+
+Use this to set evidence expectations:
+
+- `production` traces prioritize key/essential rows and bounded disk use.
+- `dev` traces include detailed diagnostics; `engine_log` appears when the dimension expression enables it.
+- `traceBudgetNotice > 0` means debug/raw rows were shed under writer queue pressure.
+- A missing dimension count can explain absent detail for that diagnostic surface.
+
 ### 1. Define The Question
 
 Classify the task before reading everything:
@@ -28,6 +44,7 @@ Collect:
 - first and last `tsMs`
 - duration
 - active `sessionId`
+- active `traceProfile`, `dimension`, and `importance` mix
 - first major `state` rows
 - terminal failure or recovery rows
 
@@ -212,11 +229,13 @@ Use this template unless the user asks for something else:
 ### Evidence
 
 - rows, payload fields, and transitions that support the conclusion
+- trace profile, dimension, importance, and budget notice context when schema v3 fields are present
 
 ### Gaps
 
 - what the trace does not prove
 - which instrumentation is still missing
+- whether the trace profile or dimension set filtered out useful debug/raw evidence
 
 ### Next Step
 
@@ -227,6 +246,9 @@ Use this template unless the user asks for something else:
 ## Project-Specific Hints
 
 - Prior analyses are recorded in `docs/project-task.md` and archived task files. Reuse prior terminology when a trace resembles an earlier incident.
+- Schema v3 traces carry `traceProfile/dimension/importance`; check these fields before deciding that a row family is absent.
+- `traceBudgetNotice` is the canonical sign that debug/raw rows were dropped under writer queue pressure.
+- `production` profile evidence should be evaluated from key/essential structured rows first.
 - `remoteManagementEnabled`, `consoleStreamingEnabled`, and address-count snapshots are often decisive for home streaming preflight analysis.
 - For `xbxengine` traces, watch for transport progress, ingress activity, recovery state, keyframe flow, and backlog or capacity warnings before blaming rendering.
 - When performance degrades without a hard failure, compare `snapshot` rows and recovery decisions before focusing on individual debug lines.

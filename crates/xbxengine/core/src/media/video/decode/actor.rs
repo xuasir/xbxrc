@@ -20,7 +20,7 @@ use crate::transport::rtc::receive::{
 const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
 const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
 const DECODE_MAILBOX_CAPACITY: usize = 2;
-const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 3;
+const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 4;
 const PENDING_PACER_RETRY_TIMEOUT_MS: u64 = 4;
 const STALE_RECOVERY_CONTINUATION_WINDOW_MS: f64 = 80.0;
 const STALE_RECOVERY_CONTINUATION_MAX_FRAMES: u32 = 3;
@@ -583,9 +583,33 @@ fn run_decode_loop(
                                 decode_state
                                     .latest_decode_candidate_decision()
                                     .map(|decision| decision.detail)
-                                    .unwrap_or("none"),
+                                .unwrap_or("none"),
                             ));
                         });
+                    }
+                    if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
+                        if let Some(dropped_frame) =
+                            drain_pending_decoded_output(&mut decode_state, &runtime_stats, &pacer)
+                        {
+                            record_pipeline_frame_drop(
+                                &runtime_stats,
+                                &mut frame_drop_observation_id,
+                                "decode",
+                                "drop",
+                                Some("pacerDisconnected"),
+                                now_ms,
+                                dropped_frame.surface.width,
+                                dropped_frame.surface.height,
+                                false,
+                                decode_state.decoded_frame_queue_len(),
+                                Some(dropped_frame.rtp_timestamp),
+                                Some(dropped_frame.surface.frame_seq),
+                                Some(dropped_frame.frame_recovery_disposition),
+                                dropped_frame.frame_unrecoverable_reason.as_deref(),
+                                None,
+                            );
+                            continue;
+                        }
                     }
                     if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
                         stale_recovery_bridge.on_decode_success(
@@ -932,7 +956,10 @@ fn sync_decode_runtime_stats(
                     stats,
                     crate::media::video::present_cadence::PRESENT_CADENCE_INTERVAL_FALLBACK_MS,
                 ),
-                crate::media::video::present_cadence::present_pipeline_stressed_from_stats(stats),
+                crate::media::video::present_cadence::present_pipeline_stressed_with_hysteresis(
+                    stats,
+                    decode_state.present_pipeline_stressed(),
+                ),
             )
         })
         .unwrap_or((

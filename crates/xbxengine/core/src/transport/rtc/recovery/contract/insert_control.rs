@@ -4,7 +4,7 @@ use super::gap::{
     parameter_sets_change_strict_window_ms, GapVsKeyframeMode, GAP_KEYFRAME_ONLY_MAX_AGE_MS,
 };
 use super::insert::PacketRecoveryActionStage;
-use super::reference_chain::ReferenceChainObservation;
+use super::reference_chain::{ReferenceChainObservation, ReferenceChainState};
 
 const FRESH_H264_IDR_ADMISSION_MS: f64 = 3_000.0;
 
@@ -14,7 +14,6 @@ pub(crate) struct InsertControlTiming {
     pub fresh_idr_inspection_accepted_at_ms: Option<f64>,
     pub parameter_sets_changed_at_ms: Option<f64>,
     pub gap_age_ms: Option<f64>,
-    pub receive_display_stable: bool,
     pub decoder_waiting_keyframe: bool,
 }
 
@@ -32,9 +31,6 @@ pub(crate) fn parameter_sets_change_strict_from_control(
     effective_rtt_ms: f64,
 ) -> bool {
     if fresh_idr_admission {
-        return false;
-    }
-    if !timing.receive_display_stable {
         return false;
     }
     if reference.decoder_reference_synced {
@@ -66,19 +62,28 @@ pub(crate) fn normalize_action_stage_for_reference(
     reference: ReferenceChainObservation,
     action_stage: PacketRecoveryActionStage,
 ) -> PacketRecoveryActionStage {
-    if reference.decoder_reference_synced
-        && matches!(
-            reference.state,
-            super::reference_chain::ReferenceChainState::Continuous
-                | super::reference_chain::ReferenceChainState::Repairing
-        )
-        && action_stage >= PacketRecoveryActionStage::WaitKeyframe
-    {
-        return if reference.has_active_gap {
-            PacketRecoveryActionStage::NackMissed
-        } else {
-            PacketRecoveryActionStage::Steady
-        };
+    if reference.decoder_reference_synced {
+        match reference.state {
+            ReferenceChainState::Continuous => {
+                if action_stage >= PacketRecoveryActionStage::NackPending {
+                    return PacketRecoveryActionStage::Steady;
+                }
+            }
+            ReferenceChainState::Repairing => {
+                if reference.has_active_gap {
+                    return match action_stage {
+                        PacketRecoveryActionStage::NackPending => {
+                            PacketRecoveryActionStage::NackPending
+                        }
+                        _ => PacketRecoveryActionStage::NackMissed,
+                    };
+                }
+                if action_stage >= PacketRecoveryActionStage::WaitKeyframe {
+                    return PacketRecoveryActionStage::Steady;
+                }
+            }
+            ReferenceChainState::Unknown | ReferenceChainState::NeedKeyframe => {}
+        }
     }
     action_stage
 }

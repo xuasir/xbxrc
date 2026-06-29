@@ -12,6 +12,10 @@ pub(crate) struct RecoveryPolicyProposal {
     pub(crate) reason: VideoEscalationReason,
     pub(crate) reason_label: String,
     pub(crate) reason_domain: XbxEngineRecoveryReasonDomain,
+    pub(crate) reason_domain_before_runtime_resolution: Option<XbxEngineRecoveryReasonDomain>,
+    pub(crate) reason_domain_after_runtime_resolution: Option<XbxEngineRecoveryReasonDomain>,
+    pub(crate) remote_terminal_domain_promoted: bool,
+    pub(crate) remote_terminal_active: bool,
     pub(crate) reconnect_gate_detail: Option<String>,
     pub(crate) budget_before: RecoveryActionBudgetState,
     pub(crate) budget_after: RecoveryActionBudgetState,
@@ -23,7 +27,11 @@ pub(crate) struct RecoveryPolicyProposal {
 
 impl RecoveryPolicyProposal {
     pub(crate) fn with_runtime_reason_domain(mut self) -> Self {
-        self.reason_domain = self.runtime_reason_domain();
+        let before = self.reason_domain;
+        let after = self.runtime_reason_domain();
+        self.reason_domain_before_runtime_resolution = Some(before);
+        self.reason_domain_after_runtime_resolution = Some(after);
+        self.reason_domain = after;
         self
     }
 
@@ -207,6 +215,7 @@ mod tests {
             command_result: None,
             command_detail: None,
             observed_at_ms: 0.0,
+            ..Default::default()
         };
         assert!(
             !recovery_decision_ledger_has_pending_transport_command(&suppressed),

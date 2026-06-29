@@ -96,6 +96,7 @@ pub struct XbxEngineRuntimeHealth {
     pub observed_transport_state: XbxEngineTransportStateDto,
     pub connected_at_ms: Option<f64>,
     pub last_frame_seq: u64,
+    pub last_frame_rtp_timestamp: Option<u32>,
     pub last_frame_rendered_at_ms: Option<f64>,
     pub inbound_video_packet_count_total: u64,
     pub last_video_packet_arrival_at_ms: Option<f64>,
@@ -118,6 +119,7 @@ impl Default for XbxEngineRuntimeHealth {
             observed_transport_state: XbxEngineTransportStateDto::New,
             connected_at_ms: None,
             last_frame_seq: 0,
+            last_frame_rtp_timestamp: None,
             last_frame_rendered_at_ms: None,
             inbound_video_packet_count_total: 0,
             last_video_packet_arrival_at_ms: None,
@@ -183,6 +185,7 @@ impl XbxEngineRuntimeHealth {
         // 媒体会话重建后，帧序号和最近一次视频活动都必须重新开始统计，
         // 但 transport 连接态本身不在这里动，避免把已连接状态误清掉。
         self.last_frame_seq = 0;
+        self.last_frame_rtp_timestamp = None;
         self.last_frame_rendered_at_ms = None;
         self.inbound_video_packet_count_total = 0;
         self.last_video_packet_arrival_at_ms = None;
@@ -221,6 +224,7 @@ impl XbxEngineRuntimeHealth {
             | XbxEngineTransportStateDto::New => {
                 self.connected_at_ms = None;
                 self.last_frame_rendered_at_ms = None;
+                self.last_frame_rtp_timestamp = None;
                 self.last_video_packet_arrival_at_ms = None;
                 self.inbound_video_packet_count_total = 0;
                 self.keyframe_requested_for_current_stall = false;
@@ -236,14 +240,16 @@ impl XbxEngineRuntimeHealth {
         width: u32,
         height: u32,
         frame_seq: u64,
+        frame_rtp_timestamp: Option<u32>,
         rendered_at_ms: f64,
     ) -> Option<(u32, u32)> {
-        if frame_seq <= self.last_frame_seq {
+        if !self.is_video_frame_advance(frame_seq, frame_rtp_timestamp) {
             return None;
         }
 
         let previous_video_size = self.video_size;
         self.last_frame_seq = frame_seq;
+        self.last_frame_rtp_timestamp = frame_rtp_timestamp;
         self.last_frame_rendered_at_ms = Some(rendered_at_ms);
         self.video_size = Some((width, height));
         self.keyframe_requested_for_current_stall = false;
@@ -253,6 +259,16 @@ impl XbxEngineRuntimeHealth {
             return Some((width, height));
         }
         None
+    }
+
+    pub fn is_video_frame_advance(&self, frame_seq: u64, frame_rtp_timestamp: Option<u32>) -> bool {
+        if frame_seq > self.last_frame_seq {
+            return true;
+        }
+        match (frame_rtp_timestamp, self.last_frame_rtp_timestamp) {
+            (Some(candidate), Some(current)) => rtp_timestamp_is_after(candidate, current),
+            _ => false,
+        }
     }
 
     pub fn record_video_packet_activity(
@@ -569,6 +585,10 @@ impl XbxEngineRuntimeHealth {
         }
         !recent_twcc_feedback
     }
+}
+
+fn rtp_timestamp_is_after(candidate: u32, current: u32) -> bool {
+    candidate != current && candidate.wrapping_sub(current) < (1_u32 << 31)
 }
 
 #[cfg(test)]

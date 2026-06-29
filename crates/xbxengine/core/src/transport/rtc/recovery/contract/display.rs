@@ -13,11 +13,12 @@ pub(crate) struct RecoveryDisplayFacts {
 impl RecoveryDisplayFacts {
     pub(crate) fn from_stats(stats: &XbxEngineMediaRuntimeStats) -> Self {
         Self {
-            displayed_idr_at_ms: stats.recovery_displayed_idr_at_ms,
+            displayed_idr_at_ms: current_displayed_idr_at_ms_from_stats(stats),
             fresh_anchor_recovered_at_ms: stats.recovery_fresh_anchor_recovered_at_ms,
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn has_established_displayed_idr(self) -> bool {
         self.displayed_idr_at_ms.is_some()
     }
@@ -35,17 +36,56 @@ pub(crate) fn current_clean_anchor_observed_at_ms_from_stats(
 }
 
 pub(crate) fn has_current_clean_anchor_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    let display = RecoveryDisplayFacts::from_stats(stats);
     current_clean_anchor_observed_at_ms_from_stats(stats).is_some()
-        || display.fresh_anchor_recovered_at_ms.is_some()
-        || display.has_established_displayed_idr()
+        || current_fresh_anchor_recovered_at_ms_from_stats(stats).is_some()
 }
 
-/// latest-only mailbox 上屏帧常已是 IDR 之后的 delta；pending IDR + host 已 present 即视为 serving。
+pub(crate) fn current_fresh_anchor_recovered_at_ms_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    let anchor_at_ms = stats.recovery_fresh_anchor_recovered_at_ms?;
+    if current_clean_anchor_observed_at_ms_from_stats(stats).is_some() {
+        return Some(anchor_at_ms);
+    }
+    stats
+        .transport_recovery_episode_opened_at_ms
+        .filter(|opened_at_ms| anchor_at_ms >= *opened_at_ms)
+        .map(|_| anchor_at_ms)
+}
+
+pub(crate) fn current_displayed_idr_at_ms_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    let displayed_at_ms = stats.recovery_displayed_idr_at_ms?;
+    stats
+        .transport_recovery_episode_opened_at_ms
+        .filter(|opened_at_ms| displayed_at_ms < *opened_at_ms)
+        .map_or(Some(displayed_at_ms), |_| None)
+}
+
+pub(crate) fn current_playback_recovered_at_ms_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    let recovered_at_ms = stats.recovery_playback_recovered_at_ms?;
+    stats
+        .transport_recovery_episode_opened_at_ms
+        .filter(|opened_at_ms| recovered_at_ms < *opened_at_ms)
+        .map_or(Some(recovered_at_ms), |_| None)
+}
+
+/// latest-only mailbox 上屏帧常已是 IDR 之后的 delta；pending IDR 只接受当前新鲜 host present。
 pub(crate) fn displayed_idr_serving_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    stats.recovery_displayed_idr_at_ms.is_some()
+    current_displayed_idr_at_ms_from_stats(stats).is_some()
         || (stats.recovery_pending_displayed_idr_rtp.is_some()
-            && stats.host_frame_present_epoch > 0)
+            && stats.host_frame_present_epoch > 0
+            && pending_displayed_idr_host_present_fresh(stats))
+}
+
+fn pending_displayed_idr_host_present_fresh(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.latest_video_host_present_time_ms.is_some()
+        && stats
+            .display_age_ms
+            .is_some_and(|age_ms| age_ms <= PENDING_DISPLAYED_IDR_HOST_PRESENT_FRESH_MS)
 }
 
 /// host present 提交 displayed-idr 事实时优先用 decode 侧 pending IDR，而非当前 displayed delta RTP。
@@ -60,6 +100,7 @@ pub(crate) fn resolve_host_display_idr_anchor_rtp(
 
 const DISPLAYED_IDR_SERVING_DECODER_BOOTSTRAP_FRESH_MS: f64 = 1_500.0;
 pub(crate) const DISPLAYED_IDR_SERVING_STALE_SUBMIT_BREAK_MS: f64 = 1_000.0;
+const PENDING_DISPLAYED_IDR_HOST_PRESENT_FRESH_MS: f64 = 600.0;
 
 /// steady continuation 的 codec 元数据拒因；displayed-idr 已 serving 时不应切断窄路径放松。
 pub(crate) fn is_soft_missing_idr_bootstrap_reject_reason(reason: Option<&str>) -> bool {

@@ -642,6 +642,63 @@ fn runtime_local_host_stall_reset_skips_when_present_loop_not_running() {
 }
 
 #[test]
+fn runtime_local_host_stall_reset_skips_when_mailbox_has_no_pending_frame() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_owner_reason = Some("hostPresentStalled".to_string());
+        stats.video_renderer_stalled = Some(true);
+        stats.host_display_tick_epoch = 64;
+        stats.host_frame_present_epoch = 10;
+        stats.host_no_pending_streak = 22;
+        stats.host_no_pending_pressure_level = Some("elevated".to_string());
+    }
+    let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+    let mut backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats::default(),
+    );
+    backend.runtime_stats = runtime_stats.clone();
+    backend.pending_runtime_recovery_action = pending_runtime_recovery_action;
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    let order = call_order.lock().expect("call order lock");
+    let reset_count = order
+        .iter()
+        .filter(|entry| **entry == "resetNativePresenterHostStall")
+        .count();
+    assert_eq!(reset_count, 0, "unexpected host-stall reset: {order:?}");
+    assert_eq!(
+        runtime.snapshot.last_recovery_reason.as_deref(),
+        Some("hostPresentStalled:noPendingHostMailbox")
+    );
+}
+
+#[test]
 fn runtime_local_host_stall_reset_still_runs_when_renderer_submit_is_fresh() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -851,5 +908,64 @@ fn runtime_display_supply_critical_without_fresh_post_decode_evidence_skips_loca
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some("displayRecoverySkipped:stalePostDecodeEvidence")
+    );
+}
+
+#[test]
+fn runtime_display_supply_critical_skips_local_reset_when_mailbox_has_no_pending_frame() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_owner_reason = Some("displaySupplyCritical".to_string());
+        stats.video_renderer_stalled = Some(false);
+        stats.host_display_tick_epoch = 30;
+        stats.host_frame_present_epoch = 10;
+        stats.host_no_pending_streak = 36;
+        stats.host_no_pending_pressure_level = Some("critical".to_string());
+        stats.video_renderer_submit_count_total = 1;
+    }
+    let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+    let mut backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats::default(),
+    );
+    backend.runtime_stats = runtime_stats.clone();
+    backend.pending_runtime_recovery_action = pending_runtime_recovery_action;
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    let order = call_order.lock().expect("call order lock");
+    assert!(
+        order
+            .iter()
+            .all(|entry| *entry != "resetNativePresenterDisplayRecovery"),
+        "display recovery reset should skip no-pending mailbox: {order:?}"
+    );
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("displayRecoverySkipped:noPendingHostMailbox")
     );
 }

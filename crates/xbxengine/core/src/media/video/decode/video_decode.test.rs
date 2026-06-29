@@ -1754,12 +1754,12 @@ fn present_pipeline_stressed_decode_mailbox_keeps_current_next_and_latest_candid
 }
 
 #[test]
-fn present_pipeline_stressed_decode_mailbox_supersedes_latest_when_three_slots_full() {
+fn present_pipeline_stressed_decode_mailbox_keeps_short_burst_before_superseding_latest() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
     state.set_present_pipeline_stressed(true);
 
-    for seq in 1..=4 {
+    for seq in 1..=5 {
         state.enqueue_decoded_frame_for_test(XbxRenderFrame {
             width: 2,
             height: 2,
@@ -1778,7 +1778,7 @@ fn present_pipeline_stressed_decode_mailbox_supersedes_latest_when_three_slots_f
         });
     }
 
-    assert_eq!(state.decoded_frame_queue_len(), 3);
+    assert_eq!(state.decoded_frame_queue_len(), 4);
     assert_eq!(state.decoded_frame_drop_count(), 1);
     assert_eq!(
         state
@@ -1796,7 +1796,13 @@ fn present_pipeline_stressed_decode_mailbox_supersedes_latest_when_three_slots_f
         state
             .pop_decoded_frame(7.0)
             .map(|frame| frame.surface.frame_seq),
-        Some(4)
+        Some(3)
+    );
+    assert_eq!(
+        state
+            .pop_decoded_frame(8.0)
+            .map(|frame| frame.surface.frame_seq),
+        Some(5)
     );
 }
 
@@ -2614,12 +2620,82 @@ fn enqueue_decoded_frame_recovering_state_does_not_expand_decode_output_mailbox_
 }
 
 #[test]
-fn enqueue_decoded_frame_drops_stale_frame_before_queueing() {
+fn enqueue_decoded_frame_keeps_stale_frame_when_mailbox_empty() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
 
     let dropped = state.enqueue_decoded_frame(DecodedFrame {
-        pts: Instant::now() - Duration::from_millis(40),
+        pts: Instant::now() - Duration::from_millis(80),
+        rtp_timestamp: 7,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 7,
+            rendered_at_ms: 7.0,
+            rtp_timestamp: Some(7),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([7u8; 16]),
+            },
+        },
+    });
+
+    assert!(dropped.is_none());
+    assert_eq!(state.decoded_frame_queue_len(), 1);
+    assert_eq!(state.decoded_frame_drop_count(), 0);
+}
+
+#[test]
+fn enqueue_decoded_frame_drops_stale_frame_when_candidate_exists() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    assert!(state
+        .enqueue_decoded_frame(DecodedFrame {
+            pts: Instant::now(),
+            rtp_timestamp: 6,
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            clean_anchor_commit_recovery_epoch: None,
+            presentation_value_role: None,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: 6,
+                rendered_at_ms: 6.0,
+                rtp_timestamp: Some(6),
+                recovery_epoch_tag: None,
+                recovery_owner_rtp_timestamp: None,
+                is_keyframe: false,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                presentation_value_role: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([6u8; 16]),
+                },
+            },
+        })
+        .is_none());
+
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(120),
         rtp_timestamp: 7,
         recovery_epoch_tag: None,
         recovery_owner_rtp_timestamp: None,
@@ -2648,7 +2724,7 @@ fn enqueue_decoded_frame_drops_stale_frame_before_queueing() {
     });
 
     assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(7));
-    assert_eq!(state.decoded_frame_queue_len(), 0);
+    assert_eq!(state.decoded_frame_queue_len(), 1);
     assert_eq!(state.decoded_frame_drop_count(), 1);
     let decision = state
         .latest_decode_candidate_decision()

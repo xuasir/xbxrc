@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::contract::{
-    decoder_reset_permitted_from_stats, CoalescingMode,
+    decoder_reset_permitted_from_stats, has_current_clean_anchor_from_stats, CoalescingMode,
 };
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, RecoveryActionBudgetState, VideoEscalationController, VideoEscalationDecision,
@@ -657,7 +657,7 @@ impl RecoveryCoordinator {
                     episode.first_video_packet_is_keyframe,
                     episode.first_keyframe_packet_at_ms,
                     episode.first_keyframe_decoded_at_ms,
-                    stats.recovery_displayed_idr_at_ms.is_some(),
+                    has_current_clean_anchor_from_stats(stats),
                     false,
                 )
             })
@@ -1519,6 +1519,7 @@ mod tests {
             recovery_displayed_idr_at_ms: Some(500.0),
             recovery_fresh_anchor_recovered_at_ms: Some(500.0),
             video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_observed_at_ms: Some(500.0),
             video_anchor_clean_source_event: Some("displayed-idr".to_string()),
             video_decoder_recovery_state: Some("nominal".to_string()),
             receive_keyframe_required: Some(false),

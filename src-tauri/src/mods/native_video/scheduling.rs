@@ -20,6 +20,7 @@ const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
 const HOST_MAILBOX_SUBMIT_PIPELINE_SLACK_MS: f64 = 96.0;
 const HOST_MAILBOX_ADAPTIVE_BUDGET_MIN_INTERVAL_MS: f64 = 20.0;
 const HOST_MAILBOX_ADAPTIVE_BUDGET_MAX_INTERVAL_MS: f64 = 90.0;
+const HOST_RETAINED_DISPLAYED_MAX_FRAME_AGE_MS: f64 = 180.0;
 fn format_optional_seq(value: Option<u64>) -> String {
     value
         .map(|seq| seq.to_string())
@@ -167,14 +168,22 @@ impl HostCadenceTelemetry {
     }
 
     pub fn record_submit(&mut self, now_ms: f64) -> Option<f64> {
-        let submit_gap_ms = self
-            .latest_submit_time_ms
-            .map(|previous| (now_ms - previous).max(0.0));
+        let submit_gap_ms = self.submit_gap_ms(now_ms);
         self.latest_submit_time_ms = Some(now_ms);
         self.recent_submit_times_ms.push_back(now_ms);
         self.trim_submit_times(now_ms);
         self.log_host_flow("submit_telemetry", None, None, None, submit_gap_ms);
         submit_gap_ms
+    }
+
+    pub fn submit_gap_ms(&self, now_ms: f64) -> Option<f64> {
+        self.latest_submit_time_ms
+            .map(|previous| (now_ms - previous).max(0.0))
+    }
+
+    pub fn record_enqueue(&mut self, now_ms: f64) -> Option<f64> {
+        self.present_enqueue_count_total = self.present_enqueue_count_total.saturating_add(1);
+        self.record_submit(now_ms)
     }
 
     pub fn record_drop(&mut self) {
@@ -220,11 +229,9 @@ impl HostCadenceTelemetry {
         }
     }
 
-    /// 刷新 present 时钟但不增加 present_epoch（持帧重绘 / 同帧维持可见）。
+    /// 持帧重绘不推进 source-present freshness。
     /// 不计入 `present_fps`：否则 display tick 会把呈现帧率抬到 120+ 而误导性能面板。
-    pub fn record_present_refresh(&mut self, now_ms: f64) {
-        self.latest_present_time_ms = Some(now_ms);
-    }
+    pub fn record_present_refresh(&mut self, _now_ms: f64) {}
 
     /// DisplayLink 不可用时的 fallback 轮询间隔：有实测 tick 间隔后跟随真刷新率。
     pub fn present_tick_sleep_duration(&self) -> Duration {
@@ -331,6 +338,10 @@ impl HostCadenceTelemetry {
         self.submit_driven_frame_age_budget_ms()
             .map(|submit_budget| base.max(submit_budget))
             .unwrap_or(base)
+    }
+
+    pub fn retained_displayed_frame_stale_budget_ms(&self) -> f64 {
+        HOST_RETAINED_DISPLAYED_MAX_FRAME_AGE_MS
     }
 
     fn holding_displayed_awaiting_next_frame(&self) -> bool {
@@ -506,6 +517,15 @@ pub struct ScheduledFrameSlot {
     pub render_loop_started: bool,
 }
 
+pub fn submitted_frame_is_stale_for_host_mailbox(
+    telemetry: &HostCadenceTelemetry,
+    frame: &XbxEngineRenderFrame,
+    now_ms: f64,
+) -> bool {
+    let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+    frame_age_ms > telemetry.host_mailbox_submit_stale_budget_ms(frame)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScheduledFrameSlotDiagnostics {
     pub displayed_frame_seq: Option<u64>,
@@ -547,6 +567,11 @@ pub enum ScheduledFrameSubmitOutcome {
 pub enum ScheduledFrameTakeOutcome {
     Ready(XbxEngineRenderFrame),
     RetainedDisplayedFrame(XbxEngineRenderFrame),
+    RetainedDisplayedFrameStale {
+        frame: XbxEngineRenderFrame,
+        frame_age_ms: f64,
+        frame_age_budget_ms: f64,
+    },
     NoPendingFrame,
     DroppedStale {
         frame: XbxEngineRenderFrame,
@@ -560,6 +585,7 @@ impl ScheduledFrameTakeOutcome {
         match self {
             Self::Ready(_) => "ready",
             Self::RetainedDisplayedFrame(_) => "retainedDisplayed",
+            Self::RetainedDisplayedFrameStale { .. } => "retainedDisplayedStale",
             Self::NoPendingFrame => "noPending",
             Self::DroppedStale { .. } => "droppedStale",
         }
@@ -624,8 +650,45 @@ impl ScheduledFrameSlot {
         Self::frame_is_recovery_valued(frame) && frame.frame_seq < last_presented
     }
 
-    fn should_begin_new_media_epoch(&self, frame: &XbxEngineRenderFrame) -> bool {
-        self.displayed_frame.is_some() && self.frame_opens_recovery_media_epoch(frame)
+    fn frame_opens_forward_source_timeline(
+        &self,
+        frame: &XbxEngineRenderFrame,
+        now_ms: f64,
+        telemetry: &HostCadenceTelemetry,
+    ) -> bool {
+        let Some(displayed) = self.displayed_frame.as_ref() else {
+            return false;
+        };
+        let Some(last_presented) = self.last_presented_frame_seq else {
+            return false;
+        };
+        if frame.frame_seq >= last_presented {
+            return false;
+        }
+        let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+        if frame_age_ms > telemetry.host_mailbox_submit_stale_budget_ms(frame) {
+            return false;
+        }
+        let rtp_forward = frame
+            .rtp_timestamp
+            .zip(displayed.rtp_timestamp)
+            .is_some_and(|(incoming, current)| rtp_timestamp_is_after(incoming, current));
+        if !rtp_forward {
+            return false;
+        }
+        telemetry.no_pending_streak > 0
+            || Self::retained_displayed_frame_is_stale(displayed, now_ms, telemetry).is_some()
+    }
+
+    fn should_begin_new_media_epoch(
+        &self,
+        frame: &XbxEngineRenderFrame,
+        now_ms: f64,
+        telemetry: &HostCadenceTelemetry,
+    ) -> bool {
+        self.displayed_frame.is_some()
+            && (self.frame_opens_recovery_media_epoch(frame)
+                || self.frame_opens_forward_source_timeline(frame, now_ms, telemetry))
     }
 
     fn host_mailbox_pending_age_ms(
@@ -658,6 +721,20 @@ impl ScheduledFrameSlot {
         })
     }
 
+    fn displayed_frame_age_ms(frame: &XbxEngineRenderFrame, now_ms: f64) -> f64 {
+        (now_ms - frame.rendered_at_ms).max(0.0)
+    }
+
+    fn retained_displayed_frame_is_stale(
+        frame: &XbxEngineRenderFrame,
+        now_ms: f64,
+        telemetry: &HostCadenceTelemetry,
+    ) -> Option<(f64, f64)> {
+        let frame_age_ms = Self::displayed_frame_age_ms(frame, now_ms);
+        let frame_age_budget_ms = telemetry.retained_displayed_frame_stale_budget_ms();
+        (frame_age_ms >= frame_age_budget_ms).then_some((frame_age_ms, frame_age_budget_ms))
+    }
+
     fn discard_pending_without_present(&mut self) {
         self.pending_frame = None;
         self.pending_accepted_at_ms = None;
@@ -669,15 +746,15 @@ impl ScheduledFrameSlot {
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameSubmitOutcome {
-        if self.should_begin_new_media_epoch(frame) {
+        if self.should_begin_new_media_epoch(frame, now_ms, telemetry) {
             // 解码侧恢复后 frame_seq 会以较小序号重新进入；宿主仍保留旧 epoch 的 displayed frame 时，
-            // 恢复关键帧需要先切 media epoch，再进入新的调度窗口。
+            // 恢复关键帧或新 RTP 时间线需要先切 media epoch，再进入新的调度窗口。
             self.begin_media_epoch();
         }
         let frame_seq = frame.frame_seq;
         let frame_age_budget_ms = telemetry.host_mailbox_submit_stale_budget_ms(frame);
         let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
-        if frame_age_ms > frame_age_budget_ms {
+        if submitted_frame_is_stale_for_host_mailbox(telemetry, frame, now_ms) {
             telemetry.record_stale_frame_drop(frame, now_ms, "scheduledFrameStale", 1);
             self.log_host_flow(
                 "submit",
@@ -739,6 +816,7 @@ impl ScheduledFrameSlot {
             .map(|frame| frame.frame_seq);
         let overwrote_pending = replaced_frame_seq.is_some();
         self.pending_accepted_at_ms = Some(now_ms);
+        let _ = telemetry.record_enqueue(now_ms);
         if overwrote_pending {
             telemetry.record_overwrite();
         }
@@ -859,8 +937,28 @@ impl ScheduledFrameSlot {
                 .as_ref()
                 .expect("displayed frame should exist when retaining display")
                 .clone();
+            if let Some((frame_age_ms, frame_age_budget_ms)) =
+                Self::retained_displayed_frame_is_stale(&displayed_frame, now_ms, telemetry)
+            {
+                telemetry.record_no_pending_take();
+                self.log_host_flow(
+                    "take",
+                    Some(displayed_frame.frame_seq),
+                    "RetainedDisplayedFrameStale",
+                    None,
+                    false,
+                    frame_age_ms,
+                    frame_age_budget_ms,
+                    telemetry,
+                );
+                return ScheduledFrameTakeOutcome::RetainedDisplayedFrameStale {
+                    frame: displayed_frame,
+                    frame_age_ms,
+                    frame_age_budget_ms,
+                };
+            }
             telemetry.record_display_hold();
-            // pending 已在上面的 take 分支消费；此处仅持帧，不刷新 present 时钟以免压过下一帧 submit。
+            // pending 已在上面的 take 分支消费；此处仅持帧，不推进 source-present freshness。
             if self.pending_frame.is_none() {
                 telemetry.record_present_refresh(now_ms);
             }
@@ -901,12 +999,12 @@ impl ScheduledFrameSlot {
     }
 
     pub fn begin_media_epoch(&mut self) {
+        self.displayed_frame = None;
         self.pending_frame = None;
         self.pending_accepted_at_ms = None;
         self.last_presented_frame_seq = None;
-        // 媒体 epoch 刷新时保留已显示帧，直到新 epoch 的恢复锚点或最新帧真正接管。
-        // 这样 host 末端仍有替换基准，stale recovery anchor 不会因为 displayed 被提前清空而落成 drop。
-        // 同时只清去重态，不动 render_loop_started，否则会把仍在运行的 display link / fallback loop 误判成需要重启。
+        self.displayed_view_epoch = self.view_epoch;
+        // media epoch 切换代表 source timeline 已更新；保留 render_loop_started，避免误重启 display link。
     }
 
     pub fn begin_view_epoch(&mut self) -> u64 {
@@ -1011,6 +1109,10 @@ fn frame_confirms_recovery_owner(frame: &XbxEngineRenderFrame) -> bool {
             .is_some_and(|(owner_rtp, frame_rtp)| owner_rtp == frame_rtp)
 }
 
+fn rtp_timestamp_is_after(candidate: u32, current: u32) -> bool {
+    candidate != current && candidate.wrapping_sub(current) < (1_u32 << 31)
+}
+
 fn incoming_frame_is_newer_than_pending(
     pending: &XbxEngineRenderFrame,
     incoming: &XbxEngineRenderFrame,
@@ -1022,15 +1124,17 @@ fn incoming_frame_is_newer_than_pending(
         _ => {}
     }
 
-    if incoming.frame_seq != pending.frame_seq {
-        return incoming.frame_seq > pending.frame_seq;
-    }
-
     match (pending.rtp_timestamp, incoming.rtp_timestamp) {
-        (Some(existing), Some(candidate)) if candidate != existing => return candidate > existing,
+        (Some(existing), Some(candidate)) if candidate != existing => {
+            return rtp_timestamp_is_after(candidate, existing);
+        }
         (None, Some(_)) => return true,
         (Some(_), None) => return false,
         _ => {}
+    }
+
+    if incoming.frame_seq != pending.frame_seq {
+        return incoming.frame_seq > pending.frame_seq;
     }
 
     incoming.rendered_at_ms >= pending.rendered_at_ms

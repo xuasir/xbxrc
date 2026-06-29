@@ -7,6 +7,16 @@ pub(crate) enum StageReconnectCandidateOutcome {
     Unchanged,
 }
 
+impl StageReconnectCandidateOutcome {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::StagedNew => "staged-new",
+            Self::StagedUpdated => "staged-updated",
+            Self::Unchanged => "unchanged",
+        }
+    }
+}
+
 /// 统一 pending reconnect 的落地规则，避免多处直接改写相同状态。
 pub(crate) fn stage_reconnect_candidate(
     pending_runtime_action: &mut Option<XbxEnginePendingRuntimeRecoveryAction>,

@@ -33,6 +33,17 @@ fn normalize_string_enum(key: &str, value: &Value, fallback: &str, allowed: &[&s
     Value::from(fallback.to_string())
 }
 
+fn normalize_runtime_trace_mode(value: &Value, fallback: &Value) -> Value {
+    let fallback_profile = crate::mods::runtime_trace::RuntimeTraceProfile::from_stored_mode(
+        fallback.as_str().unwrap_or("production"),
+    );
+    let profile = value
+        .as_str()
+        .map(crate::mods::runtime_trace::RuntimeTraceProfile::from_stored_mode)
+        .unwrap_or(fallback_profile);
+    Value::from(profile.as_str().to_string())
+}
+
 fn normalize_display_options(key: &str, value: &Value, fallback: &Value) -> Value {
     let Some(map) = value.as_object() else {
         log::warn!(
@@ -101,7 +112,8 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "video_format"
         | "server_url"
         | "server_username"
-        | "server_credential" => {
+        | "server_credential"
+        | "runtime_trace_dimensions" => {
             if let Some(val) = value.as_str() {
                 Value::from(val.to_string())
             } else {
@@ -156,12 +168,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             fallback.as_str().unwrap_or("webrtc-direct"),
             &["webrtc-direct", "rust-owned"],
         ),
-        "runtime_trace_mode" => normalize_string_enum(
-            key,
-            value,
-            fallback.as_str().unwrap_or("minimal"),
-            &["off", "minimal", "standard", "verbose", "trace"],
-        ),
+        "runtime_trace_mode" => normalize_runtime_trace_mode(value, fallback),
         "display_options" => normalize_display_options(key, value, fallback),
         "gamepad_device_profiles" => {
             if value.is_array() {
@@ -231,5 +238,23 @@ mod tests {
             .as_array()
             .expect("normalized keyboard bindings");
         assert!(!bindings.is_empty());
+    }
+
+    #[test]
+    fn normalize_runtime_trace_mode_keeps_legacy_values_compatible() {
+        let mut source = Map::new();
+        source.insert("runtime_trace_mode".to_owned(), json!("verbose"));
+        source.insert(
+            "runtime_trace_dimensions".to_owned(),
+            json!("network,recovery,-input"),
+        );
+
+        let normalized = normalize_config(source);
+
+        assert_eq!(normalized["runtime_trace_mode"], "dev");
+        assert_eq!(
+            normalized["runtime_trace_dimensions"],
+            "network,recovery,-input"
+        );
     }
 }

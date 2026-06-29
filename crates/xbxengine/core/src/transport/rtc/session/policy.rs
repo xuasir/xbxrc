@@ -737,6 +737,11 @@ impl RtcSessionPolicy {
             self.last_successful_media_edge_at_ms = Some(latest_success_edge);
             self.reconnect_success_edge_at_last_grant = None;
             self.reconnect_grants_without_success_edge = 0;
+            self.recovery_no_progress_since_ms = None;
+            self.recovery_no_progress_last_frame_count = None;
+            self.recovery_no_progress_last_transport_progress_token = None;
+            self.liveness_reconnect_attempts_without_progress = 0;
+            self.reset_connected_render_stall_liveness();
         }
     }
 
@@ -1208,18 +1213,8 @@ impl RtcSessionPolicy {
                 );
             });
         }
-        let reconnect_gate_detail = expensive_recovery_gate
-            .apply_to_proposal(
-                snapshot,
-                owner_state,
-                &mut proposal,
-                &owner_signal,
-                observed_at_ms,
-                twcc_warmup_state,
-                block_lifecycle_reconnect_candidate,
-            )
-            .detail;
-
+        let reconnect_candidate_before_rfc_ceiling =
+            proposal.decision.action == RecoveryAction::RequestReconnectCandidate;
         expensive_recovery_gate.apply_rfc_decode_display_transport_ceiling(
             snapshot,
             observed_at_ms,
@@ -1231,6 +1226,8 @@ impl RtcSessionPolicy {
             &mut proposal,
             &owner_signal,
         );
+        let rfc_ceiling_suppressed_reconnect_candidate = reconnect_candidate_before_rfc_ceiling
+            && proposal.decision.action == RecoveryAction::CooldownSuppressed;
         if remote_terminal_active
             && owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
             && !first_frame_acquisition_priority
@@ -1323,18 +1320,57 @@ impl RtcSessionPolicy {
             // 这类轻信号只并入当前恢复轮次观察，不应立即重新升级动作。
             proposal.decision.action = RecoveryAction::CooldownSuppressed;
         }
+        if owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && proposal.decision.action == RecoveryAction::RequestReconnectCandidate
+            && !recovery_observation.allows_transport_await_reconnect_fallback(observed_at_ms)
+        {
+            proposal.decision.action = RecoveryAction::CooldownSuppressed;
+        }
+        let remote_terminal_reconnect = remote_terminal_active
+            && owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && proposal.decision.action == RecoveryAction::RequestReconnectCandidate;
+        let mut reconnect_gate_detail = if remote_terminal_reconnect {
+            None
+        } else {
+            expensive_recovery_gate
+                .apply_to_proposal(
+                    snapshot,
+                    owner_state,
+                    &mut proposal,
+                    &owner_signal,
+                    observed_at_ms,
+                    twcc_warmup_state,
+                    block_lifecycle_reconnect_candidate,
+                )
+                .detail
+        };
+        if reconnect_gate_detail.is_none()
+            && rfc_ceiling_suppressed_reconnect_candidate
+            && !remote_terminal_active
+            && proposal.decision.action == RecoveryAction::CooldownSuppressed
+        {
+            // RFC ceiling 可能先把 reconnect candidate 降级；这里补回具体 gate 诊断，方便 trace 验收。
+            let mut diagnostic_probe = proposal.clone();
+            diagnostic_probe.decision.action = RecoveryAction::RequestReconnectCandidate;
+            reconnect_gate_detail = expensive_recovery_gate
+                .apply_to_proposal(
+                    snapshot,
+                    owner_state,
+                    &mut diagnostic_probe,
+                    &owner_signal,
+                    observed_at_ms,
+                    twcc_warmup_state,
+                    block_lifecycle_reconnect_candidate,
+                )
+                .detail
+                .filter(|detail| detail.starts_with("reconnectBlocked:"));
+        }
         if owner_signal.reason == VideoEscalationReason::LifecycleRecovering
             && proposal.decision.action == RecoveryAction::RequestReconnectCandidate
         {
             self.liveness_reconnect_attempts_without_progress = self
                 .liveness_reconnect_attempts_without_progress
                 .saturating_add(1);
-        }
-        if owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
-            && proposal.decision.action == RecoveryAction::RequestReconnectCandidate
-            && !recovery_observation.allows_transport_await_reconnect_fallback(observed_at_ms)
-        {
-            proposal.decision.action = RecoveryAction::CooldownSuppressed;
         }
         if proposal.decision.action == RecoveryAction::RequestReconnectCandidate {
             self.record_reconnect_grant_without_success_edge();
@@ -1358,6 +1394,10 @@ impl RtcSessionPolicy {
             reason: owner_signal.reason,
             reason_label: owner_signal.reason_label,
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            reason_domain_before_runtime_resolution: None,
+            reason_domain_after_runtime_resolution: None,
+            remote_terminal_domain_promoted: false,
+            remote_terminal_active,
             reconnect_gate_detail,
             budget_before: proposal.budget_before,
             budget_after: proposal.budget_after,
@@ -1366,9 +1406,12 @@ impl RtcSessionPolicy {
             preempt_reason: proposal.preempt_reason,
         }
         .with_runtime_reason_domain();
-        if self.should_promote_remote_terminal_transport_reconnect_domain(&proposal) {
+        let remote_terminal_domain_promoted =
+            self.should_promote_remote_terminal_transport_reconnect_domain(&proposal);
+        if remote_terminal_domain_promoted {
             proposal.reason_domain = crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport;
         }
+        proposal.remote_terminal_domain_promoted = remote_terminal_domain_promoted;
         if proposal.decision.action == RecoveryAction::RequestReconnectCandidate {
             self.recovery_coordinator.on_reconnect_candidate_accepted();
             proposal.budget_after = self.recovery_coordinator.current_budget_state();
@@ -2590,6 +2633,18 @@ impl RtcSessionPolicy {
         });
         let escalation_basis =
             proposal.map(|p| recovery_escalation_basis_for_reason(p.reason).to_string());
+        let proposal_reason = proposal.map(|p| p.reason.label().to_string());
+        let proposal_reason_label = proposal.map(|p| p.reason_label.clone());
+        let proposal_reason_domain = proposal.map(|p| p.reason_domain.as_str().to_string());
+        let proposal_reason_domain_before_runtime_resolution = proposal
+            .and_then(|p| p.reason_domain_before_runtime_resolution)
+            .map(|domain| domain.as_str().to_string());
+        let proposal_reason_domain_after_runtime_resolution = proposal
+            .and_then(|p| p.reason_domain_after_runtime_resolution)
+            .map(|domain| domain.as_str().to_string());
+        let remote_terminal_domain_promoted = proposal.map(|p| p.remote_terminal_domain_promoted);
+        let remote_terminal_active = proposal.map(|p| p.remote_terminal_active);
+        let reconnect_gate_detail = proposal.and_then(|p| p.reconnect_gate_detail.clone());
         let ledger = XbxEngineRecoveryDecisionLedgerObservation {
             decision_id,
             state_before: state_before.as_str().to_string(),
@@ -2612,6 +2667,14 @@ impl RtcSessionPolicy {
             anchor_evidence: anchor_evidence.flatten(),
             keyframe_episode_health,
             escalation_basis,
+            proposal_reason,
+            proposal_reason_label,
+            proposal_reason_domain,
+            proposal_reason_domain_before_runtime_resolution,
+            proposal_reason_domain_after_runtime_resolution,
+            remote_terminal_domain_promoted,
+            remote_terminal_active,
+            reconnect_gate_detail,
             budget_before,
             budget_after,
             trigger_observation_label: None,

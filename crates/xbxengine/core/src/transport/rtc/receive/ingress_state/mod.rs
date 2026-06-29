@@ -678,7 +678,10 @@ fn should_suppress_transport_observation_for_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::should_suppress_transport_observation_for_runtime;
+    use super::{
+        should_suppress_transport_observation_for_runtime, video_ingress_channel_capacity,
+        MAX_VIDEO_INGRESS_CHANNEL_CAPACITY, MIN_VIDEO_INGRESS_CHANNEL_CAPACITY,
+    };
     use crate::transport::rtc::stream::adapter_types::TransportObservation;
     use xbxengine_protocol::XbxEngineTransportStateDto;
 
@@ -696,6 +699,22 @@ mod tests {
             XbxEngineTransportStateDto::Connecting,
             TransportObservation::StreamThinStall,
         ));
+    }
+
+    #[test]
+    fn video_ingress_channel_capacity_is_capped_for_low_latency() {
+        assert_eq!(
+            video_ingress_channel_capacity(1),
+            MIN_VIDEO_INGRESS_CHANNEL_CAPACITY
+        );
+        assert_eq!(
+            video_ingress_channel_capacity(96),
+            MAX_VIDEO_INGRESS_CHANNEL_CAPACITY
+        );
+        assert_eq!(
+            video_ingress_channel_capacity(8192),
+            MAX_VIDEO_INGRESS_CHANNEL_CAPACITY
+        );
     }
 }
 
@@ -881,6 +900,15 @@ impl FrameBoundaryTracker {
 }
 
 pub(crate) const UINT16SIZE_HALF: u16 = 1 << 15;
+const MIN_VIDEO_INGRESS_CHANNEL_CAPACITY: usize = 64;
+const MAX_VIDEO_INGRESS_CHANNEL_CAPACITY: usize = 64;
+
+fn video_ingress_channel_capacity(requested: usize) -> usize {
+    requested.clamp(
+        MIN_VIDEO_INGRESS_CHANNEL_CAPACITY,
+        MAX_VIDEO_INGRESS_CHANNEL_CAPACITY,
+    )
+}
 
 pub(crate) fn build_rtc_video_frame_source(
     ingress_capacity: usize,
@@ -896,7 +924,8 @@ pub(crate) fn build_rtc_video_frame_source(
     Box<dyn crate::transport::rtc::stream::sink::RtcMediaSink>,
     VideoFramePipelineSources,
 ) {
-    let (tx, rx) = tokio::sync::mpsc::channel::<RtcVideoRtpPacket>(ingress_capacity.max(256));
+    let channel_capacity = video_ingress_channel_capacity(ingress_capacity);
+    let (tx, rx) = tokio::sync::mpsc::channel::<RtcVideoRtpPacket>(channel_capacity);
     let (transport_observation_tx, transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel::<TransportObservation>();
     let mut source = RtcVideoFrameSource::new(

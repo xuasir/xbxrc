@@ -37,6 +37,7 @@ use crate::AppState;
 const XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT: Duration = Duration::from_secs(20);
 static XBXENGINE_HOST_EXCHANGE_OFFER_REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
 const XBXENGINE_RUNTIME_LOCK_TRACE_INTERVAL: Duration = Duration::from_millis(1_000);
+const XBXENGINE_INITIAL_RUNTIME_GENERATION: u64 = 1;
 
 struct PendingControlGuard<'a>(&'a AtomicU64);
 
@@ -58,49 +59,79 @@ impl XbxHostRenderFramePush for NativeVideoHostRenderFramePush {
         &self,
         frame: XbxEngineRenderFrame,
     ) -> XbxHostRenderFramePushOutcome {
-        let Ok(route_guard) = self.route.lock() else {
-            self.runtime_trace.record_event(
-                "xbxengine-host",
-                "nativeHostPushDropped",
-                None,
-                serde_json::json!({
-                    "reason": "routeUnavailable",
-                    "frameSeq": frame.frame_seq,
-                }),
-            );
-            return XbxHostRenderFramePushOutcome::RouteUnavailable;
+        let (viewport_id, surface_id) = match self.route.try_lock() {
+            Ok(route_guard) => {
+                let Some(viewport) = route_guard.viewport.as_ref() else {
+                    self.runtime_trace.record_event(
+                        "xbxengine-host",
+                        "nativeHostPushDropped",
+                        None,
+                        serde_json::json!({
+                            "reason": "routeUnavailable",
+                            "frameSeq": frame.frame_seq,
+                        }),
+                    );
+                    return XbxHostRenderFramePushOutcome::RouteUnavailable;
+                };
+                (viewport.viewport_id.clone(), route_guard.surface_id.clone())
+            }
+            Err(TryLockError::WouldBlock) => {
+                self.runtime_trace.record_event(
+                    "xbxengine-host",
+                    "nativeHostPushDropped",
+                    None,
+                    serde_json::json!({
+                        "reason": "routeBusy",
+                        "frameSeq": frame.frame_seq,
+                    }),
+                );
+                return XbxHostRenderFramePushOutcome::RouteUnavailable;
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                self.runtime_trace.record_event(
+                    "xbxengine-host",
+                    "nativeHostPushDropped",
+                    None,
+                    serde_json::json!({
+                        "reason": "routeUnavailable",
+                        "frameSeq": frame.frame_seq,
+                    }),
+                );
+                return XbxHostRenderFramePushOutcome::RouteUnavailable;
+            }
         };
-        let Some(viewport) = route_guard.viewport.as_ref() else {
-            self.runtime_trace.record_event(
-                "xbxengine-host",
-                "nativeHostPushDropped",
-                None,
-                serde_json::json!({
-                    "reason": "routeUnavailable",
-                    "frameSeq": frame.frame_seq,
-                }),
-            );
-            return XbxHostRenderFramePushOutcome::RouteUnavailable;
+        let mut registry = match self.native_video.try_lock() {
+            Ok(registry) => registry,
+            Err(TryLockError::WouldBlock) => {
+                self.runtime_trace.record_event(
+                    "xbxengine-host",
+                    "nativeHostPushDropped",
+                    None,
+                    serde_json::json!({
+                        "reason": "registryBusy",
+                        "frameSeq": frame.frame_seq,
+                        "viewportId": viewport_id.as_str(),
+                        "surfaceId": surface_id.as_deref(),
+                    }),
+                );
+                return XbxHostRenderFramePushOutcome::RegistryUnavailable;
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                self.runtime_trace.record_event(
+                    "xbxengine-host",
+                    "nativeHostPushDropped",
+                    None,
+                    serde_json::json!({
+                        "reason": "registryUnavailable",
+                        "frameSeq": frame.frame_seq,
+                        "viewportId": viewport_id.as_str(),
+                        "surfaceId": surface_id.as_deref(),
+                    }),
+                );
+                return XbxHostRenderFramePushOutcome::RegistryUnavailable;
+            }
         };
-        let Ok(mut registry) = self.native_video.lock() else {
-            self.runtime_trace.record_event(
-                "xbxengine-host",
-                "nativeHostPushDropped",
-                None,
-                serde_json::json!({
-                    "reason": "registryUnavailable",
-                    "frameSeq": frame.frame_seq,
-                    "viewportId": viewport.viewport_id,
-                    "surfaceId": route_guard.surface_id,
-                }),
-            );
-            return XbxHostRenderFramePushOutcome::RegistryUnavailable;
-        };
-        if registry.present_frame(
-            &viewport.viewport_id,
-            route_guard.surface_id.as_deref(),
-            &frame,
-        ) {
+        if registry.present_frame(&viewport_id, surface_id.as_deref(), &frame) {
             XbxHostRenderFramePushOutcome::Accepted
         } else {
             XbxHostRenderFramePushOutcome::Rejected
@@ -114,6 +145,55 @@ type TauriXbxEngineRuntime = XbxEngineRuntime<
     Box<dyn XbxEngineMediaBackend>,
 >;
 
+#[allow(clippy::too_many_arguments)]
+fn create_tauri_runtime(
+    app_handle: AppHandle,
+    last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
+    native_video: NativeVideoRegistryRef,
+    runtime_trace: RuntimeTraceRecorderRef,
+    host_present_route: Arc<StdMutex<XbxEngineHostPresentRoute>>,
+    cancellation_epoch: Arc<AtomicU64>,
+    rumble_worker: GamepadRumbleWorkerHandle,
+    active_event_generation: Arc<AtomicU64>,
+    event_generation: u64,
+) -> TauriXbxEngineRuntime {
+    let event_bridge = TauriEngineEventBridge {
+        app_handle: app_handle.clone(),
+        state: Default::default(),
+        last_runtime_event,
+        runtime_trace: runtime_trace.clone(),
+    };
+    let input_backend = Box::new(OhMyGamepadXbxEngineInputBackend::new());
+    let host_render_frame_push: Arc<dyn XbxHostRenderFramePush> =
+        Arc::new(NativeVideoHostRenderFramePush {
+            native_video: native_video.clone(),
+            route: host_present_route.clone(),
+            runtime_trace: runtime_trace.clone(),
+        });
+    let media_backend = create_active_media_backend(
+        input_backend,
+        XbxEngineRuntimeConfig::default(),
+        Some(host_render_frame_push),
+    );
+    XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TauriXbxEngineHostBridge {
+            app_handle,
+            native_video,
+            runtime_trace: runtime_trace.clone(),
+            host_present_route,
+            cancellation_epoch,
+            rumble_worker,
+        },
+        TauriXbxEngineEventSink {
+            bridge: Arc::new(StdMutex::new(event_bridge)),
+            generation: event_generation,
+            active_generation: active_event_generation,
+        },
+        media_backend,
+    )
+}
+
 #[derive(Debug)]
 struct NativeVideoHostFeedbackSnapshot {
     viewport_id: String,
@@ -126,6 +206,8 @@ struct NativeVideoHostFeedbackSnapshot {
 /// 运行态只负责持有 runtime 实例和并发访问。
 pub struct XbxEngineRuntimeState {
     runtime: StdMutex<TauriXbxEngineRuntime>,
+    app_handle: AppHandle,
+    last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
     native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
     /// 与 `XbxEngineRuntime` 快照同步，供 `NativeVideoHostRenderFramePush` 在 renderer 线程读取。
@@ -140,6 +222,7 @@ pub struct XbxEngineRuntimeState {
     last_runtime_lock_wait_trace_at: StdMutex<Option<Instant>>,
     last_tick_lock_busy_trace_at: StdMutex<Option<Instant>>,
     cancellation_epoch: Arc<AtomicU64>,
+    active_event_generation: Arc<AtomicU64>,
     rumble_worker: GamepadRumbleWorkerHandle,
 }
 
@@ -152,44 +235,26 @@ impl XbxEngineRuntimeState {
         stats_snapshot_interval: Duration,
     ) -> Self {
         let cancellation_epoch = Arc::new(AtomicU64::new(0));
-        let event_bridge = TauriEngineEventBridge {
-            app_handle: app_handle.clone(),
-            state: Default::default(),
-            last_runtime_event,
-            runtime_trace: runtime_trace.clone(),
-        };
-        let input_backend = Box::new(OhMyGamepadXbxEngineInputBackend::new());
         let host_present_route = Arc::new(StdMutex::new(XbxEngineHostPresentRoute::default()));
-        let host_render_frame_push: Arc<dyn XbxHostRenderFramePush> =
-            Arc::new(NativeVideoHostRenderFramePush {
-                native_video: native_video.clone(),
-                route: host_present_route.clone(),
-                runtime_trace: runtime_trace.clone(),
-            });
-        let media_backend = create_active_media_backend(
-            input_backend,
-            XbxEngineRuntimeConfig::default(),
-            Some(host_render_frame_push),
-        );
+        let active_event_generation =
+            Arc::new(AtomicU64::new(XBXENGINE_INITIAL_RUNTIME_GENERATION));
         let rumble_worker =
             GamepadRumbleWorkerHandle::new(app_handle.clone(), runtime_trace.clone());
-        let runtime = XbxEngineRuntime::with_media_backend(
-            XbxEngineRuntimeConfig::default(),
-            TauriXbxEngineHostBridge {
-                app_handle,
-                native_video: native_video.clone(),
-                runtime_trace: runtime_trace.clone(),
-                host_present_route: host_present_route.clone(),
-                cancellation_epoch: cancellation_epoch.clone(),
-                rumble_worker: rumble_worker.clone(),
-            },
-            TauriXbxEngineEventSink {
-                bridge: Arc::new(StdMutex::new(event_bridge)),
-            },
-            media_backend,
+        let runtime = create_tauri_runtime(
+            app_handle.clone(),
+            last_runtime_event.clone(),
+            native_video.clone(),
+            runtime_trace.clone(),
+            host_present_route.clone(),
+            cancellation_epoch.clone(),
+            rumble_worker.clone(),
+            active_event_generation.clone(),
+            XBXENGINE_INITIAL_RUNTIME_GENERATION,
         );
         Self {
             runtime: StdMutex::new(runtime),
+            app_handle,
+            last_runtime_event,
             native_video,
             runtime_trace,
             host_present_route,
@@ -204,6 +269,7 @@ impl XbxEngineRuntimeState {
             last_runtime_lock_wait_trace_at: StdMutex::new(None),
             last_tick_lock_busy_trace_at: StdMutex::new(None),
             cancellation_epoch,
+            active_event_generation,
             rumble_worker,
         }
     }
@@ -284,6 +350,28 @@ impl XbxEngineRuntimeState {
         }
     }
 
+    fn create_runtime_for_next_generation(&self) -> (TauriXbxEngineRuntime, u64) {
+        let generation = self
+            .active_event_generation
+            .fetch_add(1, Ordering::SeqCst)
+            .saturating_add(1);
+        if let Ok(mut last_runtime_event) = self.last_runtime_event.lock() {
+            *last_runtime_event = None;
+        }
+        let runtime = create_tauri_runtime(
+            self.app_handle.clone(),
+            self.last_runtime_event.clone(),
+            self.native_video.clone(),
+            self.runtime_trace.clone(),
+            self.host_present_route.clone(),
+            self.cancellation_epoch.clone(),
+            self.rumble_worker.clone(),
+            self.active_event_generation.clone(),
+            generation,
+        );
+        (runtime, generation)
+    }
+
     pub fn apply_control(
         &self,
         command: XbxEngineControlCommandDto,
@@ -321,6 +409,9 @@ impl XbxEngineRuntimeState {
                 _ => {}
             }
         }
+        if matches!(command, XbxEngineControlCommandDto::StopRuntime { .. }) {
+            return self.apply_stop_runtime_control(command);
+        }
         let lock_started_at = Instant::now();
         let mut runtime = match self.runtime.try_lock() {
             Ok(runtime) => runtime,
@@ -356,6 +447,88 @@ impl XbxEngineRuntimeState {
             result.as_ref().err(),
         );
         result
+    }
+
+    fn apply_stop_runtime_control(
+        &self,
+        command: XbxEngineControlCommandDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let lock_started_at = Instant::now();
+        let mut runtime = match self.runtime.try_lock() {
+            Ok(runtime) => runtime,
+            Err(TryLockError::WouldBlock) => {
+                self.record_control_waiting_for_runtime_lock(
+                    &command,
+                    lock_started_at.elapsed().as_millis(),
+                );
+                self.runtime
+                    .lock()
+                    .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"));
+            }
+        };
+        record_control_apply_trace(
+            &self.runtime_trace,
+            &command,
+            "lockAcquired",
+            Some(lock_started_at.elapsed().as_millis()),
+            None,
+        );
+
+        let replacement_started_at = Instant::now();
+        let (replacement_runtime, replacement_generation) =
+            self.create_runtime_for_next_generation();
+        if let Err(error) = runtime.apply_control(XbxEngineControlCommandDto::DetachViewport) {
+            self.runtime_trace.record_event(
+                "xbxengine-host",
+                "runtimeStopPreDetachFailed",
+                None,
+                serde_json::json!({
+                    "error": error.to_string(),
+                }),
+            );
+        }
+
+        let mut draining_runtime = std::mem::replace(&mut *runtime, replacement_runtime);
+        self.sync_host_present_route_from_runtime(&runtime);
+        drop(runtime);
+
+        let runtime_trace = self.runtime_trace.clone();
+        let drain_command = command.clone();
+        std::thread::spawn(move || {
+            let drain_started_at = Instant::now();
+            runtime_trace.record_event(
+                "xbxengine-host",
+                "runtimeStopDrainStarted",
+                None,
+                serde_json::json!({
+                    "replacementGeneration": replacement_generation,
+                }),
+            );
+            let result = draining_runtime.apply_control(drain_command);
+            runtime_trace.record_event(
+                "xbxengine-host",
+                "runtimeStopDrainCompleted",
+                None,
+                serde_json::json!({
+                    "durationMs": drain_started_at.elapsed().as_millis(),
+                    "ok": result.is_ok(),
+                    "error": result.as_ref().err().map(ToString::to_string),
+                    "replacementGeneration": replacement_generation,
+                }),
+            );
+        });
+
+        record_control_apply_trace(
+            &self.runtime_trace,
+            &command,
+            "completed",
+            Some(replacement_started_at.elapsed().as_millis()),
+            None,
+        );
+        Ok(())
     }
 
     pub fn tick(&self) -> Result<(), XbxEngineRuntimeError> {
@@ -398,8 +571,8 @@ impl XbxEngineRuntimeState {
         if should_skip_trace_tick(session_id.as_deref(), &stats_snapshot) {
             return Ok(());
         }
-        let trace_mode = self.runtime_trace.trace_mode();
-        let observation_interval = trace_observation_tick_interval(&trace_mode);
+        let observation_interval =
+            trace_observation_tick_interval(self.runtime_trace.trace_profile());
         let should_project = self
             .last_trace_observation_at
             .lock()
@@ -1154,14 +1327,20 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
                 let state = self
                     .app_state()
                     .map_err(map_app_error("keepAliveRemoteSession"))?;
-                tauri::async_runtime::block_on(state.streaming.send_keepalive(session_id))
-                    .map_err(map_app_error("keepAliveRemoteSession"))?;
+                let accepted =
+                    tauri::async_runtime::block_on(state.streaming.send_keepalive(session_id))
+                        .map_err(map_app_error("keepAliveRemoteSession"))?;
                 self.runtime_trace.record_event(
                     "xbxengine-host",
                     "keepAliveRemoteSession",
                     None,
-                    serde_json::json!({ "accepted": true }),
+                    serde_json::json!({ "accepted": accepted }),
                 );
+                if !accepted {
+                    return Err(XbxEngineRuntimeError::new(
+                        "keepAliveRemoteSession:streaming:SessionNotActive",
+                    ));
+                }
                 Ok(XbxEngineHostResponseDto::KeepAliveAccepted)
             }
             XbxEngineHostRequestDto::CloseRemoteSession { session_id, .. } => {
@@ -1174,10 +1353,15 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
 #[derive(Clone)]
 struct TauriXbxEngineEventSink {
     bridge: Arc<StdMutex<TauriEngineEventBridge>>,
+    generation: u64,
+    active_generation: Arc<AtomicU64>,
 }
 
 impl XbxEngineEventSink for TauriXbxEngineEventSink {
     fn emit(&mut self, event: XbxEngineRuntimeEventDto) {
+        if self.active_generation.load(Ordering::SeqCst) != self.generation {
+            return;
+        }
         if let Ok(mut bridge) = self.bridge.lock() {
             bridge.apply_event(&event);
         }
@@ -1289,6 +1473,15 @@ fn control_apply_event_name(
         (XbxEngineControlCommandDto::StartRuntime { .. }, "completed") => {
             Some("runtimeStartApplyCompleted")
         }
+        (XbxEngineControlCommandDto::StopRuntime { .. }, "entered") => {
+            Some("runtimeStopApplyEntered")
+        }
+        (XbxEngineControlCommandDto::StopRuntime { .. }, "lockAcquired") => {
+            Some("runtimeStopRuntimeLockAcquired")
+        }
+        (XbxEngineControlCommandDto::StopRuntime { .. }, "completed") => {
+            Some("runtimeStopApplyCompleted")
+        }
         _ => None,
     }
 }
@@ -1327,13 +1520,62 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        exchange_offer_failure_kind_from_message, exchange_offer_with_timeout,
-        summarize_sdp_capabilities, update_host_present_route_on_attach,
-        update_host_present_route_on_detach,
+        control_apply_event_name, exchange_offer_failure_kind_from_message,
+        exchange_offer_with_timeout, summarize_sdp_capabilities,
+        update_host_present_route_on_attach, update_host_present_route_on_detach,
+        NativeVideoHostRenderFramePush,
     };
+    use crate::mods::native_video::NativeVideoRegistry;
+    use crate::mods::runtime_trace::{RuntimeTraceRecorder, RuntimeTraceRecorderRef};
     use crate::mods::streaming::{StreamingAnswerPayload, StreamingExchangeOfferResult};
-    use xbxengine::XbxEngineHostPresentRoute;
-    use xbxengine_protocol::XbxEngineViewportDto;
+    use xbxengine::{
+        XbxEngineHostPresentRoute, XbxEngineRenderFrame, XbxEngineRenderPixelData,
+        XbxHostRenderFramePush, XbxHostRenderFramePushOutcome,
+    };
+    use xbxengine_protocol::{XbxEngineControlCommandDto, XbxEngineViewportDto};
+
+    fn test_runtime_trace() -> RuntimeTraceRecorderRef {
+        Arc::new(RuntimeTraceRecorder::new_with_mode("off").expect("runtime trace"))
+    }
+
+    fn test_render_frame(frame_seq: u64) -> XbxEngineRenderFrame {
+        XbxEngineRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq,
+            rendered_at_ms: 1_000.0,
+            rtp_timestamp: Some(frame_seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: frame_seq == 1,
+            frame_recovery_disposition: None,
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::from(vec![0_u8; 16].into_boxed_slice()),
+            },
+        }
+    }
+
+    #[test]
+    fn stop_runtime_control_trace_events_are_named() {
+        let command = XbxEngineControlCommandDto::StopRuntime {
+            reason: Some("menuActionExit".to_string()),
+        };
+
+        assert_eq!(
+            control_apply_event_name(&command, "entered"),
+            Some("runtimeStopApplyEntered")
+        );
+        assert_eq!(
+            control_apply_event_name(&command, "lockAcquired"),
+            Some("runtimeStopRuntimeLockAcquired")
+        );
+        assert_eq!(
+            control_apply_event_name(&command, "completed"),
+            Some("runtimeStopApplyCompleted")
+        );
+    }
 
     #[tokio::test]
     async fn exchange_offer_with_timeout_returns_error_when_future_stalls() {
@@ -1456,5 +1698,47 @@ mod tests {
         let guard = route.lock().expect("route lock");
         assert!(guard.viewport.is_none());
         assert!(guard.surface_id.is_none());
+    }
+
+    #[test]
+    fn native_host_push_returns_when_route_lock_is_busy() {
+        let native_video = Arc::new(StdMutex::new(NativeVideoRegistry::default()));
+        let route = Arc::new(StdMutex::new(XbxEngineHostPresentRoute {
+            viewport: Some(XbxEngineViewportDto {
+                viewport_id: "vp-1".to_string(),
+            }),
+            surface_id: Some("wgpu:surface-1".to_string()),
+        }));
+        let _route_guard = route.lock().expect("route lock");
+        let push = NativeVideoHostRenderFramePush {
+            native_video,
+            route: route.clone(),
+            runtime_trace: test_runtime_trace(),
+        };
+
+        let outcome = push.push_render_frame_for_host_present(test_render_frame(42));
+
+        assert_eq!(outcome, XbxHostRenderFramePushOutcome::RouteUnavailable);
+    }
+
+    #[test]
+    fn native_host_push_returns_when_registry_lock_is_busy() {
+        let native_video = Arc::new(StdMutex::new(NativeVideoRegistry::default()));
+        let route = Arc::new(StdMutex::new(XbxEngineHostPresentRoute {
+            viewport: Some(XbxEngineViewportDto {
+                viewport_id: "vp-1".to_string(),
+            }),
+            surface_id: Some("wgpu:surface-1".to_string()),
+        }));
+        let _registry_guard = native_video.lock().expect("registry lock");
+        let push = NativeVideoHostRenderFramePush {
+            native_video: native_video.clone(),
+            route,
+            runtime_trace: test_runtime_trace(),
+        };
+
+        let outcome = push.push_render_frame_for_host_present(test_render_frame(43));
+
+        assert_eq!(outcome, XbxHostRenderFramePushOutcome::RegistryUnavailable);
     }
 }

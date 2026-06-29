@@ -3,8 +3,8 @@ use std::sync::Arc;
 use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
 use super::{
-    HostCadencePhase, HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome,
-    ScheduledFrameTakeOutcome,
+    submitted_frame_is_stale_for_host_mailbox, HostCadencePhase, HostCadenceTelemetry,
+    ScheduledFrameSlot, ScheduledFrameSubmitOutcome, ScheduledFrameTakeOutcome,
 };
 
 fn mk_frame(frame_seq: u64, rendered_at_ms: f64) -> XbxEngineRenderFrame {
@@ -52,6 +52,46 @@ fn pending_slot_keeps_latest_arrival() {
     let snapshot = slot.diagnostics_snapshot();
     assert_eq!(snapshot.pending_frame_seqs, vec![11]);
     assert_eq!(snapshot.pending_queue_depth, 1);
+}
+
+#[test]
+fn enqueue_telemetry_advances_only_for_accepted_pending_frames() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(10, 1_000.0), 1_010.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    assert_eq!(telemetry.present_enqueue_count_total, 1);
+    assert_eq!(telemetry.latest_submit_time_ms, Some(1_010.0));
+
+    let mut already_presented = mk_frame(9, 1_011.0);
+    already_presented.is_keyframe = false;
+    already_presented.frame_recovery_disposition = None;
+    already_presented.presentation_value_role = None;
+    match slot.submit_frame(&already_presented, 1_012.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::RejectedAlreadyPresented { .. } => {}
+        other => panic!("expected already-presented rejection, got {other:?}"),
+    }
+    assert_eq!(telemetry.present_enqueue_count_total, 1);
+    assert_eq!(telemetry.latest_submit_time_ms, Some(1_010.0));
+    assert!(
+        telemetry.submit_interval_ms().is_none(),
+        "rejected submit attempts must not pollute accepted-submit cadence"
+    );
+
+    let stale = mk_frame(30, 1_000.0);
+    match slot.submit_frame(&stale, 1_500.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::DroppedStale { .. } => {}
+        other => panic!("expected stale drop, got {other:?}"),
+    }
+    assert_eq!(telemetry.present_enqueue_count_total, 1);
+    assert_eq!(telemetry.latest_submit_time_ms, Some(1_010.0));
+    assert!(
+        telemetry.submit_interval_ms().is_none(),
+        "stale submit drops must not pollute accepted-submit cadence"
+    );
 }
 
 #[test]
@@ -112,6 +152,157 @@ fn recovery_epoch_rollover_still_allows_rewound_frame_sequence() {
 }
 
 #[test]
+fn starved_host_allows_rewound_sequence_when_rtp_timeline_moves_forward() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let displayed = XbxEngineRenderFrame {
+        frame_seq: 350,
+        rtp_timestamp: Some(1_746_264_948),
+        is_keyframe: false,
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(350, 1_000.0)
+    };
+    let _ = slot.submit_frame(&displayed, 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            assert_eq!(frame.frame_seq, 350);
+            telemetry.record_present(1_020.0);
+        }
+        other => panic!("expected initial displayed frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_200.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrameStale { frame, .. } => {
+            assert_eq!(frame.frame_seq, 350)
+        }
+        other => panic!("expected old displayed frame to become stale, got {other:?}"),
+    }
+    assert!(telemetry.no_pending_streak > 0);
+
+    let continuation_after_recovery = XbxEngineRenderFrame {
+        frame_seq: 7,
+        rtp_timestamp: Some(2_856_576_214),
+        is_keyframe: false,
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(7, 1_201.0)
+    };
+    match slot.submit_frame(&continuation_after_recovery, 1_202.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 7),
+        other => panic!("expected forward RTP source timeline to open media epoch, got {other:?}"),
+    }
+    let snapshot = slot.diagnostics_snapshot();
+    assert_eq!(snapshot.displayed_frame_seq, None);
+    assert_eq!(snapshot.last_presented_frame_seq, None);
+    assert_eq!(snapshot.pending_frame_seqs, vec![7]);
+}
+
+#[test]
+fn fresh_displayed_frame_keeps_rewound_sequence_duplicate_guard() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let displayed = XbxEngineRenderFrame {
+        frame_seq: 350,
+        rtp_timestamp: Some(1_746_264_948),
+        is_keyframe: false,
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(350, 1_000.0)
+    };
+    let _ = slot.submit_frame(&displayed, 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            assert_eq!(frame.frame_seq, 350);
+            telemetry.record_present(1_020.0);
+        }
+        other => panic!("expected initial displayed frame, got {other:?}"),
+    }
+
+    let duplicate_like = XbxEngineRenderFrame {
+        frame_seq: 7,
+        rtp_timestamp: Some(2_856_576_214),
+        is_keyframe: false,
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(7, 1_030.0)
+    };
+    match slot.submit_frame(&duplicate_like, 1_031.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::RejectedAlreadyPresented { frame_seq, .. } => {
+            assert_eq!(frame_seq, 7)
+        }
+        other => panic!("expected fresh displayed duplicate guard to hold, got {other:?}"),
+    }
+}
+
+#[test]
+fn stale_rewound_forward_rtp_frame_does_not_clear_displayed_epoch() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let displayed = XbxEngineRenderFrame {
+        frame_seq: 350,
+        rtp_timestamp: Some(1_746_264_948),
+        is_keyframe: false,
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(350, 1_000.0)
+    };
+    let _ = slot.submit_frame(&displayed, 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            assert_eq!(frame.frame_seq, 350);
+            telemetry.record_present(1_020.0);
+        }
+        other => panic!("expected initial displayed frame, got {other:?}"),
+    }
+    let _ = slot.take_ready_frame(1_200.0, &mut telemetry);
+
+    let stale_candidate = XbxEngineRenderFrame {
+        frame_seq: 7,
+        rtp_timestamp: Some(2_856_576_214),
+        is_keyframe: false,
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(7, 900.0)
+    };
+    match slot.submit_frame(&stale_candidate, 1_202.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::DroppedStale { frame_seq, .. } => assert_eq!(frame_seq, 7),
+        other => panic!("expected stale rewound frame to drop, got {other:?}"),
+    }
+    let snapshot = slot.diagnostics_snapshot();
+    assert_eq!(snapshot.displayed_frame_seq, Some(350));
+    assert_eq!(snapshot.last_presented_frame_seq, Some(350));
+    assert!(snapshot.pending_frame_seqs.is_empty());
+}
+
+#[test]
+fn begin_media_epoch_clears_displayed_frame_without_stopping_render_loop() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let _ = slot.submit_frame(&mk_frame(120, 1_000.0), 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 120),
+        other => panic!("expected initial frame present, got {other:?}"),
+    }
+    slot.render_loop_started = true;
+
+    slot.begin_media_epoch();
+
+    assert!(
+        slot.displayed_frame().is_none(),
+        "media epoch switch should not retain previous source frame"
+    );
+    assert!(slot.render_loop_started);
+    match slot.take_ready_frame(1_030.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::NoPendingFrame => {}
+        other => panic!("expected no old retained frame after media epoch switch, got {other:?}"),
+    }
+}
+
+#[test]
 fn older_pending_candidate_is_rejected_and_current_pending_is_preserved() {
     let mut slot = ScheduledFrameSlot::default();
     let mut telemetry = HostCadenceTelemetry::default();
@@ -150,6 +341,55 @@ fn older_pending_candidate_is_rejected_and_current_pending_is_preserved() {
             assert_eq!(frame.rtp_timestamp, Some(500));
         }
         other => panic!("expected preserved pending frame to present, got {other:?}"),
+    }
+}
+
+#[test]
+fn pending_slot_prefers_forward_rtp_timeline_over_rewound_frame_seq() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let old_timeline_pending = XbxEngineRenderFrame {
+        frame_seq: 350,
+        rtp_timestamp: Some(1_746_264_948),
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(350, 1_020.0)
+    };
+    match slot.submit_frame(&old_timeline_pending, 1_021.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected old timeline pending accepted, got {other:?}"),
+    }
+
+    let forward_timeline_candidate = XbxEngineRenderFrame {
+        frame_seq: 7,
+        rtp_timestamp: Some(2_856_576_214),
+        frame_recovery_disposition: None,
+        presentation_value_role: Some("steady_continuation".to_string()),
+        ..mk_frame(7, 1_022.0)
+    };
+    match slot.submit_frame(&forward_timeline_candidate, 1_023.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted {
+            frame_seq,
+            overwrote_pending,
+            replaced_frame_seq,
+            ..
+        } => {
+            assert_eq!(frame_seq, 7);
+            assert!(overwrote_pending);
+            assert_eq!(replaced_frame_seq, Some(350));
+        }
+        other => panic!("expected forward RTP candidate to replace old pending, got {other:?}"),
+    }
+
+    let snapshot = slot.diagnostics_snapshot();
+    assert_eq!(snapshot.pending_frame_seqs, vec![7]);
+    match slot.take_ready_frame(1_030.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            assert_eq!(frame.frame_seq, 7);
+            assert_eq!(frame.rtp_timestamp, Some(2_856_576_214));
+        }
+        other => panic!("expected forward RTP pending frame to present, got {other:?}"),
     }
 }
 
@@ -225,7 +465,7 @@ fn retained_displayed_frame_does_not_enter_starved_or_no_pending_streak() {
     assert_eq!(telemetry.present_epoch(), 1);
     assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
 
-    for offset in [0.0, 50.0, 100.0, 150.0] {
+    for offset in [0.0, 40.0, 80.0, 120.0] {
         match slot.take_ready_frame(1_030.0 + offset, &mut telemetry) {
             ScheduledFrameTakeOutcome::RetainedDisplayedFrame(frame) => {
                 assert_eq!(frame.frame_seq, 30)
@@ -235,16 +475,50 @@ fn retained_displayed_frame_does_not_enter_starved_or_no_pending_streak() {
     }
     assert_eq!(telemetry.no_pending_streak, 0);
     assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
-    assert!(
-        telemetry
-            .latest_present_time_ms
-            .is_some_and(|t| t >= 1_180.0),
-        "present refresh should advance latest_present_time_ms"
+    assert_eq!(
+        telemetry.latest_present_time_ms,
+        Some(1_020.0),
+        "display hold refresh should keep source-present freshness tied to the last real frame"
     );
     assert!(
         telemetry.present_fps() < 30.0,
         "display hold refresh must not inflate present_fps toward display tick rate"
     );
+}
+
+#[test]
+fn stale_retained_displayed_frame_stops_refreshing_present_freshness() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    let _ = slot.submit_frame(&mk_frame(31, 1_000.0), 1_010.0, &mut telemetry);
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            assert_eq!(frame.frame_seq, 31);
+            telemetry.record_present(1_020.0);
+        }
+        other => panic!("expected initial present, got {other:?}"),
+    }
+
+    match slot.take_ready_frame(1_179.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame(frame) => assert_eq!(frame.frame_seq, 31),
+        other => panic!("expected retained displayed frame inside stale budget, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_180.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrameStale {
+            frame,
+            frame_age_ms,
+            frame_age_budget_ms,
+        } => {
+            assert_eq!(frame.frame_seq, 31);
+            assert_eq!(frame_age_ms, 180.0);
+            assert_eq!(frame_age_budget_ms, 180.0);
+        }
+        other => panic!("expected stale retained displayed frame, got {other:?}"),
+    }
+    assert_eq!(telemetry.latest_present_time_ms, Some(1_020.0));
+    assert_eq!(telemetry.no_pending_streak, 1);
+    assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Starved);
 }
 
 #[test]
@@ -413,6 +687,37 @@ fn steady_frame_age_budget_uses_display_interval_floor() {
     assert!(
         budget >= 45.0,
         "steady budget should track display interval floor, got {budget}"
+    );
+}
+
+#[test]
+fn submitted_frame_stale_gate_uses_host_mailbox_recovery_budget() {
+    let mut telemetry = HostCadenceTelemetry::default();
+    telemetry.present_epoch = 4;
+    telemetry.cadence_phase = HostCadencePhase::Starved;
+    let mut frame = mk_frame(80, 1_000.0);
+    frame.is_keyframe = true;
+    frame.recovery_owner_rtp_timestamp = frame.rtp_timestamp;
+    frame.presentation_value_role = Some("fresh_anchor".to_string());
+
+    assert!(
+        telemetry.frame_age_budget_ms() < 90.0,
+        "base budget should stay tight before recovery expansion"
+    );
+    assert!(
+        !submitted_frame_is_stale_for_host_mailbox(&telemetry, &frame, 1_090.0),
+        "host presenter pre-gate must use the same recovery-aware budget as ScheduledFrameSlot"
+    );
+}
+
+#[test]
+fn submitted_frame_stale_gate_still_rejects_ordinary_over_budget_frame() {
+    let telemetry = HostCadenceTelemetry::default();
+    let frame = mk_frame(81, 1_000.0);
+
+    assert!(
+        submitted_frame_is_stale_for_host_mailbox(&telemetry, &frame, 1_500.0),
+        "ordinary frame should still be rejected once it exceeds mailbox submit budget"
     );
 }
 

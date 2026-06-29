@@ -149,6 +149,11 @@ class TraceProfile:
     first_ts: int | None
     last_ts: int | None
     duration_ms: int | None
+    trace_mode_counts: Counter[str]
+    trace_profile_counts: Counter[str]
+    dimension_counts: Counter[str]
+    importance_counts: Counter[str]
+    trace_budget_notice_count: int
     category_counts: Counter[str]
     domain_counts: Counter[str]
     event_counts: Counter[str]
@@ -1750,6 +1755,13 @@ def build_trace_profile(
     recovery_silence_threshold_ms: int,
     metric_name: str | None = None,
 ) -> TraceProfile:
+    trace_mode_counts = Counter(str(row.get("traceMode", "legacy")) for row in rows)
+    trace_profile_counts = Counter(
+        str(row.get("traceProfile", row.get("traceMode", "legacy"))) for row in rows
+    )
+    dimension_counts = Counter(str(row.get("dimension", "legacy")) for row in rows)
+    importance_counts = Counter(str(row.get("importance", "legacy")) for row in rows)
+    trace_budget_notice_count = sum(1 for row in rows if row.get("event") == "traceBudgetNotice")
     category_counts = Counter(str(row.get("category", "unknown")) for row in rows)
     domain_counts = Counter(str(row.get("domain", "unknown")) for row in rows)
     event_counts = Counter(
@@ -1811,6 +1823,11 @@ def build_trace_profile(
         first_ts=first_ts,
         last_ts=last_ts,
         duration_ms=duration_ms,
+        trace_mode_counts=trace_mode_counts,
+        trace_profile_counts=trace_profile_counts,
+        dimension_counts=dimension_counts,
+        importance_counts=importance_counts,
+        trace_budget_notice_count=trace_budget_notice_count,
         category_counts=category_counts,
         domain_counts=domain_counts,
         event_counts=event_counts,
@@ -2209,6 +2226,11 @@ def build_machine_summary(
             "timeWindow": args.time_window,
         },
         "counts": {
+            "traceModes": dict(profile.trace_mode_counts),
+            "traceProfiles": dict(profile.trace_profile_counts),
+            "dimensions": dict(profile.dimension_counts),
+            "importance": dict(profile.importance_counts),
+            "traceBudgetNotices": profile.trace_budget_notice_count,
             "categories": dict(profile.category_counts),
             "domains": dict(profile.domain_counts),
             "eventsTop": dict(profile.event_counts.most_common(args.top_events)),
@@ -2252,6 +2274,24 @@ def print_profile(profile: TraceProfile, args: argparse.Namespace) -> None:
         f"time_range_ms: {profile.first_ts} -> {profile.last_ts} "
         f"(duration={fmt_ms(profile.duration_ms)})"
     )
+    print(
+        "trace_profiles: "
+        + ", ".join(f"{name}={count}" for name, count in profile.trace_profile_counts.most_common())
+    )
+    print(
+        "trace_modes: "
+        + ", ".join(f"{name}={count}" for name, count in profile.trace_mode_counts.most_common())
+    )
+    print(
+        "dimensions: "
+        + ", ".join(f"{name}={count}" for name, count in profile.dimension_counts.most_common())
+    )
+    print(
+        "importance: "
+        + ", ".join(f"{name}={count}" for name, count in profile.importance_counts.most_common())
+    )
+    if profile.trace_budget_notice_count:
+        print(f"trace_budget_notices: {profile.trace_budget_notice_count}")
     print(
         "categories: "
         + ", ".join(f"{name}={count}" for name, count in profile.category_counts.most_common())

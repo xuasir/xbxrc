@@ -1,7 +1,8 @@
 use super::types::{VideoPlatformCapabilities, VideoPlatformKind};
 use super::{
     clear_host_present_tick_dispatch, finish_host_present_tick_dispatch,
-    request_host_present_tick_dispatch, reset_viewport_present_runtime_state,
+    host_present_tick_dispatch_diagnostics, request_host_present_tick_dispatch,
+    rescue_stale_host_present_tick_dispatch, reset_viewport_present_runtime_state,
     resolve_display_layer_layout, resolve_host_timing_record_policy,
     should_emit_sampled_host_timing, should_reattach_viewport, should_update_scale,
     take_wgpu_scheduled_frame, HostPresentTickGuard, HostTimingRecordPolicy,
@@ -245,6 +246,10 @@ fn host_timing_record_policy_samples_high_frequency_present_path() {
         HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
+        resolve_host_timing_record_policy("present_tick_immediate_deferred"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
         resolve_host_timing_record_policy("present_tick_rerun"),
         HostTimingRecordPolicy::Sampled
     );
@@ -424,4 +429,76 @@ fn clear_host_present_tick_dispatch_resets_pending_and_followup_state() {
 
     assert!(!pending.load(Ordering::Relaxed));
     assert!(!rerun_requested.load(Ordering::Relaxed));
+}
+
+#[test]
+fn stale_host_present_tick_dispatch_rescue_releases_stuck_pending() {
+    let pending = Arc::new(AtomicBool::new(true));
+    let rerun_requested = Arc::new(AtomicBool::new(true));
+    let telemetry = Arc::new(Mutex::new(MacOsWgpuTelemetry::default()));
+    telemetry
+        .lock()
+        .expect("lock telemetry")
+        .record_present(1_000.0);
+
+    assert!(rescue_stale_host_present_tick_dispatch(
+        &pending,
+        &rerun_requested,
+        &telemetry,
+        1_300.0,
+    ));
+    assert!(!pending.load(Ordering::Relaxed));
+    assert!(!rerun_requested.load(Ordering::Relaxed));
+}
+
+#[test]
+fn fresh_host_present_tick_dispatch_rescue_keeps_pending() {
+    let pending = Arc::new(AtomicBool::new(true));
+    let rerun_requested = Arc::new(AtomicBool::new(true));
+    let telemetry = Arc::new(Mutex::new(MacOsWgpuTelemetry::default()));
+    telemetry
+        .lock()
+        .expect("lock telemetry")
+        .record_present(1_000.0);
+
+    assert!(!rescue_stale_host_present_tick_dispatch(
+        &pending,
+        &rerun_requested,
+        &telemetry,
+        1_100.0,
+    ));
+    assert!(pending.load(Ordering::Relaxed));
+    assert!(rerun_requested.load(Ordering::Relaxed));
+}
+
+#[test]
+fn host_present_tick_dispatch_diagnostics_reports_rescue_context() {
+    let pending = Arc::new(AtomicBool::new(true));
+    let rerun_requested = Arc::new(AtomicBool::new(true));
+    let telemetry = Arc::new(Mutex::new(MacOsWgpuTelemetry::default()));
+    {
+        let mut telemetry = telemetry.lock().expect("lock telemetry");
+        telemetry.record_display_tick(980.0);
+        telemetry.record_display_tick(996.0);
+        telemetry.record_enqueue(1_010.0);
+        telemetry.record_present(1_000.0);
+    }
+
+    let details = host_present_tick_dispatch_diagnostics(
+        "displayLink",
+        &pending,
+        &rerun_requested,
+        &telemetry,
+        1_300.0,
+    );
+
+    assert_eq!(details["source"], "displayLink");
+    assert_eq!(details["pendingBefore"], true);
+    assert_eq!(details["rerunBefore"], true);
+    assert_eq!(details["presentAgeMs"], 300.0);
+    assert_eq!(details["submitAgeMs"], 290.0);
+    assert_eq!(details["hostDisplayTickEpoch"], 2);
+    assert_eq!(details["hostFramePresentEpoch"], 1);
+    assert_eq!(details["hostCadencePhase"], "steady");
+    assert_eq!(details["hostMailboxEnqueueCountTotal"], 1);
 }

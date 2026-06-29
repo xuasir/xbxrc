@@ -4,6 +4,9 @@ use super::decode_sync::{
     decoder_no_output_request_idr_control_active_from_stats, decoder_reference_synced_from_stats,
     decoder_waiting_keyframe_control_active_from_stats, receiver_nack_exhausted_from_stats,
 };
+use super::display::{
+    current_displayed_idr_at_ms_from_stats, current_playback_recovered_at_ms_from_stats,
+};
 use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
 use crate::XbxEngineMediaRuntimeStats;
 
@@ -38,10 +41,10 @@ pub(crate) struct ReferenceChainObservation {
     pub submit_age_ms: Option<f64>,
 }
 
-fn had_prior_playback_output(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    stats.recovery_decoder_reference_synced_at_ms.is_some()
-        || stats.recovery_playback_recovered_at_ms.is_some()
-        || stats.recovery_displayed_idr_at_ms.is_some()
+fn had_current_playback_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    decoder_reference_synced_from_stats(stats, now_ms)
+        || current_playback_recovered_at_ms_from_stats(stats).is_some()
+        || current_displayed_idr_at_ms_from_stats(stats).is_some()
 }
 
 pub(crate) fn derive_reference_chain_state_from_stats(
@@ -106,15 +109,15 @@ pub(crate) fn derive_reference_chain_state_from_stats(
     }
 
     if !decoder_reference_synced && !bootstrap_ready {
-        let had_prior_output = had_prior_playback_output(stats);
-        if had_prior_output && nack_exhausted {
+        let had_current_output = had_current_playback_output(stats, now_ms);
+        if had_current_output && nack_exhausted {
             return ReferenceChainObservation {
                 state: ReferenceChainState::NeedKeyframe,
                 cause: "post-reset-gap-exhausted",
                 ..base()
             };
         }
-        if !had_prior_output {
+        if !had_current_output {
             return ReferenceChainObservation {
                 state: ReferenceChainState::Unknown,
                 cause: "bootstrap-missing-priming",

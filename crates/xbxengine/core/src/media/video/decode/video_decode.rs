@@ -18,7 +18,7 @@ use crate::{
     XbxEngineRuntimeError,
 };
 
-const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 3;
+const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 4;
 const DECODE_OUTPUT_MAILBOX_BASE_CAPACITY: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 2;
@@ -262,6 +262,7 @@ pub(crate) struct XbxVideoDecodeState {
     first_video_packet_logged: bool,
     decoded_inflight_current: Option<DecodedFrame>,
     decoded_stressed_next_candidate: Option<DecodedFrame>,
+    decoded_stressed_burst_candidate: Option<DecodedFrame>,
     decoded_latest_candidate: Option<DecodedFrame>,
     last_decode_ok_time_ms: Option<f64>,
     last_encoded_frame_time_ms: Option<f64>,
@@ -325,6 +326,7 @@ impl XbxVideoDecodeState {
             first_video_packet_logged: false,
             decoded_inflight_current: None,
             decoded_stressed_next_candidate: None,
+            decoded_stressed_burst_candidate: None,
             decoded_latest_candidate: None,
             last_decode_ok_time_ms: None,
             last_encoded_frame_time_ms: None,
@@ -1156,6 +1158,7 @@ impl XbxVideoDecodeState {
             self.decoded_inflight_current = self
                 .decoded_stressed_next_candidate
                 .take()
+                .or_else(|| self.decoded_stressed_burst_candidate.take())
                 .or_else(|| self.decoded_latest_candidate.take());
         }
         self.decoded_inflight_current.take()
@@ -1164,6 +1167,7 @@ impl XbxVideoDecodeState {
     pub(crate) fn has_decoded_frame(&self) -> bool {
         self.decoded_inflight_current.is_some()
             || self.decoded_stressed_next_candidate.is_some()
+            || self.decoded_stressed_burst_candidate.is_some()
             || self.decoded_latest_candidate.is_some()
     }
 
@@ -1204,6 +1208,7 @@ impl XbxVideoDecodeState {
         self.decoded_inflight_current
             .as_ref()
             .or(self.decoded_stressed_next_candidate.as_ref())
+            .or(self.decoded_stressed_burst_candidate.as_ref())
             .or(self.decoded_latest_candidate.as_ref())
     }
 
@@ -1211,7 +1216,7 @@ impl XbxVideoDecodeState {
         self.decoded_output_mailbox_len()
     }
 
-    /// 普通路径保持 current+latest 两槽；present pipeline stressed 时启用三槽。
+    /// 普通路径保持 current+latest 两槽；present pipeline stressed 时启用短突发四槽。
     #[cfg(test)]
     pub(crate) fn decoded_frame_queue_is_full(&self) -> bool {
         self.decoded_output_mailbox_len() >= self.decoded_output_mailbox_capacity()
@@ -1233,7 +1238,10 @@ impl XbxVideoDecodeState {
         Self::normalize_decoded_surface_recovery_metadata(&mut frame);
         let incoming_frame_seq = frame.surface.frame_seq;
         let observed_at_ms = frame.surface.rendered_at_ms;
-        if self.decoded_frame_is_stale(&frame, Instant::now()) {
+        let stale_after_decode = self.decoded_frame_is_stale(&frame, Instant::now());
+        let stale_frame_must_drop =
+            frame.is_keyframe || frame.clean_anchor_commit_recovery_epoch.is_some();
+        if stale_after_decode && (self.decoded_output_mailbox_len() > 0 || stale_frame_must_drop) {
             self.record_decode_output_drop("staleAfterDecode");
             self.record_decode_candidate_decision(
                 XbxDecodeCandidateState::Backpressure,
@@ -1249,6 +1257,7 @@ impl XbxVideoDecodeState {
         if self.present_pipeline_stressed
             && self.decoded_inflight_current.is_none()
             && self.decoded_stressed_next_candidate.is_none()
+            && self.decoded_stressed_burst_candidate.is_none()
             && self.decoded_latest_candidate.is_none()
         {
             self.decoded_inflight_current = Some(frame);
@@ -1274,6 +1283,29 @@ impl XbxVideoDecodeState {
             && self.decoded_latest_candidate.is_some()
         {
             self.decoded_stressed_next_candidate = self.decoded_latest_candidate.take();
+            self.decoded_latest_candidate = Some(frame);
+            self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
+            if matches!(
+                self.decode_candidate_state,
+                XbxDecodeCandidateState::Backpressure
+            ) {
+                self.record_decode_candidate_decision(
+                    XbxDecodeCandidateState::Nominal,
+                    "accept",
+                    "mailboxRecovered",
+                    Some(incoming_frame_seq),
+                    None,
+                    observed_at_ms,
+                );
+            }
+            return None;
+        }
+
+        if self.present_pipeline_stressed
+            && self.decoded_stressed_burst_candidate.is_none()
+            && self.decoded_latest_candidate.is_some()
+        {
+            self.decoded_stressed_burst_candidate = self.decoded_latest_candidate.take();
             self.decoded_latest_candidate = Some(frame);
             self.last_decode_latest_replace_at_ms = Some(observed_at_ms);
             if matches!(
@@ -1412,6 +1444,7 @@ impl XbxVideoDecodeState {
         for existing in [
             self.decoded_inflight_current.as_ref(),
             self.decoded_stressed_next_candidate.as_ref(),
+            self.decoded_stressed_burst_candidate.as_ref(),
             self.decoded_latest_candidate.as_ref(),
         ]
         .into_iter()
@@ -1440,6 +1473,7 @@ impl XbxVideoDecodeState {
     fn decoded_output_mailbox_len(&self) -> usize {
         usize::from(self.decoded_inflight_current.is_some())
             + usize::from(self.decoded_stressed_next_candidate.is_some())
+            + usize::from(self.decoded_stressed_burst_candidate.is_some())
             + usize::from(self.decoded_latest_candidate.is_some())
     }
 
@@ -1454,6 +1488,7 @@ impl XbxVideoDecodeState {
     fn clear_decoded_output_mailbox(&mut self) {
         self.decoded_inflight_current = None;
         self.decoded_stressed_next_candidate = None;
+        self.decoded_stressed_burst_candidate = None;
         self.decoded_latest_candidate = None;
     }
 
@@ -2163,6 +2198,7 @@ impl XbxVideoDecodeState {
             first_video_packet_logged: false,
             decoded_inflight_current: None,
             decoded_stressed_next_candidate: None,
+            decoded_stressed_burst_candidate: None,
             decoded_latest_candidate: None,
             last_decode_ok_time_ms: None,
             last_encoded_frame_time_ms: None,

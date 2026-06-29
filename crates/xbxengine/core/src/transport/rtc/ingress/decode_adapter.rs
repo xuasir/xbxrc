@@ -35,7 +35,10 @@ impl DecodeIngressAdapter {
     ) {
         let host_stall_throttle = self.post_decode.host_stall_throttle_enabled();
         let now = Instant::now();
-        let _ = ingress.drain_expired_for_decode(now);
+        if !host_stall_throttle {
+            let _ = ingress.drain_expired_for_decode(now);
+        }
+        let mut host_stall_continuation_submitted = false;
         loop {
             let demand = self.decode_handle.demand_snapshot();
             if !demand.accepts_input {
@@ -53,7 +56,10 @@ impl DecodeIngressAdapter {
                 ingress.discard_non_keyframe_prefix_for_host_stall(MAX_HOST_STALL_HEAD_DISCARDS);
                 match ingress.peek_front() {
                     None => break,
-                    Some(front) if !front.is_keyframe => break,
+                    Some(front) if !front.is_keyframe && host_stall_continuation_submitted => break,
+                    Some(front) if !front.is_keyframe => {
+                        host_stall_continuation_submitted = true;
+                    }
                     _ => {}
                 }
             }

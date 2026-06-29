@@ -10,12 +10,14 @@ fn apply_release_runtime_trace_patch_clamp(
     #[cfg(not(debug_assertions))]
     {
         let mut patch = patch;
-        if patch.contains_key("runtime_trace_mode") {
+        if let Some(mode) = patch.get("runtime_trace_mode").and_then(Value::as_str) {
+            let effective_mode = crate::mods::runtime_trace::effective_runtime_trace_mode(mode);
             patch.insert(
                 "runtime_trace_mode".to_string(),
-                Value::String("off".to_string()),
+                Value::String(effective_mode),
             );
         }
+        patch.remove("runtime_trace_dimensions");
         patch
     }
     #[cfg(debug_assertions)]
@@ -24,18 +26,50 @@ fn apply_release_runtime_trace_patch_clamp(
     }
 }
 
-fn apply_runtime_trace_mode_live(app_handle: &tauri::AppHandle, mode: &str) -> AppResult<()> {
+fn apply_runtime_trace_config_live(app_handle: &tauri::AppHandle, config: &Value) -> AppResult<()> {
+    let stored_mode = config
+        .get("runtime_trace_mode")
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| {
+            if cfg!(debug_assertions) {
+                "dev"
+            } else {
+                "production"
+            }
+        });
+    let mode = crate::mods::runtime_trace::effective_runtime_trace_mode(stored_mode);
+    let dimensions = if cfg!(debug_assertions) {
+        std::env::var("XBX_TRACE_DIMENSIONS")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| {
+                config
+                    .get("runtime_trace_dimensions")
+                    .and_then(Value::as_str)
+                    .map(std::string::ToString::to_string)
+            })
+    } else {
+        None
+    };
     let state = app_handle.state::<AppState>();
     state
         .runtime_trace
-        .apply_trace_mode(mode)
+        .apply_trace_config(&mode, dimensions.as_deref())
         .map_err(|error| {
             crate::error::AppError::Internal(format!("runtime trace mode apply failed: {error}"))
         })?;
-    crate::mods::runtime_trace::apply_xbxengine_trace_logging(mode);
-    let interval = crate::mods::runtime_trace::stats_snapshot_interval(mode);
+    crate::mods::runtime_trace::apply_xbxengine_trace_logging(
+        state.runtime_trace.trace_profile(),
+        state.runtime_trace.trace_dimensions(),
+    );
+    let interval =
+        crate::mods::runtime_trace::stats_snapshot_interval(state.runtime_trace.trace_profile());
     state.xbxengine.set_stats_snapshot_interval(interval);
-    log::debug!("Runtime trace mode applied live (mode={})", mode);
+    log::debug!(
+        "Runtime trace mode applied live (mode={}, dimensions={})",
+        mode,
+        state.runtime_trace.trace_dimensions().expression()
+    );
     Ok(())
 }
 
@@ -73,17 +107,13 @@ pub async fn handle_rpc(
         ConfigCommand::Get { keys } => service.get_by_keys(&keys).map_err(Into::into),
         ConfigCommand::Set { patch } => {
             let patch = apply_release_runtime_trace_patch_clamp(patch);
-            let touch_runtime_trace = patch.contains_key("runtime_trace_mode");
+            let touch_runtime_trace = patch.contains_key("runtime_trace_mode")
+                || patch.contains_key("runtime_trace_dimensions");
             let result = service
                 .set_by_patch(&patch)
                 .map_err(crate::error::AppError::from)?;
             if touch_runtime_trace {
-                if let Some(mode) = result
-                    .get("runtime_trace_mode")
-                    .and_then(|value| value.as_str())
-                {
-                    apply_runtime_trace_mode_live(&app_handle, mode)?;
-                }
+                apply_runtime_trace_config_live(&app_handle, &result)?;
             }
             Ok(result)
         }

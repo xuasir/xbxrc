@@ -40,6 +40,7 @@ pub struct XbxEngineVideoFrameStats {
     pub width: u32,
     pub height: u32,
     pub frame_seq: u64,
+    pub rtp_timestamp: Option<u32>,
     pub fps: f64,
     pub rendered_at_ms: f64,
 }
@@ -383,10 +384,12 @@ pub fn compare_latest_only_frame_meta(
             incoming.recovery_owner_rtp_timestamp,
         ) {
             (Some(existing_owner), Some(incoming_owner)) => {
-                match existing_owner.cmp(&incoming_owner) {
-                    std::cmp::Ordering::Greater => return 1,
-                    std::cmp::Ordering::Less => return -1,
-                    std::cmp::Ordering::Equal => {}
+                if existing_owner != incoming_owner {
+                    return if rtp_timestamp_is_after(incoming_owner, existing_owner) {
+                        -1
+                    } else {
+                        1
+                    };
                 }
             }
             (Some(_), None) => {
@@ -420,11 +423,14 @@ pub fn compare_latest_only_frame_meta(
     }
 
     match (existing.rtp_timestamp, incoming.rtp_timestamp) {
-        (Some(existing_rtp), Some(incoming_rtp)) => match existing_rtp.cmp(&incoming_rtp) {
-            std::cmp::Ordering::Greater => return 1,
-            std::cmp::Ordering::Less => return -1,
-            std::cmp::Ordering::Equal => {}
-        },
+        (Some(existing_rtp), Some(incoming_rtp)) if existing_rtp != incoming_rtp => {
+            return if rtp_timestamp_is_after(incoming_rtp, existing_rtp) {
+                -1
+            } else {
+                1
+            };
+        }
+        (Some(_), Some(_)) => {}
         (Some(_), None) => return 1,
         (None, Some(_)) => return -1,
         (None, None) => {}
@@ -447,6 +453,22 @@ pub fn compare_latest_only_frame_meta(
         -1
     } else {
         0
+    }
+}
+
+fn rtp_timestamp_is_after(candidate: u32, current: u32) -> bool {
+    candidate != current && candidate.wrapping_sub(current) < (1_u32 << 31)
+}
+
+fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
+    if streak >= 180 {
+        "critical"
+    } else if streak >= 60 {
+        "high"
+    } else if streak >= 20 {
+        "elevated"
+    } else {
+        "normal"
     }
 }
 
@@ -1464,6 +1486,7 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
                 width: 1280,
                 height: 720,
                 frame_seq: self.negotiation_count as u64,
+                rtp_timestamp: Some(self.negotiation_count as u32),
                 fps: 60.0,
                 rendered_at_ms: frame_clock + 12.0,
             }),
@@ -1580,8 +1603,13 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
     ) -> Result<(), XbxEngineRuntimeError> {
         self.last_runtime_stats.latest_host_mailbox_submit_time_ms =
             metrics.latest_host_submit_time_ms;
+        self.last_runtime_stats
+            .latest_video_host_submit_rtp_timestamp = metrics.latest_host_submit_rtp_timestamp;
         self.last_runtime_stats.latest_video_host_present_time_ms =
             metrics.latest_host_present_time_ms;
+        self.last_runtime_stats.host_view_generation = metrics.host_view_generation;
+        self.last_runtime_stats.latest_host_view_created_at_ms =
+            metrics.latest_host_view_created_at_ms;
         self.last_runtime_stats.host_mailbox_submit_epoch = metrics.host_mailbox_submit_epoch;
         self.last_runtime_stats.host_display_tick_epoch = metrics.host_display_tick_epoch;
         let prev_present_epoch = self.last_runtime_stats.host_frame_present_epoch;
@@ -1608,6 +1636,16 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
             metrics.host_mailbox_drop_count_total;
         self.last_runtime_stats.host_mailbox_overwrite_count_total =
             metrics.host_mailbox_overwrite_count_total;
+        self.last_runtime_stats.host_no_pending_take_count_total =
+            metrics.no_pending_take_count_total;
+        self.last_runtime_stats.host_no_pending_streak = metrics.no_pending_streak;
+        self.last_runtime_stats.host_no_pending_max_streak = metrics.no_pending_max_streak;
+        self.last_runtime_stats.host_no_pending_pressure_level =
+            Some(resolve_no_pending_pressure_level(metrics.no_pending_streak).to_string());
+        self.last_runtime_stats.last_displayed_frame_seq = metrics.last_displayed_frame_seq;
+        self.last_runtime_stats.last_displayed_frame_rtp_timestamp =
+            metrics.last_displayed_frame_rtp_timestamp;
+        self.last_runtime_stats.last_displayed_at_ms = metrics.last_displayed_at_ms;
         self.last_runtime_stats.video_present_descriptor_upload_mode =
             metrics.descriptor_upload_mode;
         self.last_runtime_stats

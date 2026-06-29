@@ -6,10 +6,13 @@ Each trace row is one JSON object in `jsonl` format.
 
 Stable top-level fields:
 
-- `schemaVersion`: current schema version. Treat version drift as a parsing risk. Version `2` adds `traceMode` and keeps prior fields.
+- `schemaVersion`: current schema version. Treat version drift as a parsing risk. Version `2` adds `traceMode`; version `3` adds `traceProfile`, `dimension`, and `importance`.
 - `seq`: per-file monotonic sequence number. Use this as the most stable row anchor.
 - `tsMs`: wall-clock timestamp in milliseconds.
-- `traceMode` (schema ≥2): setting at file creation time — one of `off`, `minimal`, `standard`, `verbose`, `trace`. Missing on legacy files (treat as unknown / pre-settings UI).
+- `traceMode` (schema ≥2): compatibility field. On v3 traces it matches the effective profile (`off`, `production`, or `dev`). On v2 traces it may contain older settings such as `minimal`, `standard`, `verbose`, or `trace`.
+- `traceProfile` (schema ≥3): effective writer profile. Values are `off`, `production`, or `dev`.
+- `dimension` (schema ≥3): diagnostic surface for the row. Values are `core`, `lifecycle`, `network`, `recovery`, `media_supply`, `presentation`, `input`, `native_video`, `frontend`, or `engine_log`.
+- `importance` (schema ≥3): retention class for the row. Values are `essential`, `key`, `debug`, or `raw`.
 - `category`: one of `event`, `decision`, `state`, `snapshot`, `log`.
 - `domain`: emitting subsystem, for example `streaming`, `xbxengine`, `trace`, or `data`.
 - `event`: event name within the domain.
@@ -17,6 +20,30 @@ Stable top-level fields:
 - `payload`: structured event payload.
 
 Primary writer: `src-tauri/src/mods/runtime_trace/service.rs`.
+
+## Profile And Budget Semantics
+
+- `production`: release default. Keeps essential/key rows for the production dimensions and writes bounded trace files.
+- `dev`: debug default. Keeps detailed diagnostics; `engine_log` is enabled only when the dimension expression includes it.
+- `off`: closes the trace writer.
+- Production file budget: 16MB per file, 5 files retained.
+- Dev file budget: 64MB per file, 10 files retained.
+- `fileOpened` rows include `traceProfile`, active `dimensions`, and `budget`.
+- `budgetRotate` in `fileOpened.payload.reason` means the active file exceeded its profile budget and a new trace file opened.
+- `traceBudgetNotice` means debug/raw rows were dropped under writer queue pressure. Treat essential/key rows as the retained evidence lane.
+
+Dimension configuration:
+
+- Production ignores custom dimension expressions and uses the fixed production set: `core,lifecycle,network,recovery,media_supply,presentation,frontend,native_video`.
+- Dev accepts `XBX_TRACE_DIMENSIONS` or hidden config `runtime_trace_dimensions`.
+- Dimension expressions are comma separated. Positive names build an allowlist, `-name` removes from the default set, and `all` enables every dimension.
+
+Legacy mode mapping:
+
+- `off`, `none`, `0` map to `off`.
+- `production`, `prod`, `minimal`, and `standard` map to `production`.
+- `dev`, `debug`, `verbose`, and `trace` map to `dev`.
+- Release builds downgrade stored `dev` to effective `production`.
 
 ## Category Semantics
 

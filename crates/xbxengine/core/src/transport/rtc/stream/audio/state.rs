@@ -122,7 +122,9 @@ fn write_output_frame(frame: &mut [f32], left: f32, right: f32) {
 #[cfg(test)]
 mod tests {
     use super::AudioPlaybackSharedState;
-    use crate::transport::rtc::stream::audio::OPUS_SAMPLE_RATE_HZ;
+    use crate::transport::rtc::stream::audio::{
+        MAX_BUFFERED_AUDIO_FRAMES, MAX_BUFFERED_AUDIO_LATENCY_MS, OPUS_SAMPLE_RATE_HZ,
+    };
 
     #[test]
     fn playback_buffer_trims_overflow_and_keeps_cursor_bounded() {
@@ -134,8 +136,25 @@ mod tests {
 
         state.enqueue_interleaved_stereo(&samples);
 
-        assert_eq!(state.frames.len(), OPUS_SAMPLE_RATE_HZ as usize);
+        assert_eq!(state.frames.len(), MAX_BUFFERED_AUDIO_FRAMES);
         assert!(state.source_cursor_frames <= (state.frames.len().saturating_sub(1)) as f64);
+    }
+
+    #[test]
+    fn playback_buffer_caps_latency_for_low_latency_streaming() {
+        let mut state = AudioPlaybackSharedState::default();
+        let mut samples = Vec::new();
+        for _ in 0..OPUS_SAMPLE_RATE_HZ as usize {
+            samples.extend_from_slice(&[0.25, -0.25]);
+        }
+
+        state.enqueue_interleaved_stereo(&samples);
+
+        assert!(
+            state.current_output_metrics().playout_latency_ms <= {
+                MAX_BUFFERED_AUDIO_LATENCY_MS as f64
+            }
+        );
     }
 
     #[test]

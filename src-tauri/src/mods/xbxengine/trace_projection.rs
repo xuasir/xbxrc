@@ -42,6 +42,25 @@ fn retained_old_frame_risk(
     source_frame_stale && no_pending_streak.unwrap_or(0) > 0
 }
 
+fn ingress_queue_depth_breakdown_payload(
+    breakdown: Option<&xbxengine_protocol::XbxEngineIngressQueueDepthBreakdownObservationDto>,
+) -> Option<Value> {
+    breakdown.map(|breakdown| {
+        json!({
+            "senderQueueDepth": breakdown.sender_queue_depth,
+            "senderMaxCapacity": breakdown.sender_max_capacity,
+            "senderQueueLimit": breakdown.sender_queue_limit,
+            "senderRemainingCapacity": breakdown.sender_remaining_capacity,
+            "pendingPriorityPrimaryLen": breakdown.pending_priority_primary_len,
+            "pendingPriorityPrimaryLimit": breakdown.pending_priority_primary_limit,
+            "pendingRepairLen": breakdown.pending_repair_len,
+            "pendingRepairLimit": breakdown.pending_repair_limit,
+            "pendingBestEffortLen": breakdown.pending_best_effort_len,
+            "pendingBestEffortLimit": breakdown.pending_best_effort_limit,
+        })
+    })
+}
+
 /// 当 presentation 进入 `displaySupplyStarved` 时，把上游卡点收成可读 blocker（仅 trace/UI）。
 /// 优先级：decode→clean anchor→display stable 闭环缺口，最后才是 generic wait-idr。
 fn derive_display_supply_starved_blocker(stats: &XbxEngineStatsDto) -> Option<String> {
@@ -161,6 +180,8 @@ pub(super) struct RuntimeTraceObservationState {
         String,
         String,
         String,
+        Option<String>,
+        Option<String>,
         Option<String>,
         Option<String>,
         Option<String>,
@@ -661,7 +682,8 @@ pub(super) fn record_runtime_trace_observations(
     session_id: Option<&str>,
     stats: &XbxEngineStatsDto,
 ) {
-    let trace_mode = runtime_trace.trace_mode();
+    let low_noise_profile = runtime_trace.trace_profile()
+        == crate::mods::runtime_trace::RuntimeTraceProfile::Production;
     let latest_rtcp_send_failure = latest_rtcp_send_failure_from_stats(stats);
     let latest_rtcp_send_failure_signature = latest_rtcp_send_failure
         .as_ref()
@@ -738,6 +760,7 @@ pub(super) fn record_runtime_trace_observations(
                     "height": frame_drop.height,
                     "isKeyframe": frame_drop.is_keyframe,
                     "queueDepth": frame_drop.queue_depth,
+                    "ingressQueueDepthBreakdown": ingress_queue_depth_breakdown_payload(frame_drop.ingress_queue_depth_breakdown.as_ref()),
                 }),
             );
             let decision_event_name = match frame_drop.stage.as_deref() {
@@ -762,6 +785,7 @@ pub(super) fn record_runtime_trace_observations(
                         "frameUnrecoverableReason": frame_drop.frame_unrecoverable_reason,
                         "frameBudget": frame_drop.frame_budget,
                         "queueDepth": frame_drop.queue_depth,
+                        "ingressQueueDepthBreakdown": ingress_queue_depth_breakdown_payload(frame_drop.ingress_queue_depth_breakdown.as_ref()),
                         "observedAtMs": frame_drop.observed_at_ms,
                     }),
                 );
@@ -870,8 +894,8 @@ pub(super) fn record_runtime_trace_observations(
     }
 
     if let Some(observation) = stats.latest_decode_output_path_observation.as_ref() {
-        let material_in_minimal = trace_mode != "minimal" || observation.verdict != "decoded-frame";
-        if material_in_minimal
+        let material_in_low_noise = !low_noise_profile || observation.verdict != "decoded-frame";
+        if material_in_low_noise
             && observation_state.decode_output_path_observation_id
                 != Some(observation.observation_id)
         {
@@ -1139,6 +1163,8 @@ pub(super) fn record_runtime_trace_observations(
             ledger.command_result.clone(),
             ledger.command_detail.clone(),
             ledger.gap_severity.clone(),
+            ledger.proposal_reason_domain.clone(),
+            ledger.reconnect_gate_detail.clone(),
         );
         if observation_state
             .recovery_decision_ledger_signature
@@ -1172,6 +1198,14 @@ pub(super) fn record_runtime_trace_observations(
                     "anchorEvidence": ledger.anchor_evidence,
                     "keyframeEpisodeHealth": ledger.keyframe_episode_health,
                     "escalationBasis": ledger.escalation_basis,
+                    "proposalReason": ledger.proposal_reason,
+                    "proposalReasonLabel": ledger.proposal_reason_label,
+                    "proposalReasonDomain": ledger.proposal_reason_domain,
+                    "proposalReasonDomainBeforeRuntimeResolution": ledger.proposal_reason_domain_before_runtime_resolution,
+                    "proposalReasonDomainAfterRuntimeResolution": ledger.proposal_reason_domain_after_runtime_resolution,
+                    "remoteTerminalDomainPromoted": ledger.remote_terminal_domain_promoted,
+                    "remoteTerminalActive": ledger.remote_terminal_active,
+                    "reconnectGateDetail": ledger.reconnect_gate_detail,
                     "budgetBefore": ledger.budget_before,
                     "budgetAfter": ledger.budget_after,
                     "commandResult": ledger.command_result,
@@ -1677,7 +1711,7 @@ pub(super) fn record_runtime_trace_observations(
             observation_state.h264_inspection_trace_signature = Some(signature);
             let material = inspection.bootstrap_reject_reason.is_some()
                 || !inspection.admission_accepted
-                || trace_mode != "minimal";
+                || !low_noise_profile;
             if material {
                 let payload = h264_inspection_payload(Some(inspection), stats);
                 runtime_trace.record_state(
@@ -2636,14 +2670,12 @@ pub(super) fn record_runtime_trace_observations(
                     }),
                 );
             }
-            Some("runtimeReconnectConsumed") => {
+            Some(label @ ("runtimeReconnectConsumed" | "runtimeReconnectBlocked")) => {
                 runtime_trace.record_event(
                     "xbxengine",
-                    "runtimeReconnectConsumed",
+                    label,
                     session_id,
-                    json!({
-                        "summary": stats.latest_observation_summary,
-                    }),
+                    reconnect_observation_payload(stats.latest_observation_summary.as_deref()),
                 );
             }
             Some(
@@ -2655,9 +2687,7 @@ pub(super) fn record_runtime_trace_observations(
                     "xbxengine",
                     label,
                     session_id,
-                    json!({
-                        "summary": stats.latest_observation_summary,
-                    }),
+                    reconnect_observation_payload(stats.latest_observation_summary.as_deref()),
                 );
             }
             _ => {}
@@ -2958,6 +2988,7 @@ fn keyframe_request_episode_payload(
             "diagnosticDecodeOutputDetail": stats.latest_decode_output_path_observation.as_ref().map(|output| output.detail.clone()),
             "diagnosticFrameDropDetail": stats.latest_video_frame_drop.as_ref().and_then(|drop| drop.detail.clone()),
             "diagnosticFrameDropQueueDepth": stats.latest_video_frame_drop.as_ref().map(|drop| drop.queue_depth),
+            "diagnosticFrameDropIngressQueueDepthBreakdown": ingress_queue_depth_breakdown_payload(stats.latest_video_frame_drop.as_ref().and_then(|drop| drop.ingress_queue_depth_breakdown.as_ref())),
             "diagnosticPendingReason": diagnostic_pending_reason(stats, h264_inspection),
         }),
         None => json!(null),
@@ -3388,6 +3419,85 @@ fn latest_rtcp_send_failure_from_stats(stats: &XbxEngineStatsDto) -> Option<(f64
     let (observed_at_ms_text, reason_text) = rest.split_once(" reason=")?;
     let observed_at_ms = observed_at_ms_text.trim().parse::<f64>().ok()?;
     Some((observed_at_ms, reason_text.to_string()))
+}
+
+fn reconnect_observation_payload(summary: Option<&str>) -> Value {
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "summary".to_string(),
+        summary
+            .map(|value| Value::String(value.to_string()))
+            .unwrap_or(Value::Null),
+    );
+    for (key, value) in reconnect_summary_fields(summary) {
+        payload.insert(key, value);
+    }
+    Value::Object(payload)
+}
+
+fn reconnect_summary_fields(summary: Option<&str>) -> serde_json::Map<String, Value> {
+    let mut fields = serde_json::Map::new();
+    let Some(summary) = summary else {
+        return fields;
+    };
+    for token in summary.split_whitespace() {
+        let Some((raw_key, raw_value)) = token.split_once('=') else {
+            continue;
+        };
+        let Some(key) = reconnect_summary_payload_key(raw_key) else {
+            continue;
+        };
+        fields.insert(
+            key.to_string(),
+            reconnect_summary_payload_value(key, raw_value),
+        );
+    }
+    fields
+}
+
+fn reconnect_summary_payload_key(key: &str) -> Option<&'static str> {
+    match key {
+        "observationId" => Some("observationId"),
+        "reason" => Some("reason"),
+        "reasonDomain" => Some("reasonDomain"),
+        "pendingObservationId" => Some("pendingObservationId"),
+        "pendingReason" => Some("pendingReason"),
+        "pendingReasonDomain" => Some("pendingReasonDomain"),
+        "blockReason" => Some("blockReason"),
+        "stageOutcome" => Some("stageOutcome"),
+        "transportRecovering" => Some("transportRecovering"),
+        "runtimeState" => Some("runtimeState"),
+        "lastRecoveryActionAtMs" => Some("lastRecoveryActionAtMs"),
+        "staged" => Some("staged"),
+        "error" => Some("error"),
+        _ => None,
+    }
+}
+
+fn reconnect_summary_payload_value(key: &str, raw_value: &str) -> Value {
+    if raw_value == "none"
+        && matches!(
+            key,
+            "pendingObservationId" | "pendingReason" | "pendingReasonDomain"
+        )
+    {
+        return Value::Null;
+    }
+    match key {
+        "observationId" | "pendingObservationId" => raw_value
+            .parse::<u64>()
+            .map(Value::from)
+            .unwrap_or_else(|_| Value::String(raw_value.to_string())),
+        "lastRecoveryActionAtMs" => raw_value
+            .parse::<f64>()
+            .map(|value| json!(value))
+            .unwrap_or_else(|_| Value::String(raw_value.to_string())),
+        "transportRecovering" | "staged" => raw_value
+            .parse::<bool>()
+            .map(Value::Bool)
+            .unwrap_or_else(|_| Value::String(raw_value.to_string())),
+        _ => Value::String(raw_value.to_string()),
+    }
 }
 
 fn latest_rtcp_send_failure_snapshot(stats: &XbxEngineStatsDto) -> Option<serde_json::Value> {

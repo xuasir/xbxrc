@@ -24,6 +24,7 @@ struct RtcInputStreamState {
     last_gamepad_sample_signature: [u64; 4],
     gamepad_sample_signature: [u64; 4],
     last_metadata_frame_seq: u64,
+    last_metadata_frame_rtp_timestamp: Option<u32>,
 }
 
 impl Default for RtcInputStreamState {
@@ -35,6 +36,7 @@ impl Default for RtcInputStreamState {
             last_gamepad_sample_signature: [0; 4],
             gamepad_sample_signature: [0; 4],
             last_metadata_frame_seq: 0,
+            last_metadata_frame_rtp_timestamp: None,
         }
     }
 }
@@ -149,9 +151,18 @@ impl RtcInputStreamController {
             return;
         };
         let (metadata, pointer_events, mouse_frames, keyboard_frames, frames, now_ms) = {
+            let mut last_metadata_frame_seq = input_state.last_metadata_frame_seq;
+            let mut last_metadata_frame_rtp_timestamp =
+                input_state.last_metadata_frame_rtp_timestamp;
             let metadata = runtime_stats.lock().ok().and_then(|stats| {
-                build_metadata_frame(&stats, &mut input_state.last_metadata_frame_seq)
+                build_metadata_frame(
+                    &stats,
+                    &mut last_metadata_frame_seq,
+                    &mut last_metadata_frame_rtp_timestamp,
+                )
             });
+            input_state.last_metadata_frame_seq = last_metadata_frame_seq;
+            input_state.last_metadata_frame_rtp_timestamp = last_metadata_frame_rtp_timestamp;
             let frames = Self::collect_gamepad_frames(&mut input_state);
             let sample_count = frames.len();
             let (pointer_events, mouse_frames, keyboard_frames) =

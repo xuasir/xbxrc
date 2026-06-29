@@ -12,7 +12,7 @@ use crate::api::backend::{
 };
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::present_cadence::{
-    present_pipeline_stressed_from_stats, resolve_pacer_release_interval_ms,
+    present_pipeline_stressed_with_hysteresis, resolve_pacer_release_interval_ms,
     resolve_stressed_release_interval_ms,
 };
 use crate::media::video::render::actor::RendererActorHandle;
@@ -78,7 +78,6 @@ fn run_pacer_loop(
     refresh_interval_ms: u64,
 ) {
     let fallback_refresh_interval_ms = refresh_interval_ms;
-    let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None::<u64>;
     let mut frame_drop_observation_id = 0u64;
     // mailbox: current_release(front) + latest_release_candidate(back)
@@ -107,7 +106,7 @@ fn run_pacer_loop(
             }
         } else {
             match rx.recv_timeout(
-                next_wait_duration(pacing_queue.front(), &pacing_policy, catch_up_mode, None)
+                next_wait_duration(pacing_queue.front(), &pacing_policy, None)
                     .min(Duration::from_millis(RENDER_QUEUE_RETRY_TIMEOUT_MS)),
             ) {
                 Ok(msg) => Some(msg),
@@ -157,7 +156,6 @@ fn run_pacer_loop(
             &pacing_policy,
             &host_context,
             &mut last_consumed_host_tick_epoch,
-            &mut catch_up_mode,
             &mut render_backpressure_active,
         ) {
             log_pacer_flow(
@@ -261,7 +259,6 @@ fn drive_ready_frames(
     pacing_policy: &FramePacingPolicy,
     host_context: &HostPacingContext,
     last_consumed_host_tick_epoch: &mut Option<u64>,
-    catch_up_mode: &mut bool,
     render_backpressure_active: &mut bool,
 ) -> Option<DecodedFrame> {
     drive_ready_frames_with_submit(
@@ -272,7 +269,6 @@ fn drive_ready_frames(
         pacing_policy,
         host_context,
         last_consumed_host_tick_epoch,
-        catch_up_mode,
         render_backpressure_active,
         |render_queue| flush_pending_render_output(render_queue, renderer),
     )
@@ -286,7 +282,6 @@ fn drive_ready_frames_with_submit<F>(
     pacing_policy: &FramePacingPolicy,
     host_context: &HostPacingContext,
     last_consumed_host_tick_epoch: &mut Option<u64>,
-    catch_up_mode: &mut bool,
     render_backpressure_active: &mut bool,
     mut flush_render_output: F,
 ) -> Option<DecodedFrame>
@@ -350,13 +345,7 @@ where
         let Some(frame) = pacing_queue.front() else {
             return None;
         };
-        let decision = pacing_policy.decide(Instant::now(), frame.pts, *catch_up_mode, None);
-        if decision.enter_catch_up_mode {
-            *catch_up_mode = true;
-        }
-        if decision.exit_catch_up_mode {
-            *catch_up_mode = false;
-        }
+        let decision = pacing_policy.decide(Instant::now(), frame.pts, None);
         match decision.action {
             FramePacingAction::Ready => {
                 let Some(frame) = pacing_queue.pop_front() else {
@@ -457,6 +446,38 @@ where
                         next_consumed_host_tick_epoch(host_context, *last_consumed_host_tick_epoch);
                     continue;
                 }
+                if pacing_queue.front().is_some_and(|frame| {
+                    should_release_late_frame_to_starved_host(
+                        frame,
+                        host_context,
+                        render_queue.len(),
+                    )
+                }) {
+                    let Some(frame) = pacing_queue.pop_front() else {
+                        return None;
+                    };
+                    log_pacer_flow(
+                        "submitNow",
+                        &frame,
+                        pacing_queue.len(),
+                        render_queue.len(),
+                        Some(host_context),
+                        Some("submit"),
+                        Some("starvedHostNoPendingDelivery"),
+                        None,
+                    );
+                    enqueue_render_frame(
+                        render_queue,
+                        frame,
+                        pacing_queue.len(),
+                        runtime_stats,
+                        frame_drop_observation_id,
+                        Some(host_context),
+                    );
+                    *last_consumed_host_tick_epoch =
+                        next_consumed_host_tick_epoch(host_context, *last_consumed_host_tick_epoch);
+                    continue;
+                }
                 let Some(frame) = pacing_queue.pop_front() else {
                     return None;
                 };
@@ -471,6 +492,7 @@ where
                     Some(host_context),
                 );
             }
+            FramePacingAction::Hold => return None,
         }
     }
 }
@@ -664,6 +686,19 @@ fn should_force_recovery_keyframe_delivery(frame: &DecodedFrame) -> bool {
         && frame.frame_unrecoverable_reason.is_none()
 }
 
+fn should_release_late_frame_to_starved_host(
+    frame: &DecodedFrame,
+    host_context: &HostPacingContext,
+    render_queue_depth: usize,
+) -> bool {
+    render_queue_depth == 0
+        && !frame.is_keyframe
+        && frame.clean_anchor_commit_recovery_epoch.is_none()
+        && frame.frame_unrecoverable_reason.is_none()
+        && (matches!(host_context.cadence_phase, HostCadencePhaseHint::Starved)
+            || host_context.pressure.no_pending_streak > 0)
+}
+
 #[derive(Debug)]
 enum PendingRenderSubmitResult {
     Idle,
@@ -774,17 +809,15 @@ fn log_pacer_flow(
 fn next_wait_duration(
     frame: Option<&DecodedFrame>,
     pacing_policy: &FramePacingPolicy,
-    catch_up_mode: bool,
     host_release_wait: Option<Duration>,
 ) -> Duration {
     let Some(frame) = frame else {
         return Duration::from_millis(100);
     };
-    match pacing_policy
-        .decide(Instant::now(), frame.pts, catch_up_mode, host_release_wait)
-        .action
-    {
+    let decision = pacing_policy.decide(Instant::now(), frame.pts, host_release_wait);
+    match decision.action {
         FramePacingAction::Drop | FramePacingAction::Ready => Duration::ZERO,
+        FramePacingAction::Hold => decision.wait_duration,
     }
 }
 
@@ -824,7 +857,10 @@ fn resolve_host_pacing_context(
                 .unwrap_or(fallback_refresh_interval_ms);
             let mut release_interval_ms =
                 resolve_pacer_release_interval_ms(stats, fallback_refresh_interval_ms);
-            if present_pipeline_stressed_from_stats(stats) {
+            if present_pipeline_stressed_with_hysteresis(
+                stats,
+                stats.video_decode_output_present_pipeline_stressed,
+            ) {
                 release_interval_ms = resolve_stressed_release_interval_ms(
                     release_interval_ms,
                     host_refresh_interval_ms,

@@ -3,6 +3,10 @@ use crate::transport::rtc::session::facts::recovery_episode::{
 };
 use crate::XbxEngineMediaRuntimeStats;
 
+use super::display::{
+    current_displayed_idr_at_ms_from_stats, current_fresh_anchor_recovered_at_ms_from_stats,
+};
+
 const FRESH_H264_IDR_ADMISSION_MS: f64 = 3_000.0;
 /// 与 owner TimedFallback 对齐：尽早结束 transport-await 焊死并触发续播窄路径。
 pub(crate) fn fresh_h264_idr_admission_from_stats(
@@ -80,7 +84,7 @@ fn decoder_recovery_debt_cleared_by_anchor_from_stats(
     {
         return true;
     }
-    if stats.recovery_fresh_anchor_recovered_at_ms.is_some() {
+    if current_fresh_anchor_recovered_at_ms_from_stats(stats).is_some() {
         return true;
     }
     decoder_reference_synced_from_stats(stats, now_ms)
@@ -117,7 +121,7 @@ pub(crate) fn displayed_idr_decoder_synced_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    stats.recovery_displayed_idr_at_ms.is_some()
+    current_displayed_idr_at_ms_from_stats(stats).is_some()
         && decoder_reference_synced_from_stats(stats, now_ms)
 }
 

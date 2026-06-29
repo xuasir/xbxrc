@@ -175,9 +175,62 @@ fn active_refresh_outcome_sent_does_not_reopen_hard_request_stats_window() {
             stats.latest_keyframe_request_outcome.clone(),
             stats.receive_keyframe_last_sent_at_ms,
             stats.receive_keyframe_sent_count_unresolved,
+            stats.latest_keyframe_request_episode.clone(),
         )
     });
-    assert_eq!(stats, Some((Some("sent".to_string()), None, 0)));
+    assert_eq!(stats, Some((Some("sent".to_string()), None, 0, None)));
+}
+
+#[test]
+fn hard_receive_feedback_keyframe_creates_picture_recovery_episode() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    let now_ms = 1_000.0;
+    source.runtime_stats.begin_transport_recovery_episode(900.0);
+    source.runtime_stats.update(|stats| {
+        stats.recovery_effective_rtt_ms = Some(24.0);
+    });
+    source.sync_recovery_ledger_to_stats();
+
+    let decision = source.plan_receive_feedback(
+        "receiver-local-nack-gap-too-large",
+        now_ms,
+        24.0,
+        Default::default(),
+        Some(InsertDecision::HoldRepair),
+        true,
+        false,
+    );
+    let dispatch = source.execute_receive_feedback_keyframe(
+        decision,
+        "receiver-local-nack-gap-too-large",
+        None,
+        now_ms,
+        true,
+    );
+
+    assert!(matches!(dispatch, KeyframeRequestDispatch::Sent(_)));
+    let stats = source.runtime_stats.read(|stats| {
+        (
+            stats.receive_recovery_ledger_generation,
+            stats.receive_keyframe_last_sent_at_ms,
+            stats.latest_keyframe_request_episode.clone(),
+            stats.latest_picture_recovery_transition_observation.clone(),
+        )
+    });
+    let (ledger_generation, last_sent_at_ms, episode, transition) = stats.expect("runtime stats");
+    assert_eq!(last_sent_at_ms, Some(now_ms));
+    let episode = episode.expect("keyframe request episode");
+    assert_eq!(Some(episode.episode_id), ledger_generation);
+    assert_eq!(
+        episode.request_reason.as_deref(),
+        Some("receiverWaitingKeyframe")
+    );
+    assert_eq!(episode.request_kind.as_deref(), Some("pli"));
+    assert_eq!(episode.status, "sent");
+    assert_eq!(episode.sent_at_ms, Some(now_ms));
+    let transition = transition.expect("picture recovery transition");
+    assert_eq!(transition.phase, "PliSent");
+    assert_eq!(Some(episode.episode_id), transition.episode_id);
 }
 
 #[test]
@@ -847,7 +900,7 @@ fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
 }
 
 #[test]
-fn waiting_keyframe_accepts_non_idr_continuation_after_first_frame_acquired() {
+fn waiting_keyframe_holds_non_idr_continuation_during_active_repair() {
     let inspector = H264AccessUnitInspector::new();
     inspector
         .seed_committed_parameter_sets_if_absent(&bootstrap_sps_nalu(), &bootstrap_pps_nalu())
@@ -859,7 +912,7 @@ fn waiting_keyframe_accepts_non_idr_continuation_after_first_frame_acquired() {
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_insert_emit(
+    assert_insert_hold(
         &inspection,
         &test_insert_context(
             test_receiver_decode_context_with_output(
@@ -946,7 +999,7 @@ fn blocking_is_only_when_waiting_and_nack_exhausted() {
 }
 
 #[test]
-fn repairing_continuation_is_accepted_during_gap_repair() {
+fn repairing_continuation_is_held_during_gap_repair() {
     let inspector = H264AccessUnitInspector::new();
     inspector
         .seed_committed_parameter_sets_if_absent(&bootstrap_sps_nalu(), &bootstrap_pps_nalu())
@@ -958,7 +1011,7 @@ fn repairing_continuation_is_accepted_during_gap_repair() {
         .expect("inspect non-idr access unit");
 
     assert!(inspection.delta_continuation_ready());
-    assert_insert_emit(
+    assert_insert_hold(
         &inspection,
         &test_insert_context(
             test_receiver_decode_context(ReceiverState::Repairing, true, false, true),
@@ -1221,6 +1274,80 @@ async fn clean_anchor_waits_for_decode_before_committing_stats() {
     let ledger = latest_anchor_candidate_ledger.expect("observed anchor candidate");
     assert_eq!(ledger.state, XbxEngineAnchorCandidateState::Observed);
     assert_eq!(ledger.frame_rtp_timestamp, Some(frame.rtp_timestamp));
+}
+
+#[tokio::test]
+async fn recovery_required_fresh_idr_without_episode_becomes_recovery_owner() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.sync_recovery_ledger_to_stats();
+    source
+        .trace_ledger
+        .recovery_ledger_mut()
+        .note_nack_exhausted();
+    source.sync_recovery_ledger_to_stats();
+    let episode = source
+        .runtime_stats
+        .read(|stats| stats.latest_keyframe_request_episode.clone())
+        .expect("runtime stats");
+    assert!(episode.is_none());
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+    tx.send(make_video_rtp_packet(
+        103,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("next frame packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should produce frame")
+        .expect("frame should exist");
+
+    assert!(frame.is_keyframe);
+    assert_eq!(frame.rtp_timestamp, 9_000);
+    assert_eq!(frame.recovery_owner_rtp_timestamp, Some(9_000));
+    assert_eq!(
+        frame.budget.window_source,
+        FrameBudgetWindowSource::Recovery
+    );
+    assert_eq!(
+        frame.frame_recovery_disposition,
+        FrameRecoveryDisposition::Repairing
+    );
+    assert_eq!(frame.clean_anchor_commit_recovery_epoch, None);
+}
+
+#[tokio::test]
+async fn steady_fresh_idr_without_recovery_required_does_not_become_recovery_owner() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+    tx.send(make_video_rtp_packet(
+        103,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("next frame packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should produce frame")
+        .expect("frame should exist");
+
+    assert!(frame.is_keyframe);
+    assert_eq!(frame.rtp_timestamp, 9_000);
+    assert_eq!(frame.recovery_owner_rtp_timestamp, None);
+    assert_eq!(frame.budget.window_source, FrameBudgetWindowSource::Playout);
+    assert_eq!(frame.clean_anchor_commit_recovery_epoch, None);
 }
 
 #[test]

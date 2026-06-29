@@ -243,9 +243,6 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const isDisplaySupplyLimited
     = rawDisplaySupplyLimited
       || (preferDisplaySupplyOverRecovering && hasVideoOutputEvidence)
-  const displaySupplyDominates
-    = preferDisplaySupplyOverRecovering
-      && hasVideoOutputEvidence
   const stablePresentationSuppressesRecovery
     = hasServiceablePresentation
       && (

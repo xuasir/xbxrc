@@ -1,7 +1,7 @@
 use ohmygamepad_protocol::OhMyGamepadKeyboardMappingDto;
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 39] = [
+pub const APP_CONFIG_KEYS: [&str; 40] = [
     "locale",
     "theme",
     "fullscreen",
@@ -37,6 +37,7 @@ pub const APP_CONFIG_KEYS: [&str; 39] = [
     "ui_audio",
     "debug",
     "runtime_trace_mode",
+    "runtime_trace_dimensions",
     "gamepad_device_profiles",
     "gamepad_keyboard_mapping",
     "gamepad_cold_start_sdl_binding_nudge",
@@ -45,9 +46,9 @@ pub const APP_CONFIG_KEYS: [&str; 39] = [
 
 pub fn default_config_map() -> Map<String, Value> {
     let runtime_trace_mode_default = if cfg!(debug_assertions) {
-        json!("minimal")
+        json!("dev")
     } else {
-        json!("off")
+        json!("production")
     };
 
     let value = json!({
@@ -92,8 +93,8 @@ pub fn default_config_map() -> Map<String, Value> {
         "ui_haptics": true,
         "ui_audio": true,
         "debug": false,
-        "runtime_trace_mode": null
-        ,
+        "runtime_trace_mode": null,
+        "runtime_trace_dimensions": "",
         "gamepad_device_profiles": [],
         "gamepad_keyboard_mapping": default_keyboard_mapping_value()
     });

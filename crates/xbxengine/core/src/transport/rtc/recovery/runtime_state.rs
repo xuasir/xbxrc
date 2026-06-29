@@ -195,16 +195,17 @@ fn current_owner_mode_for_test(
         decoder_stalled,
         renderer_stalled,
     )) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let now_ms = unix_now_ms();
         let diagnosis = escalation_structured_label(stats).map(str::to_string);
         let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
         let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
         let recovery_profile =
             ScenarioPolicyResolver::resolve_recovery_profile_by_kind(baseline_profile);
-        let fresh_output = has_fresh_media_output(stats, unix_now_ms());
+        let fresh_output = has_fresh_media_output(stats, now_ms);
         let stable_output = effective_bitrate_kbps
             >= recovery_profile.startup_low_quality_recovered_kbps
             && fresh_output
-            && has_serviceable_display_continuity(stats);
+            && has_serviceable_display_continuity(stats, now_ms);
         let startup_low = phase == SessionPhase::Startup
             && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
         Some((
@@ -215,7 +216,7 @@ fn current_owner_mode_for_test(
             fresh_output,
             startup_low,
             stats.video_decoder_stalled.unwrap_or(false),
-            renderer_shadow_blocks_serviceability(stats, unix_now_ms()),
+            renderer_shadow_blocks_serviceability(stats, now_ms),
         ))
     })
     .flatten()
@@ -248,9 +249,12 @@ fn resolve_effective_diagnosis_label_for_test(
     }
     if diagnosis_label == "adapterIdleTimeout"
         && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            has_fresh_media_output(stats, unix_now_ms())
+            let now_ms = unix_now_ms();
+            has_fresh_media_output(stats, now_ms)
+                && host_presentation_serviceable(stats, now_ms)
+                && !decode_present_pipeline_stressed(stats, now_ms)
                 && !stats.video_decoder_stalled.unwrap_or(false)
-                && !renderer_shadow_blocks_serviceability(stats, unix_now_ms())
+                && !renderer_shadow_blocks_serviceability(stats, now_ms)
         })
         .unwrap_or(false)
     {
@@ -368,6 +372,7 @@ fn project_phase_from_stats(stats: &XbxEngineMediaRuntimeStats) -> SessionPhase 
 }
 
 fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
+    let now_ms = unix_now_ms();
     if stats.transport_recovery_episode_active
         && stats.transport_state != XbxEngineTransportStateDto::Connected
     {
@@ -386,7 +391,7 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         return "observe-anomaly";
     }
     if matches!(stats.session_phase.as_deref(), Some("recovery-eligible")) {
-        if decode_present_pipeline_stressed(stats, unix_now_ms()) {
+        if decode_present_pipeline_stressed(stats, now_ms) {
             return "display-constrained";
         }
         return "recovery-eligible";
@@ -406,17 +411,20 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         return "ramp-up";
     }
     if owner_state_has_steady_output_semantics(stats)
-        && has_fresh_media_output(stats, unix_now_ms())
+        && has_fresh_media_output(stats, now_ms)
+        && host_presentation_serviceable(stats, now_ms)
+        && !decode_present_pipeline_stressed(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
-        && !renderer_shadow_blocks_serviceability(stats, unix_now_ms())
+        && !renderer_shadow_blocks_serviceability(stats, now_ms)
     {
         return "steady";
     }
-    if decode_present_pipeline_stressed(stats, unix_now_ms())
+    if decode_present_pipeline_stressed(stats, now_ms)
         && matches!(
             stats.video_owner_state.as_deref(),
             Some("degraded-serving" | "stable-serving" | "supply-starved")
         )
+        && host_presentation_serviceable(stats, now_ms)
     {
         return "display-constrained";
     }
@@ -551,6 +559,7 @@ fn resolve_effective_diagnosis_label_from_stats(
         )
         && owner_state_has_steady_output_semantics(stats)
         && has_fresh_media_output(stats, now_ms)
+        && host_presentation_serviceable(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
         && !renderer_shadow_blocks_serviceability(stats, now_ms)
     {
@@ -567,6 +576,8 @@ fn resolve_effective_diagnosis_label_from_stats(
     }
     if diagnosis_label == "adapterIdleTimeout"
         && has_fresh_media_output(stats, now_ms)
+        && host_presentation_serviceable(stats, now_ms)
+        && !decode_present_pipeline_stressed(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
         && !renderer_shadow_blocks_serviceability(stats, now_ms)
     {
@@ -596,20 +607,21 @@ fn current_owner_mode_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     phase: SessionPhase,
 ) -> RecoveryOwnerMode {
+    let now_ms = unix_now_ms();
     let diagnosis = escalation_structured_label(stats).map(str::to_string);
     let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
     let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
     let recovery_profile =
         ScenarioPolicyResolver::resolve_recovery_profile_by_kind(baseline_profile);
-    let fresh_output = has_fresh_media_output(stats, unix_now_ms());
+    let fresh_output = has_fresh_media_output(stats, now_ms);
     let stable_output = effective_bitrate_kbps
         >= recovery_profile.startup_low_quality_recovered_kbps
         && fresh_output
-        && has_serviceable_display_continuity(stats);
+        && has_serviceable_display_continuity(stats, now_ms);
     let startup_low = phase == SessionPhase::Startup
         && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
     let decoder_stalled = stats.video_decoder_stalled.unwrap_or(false);
-    let renderer_stalled = renderer_shadow_blocks_serviceability(stats, unix_now_ms());
+    let renderer_stalled = renderer_shadow_blocks_serviceability(stats, now_ms);
     resolve_recovery_owner_mode_by_signals(
         diagnosis.as_deref(),
         phase,
@@ -786,6 +798,7 @@ fn should_absorb_stale_recovery_diagnosis(
         return decode_present_pipeline_stressed(stats, now_ms)
             && owner_state_has_steady_output_semantics(stats)
             && has_fresh_media_output(stats, now_ms)
+            && host_presentation_serviceable(stats, now_ms)
             && !stats.video_decoder_stalled.unwrap_or(false)
             && !renderer_shadow_blocks_serviceability(stats, now_ms);
     }
@@ -808,7 +821,11 @@ fn should_absorb_stale_recovery_diagnosis(
     {
         return true;
     }
-    owner_state_has_steady_output_semantics(stats) && fresh_output && pipeline_serviceable
+    owner_state_has_steady_output_semantics(stats)
+        && fresh_output
+        && pipeline_serviceable
+        && host_presentation_serviceable(stats, now_ms)
+        && !decode_present_pipeline_stressed(stats, now_ms)
 }
 
 pub(crate) fn decoder_backend_failure_signal_is_active(
@@ -1016,6 +1033,33 @@ mod tests {
     }
 
     #[test]
+    fn stale_host_present_does_not_absorb_rebuilding_supply_suspect_from_fresh_decode() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovering".to_string()),
+            recovery_active_escalation_reason: Some("rebuildingSupplySuspect".to_string()),
+            video_owner_state: Some("stable-serving".to_string()),
+            latest_video_host_present_time_ms: Some(now_ms - 360.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 24.0),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            host_no_pending_streak: 15,
+            host_cadence_phase: Some("starved".to_string()),
+            video_present_fps: 21.0,
+            video_decode_fps: 31.0,
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(false),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert!(decode_present_pipeline_stressed(&stats, now_ms));
+        assert_eq!(
+            resolve_effective_diagnosis_label_from_stats(&stats, "rebuildingSupplySuspect", now_ms),
+            "rebuildingSupplySuspect"
+        );
+        assert_ne!(recovery_stage_label(&stats), "display-constrained");
+    }
+
+    #[test]
     fn decode_present_pipeline_stress_matches_cloud_decode_present_gap() {
         let now_ms = unix_now_ms();
         let mut stats = XbxEngineMediaRuntimeStats {
@@ -1028,6 +1072,8 @@ mod tests {
 
         assert!(decode_present_pipeline_stressed(&stats, now_ms));
         stats.video_present_fps = 24.0;
+        assert!(decode_present_pipeline_stressed(&stats, now_ms));
+        stats.video_present_fps = 26.0;
         assert!(!decode_present_pipeline_stressed(&stats, now_ms));
     }
 
@@ -1050,10 +1096,56 @@ mod tests {
             RecoveryOwnerMode::RecoveringReferenceChain
         );
     }
+
+    #[test]
+    fn recovering_phase_with_fresh_decode_and_stale_playback_recovered_requires_current_present() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovering".to_string()),
+            inbound_video_bitrate_kbps: Some(20_000.0),
+            video_present_fps: 60.0,
+            latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: Some(now_ms - 1_200.0),
+            recovery_playback_recovered_at_ms: Some(now_ms - 1_200.0),
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(false),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            current_owner_mode_from_stats(&stats, SessionPhase::Recovering),
+            RecoveryOwnerMode::RecoveringReferenceChain
+        );
+    }
+
+    #[test]
+    fn adapter_idle_timeout_with_fresh_decode_and_stale_present_stays_active() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: Some(now_ms - 1_200.0),
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(false),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            resolve_effective_diagnosis_label_from_stats(&stats, "adapterIdleTimeout", now_ms),
+            "adapterIdleTimeout"
+        );
+    }
 }
 const SERVICEABLE_PRESENT_FPS: f64 = 35.0;
+const PLAYBACK_RECOVERED_DISPLAY_CONTINUITY_FRESH_MS: f64 = 600.0;
 
-fn has_serviceable_display_continuity(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    stats.video_present_fps >= SERVICEABLE_PRESENT_FPS
-        || stats.recovery_playback_recovered_at_ms.is_some()
+fn has_serviceable_display_continuity(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    if stats.video_present_fps >= SERVICEABLE_PRESENT_FPS {
+        return host_presentation_serviceable(stats, now_ms);
+    }
+    stats
+        .recovery_playback_recovered_at_ms
+        .is_some_and(|at_ms| {
+            (now_ms - at_ms).max(0.0) <= PLAYBACK_RECOVERED_DISPLAY_CONTINUITY_FRESH_MS
+        })
+        && host_presentation_serviceable(stats, now_ms)
 }

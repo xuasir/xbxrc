@@ -1,5 +1,5 @@
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 use std::thread;
 
 use crate::api::backend::{
@@ -95,7 +95,7 @@ fn run_renderer_loop(
 
                 let mut host_push_frame: Option<XbxEngineRenderFrame> = None;
                 match state.present_frame(render_frame) {
-                    Ok((_frame_stats, outcome)) => {
+                    Ok((frame_stats, outcome)) => {
                         log_renderer_flow(
                             "submit",
                             &flow_frame,
@@ -105,6 +105,7 @@ fn run_renderer_loop(
                             outcome.overwritten_pending_frame,
                         );
                         runtime_stats.update(|stats| {
+                            stats.latest_video_frame = Some(frame_stats);
                             stats.latest_observation_label =
                                 Some("rendererFrameAccepted".to_string());
                             stats.latest_observation_summary = Some(format!(
@@ -227,35 +228,53 @@ fn run_renderer_loop(
 
                 if let Some(engine_frame) = host_push_frame {
                     drop(state);
-                    if let Ok(guard) = host_render_frame_push.lock() {
-                        if let Some(push) = guard.as_ref() {
-                            let push_outcome =
-                                push.push_render_frame_for_host_present(engine_frame);
-                            let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
-                            runtime_stats.update(|stats| match push_outcome {
-                                XbxHostRenderFramePushOutcome::Accepted => {
-                                    stats.latest_host_mailbox_submit_time_ms = Some(observed_at_ms);
-                                }
-                                XbxHostRenderFramePushOutcome::RouteUnavailable => {
-                                    stats.latest_observation_label =
-                                        Some("hostPresentRouteUnavailable".to_string());
-                                    stats.latest_observation_summary =
-                                        Some("rendererPushDropped:routeUnavailable".to_string());
-                                }
-                                XbxHostRenderFramePushOutcome::RegistryUnavailable => {
-                                    stats.latest_observation_label =
-                                        Some("hostPresentRegistryUnavailable".to_string());
-                                    stats.latest_observation_summary =
-                                        Some("rendererPushDropped:registryUnavailable".to_string());
-                                }
-                                XbxHostRenderFramePushOutcome::Rejected => {
-                                    stats.latest_observation_label =
-                                        Some("hostPresentRejected".to_string());
-                                    stats.latest_observation_summary =
-                                        Some("rendererPushRejected".to_string());
-                                }
+                    let push = match host_render_frame_push.try_lock() {
+                        Ok(guard) => guard.as_ref().cloned(),
+                        Err(TryLockError::WouldBlock) => {
+                            runtime_stats.update(|stats| {
+                                stats.latest_observation_label =
+                                    Some("hostPresentPushHandleBusy".to_string());
+                                stats.latest_observation_summary =
+                                    Some("rendererPushDropped:pushHandleBusy".to_string());
                             });
+                            None
                         }
+                        Err(TryLockError::Poisoned(_)) => {
+                            runtime_stats.update(|stats| {
+                                stats.latest_observation_label =
+                                    Some("hostPresentPushHandleUnavailable".to_string());
+                                stats.latest_observation_summary =
+                                    Some("rendererPushDropped:pushHandleUnavailable".to_string());
+                            });
+                            None
+                        }
+                    };
+                    if let Some(push) = push {
+                        let push_outcome = push.push_render_frame_for_host_present(engine_frame);
+                        let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
+                        runtime_stats.update(|stats| match push_outcome {
+                            XbxHostRenderFramePushOutcome::Accepted => {
+                                stats.latest_host_mailbox_submit_time_ms = Some(observed_at_ms);
+                            }
+                            XbxHostRenderFramePushOutcome::RouteUnavailable => {
+                                stats.latest_observation_label =
+                                    Some("hostPresentRouteUnavailable".to_string());
+                                stats.latest_observation_summary =
+                                    Some("rendererPushDropped:routeUnavailable".to_string());
+                            }
+                            XbxHostRenderFramePushOutcome::RegistryUnavailable => {
+                                stats.latest_observation_label =
+                                    Some("hostPresentRegistryUnavailable".to_string());
+                                stats.latest_observation_summary =
+                                    Some("rendererPushDropped:registryUnavailable".to_string());
+                            }
+                            XbxHostRenderFramePushOutcome::Rejected => {
+                                stats.latest_observation_label =
+                                    Some("hostPresentRejected".to_string());
+                                stats.latest_observation_summary =
+                                    Some("rendererPushRejected".to_string());
+                            }
+                        });
                     }
                 }
             }
@@ -419,6 +438,35 @@ mod tests {
     }
 
     #[test]
+    fn renderer_actor_records_latest_video_frame_with_rtp_timestamp() {
+        let (tx, rx) = mpsc::sync_channel(2);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        tx.send(RendererMsg::Frame(make_decoded_frame(7, 2, 2)))
+            .expect("frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+
+        run_renderer_loop(
+            rx,
+            render_state,
+            runtime_stats_sink,
+            Arc::new(Mutex::new(None)),
+        );
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let latest_frame = stats
+            .latest_video_frame
+            .as_ref()
+            .expect("latest video frame");
+        assert_eq!(latest_frame.frame_seq, 7);
+        assert_eq!(latest_frame.rtp_timestamp, Some(7));
+        assert_eq!(latest_frame.width, 2);
+        assert_eq!(latest_frame.height, 2);
+    }
+
+    #[test]
     fn renderer_actor_counts_present_error_as_drop() {
         let (tx, rx) = mpsc::sync_channel(2);
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
@@ -521,7 +569,12 @@ mod tests {
             .expect("frame");
         tx.send(RendererMsg::Stop).expect("stop");
 
-        run_renderer_loop(rx, render_state, runtime_stats_sink, host_render_frame_push);
+        run_renderer_loop(
+            rx,
+            render_state,
+            runtime_stats_sink,
+            host_render_frame_push.clone(),
+        );
 
         let seqs = pushed_seqs.lock().expect("lock");
         assert_eq!(seqs.as_slice(), &[9]);
@@ -561,7 +614,12 @@ mod tests {
             .expect("frame");
         tx.send(RendererMsg::Stop).expect("stop");
 
-        run_renderer_loop(rx, render_state, runtime_stats_sink, host_render_frame_push);
+        run_renderer_loop(
+            rx,
+            render_state,
+            runtime_stats_sink,
+            host_render_frame_push.clone(),
+        );
 
         let stats = runtime_stats.lock().expect("stats");
         assert_eq!(stats.latest_host_mailbox_submit_time_ms, None);
@@ -572,6 +630,41 @@ mod tests {
         assert_eq!(
             stats.latest_observation_summary.as_deref(),
             Some("rendererPushDropped:routeUnavailable")
+        );
+    }
+
+    #[test]
+    fn renderer_actor_drops_host_push_when_push_handle_is_busy() {
+        let host_render_frame_push = Arc::new(Mutex::new(Some(
+            Arc::new(RejectingHostPush) as Arc<dyn XbxHostRenderFramePush>
+        )));
+        let _busy_guard = host_render_frame_push.lock().expect("push handle lock");
+
+        let (tx, rx) = mpsc::sync_channel(2);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        tx.send(RendererMsg::Frame(make_decoded_frame(11, 2, 2)))
+            .expect("frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+
+        run_renderer_loop(
+            rx,
+            render_state,
+            runtime_stats_sink,
+            host_render_frame_push.clone(),
+        );
+
+        let stats = runtime_stats.lock().expect("stats");
+        assert_eq!(stats.latest_host_mailbox_submit_time_ms, None);
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("hostPresentPushHandleBusy")
+        );
+        assert_eq!(
+            stats.latest_observation_summary.as_deref(),
+            Some("rendererPushDropped:pushHandleBusy")
         );
     }
 }

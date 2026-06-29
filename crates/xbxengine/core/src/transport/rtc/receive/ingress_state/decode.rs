@@ -1635,7 +1635,7 @@ impl RtcVideoFrameSource {
         let recovery_epoch_tag = self
             .runtime_stats
             .read(|stats| stats.transport_recovery_epoch);
-        let recovery_owner_rtp_timestamp = self
+        let episode_recovery_owner_rtp_timestamp = self
             .runtime_stats
             .read(|stats| {
                 stats
@@ -1644,6 +1644,13 @@ impl RtcVideoFrameSource {
                     .and_then(|episode| episode.response_rtp_timestamp)
             })
             .flatten();
+        let ledger_usable_idr_owner_rtp_timestamp = (insert_ctx.keyframe_required
+            && current_frame_allows_sustaining_exit
+            && self.trace_ledger.recovery_ledger().last_usable_keyframe_rtp
+                == Some(sample.packet_timestamp))
+        .then_some(sample.packet_timestamp);
+        let recovery_owner_rtp_timestamp =
+            episode_recovery_owner_rtp_timestamp.or(ledger_usable_idr_owner_rtp_timestamp);
         // clean-anchor stats 提交仅在 post-decode；ingress 不再带 pre-decode commit epoch。
         let clean_anchor_commit_recovery_epoch = None;
         let is_recovery_owner_frame = recovery_owner_rtp_timestamp == Some(sample.packet_timestamp);

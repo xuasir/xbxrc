@@ -234,6 +234,7 @@ fn invalid_transport_await_response_releases_decoder_reset_family_gate() {
             command_result: None,
             command_detail: None,
             observed_at_ms: now_ms,
+            ..Default::default()
         });
     stats.recent_recovery_decision_ledgers =
         vec![stats.latest_recovery_decision_ledger.clone().unwrap()];
@@ -369,6 +370,7 @@ fn invalid_transport_await_non_idr_vcl_unlocks_decoder_reset_gate_without_packet
             command_result: None,
             command_detail: None,
             observed_at_ms: now_ms,
+            ..Default::default()
         });
     stats.recent_recovery_decision_ledgers =
         vec![stats.latest_recovery_decision_ledger.clone().unwrap()];
@@ -641,6 +643,7 @@ fn command_result_updates_matching_recovery_decision_ledger() {
         command_result: None,
         command_detail: None,
         observed_at_ms: 10.0,
+        ..Default::default()
     };
     stats.latest_recovery_decision_ledger = Some(matching_ledger.clone());
     stats.recent_recovery_decision_ledgers.push(matching_ledger);
@@ -711,6 +714,7 @@ fn command_result_updates_historical_ledger_when_latest_has_rotated() {
             command_result: None,
             command_detail: None,
             observed_at_ms: 10.0,
+            ..Default::default()
         },
     );
     stats.latest_recovery_decision_ledger =
@@ -741,6 +745,7 @@ fn command_result_updates_historical_ledger_when_latest_has_rotated() {
             command_result: None,
             command_detail: None,
             observed_at_ms: 11.0,
+            ..Default::default()
         });
     let runtime_stats = Arc::new(Mutex::new(stats));
     let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
@@ -811,6 +816,7 @@ fn trace_contract_feedback_target_pending_updates_ledger_with_family_deferred_re
         command_result: None,
         command_detail: None,
         observed_at_ms: 10_140.0,
+        ..Default::default()
     };
     stats.latest_recovery_decision_ledger = Some(decision.clone());
     stats.recent_recovery_decision_ledgers.push(decision);
@@ -871,6 +877,7 @@ fn trace_contract_feedback_transport_not_ready_updates_ledger_with_transport_rea
         command_result: None,
         command_detail: None,
         observed_at_ms: 10_140.0,
+        ..Default::default()
     };
     stats.latest_recovery_decision_ledger = Some(decision.clone());
     stats.recent_recovery_decision_ledgers.push(decision);

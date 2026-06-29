@@ -241,6 +241,8 @@ pub(crate) fn is_remote_picture_recovery_terminal_reason(reason: Option<&str>) -
 pub(crate) fn remote_picture_recovery_terminal_latched_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
+    let current_display_stable = stats.receive_display_state.as_deref() == Some("display-stable")
+        && super::display::has_current_clean_anchor_from_stats(stats);
     if is_remote_picture_recovery_terminal_reason(
         stats
             .latest_receive_picture_recovery_terminal_reason
@@ -249,7 +251,7 @@ pub(crate) fn remote_picture_recovery_terminal_latched_from_stats(
         return true;
     }
     stats.receive_picture_recovery_terminal_total > 0
-        && stats.receive_display_state.as_deref() != Some("display-stable")
+        && !current_display_stable
         && stats.receive_keyframe_sent_count_unresolved
             >= REMOTE_TERMINAL_LATCH_MIN_UNRESOLVED_KEYFRAMES
         && matches!(
@@ -262,7 +264,9 @@ pub(crate) fn remote_picture_recovery_terminal_latched_from_stats(
 pub(crate) fn remote_picture_recovery_terminal_active_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
-    if stats.receive_display_state.as_deref() == Some("display-stable") {
+    if stats.receive_display_state.as_deref() == Some("display-stable")
+        && super::display::has_current_clean_anchor_from_stats(stats)
+    {
         return false;
     }
     let remote_terminal = remote_picture_recovery_terminal_latched_from_stats(stats);

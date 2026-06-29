@@ -8,6 +8,7 @@ use super::RuntimeStatsSink;
 
 const PLAYBACK_RECOVERED_MIN_PRESENT_FPS: f64 = 12.0;
 const PLAYBACK_RECOVERED_MAX_PRESENT_FPS: f64 = 90.0;
+const PLAYBACK_RECOVERED_MAX_PRESENT_AGE_MS: f64 = 300.0;
 
 fn sanitize_playback_recovered_present_fps(
     stats: &crate::XbxEngineMediaRuntimeStats,
@@ -28,6 +29,34 @@ fn sanitize_playback_recovered_present_fps(
         return None;
     }
     None
+}
+
+fn host_present_qualifies_for_playback_recovered(
+    stats: &crate::XbxEngineMediaRuntimeStats,
+    observed_at_ms: f64,
+) -> bool {
+    if stats
+        .transport_recovery_episode_opened_at_ms
+        .is_some_and(|opened_at_ms| observed_at_ms < opened_at_ms)
+    {
+        return false;
+    }
+    if stats
+        .display_age_ms
+        .is_some_and(|age_ms| age_ms > PLAYBACK_RECOVERED_MAX_PRESENT_AGE_MS)
+    {
+        return false;
+    }
+    if matches!(stats.video_owner_state.as_deref(), Some("supply-starved")) {
+        return false;
+    }
+    if matches!(
+        stats.video_owner_reason.as_deref(),
+        Some("displaySupplyCritical" | "hostPresentStalled")
+    ) {
+        return false;
+    }
+    true
 }
 
 impl RuntimeStatsSink {
@@ -173,6 +202,9 @@ impl RuntimeStatsSink {
     pub(crate) fn record_playback_recovered_fact(&self, observed_at_ms: f64, present_fps: f64) {
         self.update(|stats| {
             if stats.recovery_playback_recovered_at_ms.is_some() {
+                return;
+            }
+            if !host_present_qualifies_for_playback_recovered(stats, observed_at_ms) {
                 return;
             }
             let effective_fps = sanitize_playback_recovered_present_fps(stats, present_fps);

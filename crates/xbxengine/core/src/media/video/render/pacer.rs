@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-const DEFAULT_CATCH_UP_THRESHOLD_MS: u64 = 500;
+const DEFAULT_LATE_DROP_THRESHOLD_MS: u64 = 500;
 const DEFAULT_LONG_SLEEP_GUARD_MS: u64 = 20;
 const MIN_REFRESH_INTERVAL_MS: u64 = 6;
 const MAX_REFRESH_INTERVAL_MS: u64 = 34;
@@ -8,30 +8,35 @@ const MAX_REFRESH_INTERVAL_MS: u64 = 34;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FramePacingAction {
     Drop,
+    Hold,
     Ready,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FramePacingDecision {
     pub action: FramePacingAction,
-    pub enter_catch_up_mode: bool,
-    pub exit_catch_up_mode: bool,
+    pub wait_duration: Duration,
 }
 
 impl FramePacingDecision {
-    fn drop(enter_catch_up_mode: bool) -> Self {
+    fn drop() -> Self {
         Self {
             action: FramePacingAction::Drop,
-            enter_catch_up_mode,
-            exit_catch_up_mode: false,
+            wait_duration: Duration::ZERO,
         }
     }
 
-    fn ready(exit_catch_up_mode: bool) -> Self {
+    fn hold(wait_duration: Duration) -> Self {
+        Self {
+            action: FramePacingAction::Hold,
+            wait_duration,
+        }
+    }
+
+    fn ready() -> Self {
         Self {
             action: FramePacingAction::Ready,
-            enter_catch_up_mode: false,
-            exit_catch_up_mode,
+            wait_duration: Duration::ZERO,
         }
     }
 }
@@ -39,11 +44,11 @@ impl FramePacingDecision {
 /**
  * pacing v1 先收敛成纯策略对象：
  * - 不直接依赖线程或渲染器，便于 actor/未来 display-link 复用
- * - 统一处理 catch-up、长睡眠保护和 deadline 判定
+ * - 统一处理低延迟丢帧、长睡眠保护和 deadline 判定
  */
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct FramePacingPolicy {
-    catch_up_threshold: Duration,
+    late_drop_threshold: Duration,
     long_sleep_guard: Duration,
 }
 
@@ -55,7 +60,7 @@ impl FramePacingPolicy {
 
     pub(crate) fn with_dynamic_budget(
         refresh_interval_ms: u64,
-        catch_up_threshold_ms: Option<u64>,
+        late_drop_threshold_ms: Option<u64>,
         long_sleep_guard_ms: Option<u64>,
         video_rtt_ms: Option<f64>,
         video_nack_recovery_rtt_ms: Option<f64>,
@@ -63,19 +68,19 @@ impl FramePacingPolicy {
         let normalized_refresh_interval_ms =
             refresh_interval_ms.clamp(MIN_REFRESH_INTERVAL_MS, MAX_REFRESH_INTERVAL_MS);
 
-        // RTT 感知的 catch-up 阈值：max(500ms, 2 × RTT + jitter_buffer_max_delay)
+        // RTT 感知的 late-drop 阈值：max(500ms, 2 × RTT + jitter_buffer_max_delay)
         // 优先使用 NACK recovery RTT（更准确），回退到 video RTT
         let rtt_aware_threshold_ms = video_nack_recovery_rtt_ms.or(video_rtt_ms).map(|rtt_ms| {
             // 2 × RTT + 保守的 jitter buffer 估计（30ms）
             let threshold = (2.0 * rtt_ms + 30.0).round() as u64;
-            threshold.max(DEFAULT_CATCH_UP_THRESHOLD_MS)
+            threshold.max(DEFAULT_LATE_DROP_THRESHOLD_MS)
         });
 
         Self {
-            catch_up_threshold: Duration::from_millis(
-                catch_up_threshold_ms
+            late_drop_threshold: Duration::from_millis(
+                late_drop_threshold_ms
                     .or(rtt_aware_threshold_ms)
-                    .unwrap_or(DEFAULT_CATCH_UP_THRESHOLD_MS)
+                    .unwrap_or(DEFAULT_LATE_DROP_THRESHOLD_MS)
                     .max(1),
             ),
             long_sleep_guard: Duration::from_millis(
@@ -89,20 +94,18 @@ impl FramePacingPolicy {
         &self,
         now: Instant,
         deadline: Instant,
-        catch_up_mode: bool,
         _host_release_wait: Option<Duration>,
     ) -> FramePacingDecision {
-        if catch_up_mode {
-            if now > deadline + self.catch_up_threshold {
-                return FramePacingDecision::drop(true);
-            }
-            FramePacingDecision::ready(true)
-        } else if now > deadline + self.catch_up_threshold {
-            FramePacingDecision::drop(true)
-        } else {
-            let _ = self.long_sleep_guard;
-            FramePacingDecision::ready(false)
+        if now > deadline + self.late_drop_threshold {
+            return FramePacingDecision::drop();
         }
+        if now >= deadline || self.long_sleep_guard.is_zero() {
+            return FramePacingDecision::ready();
+        }
+        let wait_duration = deadline
+            .saturating_duration_since(now)
+            .min(self.long_sleep_guard);
+        FramePacingDecision::hold(wait_duration)
     }
 }
 
@@ -160,28 +163,27 @@ mod tests {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now - Duration::from_millis(600);
-        let decision = policy.decide(now, deadline, false, None);
+        let decision = policy.decide(now, deadline, None);
         assert_eq!(decision.action, FramePacingAction::Drop);
-        assert!(decision.enter_catch_up_mode);
     }
 
     #[test]
-    fn pacing_marks_short_early_gap_as_ready() {
+    fn pacing_holds_short_early_gap_until_deadline() {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
-        let decision = policy.decide(now, deadline, false, None);
-        assert_eq!(decision.action, FramePacingAction::Ready);
+        let decision = policy.decide(now, deadline, None);
+        assert_eq!(decision.action, FramePacingAction::Hold);
+        assert!(decision.wait_duration <= Duration::from_millis(10));
     }
 
     #[test]
-    fn pacing_exits_catch_up_when_deadline_returns() {
+    fn pacing_ready_when_deadline_arrives() {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now - Duration::from_millis(100);
-        let decision = policy.decide(now, deadline, true, None);
+        let decision = policy.decide(now, deadline, None);
         assert_eq!(decision.action, FramePacingAction::Ready);
-        assert!(decision.exit_catch_up_mode);
     }
 
     #[test]
@@ -189,7 +191,7 @@ mod tests {
         let policy = FramePacingPolicy::with_dynamic_budget(16, None, Some(0), None, None);
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
-        let decision = policy.decide(now, deadline, false, None);
+        let decision = policy.decide(now, deadline, None);
         assert_eq!(decision.action, FramePacingAction::Ready);
     }
 
@@ -198,7 +200,7 @@ mod tests {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now - Duration::from_millis(1);
-        let decision = policy.decide(now, deadline, false, Some(Duration::from_millis(5)));
+        let decision = policy.decide(now, deadline, Some(Duration::from_millis(5)));
         assert_eq!(decision.action, FramePacingAction::Ready);
     }
 
@@ -207,7 +209,7 @@ mod tests {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
-        let decision = policy.decide(now, deadline, false, Some(Duration::from_millis(4)));
-        assert_eq!(decision.action, FramePacingAction::Ready);
+        let decision = policy.decide(now, deadline, Some(Duration::from_millis(4)));
+        assert_eq!(decision.action, FramePacingAction::Hold);
     }
 }

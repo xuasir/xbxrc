@@ -1,5 +1,8 @@
 use super::decode_sync::decoder_waiting_keyframe_control_active_from_stats;
-use super::display::displayed_idr_serving_from_stats;
+use super::display::{
+    current_playback_recovered_at_ms_from_stats, displayed_idr_serving_from_stats,
+    has_current_clean_anchor_from_stats,
+};
 use super::insert::{derive_packet_recovery_action_stage_from_stats, PacketRecoveryActionStage};
 use super::snapshot::DerivedDecoderHealth;
 use crate::XbxEngineMediaRuntimeStats;
@@ -203,21 +206,22 @@ pub(crate) fn receive_presentation_holds_steady_session_phase_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    if stats.receive_display_state.as_deref() == Some("display-stable") {
-        return true;
-    }
     let host_presenting =
         stats.host_frame_present_epoch > 0 && stats.latest_video_host_present_time_ms.is_some();
+    const RECEIVE_PRESENTATION_HOLD_FRESH_MS: f64 = 600.0;
+    let host_present_fresh = stats
+        .latest_video_host_present_time_ms
+        .is_some_and(|at| (now_ms - at).max(0.0) < RECEIVE_PRESENTATION_HOLD_FRESH_MS);
+    if stats.receive_display_state.as_deref() == Some("display-stable") {
+        return has_current_clean_anchor_from_stats(stats) || host_present_fresh;
+    }
     if !host_presenting {
         return false;
     }
-    if stats.recovery_playback_recovered_at_ms.is_some() {
-        return true;
+    if current_playback_recovered_at_ms_from_stats(stats).is_some() {
+        return host_present_fresh;
     }
-    stats.receive_keyframe_required == Some(true)
-        && stats
-            .latest_video_host_present_time_ms
-            .is_some_and(|at| (now_ms - at).max(0.0) < 600.0)
+    stats.receive_keyframe_required == Some(true) && host_present_fresh
 }
 
 pub(crate) fn recovery_surface_phase_from_presentation_supply_phase(
@@ -240,7 +244,7 @@ pub(crate) fn media_supply_submit_starved_from_stats(
     _now_ms: f64,
 ) -> bool {
     let had_host_output = stats.host_frame_present_epoch > 0
-        || stats.recovery_playback_recovered_at_ms.is_some()
+        || current_playback_recovered_at_ms_from_stats(stats).is_some()
         || displayed_idr_serving_from_stats(stats);
     had_host_output
         && stats
@@ -254,7 +258,7 @@ pub(crate) fn recovery_supply_break_active_from_stats(
 ) -> bool {
     let _ = now_ms;
     let had_present = stats.host_frame_present_epoch > 0
-        || stats.recovery_playback_recovered_at_ms.is_some()
+        || current_playback_recovered_at_ms_from_stats(stats).is_some()
         || displayed_idr_serving_from_stats(stats);
     if !had_present {
         return false;
