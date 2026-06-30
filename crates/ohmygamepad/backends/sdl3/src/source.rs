@@ -31,6 +31,8 @@ const POLLED_SNAPSHOT_TRACE_INTERVAL_MS: u64 = 1000;
 const DEVICE_REENUMERATE_INTERVAL: Duration = Duration::from_millis(1000);
 const STARTUP_DEVICE_REENUMERATE_INTERVAL: Duration = Duration::from_millis(100);
 const STARTUP_DEVICE_REENUMERATE_WINDOW: Duration = Duration::from_millis(2000);
+#[cfg(target_os = "windows")]
+const XINPUT_DIRECT_USER_COUNT: u32 = 4;
 
 const KNOWN_HANDHELD_CONTROLLER_IDS: &[(u16, u16)] = &[
     (0x28de, 0x1205), // Steam Deck
@@ -55,6 +57,72 @@ struct SnapshotSummary {
     max_abs_axis_milli: i32,
     left_trigger_milli: i32,
     right_trigger_milli: i32,
+}
+
+#[derive(Clone, Debug)]
+struct CapturedSnapshot {
+    buttons: Vec<f32>,
+    axes: Vec<f32>,
+    metadata: SnapshotCaptureMetadata,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SnapshotCaptureMetadata {
+    sample_source: &'static str,
+    player_index: Option<u16>,
+    xinput_user_index: Option<u32>,
+    xinput_result: Option<u32>,
+    fallback_reason: Option<&'static str>,
+}
+
+impl SnapshotCaptureMetadata {
+    fn sdl(player_index: Option<u16>, fallback_reason: Option<&'static str>) -> Self {
+        Self {
+            sample_source: "sdl",
+            player_index,
+            xinput_user_index: None,
+            xinput_result: None,
+            fallback_reason,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn xinput_fallback(player_index: Option<u16>, user_index: u32, result: u32) -> Self {
+        Self {
+            sample_source: "xinputFallback",
+            player_index,
+            xinput_user_index: Some(user_index),
+            xinput_result: Some(result),
+            fallback_reason: None,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn xinput_direct(user_index: u32, result: u32) -> Self {
+        Self {
+            sample_source: "xinputDirect",
+            player_index: u16::try_from(user_index).ok(),
+            xinput_user_index: Some(user_index),
+            xinput_result: Some(result),
+            fallback_reason: None,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn sdl_after_xinput_miss(
+        player_index: Option<u16>,
+        user_index: Option<u32>,
+        result: Option<u32>,
+        fallback_reason: &'static str,
+    ) -> Self {
+        Self {
+            sample_source: "sdl",
+            player_index,
+            xinput_user_index: user_index,
+            xinput_result: result,
+            fallback_reason: Some(fallback_reason),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -270,10 +338,14 @@ fn run_sdl3_source_thread(
             "startupReenumerateIntervalMs": STARTUP_DEVICE_REENUMERATE_INTERVAL.as_millis(),
             "startupReenumerateWindowMs": STARTUP_DEVICE_REENUMERATE_WINDOW.as_millis(),
             "reenumerateIntervalMs": DEVICE_REENUMERATE_INTERVAL.as_millis(),
+            "xinputDirectPollerEnabled": cfg!(target_os = "windows"),
+            "xinputDirectUserCount": if cfg!(target_os = "windows") { 4 } else { 0 },
         }),
     );
 
     let mut opened_gamepads = HashMap::new();
+    #[cfg(target_os = "windows")]
+    let mut xinput_direct_poller = XInputDirectPoller::default();
     if enumerate_available_gamepads(
         &event_tx,
         &gamepad_subsystem,
@@ -323,11 +395,39 @@ fn run_sdl3_source_thread(
             }
         }
 
+        #[cfg(target_os = "windows")]
+        {
+            let observed_at_ms = now_ms();
+            if !xinput_direct_poller.disconnect_sdl_covered_users(
+                &event_tx,
+                &opened_gamepads,
+                observed_at_ms,
+                &mut trace_state,
+            ) {
+                return;
+            }
+        }
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default();
         if now.saturating_sub(last_polled_snapshot_at) >= POLLED_SNAPSHOT_INTERVAL {
-            emit_polled_snapshots(&event_tx, &mut opened_gamepads, now_ms(), &mut trace_state);
+            let observed_at_ms = now_ms();
+            emit_polled_snapshots(
+                &event_tx,
+                &mut opened_gamepads,
+                observed_at_ms,
+                &mut trace_state,
+            );
+            #[cfg(target_os = "windows")]
+            if !xinput_direct_poller.poll_uncovered_users(
+                &event_tx,
+                &opened_gamepads,
+                observed_at_ms,
+                &mut trace_state,
+            ) {
+                return;
+            }
             last_polled_snapshot_at = now;
         }
         let startup_reenumerate_active =
@@ -395,6 +495,212 @@ fn configure_sdl_input_runtime() {
 struct OpenedSdl3Gamepad {
     gamepad: Gamepad,
     descriptor: Sdl3DeviceDescriptor,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Default)]
+struct XInputDirectPoller {
+    connected: HashMap<u32, Sdl3DeviceDescriptor>,
+}
+
+#[cfg(target_os = "windows")]
+impl XInputDirectPoller {
+    fn disconnect_sdl_covered_users(
+        &mut self,
+        event_tx: &Sender<Sdl3InputEvent>,
+        opened_gamepads: &HashMap<String, OpenedSdl3Gamepad>,
+        observed_at_ms: u64,
+        trace_state: &mut SourceTraceState,
+    ) -> bool {
+        let covered_users = opened_gamepad_xinput_users(opened_gamepads);
+        for user_index in covered_users {
+            if !self.disconnect_user(
+                event_tx,
+                user_index,
+                observed_at_ms,
+                trace_state,
+                "sdl-opened-device-covered-user",
+                None,
+            ) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn poll_uncovered_users(
+        &mut self,
+        event_tx: &Sender<Sdl3InputEvent>,
+        opened_gamepads: &HashMap<String, OpenedSdl3Gamepad>,
+        observed_at_ms: u64,
+        trace_state: &mut SourceTraceState,
+    ) -> bool {
+        let covered_users = opened_gamepad_xinput_users(opened_gamepads);
+        for user_index in 0..XINPUT_DIRECT_USER_COUNT {
+            if covered_users.contains(&user_index) {
+                continue;
+            }
+
+            match capture_xinput_user_state(user_index) {
+                Ok(snapshot) => {
+                    if !self.emit_snapshot(event_tx, snapshot, observed_at_ms, trace_state) {
+                        return false;
+                    }
+                }
+                Err(result) => {
+                    if !self.disconnect_user(
+                        event_tx,
+                        user_index,
+                        observed_at_ms,
+                        trace_state,
+                        "xinput-get-state-failed",
+                        Some(result),
+                    ) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    fn emit_snapshot(
+        &mut self,
+        event_tx: &Sender<Sdl3InputEvent>,
+        snapshot: XInputSnapshot,
+        observed_at_ms: u64,
+        trace_state: &mut SourceTraceState,
+    ) -> bool {
+        let metadata = SnapshotCaptureMetadata::xinput_direct(snapshot.user_index, snapshot.result);
+        let Some(descriptor) = self.connected.get(&snapshot.user_index).cloned() else {
+            return self.connect_user(event_tx, snapshot, observed_at_ms, metadata);
+        };
+
+        record_polled_snapshot_trace(
+            trace_state,
+            &descriptor,
+            observed_at_ms,
+            &snapshot.buttons,
+            &snapshot.axes,
+            &metadata,
+        );
+        send_event(
+            event_tx,
+            Sdl3InputEvent {
+                device: descriptor,
+                observed_at_ms,
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot.buttons,
+                    axes: snapshot.axes,
+                },
+            },
+        )
+    }
+
+    fn connect_user(
+        &mut self,
+        event_tx: &Sender<Sdl3InputEvent>,
+        snapshot: XInputSnapshot,
+        observed_at_ms: u64,
+        metadata: SnapshotCaptureMetadata,
+    ) -> bool {
+        let descriptor = descriptor_from_xinput_user(snapshot.user_index);
+        log_gamepad_diagnostics("xinput-direct-connected", &descriptor);
+        record_runtime_trace(
+            "sdl3XInputDirectDeviceConnected",
+            json!({
+                "deviceId": descriptor.device_id,
+                "deviceName": descriptor.name,
+                "xinputUserIndex": snapshot.user_index,
+                "xinputResult": snapshot.result,
+            }),
+        );
+
+        if !send_event(
+            event_tx,
+            Sdl3InputEvent {
+                device: descriptor.clone(),
+                observed_at_ms,
+                kind: Sdl3InputEventKind::Connected,
+            },
+        ) {
+            return false;
+        }
+
+        record_snapshot_trace(
+            "sdl3ConnectedBaselineSnapshot",
+            "xinput-direct-connected",
+            &descriptor,
+            observed_at_ms,
+            &snapshot.buttons,
+            &snapshot.axes,
+            &metadata,
+            None,
+        );
+
+        let sent = send_event(
+            event_tx,
+            Sdl3InputEvent {
+                device: descriptor.clone(),
+                observed_at_ms,
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot.buttons,
+                    axes: snapshot.axes,
+                },
+            },
+        );
+        if sent {
+            self.connected.insert(snapshot.user_index, descriptor);
+        }
+        sent
+    }
+
+    fn disconnect_user(
+        &mut self,
+        event_tx: &Sender<Sdl3InputEvent>,
+        user_index: u32,
+        observed_at_ms: u64,
+        trace_state: &mut SourceTraceState,
+        reason: &'static str,
+        xinput_result: Option<u32>,
+    ) -> bool {
+        let Some(descriptor) = self.connected.remove(&user_index) else {
+            return true;
+        };
+        trace_state.per_device.remove(&descriptor.device_id);
+        record_runtime_trace(
+            "sdl3XInputDirectDeviceDisconnected",
+            json!({
+                "deviceId": descriptor.device_id,
+                "deviceName": descriptor.name,
+                "xinputUserIndex": user_index,
+                "xinputResult": xinput_result,
+                "reason": reason,
+                "observedAtMs": observed_at_ms,
+            }),
+        );
+        send_event(
+            event_tx,
+            Sdl3InputEvent {
+                device: descriptor,
+                observed_at_ms,
+                kind: Sdl3InputEventKind::Disconnected,
+            },
+        )
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn opened_gamepad_xinput_users(opened_gamepads: &HashMap<String, OpenedSdl3Gamepad>) -> Vec<u32> {
+    let mut users = opened_gamepads
+        .values()
+        .filter_map(|opened| opened.gamepad.player_index())
+        .filter(|player_index| *player_index < XINPUT_DIRECT_USER_COUNT as u16)
+        .map(u32::from)
+        .collect::<Vec<_>>();
+    users.sort_unstable();
+    users.dedup();
+    users
 }
 
 fn handle_sdl_event(
@@ -897,14 +1203,15 @@ fn emit_connected_baseline_event(
         return false;
     }
 
-    let (buttons, axes) = capture_gamepad_baseline_state(gamepad);
+    let snapshot = capture_gamepad_baseline_state(gamepad);
     record_snapshot_trace(
         "sdl3ConnectedBaselineSnapshot",
         "connected-baseline",
         descriptor,
         observed_at_ms,
-        &buttons,
-        &axes,
+        &snapshot.buttons,
+        &snapshot.axes,
+        &snapshot.metadata,
         None,
     );
     send_event(
@@ -912,7 +1219,10 @@ fn emit_connected_baseline_event(
         Sdl3InputEvent {
             device: descriptor.clone(),
             observed_at_ms,
-            kind: Sdl3InputEventKind::Snapshot { buttons, axes },
+            kind: Sdl3InputEventKind::Snapshot {
+                buttons: snapshot.buttons,
+                axes: snapshot.axes,
+            },
         },
     )
 }
@@ -1198,14 +1508,15 @@ fn prime_sampling_on_devices(
         };
         opened.descriptor = descriptor_from_gamepad(device_id, &opened.gamepad);
         log_gamepad_diagnostics("prime-snapshot", &opened.descriptor);
-        let (buttons, axes) = capture_gamepad_baseline_state(&opened.gamepad);
+        let snapshot = capture_gamepad_baseline_state(&opened.gamepad);
         record_snapshot_trace(
             "sdl3PrimeSamplingSnapshot",
             "prime-sampling",
             &opened.descriptor,
             observed_at_ms,
-            &buttons,
-            &axes,
+            &snapshot.buttons,
+            &snapshot.axes,
+            &snapshot.metadata,
             None,
         );
         let _ = send_event(
@@ -1213,7 +1524,10 @@ fn prime_sampling_on_devices(
             Sdl3InputEvent {
                 device: opened.descriptor.clone(),
                 observed_at_ms,
-                kind: Sdl3InputEventKind::PrimeSnapshot { buttons, axes },
+                kind: Sdl3InputEventKind::PrimeSnapshot {
+                    buttons: snapshot.buttons,
+                    axes: snapshot.axes,
+                },
             },
         );
     }
@@ -1313,20 +1627,24 @@ fn emit_polled_snapshots(
         let Some(opened) = opened_gamepads.get_mut(&device_id) else {
             continue;
         };
-        let (buttons, axes) = capture_gamepad_baseline_state(&opened.gamepad);
+        let snapshot = capture_gamepad_baseline_state(&opened.gamepad);
         record_polled_snapshot_trace(
             trace_state,
             &opened.descriptor,
             observed_at_ms,
-            &buttons,
-            &axes,
+            &snapshot.buttons,
+            &snapshot.axes,
+            &snapshot.metadata,
         );
         let _ = send_event(
             event_tx,
             Sdl3InputEvent {
                 device: opened.descriptor.clone(),
                 observed_at_ms,
-                kind: Sdl3InputEventKind::Snapshot { buttons, axes },
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot.buttons,
+                    axes: snapshot.axes,
+                },
             },
         );
     }
@@ -1339,6 +1657,7 @@ fn record_snapshot_trace(
     observed_at_ms: u64,
     buttons: &[f32],
     axes: &[f32],
+    metadata: &SnapshotCaptureMetadata,
     extra_payload: Option<serde_json::Value>,
 ) {
     let summary = summarize_snapshot(buttons, axes);
@@ -1358,6 +1677,11 @@ fn record_snapshot_trace(
         "leftTriggerMilli": summary.left_trigger_milli,
         "rightTriggerMilli": summary.right_trigger_milli,
         "allZero": snapshot_is_all_zero(&summary),
+        "sampleSource": metadata.sample_source,
+        "playerIndex": metadata.player_index,
+        "xinputUserIndex": metadata.xinput_user_index,
+        "xinputResult": metadata.xinput_result,
+        "fallbackReason": metadata.fallback_reason,
     });
     if let Some(extra_payload) = extra_payload {
         payload["extra"] = extra_payload;
@@ -1371,9 +1695,10 @@ fn record_polled_snapshot_trace(
     observed_at_ms: u64,
     buttons: &[f32],
     axes: &[f32],
+    metadata: &SnapshotCaptureMetadata,
 ) {
     let summary = summarize_snapshot(buttons, axes);
-    let signature = snapshot_summary_signature(&summary);
+    let signature = snapshot_summary_signature(&summary, metadata);
     let device_state = trace_state
         .per_device
         .entry(descriptor.device_id.clone())
@@ -1399,6 +1724,7 @@ fn record_polled_snapshot_trace(
             observed_at_ms,
             buttons,
             axes,
+            metadata,
             Some(json!({
                 "previousSignature": previous_signature,
                 "signature": signature,
@@ -1421,6 +1747,7 @@ fn record_polled_snapshot_trace(
         observed_at_ms,
         buttons,
         axes,
+        metadata,
         Some(json!({
             "signature": signature,
             "repeatedPollCount": device_state.repeated_poll_count,
@@ -1470,30 +1797,94 @@ fn snapshot_is_all_zero(summary: &SnapshotSummary) -> bool {
         && summary.right_trigger_milli == 0
 }
 
-fn snapshot_summary_signature(summary: &SnapshotSummary) -> String {
+fn snapshot_summary_signature(
+    summary: &SnapshotSummary,
+    metadata: &SnapshotCaptureMetadata,
+) -> String {
     format!(
-        "{}:{}:{}:{}:{}",
+        "{}:{}:{}:{}:{}:{}:{:?}:{:?}:{:?}:{:?}",
         summary.pressed_button_count,
         summary.non_zero_axis_count,
         summary.max_abs_axis_milli,
         summary.left_trigger_milli,
-        summary.right_trigger_milli
+        summary.right_trigger_milli,
+        metadata.sample_source,
+        metadata.player_index,
+        metadata.xinput_user_index,
+        metadata.xinput_result,
+        metadata.fallback_reason,
     )
 }
 
 #[cfg(target_os = "windows")]
-fn try_capture_xinput_state(player_index: Option<i32>) -> Option<(Vec<f32>, Vec<f32>)> {
+#[derive(Clone, Debug)]
+struct XInputSnapshot {
+    buttons: Vec<f32>,
+    axes: Vec<f32>,
+    user_index: u32,
+    result: u32,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum XInputSnapshotMiss {
+    MissingPlayerIndex,
+    PlayerIndexOutOfRange { player_index: u16 },
+    GetStateFailed { user_index: u32, result: u32 },
+}
+
+#[cfg(target_os = "windows")]
+impl XInputSnapshotMiss {
+    fn metadata(self, player_index: Option<u16>) -> SnapshotCaptureMetadata {
+        match self {
+            Self::MissingPlayerIndex => SnapshotCaptureMetadata::sdl_after_xinput_miss(
+                player_index,
+                None,
+                None,
+                "player-index-missing",
+            ),
+            Self::PlayerIndexOutOfRange { .. } => SnapshotCaptureMetadata::sdl_after_xinput_miss(
+                player_index,
+                None,
+                None,
+                "player-index-out-of-range",
+            ),
+            Self::GetStateFailed { user_index, result } => {
+                SnapshotCaptureMetadata::sdl_after_xinput_miss(
+                    player_index,
+                    Some(user_index),
+                    Some(result),
+                    "xinput-get-state-failed",
+                )
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn try_capture_xinput_state(
+    player_index: Option<u16>,
+) -> Result<XInputSnapshot, XInputSnapshotMiss> {
+    let index = player_index.ok_or(XInputSnapshotMiss::MissingPlayerIndex)?;
+    if index > 3 {
+        return Err(XInputSnapshotMiss::PlayerIndexOutOfRange {
+            player_index: index,
+        });
+    }
+    let user_index = index as u32;
+
+    capture_xinput_user_state(user_index)
+        .map_err(|result| XInputSnapshotMiss::GetStateFailed { user_index, result })
+}
+
+#[cfg(target_os = "windows")]
+fn capture_xinput_user_state(user_index: u32) -> Result<XInputSnapshot, u32> {
     use windows_sys::Win32::UI::Input::XboxController::{XInputGetState, XINPUT_STATE};
 
-    let index = player_index? as u32;
-    if index > 3 {
-        return None;
-    }
-
     let mut state: XINPUT_STATE = unsafe { std::mem::zeroed() };
-    let result = unsafe { XInputGetState(index, &mut state) };
+    let result = unsafe { XInputGetState(user_index, &mut state) };
     if result != 0 {
-        return None;
+        return Err(result);
     }
 
     let pad = state.Gamepad;
@@ -1527,14 +1918,35 @@ fn try_capture_xinput_state(player_index: Option<i32>) -> Option<(Vec<f32>, Vec<
     buttons[6] = ((lt + 1.0) * 0.5).clamp(0.0, 1.0);
     buttons[7] = ((rt + 1.0) * 0.5).clamp(0.0, 1.0);
 
-    Some((buttons, axes))
+    Ok(XInputSnapshot {
+        buttons,
+        axes,
+        user_index,
+        result,
+    })
 }
 
-fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> (Vec<f32>, Vec<f32>) {
+fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> CapturedSnapshot {
+    let player_index = gamepad.player_index();
+
     #[cfg(target_os = "windows")]
-    if let Some(state) = try_capture_xinput_state(gamepad.player_index()) {
-        return state;
-    }
+    let sdl_metadata = match try_capture_xinput_state(player_index) {
+        Ok(snapshot) => {
+            return CapturedSnapshot {
+                buttons: snapshot.buttons,
+                axes: snapshot.axes,
+                metadata: SnapshotCaptureMetadata::xinput_fallback(
+                    player_index,
+                    snapshot.user_index,
+                    snapshot.result,
+                ),
+            };
+        }
+        Err(error) => error.metadata(player_index),
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let sdl_metadata = SnapshotCaptureMetadata::sdl(player_index, None);
 
     let mut buttons = vec![0.0; 17];
     let mut axes = vec![0.0; 6];
@@ -1576,7 +1988,11 @@ fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> (Vec<f32>, Vec<f32>) {
     buttons[6] = axis_to_trigger_button_value(left_trigger);
     buttons[7] = axis_to_trigger_button_value(right_trigger);
 
-    (buttons, axes)
+    CapturedSnapshot {
+        buttons,
+        axes,
+        metadata: sdl_metadata,
+    }
 }
 
 fn translate_button_event(
@@ -1748,6 +2164,41 @@ fn descriptor_from_gamepad(device_id: String, gamepad: &Gamepad) -> Sdl3DeviceDe
     };
     descriptor.classification = classify_device_descriptor(&descriptor);
     descriptor
+}
+
+#[cfg(target_os = "windows")]
+fn descriptor_from_xinput_user(user_index: u32) -> Sdl3DeviceDescriptor {
+    let player_index = u16::try_from(user_index).ok();
+    Sdl3DeviceDescriptor {
+        device_id: xinput_direct_device_id(user_index),
+        name: format!("XInput Controller {}", user_index.saturating_add(1)),
+        connection: Some(OhMyGamepadConnectionKindDto::Unknown),
+        vendor_id: None,
+        product_id: None,
+        product_version: None,
+        firmware_version: None,
+        serial_number: None,
+        path: Some(format!("xinput://user/{user_index}")),
+        mapping: Some("xinput-direct".to_owned()),
+        player_index,
+        gamepad_type: Some(OhMyGamepadDeviceTypeDto::Xbox360),
+        power_state: Some(OhMyGamepadPowerStateDto::Unknown),
+        battery_percent: None,
+        touchpad_count: None,
+        touchpad_finger_count: None,
+        classification: OhMyGamepadDeviceClassificationDto {
+            is_handheld_builtin: false,
+            is_virtual_controller: false,
+            is_steam_virtual: false,
+            is_motion_native_candidate: false,
+            confidence: OhMyGamepadIdentityConfidenceDto::Medium,
+            reasons: vec!["source:xinput-direct".to_owned()],
+        },
+        capabilities: OhMyGamepadCapabilityFlagsDto {
+            supports_player_index: player_index.is_some(),
+            ..OhMyGamepadCapabilityFlagsDto::default()
+        },
+    }
 }
 
 fn classify_device_descriptor(
@@ -1952,6 +2403,11 @@ fn gamepad_instance_id_to_device_id(gamepad: &Gamepad) -> Option<String> {
     Some(gamepad.id().ok()?.0.to_string())
 }
 
+#[cfg(target_os = "windows")]
+fn xinput_direct_device_id(user_index: u32) -> String {
+    format!("xinput:user:{user_index}")
+}
+
 fn joystick_instance_id_to_device_id(joystick_instance_id: u32) -> String {
     joystick_instance_id.to_string()
 }
@@ -1993,6 +2449,30 @@ mod tests {
                     value: expected,
                 },
             }]
+        );
+    }
+
+    #[test]
+    fn polled_snapshot_signature_tracks_sample_source() {
+        let summary = SnapshotSummary {
+            pressed_button_count: 1,
+            non_zero_axis_count: 0,
+            max_abs_axis_milli: 0,
+            left_trigger_milli: 0,
+            right_trigger_milli: 0,
+        };
+        let sdl_metadata = SnapshotCaptureMetadata::sdl(Some(0), Some("xinput-get-state-failed"));
+        let xinput_metadata = SnapshotCaptureMetadata {
+            sample_source: "xinputFallback",
+            player_index: Some(0),
+            xinput_user_index: Some(0),
+            xinput_result: Some(0),
+            fallback_reason: None,
+        };
+
+        assert_ne!(
+            snapshot_summary_signature(&summary, &sdl_metadata),
+            snapshot_summary_signature(&summary, &xinput_metadata)
         );
     }
 }
