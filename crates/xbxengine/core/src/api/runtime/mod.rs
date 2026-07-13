@@ -174,7 +174,7 @@ impl Default for XbxEngineNegotiationRuntimeConfig {
             audio_bitrate_kbps: 128,
             force_mono_audio: false,
             prefer_ipv6: false,
-            offer_profile: "macos".to_string(),
+            offer_profile: "4d".to_string(),
             ice_policy: XbxEngineIceCandidatePolicyRuntimeConfig::default(),
         }
     }
@@ -403,6 +403,12 @@ pub struct XbxEngineRuntime<
     session: Option<XbxEngineSessionDto>,
     snapshot: XbxEngineRuntimeSnapshot,
     health: XbxEngineRuntimeHealth,
+    h264_profile_fallback: Option<XbxEngineH264ProfileFallbackState>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct XbxEngineH264ProfileFallbackState {
+    configured_offer_profile_token: String,
 }
 
 impl<THostBridge, TEventSink>
@@ -447,6 +453,7 @@ where
             session: None,
             snapshot: XbxEngineRuntimeSnapshot::default(),
             health: XbxEngineRuntimeHealth::default(),
+            h264_profile_fallback: None,
         }
     }
 

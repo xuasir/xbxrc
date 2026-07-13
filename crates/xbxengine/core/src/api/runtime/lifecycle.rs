@@ -9,9 +9,9 @@ use xbxengine_protocol::{
 
 use super::{
     dedupe_remote_ice_candidates, ice_candidate_dedupe_key, is_end_of_candidates_marker,
-    now_ms_f64, XbxEngineEventSink, XbxEngineHostBridge, XbxEngineReconnectTriggerSource,
-    XbxEngineRuntime, XbxEngineRuntimeError, XbxEngineRuntimeState,
-    XbxEngineVideoPipelineRuntimeConfig,
+    now_ms_f64, XbxEngineEventSink, XbxEngineH264ProfileFallbackState, XbxEngineHostBridge,
+    XbxEngineReconnectTriggerSource, XbxEngineRuntime, XbxEngineRuntimeError,
+    XbxEngineRuntimeState, XbxEngineVideoPipelineRuntimeConfig,
 };
 use crate::session::recovery::STALL_SIGNAL_STABILITY_MS;
 use crate::transport::rtc::recovery::contract::{
@@ -41,6 +41,7 @@ const RUNTIME_RECONNECT_NO_PENDING_LOCAL_MIN_STREAK: u32 = 48;
 const RUNTIME_RECONNECT_STALE_DISPLAY_LOCAL_MS: f64 = 600.0;
 const RUNTIME_RECONNECT_HEALTHY_MIN_TWCC_DELIVERY_RATIO: f64 = 0.95;
 const RUNTIME_RECONNECT_HEALTHY_MAX_TWCC_LOSS_RATIO: f64 = 0.05;
+const H264_BROWSER_FALLBACK_OFFER_PROFILE: &str = "42e";
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -75,6 +76,7 @@ where
         let previous_session = self.session.clone();
         let previous_snapshot = self.snapshot.clone();
         let previous_health = self.health.clone();
+        let previous_h264_profile_fallback = self.h264_profile_fallback.clone();
         self.state = XbxEngineRuntimeState::Starting;
         self.session = Some(session);
         self.snapshot.viewport = Some(viewport);
@@ -107,6 +109,7 @@ where
                 self.session = previous_session;
                 self.snapshot = previous_snapshot;
                 self.health = previous_health;
+                self.h264_profile_fallback = previous_h264_profile_fallback;
                 Err(error)
             }
         }
@@ -188,6 +191,7 @@ where
     }
 
     pub fn stop(&mut self) {
+        self.clear_h264_profile_fallback_for_new_execution();
         if let Err(error) = self.host_bridge.clear_pending_gamepad_rumble_requests() {
             self.emit_error("clearPendingGamepadRumbleRequestsFailed", error.to_string());
         }
@@ -524,6 +528,7 @@ where
         if decoder_fresh || present_fresh {
             return false;
         }
+        self.maybe_apply_startup_h264_profile_fallback(runtime_stats, terminal_reason, now_ms);
         if let Err(error) = self.request_reconnect(
             XbxEngineReconnectReasonDto::MediaStalled,
             XbxEngineReconnectTriggerSource::Other,
@@ -536,6 +541,82 @@ where
             }
         }
         true
+    }
+
+    fn maybe_apply_startup_h264_profile_fallback(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+        terminal_reason: Option<&str>,
+        now_ms: f64,
+    ) -> bool {
+        if self.h264_profile_fallback.is_some() {
+            return false;
+        }
+        if !remote_terminal_reason_supports_h264_profile_fallback(terminal_reason) {
+            return false;
+        }
+        if h264_profile_fallback_has_playout_success(runtime_stats) {
+            return false;
+        }
+        let configured_offer_profile = self.config.webrtc.negotiation.offer_profile.clone();
+        let current_profile = normalize_offer_profile_token(&configured_offer_profile);
+        if !is_high_quality_h264_profile_family(&current_profile) {
+            return false;
+        }
+        let selected_profile = runtime_stats
+            .latest_remote_answer_observation
+            .as_ref()
+            .and_then(|observation| observation.selected_video_profile_level_id.as_deref());
+        if !selected_profile.is_some_and(is_high_quality_h264_profile_family) {
+            return false;
+        }
+
+        self.h264_profile_fallback = Some(XbxEngineH264ProfileFallbackState {
+            configured_offer_profile_token: configured_offer_profile.clone(),
+        });
+        self.config.webrtc.negotiation.offer_profile =
+            H264_BROWSER_FALLBACK_OFFER_PROFILE.to_string();
+        if let Err(error) = self.media_backend.sync_runtime_config(&self.config) {
+            self.config.webrtc.negotiation.offer_profile = configured_offer_profile;
+            self.h264_profile_fallback = None;
+            self.emit_error("startupH264ProfileFallbackSyncFailed", error.to_string());
+            return false;
+        }
+        self.snapshot.last_recovery_action = Some("startupH264ProfileFallback".to_string());
+        self.snapshot.last_recovery_action_at_ms = Some(now_ms);
+        self.snapshot.last_recovery_reason = Some(format!(
+            "startupH264ProfileFallback:previousProfile={current_profile}:nextProfile={}:terminalReason={}",
+            H264_BROWSER_FALLBACK_OFFER_PROFILE,
+            terminal_reason.unwrap_or("unknown")
+        ));
+        self.snapshot.latest_runtime_observation_label =
+            Some("startupH264ProfileFallback".to_string());
+        self.snapshot.latest_runtime_observation_summary = Some(format!(
+            "previousProfile={current_profile} nextProfile={} terminalReason={} selectedAnswerProfile={} unresolvedKeyframes={} playout=false displayState={}",
+            H264_BROWSER_FALLBACK_OFFER_PROFILE,
+            terminal_reason.unwrap_or("unknown"),
+            selected_profile.unwrap_or("unknown"),
+            runtime_stats.receive_keyframe_sent_count_unresolved,
+            runtime_stats
+                .receive_display_state
+                .as_deref()
+                .unwrap_or("unknown")
+        ));
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime] startup h264 profile fallback previousProfile={} nextProfile={} terminalReason={} selectedAnswerProfile={} unresolvedKeyframes={}",
+            current_profile,
+            H264_BROWSER_FALLBACK_OFFER_PROFILE,
+            terminal_reason.unwrap_or("unknown"),
+            selected_profile.unwrap_or("unknown"),
+            runtime_stats.receive_keyframe_sent_count_unresolved
+        );
+        true
+    }
+
+    fn clear_h264_profile_fallback_for_new_execution(&mut self) {
+        if let Some(state) = self.h264_profile_fallback.take() {
+            self.config.webrtc.negotiation.offer_profile = state.configured_offer_profile_token;
+        }
     }
 
     fn has_fresh_post_decode_display_recovery_evidence(
@@ -1035,6 +1116,7 @@ where
         render: Option<&XbxEngineRenderProjectionDto>,
         ice_candidate_policy: Option<&XbxEngineIceCandidatePolicyDto>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        self.clear_h264_profile_fallback_for_new_execution();
         if let Some(runtime) = runtime {
             if let Some(video_bitrate_kbps) = runtime.max_video_bitrate_kbps {
                 self.config.webrtc.negotiation.video_bitrate_kbps = video_bitrate_kbps;
@@ -2120,11 +2202,32 @@ fn normalize_offer_profile_token(profile: &str) -> String {
         .unwrap_or(normalized.as_str())
         .to_string();
     match normalized.as_str() {
-        "high" | "main" => "4d".to_string(),
-        "normal" | "default" | "browser" | "macos" | "rust-owned" => "42e".to_string(),
-        "low" | "baseline" => "420".to_string(),
+        "high" => "64".to_string(),
+        "main" => "4d".to_string(),
+        "normal" | "default" | "macos" | "rust-owned" => "4d".to_string(),
+        "browser" | "baseline" | "constrained-baseline" => "42e".to_string(),
+        "low" => "420".to_string(),
         other => other.to_string(),
     }
+}
+
+fn is_high_quality_h264_profile_family(profile: &str) -> bool {
+    let normalized = normalize_offer_profile_token(profile);
+    normalized.starts_with("4d") || normalized.starts_with("64")
+}
+
+fn remote_terminal_reason_supports_h264_profile_fallback(reason: Option<&str>) -> bool {
+    matches!(
+        reason,
+        Some("remote-no-response" | "remote-continuation-only" | "remote-idr-unusable")
+    )
+}
+
+fn h264_profile_fallback_has_playout_success(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+) -> bool {
+    runtime_stats.latest_video_host_present_time_ms.is_some()
+        || runtime_stats.receive_display_state.as_deref() == Some("display-stable")
 }
 
 fn is_terminal_remote_session_inactive_error(error: &XbxEngineRuntimeError) -> bool {

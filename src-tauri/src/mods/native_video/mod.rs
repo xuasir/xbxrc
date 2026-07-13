@@ -142,19 +142,12 @@ fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
         // 高频阶段在 present/pre-present 主链上会逐帧触发，按窗口采样降级。
         "hostMailboxIdle"
         | "hostMailboxRetainedDisplayed"
-        | "hostMailboxTakeDecision"
-        | "hostMailboxAccepted"
         | "prepare_sample_ready"
-        | "hostFramePresented"
         | "run_on_main_thread_delay"
         | "tick_total"
         | "hostMailboxSubmitGap"
-        | "present_tick_dispatch_coalesced"
-        | "present_tick_immediate_deferred"
         | "present_tick_rerun"
         | "hostMailboxUpdateFailed"
-        | "present_tick_failed"
-        | "present_tick_blocked"
         | "videoEffectProcessed" => HostTimingRecordPolicy::Sampled,
         _ => HostTimingRecordPolicy::Always,
     }
@@ -2145,6 +2138,18 @@ unsafe extern "C" fn macos_display_link_callback(
         return 0;
     };
     if !request_host_present_tick_dispatch(&context.render_loop_pending, &context.rerun_requested) {
+        record_native_video_timing_event_lazy(
+            context.runtime_trace.as_ref(),
+            "wgpu",
+            "present_tick_dispatch_coalesced",
+            &context.viewport_id,
+            &context.window_label,
+            || {
+                serde_json::json!({
+                    "source": "displayLink",
+                })
+            },
+        );
         return 0;
     }
     let Some(window) = context.app_handle.get_window(&context.window_label) else {

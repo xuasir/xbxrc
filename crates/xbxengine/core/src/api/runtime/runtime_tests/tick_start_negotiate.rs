@@ -20,8 +20,105 @@ use xbxengine_protocol::{
 
 use crate::{
     PlaceholderXbxEngineMediaBackend, XbxEngineInputStatus, XbxEngineMediaNegotiation,
-    XbxEngineMediaRuntimeStats,
+    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation,
 };
+
+#[test]
+fn default_runtime_prefers_main_h264_profile_for_rust_owned_negotiation() {
+    assert_eq!(
+        XbxEngineRuntimeConfig::default()
+            .webrtc
+            .negotiation
+            .offer_profile,
+        "4d"
+    );
+}
+
+fn runtime_projection_with_h264_profile(profile: &str) -> XbxEngineRuntimeProjectionDto {
+    XbxEngineRuntimeProjectionDto {
+        codec: Some(XbxEngineRuntimeCodecPreferenceDto {
+            mime_type: "video/H264".to_string(),
+            profiles: vec![profile.to_string()],
+        }),
+        max_video_bitrate_kbps: Some(42_000),
+        max_audio_bitrate_kbps: Some(192),
+        target_video_width: 1920,
+        target_video_height: 1080,
+        force_mono_audio: false,
+        prefer_ipv6: true,
+        bwe_mode: "hybrid".to_string(),
+        forced_remb_kbps: Some(24_000),
+        adaptive_remb_enabled: false,
+        remb_floor_kbps: 12_000,
+        remb_ceiling_kbps: 60_000,
+        remb_ramp_up_step_kbps: 3_000,
+        remb_ramp_down_factor: 750,
+        video_pipeline: XbxEngineRuntimeVideoPipelineDto {
+            feedback_interval_ms: 333,
+            nack_window_ms: 321,
+            nack_max_age_ms: 123,
+            nack_retry_interval_ms: 45,
+            nack_burst_count: 8,
+            nack_max_retry_count: 6,
+            jitter_buffer_min_delay_ms: 12,
+            jitter_buffer_max_delay_ms: 34,
+            jitter_buffer_max_packets: 789,
+            idle_timeout_ms: 222,
+            late_frame_drop_threshold_ms: 444,
+            backlog_drop_threshold_packets: 11,
+            jitter_early_emit_enabled: false,
+        },
+        recovery: XbxEngineRuntimeRecoveryDto {
+            first_frame_grace_ms: 7_000,
+            keyframe_request_stall_ms: 1_100,
+            keyframe_loss_burst_threshold: 4,
+            decoder_reset_after_keyframe_wait_ms: 333,
+            decoder_reset_request_cooldown_ms: 1_234,
+            reconnect_stall_ms: 3_210,
+            stall_recovery_cooldown_ms: 4_321,
+        },
+        polling_rate_hz: 120,
+        vibration: true,
+    }
+}
+
+fn startup_h264_profile_fallback_backend(answer_profile: &str) -> ScriptedMediaBackend {
+    ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_remote_answer_observation: Some(XbxEngineRemoteAnswerObservation {
+                observation_id: 1,
+                video_payload_order: vec![124],
+                selected_video_payload_type: Some(124),
+                selected_video_mime_type: Some("video/H264".to_string()),
+                selected_video_profile_level_id: Some(answer_profile.to_string()),
+                selected_video_h264_sprop_parameter_sets: None,
+                accepted_video_rtcp_feedback: vec!["nack pli".to_string()],
+                accepted_audio_rtcp_feedback: Vec::new(),
+                accepted_video_header_extensions: Vec::new(),
+                accepted_audio_header_extensions: Vec::new(),
+                observed_at_ms: 1_000.0,
+            }),
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            reference_chain_state: Some("need-keyframe".to_string()),
+            ..Default::default()
+        },
+    )
+}
 
 #[test]
 fn start_negotiates_remote_and_reaches_running() {
@@ -800,6 +897,433 @@ fn reconnect_keeps_remote_session_alive_before_restart_negotiation() {
             phase: XbxEngineRuntimePhaseDto::Reconnecting,
         }
     )));
+}
+
+#[test]
+fn startup_remote_terminal_falls_back_from_main_to_browser_h264_profile_before_reconnect() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_remote_answer_observation: Some(XbxEngineRemoteAnswerObservation {
+                observation_id: 1,
+                video_payload_order: vec![124],
+                selected_video_payload_type: Some(124),
+                selected_video_mime_type: Some("video/H264".to_string()),
+                selected_video_profile_level_id: Some("4d002a".to_string()),
+                selected_video_h264_sprop_parameter_sets: None,
+                accepted_video_rtcp_feedback: vec!["nack pli".to_string()],
+                accepted_audio_rtcp_feedback: Vec::new(),
+                accepted_video_header_extensions: Vec::new(),
+                accepted_audio_header_extensions: Vec::new(),
+                observed_at_ms: 1_000.0,
+            }),
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            reference_chain_state: Some("need-keyframe".to_string()),
+            ..Default::default()
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e");
+    assert!(runtime.h264_profile_fallback.is_some());
+    assert_eq!(
+        runtime
+            .snapshot()
+            .latest_runtime_observation_label
+            .as_deref(),
+        Some("startupH264ProfileFallback")
+    );
+    assert_eq!(runtime.snapshot().negotiation_attempt_count, 2);
+    assert!(requests.borrow().iter().any(|request| matches!(
+        request,
+        XbxEngineHostRequestDto::ExchangeOffer {
+            channel,
+            restart,
+            ..
+        } if channel == "media" && *restart
+    )));
+}
+
+#[test]
+fn startup_h264_profile_fallback_treats_decode_and_clean_anchor_as_incomplete_playout() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = startup_h264_profile_fallback_backend("4d002a");
+    {
+        let mut stats = backend
+            .runtime_stats
+            .lock()
+            .expect("runtime stats lock should succeed");
+        stats.latest_video_decode_ok_time_ms = Some(1.0);
+        stats.video_anchor_clean_observed_at_ms = Some(1.0);
+        stats.recovery_fresh_anchor_recovered_at_ms = Some(1.0);
+        stats.receive_display_state = Some("none".to_string());
+    }
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e");
+    assert!(runtime.h264_profile_fallback.is_some());
+    assert_eq!(
+        runtime
+            .snapshot()
+            .latest_runtime_observation_label
+            .as_deref(),
+        Some("startupH264ProfileFallback")
+    );
+    assert!(runtime
+        .snapshot()
+        .latest_runtime_observation_summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("playout=false")));
+}
+
+#[test]
+fn startup_h264_profile_fallback_is_suppressed_after_host_present() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = startup_h264_profile_fallback_backend("4d002a");
+    {
+        let mut stats = backend
+            .runtime_stats
+            .lock()
+            .expect("runtime stats lock should succeed");
+        stats.latest_video_host_present_time_ms = Some(1.0);
+        stats.receive_display_state = Some("none".to_string());
+    }
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "4d");
+    assert!(runtime.h264_profile_fallback.is_none());
+    assert_ne!(
+        runtime
+            .snapshot()
+            .latest_runtime_observation_label
+            .as_deref(),
+        Some("startupH264ProfileFallback")
+    );
+}
+
+#[test]
+fn startup_h264_profile_fallback_is_suppressed_after_display_stable() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = startup_h264_profile_fallback_backend("4d002a");
+    {
+        let mut stats = backend
+            .runtime_stats
+            .lock()
+            .expect("runtime stats lock should succeed");
+        stats.receive_display_state = Some("display-stable".to_string());
+    }
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "4d");
+    assert!(runtime.h264_profile_fallback.is_none());
+    assert_ne!(
+        runtime
+            .snapshot()
+            .latest_runtime_observation_label
+            .as_deref(),
+        Some("startupH264ProfileFallback")
+    );
+}
+
+#[test]
+fn startup_h264_profile_fallback_restores_configured_profile_on_next_start() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_remote_answer_observation: Some(XbxEngineRemoteAnswerObservation {
+                observation_id: 1,
+                video_payload_order: vec![123],
+                selected_video_payload_type: Some(123),
+                selected_video_mime_type: Some("video/H264".to_string()),
+                selected_video_profile_level_id: Some("64002a".to_string()),
+                selected_video_h264_sprop_parameter_sets: None,
+                accepted_video_rtcp_feedback: vec!["nack pli".to_string()],
+                accepted_audio_rtcp_feedback: Vec::new(),
+                accepted_video_header_extensions: Vec::new(),
+                accepted_audio_header_extensions: Vec::new(),
+                observed_at_ms: 1_000.0,
+            }),
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            reference_chain_state: Some("need-keyframe".to_string()),
+            ..Default::default()
+        },
+    );
+    let mut config = XbxEngineRuntimeConfig::default();
+    config.webrtc.negotiation.offer_profile = "64".to_string();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        config,
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e");
+    assert!(runtime.h264_profile_fallback.is_some());
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime restart should restore configured profile");
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "64");
+    assert!(runtime.h264_profile_fallback.is_none());
+}
+
+#[test]
+fn startup_h264_profile_fallback_restores_configured_token_on_stop() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let mut config = XbxEngineRuntimeConfig::default();
+    config.webrtc.negotiation.offer_profile = "high".to_string();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        config,
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        startup_h264_profile_fallback_backend("64002a"),
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e");
+    assert!(runtime.h264_profile_fallback.is_some());
+
+    runtime.stop();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "high");
+    assert!(runtime.h264_profile_fallback.is_none());
+}
+
+#[test]
+fn startup_h264_profile_fallback_allows_next_start_runtime_spec_override() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let mut config = XbxEngineRuntimeConfig::default();
+    config.webrtc.negotiation.offer_profile = "64".to_string();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        config,
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        startup_h264_profile_fallback_backend("64002a"),
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e");
+    assert!(runtime.h264_profile_fallback.is_some());
+
+    runtime
+        .start(
+            session(),
+            viewport(),
+            1.0,
+            Some(runtime_projection_with_h264_profile("42e01f")),
+            None,
+        )
+        .expect("runtime restart with spec should succeed");
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e01f");
+    assert!(runtime.h264_profile_fallback.is_none());
+}
+
+#[test]
+fn startup_h264_profile_fallback_respects_baseline_configuration() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_remote_answer_observation: Some(XbxEngineRemoteAnswerObservation {
+                observation_id: 1,
+                video_payload_order: vec![125],
+                selected_video_payload_type: Some(125),
+                selected_video_mime_type: Some("video/H264".to_string()),
+                selected_video_profile_level_id: Some("42e02a".to_string()),
+                selected_video_h264_sprop_parameter_sets: None,
+                accepted_video_rtcp_feedback: vec!["nack pli".to_string()],
+                accepted_audio_rtcp_feedback: Vec::new(),
+                accepted_video_header_extensions: Vec::new(),
+                accepted_audio_header_extensions: Vec::new(),
+                observed_at_ms: 1_000.0,
+            }),
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            reference_chain_state: Some("need-keyframe".to_string()),
+            ..Default::default()
+        },
+    );
+    let mut config = XbxEngineRuntimeConfig::default();
+    config.webrtc.negotiation.offer_profile = "42e".to_string();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        config,
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e");
+    assert!(runtime.h264_profile_fallback.is_none());
+    assert_ne!(
+        runtime
+            .snapshot()
+            .latest_runtime_observation_label
+            .as_deref(),
+        Some("startupH264ProfileFallback")
+    );
+}
+
+#[test]
+fn startup_h264_profile_fallback_waits_for_selected_answer_profile_evidence() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_receive_picture_recovery_terminal_reason: Some("remote-no-response".to_string()),
+            receive_keyframe_required: Some(true),
+            receive_keyframe_response_state: Some("no-packet".to_string()),
+            receive_keyframe_sent_count_unresolved: 7,
+            reference_chain_state: Some("need-keyframe".to_string()),
+            ..Default::default()
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    runtime.tick();
+
+    assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "4d");
+    assert!(runtime.h264_profile_fallback.is_none());
+    assert_ne!(
+        runtime
+            .snapshot()
+            .latest_runtime_observation_label
+            .as_deref(),
+        Some("startupH264ProfileFallback")
+    );
 }
 
 #[test]

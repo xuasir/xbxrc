@@ -1667,7 +1667,29 @@ export function createBrowserRuntime(options: {
         emit({ type: 'microphoneStateChanged', capturing, paused })
       }),
       eventBus.on('media.videoFramePresented', (meta) => {
+        const firstPresentedTrace = firstPresentedAtMs === undefined
         markFrameReady(meta)
+        if (firstPresentedTrace) {
+          void recordRuntimeTraceEvent('browserWebRtcTimelineObserved', {
+            kind: 'firstPresented',
+            observedAtMs: Date.now(),
+            elapsedSinceConnectedMs: connectedAt === null ? null : Math.max(0, Date.now() - connectedAt),
+            trackingSource: meta?.trackingSource ?? null,
+            callbackIntervalMs: meta?.callbackIntervalMs ?? null,
+            presentedFramesDelta: meta?.presentedFramesDelta ?? null,
+            mediaTimeDeltaSec: meta?.mediaTimeDeltaSec ?? null,
+            expectedDisplayLeadMs: meta?.expectedDisplayLeadMs ?? null,
+          })
+        }
+      }),
+      eventBus.on('stats.browserWebRtc', (sample) => {
+        void recordRuntimeTraceEvent('browserWebRtcStatsObserved', { ...sample })
+      }),
+      eventBus.on('stats.browserWebRtcTimeline', (event) => {
+        void recordRuntimeTraceEvent('browserWebRtcTimelineObserved', { ...event })
+      }),
+      eventBus.on('transport.sdpObserved', (observation) => {
+        void recordRuntimeTraceEvent('browserWebRtcSdpObserved', { ...observation })
       }),
       eventBus.on('media.videoReady', ({ width, height }) => {
         if (transportState === 'connected') {

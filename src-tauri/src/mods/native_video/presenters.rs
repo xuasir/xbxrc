@@ -285,8 +285,33 @@ impl WindowsWgpuPresenter {
             &self.render_loop_pending,
             &self.render_loop_rerun_requested,
         ) {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "present_tick_dispatch_coalesced",
+                &self.viewport_id,
+                &self.window_label,
+                || {
+                    serde_json::json!({
+                        "source": "immediateSubmit",
+                    })
+                },
+            );
             return;
         }
+        record_native_video_timing_event_lazy(
+            self.runtime_trace.as_ref(),
+            "wgpu",
+            "present_tick_immediate_requested",
+            &self.viewport_id,
+            &self.window_label,
+            || {
+                serde_json::json!({
+                    "source": "immediateSubmit",
+                    "target": "mainThread",
+                })
+            },
+        );
         let Some(window) = self.app_handle.get_window(&self.window_label) else {
             clear_host_present_tick_dispatch(
                 &self.render_loop_pending,
@@ -1008,8 +1033,33 @@ impl MacOsWgpuPresenter {
             &self.render_loop_pending,
             &self.render_loop_rerun_requested,
         ) {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "present_tick_dispatch_coalesced",
+                &self.viewport_id,
+                &self.window_label,
+                || {
+                    serde_json::json!({
+                        "source": "immediateSubmit",
+                    })
+                },
+            );
             return;
         }
+        record_native_video_timing_event_lazy(
+            self.runtime_trace.as_ref(),
+            "wgpu",
+            "present_tick_immediate_requested",
+            &self.viewport_id,
+            &self.window_label,
+            || {
+                serde_json::json!({
+                    "source": "immediateSubmit",
+                    "target": "mainThread",
+                })
+            },
+        );
         let Some(window) = self.app_handle.get_window(&self.window_label) else {
             clear_host_present_tick_dispatch(
                 &self.render_loop_pending,
@@ -1645,6 +1695,19 @@ impl MacOsVideoPresenter {
             );
             return;
         }
+        record_native_video_timing_event_lazy(
+            self.runtime_trace.as_ref(),
+            "layer",
+            "present_tick_immediate_requested",
+            &self.viewport_id,
+            &self.window_label,
+            || {
+                serde_json::json!({
+                    "source": "immediateSubmit",
+                    "target": "mainThread",
+                })
+            },
+        );
         let Some(window) = self.app_handle.get_window(&self.window_label) else {
             clear_host_present_tick_dispatch(
                 &self.render_loop_pending,

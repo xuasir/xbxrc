@@ -13,7 +13,7 @@ import type {
   LogicalButtonsStateDto,
   LogicalPadSnapshotDto,
 } from '@shared/gamepad/contract'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Focusable } from '@/navigation/core/vue'
 import SettingGamepadMappingSheet from '../../components/settings/SettingGamepadMappingSheet.vue'
 import SettingInputDebugSheet from '../../components/settings/SettingInputDebugSheet.vue'
@@ -232,57 +232,6 @@ function logicalButtonToKeyboardControl(button: LogicalButtonDto): GamepadKeyboa
   return map[button]
 }
 
-function keyboardCodeToDtoKey(code: string): GamepadKeyboardKeyDto | null {
-  const normalized = code.charAt(0).toLowerCase() + code.slice(1)
-  const allowed: GamepadKeyboardKeyDto[] = [
-    'keyA',
-    'keyB',
-    'keyC',
-    'keyD',
-    'keyE',
-    'keyF',
-    'keyG',
-    'keyH',
-    'keyI',
-    'keyJ',
-    'keyK',
-    'keyL',
-    'keyM',
-    'keyN',
-    'keyO',
-    'keyP',
-    'keyQ',
-    'keyR',
-    'keyS',
-    'keyT',
-    'keyU',
-    'keyV',
-    'keyW',
-    'keyX',
-    'keyY',
-    'keyZ',
-    'digit0',
-    'digit1',
-    'digit2',
-    'digit3',
-    'digit4',
-    'digit5',
-    'digit6',
-    'digit7',
-    'digit8',
-    'digit9',
-    'enter',
-    'tab',
-    'escape',
-    'space',
-    'arrowUp',
-    'arrowDown',
-    'arrowLeft',
-    'arrowRight',
-  ]
-  return allowed.includes(normalized as GamepadKeyboardKeyDto) ? normalized as GamepadKeyboardKeyDto : null
-}
-
 function detectPressedLogicalButton(snapshot: LogicalPadSnapshotDto): LogicalButtonDto | null {
   const buttons = snapshot.state.buttons
   let maxButton: LogicalButtonDto | null = null
@@ -474,31 +423,6 @@ async function handleResetMappings(): Promise<void> {
   }
 }
 
-function handleMappingCaptureKeydown(event: KeyboardEvent): void {
-  if (!isMappingSheetOpen.value || captureTargetButton.value === null) {
-    return
-  }
-  event.preventDefault()
-  event.stopPropagation()
-  const key = keyboardCodeToDtoKey(event.code)
-  if (key === null) {
-    return
-  }
-  keyboardBindings.value[captureTargetButton.value] = key
-  captureTargetButton.value = null
-}
-
-watch(
-  () => [isMappingSheetOpen.value, captureTargetButton.value] as const,
-  ([open, target]) => {
-    window.removeEventListener('keydown', handleMappingCaptureKeydown)
-    if (open && target !== null) {
-      window.addEventListener('keydown', handleMappingCaptureKeydown)
-    }
-  },
-  { immediate: true },
-)
-
 onMounted(() => {
   void loadRuntimeSnapshot()
   void loadMappings()
@@ -533,7 +457,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleMappingCaptureKeydown)
   if (disposeGamepadRuntimeSnapshot !== undefined) {
     disposeGamepadRuntimeSnapshot()
     disposeGamepadRuntimeSnapshot = undefined

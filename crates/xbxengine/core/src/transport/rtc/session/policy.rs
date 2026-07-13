@@ -3148,6 +3148,9 @@ mod unit_tests {
             receive_keyframe_sent_count_unresolved: 7,
             recovery_displayed_idr_at_ms: Some(1_000.0),
             recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            video_anchor_clean_epoch: Some(0),
+            video_anchor_clean_observed_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("decoded-usable-idr".to_string()),
             ..XbxEngineMediaRuntimeStats::default()
         };
 
@@ -3206,6 +3209,9 @@ mod unit_tests {
             receive_keyframe_sent_count_unresolved: 7,
             recovery_displayed_idr_at_ms: Some(1_000.0),
             recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            video_anchor_clean_epoch: Some(0),
+            video_anchor_clean_observed_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("decoded-usable-idr".to_string()),
             ..XbxEngineMediaRuntimeStats::default()
         };
 
@@ -3226,6 +3232,9 @@ mod unit_tests {
             receive_display_state: Some("display-stable".to_string()),
             recovery_displayed_idr_at_ms: Some(1_000.0),
             recovery_fresh_anchor_recovered_at_ms: Some(1_000.0),
+            video_anchor_clean_epoch: Some(0),
+            video_anchor_clean_observed_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("decoded-usable-idr".to_string()),
             ..XbxEngineMediaRuntimeStats::default()
         };
 

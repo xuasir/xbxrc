@@ -230,8 +230,33 @@ impl WindowsD3d11Presenter {
             &self.render_loop_pending,
             &self.render_loop_rerun_requested,
         ) {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                D3D11_NATIVE_PIPELINE,
+                "present_tick_dispatch_coalesced",
+                &self.viewport_id,
+                &self.window_label,
+                || {
+                    serde_json::json!({
+                        "source": "immediateSubmit",
+                    })
+                },
+            );
             return;
         }
+        record_native_video_timing_event_lazy(
+            self.runtime_trace.as_ref(),
+            D3D11_NATIVE_PIPELINE,
+            "present_tick_immediate_requested",
+            &self.viewport_id,
+            &self.window_label,
+            || {
+                serde_json::json!({
+                    "source": "immediateSubmit",
+                    "target": "renderTick",
+                })
+            },
+        );
         run_windows_d3d11_render_tick(
             &self.app_handle,
             &self.window_label,

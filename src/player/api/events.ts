@@ -2,7 +2,13 @@ import type { ProcessedVideoFrameMetadata } from '../domain/input'
 import type { PresentedVideoFrameMetadata, StreamStats } from '../domain/media'
 import type { ChannelMessage } from '../domain/messages'
 import type { IceCandidateLike, SessionState } from '../domain/session'
-import type { FpsStats, InputPacketStats } from '../domain/stats'
+import type {
+  BrowserWebRtcSdpObservation,
+  BrowserWebRtcStatsSample,
+  BrowserWebRtcTimelineEvent,
+  FpsStats,
+  InputPacketStats,
+} from '../domain/stats'
 
 export interface PlayerEvents {
   'session.stateChanged': { from: SessionState, to: SessionState }
@@ -12,6 +18,9 @@ export interface PlayerEvents {
   'channel.message': ChannelMessage
   'stats.updated': StreamStats
   'stats.fps': FpsStats
+  'stats.browserWebRtc': BrowserWebRtcStatsSample
+  'stats.browserWebRtcTimeline': BrowserWebRtcTimelineEvent
+  'transport.sdpObserved': BrowserWebRtcSdpObservation
   'stats.inputPacket': InputPacketStats
   'stats.videoFrameProcessed': ProcessedVideoFrameMetadata
   'media.videoFramePresented': PresentedVideoFrameMetadata

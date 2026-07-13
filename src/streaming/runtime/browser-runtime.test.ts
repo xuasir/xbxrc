@@ -289,6 +289,148 @@ describe('browser-runtime super resolution state', () => {
     }
   })
 
+  it('records browser WebRTC stats and SDP samples to runtime trace', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    await runtime.launch(createLaunchSpec({ pipelinePreference: 'video' }))
+    const client = getClient()
+
+    client.eventBus.emit('stats.browserWebRtc', {
+      sampledAtMs: 1234,
+      connectionState: 'connected',
+      selectedCodec: {
+        payloadType: 124,
+        mimeType: 'video/H264',
+        sdpFmtpLine: 'level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d002a',
+      },
+      inboundVideo: {
+        id: 'RTCInboundRTPVideoStream_1',
+        mid: '1',
+        ssrc: 123456,
+        packetsReceived: 42,
+        packetsDiscarded: 1,
+        retransmittedPacketsReceived: 2,
+        framesDecoded: 3,
+        keyFramesDecoded: 1,
+        framesAssembledFromMultiplePackets: 3,
+        jitterBufferTargetDelay: 0.12,
+        freezeCount: 0,
+        pliCount: 1,
+        firCount: 0,
+        nackCount: 0,
+        codecId: 'RTCCodec_124',
+      },
+      selectedCandidatePair: {
+        id: 'candidate-pair',
+        state: 'succeeded',
+        nominated: true,
+        currentRoundTripTime: 0.02,
+        localCandidate: {
+          id: 'local-candidate',
+          candidateType: 'host',
+          protocol: 'udp',
+          addressFamily: 'ipv4',
+        },
+        remoteCandidate: {
+          id: 'remote-candidate',
+          candidateType: 'srflx',
+          protocol: 'udp',
+          addressFamily: 'ipv4',
+        },
+      },
+      transport: {
+        id: 'transport',
+        selectedCandidatePairId: 'candidate-pair',
+        selectedCandidatePairChanges: 1,
+        dtlsState: 'connected',
+        srtpCipher: 'AEAD_AES_128_GCM',
+      },
+    })
+    client.eventBus.emit('transport.sdpObserved', {
+      stage: 'remoteAnswer',
+      length: 256,
+      hasAudio: true,
+      hasVideo: true,
+      hasApplication: true,
+      h264Payloads: [{
+        payloadType: '124',
+        rtpmap: 'H264/90000',
+        fmtp: 'level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d002a',
+        profileLevelId: '4d002a',
+        packetizationMode: '1',
+        spropParameterSetsPresent: false,
+        rtcpFeedback: ['nack pli', 'ccm fir', 'transport-cc'],
+      }],
+      videoHeaderExtensions: ['4 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time'],
+      videoSsrcs: ['123456 cname:video'],
+    })
+    client.eventBus.emit('stats.browserWebRtcTimeline', {
+      kind: 'remoteAnswerSet',
+      observedAtMs: 1250,
+      elapsedSinceBindMs: 80,
+      connectionState: 'connected',
+      sdpStage: 'remoteAnswer',
+      selectedPayloadType: '124',
+      selectedProfileLevelId: '4d002a',
+      selectedMimeType: 'video/H264',
+    })
+
+    expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'browserWebRtcStatsObserved',
+        payload: expect.objectContaining({
+          connectionState: 'connected',
+          selectedCodec: expect.objectContaining({
+            mimeType: 'video/H264',
+            payloadType: 124,
+          }),
+          inboundVideo: expect.objectContaining({
+            framesDecoded: 3,
+            keyFramesDecoded: 1,
+            framesAssembledFromMultiplePackets: 3,
+            jitterBufferTargetDelay: 0.12,
+            pliCount: 1,
+          }),
+          selectedCandidatePair: expect.objectContaining({
+            id: 'candidate-pair',
+            localCandidate: expect.objectContaining({
+              candidateType: 'host',
+            }),
+          }),
+          transport: expect.objectContaining({
+            selectedCandidatePairId: 'candidate-pair',
+            dtlsState: 'connected',
+          }),
+        }),
+      }),
+    )
+    expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'browserWebRtcSdpObserved',
+        payload: expect.objectContaining({
+          stage: 'remoteAnswer',
+          h264Payloads: [expect.objectContaining({
+            payloadType: '124',
+            profileLevelId: '4d002a',
+            spropParameterSetsPresent: false,
+          })],
+        }),
+      }),
+    )
+    expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'browserWebRtcTimelineObserved',
+        payload: expect.objectContaining({
+          kind: 'remoteAnswerSet',
+          sdpStage: 'remoteAnswer',
+          selectedPayloadType: '124',
+          selectedProfileLevelId: '4d002a',
+        }),
+      }),
+    )
+
+    await runtime.stop()
+  })
+
   it('blocks SR attach when pipelinePreference=video even with fsr1Experimental', async () => {
     vi.useFakeTimers()
     try {

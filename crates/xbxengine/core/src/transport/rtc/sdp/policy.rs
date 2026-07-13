@@ -312,10 +312,18 @@ fn collect_h264_payload_types(video_section_lines: &[String]) -> HashSet<String>
 
 fn normalize_h264_profile_token(profile: &str) -> String {
     let normalized = profile.trim().to_ascii_lowercase();
-    normalized
+    let normalized = normalized
         .strip_prefix("profile-level-id=")
         .unwrap_or(normalized.as_str())
-        .to_string()
+        .to_string();
+    match normalized.as_str() {
+        "high" => "64".to_string(),
+        "main" => "4d".to_string(),
+        "normal" | "default" | "macos" | "rust-owned" => "4d".to_string(),
+        "browser" | "baseline" | "constrained-baseline" => "42e".to_string(),
+        "low" => "420".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn h264_profile_rank(profile_level_id: &str) -> u8 {
@@ -451,11 +459,14 @@ mod tests {
     #[test]
     fn h264_profile_matching_uses_family_prefixes() {
         assert!(matches_h264_profile_family("640032", "64"));
+        assert!(matches_h264_profile_family("640032", "high"));
         assert!(matches_h264_profile_family("4d0032", "4d"));
+        assert!(matches_h264_profile_family("4d0032", "main"));
         assert!(matches_h264_profile_family(
             "profile-level-id=42e01f",
             "42e"
         ));
+        assert!(matches_h264_profile_family("42e01f", "browser"));
         assert!(!matches_h264_profile_family("640032", "4d"));
     }
 
@@ -489,13 +500,27 @@ mod tests {
         let patched = apply_offer_policy_contract(
             &sample_offer_sdp(),
             &XbxEngineNegotiationRuntimeConfig {
-                offer_profile: "4d".to_string(),
+                offer_profile: "main".to_string(),
                 ..Default::default()
             },
             Some(&XbxEngineTargetTypeDto::Home),
         );
 
         assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 106 108 104 102"));
+    }
+
+    #[test]
+    fn apply_offer_policy_contract_places_constrained_baseline_first_when_42e_is_preferred() {
+        let patched = apply_offer_policy_contract(
+            &sample_offer_sdp(),
+            &XbxEngineNegotiationRuntimeConfig {
+                offer_profile: "browser".to_string(),
+                ..Default::default()
+            },
+            Some(&XbxEngineTargetTypeDto::Home),
+        );
+
+        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 104 108 106 102"));
     }
 
     #[test]
