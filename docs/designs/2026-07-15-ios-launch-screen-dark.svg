@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0D1B12"/>
+      <stop offset="0.48" stop-color="#0F0F10"/>
+      <stop offset="1" stop-color="#12161E"/>
+    </linearGradient>
+    <radialGradient id="brandAura" cx="0.14" cy="0.10" r="0.78">
+      <stop offset="0" stop-color="#107C10" stop-opacity="0.30"/>
+      <stop offset="0.48" stop-color="#107C10" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#107C10" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="coolAura" cx="0.88" cy="0.88" r="0.72">
+      <stop offset="0" stop-color="#376376" stop-opacity="0.24"/>
+      <stop offset="0.52" stop-color="#376376" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#376376" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="beacon" cx="0.50" cy="0.42" r="0.58">
+      <stop offset="0" stop-color="#24D158" stop-opacity="0.18"/>
+      <stop offset="0.54" stop-color="#107C10" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#107C10" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="loader" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6CD66C" stop-opacity="0.30"/>
+      <stop offset="0.52" stop-color="#B8F3B8"/>
+      <stop offset="1" stop-color="#6CD66C" stop-opacity="0.30"/>
+    </linearGradient>
+    <linearGradient id="brandMark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F3FFF3"/>
+      <stop offset="0.52" stop-color="#D3F3D3"/>
+      <stop offset="1" stop-color="#78C878"/>
+    </linearGradient>
+    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+  </defs>
+
+  <rect width="1290" height="2796" fill="url(#canvas)"/>
+  <rect width="1290" height="2796" fill="url(#brandAura)"/>
+  <rect width="1290" height="2796" fill="url(#coolAura)"/>
+
+  <circle cx="645" cy="1264" r="360" fill="url(#beacon)" filter="url(#softGlow)"/>
+  <circle cx="645" cy="1264" r="232" fill="#FFFFFF" fill-opacity="0.016" stroke="#FFFFFF" stroke-opacity="0.065" stroke-width="2"/>
+  <circle cx="645" cy="1264" r="202" fill="none" stroke="#8BE18B" stroke-opacity="0.15" stroke-width="16"
+          stroke-dasharray="34 19" stroke-linecap="square" transform="rotate(-4 645 1264)"/>
+  <circle cx="645" cy="1264" r="166" fill="#FFFFFF" fill-opacity="0.015" stroke="#FFFFFF" stroke-opacity="0.05" stroke-width="2"/>
+
+  <path d="M492 158q-4 0-5-1v-2l2-3Q614 77 746 39t278-39q143 0 277 38t256 113l3 2q-3 5-6 5-8 0-17-2t-17-4q-9-1-18-1t-18 0q-47 0-95 9t-96 24-92 34-88 39q-22 11-44 21t-43 25h-5q-43-27-100-54t-120-49-123-36-113-14q-19 0-39 4t-34 4zm251 412q-44 53-101 128T525 862t-117 184-102 189-72 180-28 156q0 17 2 37t8 36l-1 2-2 1-4-2q-103-139-156-293T0 1024q0-98 20-199t60-196 96-180 130-153q5-4 15-5t15-2q30 0 66 14t75 38 76 53 74 60 65 59 51 50l1 4-1 3zm968-281q7 0 16 1t15 6q73 71 130 155t96 178 59 194 21 201q0 173-53 328t-156 293l-6 1-2-3q3-4 5-14t3-21 2-22 1-16q0-69-27-155t-72-180-102-190-117-184-117-163-102-129l-1-3 1-3q21-21 50-49t65-58 73-61 77-53 75-38 66-15zm-687 533q29 18 56 42t54 47q42 37 102 94t127 128 131 149 117 155 84 149 32 129q0 23-6 43t-23 37q-31 31-69 57t-76 49q-120 72-254 109t-275 38q-141 0-274-37t-255-110q-17-10-43-26t-51-37-47-40-27-39q-7-20-7-45 0-54 30-122t78-142 110-149 123-142 118-123 97-92q34-30 72-64t76-58z"
+        transform="translate(525 1144) scale(0.1171875)" fill="url(#brandMark)"/>
+
+  <text x="645" y="1546" text-anchor="middle" fill="#F6F7FB"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
+        font-size="62" font-weight="600" letter-spacing="12">XBXRC</text>
+
+  <rect x="555" y="1620" width="180" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.08"/>
+  <rect x="594" y="1620" width="102" height="8" rx="4" fill="url(#loader)"/>
+</svg>

@@ -114,7 +114,12 @@ impl AuthFlow {
             .exchange_code_for_token(&code, &input.pending.redirect_flow.code_challenge.verifier)
             .await?;
         let auth_bundle = self
-            .finalize_login(&user_token, &input.seed.private_jwk, &input.force_region_ip)
+            .finalize_login(
+                &user_token,
+                &input.seed.private_jwk,
+                &input.force_region_ip,
+                input.include_streaming_tokens,
+            )
             .await?;
 
         Ok(CompleteOAuthLoginOutput { auth_bundle })
@@ -133,6 +138,7 @@ impl AuthFlow {
                 &refreshed_user_token,
                 &input.seed.private_jwk,
                 &input.force_region_ip,
+                input.include_streaming_tokens,
             )
             .await?;
 
@@ -152,6 +158,7 @@ impl AuthFlow {
                 input.sisu_token,
                 &input.seed.private_jwk,
                 &input.force_region_ip,
+                true,
             )
             .await?;
 
@@ -176,6 +183,7 @@ impl AuthFlow {
         user_token: &xbox_webapi::OAuthTokenResponse,
         private_jwk: &Value,
         force_region_ip: &str,
+        include_streaming_tokens: bool,
     ) -> Result<AuthBundle, AuthFlowError> {
         let device_uuid = uuid::Uuid::new_v4().to_string();
         let serial_number = uuid::Uuid::new_v4().to_string();
@@ -216,8 +224,14 @@ impl AuthFlow {
             authorization_token: convert_token_details(authorization_token)?,
         };
 
-        self.build_auth_bundle(user_token, sisu_token, private_jwk, force_region_ip)
-            .await
+        self.build_auth_bundle(
+            user_token,
+            sisu_token,
+            private_jwk,
+            force_region_ip,
+            include_streaming_tokens,
+        )
+        .await
     }
 
     // 这里统一收敛 XSTS/Web/streaming token 生成，供 refresh 与 skip-refresh 复用。
@@ -227,6 +241,7 @@ impl AuthFlow {
         sisu_token: FlowSisuTokenData,
         private_jwk: &Value,
         force_region_ip: &str,
+        include_streaming_tokens: bool,
     ) -> Result<AuthBundle, AuthFlowError> {
         let user_token_str = sisu_token.user_token.token.as_deref().ok_or_else(|| {
             AuthFlowError::Protocol("Sisu response missing user token string".to_string())
@@ -236,25 +251,78 @@ impl AuthFlow {
             .auth_api
             .xsts_authorize(user_token_str, "http://xboxlive.com", private_jwk)
             .await?;
+        let token_update_time = now_ms();
+        let stream_tokens = if include_streaming_tokens {
+            self.build_stream_tokens(
+                user_token_str,
+                private_jwk,
+                force_region_ip,
+                token_update_time,
+            )
+            .await?
+        } else {
+            Map::new()
+        };
+
+        Ok(AuthBundle {
+            user_token: user_token.clone(),
+            sisu_token,
+            web_token: json!({ "data": web_token_resp }),
+            stream_tokens: Value::Object(stream_tokens.clone()),
+            app_level: if !include_streaming_tokens {
+                0
+            } else if has_xcloud_token(&stream_tokens) {
+                2
+            } else {
+                1
+            },
+            token_update_time,
+        })
+    }
+
+    async fn build_stream_tokens(
+        &self,
+        user_token_str: &str,
+        private_jwk: &Value,
+        force_region_ip: &str,
+        token_update_time: u64,
+    ) -> Result<Map<String, Value>, AuthFlowError> {
         let gssv_token = self
             .auth_api
             .xsts_authorize(user_token_str, "http://gssv.xboxlive.com/", private_jwk)
             .await?
             .Token;
 
-        // xHome 的会话在当前环境下会被 force_region_ip 影响到 Provisioning/Provisioned 的推进，
-        // 这里保留区域 IP，避免把 xCloud 的默认区域选择误带进 xHome。
+        // xHome 会受区域 IP 影响，这里继续保留桌面端既有语义。
         let xhome_token = self
             .auth_api
             .get_streaming_token(&gssv_token, "xhome", force_region_ip)
             .await?;
+        let mut stream_tokens = Map::new();
+        stream_tokens.insert(
+            "xHomeToken".to_string(),
+            json!({
+                "_objectCreateTime": token_update_time as i64,
+                "data": xhome_token.data
+            }),
+        );
+
         let xgpuweb_result = self
             .auth_api
             .get_streaming_token(&gssv_token, "xgpuweb", force_region_ip)
             .await;
-        let (xcloud_token, xcloud_token_diagnostics) = match xgpuweb_result {
-            Ok(token) => (Some(token), None),
+        match xgpuweb_result {
+            Ok(token) => {
+                stream_tokens.insert(
+                    "xCloudToken".to_string(),
+                    json!({
+                        "_objectCreateTime": token_update_time as i64,
+                        "data": token.data
+                    }),
+                );
+            }
             Err(xgpuweb_error) => {
+                let xgpuweb_diagnostics = streaming_token_error_diagnostics(&xgpuweb_error);
                 let xgpuweb_error = xgpuweb_error.to_string();
                 match self
                     .auth_api
@@ -266,9 +334,17 @@ impl AuthFlow {
                             "Auth: xgpuweb token failed, using xgpuwebf2p fallback: {}",
                             xgpuweb_error
                         );
-                        (Some(token), None)
+                        stream_tokens.insert(
+                            "xCloudToken".to_string(),
+                            json!({
+                                "_objectCreateTime": token_update_time as i64,
+                                "data": token.data
+                            }),
+                        );
                     }
                     Err(xgpuwebf2p_error) => {
+                        let xgpuwebf2p_diagnostics =
+                            streaming_token_error_diagnostics(&xgpuwebf2p_error);
                         let xgpuwebf2p_error = xgpuwebf2p_error.to_string();
                         log::warn!(
                             "Auth: xCloud token unavailable, xgpuweb={}, xgpuwebf2p={}",
@@ -276,61 +352,47 @@ impl AuthFlow {
                             xgpuwebf2p_error
                         );
                         let force_region_ip = force_region_ip.trim();
-                        let diagnostics = json!({
-                            "xgpuwebError": xgpuweb_error,
-                            "xgpuwebf2pError": xgpuwebf2p_error,
-                            "forceRegionIp": if force_region_ip.is_empty() {
-                                Value::Null
-                            } else {
-                                Value::String(force_region_ip.to_string())
-                            },
-                        });
-                        (None, Some(diagnostics))
+                        stream_tokens.insert(
+                            "_diagnostics".to_string(),
+                            json!({
+                                "xCloudToken": {
+                                    "xgpuweb": xgpuweb_diagnostics,
+                                    "xgpuwebf2p": xgpuwebf2p_diagnostics,
+                                    "forceRegionApplied": !force_region_ip.is_empty(),
+                                },
+                            }),
+                        );
                     }
                 }
             }
-        };
-
-        let token_update_time = now_ms();
-        let mut stream_tokens = Map::new();
-        stream_tokens.insert(
-            "xHomeToken".to_string(),
-            json!({
-                "_objectCreateTime": token_update_time as i64,
-                "data": xhome_token.data
-            }),
-        );
-        if let Some(token) = xcloud_token {
-            stream_tokens.insert(
-                "xCloudToken".to_string(),
-                json!({
-                    "_objectCreateTime": token_update_time as i64,
-                    "data": token.data
-                }),
-            );
-        }
-        if let Some(diagnostics) = xcloud_token_diagnostics {
-            stream_tokens.insert(
-                "_diagnostics".to_string(),
-                json!({
-                    "xCloudToken": diagnostics,
-                }),
-            );
         }
 
-        Ok(AuthBundle {
-            user_token: user_token.clone(),
-            sisu_token,
-            web_token: json!({ "data": web_token_resp }),
-            stream_tokens: Value::Object(stream_tokens.clone()),
-            app_level: if has_xcloud_token(&stream_tokens) {
-                2
-            } else {
-                1
-            },
-            token_update_time,
-        })
+        Ok(stream_tokens)
     }
+}
+
+fn streaming_token_error_diagnostics(error: &xbox_webapi::WebApiError) -> Value {
+    let error_kind = match error {
+        xbox_webapi::WebApiError::Network { .. } => "network",
+        xbox_webapi::WebApiError::Http { .. } => "http",
+        xbox_webapi::WebApiError::Parse { .. } => "parse",
+        xbox_webapi::WebApiError::Auth { .. } => "auth",
+    };
+    let timeout = match error {
+        xbox_webapi::WebApiError::Network { message, .. } => {
+            let message = message.to_ascii_lowercase();
+            message.contains("timeout") || message.contains("timed out")
+        }
+        xbox_webapi::WebApiError::Http { status, .. } => *status == 408 || *status == 504,
+        _ => false,
+    };
+
+    json!({
+        "errorKind": error_kind,
+        "statusCode": error.to_status_code(),
+        "timeout": timeout,
+        "retriable": error.is_retriable(),
+    })
 }
 
 impl Default for AuthFlow {

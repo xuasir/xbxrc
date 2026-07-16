@@ -200,6 +200,7 @@ impl AuthService {
                 pending: flow,
                 seed,
                 force_region_ip,
+                include_streaming_tokens: true,
             })
             .await
             .map_err(|error| {
@@ -284,6 +285,7 @@ impl AuthService {
                     refresh_token: user_token.refresh_token,
                     seed,
                     force_region_ip,
+                    include_streaming_tokens: true,
                 })
                 .await
                 .map_err(|error| {

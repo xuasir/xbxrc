@@ -7,6 +7,8 @@ members = [
   "crates/xbxengine/protocol",
   "crates/xbxengine/core",
   "crates/xbox-auth-flow",
+  "crates/xbox-cloud-catalog-flow",
+  "crates/xbox-ios-bridge",
   "crates/xbox-streaming",
   "crates/xbox-webapi",
   "src-tauri",

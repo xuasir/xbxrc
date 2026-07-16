@@ -1,0 +1,30 @@
+[package]
+name = "xbox-ios-bridge"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["lib", "staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true
+uniffi = { version = "0.32.0", default-features = false, features = ["tokio"] }
+xbox-auth-flow = { path = "../xbox-auth-flow" }
+xbox-cloud-catalog-flow = { path = "../xbox-cloud-catalog-flow" }
+xbox-webapi = { path = "../xbox-webapi" }
+
+[dev-dependencies]
+uniffi = { version = "0.32.0", features = ["cli"] }
+
+[[example]]
+name = "uniffi-bindgen"
+path = "examples/uniffi-bindgen.rs"

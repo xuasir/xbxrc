@@ -30,6 +30,7 @@ pub struct CompleteOAuthLoginInput {
     pub pending: PendingOAuthLogin,
     pub seed: AuthFlowSeed,
     pub force_region_ip: String,
+    pub include_streaming_tokens: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +43,7 @@ pub struct RefreshAndFinalizeInput {
     pub refresh_token: String,
     pub seed: AuthFlowSeed,
     pub force_region_ip: String,
+    pub include_streaming_tokens: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

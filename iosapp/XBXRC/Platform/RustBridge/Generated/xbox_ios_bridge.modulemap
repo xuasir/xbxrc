@@ -1,0 +1,7 @@
+module xbox_ios_bridgeFFI {
+    header "xbox_ios_bridgeFFI.h"
+    export *
+    use "Darwin"
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}

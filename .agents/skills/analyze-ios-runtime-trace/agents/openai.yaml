@@ -1,0 +1,4 @@
+interface:
+  display_name: "分析 iOS Runtime Trace"
+  short_description: "审计 iOS JSONL 日志覆盖、预算、脱敏与故障时间线"
+  default_prompt: "使用 $analyze-ios-runtime-trace 分析 iOS JSONL trace 的覆盖、文件预算、脱敏和故障时间线。"

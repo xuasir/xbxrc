@@ -6,11 +6,9 @@ use crate::mods::data::types::{
     DataSessionContext, DataXcloudCatalogCacheState, DataXcloudCatalogPayload,
     XcloudCatalogCacheScope,
 };
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
-use reqwest::Client;
-use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
-use xbox_webapi::XcloudApi;
+use xbox_cloud_catalog_flow::{
+    CloudCatalogBaseEntry, CloudCatalogOverlayEntry, CloudCatalogScope, XboxCloudCatalogFlow,
+};
 
 const XCLOUD_CATALOG_DEFAULT_MARKET: &str = "US";
 
@@ -19,15 +17,11 @@ pub(crate) struct XcloudCatalogRefreshOutcome {
     pub missing_product_count: usize,
 }
 
-pub struct XcloudService {
-    client: Client,
-}
+pub struct XcloudService;
 
 impl XcloudService {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        Self
     }
 
     pub fn resolve_cache_scope(
@@ -69,81 +63,60 @@ impl XcloudService {
             });
         };
 
-        let xcloud_api = XcloudApi::new(region.host.clone(), region.bearer_token.clone());
-
-        let streaming_titles_response = xcloud_api.get_titles().await.map_err(|e| e.to_string())?;
-        let recent_titles_response = xcloud_api
-            .get_recent_titles(25)
+        let catalog_scope = CloudCatalogScope {
+            market: scope.market.clone(),
+            language: scope.language.clone(),
+        };
+        let catalog_flow = XboxCloudCatalogFlow::new(region.host, region.bearer_token);
+        let overlay_load = catalog_flow
+            .load_overlay(&catalog_scope)
             .await
-            .unwrap_or_else(|_| json!({ "results": [] }));
-        let newest_titles_response = self
-            .fetch_json_or_fallback(
-                &format!(
-                    "https://catalog.gamepass.com/sigls/v2?id=f13cf6b4-57e6-4459-89df-6aec18cf0538&market={}&language={}",
-                    scope.market, scope.language
-                ),
-                json!([]),
-                None,
-                None,
-            )
-            .await;
+            .map_err(|error| error.to_string())?;
 
-        let streaming_titles = Self::extract_streaming_titles(&streaming_titles_response);
-        let product_ids = Self::unique_strings(
-            streaming_titles
-                .iter()
-                .filter_map(|title| {
-                    Self::normalize_product_id(
-                        title
-                            .get("details")
-                            .and_then(|value| value.get("productId"))
-                            .and_then(|value| value.as_str()),
-                    )
-                })
-                .collect(),
-        );
-
-        let live_title_map = Self::build_live_title_map(&streaming_titles);
-        let recent_product_ids = Self::extract_recent_product_ids(&recent_titles_response);
-        let newest_product_ids = Self::extract_newest_product_ids(&newest_titles_response);
-        let overlay_entries = product_ids
-            .iter()
-            .map(|product_id| {
-                Self::build_overlay_entry(
-                    product_id,
-                    live_title_map.get(product_id),
-                    &recent_product_ids,
-                    &newest_product_ids,
-                )
-            })
-            .filter(|entry| !entry.title_id.is_empty())
-            .collect::<Vec<_>>();
+        if !overlay_load.recent_source_available {
+            log::warn!("[Data][xcloud] recent titles source unavailable; continuing without MRU");
+        }
+        if !overlay_load.newest_source_available {
+            log::warn!("[Data][xcloud] Game Pass newest source unavailable; continuing without new markers");
+        }
 
         let cached_base_snapshot = cache_repository
             .get_xcloud_catalog_base_snapshot(scope)?
             .filter(|snapshot| !snapshot.entries.is_empty())
             .unwrap_or_default();
         let missing_product_ids = if cached_base_snapshot.entries.is_empty() {
-            product_ids.clone()
+            overlay_load.product_ids.clone()
         } else {
-            product_ids
+            overlay_load
+                .product_ids
                 .iter()
                 .filter(|product_id| !cached_base_snapshot.entries.contains_key(*product_id))
                 .cloned()
                 .collect::<Vec<_>>()
         };
 
-        let fetched_base_entries = if missing_product_ids.is_empty() {
-            HashMap::new()
-        } else {
-            self.load_catalog_base_entries(scope, &missing_product_ids)
-                .await?
-        };
+        let hydration_load = catalog_flow
+            .hydrate_products(&catalog_scope, &missing_product_ids)
+            .await;
+        if hydration_load.failed_chunk_count > 0 {
+            log::warn!(
+                "[Data][xcloud] Game Pass products hydration failed chunks={}",
+                hydration_load.failed_chunk_count
+            );
+        }
 
         let mut merged_base_entries = cached_base_snapshot.entries;
-        for (product_id, entry) in fetched_base_entries {
-            merged_base_entries.insert(product_id, entry);
-        }
+        merged_base_entries.extend(
+            hydration_load
+                .entries
+                .into_iter()
+                .map(|(product_id, entry)| (product_id, Self::to_cached_base_entry(entry))),
+        );
+        let overlay_entries = overlay_load
+            .entries
+            .into_iter()
+            .map(Self::to_cached_overlay_entry)
+            .collect();
 
         cache_repository.save_xcloud_catalog_base(scope, merged_base_entries)?;
         cache_repository.save_xcloud_catalog_overlay(scope, overlay_entries)?;
@@ -160,204 +133,28 @@ impl XcloudService {
         })
     }
 
-    async fn load_catalog_base_entries(
-        &self,
-        scope: &XcloudCatalogCacheScope,
-        product_ids: &[String],
-    ) -> Result<HashMap<String, CachedXcloudCatalogBaseEntry>, String> {
-        if product_ids.is_empty() {
-            return Ok(HashMap::new());
+    fn to_cached_base_entry(entry: CloudCatalogBaseEntry) -> CachedXcloudCatalogBaseEntry {
+        CachedXcloudCatalogBaseEntry {
+            product_id: entry.product_id,
+            name: entry.name,
+            publisher_name: entry.publisher_name,
+            description: entry.description,
+            tile_image_url: entry.tile_image_url,
+            poster_image_url: entry.poster_image_url,
+            categories: entry.categories,
         }
-
-        let chunks = Self::chunk_values(product_ids, 75);
-        let mut entries = HashMap::new();
-
-        for chunk in chunks {
-            let response = self
-                .fetch_json_or_fallback(
-                    &format!(
-                        "https://catalog.gamepass.com/v3/products?market={}&language={}&hydration=RemoteLowJade0",
-                        scope.market, scope.language
-                    ),
-                    json!({ "Products": {} }),
-                    Some(Self::catalog_headers()?),
-                    Some(json!({ "Products": chunk })),
-                )
-                .await;
-
-            if let Some(products) = response.get("Products").and_then(|value| value.as_object()) {
-                for (product_id, value) in products {
-                    entries.insert(
-                        product_id.to_uppercase(),
-                        CachedXcloudCatalogBaseEntry {
-                            product_id: product_id.to_uppercase(),
-                            name: value
-                                .get("ProductTitle")
-                                .and_then(|entry| entry.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            publisher_name: value
-                                .get("PublisherName")
-                                .and_then(|entry| entry.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            description: value
-                                .get("ProductDescription")
-                                .and_then(|entry| entry.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            tile_image_url: Self::resolve_image_url(
-                                value
-                                    .get("Image_Tile")
-                                    .and_then(|entry| entry.get("URL"))
-                                    .and_then(|entry| entry.as_str()),
-                            ),
-                            poster_image_url: Self::resolve_image_url(
-                                value
-                                    .get("Image_Poster")
-                                    .and_then(|entry| entry.get("URL"))
-                                    .and_then(|entry| entry.as_str()),
-                            ),
-                            categories: value
-                                .get("LocalizedCategories")
-                                .and_then(|entry| entry.as_array())
-                                .or_else(|| {
-                                    value.get("Categories").and_then(|entry| entry.as_array())
-                                })
-                                .map(|entries| {
-                                    Self::unique_strings(
-                                        entries
-                                            .iter()
-                                            .filter_map(|entry| {
-                                                entry.as_str().map(|value| value.trim().to_string())
-                                            })
-                                            .filter(|value| !value.is_empty())
-                                            .collect(),
-                                    )
-                                })
-                                .unwrap_or_default(),
-                        },
-                    );
-                }
-            }
-        }
-
-        Ok(entries)
     }
 
-    fn build_live_title_map(streaming_titles: &[Value]) -> HashMap<String, Value> {
-        let mut live_title_map = HashMap::new();
-        for title in streaming_titles {
-            if let Some(product_id) = Self::normalize_product_id(
-                title
-                    .get("details")
-                    .and_then(|value| value.get("productId"))
-                    .and_then(|value| value.as_str()),
-            ) {
-                live_title_map.insert(product_id, title.clone());
-            }
-        }
-        live_title_map
-    }
-
-    fn build_overlay_entry(
-        product_id: &str,
-        live_title: Option<&Value>,
-        recent_product_ids: &HashSet<String>,
-        newest_product_ids: &HashSet<String>,
-    ) -> CachedXcloudCatalogOverlayEntry {
+    fn to_cached_overlay_entry(entry: CloudCatalogOverlayEntry) -> CachedXcloudCatalogOverlayEntry {
         CachedXcloudCatalogOverlayEntry {
-            product_id: product_id.to_string(),
-            title_id: Self::as_non_empty_string(
-                live_title
-                    .and_then(|title| title.get("titleId"))
-                    .and_then(|value| value.as_str()),
-            )
-            .unwrap_or_default(),
-            xbox_title_id: live_title
-                .and_then(|title| title.get("details"))
-                .and_then(|details| details.get("xboxTitleId"))
-                .and_then(Self::resolve_xbox_title_id),
-            fallback_name: Self::as_non_empty_string(
-                live_title
-                    .and_then(|title| title.get("details"))
-                    .and_then(|details| details.get("titleName"))
-                    .and_then(|value| value.as_str()),
-            )
-            .or_else(|| {
-                Self::as_non_empty_string(
-                    live_title
-                        .and_then(|title| title.get("titleId"))
-                        .and_then(|value| value.as_str()),
-                )
-            })
-            .unwrap_or_else(|| product_id.to_string()),
-            supported_input_types: live_title
-                .and_then(|title| title.get("details"))
-                .and_then(|details| details.get("supportedInputTypes"))
-                .and_then(|value| value.as_array())
-                .map(|values| {
-                    Self::unique_strings(
-                        values
-                            .iter()
-                            .filter_map(|value| value.as_str().map(|text| text.to_string()))
-                            .collect(),
-                    )
-                })
-                .unwrap_or_default(),
-            has_entitlement: live_title
-                .and_then(|title| title.get("details"))
-                .and_then(|details| details.get("hasEntitlement"))
-                .and_then(|value| value.as_bool())
-                .unwrap_or(true),
-            is_recently_played: recent_product_ids.contains(product_id),
-            is_new: newest_product_ids.contains(product_id),
-        }
-    }
-
-    async fn fetch_json(
-        &self,
-        url: &str,
-        headers: Option<HeaderMap>,
-        body: Option<Value>,
-    ) -> Result<Value, String> {
-        let mut request = if body.is_some() {
-            self.client.post(url)
-        } else {
-            self.client.get(url)
-        };
-
-        if let Some(headers) = headers {
-            request = request.headers(headers);
-        }
-
-        if let Some(payload) = body {
-            request = request.json(&payload);
-        }
-
-        let response = request.send().await.map_err(|error| error.to_string())?;
-        if !response.status().is_success() {
-            let status = response.status();
-            let body_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP {status} for {url}: {body_text}"));
-        }
-
-        response
-            .json::<Value>()
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    async fn fetch_json_or_fallback(
-        &self,
-        url: &str,
-        fallback: Value,
-        headers: Option<HeaderMap>,
-        body: Option<Value>,
-    ) -> Value {
-        match self.fetch_json(url, headers, body).await {
-            Ok(payload) => payload,
-            Err(_) => fallback,
+            product_id: entry.product_id,
+            title_id: entry.stream_title_id,
+            xbox_title_id: entry.xbox_title_id,
+            fallback_name: entry.fallback_name,
+            supported_input_types: entry.supported_input_types,
+            has_entitlement: entry.has_entitlement,
+            is_recently_played: entry.is_recently_played,
+            is_new: entry.is_new,
         }
     }
 
@@ -395,144 +192,11 @@ impl XcloudService {
         })
     }
 
-    fn extract_streaming_titles(raw_response: &Value) -> Vec<Value> {
-        raw_response
-            .get("results")
-            .and_then(|value| value.as_array())
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|item| {
-                Self::normalize_product_id(
-                    item.get("details")
-                        .and_then(|value| value.get("productId"))
-                        .and_then(|value| value.as_str()),
-                )
-                .is_some()
-            })
-            .collect()
-    }
-
-    fn extract_recent_product_ids(raw_response: &Value) -> HashSet<String> {
-        let mut result = HashSet::new();
-        let Some(items) = raw_response
-            .get("results")
-            .and_then(|value| value.as_array())
-        else {
-            return result;
-        };
-
-        for item in items {
-            if let Some(product_id) = Self::normalize_product_id(
-                item.get("details")
-                    .and_then(|value| value.get("productId"))
-                    .and_then(|value| value.as_str()),
-            ) {
-                result.insert(product_id);
-            }
-        }
-
-        result
-    }
-
-    fn extract_newest_product_ids(raw_response: &Value) -> HashSet<String> {
-        let mut result = HashSet::new();
-        let Some(items) = raw_response.as_array() else {
-            return result;
-        };
-
-        for item in items {
-            if let Some(product_id) =
-                Self::normalize_product_id(item.get("id").and_then(|value| value.as_str()))
-            {
-                result.insert(product_id);
-            }
-        }
-
-        result
-    }
-
-    fn normalize_product_id(value: Option<&str>) -> Option<String> {
-        value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(|value| value.to_uppercase())
-    }
-
-    fn as_non_empty_string(value: Option<&str>) -> Option<String> {
-        value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(|value| value.to_string())
-    }
-
-    fn resolve_image_url(value: Option<&str>) -> String {
-        let Some(url) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-            return String::new();
-        };
-
-        if url.starts_with("//") {
-            return format!("https:{url}");
-        }
-
-        url.to_string()
-    }
-
-    fn resolve_xbox_title_id(value: &Value) -> Option<u64> {
-        if let Some(number) = value.as_u64() {
-            return Some(number);
-        }
-
-        value
-            .as_str()
-            .and_then(|raw| raw.parse::<u64>().ok())
-            .filter(|value| *value > 0)
-    }
-
-    fn unique_strings(values: Vec<String>) -> Vec<String> {
-        let mut set = HashSet::new();
-        let mut result = Vec::new();
-
-        for value in values {
-            if set.insert(value.clone()) {
-                result.push(value);
-            }
-        }
-
-        result
-    }
-
-    fn chunk_values(values: &[String], size: usize) -> Vec<Vec<String>> {
-        let mut chunks = Vec::new();
-        let mut index = 0;
-
-        while index < values.len() {
-            let end = std::cmp::min(index + size, values.len());
-            chunks.push(values[index..end].to_vec());
-            index += size;
-        }
-
-        chunks
-    }
-
     fn resolve_catalog_language() -> String {
         match std::env::var("LANG") {
             Ok(lang) if lang.to_lowercase().starts_with("zh") => "zh-TW".to_string(),
             _ => "en-US".to_string(),
         }
-    }
-
-    fn catalog_headers() -> Result<HeaderMap, String> {
-        let mut headers = HeaderMap::new();
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert("ms-cv", HeaderValue::from_static("0"));
-        headers.insert(
-            "calling-app-name",
-            HeaderValue::from_static("Xbox Cloud Gaming Web"),
-        );
-        headers.insert("calling-app-version", HeaderValue::from_static("24.17.63"));
-        Ok(headers)
     }
 }
 
@@ -585,5 +249,35 @@ mod tests {
         assert_eq!(scope.account_id, "stable-xid");
         assert_eq!(scope.region_host, "wus.core.gssv-play-prod.xboxlive.com");
         assert_eq!(scope.market, "US");
+    }
+
+    #[test]
+    fn maps_shared_entries_to_existing_cache_contract() {
+        let base = XcloudService::to_cached_base_entry(CloudCatalogBaseEntry {
+            product_id: "9ABC".to_string(),
+            name: "Alpha".to_string(),
+            publisher_name: "Publisher".to_string(),
+            description: "Description".to_string(),
+            tile_image_url: "tile".to_string(),
+            poster_image_url: "poster".to_string(),
+            hero_image_url: "hero".to_string(),
+            categories: vec!["Action".to_string()],
+        });
+        let overlay = XcloudService::to_cached_overlay_entry(CloudCatalogOverlayEntry {
+            product_id: "9ABC".to_string(),
+            stream_title_id: "stream-alpha".to_string(),
+            xbox_title_id: Some(123),
+            fallback_name: "Alpha".to_string(),
+            supported_input_types: vec!["Controller".to_string()],
+            has_entitlement: true,
+            is_recently_played: true,
+            is_new: false,
+        });
+
+        assert_eq!(base.product_id, "9ABC");
+        assert_eq!(base.poster_image_url, "poster");
+        assert_eq!(overlay.title_id, "stream-alpha");
+        assert_eq!(overlay.xbox_title_id, Some(123));
+        assert!(overlay.is_recently_played);
     }
 }
