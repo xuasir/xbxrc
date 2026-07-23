@@ -73,6 +73,13 @@ impl WebApiSessionGateway {
         Ok((response.state, error_details))
     }
 
+    /// configuration 在会话尚未准备好时可能返回 204（空 body）。
+    /// Gateway 把该状态稳定投影为 None，避免各宿主重复判断空 JSON 字符串。
+    pub async fn get_configuration(&self, session_id: &str) -> Result<Option<Value>, WebApiError> {
+        let response = self.session_api.get_configuration(session_id).await?;
+        Ok(normalize_configuration_response(response))
+    }
+
     pub async fn send_connect_token(
         &self,
         session_id: &str,
@@ -112,4 +119,28 @@ impl WebApiSessionGateway {
 
 fn to_legacy_input_config(config: Value) -> Value {
     config
+}
+
+fn normalize_configuration_response(response: Value) -> Option<Value> {
+    if matches!(&response, Value::String(value) if value.trim().is_empty()) {
+        None
+    } else {
+        Some(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_configuration_response;
+    use serde_json::json;
+
+    #[test]
+    fn configuration_empty_body_is_pending() {
+        assert_eq!(normalize_configuration_response(json!("")), None);
+        assert_eq!(normalize_configuration_response(json!("  ")), None);
+        assert_eq!(
+            normalize_configuration_response(json!({"iceServers": []})),
+            Some(json!({"iceServers": []}))
+        );
+    }
 }

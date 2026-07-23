@@ -18,3 +18,7 @@ cargo run -p xbox-ios-bridge --example uniffi-bindgen -- \
   --module-name xbox_ios_bridgeFFI \
   --modulemap-filename xbox_ios_bridge.modulemap \
   "$LIBRARY_PATH" "$OUTPUT_DIR"
+
+sed -i '' -E 's/[[:space:]]+$//' \
+  "$OUTPUT_DIR/xbox_ios_bridge.swift" \
+  "$OUTPUT_DIR/xbox_ios_bridgeFFI.h"

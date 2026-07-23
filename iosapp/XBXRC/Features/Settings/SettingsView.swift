@@ -1,165 +1,204 @@
 import SwiftUI
 import UIKit
 
-struct SettingsView: View {
-    @EnvironmentObject private var settingsStore: AppSettingsStore
-    @EnvironmentObject private var authStore: AuthStore
-    @EnvironmentObject private var cloudStore: CloudLibraryStore
+struct MySettingsPresentation: Equatable {
+    let cloudAccessStatus: String
+    let cloudGamingSummary: String
+    let loginMode: String
+    let traceSummary: String
+    let version: String
 
-    @State private var selectedRegion: CloudRegionPreset = .default
-    @State private var traceProfile = IOSRuntimeTrace.currentProfile
-    @State private var traceExportItem: TraceExportItem?
-    @State private var traceActionError: String?
-    @State private var regionActionError: String?
-    @State private var isPreparingTraceExport = false
-    @State private var isApplyingRegion = false
-    @State private var showsTraceClearConfirmation = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                accountSection
-                cloudSection
-                diagnosticsSection
-                aboutSection
-            }
-            .scrollContentBackground(.hidden)
-            .appThemeCanvas()
-            .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.large)
-            .onAppear {
-                selectedRegion = settingsStore.cloudRegionPreset
-            }
-            .onChange(of: traceProfile) { _, profile in
-                IOSRuntimeTrace.setProfile(profile)
-            }
-            .confirmationDialog(
-                "清理全部 iOS Trace？",
-                isPresented: $showsTraceClearConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("清理 Trace", role: .destructive) {
-                    Task { await IOSRuntimeTrace.clearFiles() }
-                }
-            } message: {
-                Text("历史诊断文件会被删除，当前 profile 会继续生效。")
-            }
-            .sheet(item: $traceExportItem) { item in
-                TraceShareSheet(url: item.url)
-            }
-            .alert(
-                "设置操作失败",
-                isPresented: Binding(
-                    get: { traceActionError != nil || regionActionError != nil },
-                    set: { presented in
-                        if !presented {
-                            traceActionError = nil
-                            regionActionError = nil
-                        }
-                    }
-                )
-            ) {
-                Button("知道了", role: .cancel) {}
-            } message: {
-                Text(regionActionError ?? traceActionError ?? "设置暂时不可用")
-            }
-        }
+    init(
+        appLevel: Int?,
+        cloudRegionTitle: String,
+        usesEphemeralLoginSession: Bool,
+        traceProfileTitle: String,
+        version: String
+    ) {
+        let cloudAccessStatus = Self.cloudAccessStatus(for: appLevel)
+        self.cloudAccessStatus = cloudAccessStatus
+        cloudGamingSummary = "\(cloudRegionTitle) · \(cloudAccessStatus)"
+        loginMode = usesEphemeralLoginSession ? "无 Cookie 临时会话" : "标准会话"
+        traceSummary = traceProfileTitle
+        self.version = "XBXRC \(version)"
     }
 
-    private var accountSection: some View {
-        Section {
-            Toggle(
-                "使用无 Cookie 临时会话",
-                isOn: $settingsStore.usesEphemeralLoginSession
-            )
-        } header: {
-            Text("登录")
-        } footer: {
-            Text("开启后，下一次登录不会复用 Microsoft 登录 Cookie 和上次账号信息。现有 Xbox 会话保持有效，退出后重新登录生效。")
-        }
-    }
-
-    private var cloudSection: some View {
-        Section {
-            Picker("地区路由", selection: $selectedRegion) {
-                ForEach(CloudRegionPreset.allCases) { preset in
-                    Text(preset.title).tag(preset)
-                }
-            }
-
-            LabeledContent("云访问状态", value: cloudAccessStatus)
-
-            Button {
-                applyRegion()
-            } label: {
-                HStack {
-                    Label("应用地区设置", systemImage: "network")
-                    Spacer()
-                    if isApplyingRegion {
-                        ProgressView().controlSize(.small)
-                    }
-                }
-            }
-            .disabled(isApplyingRegion || selectedRegion == settingsStore.cloudRegionPreset)
-        } header: {
-            Text("云游戏")
-        } footer: {
-            Text("地区路由会影响 Xbox streaming token 与云游戏区域选择。应用后会刷新当前会话和游戏库。")
-        }
-    }
-
-    private var diagnosticsSection: some View {
-        Section("诊断") {
-            Picker("Trace 记录级别", selection: $traceProfile) {
-                ForEach(IOSRuntimeTraceProfile.allCases) { profile in
-                    Text(profile.title).tag(profile)
-                }
-            }
-
-            Button("导出当前 Trace", systemImage: "square.and.arrow.up") {
-                prepareTraceExport(allFiles: false)
-            }
-            .disabled(isPreparingTraceExport)
-
-            Button("导出全部 Trace", systemImage: "archivebox") {
-                prepareTraceExport(allFiles: true)
-            }
-            .disabled(isPreparingTraceExport)
-
-            Button("清理 Trace", systemImage: "trash", role: .destructive) {
-                showsTraceClearConfirmation = true
-            }
-        }
-    }
-
-    private var aboutSection: some View {
-        Section("关于") {
-            LabeledContent("应用", value: "XBXRC")
-            LabeledContent("版本", value: versionText)
-        }
-    }
-
-    private var cloudAccessStatus: String {
-        guard let session = authStore.session else { return "未登录" }
-        switch session.appLevel {
+    static func cloudAccessStatus(for appLevel: Int?) -> String {
+        guard let appLevel else { return "未登录" }
+        switch appLevel {
         case 2...: return "可用"
         case 1: return "地区受限"
         default: return "等待刷新"
         }
     }
+}
 
-    private var versionText: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
-            as? String ?? "unknown"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
-            as? String ?? "unknown"
-        return "\(version) (\(build))"
+struct AppearanceSettingsView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    @State private var isApplyingIcon = false
+    @State private var applyingIcon: AppIconPreset?
+    @State private var actionError: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("应用外观", selection: $settingsStore.appearanceMode) {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("外观")
+            } footer: {
+                Text("跟随系统会根据设备的外观自动切换。选择会立即生效并在下次启动恢复。")
+            }
+
+            Section {
+                ForEach(AppIconPreset.allCases) { preset in
+                    Button {
+                        applyIcon(preset)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: preset.systemImage)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(AppThemePalette.brand)
+                                .frame(width: 28)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(preset.title)
+                                    .foregroundStyle(.primary)
+                                Text(preset.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+                            if applyingIcon == preset {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else if settingsStore.appIconPreset == preset {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(AppThemePalette.brand)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isApplyingIcon || settingsStore.appIconPreset == preset)
+                }
+            } header: {
+                Text("应用图标")
+            } footer: {
+                Text("图标切换由系统完成。设备或构建环境不支持时，当前图标和设置会保持不变。")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appThemeCanvas()
+        .navigationTitle("外观与图标")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "设置操作失败",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { presented in
+                    if !presented {
+                        actionError = nil
+                    }
+                }
+            )
+        ) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "设置暂时不可用")
+        }
+    }
+
+    private func applyIcon(_ preset: AppIconPreset) {
+        guard !isApplyingIcon else { return }
+        isApplyingIcon = true
+        applyingIcon = preset
+        actionError = nil
+        Task {
+            actionError = await settingsStore.setAppIconPreset(preset)
+            applyingIcon = nil
+            isApplyingIcon = false
+        }
+    }
+}
+
+struct CloudGamingSettingsView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+    @EnvironmentObject private var authStore: AuthStore
+    @EnvironmentObject private var cloudStore: CloudLibraryStore
+
+    @Binding var isApplyingRegion: Bool
+    @State private var selectedRegion: CloudRegionPreset = .default
+    @State private var actionError: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("地区路由", selection: $selectedRegion) {
+                    ForEach(CloudRegionPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+
+                LabeledContent("云访问状态", value: cloudAccessStatus)
+
+                Button {
+                    applyRegion()
+                } label: {
+                    HStack {
+                        Label("应用地区设置", systemImage: "network")
+                        Spacer()
+                        if isApplyingRegion {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                }
+                .disabled(isApplyingRegion)
+            } footer: {
+                Text("地区路由会影响 Xbox streaming token 与云游戏区域选择。应用后会刷新当前会话和游戏库。")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appThemeCanvas()
+        .navigationTitle("云游戏")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isApplyingRegion)
+        .onAppear {
+            selectedRegion = settingsStore.cloudRegionPreset
+        }
+        .alert(
+            "设置操作失败",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { presented in
+                    if !presented {
+                        actionError = nil
+                    }
+                }
+            )
+        ) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "设置暂时不可用")
+        }
+    }
+
+    private var cloudAccessStatus: String {
+        MySettingsPresentation.cloudAccessStatus(
+            for: authStore.session.map { Int($0.appLevel) }
+        )
     }
 
     private func applyRegion() {
         guard !isApplyingRegion else { return }
         isApplyingRegion = true
-        regionActionError = nil
+        actionError = nil
         let preset = selectedRegion
         settingsStore.setCloudRegionPreset(preset)
         Task {
@@ -170,11 +209,104 @@ struct SettingsView: View {
                     await cloudStore.activate(session: authStore.session) {
                         try await authStore.prepareCloudAccess()
                     }
+                    actionError = cloudStore.errorMessage
                 } else {
-                    regionActionError = authStore.errorMessage ?? "当前地区无法建立云游戏访问"
+                    actionError = authStore.errorMessage ?? "当前地区无法建立云游戏访问"
                 }
             }
             isApplyingRegion = false
+        }
+    }
+}
+
+struct LoginPreferencesView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(
+                    "使用无 Cookie 临时会话",
+                    isOn: $settingsStore.usesEphemeralLoginSession
+                )
+            } footer: {
+                Text("开启后，下一次登录不会复用 Microsoft 登录 Cookie 和上次账号信息。现有 Xbox 会话保持有效，退出后重新登录生效。")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appThemeCanvas()
+        .navigationTitle("登录偏好")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct DiagnosticsSettingsView: View {
+    @Binding var traceProfile: IOSRuntimeTraceProfile
+
+    @State private var traceExportItem: TraceExportItem?
+    @State private var actionError: String?
+    @State private var isPreparingTraceExport = false
+    @State private var showsTraceClearConfirmation = false
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Trace 记录级别", selection: $traceProfile) {
+                    ForEach(IOSRuntimeTraceProfile.allCases) { profile in
+                        Text(profile.title).tag(profile)
+                    }
+                }
+
+                Button("导出当前 Trace", systemImage: "square.and.arrow.up") {
+                    prepareTraceExport(allFiles: false)
+                }
+                .disabled(isPreparingTraceExport)
+
+                Button("导出全部 Trace", systemImage: "archivebox") {
+                    prepareTraceExport(allFiles: true)
+                }
+                .disabled(isPreparingTraceExport)
+
+                Button("清理 Trace", systemImage: "trash", role: .destructive) {
+                    showsTraceClearConfirmation = true
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appThemeCanvas()
+        .navigationTitle("诊断")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: traceProfile) { _, profile in
+            IOSRuntimeTrace.setProfile(profile)
+        }
+        .confirmationDialog(
+            "清理全部 iOS Trace？",
+            isPresented: $showsTraceClearConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("清理 Trace", role: .destructive) {
+                Task { await IOSRuntimeTrace.clearFiles() }
+            }
+        } message: {
+            Text("历史诊断文件会被删除，当前 profile 会继续生效。")
+        }
+        .sheet(item: $traceExportItem) { item in
+            TraceShareSheet(url: item.url)
+        }
+        .alert(
+            "设置操作失败",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { presented in
+                    if !presented {
+                        actionError = nil
+                    }
+                }
+            )
+        ) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "设置暂时不可用")
         }
     }
 
@@ -193,10 +325,33 @@ struct SettingsView: View {
                 let url = try await IOSRuntimeTrace.prepareExport(allFiles: allFiles)
                 traceExportItem = TraceExportItem(url: url)
             } catch {
-                traceActionError = CloudLibraryDiagnostics.safeError(error)
+                actionError = CloudLibraryDiagnostics.safeError(error)
             }
             isPreparingTraceExport = false
         }
+    }
+}
+
+struct AboutSettingsView: View {
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("应用", value: "XBXRC")
+                LabeledContent("版本", value: versionText)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appThemeCanvas()
+        .navigationTitle("关于")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
+            as? String ?? "unknown"
+        return "\(version) (\(build))"
     }
 }
 

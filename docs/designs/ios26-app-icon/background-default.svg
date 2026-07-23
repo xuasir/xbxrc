@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="base" x1="86" y1="38" x2="936" y2="982" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#176f35"/>
+      <stop offset="0.48" stop-color="#0b4822"/>
+      <stop offset="1" stop-color="#061d0e"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="110" y1="46" x2="730" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="0.30" stop-color="#dffff0" stop-opacity="0.08"/>
+      <stop offset="0.64" stop-color="#8fe5aa" stop-opacity="0.015"/>
+      <stop offset="1" stop-color="#8fe5aa" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="depth" cx="0.82" cy="0.86" r="0.76">
+      <stop offset="0" stop-color="#021208" stop-opacity="0.48"/>
+      <stop offset="0.72" stop-color="#021208" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#021208" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#base)"/>
+  <rect width="1024" height="1024" fill="url(#sheen)"/>
+  <rect width="1024" height="1024" fill="url(#depth)"/>
+</svg>

@@ -4,6 +4,15 @@ struct GameLibraryView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var cloudStore: CloudLibraryStore
     @State private var didTraceAppearance = false
+    let isActive: Bool
+
+    init(isActive: Bool = true) {
+        self.isActive = isActive
+    }
+
+    private var activationID: String {
+        "\(authStore.ownerGeneration):\(isActive)"
+    }
 
     private var collections: [LibraryCollection] {
         LibraryPresentation.collections(fromCloudGames: cloudStore.games)
@@ -16,7 +25,8 @@ struct GameLibraryView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .toolbarBackground(.hidden, for: .navigationBar)
         }
-        .task(id: authStore.isSignedIn) {
+        .task(id: activationID) {
+            guard isActive, authStore.phase == .signedIn else { return }
             await activateCloudLibrary()
         }
         .onAppear {
@@ -104,26 +114,43 @@ struct GameLibraryView: View {
         switch cloudStore.phase {
         case .idle, .loading:
             GameLibraryLoadingView()
+                .refreshable {
+                    await refreshCloudLibrary(reason: .pullToRefresh)
+                }
         case .failed:
-            ContentUnavailableView {
-                Label("无法载入游戏库", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(cloudStore.errorMessage ?? "Xbox 服务暂时不可用")
-            } actions: {
-                Button("重新加载", systemImage: "arrow.clockwise") {
+            refreshableEmptyState {
+                AppThemeEmptyState(
+                    title: "无法载入游戏库",
+                    systemImage: "exclamationmark.triangle",
+                    description: cloudStore.errorMessage ?? "Xbox 服务暂时不可用",
+                    actionTitle: "重新加载"
+                ) {
                     Task {
                         await refreshCloudLibrary(reason: .manualRetry)
                     }
                 }
-                .buttonStyle(.borderedProminent)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded:
-            ContentUnavailableView(
-                "暂无游戏记录",
-                systemImage: "play.rectangle.on.rectangle"
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            refreshableEmptyState {
+                AppThemeEmptyState(
+                    title: "暂无游戏记录",
+                    systemImage: "play.rectangle.on.rectangle"
+                )
+            }
+        }
+    }
+
+    private func refreshableEmptyState<Content: View>(
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content()
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+            .refreshable {
+                await refreshCloudLibrary(reason: .pullToRefresh)
+            }
         }
     }
 
@@ -184,6 +211,83 @@ struct GameLibraryView: View {
         )
     }
 
+}
+
+struct AppThemeEmptyState: View {
+    let title: String
+    let systemImage: String
+    let description: String?
+    let actionTitle: String?
+    let action: (() -> Void)?
+
+    init(
+        title: String,
+        systemImage: String,
+        description: String? = nil,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.description = description
+        self.actionTitle = actionTitle
+        self.action = action
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: systemImage)
+                .font(.system(size: 38, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                if let description {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+
+            if let actionTitle, let action {
+                Button(action: action) {
+                    Label(actionTitle, systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(AppThemeGlassActionButtonStyle())
+            }
+        }
+        .frame(maxWidth: 420)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 24)
+    }
+}
+
+private struct AppThemeGlassActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 20)
+            .frame(minHeight: 48)
+            .contentShape(Capsule())
+            .glassEffect(
+                .regular
+                    .tint(AppThemePalette.canvasTop.opacity(0.08))
+                    .interactive(),
+                in: Capsule()
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+    }
 }
 
 private struct GameLibraryLoadingView: View {

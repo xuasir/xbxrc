@@ -5,13 +5,85 @@ struct TitlePlaytime: Equatable, Sendable {
     let minutes: Int?
 }
 
+struct HostPowerCommandResult: Equatable, Sendable {
+    let consoleID: String
+    let accepted: Bool
+}
+
 protocol XboxDataClient: Sendable {
+    func loadHosts(webTokenJSON: String) async throws -> [XboxHostSummary]
+    func powerOn(webTokenJSON: String, consoleID: String) async throws -> HostPowerCommandResult
+    func powerOff(webTokenJSON: String, consoleID: String) async throws -> HostPowerCommandResult
     func loadGameLibrary(webTokenJSON: String) async throws -> [GameSummary]
     func loadPlaytimes(webTokenJSON: String, titleIDs: [String]) async throws -> [TitlePlaytime]
     func loadAchievements(webTokenJSON: String, titleID: String) async throws -> [AchievementSummary]
 }
 
 struct RustXboxDataClient: XboxDataClient {
+    func loadHosts(webTokenJSON: String) async throws -> [XboxHostSummary] {
+        try await fetchHosts(webTokenJson: webTokenJSON).enumerated().map { index, host in
+            let commandID = host.id ?? host.serverId ?? host.deviceId
+            let streamTargetID = host.serverId ?? host.id ?? host.deviceId
+            let stableID = streamTargetID ?? commandID ?? "host-\(index)"
+            let displayName = [host.name, host.deviceName]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first(where: { !$0.isEmpty }) ?? "Xbox"
+            let consoleType = host.consoleType?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nonEmpty ?? "Xbox"
+            return XboxHostSummary(
+                id: stableID,
+                commandID: commandID,
+                streamTargetID: streamTargetID,
+                name: displayName,
+                consoleType: consoleType,
+                locale: host.locale,
+                region: host.region,
+                powerState: host.powerState,
+                remoteManagementEnabled: host.remoteManagementEnabled,
+                consoleStreamingEnabled: host.consoleStreamingEnabled,
+                wirelessWarning: host.wirelessWarning,
+                outOfHomeWarning: host.outOfHomeWarning,
+                storageDevices: host.storageDevices.enumerated().map { storageIndex, storage in
+                    XboxHostStorageSummary(
+                        id: storage.id ?? "\(stableID)-storage-\(storageIndex)",
+                        name: storage.name ?? "存储设备",
+                        freeBytes: storage.freeBytes,
+                        totalBytes: storage.totalBytes
+                    )
+                }
+            )
+        }
+    }
+
+    func powerOn(
+        webTokenJSON: String,
+        consoleID: String
+    ) async throws -> HostPowerCommandResult {
+        let result = try await powerOnConsole(
+            webTokenJson: webTokenJSON,
+            consoleId: consoleID
+        )
+        return HostPowerCommandResult(
+            consoleID: result.consoleId,
+            accepted: result.accepted
+        )
+    }
+
+    func powerOff(
+        webTokenJSON: String,
+        consoleID: String
+    ) async throws -> HostPowerCommandResult {
+        let result = try await powerOffConsole(
+            webTokenJson: webTokenJSON,
+            consoleId: consoleID
+        )
+        return HostPowerCommandResult(
+            consoleID: result.consoleId,
+            accepted: result.accepted
+        )
+    }
+
     func loadGameLibrary(webTokenJSON: String) async throws -> [GameSummary] {
         let operationID = UUID().uuidString
         let startedAt = Date()
@@ -228,5 +300,11 @@ enum XboxImageURL {
             components.scheme = "https"
         }
         return components.url
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
     }
 }

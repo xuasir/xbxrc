@@ -9177,15 +9177,20 @@ dependencies = [
 name = "xbox-ios-bridge"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "uniffi",
  "url",
+ "uuid",
  "xbox-auth-flow",
  "xbox-cloud-catalog-flow",
+ "xbox-streaming",
  "xbox-webapi",
+ "xbxengine-protocol",
 ]
 
 [[package]]
@@ -9255,6 +9260,7 @@ name = "xbxengine-protocol"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -478,7 +478,7 @@ fn recovering_phase_refreshes_recovery_signal_timestamp() {
 }
 
 #[test]
-fn runtime_starting_phase_is_ready_for_startup_wait() {
+fn runtime_starting_waits_for_provisioned_after_connect_token() {
     let mut last_recovery_signal_at_ms = 10_000;
     let action = decide_startup_progress_action(
         &startup_progress(SessionPhase::RuntimeStarting, None),
@@ -486,8 +486,13 @@ fn runtime_starting_phase_is_ready_for_startup_wait() {
         &mut last_recovery_signal_at_ms,
         2_000,
     );
-    assert_eq!(action, StartupProgressAction::Ready);
-    assert_eq!(last_recovery_signal_at_ms, 10_000);
+    assert_eq!(
+        action,
+        StartupProgressAction::Continue {
+            transient_closed: false
+        }
+    );
+    assert_eq!(last_recovery_signal_at_ms, 11_000);
 }
 
 #[test]

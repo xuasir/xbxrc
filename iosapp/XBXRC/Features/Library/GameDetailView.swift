@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct GameDetailView: View {
+    @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var cloudStore: CloudLibraryStore
+    @EnvironmentObject private var streamingStore: StreamingFeatureStore
 
     let game: CloudLibraryGame
     var onPlay: ((String) -> Void)?
 
     @State private var selectedCardID: GameDetailDataCard.ID?
-    @State private var playAlertPresented = false
 
     init(
         game: CloudLibraryGame,
@@ -54,11 +55,6 @@ struct GameDetailView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .alert("串流运行时接入中", isPresented: $playAlertPresented) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text("游戏启动身份已经准备完成，媒体串流将在 StreamingRuntime 阶段接入。")
-        }
         .accessibilityElement(children: .contain)
         .onAppear {
             IOSRuntimeTrace.event(
@@ -318,9 +314,6 @@ struct GameDetailView: View {
         if normalizedStreamTitleID == nil {
             return "云游戏启动标识同步中"
         }
-        if onPlay == nil {
-            return "启动入口已就绪 · 串流运行时接入中"
-        }
         return "通过 Xbox Cloud Gaming 启动"
     }
 
@@ -409,17 +402,6 @@ struct GameDetailView: View {
             )
             return
         }
-        guard let onPlay else {
-            IOSRuntimeTrace.decision(
-                domain: "library-ui",
-                event: "playUnavailable",
-                payload: ["reason": "streamingRuntimePending"],
-                dimension: .frontend,
-                importance: .key
-            )
-            playAlertPresented = true
-            return
-        }
         IOSRuntimeTrace.event(
             domain: "library-ui",
             event: "playRequested",
@@ -430,7 +412,13 @@ struct GameDetailView: View {
             dimension: .frontend,
             importance: .essential
         )
-        onPlay(streamTitleID)
+        if let onPlay {
+            onPlay(streamTitleID)
+        } else {
+            streamingStore.start(streamTitleID: streamTitleID) {
+                try await authStore.prepareCloudAccess()
+            }
+        }
     }
 
     private func recordSuccessfulImage(_ url: URL) {

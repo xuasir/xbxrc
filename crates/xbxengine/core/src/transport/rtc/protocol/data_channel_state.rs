@@ -104,7 +104,7 @@ pub(crate) fn build_input_stream_packet(
     }
     if !frames.is_empty() {
         report_type |= REPORT_TYPE_GAMEPAD;
-        total_size += 1 + (22 * frames.len());
+        total_size += 1 + (23 * frames.len());
     }
     if !pointer_events.is_empty() {
         report_type |= REPORT_TYPE_POINTER;

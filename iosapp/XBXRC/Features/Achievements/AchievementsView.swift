@@ -5,6 +5,15 @@ struct AchievementsView: View {
     @EnvironmentObject private var dataStore: XboxDataStore
     @State private var featuredGameID: String?
     @Namespace private var glassNamespace
+    let isActive: Bool
+
+    init(isActive: Bool = true) {
+        self.isActive = isActive
+    }
+
+    private var activationID: String {
+        "\(authStore.ownerGeneration):\(isActive)"
+    }
 
     private var games: [GameSummary] {
         dataStore.games.filter { $0.achievementProgress != nil }
@@ -18,6 +27,14 @@ struct AchievementsView: View {
         NavigationStack {
             content
                 .appThemeCanvas()
+        }
+        .task(id: activationID) {
+            guard isActive, authStore.phase == .signedIn else { return }
+            await dataStore.sync(
+                session: authStore.session,
+                ownerGeneration: authStore.ownerGeneration
+            )
+            await dataStore.activateLibraryOnce()
         }
     }
 
@@ -36,7 +53,12 @@ struct AchievementsView: View {
         } else if dataStore.games.isEmpty {
             emptyLibraryContent
         } else if games.isEmpty {
-            ContentUnavailableView("没有成就记录", systemImage: "trophy")
+            refreshableLibraryEmptyState {
+                AppThemeEmptyState(
+                    title: "没有成就记录",
+                    systemImage: "trophy"
+                )
+            }
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -46,10 +68,16 @@ struct AchievementsView: View {
                             .padding(.bottom, 16)
                     }
 
-                    FeaturedAchievementsCarousel(
-                        games: featuredGames,
+                    OrbitCardCarousel(
+                        items: featuredGames,
                         selection: $featuredGameID
-                    )
+                    ) { game in
+                        NavigationLink {
+                            GameAchievementsView(game: game)
+                        } label: {
+                            FeaturedAchievementCard(game: game)
+                        }
+                    }
                     .frame(height: 390)
                     .padding(.top, 12)
                     .padding(.bottom, 20)
@@ -95,164 +123,39 @@ struct AchievementsView: View {
         switch dataStore.libraryPhase {
         case .idle, .loading:
             AchievementsLoadingView()
+                .refreshable { await dataStore.refreshLibrary() }
         case .failed:
-            ContentUnavailableView {
-                Label("无法载入成就", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(dataStore.libraryErrorMessage ?? "Xbox 服务暂时不可用")
-            } actions: {
-                Button("重新加载", systemImage: "arrow.clockwise") {
+            refreshableLibraryEmptyState {
+                AppThemeEmptyState(
+                    title: "无法载入成就",
+                    systemImage: "exclamationmark.triangle",
+                    description: dataStore.libraryErrorMessage ?? "Xbox 服务暂时不可用",
+                    actionTitle: "重新加载"
+                ) {
                     Task {
-                        await dataStore.refreshLibrary()
+                        await dataStore.refreshLibrary(reason: .manualRetry)
                     }
                 }
-                .buttonStyle(.borderedProminent)
             }
         case .loaded:
-            ContentUnavailableView("没有成就记录", systemImage: "trophy")
-        }
-    }
-}
-
-private struct FeaturedAchievementsCarousel: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let games: [GameSummary]
-    @Binding var selection: String?
-    @State private var dragProgress: CGFloat = 0
-    private let cardWidth: CGFloat = 260
-    private let cardHeight: CGFloat = 390
-    private let orbitRadius: CGFloat = 3_600
-    private let angleStepDegrees: CGFloat = 4.65
-    private let dragStepWidth: CGFloat = 220
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                ForEach(games.indices, id: \.self) { index in
-                    carouselCard(game: games[index], at: index)
-                }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .contentShape(Rectangle())
-            .highPriorityGesture(carouselDragGesture)
-        }
-        .task(id: games.map(\.id)) {
-            normalizeSelection()
-        }
-        .sensoryFeedback(.selection, trigger: selection)
-    }
-
-    private func carouselCard(game: GameSummary, at index: Int) -> some View {
-        let position = relativePosition(for: index)
-        // 卡片中心沿共享圆弧移动，卡片角度同步对齐圆周切线。
-        let radians = Double(position * angleStepDegrees) * .pi / 180
-        let distance = abs(position)
-        let depth = min(distance, 2)
-
-        return NavigationLink {
-            GameAchievementsView(game: game)
-        } label: {
-            FeaturedAchievementCard(game: game)
-                .frame(width: cardWidth, height: cardHeight)
-                .mask(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(LiquidGlassPressStyle())
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.2), lineWidth: 0.75)
-        }
-        .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .scaleEffect(max(0.92, 1 - depth * 0.035))
-        .opacity(cardOpacity(at: distance))
-        .rotationEffect(.degrees(Double(position * angleStepDegrees)))
-        .offset(
-            x: orbitRadius * CGFloat(sin(radians)),
-            y: orbitRadius * CGFloat(1 - cos(radians))
-        )
-        .zIndex(100 - Double(abs(position)))
-        .allowsHitTesting(distance < 1.15)
-        .accessibilityHidden(distance >= 1.15)
-    }
-
-    private func cardOpacity(at distance: CGFloat) -> Double {
-        if distance <= 1.05 {
-            return Double(1 - min(distance, 1) * 0.06)
-        }
-        if distance >= 1.7 {
-            return 0
-        }
-
-        let fadeProgress = (distance - 1.05) / 0.65
-        return Double(0.94 * (1 - fadeProgress))
-    }
-
-    private var carouselDragGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                dragProgress = min(
-                    max(-value.translation.width / dragStepWidth, -1.15),
-                    1.15
+            refreshableLibraryEmptyState {
+                AppThemeEmptyState(
+                    title: "没有成就记录",
+                    systemImage: "trophy"
                 )
             }
-            .onEnded { value in
-                let projectedTranslation = abs(value.predictedEndTranslation.width)
-                    > abs(value.translation.width)
-                    ? value.predictedEndTranslation.width
-                    : value.translation.width
-                let step = abs(projectedTranslation) >= 48
-                    ? (projectedTranslation < 0 ? 1 : -1)
-                    : 0
+        }
+    }
 
-                withAnimation(carouselAnimation) {
-                    if step != 0 {
-                        moveSelection(by: step)
-                    }
-                    dragProgress = 0
-                }
+    private func refreshableLibraryEmptyState<Content: View>(
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content()
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
-    }
-
-    private var carouselAnimation: Animation {
-        reduceMotion
-            ? .easeOut(duration: 0.16)
-            : .snappy(duration: 0.68, extraBounce: 0.06)
-    }
-
-    private func relativePosition(for index: Int) -> CGFloat {
-        guard !games.isEmpty else {
-            return 0
-        }
-
-        let selectedIndex = games.firstIndex { $0.id == selection } ?? 0
-        var distance = index - selectedIndex
-        let halfCount = games.count / 2
-
-        if distance > halfCount {
-            distance -= games.count
-        } else if distance < -halfCount {
-            distance += games.count
-        }
-
-        return CGFloat(distance) - dragProgress
-    }
-
-    private func moveSelection(by step: Int) {
-        guard !games.isEmpty else {
-            selection = nil
-            return
-        }
-
-        let currentIndex = games.firstIndex { $0.id == selection } ?? 0
-        let nextIndex = (currentIndex + step + games.count) % games.count
-        selection = games[nextIndex].id
-    }
-
-    private func normalizeSelection() {
-        dragProgress = 0
-        guard games.contains(where: { $0.id == selection }) else {
-            selection = games.first?.id
-            return
+            .refreshable { await dataStore.refreshLibrary() }
         }
     }
 }
@@ -337,21 +240,18 @@ private struct FeaturedGameArtwork: View {
 
     var body: some View {
         GeometryReader { geometry in
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .empty:
+            SharedRemoteImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: { showProgress in
+                if showProgress {
                     ZStack {
                         Rectangle().fill(.black.opacity(0.18))
                         ProgressView()
                             .tint(.white)
                     }
-                case .failure:
-                    placeholder
-                @unknown default:
+                } else {
                     placeholder
                 }
             }
@@ -506,20 +406,17 @@ struct GameArtworkView: View {
     let size: CGFloat
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case let .success(image):
-                image
-                    .resizable()
-                    .scaledToFill()
-            case .empty:
+        SharedRemoteImage(url: url) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: { showProgress in
+            if showProgress {
                 ZStack {
                     Rectangle().fill(.regularMaterial)
                     ProgressView().controlSize(.small)
                 }
-            case .failure:
-                placeholder
-            @unknown default:
+            } else {
                 placeholder
             }
         }
@@ -596,7 +493,7 @@ struct GameAchievementsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "搜索成就")
         .task(id: game.titleID) {
-            await dataStore.loadAchievements(for: game)
+            await dataStore.activateAchievementsOnce(for: game)
         }
     }
 
@@ -605,25 +502,48 @@ struct GameAchievementsView: View {
         switch dataStore.achievementPhase(for: game.titleID) {
         case .idle, .loading:
             GameAchievementsLoadingView()
+                .refreshable { await dataStore.refreshAchievements(for: game) }
         case .failed:
-            ContentUnavailableView {
-                Label("无法载入成就", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(dataStore.achievementError(for: game.titleID) ?? "Xbox 服务暂时不可用")
-            } actions: {
-                Button("重新加载", systemImage: "arrow.clockwise") {
+            refreshableEmptyState {
+                AppThemeEmptyState(
+                    title: "无法载入成就",
+                    systemImage: "exclamationmark.triangle",
+                    description: dataStore.achievementError(for: game.titleID)
+                        ?? "Xbox 服务暂时不可用",
+                    actionTitle: "重新加载"
+                ) {
                     Task {
-                        await dataStore.loadAchievements(for: game, force: true)
+                        await dataStore.refreshAchievements(for: game)
                     }
                 }
-                .buttonStyle(.borderedProminent)
             }
         case .loaded:
-            if searchText.isEmpty {
-                ContentUnavailableView("没有成就", systemImage: "trophy")
-            } else {
-                ContentUnavailableView.search(text: searchText)
+            refreshableEmptyState {
+                if searchText.isEmpty {
+                    AppThemeEmptyState(
+                        title: "没有成就",
+                        systemImage: "trophy"
+                    )
+                } else {
+                    AppThemeEmptyState(
+                        title: "未找到结果",
+                        systemImage: "magnifyingglass",
+                        description: "没有与“\(searchText)”匹配的成就"
+                    )
+                }
             }
+        }
+    }
+
+    private func refreshableEmptyState<Content: View>(
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content()
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+            .refreshable { await dataStore.refreshAchievements(for: game) }
         }
     }
 
@@ -655,7 +575,7 @@ struct GameAchievementsView: View {
             .padding(.bottom, 24)
         }
         .refreshable {
-            await dataStore.loadAchievements(for: game, force: true)
+            await dataStore.refreshAchievements(for: game)
         }
     }
 

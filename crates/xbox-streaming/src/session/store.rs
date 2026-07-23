@@ -19,6 +19,10 @@ impl SessionCancelToken {
     pub fn cancel(&self) {
         self.inner.store(true, Ordering::Relaxed);
     }
+
+    pub(crate) fn same_instance(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
 }
 
 /// 运行态会话记录：快照 + 策略计划 + 监控元数据。
@@ -93,11 +97,34 @@ impl<T: Clone> SessionRuntimeStore<T> {
         self.records.insert(session_id, record);
     }
 
+    pub fn upsert_if_same(&mut self, session_id: String, record: SessionRuntimeRecord<T>) -> bool {
+        let Some(current) = self.records.get(&session_id) else {
+            return false;
+        };
+        if !current.cancelled.same_instance(&record.cancelled) {
+            return false;
+        }
+        self.upsert(session_id, record);
+        true
+    }
+
     pub fn remove(&mut self, session_id: &str) -> Option<SessionRuntimeRecord<T>> {
         self.records.remove(session_id).map(|record| {
             record.cancelled.cancel();
             record
         })
+    }
+
+    pub fn remove_if_same(
+        &mut self,
+        session_id: &str,
+        cancelled: &SessionCancelToken,
+    ) -> Option<SessionRuntimeRecord<T>> {
+        let current = self.records.get(session_id)?;
+        if !current.cancelled.same_instance(cancelled) {
+            return None;
+        }
+        self.remove(session_id)
     }
 
     pub fn keys(&self) -> Vec<String> {
@@ -141,5 +168,30 @@ mod tests {
         assert_eq!(record.metadata.repeated_state_count, 3);
         assert!(!cancel.is_cancelled());
         assert!(!record.cancelled.is_cancelled());
+    }
+
+    #[test]
+    fn stale_record_cannot_resurrect_or_remove_reused_session_id() {
+        let mut store = SessionRuntimeStore::default();
+        let stale_cancel = store.insert_new_with_plan(
+            "session-1".to_string(),
+            "snapshot-old".to_string(),
+            crate::policy::Plan::default(),
+            1,
+        );
+        let stale_record = store.get("session-1").expect("old record");
+        let current_cancel = store.insert_new_with_plan(
+            "session-1".to_string(),
+            "snapshot-current".to_string(),
+            crate::policy::Plan::default(),
+            2,
+        );
+
+        assert!(stale_cancel.is_cancelled());
+        assert!(!store.upsert_if_same("session-1".to_string(), stale_record));
+        assert!(store.remove_if_same("session-1", &stale_cancel).is_none());
+        let current = store.get("session-1").expect("current record");
+        assert_eq!(current.snapshot, "snapshot-current");
+        assert!(current.cancelled.same_instance(&current_cancel));
     }
 }

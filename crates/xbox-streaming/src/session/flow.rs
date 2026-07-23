@@ -16,7 +16,7 @@ use crate::session::monitor::SessionRuntimeBinding;
 use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
 use crate::session::signaling::logic::{decide_ice_poll, decide_offer_poll, PollDecision};
-use crate::session::store::{SessionRuntimeRecord, SessionRuntimeStore};
+use crate::session::store::{SessionCancelToken, SessionRuntimeRecord, SessionRuntimeStore};
 
 const STARTUP_CLOSED_RECOVERY_GRACE_MS_MIN: u64 = 1_200;
 const STARTUP_CLOSED_RECOVERY_GRACE_MS_MAX: u64 = 5_000;
@@ -343,12 +343,25 @@ where
     pub(crate) provider: P,
     pub(crate) sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
     pub(crate) signaling: tokio::sync::RwLock<HashMap<String, SessionSignalingState>>,
+    pub(crate) mutations: tokio::sync::RwLock<HashMap<String, Arc<SessionMutationEntry>>>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SessionSignalingState {
     pub last_polled_ice: Option<Vec<IceCandidate>>,
     pub restart_baseline_ice: Option<Vec<IceCandidate>>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct SessionMutationState {
+    pub connect_token_sent: bool,
+    pub closed: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct SessionMutationEntry {
+    pub cancelled: SessionCancelToken,
+    pub state: tokio::sync::Mutex<SessionMutationState>,
 }
 
 impl<S, P> SessionFlowService<S, P>
@@ -362,6 +375,7 @@ where
                 provider,
                 sessions: tokio::sync::RwLock::new(SessionRuntimeStore::default()),
                 signaling: tokio::sync::RwLock::new(HashMap::new()),
+                mutations: tokio::sync::RwLock::new(HashMap::new()),
             }),
         }
     }
@@ -418,6 +432,13 @@ where
             let mut sessions = self.inner.sessions.write().await;
             sessions.insert_new_with_plan(session_id.clone(), snapshot.clone(), plan, now_ms())
         };
+        self.inner.mutations.write().await.insert(
+            session_id.clone(),
+            Arc::new(SessionMutationEntry {
+                cancelled: cancelled.clone(),
+                state: tokio::sync::Mutex::new(SessionMutationState::default()),
+            }),
+        );
 
         let scheduler = SessionScheduler::new(Arc::clone(&self.inner));
         scheduler
@@ -684,8 +705,16 @@ where
         };
 
         let api = self.create_session_api(&record.plan).await?;
+        let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
+            return Ok(false);
+        };
+        let mut mutation_guard = mutation.state.lock().await;
+        if mutation_guard.closed {
+            return Ok(false);
+        }
+        mutation_guard.closed = true;
         let result = api.stop_stream(session_id).await;
-        self.clear_session(session_id).await;
+        self.clear_session(session_id, &record.cancelled).await;
 
         match result {
             Ok(()) => Ok(true),
@@ -722,14 +751,23 @@ where
             None
         };
 
-        if channel == Some("chat") {
-            api.send_chat_sdp(session_id, sdp)
-                .await
-                .map_err(map_webapi_error)?;
-        } else {
-            api.send_sdp(session_id, sdp)
-                .await
-                .map_err(map_webapi_error)?;
+        {
+            let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
+                return Err(missing_session_error(session_id));
+            };
+            let mutation_guard = mutation.state.lock().await;
+            if mutation_guard.closed {
+                return Err(missing_session_error(session_id));
+            }
+            if channel == Some("chat") {
+                api.send_chat_sdp(session_id, sdp)
+                    .await
+                    .map_err(map_webapi_error)?;
+            } else {
+                api.send_sdp(session_id, sdp)
+                    .await
+                    .map_err(map_webapi_error)?;
+            }
         }
 
         loop {
@@ -771,6 +809,13 @@ where
         // 导致后续 poll 读取到的 candidates 被意外清空/错配。
         let restart_baseline = None;
 
+        let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
+            return Err(missing_session_error(session_id));
+        };
+        let mutation_guard = mutation.state.lock().await;
+        if mutation_guard.closed {
+            return Err(missing_session_error(session_id));
+        }
         api.send_ice(session_id, candidates)
             .await
             .map_err(map_webapi_error)?;
@@ -1110,12 +1155,42 @@ where
         sessions.get(session_id)
     }
 
-    async fn clear_session(&self, session_id: &str) {
-        let _ = self.inner.sessions.write().await.remove(session_id);
-        let _ = self.inner.signaling.write().await.remove(session_id);
+    pub(crate) async fn session_mutation(
+        &self,
+        session_id: &str,
+        cancelled: &SessionCancelToken,
+    ) -> Option<Arc<SessionMutationEntry>> {
+        self.inner
+            .mutations
+            .read()
+            .await
+            .get(session_id)
+            .cloned()
+            .filter(|mutation| mutation.cancelled.same_instance(cancelled))
+    }
+
+    async fn clear_session(&self, session_id: &str, cancelled: &SessionCancelToken) {
+        let removed = self
+            .inner
+            .sessions
+            .write()
+            .await
+            .remove_if_same(session_id, cancelled)
+            .is_some();
+        if removed {
+            let _ = self.inner.signaling.write().await.remove(session_id);
+            let mut mutations = self.inner.mutations.write().await;
+            if mutations
+                .get(session_id)
+                .is_some_and(|mutation| mutation.cancelled.same_instance(cancelled))
+            {
+                mutations.remove(session_id);
+            }
+        }
     }
 
     async fn cleanup_session_for_recreate(&self, session_id: &str) {
+        let record = self.get_session_record(session_id).await;
         if let Err(error) = self.close_session(session_id).await {
             log::warn!(
                 "best-effort startup retry cleanup failed, continuing with recreate: session_id={} error={}",
@@ -1123,7 +1198,9 @@ where
                 error,
             );
         }
-        self.clear_session(session_id).await;
+        if let Some(record) = record {
+            self.clear_session(session_id, &record.cancelled).await;
+        }
     }
 
     async fn wait_until_session_cleanup_settled(&self, plan: &Plan, session_id: &str) -> bool {
@@ -1634,10 +1711,7 @@ fn decide_startup_progress_action(
     last_recovery_signal_at_ms: &mut u64,
     closed_recovery_grace_ms: u64,
 ) -> StartupProgressAction {
-    if matches!(
-        progress.phase,
-        SessionPhase::RuntimeStarting | SessionPhase::SessionReady
-    ) {
+    if progress.phase == SessionPhase::SessionReady {
         return StartupProgressAction::Ready;
     }
 

@@ -6,6 +6,18 @@ use rtc::peer_connection::event::RTCDataChannelEvent;
 use rtc::peer_connection::message::RTCMessage;
 use rtc::sansio::Protocol;
 use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
+use xbxengine_protocol::{
+    build_xbox_stream_control_authorization_payload,
+    build_xbox_stream_control_gamepad_changed_payload,
+    build_xbox_stream_control_video_keyframe_requested_payload,
+    build_xbox_stream_dimensions_changed_payload,
+    build_xbox_stream_input_metadata_bootstrap_packet, build_xbox_stream_message_handshake_payload,
+    build_xbox_stream_post_handshake_payloads, is_xbox_stream_message_handshake_ack,
+    XBOX_STREAM_CHAT_CHANNEL_LABEL, XBOX_STREAM_CONTROL_CHANNEL_LABEL,
+    XBOX_STREAM_DATA_CHANNEL_PROFILES, XBOX_STREAM_DEFAULT_VIEWPORT_HEIGHT,
+    XBOX_STREAM_DEFAULT_VIEWPORT_WIDTH, XBOX_STREAM_INPUT_CHANNEL_LABEL,
+    XBOX_STREAM_MESSAGE_CHANNEL_LABEL,
+};
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::builder::ControlledPeerConnection;
@@ -27,17 +39,10 @@ const RTC_CONTROL_DELAYED_GAMEPAD_ADDED_MS: f64 = 500.0;
 const RTC_CONTROL_DELAYED_PLI_PRIME_MS: f64 = 0.0;
 const RTC_INPUT_BUFFERED_AMOUNT_HIGH_THRESHOLD_BYTES: u32 = 1024;
 const RTC_INPUT_BUFFERED_AMOUNT_LOW_THRESHOLD_BYTES: u32 = 512;
-pub(crate) const MESSAGE_CHANNEL_LABEL: &str = "message";
-pub(crate) const CONTROL_CHANNEL_LABEL: &str = "control";
-pub(crate) const INPUT_CHANNEL_LABEL: &str = "input";
-pub(crate) const CHAT_CHANNEL_LABEL: &str = "chat";
-
-const MESSAGE_HANDSHAKE_ID: &str = "f9c5f412-0e69-4ede-8e62-92c7f5358c56";
-const MESSAGE_TRANSACTION_ID: &str = "41f93d5a-900f-4d33-b7a1-2d4ca6747072";
-const MESSAGE_CLIENT_APP_INSTALL_ID: &str = "c11ddb2e-c7e3-4f02-a62b-fd5448e0b851";
-const CONTROL_ACCESS_KEY: &str = "4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E";
-const DEFAULT_VIEWPORT_WIDTH: u32 = 1920;
-const DEFAULT_VIEWPORT_HEIGHT: u32 = 1080;
+pub(crate) const MESSAGE_CHANNEL_LABEL: &str = XBOX_STREAM_MESSAGE_CHANNEL_LABEL;
+pub(crate) const CONTROL_CHANNEL_LABEL: &str = XBOX_STREAM_CONTROL_CHANNEL_LABEL;
+pub(crate) const INPUT_CHANNEL_LABEL: &str = XBOX_STREAM_INPUT_CHANNEL_LABEL;
+pub(crate) const CHAT_CHANNEL_LABEL: &str = XBOX_STREAM_CHAT_CHANNEL_LABEL;
 const INPUT_METADATA_SEQ: u32 = 0;
 const INPUT_METADATA_MAX_TOUCHPOINTS: u8 = 64;
 
@@ -59,8 +64,8 @@ impl StreamViewportDimensions {
 impl Default for StreamViewportDimensions {
     fn default() -> Self {
         Self {
-            width: DEFAULT_VIEWPORT_WIDTH,
-            height: DEFAULT_VIEWPORT_HEIGHT,
+            width: XBOX_STREAM_DEFAULT_VIEWPORT_WIDTH,
+            height: XBOX_STREAM_DEFAULT_VIEWPORT_HEIGHT,
         }
     }
 }
@@ -70,18 +75,14 @@ pub(crate) fn bootstrap_default_channels(
     peer_connection: &mut ControlledPeerConnection,
     state: &mut crate::transport::rtc::connection::runtime_state::RtcConnectionRuntimeState,
 ) -> Result<(), crate::XbxEngineRuntimeError> {
-    for (label, ordered, protocol) in [
-        (INPUT_CHANNEL_LABEL, true, "1.0"),
-        (CONTROL_CHANNEL_LABEL, true, "controlV1"),
-        (CHAT_CHANNEL_LABEL, true, "chatV1"),
-        (MESSAGE_CHANNEL_LABEL, true, "messageV1"),
-    ] {
+    for profile in XBOX_STREAM_DATA_CHANNEL_PROFILES {
+        let label = profile.label;
         let channel = peer_connection
             .create_data_channel(
                 label,
                 Some(RTCDataChannelInit {
-                    ordered,
-                    protocol: protocol.to_string(),
+                    ordered: profile.ordered,
+                    protocol: profile.protocol_name.to_string(),
                     ..Default::default()
                 }),
             )
@@ -98,82 +99,25 @@ pub(crate) fn bootstrap_default_channels(
 }
 
 pub(crate) fn build_message_handshake_payload() -> String {
-    serde_json::json!({
-        "type": "Handshake",
-        "version": "messageV1",
-        "id": MESSAGE_HANDSHAKE_ID,
-        "cv": "",
-    })
-    .to_string()
+    build_xbox_stream_message_handshake_payload()
 }
 
 pub(crate) fn build_post_handshake_message_payloads(
     viewport: StreamViewportDimensions,
 ) -> Vec<String> {
     let viewport = viewport.sanitized();
-    vec![
-        build_message_payload(
-            "/streaming/systemUi/configuration",
-            serde_json::json!({
-                "version": [8, 0],
-                "systemUis": [0],
-            }),
-        ),
-        build_message_payload(
-            "/streaming/properties/clientappinstallidchanged",
-            serde_json::json!({
-                "clientAppInstallId": MESSAGE_CLIENT_APP_INSTALL_ID,
-            }),
-        ),
-        build_message_payload(
-            "/streaming/characteristics/orientationchanged",
-            serde_json::json!({
-                "orientation": 0,
-            }),
-        ),
-        build_message_payload(
-            "/streaming/characteristics/touchinputenabledchanged",
-            serde_json::json!({
-                "touchInputEnabled": false,
-            }),
-        ),
-        build_message_payload(
-            "/streaming/characteristics/clientdevicecapabilities",
-            serde_json::json!({}),
-        ),
-        build_dimensions_changed_message_payload(viewport),
-    ]
+    build_xbox_stream_post_handshake_payloads(viewport.width, viewport.height)
 }
 
 pub(crate) fn build_dimensions_changed_message_payload(
     viewport: StreamViewportDimensions,
 ) -> String {
     let viewport = viewport.sanitized();
-    build_message_payload(
-        "/streaming/characteristics/dimensionschanged",
-        serde_json::json!({
-            "horizontal": viewport.width,
-            "vertical": viewport.height,
-            "preferredWidth": viewport.width,
-            "preferredHeight": viewport.height,
-            "safeAreaLeft": 0,
-            "safeAreaTop": 0,
-            "safeAreaRight": viewport.width,
-            "safeAreaBottom": viewport.height,
-            "supportsCustomResolution": true,
-        }),
-    )
+    build_xbox_stream_dimensions_changed_payload(viewport.width, viewport.height)
 }
 
 pub(crate) fn is_handshake_ack_payload(payload: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(payload)
-        .ok()
-        .and_then(|json| {
-            json.get("type")
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })
-        .is_some_and(|kind| kind == "HandshakeAck")
+    is_xbox_stream_message_handshake_ack(payload)
 }
 
 pub(crate) fn build_control_decoder_reset_payload() -> String {
@@ -184,47 +128,19 @@ pub(crate) fn build_control_decoder_reset_payload() -> String {
 }
 
 pub(crate) fn build_control_video_keyframe_requested_payload() -> String {
-    serde_json::json!({
-        "message": "videoKeyframeRequested",
-        "ifrRequested": true,
-    })
-    .to_string()
+    build_xbox_stream_control_video_keyframe_requested_payload()
 }
 
 pub(crate) fn build_control_authorization_payload() -> String {
-    serde_json::json!({
-        "message": "authorizationRequest",
-        "accessKey": CONTROL_ACCESS_KEY,
-    })
-    .to_string()
+    build_xbox_stream_control_authorization_payload()
 }
 
 pub(crate) fn build_control_gamepad_changed_payload(added: bool) -> String {
-    serde_json::json!({
-        "message": "gamepadChanged",
-        "gamepadIndex": 0,
-        "wasAdded": added,
-    })
-    .to_string()
+    build_xbox_stream_control_gamepad_changed_payload(added)
 }
 
 pub(crate) fn build_input_metadata_bootstrap_packet() -> Vec<u8> {
-    build_input_metadata_packet(
-        INPUT_METADATA_SEQ,
-        now_ms_f64(),
-        INPUT_METADATA_MAX_TOUCHPOINTS,
-    )
-}
-
-fn build_message_payload(target: &str, content: serde_json::Value) -> String {
-    serde_json::json!({
-        "type": "Message",
-        "content": content.to_string(),
-        "id": MESSAGE_TRANSACTION_ID,
-        "target": target,
-        "cv": "",
-    })
-    .to_string()
+    build_xbox_stream_input_metadata_bootstrap_packet(now_ms_f64(), INPUT_METADATA_MAX_TOUCHPOINTS)
 }
 
 fn build_local_text_catalog_observation(

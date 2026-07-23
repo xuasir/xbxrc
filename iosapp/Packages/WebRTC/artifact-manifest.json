@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "mirror": {
+    "repository": "xuasir/xbxrc",
+    "releaseTag": "webrtc-137.7151.04",
+    "version": "137.7151.04"
+  },
+  "artifact": {
+    "name": "WebRTC.xcframework.zip",
+    "module": "WebRTC",
+    "url": "https://github.com/xuasir/xbxrc/releases/download/webrtc-137.7151.04/WebRTC.xcframework.zip",
+    "sizeBytes": 41307432,
+    "sha256": "9b45c5c5ecae392403758bb7262f408aa3cff705d41e862dd766856b610c3edd",
+    "swiftPMChecksum": "9b45c5c5ecae392403758bb7262f408aa3cff705d41e862dd766856b610c3edd",
+    "binarySHA256": {
+      "iosDeviceArm64": "23d0005c838fa51cc3dd2cb7c8f4582537dba657e8638669999aeb3cf27380d9",
+      "iosSimulatorUniversal": "db570f28bd0c764da7beff911c513537da1716a17a9ce308739ae88de1b2a223"
+    },
+    "symbols": {
+      "status": "unavailable-upstream",
+      "dSYMAsset": null
+    }
+  },
+  "upstream": {
+    "packageRepository": "https://github.com/stasel/WebRTC.git",
+    "packageVersion": "137.0.0",
+    "packageRevision": "b85669f32ffb3f48ce3a8f18ad828c6f559a8a0c",
+    "assetURL": "https://github.com/stasel/WebRTC/releases/download/137.0.0/WebRTC-M137.xcframework.zip",
+    "webrtcBranch": "branch-heads/7151",
+    "webrtcCommit": "cec4daea7ed5da94fc38d790bd12694c86865447"
+  },
+  "platforms": [
+    {
+      "identifier": "ios-arm64",
+      "platform": "iOS",
+      "variant": "device",
+      "architectures": ["arm64"]
+    },
+    {
+      "identifier": "ios-x86_64_arm64-simulator",
+      "platform": "iOS",
+      "variant": "simulator",
+      "architectures": ["arm64", "x86_64"]
+    }
+  ],
+  "compliance": {
+    "license": "BSD-3-Clause",
+    "licenseFile": "LICENSE-WebRTC.txt",
+    "licenseSource": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/LICENSE",
+    "privacyManifestIncluded": true
+  }
+}

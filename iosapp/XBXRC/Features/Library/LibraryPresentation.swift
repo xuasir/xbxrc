@@ -17,6 +17,7 @@ enum LibraryCollectionKind: String, CaseIterable, Identifiable, Sendable {
             "全部云游戏"
         }
     }
+
 }
 
 struct LibraryCollection: Identifiable, Equatable, Sendable {

@@ -56,121 +56,287 @@ private enum XBXProfileTokens {
 struct ProfileView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var dataStore: XboxDataStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var settingsStore: AppSettingsStore
     @State private var showsSignOutConfirmation = false
-    @State private var showsRefreshIndicator = false
+    @State private var traceProfile: IOSRuntimeTraceProfile
+    @State private var isApplyingRegion = false
+    let isActive: Bool
+
+    init(isActive: Bool = true) {
+        self.isActive = isActive
+        _traceProfile = State(initialValue: IOSRuntimeTrace.currentProfile)
+    }
+
+    private var activationID: ProfileActivationID {
+        ProfileActivationID(
+            ownerGeneration: authStore.ownerGeneration,
+            isActive: isActive,
+            phase: authStore.phase
+        )
+    }
+
+    private var showsImmersiveHero: Bool {
+        authStore.isSignedIn && (authStore.profile != nil || isProfileLoading)
+    }
+
+    private var isProfileLoading: Bool {
+        guard authStore.isSignedIn, authStore.profile == nil else { return false }
+        return authStore.phase == .refreshing
+            || (authStore.phase == .signedIn && authStore.errorMessage == nil)
+    }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if authStore.isSignedIn, let profile = authStore.profile {
-                    signedInView(profile)
-                } else {
-                    XboxLoginView(
-                        isBusy: authStore.isBusy,
-                        errorMessage: authStore.errorMessage
-                    ) {
+            rootContent
+                .appThemeCanvas()
+                .navigationTitle(showsImmersiveHero ? "" : "我的")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(showsImmersiveHero ? .hidden : .automatic, for: .navigationBar)
+                .confirmationDialog(
+                    "退出 Xbox 账户？",
+                    isPresented: $showsSignOutConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("退出登录", role: .destructive) {
                         Task {
-                            await authStore.retry()
+                            await authStore.signOut()
                         }
                     }
                 }
-            }
-            .appThemeCanvas()
-            .navigationTitle(authStore.isSignedIn ? "" : "账户")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if authStore.isSignedIn {
-                        Menu {
-                            Button("刷新资料", systemImage: "arrow.clockwise") {
-                                Task {
-                                    await refreshProfileData(showsIndicator: true)
-                                }
-                            }
-
-                            Divider()
-
-                            Button(
-                                "退出登录",
-                                systemImage: "rectangle.portrait.and.arrow.right",
-                                role: .destructive
-                            ) {
-                                showsSignOutConfirmation = true
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .foregroundStyle(XBXProfileTokens.onMediaPrimary)
-                                .accessibilityLabel("账户操作")
-                        }
-                    }
-                }
-            }
-            .toolbarBackground(authStore.isSignedIn ? .hidden : .automatic, for: .navigationBar)
-            .confirmationDialog(
-                "退出 Xbox 账户？",
-                isPresented: $showsSignOutConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("退出登录", role: .destructive) {
-                    Task {
-                        await authStore.signOut()
-                    }
-                }
-            }
+        }
+        .task(id: activationID) {
+            guard isActive, authStore.phase == .signedIn else { return }
+            await dataStore.sync(
+                session: authStore.session,
+                ownerGeneration: authStore.ownerGeneration
+            )
+            async let profileActivation: Void = authStore.activateProfileOnce()
+            async let libraryActivation: Void = dataStore.activateLibraryOnce()
+            _ = await (profileActivation, libraryActivation)
         }
     }
 
-    private func signedInView(_ profile: XboxProfile) -> some View {
+    @ViewBuilder
+    private var rootContent: some View {
+        if authStore.isSignedIn {
+            signedInView(profile: authStore.profile)
+        } else {
+            signedOutView
+        }
+    }
+
+    private func signedInView(profile: XboxProfile?) -> some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ProfileHero(
-                    profile: profile,
-                    recentGame: mostRecentGame
-                )
+                if let profile {
+                    ProfileHero(
+                        profile: profile,
+                        recentGame: mostRecentGame
+                    )
+                } else {
+                    profileStatusView
+                }
 
                 VStack(spacing: 16) {
-                    AchievementOverviewCard(
-                        overview: ProfileAchievementOverview(games: dataStore.games)
-                    )
+                    if profile != nil || !dataStore.games.isEmpty {
+                        AchievementOverviewCard(
+                            overview: ProfileAchievementOverview(games: dataStore.games)
+                        )
+                    }
 
-                    if let errorMessage = authStore.errorMessage {
+                    if profile != nil, let errorMessage = authStore.errorMessage {
                         ProfileErrorCard(message: errorMessage)
                     }
 
                     if let errorMessage = dataStore.libraryErrorMessage {
                         ProfileErrorCard(message: errorMessage)
                     }
+
+                    settingsAndSupport
+                    signOutRow
                 }
                 .frame(maxWidth: 720)
                 .padding(.horizontal, XBXProfileTokens.pageInset)
-                .padding(.top, 16)
+                .padding(.top, showsImmersiveHero ? 16 : 24)
                 .padding(.bottom, 32)
                 .frame(maxWidth: .infinity)
             }
         }
         .background(.clear)
-        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea(edges: showsImmersiveHero ? .top : Edge.Set())
         .refreshable {
             await refreshProfileData()
         }
-        .overlay(alignment: .top) {
-            if showsRefreshIndicator {
-                ProfileRefreshIndicator()
-                    .padding(.top, 58)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .allowsHitTesting(false)
+    }
+
+    private var signedOutView: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                XboxLoginView(
+                    isBusy: authStore.isBusy,
+                    errorMessage: authStore.errorMessage
+                ) {
+                    Task {
+                        await authStore.retry()
+                    }
+                }
+
+                settingsAndSupport
             }
+            .frame(maxWidth: 720)
+            .padding(.horizontal, XBXProfileTokens.pageInset)
+            .padding(.top, 24)
+            .padding(.bottom, 32)
+            .frame(maxWidth: .infinity)
         }
-        .animation(
-            reduceMotion ? nil : .snappy(duration: 0.28),
-            value: showsRefreshIndicator
+    }
+
+    @ViewBuilder
+    private var profileStatusView: some View {
+        if isProfileLoading {
+            ProfileLoadingView()
+        } else {
+            AppThemeEmptyState(
+                title: "无法载入账户资料",
+                systemImage: "person.crop.circle.badge.exclamationmark",
+                description: authStore.errorMessage ?? "Xbox 服务暂时不可用",
+                actionTitle: "重新加载"
+            ) {
+                Task {
+                    await authStore.refreshProfile(reason: .manualRetry)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 300)
+        }
+    }
+
+    private var settingsAndSupport: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("设置与支持")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(XBXProfileTokens.textPrimary)
+
+            VStack(spacing: 0) {
+                NavigationLink {
+                    CloudGamingSettingsView(isApplyingRegion: $isApplyingRegion)
+                } label: {
+                    MySettingsRow(
+                        title: "云游戏",
+                        value: isApplyingRegion ? "正在应用" : settingsPresentation.cloudGamingSummary,
+                        systemImage: "network",
+                        tint: XBXProfileTokens.brand
+                    )
+                }
+
+                settingsDivider
+
+                NavigationLink {
+                    LoginPreferencesView()
+                } label: {
+                    MySettingsRow(
+                        title: "登录偏好",
+                        value: settingsPresentation.loginMode,
+                        systemImage: "person.badge.key",
+                        tint: .blue
+                    )
+                }
+
+                settingsDivider
+
+                NavigationLink {
+                    AppearanceSettingsView()
+                } label: {
+                    MySettingsRow(
+                        title: "外观与图标",
+                        value: "\(settingsStore.appearanceMode.title) · \(settingsStore.appIconPreset.title)",
+                        systemImage: "paintbrush.pointed",
+                        tint: .purple
+                    )
+                }
+
+                settingsDivider
+
+                NavigationLink {
+                    DiagnosticsSettingsView(traceProfile: $traceProfile)
+                } label: {
+                    MySettingsRow(
+                        title: "诊断",
+                        value: settingsPresentation.traceSummary,
+                        systemImage: "waveform.path.ecg",
+                        tint: .orange
+                    )
+                }
+
+                settingsDivider
+
+                NavigationLink {
+                    AboutSettingsView()
+                } label: {
+                    MySettingsRow(
+                        title: "关于",
+                        value: settingsPresentation.version,
+                        systemImage: "info.circle",
+                        tint: .gray
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+            .glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+        }
+    }
+
+    private var settingsDivider: some View {
+        Divider()
+            .padding(.leading, 54)
+    }
+
+    private var signOutRow: some View {
+        Button(role: .destructive) {
+            showsSignOutConfirmation = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.body.weight(.semibold))
+                Text("退出登录")
+                    .font(.body.weight(.semibold))
+                Spacer(minLength: 8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .padding(.horizontal, 16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(XBXProfileTokens.danger)
+        .disabled(isApplyingRegion)
+        .opacity(isApplyingRegion ? 0.45 : 1)
+        .glassEffect(
+            .regular,
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
-        .transaction { transaction in
-            if reduceMotion {
-                transaction.animation = nil
-            }
-        }
+        .accessibilityHint(
+            isApplyingRegion ? "地区设置应用完成后可退出账户" : "退出当前 Xbox 账户"
+        )
+    }
+
+    private var settingsPresentation: MySettingsPresentation {
+        MySettingsPresentation(
+            appLevel: authStore.session.map { Int($0.appLevel) },
+            cloudRegionTitle: settingsStore.cloudRegionPreset.title,
+            usesEphemeralLoginSession: settingsStore.usesEphemeralLoginSession,
+            traceProfileTitle: traceProfile.title,
+            version: versionText
+        )
+    }
+
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
+            as? String ?? "unknown"
+        return "\(version) (\(build))"
     }
 
     private var mostRecentGame: GameSummary? {
@@ -183,35 +349,267 @@ struct ProfileView: View {
         return datedGames.max { $0.1 < $1.1 }?.0 ?? dataStore.games.first
     }
 
-    private func refreshProfileData(showsIndicator: Bool = false) async {
-        if showsIndicator {
-            self.showsRefreshIndicator = true
+    private func refreshProfileData() async {
+        guard !isApplyingRegion else { return }
+        async let profileRefresh: Void = authStore.refreshProfile(reason: .manualPull)
+        async let libraryRefresh: Void = dataStore.refreshLibrary(reason: .manualPull)
+        _ = await (profileRefresh, libraryRefresh)
+    }
+}
+
+private struct ProfileLoadingView: View {
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            AppThemeBackground()
+
+            LinearGradient(
+                colors: [
+                    Color.primary.opacity(0.04),
+                    Color.primary.opacity(0.16),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 22) {
+                ProfileIdentityLoadingView()
+
+                Divider()
+                    .overlay(Color.white.opacity(0.16))
+
+                ProfileActivityLoadingView()
+                ProfileSocialStatsLoadingView()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 132)
+            .padding(.bottom, 26)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        await authStore.refreshProfile()
-        await dataStore.refreshLibrary()
-        if showsIndicator {
-            self.showsRefreshIndicator = false
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 540, alignment: .bottomLeading)
+        .clipped()
+        .skeletonPulse(accessibilityLabel: "正在载入账户资料")
+    }
+}
+
+private struct ProfileIdentityLoadingView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 16) {
+                    avatar
+                    details
+                }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 16) {
+                        avatar
+                        details
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        avatar
+                        details
+                    }
+                }
+            }
         }
     }
 
+    private var avatar: some View {
+        Circle()
+            .fill(.quaternary)
+            .frame(width: XBXProfileTokens.avatarSize, height: XBXProfileTokens.avatarSize)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("玩家名称")
+                .font(.system(.largeTitle, design: .default, weight: .black))
+                .tracking(-0.6)
+                .lineLimit(2)
+
+            Text("@gamertag")
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    gamerscore
+                    presence
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    gamerscore
+                    presence
+                }
+            }
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .redacted(reason: .placeholder)
+    }
+
+    private var gamerscore: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .frame(width: 18, height: 18)
+            Text("12345")
+                .font(.subheadline.weight(.bold).monospacedDigit())
+        }
+    }
+
+    private var presence: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .frame(width: 8, height: 8)
+            Text("在线 · Xbox")
+                .font(.caption.weight(.semibold))
+                .lineLimit(2)
+        }
+    }
 }
 
-private struct ProfileRefreshIndicator: View {
+private struct ProfileActivityLoadingView: View {
     var body: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-                .tint(.white)
-
-            Text("正在刷新")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: 7) {
+            Text("当前活动")
+                .font(.caption.weight(.bold))
+                .tracking(1.2)
+            Text("正在游玩的游戏")
+                .font(.title3.weight(.bold))
+                .lineLimit(2)
+            Text("最近游玩 · 游戏名称")
+                .font(.caption)
+                .lineLimit(2)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .glassEffect(.regular, in: Capsule())
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .redacted(reason: .placeholder)
+    }
+}
+
+private struct ProfileSocialStatsLoadingView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 12) {
+                    ForEach(0 ..< 3, id: \.self) { index in
+                        if index > 0 {
+                            Divider().overlay(Color.white.opacity(0.12))
+                        }
+                        metric
+                    }
+                }
+            } else {
+                HStack(spacing: 16) {
+                    ForEach(0 ..< 3, id: \.self) { index in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.14))
+                                .frame(width: 1, height: 42)
+                        }
+                        metric
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var metric: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("123")
+                .font(.title3.weight(.bold).monospacedDigit())
+            Text("社交数据")
+                .font(.caption)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .redacted(reason: .placeholder)
+    }
+}
+
+private struct ProfileActivationID: Equatable {
+    let ownerGeneration: UInt64
+    let isActive: Bool
+    let phase: AuthPhase
+}
+
+private struct MySettingsRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    let value: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    rowHeader
+                    Text(value)
+                        .font(.subheadline)
+                        .foregroundStyle(XBXProfileTokens.textTertiary)
+                        .lineLimit(2)
+                        .padding(.leading, 42)
+                }
+                .padding(.vertical, 10)
+            } else {
+                HStack(spacing: 12) {
+                    rowIcon
+                    rowTitle
+                    Spacer(minLength: 8)
+                    Text(value)
+                        .font(.subheadline)
+                        .foregroundStyle(XBXProfileTokens.textTertiary)
+                        .lineLimit(1)
+                    chevron
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .padding(.horizontal, 12)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("正在刷新账户资料")
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+    }
+
+    private var rowHeader: some View {
+        HStack(spacing: 12) {
+            rowIcon
+            rowTitle
+            Spacer(minLength: 8)
+            chevron
+        }
+    }
+
+    private var rowIcon: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 30, height: 30)
+            .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    private var rowTitle: some View {
+        Text(title)
+            .font(.body.weight(.medium))
+            .foregroundStyle(XBXProfileTokens.textPrimary)
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(XBXProfileTokens.textTertiary)
+            .accessibilityHidden(true)
     }
 }
 
@@ -304,21 +702,18 @@ private struct ProfileHero: View {
     }
 
     private var avatar: some View {
-        AsyncImage(url: avatarURL) { phase in
-            switch phase {
-            case let .success(image):
-                image
-                    .resizable()
-                    .scaledToFill()
-            case .empty:
+        SharedRemoteImage(url: avatarURL) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: { showProgress in
+            if showProgress {
                 ZStack {
                     Color.white.opacity(0.10)
                     ProgressView()
                         .tint(.white)
                 }
-            case .failure:
-                avatarPlaceholder
-            @unknown default:
+            } else {
                 avatarPlaceholder
             }
         }
@@ -428,16 +823,16 @@ private struct AvatarBackdrop: View {
     let url: URL?
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            if case let .success(image) = phase {
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .scaleEffect(1.24)
-                    .blur(radius: 14)
-                    .saturation(1.04)
-                    .contrast(1.06)
-            }
+        SharedRemoteImage(url: url) { image in
+            image
+                .resizable()
+                .scaledToFill()
+                .scaleEffect(1.24)
+                .blur(radius: 14)
+                .saturation(1.04)
+                .contrast(1.06)
+        } placeholder: { _ in
+            EmptyView()
         }
     }
 }

@@ -155,6 +155,23 @@ impl SessionApi {
         })
     }
 
+    /// 获取会话进入可协商阶段后由服务端下发的串流配置。
+    ///
+    /// 配置内容会随服务端版本演进，调用层保留为 JSON，避免在控制面复制一套
+    /// 与 libwebrtc 绑定的配置模型。
+    pub async fn get_configuration(&self, session_id: &str) -> Result<Value, WebApiError> {
+        let headers = self.create_headers()?;
+        self.transport
+            .get(
+                &self.endpoint(&format!(
+                    "/v5/sessions/{}/{}/configuration",
+                    self.target_type, session_id
+                )),
+                Some(headers),
+            )
+            .await
+    }
+
     pub async fn send_connect_token(
         &self,
         session_id: &str,

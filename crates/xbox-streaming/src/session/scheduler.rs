@@ -152,7 +152,12 @@ where
                     &flow_error,
                 );
                 if flow_error.status == Some(404) {
-                    self.clear_session(session_id).await;
+                    if let Some(mutation) =
+                        self.session_mutation(session_id, &record.cancelled).await
+                    {
+                        mutation.state.lock().await.closed = true;
+                        self.clear_session(session_id, &record.cancelled).await;
+                    }
                     return false;
                 }
                 return true;
@@ -191,9 +196,24 @@ where
             monitor_control.should_continue,
             monitor_control.should_send_connect_token,
         );
-        self.upsert_session(session_id, record).await;
+
+        // GET 状态期间 close 可能已经删除 record；回写和所有 session mutation
+        // 必须共用同一把锁，防止旧 monitor 结果复活已关闭会话。
+        let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
+            return false;
+        };
+        let mut mutation = mutation.state.lock().await;
+        if mutation.closed {
+            return false;
+        }
+        if !self.upsert_session(session_id, record).await {
+            return false;
+        }
 
         if monitor_control.should_send_connect_token {
+            if mutation.connect_token_sent {
+                return monitor_control.should_continue;
+            }
             let transfer_token = match self.inner.provider.transfer_token().await {
                 Ok(token) => token,
                 Err(error) => {
@@ -209,13 +229,16 @@ where
             };
 
             match api.send_connect_token(session_id, &transfer_token).await {
-                Ok(()) => self.inner.provider.on_session_connect_token_result(
-                    session_id,
-                    &target_type,
-                    &target_id,
-                    "sent",
-                    None,
-                ),
+                Ok(()) => {
+                    mutation.connect_token_sent = true;
+                    self.inner.provider.on_session_connect_token_result(
+                        session_id,
+                        &target_type,
+                        &target_id,
+                        "sent",
+                        None,
+                    )
+                }
                 Err(error) => {
                     let flow_error = map_webapi_error(error);
                     self.inner.provider.on_session_connect_token_result(
@@ -239,6 +262,13 @@ where
         };
 
         let api = self.create_session_api(&record.plan).await?;
+        let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
+            return Ok(false);
+        };
+        let mutation_guard = mutation.state.lock().await;
+        if mutation_guard.closed {
+            return Ok(false);
+        }
         let result = api.send_keepalive(session_id).await;
         match result {
             Ok(()) => Ok(true),
@@ -259,16 +289,50 @@ where
         sessions.get(session_id)
     }
 
-    async fn upsert_session(&self, session_id: &str, record: SessionRuntimeRecord<S>) {
+    async fn session_mutation(
+        &self,
+        session_id: &str,
+        cancelled: &crate::session::store::SessionCancelToken,
+    ) -> Option<Arc<crate::session::flow::SessionMutationEntry>> {
+        self.inner
+            .mutations
+            .read()
+            .await
+            .get(session_id)
+            .cloned()
+            .filter(|mutation| mutation.cancelled.same_instance(cancelled))
+    }
+
+    async fn upsert_session(&self, session_id: &str, record: SessionRuntimeRecord<S>) -> bool {
         self.inner
             .sessions
             .write()
             .await
-            .upsert(session_id.to_string(), record);
+            .upsert_if_same(session_id.to_string(), record)
     }
 
-    async fn clear_session(&self, session_id: &str) {
-        let _ = self.inner.sessions.write().await.remove(session_id);
+    async fn clear_session(
+        &self,
+        session_id: &str,
+        cancelled: &crate::session::store::SessionCancelToken,
+    ) {
+        let removed = self
+            .inner
+            .sessions
+            .write()
+            .await
+            .remove_if_same(session_id, cancelled)
+            .is_some();
+        if !removed {
+            return;
+        }
+        let mut mutations = self.inner.mutations.write().await;
+        if mutations
+            .get(session_id)
+            .is_some_and(|mutation| mutation.cancelled.same_instance(cancelled))
+        {
+            mutations.remove(session_id);
+        }
     }
 
     async fn get_session_progress(

@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct XboxDataSyncTaskIdentity: Equatable {
+    let session: StoredAuthSession?
+    let ownerGeneration: UInt64
+}
+
 @main
 struct XBXRCApp: App {
     @Environment(\.scenePhase) private var scenePhase
@@ -7,6 +12,7 @@ struct XBXRCApp: App {
     @StateObject private var authStore: AuthStore
     @StateObject private var dataStore = XboxDataStore()
     @StateObject private var cloudStore = CloudLibraryStore()
+    @StateObject private var streamingStore = StreamingFeatureStore()
 
     init() {
         let settingsStore = AppSettingsStore()
@@ -33,12 +39,18 @@ struct XBXRCApp: App {
     }
 
     var body: some Scene {
+        let xboxDataSyncIdentity = XboxDataSyncTaskIdentity(
+            session: authStore.session,
+            ownerGeneration: authStore.ownerGeneration
+        )
         WindowGroup {
             AppRootView()
                 .environmentObject(authStore)
                 .environmentObject(dataStore)
                 .environmentObject(cloudStore)
                 .environmentObject(settingsStore)
+                .environmentObject(streamingStore)
+                .preferredColorScheme(settingsStore.appearanceMode.colorScheme)
                 .task {
                     await authStore.restore()
                     await cloudStore.restoreCached(
@@ -46,11 +58,15 @@ struct XBXRCApp: App {
                         source: "appRestore"
                     )
                 }
-                .task(id: authStore.session?.webTokenJSON) {
-                    await dataStore.sync(session: authStore.session)
+                .task(id: xboxDataSyncIdentity) {
+                    await dataStore.sync(
+                        session: xboxDataSyncIdentity.session,
+                        ownerGeneration: xboxDataSyncIdentity.ownerGeneration
+                    )
                 }
                 .task(id: authStore.session == nil) {
                     if authStore.session == nil {
+                        streamingStore.stop()
                         await cloudStore.clear()
                     }
                 }
@@ -58,6 +74,7 @@ struct XBXRCApp: App {
                     cloudStore.updateActivities(games)
                 }
                 .onChange(of: scenePhase) { previousPhase, phase in
+                    streamingStore.handleScenePhase(phase)
                     IOSRuntimeTrace.state(
                         domain: "ios-app",
                         event: "scenePhaseChanged",
@@ -73,12 +90,6 @@ struct XBXRCApp: App {
                         Task {
                             await IOSRuntimeTrace.flush()
                         }
-                    }
-                    guard phase == .active, authStore.isSignedIn else {
-                        return
-                    }
-                    Task {
-                        await authStore.refreshProfile()
                     }
                 }
         }

@@ -465,6 +465,38 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+    typealias FfiType = UInt8
+    typealias SwiftType = UInt8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -564,6 +596,265 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
+
+
+
+/**
+ * Swift 只转交 libwebrtc 产生的 offer/local ICE，并应用这里返回的 remote ICE。
+ * 会话编排、轮询、connect token、keepalive、signaling 与结束判定全部由 Rust 持有。
+ */
+public protocol XboxStreamSessionProtocol: AnyObject, Sendable {
+
+    func cancel() async  -> UInt64
+
+    func close() async throws
+
+    func exchangeOffer(generation: UInt64, sdp: String) async throws  -> String
+
+    func markConnected(generation: UInt64) async throws
+
+    func nextRemoteIceBatch(generation: UInt64) async throws  -> XboxRemoteIceBatch
+
+    func start() async throws  -> XboxPreparedSignaling
+
+    func submitIce(generation: UInt64, candidates: [XboxIceCandidate]) async throws
+
+}
+/**
+ * Swift 只转交 libwebrtc 产生的 offer/local ICE，并应用这里返回的 remote ICE。
+ * 会话编排、轮询、connect token、keepalive、signaling 与结束判定全部由 Rust 持有。
+ */
+open class XboxStreamSession: XboxStreamSessionProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_xbox_ios_bridge_fn_clone_xboxstreamsession(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_xbox_ios_bridge_fn_free_xboxstreamsession(handle, $0) }
+    }
+
+
+
+
+open func cancel()async  -> UInt64  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_cancel(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
+            errorHandler: nil
+
+        )
+}
+
+open func close()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_close(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func exchangeOffer(generation: UInt64, sdp: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_exchange_offer(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(generation),FfiConverterString.lower(sdp)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func markConnected(generation: UInt64)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_mark_connected(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(generation)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func nextRemoteIceBatch(generation: UInt64)async throws  -> XboxRemoteIceBatch  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_next_remote_ice_batch(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(generation)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeXboxRemoteIceBatch_lift,
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func start()async throws  -> XboxPreparedSignaling  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeXboxPreparedSignaling_lift,
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func submitIce(generation: UInt64, candidates: [XboxIceCandidate])async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_submit_ice(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(generation),FfiConverterSequenceTypeXboxIceCandidate.lower(candidates)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamSession: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = XboxStreamSession
+
+    public static func lift(_ handle: UInt64) throws -> XboxStreamSession {
+        return XboxStreamSession(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: XboxStreamSession) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamSession {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: XboxStreamSession, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamSession_lift(_ handle: UInt64) throws -> XboxStreamSession {
+    return try FfiConverterTypeXboxStreamSession.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamSession_lower(_ value: XboxStreamSession) -> UInt64 {
+    return FfiConverterTypeXboxStreamSession.lower(value)
+}
+
+
+
 
 public struct AuthSession: Equatable, Hashable {
     public var refreshToken: String
@@ -632,14 +923,18 @@ public struct CloudAccessResult: Equatable, Hashable {
     public var accessHandle: String
     public var accountId: String
     public var regionHost: String
+    public var ownerGeneration: UInt64
+    public var expiresAtMs: UInt64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(authSession: AuthSession, accessHandle: String, accountId: String, regionHost: String) {
+    public init(authSession: AuthSession, accessHandle: String, accountId: String, regionHost: String, ownerGeneration: UInt64, expiresAtMs: UInt64) {
         self.authSession = authSession
         self.accessHandle = accessHandle
         self.accountId = accountId
         self.regionHost = regionHost
+        self.ownerGeneration = ownerGeneration
+        self.expiresAtMs = expiresAtMs
     }
 
 
@@ -661,7 +956,9 @@ public struct FfiConverterTypeCloudAccessResult: FfiConverterRustBuffer {
                 authSession: FfiConverterTypeAuthSession.read(from: &buf),
                 accessHandle: FfiConverterString.read(from: &buf),
                 accountId: FfiConverterString.read(from: &buf),
-                regionHost: FfiConverterString.read(from: &buf)
+                regionHost: FfiConverterString.read(from: &buf),
+                ownerGeneration: FfiConverterUInt64.read(from: &buf),
+                expiresAtMs: FfiConverterUInt64.read(from: &buf)
         )
     }
 
@@ -670,6 +967,8 @@ public struct FfiConverterTypeCloudAccessResult: FfiConverterRustBuffer {
         FfiConverterString.write(value.accessHandle, into: &buf)
         FfiConverterString.write(value.accountId, into: &buf)
         FfiConverterString.write(value.regionHost, into: &buf)
+        FfiConverterUInt64.write(value.ownerGeneration, into: &buf)
+        FfiConverterUInt64.write(value.expiresAtMs, into: &buf)
     }
 }
 
@@ -686,6 +985,76 @@ public func FfiConverterTypeCloudAccessResult_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeCloudAccessResult_lower(_ value: CloudAccessResult) -> RustBuffer {
     return FfiConverterTypeCloudAccessResult.lower(value)
+}
+
+
+public struct HomeAccessResult: Equatable, Hashable {
+    public var authSession: AuthSession
+    public var accessHandle: String
+    public var accountId: String
+    public var regionHost: String
+    public var ownerGeneration: UInt64
+    public var expiresAtMs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(authSession: AuthSession, accessHandle: String, accountId: String, regionHost: String, ownerGeneration: UInt64, expiresAtMs: UInt64) {
+        self.authSession = authSession
+        self.accessHandle = accessHandle
+        self.accountId = accountId
+        self.regionHost = regionHost
+        self.ownerGeneration = ownerGeneration
+        self.expiresAtMs = expiresAtMs
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension HomeAccessResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHomeAccessResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HomeAccessResult {
+        return
+            try HomeAccessResult(
+                authSession: FfiConverterTypeAuthSession.read(from: &buf),
+                accessHandle: FfiConverterString.read(from: &buf),
+                accountId: FfiConverterString.read(from: &buf),
+                regionHost: FfiConverterString.read(from: &buf),
+                ownerGeneration: FfiConverterUInt64.read(from: &buf),
+                expiresAtMs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HomeAccessResult, into buf: inout [UInt8]) {
+        FfiConverterTypeAuthSession.write(value.authSession, into: &buf)
+        FfiConverterString.write(value.accessHandle, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterString.write(value.regionHost, into: &buf)
+        FfiConverterUInt64.write(value.ownerGeneration, into: &buf)
+        FfiConverterUInt64.write(value.expiresAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHomeAccessResult_lift(_ buf: RustBuffer) throws -> HomeAccessResult {
+    return try FfiConverterTypeHomeAccessResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHomeAccessResult_lower(_ value: HomeAccessResult) -> RustBuffer {
+    return FfiConverterTypeHomeAccessResult.lower(value)
 }
 
 
@@ -1165,6 +1534,60 @@ public func FfiConverterTypeXboxCloudGame_lower(_ value: XboxCloudGame) -> RustB
 }
 
 
+public struct XboxConsolePowerResult: Equatable, Hashable {
+    public var consoleId: String
+    public var accepted: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(consoleId: String, accepted: Bool) {
+        self.consoleId = consoleId
+        self.accepted = accepted
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxConsolePowerResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxConsolePowerResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxConsolePowerResult {
+        return
+            try XboxConsolePowerResult(
+                consoleId: FfiConverterString.read(from: &buf),
+                accepted: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxConsolePowerResult, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.consoleId, into: &buf)
+        FfiConverterBool.write(value.accepted, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxConsolePowerResult_lift(_ buf: RustBuffer) throws -> XboxConsolePowerResult {
+    return try FfiConverterTypeXboxConsolePowerResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxConsolePowerResult_lower(_ value: XboxConsolePowerResult) -> RustBuffer {
+    return FfiConverterTypeXboxConsolePowerResult.lower(value)
+}
+
+
 public struct XboxGame: Equatable, Hashable {
     public var titleId: String
     public var name: String
@@ -1235,6 +1658,351 @@ public func FfiConverterTypeXboxGame_lower(_ value: XboxGame) -> RustBuffer {
 }
 
 
+public struct XboxHost: Equatable, Hashable {
+    public var id: String?
+    public var deviceId: String?
+    public var serverId: String?
+    public var name: String?
+    public var deviceName: String?
+    public var locale: String?
+    public var region: String?
+    public var powerState: String?
+    public var consoleType: String?
+    public var remoteManagementEnabled: Bool?
+    public var consoleStreamingEnabled: Bool?
+    public var wirelessWarning: Bool?
+    public var outOfHomeWarning: Bool?
+    public var storageDevices: [XboxHostStorageDevice]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String?, deviceId: String?, serverId: String?, name: String?, deviceName: String?, locale: String?, region: String?, powerState: String?, consoleType: String?, remoteManagementEnabled: Bool?, consoleStreamingEnabled: Bool?, wirelessWarning: Bool?, outOfHomeWarning: Bool?, storageDevices: [XboxHostStorageDevice]) {
+        self.id = id
+        self.deviceId = deviceId
+        self.serverId = serverId
+        self.name = name
+        self.deviceName = deviceName
+        self.locale = locale
+        self.region = region
+        self.powerState = powerState
+        self.consoleType = consoleType
+        self.remoteManagementEnabled = remoteManagementEnabled
+        self.consoleStreamingEnabled = consoleStreamingEnabled
+        self.wirelessWarning = wirelessWarning
+        self.outOfHomeWarning = outOfHomeWarning
+        self.storageDevices = storageDevices
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxHost: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxHost: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxHost {
+        return
+            try XboxHost(
+                id: FfiConverterOptionString.read(from: &buf),
+                deviceId: FfiConverterOptionString.read(from: &buf),
+                serverId: FfiConverterOptionString.read(from: &buf),
+                name: FfiConverterOptionString.read(from: &buf),
+                deviceName: FfiConverterOptionString.read(from: &buf),
+                locale: FfiConverterOptionString.read(from: &buf),
+                region: FfiConverterOptionString.read(from: &buf),
+                powerState: FfiConverterOptionString.read(from: &buf),
+                consoleType: FfiConverterOptionString.read(from: &buf),
+                remoteManagementEnabled: FfiConverterOptionBool.read(from: &buf),
+                consoleStreamingEnabled: FfiConverterOptionBool.read(from: &buf),
+                wirelessWarning: FfiConverterOptionBool.read(from: &buf),
+                outOfHomeWarning: FfiConverterOptionBool.read(from: &buf),
+                storageDevices: FfiConverterSequenceTypeXboxHostStorageDevice.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxHost, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.id, into: &buf)
+        FfiConverterOptionString.write(value.deviceId, into: &buf)
+        FfiConverterOptionString.write(value.serverId, into: &buf)
+        FfiConverterOptionString.write(value.name, into: &buf)
+        FfiConverterOptionString.write(value.deviceName, into: &buf)
+        FfiConverterOptionString.write(value.locale, into: &buf)
+        FfiConverterOptionString.write(value.region, into: &buf)
+        FfiConverterOptionString.write(value.powerState, into: &buf)
+        FfiConverterOptionString.write(value.consoleType, into: &buf)
+        FfiConverterOptionBool.write(value.remoteManagementEnabled, into: &buf)
+        FfiConverterOptionBool.write(value.consoleStreamingEnabled, into: &buf)
+        FfiConverterOptionBool.write(value.wirelessWarning, into: &buf)
+        FfiConverterOptionBool.write(value.outOfHomeWarning, into: &buf)
+        FfiConverterSequenceTypeXboxHostStorageDevice.write(value.storageDevices, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxHost_lift(_ buf: RustBuffer) throws -> XboxHost {
+    return try FfiConverterTypeXboxHost.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxHost_lower(_ value: XboxHost) -> RustBuffer {
+    return FfiConverterTypeXboxHost.lower(value)
+}
+
+
+public struct XboxHostAddress: Equatable, Hashable {
+    public var ip: String
+    public var port: UInt16
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ip: String, port: UInt16) {
+        self.ip = ip
+        self.port = port
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxHostAddress: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxHostAddress: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxHostAddress {
+        return
+            try XboxHostAddress(
+                ip: FfiConverterString.read(from: &buf),
+                port: FfiConverterUInt16.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxHostAddress, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.ip, into: &buf)
+        FfiConverterUInt16.write(value.port, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxHostAddress_lift(_ buf: RustBuffer) throws -> XboxHostAddress {
+    return try FfiConverterTypeXboxHostAddress.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxHostAddress_lower(_ value: XboxHostAddress) -> RustBuffer {
+    return FfiConverterTypeXboxHostAddress.lower(value)
+}
+
+
+public struct XboxHostStorageDevice: Equatable, Hashable {
+    public var id: String?
+    public var name: String?
+    public var freeBytes: UInt64?
+    public var totalBytes: UInt64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String?, name: String?, freeBytes: UInt64?, totalBytes: UInt64?) {
+        self.id = id
+        self.name = name
+        self.freeBytes = freeBytes
+        self.totalBytes = totalBytes
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxHostStorageDevice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxHostStorageDevice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxHostStorageDevice {
+        return
+            try XboxHostStorageDevice(
+                id: FfiConverterOptionString.read(from: &buf),
+                name: FfiConverterOptionString.read(from: &buf),
+                freeBytes: FfiConverterOptionUInt64.read(from: &buf),
+                totalBytes: FfiConverterOptionUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxHostStorageDevice, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.id, into: &buf)
+        FfiConverterOptionString.write(value.name, into: &buf)
+        FfiConverterOptionUInt64.write(value.freeBytes, into: &buf)
+        FfiConverterOptionUInt64.write(value.totalBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxHostStorageDevice_lift(_ buf: RustBuffer) throws -> XboxHostStorageDevice {
+    return try FfiConverterTypeXboxHostStorageDevice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxHostStorageDevice_lower(_ value: XboxHostStorageDevice) -> RustBuffer {
+    return FfiConverterTypeXboxHostStorageDevice.lower(value)
+}
+
+
+public struct XboxIceCandidate: Equatable, Hashable {
+    public var candidate: String
+    public var sdpMLineIndex: UInt32?
+    public var sdpMid: String?
+    public var usernameFragment: String?
+    public var messageType: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(candidate: String, sdpMLineIndex: UInt32?, sdpMid: String?, usernameFragment: String?, messageType: String?) {
+        self.candidate = candidate
+        self.sdpMLineIndex = sdpMLineIndex
+        self.sdpMid = sdpMid
+        self.usernameFragment = usernameFragment
+        self.messageType = messageType
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxIceCandidate: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxIceCandidate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxIceCandidate {
+        return
+            try XboxIceCandidate(
+                candidate: FfiConverterString.read(from: &buf),
+                sdpMLineIndex: FfiConverterOptionUInt32.read(from: &buf),
+                sdpMid: FfiConverterOptionString.read(from: &buf),
+                usernameFragment: FfiConverterOptionString.read(from: &buf),
+                messageType: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxIceCandidate, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.candidate, into: &buf)
+        FfiConverterOptionUInt32.write(value.sdpMLineIndex, into: &buf)
+        FfiConverterOptionString.write(value.sdpMid, into: &buf)
+        FfiConverterOptionString.write(value.usernameFragment, into: &buf)
+        FfiConverterOptionString.write(value.messageType, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxIceCandidate_lift(_ buf: RustBuffer) throws -> XboxIceCandidate {
+    return try FfiConverterTypeXboxIceCandidate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxIceCandidate_lower(_ value: XboxIceCandidate) -> RustBuffer {
+    return FfiConverterTypeXboxIceCandidate.lower(value)
+}
+
+
+/**
+ * 可直接映射到 libwebrtc `RTCIceServer` 的稳定配置。
+ */
+public struct XboxIceServer: Equatable, Hashable {
+    public var urls: [String]
+    public var username: String?
+    public var credential: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(urls: [String], username: String?, credential: String?) {
+        self.urls = urls
+        self.username = username
+        self.credential = credential
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxIceServer: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxIceServer: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxIceServer {
+        return
+            try XboxIceServer(
+                urls: FfiConverterSequenceString.read(from: &buf),
+                username: FfiConverterOptionString.read(from: &buf),
+                credential: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxIceServer, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.urls, into: &buf)
+        FfiConverterOptionString.write(value.username, into: &buf)
+        FfiConverterOptionString.write(value.credential, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxIceServer_lift(_ buf: RustBuffer) throws -> XboxIceServer {
+    return try FfiConverterTypeXboxIceServer.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxIceServer_lower(_ value: XboxIceServer) -> RustBuffer {
+    return FfiConverterTypeXboxIceServer.lower(value)
+}
+
+
 public struct XboxPlaytime: Equatable, Hashable {
     public var titleId: String
     public var minutes: UInt64?
@@ -1286,6 +2054,64 @@ public func FfiConverterTypeXboxPlaytime_lift(_ buf: RustBuffer) throws -> XboxP
 #endif
 public func FfiConverterTypeXboxPlaytime_lower(_ value: XboxPlaytime) -> RustBuffer {
     return FfiConverterTypeXboxPlaytime.lower(value)
+}
+
+
+public struct XboxPreparedSignaling: Equatable, Hashable {
+    public var generation: UInt64
+    public var iceServers: [XboxIceServer]
+    public var webRtcPlan: XboxWebRtcPlan
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(generation: UInt64, iceServers: [XboxIceServer], webRtcPlan: XboxWebRtcPlan) {
+        self.generation = generation
+        self.iceServers = iceServers
+        self.webRtcPlan = webRtcPlan
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxPreparedSignaling: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxPreparedSignaling: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxPreparedSignaling {
+        return
+            try XboxPreparedSignaling(
+                generation: FfiConverterUInt64.read(from: &buf),
+                iceServers: FfiConverterSequenceTypeXboxIceServer.read(from: &buf),
+                webRtcPlan: FfiConverterTypeXboxWebRtcPlan.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxPreparedSignaling, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.generation, into: &buf)
+        FfiConverterSequenceTypeXboxIceServer.write(value.iceServers, into: &buf)
+        FfiConverterTypeXboxWebRtcPlan.write(value.webRtcPlan, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxPreparedSignaling_lift(_ buf: RustBuffer) throws -> XboxPreparedSignaling {
+    return try FfiConverterTypeXboxPreparedSignaling.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxPreparedSignaling_lower(_ value: XboxPreparedSignaling) -> RustBuffer {
+    return FfiConverterTypeXboxPreparedSignaling.lower(value)
 }
 
 
@@ -1380,6 +2206,244 @@ public func FfiConverterTypeXboxProfile_lift(_ buf: RustBuffer) throws -> XboxPr
 #endif
 public func FfiConverterTypeXboxProfile_lower(_ value: XboxProfile) -> RustBuffer {
     return FfiConverterTypeXboxProfile.lower(value)
+}
+
+
+public struct XboxRemoteIceBatch: Equatable, Hashable {
+    public var candidates: [XboxIceCandidate]
+    public var endOfCandidates: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(candidates: [XboxIceCandidate], endOfCandidates: Bool) {
+        self.candidates = candidates
+        self.endOfCandidates = endOfCandidates
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxRemoteIceBatch: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxRemoteIceBatch: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxRemoteIceBatch {
+        return
+            try XboxRemoteIceBatch(
+                candidates: FfiConverterSequenceTypeXboxIceCandidate.read(from: &buf),
+                endOfCandidates: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxRemoteIceBatch, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeXboxIceCandidate.write(value.candidates, into: &buf)
+        FfiConverterBool.write(value.endOfCandidates, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxRemoteIceBatch_lift(_ buf: RustBuffer) throws -> XboxRemoteIceBatch {
+    return try FfiConverterTypeXboxRemoteIceBatch.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxRemoteIceBatch_lower(_ value: XboxRemoteIceBatch) -> RustBuffer {
+    return FfiConverterTypeXboxRemoteIceBatch.lower(value)
+}
+
+
+public struct XboxStreamDataChannelProfile: Equatable, Hashable {
+    public var label: String
+    public var ordered: Bool
+    public var protocolName: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(label: String, ordered: Bool, protocolName: String) {
+        self.label = label
+        self.ordered = ordered
+        self.protocolName = protocolName
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxStreamDataChannelProfile: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamDataChannelProfile: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamDataChannelProfile {
+        return
+            try XboxStreamDataChannelProfile(
+                label: FfiConverterString.read(from: &buf),
+                ordered: FfiConverterBool.read(from: &buf),
+                protocolName: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxStreamDataChannelProfile, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterBool.write(value.ordered, into: &buf)
+        FfiConverterString.write(value.protocolName, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamDataChannelProfile_lift(_ buf: RustBuffer) throws -> XboxStreamDataChannelProfile {
+    return try FfiConverterTypeXboxStreamDataChannelProfile.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamDataChannelProfile_lower(_ value: XboxStreamDataChannelProfile) -> RustBuffer {
+    return FfiConverterTypeXboxStreamDataChannelProfile.lower(value)
+}
+
+
+public struct XboxWebRtcPlan: Equatable, Hashable {
+    public var audioDirection: String
+    public var videoDirection: String
+    public var videoCodecMimeType: String
+    public var targetVideoWidth: UInt32
+    public var targetVideoHeight: UInt32
+    public var h264Profiles: [String]
+    public var h264PacketizationMode: UInt8
+    public var h264LevelAsymmetryAllowed: Bool
+    public var maxFrameSize: UInt32
+    public var maxFrameRate: UInt32
+    public var minVideoBitrateKbps: UInt32?
+    public var startVideoBitrateKbps: UInt32?
+    public var maxVideoBitrateKbps: UInt32?
+    public var stereoAudio: Bool
+    public var requiredVideoRtcpFeedback: [String]
+    public var allowedCandidateTypes: [String]
+    public var iceTransportPolicy: String
+    public var preferIpv6: Bool
+    public var normalizeEndOfCandidates: Bool
+    public var consoleAddresses: [XboxHostAddress]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(audioDirection: String, videoDirection: String, videoCodecMimeType: String, targetVideoWidth: UInt32, targetVideoHeight: UInt32, h264Profiles: [String], h264PacketizationMode: UInt8, h264LevelAsymmetryAllowed: Bool, maxFrameSize: UInt32, maxFrameRate: UInt32, minVideoBitrateKbps: UInt32?, startVideoBitrateKbps: UInt32?, maxVideoBitrateKbps: UInt32?, stereoAudio: Bool, requiredVideoRtcpFeedback: [String], allowedCandidateTypes: [String], iceTransportPolicy: String, preferIpv6: Bool, normalizeEndOfCandidates: Bool, consoleAddresses: [XboxHostAddress]) {
+        self.audioDirection = audioDirection
+        self.videoDirection = videoDirection
+        self.videoCodecMimeType = videoCodecMimeType
+        self.targetVideoWidth = targetVideoWidth
+        self.targetVideoHeight = targetVideoHeight
+        self.h264Profiles = h264Profiles
+        self.h264PacketizationMode = h264PacketizationMode
+        self.h264LevelAsymmetryAllowed = h264LevelAsymmetryAllowed
+        self.maxFrameSize = maxFrameSize
+        self.maxFrameRate = maxFrameRate
+        self.minVideoBitrateKbps = minVideoBitrateKbps
+        self.startVideoBitrateKbps = startVideoBitrateKbps
+        self.maxVideoBitrateKbps = maxVideoBitrateKbps
+        self.stereoAudio = stereoAudio
+        self.requiredVideoRtcpFeedback = requiredVideoRtcpFeedback
+        self.allowedCandidateTypes = allowedCandidateTypes
+        self.iceTransportPolicy = iceTransportPolicy
+        self.preferIpv6 = preferIpv6
+        self.normalizeEndOfCandidates = normalizeEndOfCandidates
+        self.consoleAddresses = consoleAddresses
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxWebRtcPlan: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxWebRtcPlan: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxWebRtcPlan {
+        return
+            try XboxWebRtcPlan(
+                audioDirection: FfiConverterString.read(from: &buf),
+                videoDirection: FfiConverterString.read(from: &buf),
+                videoCodecMimeType: FfiConverterString.read(from: &buf),
+                targetVideoWidth: FfiConverterUInt32.read(from: &buf),
+                targetVideoHeight: FfiConverterUInt32.read(from: &buf),
+                h264Profiles: FfiConverterSequenceString.read(from: &buf),
+                h264PacketizationMode: FfiConverterUInt8.read(from: &buf),
+                h264LevelAsymmetryAllowed: FfiConverterBool.read(from: &buf),
+                maxFrameSize: FfiConverterUInt32.read(from: &buf),
+                maxFrameRate: FfiConverterUInt32.read(from: &buf),
+                minVideoBitrateKbps: FfiConverterOptionUInt32.read(from: &buf),
+                startVideoBitrateKbps: FfiConverterOptionUInt32.read(from: &buf),
+                maxVideoBitrateKbps: FfiConverterOptionUInt32.read(from: &buf),
+                stereoAudio: FfiConverterBool.read(from: &buf),
+                requiredVideoRtcpFeedback: FfiConverterSequenceString.read(from: &buf),
+                allowedCandidateTypes: FfiConverterSequenceString.read(from: &buf),
+                iceTransportPolicy: FfiConverterString.read(from: &buf),
+                preferIpv6: FfiConverterBool.read(from: &buf),
+                normalizeEndOfCandidates: FfiConverterBool.read(from: &buf),
+                consoleAddresses: FfiConverterSequenceTypeXboxHostAddress.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxWebRtcPlan, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.audioDirection, into: &buf)
+        FfiConverterString.write(value.videoDirection, into: &buf)
+        FfiConverterString.write(value.videoCodecMimeType, into: &buf)
+        FfiConverterUInt32.write(value.targetVideoWidth, into: &buf)
+        FfiConverterUInt32.write(value.targetVideoHeight, into: &buf)
+        FfiConverterSequenceString.write(value.h264Profiles, into: &buf)
+        FfiConverterUInt8.write(value.h264PacketizationMode, into: &buf)
+        FfiConverterBool.write(value.h264LevelAsymmetryAllowed, into: &buf)
+        FfiConverterUInt32.write(value.maxFrameSize, into: &buf)
+        FfiConverterUInt32.write(value.maxFrameRate, into: &buf)
+        FfiConverterOptionUInt32.write(value.minVideoBitrateKbps, into: &buf)
+        FfiConverterOptionUInt32.write(value.startVideoBitrateKbps, into: &buf)
+        FfiConverterOptionUInt32.write(value.maxVideoBitrateKbps, into: &buf)
+        FfiConverterBool.write(value.stereoAudio, into: &buf)
+        FfiConverterSequenceString.write(value.requiredVideoRtcpFeedback, into: &buf)
+        FfiConverterSequenceString.write(value.allowedCandidateTypes, into: &buf)
+        FfiConverterString.write(value.iceTransportPolicy, into: &buf)
+        FfiConverterBool.write(value.preferIpv6, into: &buf)
+        FfiConverterBool.write(value.normalizeEndOfCandidates, into: &buf)
+        FfiConverterSequenceTypeXboxHostAddress.write(value.consoleAddresses, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxWebRtcPlan_lift(_ buf: RustBuffer) throws -> XboxWebRtcPlan {
+    return try FfiConverterTypeXboxWebRtcPlan.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxWebRtcPlan_lower(_ value: XboxWebRtcPlan) -> RustBuffer {
+    return FfiConverterTypeXboxWebRtcPlan.lower(value)
 }
 
 
@@ -1485,6 +2549,153 @@ public func FfiConverterTypeXboxBridgeError_lift(_ buf: RustBuffer) throws -> Xb
 #endif
 public func FfiConverterTypeXboxBridgeError_lower(_ value: XboxBridgeError) -> RustBuffer {
     return FfiConverterTypeXboxBridgeError.lower(value)
+}
+
+
+public
+enum XboxStreamingError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+
+
+    case InvalidArgument(String
+    )
+    case InvalidState(String
+    )
+    case Cancelled(UInt64
+    )
+    case Authentication(String
+    )
+    case Network(String
+    )
+    case Http(UInt16,String
+    )
+    case Parse(String
+    )
+    case Remote(String
+    )
+
+
+
+
+
+
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+
+}
+
+#if compiler(>=6)
+extension XboxStreamingError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamingError: FfiConverterRustBuffer {
+    typealias SwiftType = XboxStreamingError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamingError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+
+
+
+        case 1: return .InvalidArgument(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 2: return .InvalidState(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 3: return .Cancelled(
+            try FfiConverterUInt64.read(from: &buf)
+            )
+        case 4: return .Authentication(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 5: return .Network(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 6: return .Http(
+            try FfiConverterUInt16.read(from: &buf),
+            try FfiConverterString.read(from: &buf)
+            )
+        case 7: return .Parse(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 8: return .Remote(
+            try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: XboxStreamingError, into buf: inout [UInt8]) {
+        switch value {
+
+
+
+
+
+        case let .InvalidArgument(v1):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .InvalidState(v1):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Cancelled(v1):
+            writeInt(&buf, Int32(3))
+            FfiConverterUInt64.write(v1, into: &buf)
+
+
+        case let .Authentication(v1):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Network(v1):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Http(v1,v2):
+            writeInt(&buf, Int32(6))
+            FfiConverterUInt16.write(v1, into: &buf)
+            FfiConverterString.write(v2, into: &buf)
+
+
+        case let .Parse(v1):
+            writeInt(&buf, Int32(7))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Remote(v1):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(v1, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamingError_lift(_ buf: RustBuffer) throws -> XboxStreamingError {
+    return try FfiConverterTypeXboxStreamingError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamingError_lower(_ value: XboxStreamingError) -> RustBuffer {
+    return FfiConverterTypeXboxStreamingError.lower(value)
 }
 
 #if swift(>=5.8)
@@ -1735,6 +2946,131 @@ fileprivate struct FfiConverterSequenceTypeXboxGame: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeXboxHost: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxHost]
+
+    public static func write(_ value: [XboxHost], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxHost.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxHost] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxHost]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxHost.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxHostAddress: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxHostAddress]
+
+    public static func write(_ value: [XboxHostAddress], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxHostAddress.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxHostAddress] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxHostAddress]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxHostAddress.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxHostStorageDevice: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxHostStorageDevice]
+
+    public static func write(_ value: [XboxHostStorageDevice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxHostStorageDevice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxHostStorageDevice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxHostStorageDevice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxHostStorageDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxIceCandidate: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxIceCandidate]
+
+    public static func write(_ value: [XboxIceCandidate], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxIceCandidate.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxIceCandidate] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxIceCandidate]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxIceCandidate.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxIceServer: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxIceServer]
+
+    public static func write(_ value: [XboxIceServer], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxIceServer.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxIceServer] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxIceServer]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxIceServer.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeXboxPlaytime: FfiConverterRustBuffer {
     typealias SwiftType = [XboxPlaytime]
 
@@ -1752,6 +3088,31 @@ fileprivate struct FfiConverterSequenceTypeXboxPlaytime: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeXboxPlaytime.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxStreamDataChannelProfile: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxStreamDataChannelProfile]
+
+    public static func write(_ value: [XboxStreamDataChannelProfile], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxStreamDataChannelProfile.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxStreamDataChannelProfile] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxStreamDataChannelProfile]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxStreamDataChannelProfile.read(from: &buf))
         }
         return seq
     }
@@ -1874,9 +3235,23 @@ public func prepareCloudAccess(refreshToken: String, seedJson: String, forceRegi
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
-public func releaseCloudAccess(accessHandle: String)throws   {try rustCallWithError(FfiConverterTypeXboxBridgeError_lift) {
+public func prepareHomeAccess(refreshToken: String, seedJson: String, forceRegionIp: String)async throws  -> HomeAccessResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_prepare_home_access(FfiConverterString.lower(refreshToken),FfiConverterString.lower(seedJson),FfiConverterString.lower(forceRegionIp)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeHomeAccessResult_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+public func releaseStreamAccess(accessHandle: String)throws   {try rustCallWithError(FfiConverterTypeXboxBridgeError_lift) {
         uniffiCallStatus in
-    uniffi_xbox_ios_bridge_fn_func_release_cloud_access(
+    uniffi_xbox_ios_bridge_fn_func_release_stream_access(
         FfiConverterString.lower(accessHandle),uniffiCallStatus
     )
 }
@@ -1937,6 +3312,20 @@ public func fetchGameLibrary(webTokenJson: String)async throws  -> [XboxGame]  {
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
+public func fetchHosts(webTokenJson: String)async throws  -> [XboxHost]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_fetch_hosts(FfiConverterString.lower(webTokenJson)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeXboxHost.lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
 public func fetchPlaytimes(webTokenJson: String, titleIds: [String])async throws  -> [XboxPlaytime]  {
     return
         try  await uniffiRustCallAsync(
@@ -1950,6 +3339,118 @@ public func fetchPlaytimes(webTokenJson: String, titleIds: [String])async throws
             liftFunc: FfiConverterSequenceTypeXboxPlaytime.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
+}
+public func powerOffConsole(webTokenJson: String, consoleId: String)async throws  -> XboxConsolePowerResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_power_off_console(FfiConverterString.lower(webTokenJson),FfiConverterString.lower(consoleId)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeXboxConsolePowerResult_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+public func powerOnConsole(webTokenJson: String, consoleId: String)async throws  -> XboxConsolePowerResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_power_on_console(FfiConverterString.lower(webTokenJson),FfiConverterString.lower(consoleId)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeXboxConsolePowerResult_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+/**
+ * 账户、代际和 target 都由 Swift 启动请求显式回传，bridge 在创建远端会话前校验。
+ */
+public func createScopedStreamSession(accessHandle: String, targetType: String, targetId: String, accountId: String, ownerGeneration: UInt64)throws  -> XboxStreamSession  {
+    return try  FfiConverterTypeXboxStreamSession_lift(try rustCallWithError(FfiConverterTypeXboxStreamingError_lift) {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_create_scoped_stream_session(
+        FfiConverterString.lower(accessHandle),
+        FfiConverterString.lower(targetType),
+        FfiConverterString.lower(targetId),
+        FfiConverterString.lower(accountId),
+        FfiConverterUInt64.lower(ownerGeneration),uniffiCallStatus
+    )
+})
+}
+public func createStreamSession(accessHandle: String, targetId: String)throws  -> XboxStreamSession  {
+    return try  FfiConverterTypeXboxStreamSession_lift(try rustCallWithError(FfiConverterTypeXboxStreamingError_lift) {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_create_stream_session(
+        FfiConverterString.lower(accessHandle),
+        FfiConverterString.lower(targetId),uniffiCallStatus
+    )
+})
+}
+public func isStreamMessageHandshakeAck(payload: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_is_stream_message_handshake_ack(
+        FfiConverterString.lower(payload),uniffiCallStatus
+    )
+})
+}
+public func streamControlBootstrapPayloads() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_control_bootstrap_payloads(uniffiCallStatus
+    )
+})
+}
+public func streamControlGamepadAddedPayload() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_control_gamepad_added_payload(uniffiCallStatus
+    )
+})
+}
+public func streamControlGamepadChangedPayload(added: Bool) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_control_gamepad_changed_payload(
+        FfiConverterBool.lower(added),uniffiCallStatus
+    )
+})
+}
+public func streamDataChannelProfiles() -> [XboxStreamDataChannelProfile]  {
+    return try!  FfiConverterSequenceTypeXboxStreamDataChannelProfile.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_data_channel_profiles(uniffiCallStatus
+    )
+})
+}
+public func streamInputMetadataBootstrapPayload() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_input_metadata_bootstrap_payload(uniffiCallStatus
+    )
+})
+}
+public func streamMessageHandshakePayload() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_message_handshake_payload(uniffiCallStatus
+    )
+})
+}
+public func streamPostHandshakePayloads(width: UInt32, height: UInt32) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_post_handshake_payloads(
+        FfiConverterUInt32.lower(width),
+        FfiConverterUInt32.lower(height),uniffiCallStatus
+    )
+})
 }
 
 private enum InitializationResult {
@@ -1982,7 +3483,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_prepare_cloud_access() != 23893) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_release_cloud_access() != 39927) {
+    if (uniffi_xbox_ios_bridge_checksum_func_prepare_home_access() != 38550) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_release_stream_access() != 55925) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_cloud_catalog() != 43117) {
@@ -1997,7 +3501,67 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_game_library() != 59706) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_xbox_ios_bridge_checksum_func_fetch_hosts() != 7945) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_playtimes() != 55863) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_power_off_console() != 6792) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_power_on_console() != 2029) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_create_scoped_stream_session() != 42383) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_create_stream_session() != 16123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_is_stream_message_handshake_ack() != 1639) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_control_bootstrap_payloads() != 5035) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_control_gamepad_added_payload() != 12577) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_control_gamepad_changed_payload() != 6594) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_data_channel_profiles() != 48316) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_input_metadata_bootstrap_payload() != 20780) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_message_handshake_payload() != 46974) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_post_handshake_payloads() != 33715) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_cancel() != 14291) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_close() != 10620) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_exchange_offer() != 14841) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_mark_connected() != 59583) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_next_remote_ice_batch() != 60123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_start() != 32767) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_submit_ice() != 36632) {
         return InitializationResult.apiChecksumMismatch
     }
 

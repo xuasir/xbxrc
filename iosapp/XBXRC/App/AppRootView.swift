@@ -32,9 +32,14 @@ enum AppThemePalette {
 }
 
 struct AppThemeBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         GeometryReader { geometry in
             let radius = max(geometry.size.width, geometry.size.height)
+            let themeMarkSize = min(radius * 0.82, geometry.size.width * 1.5)
+            let themeMarkOpacity = colorScheme == .dark ? 0.035 : 0.1
+            let themeMarkBlur = colorScheme == .dark ? 1.2 : 0.6
 
             ZStack {
                 LinearGradient(
@@ -60,6 +65,18 @@ struct AppThemeBackground: View {
                     startRadius: 0,
                     endRadius: radius * 0.64
                 )
+
+                Image("LaunchIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: themeMarkSize, height: themeMarkSize)
+                    .opacity(themeMarkOpacity)
+                    .rotationEffect(.degrees(-10))
+                    .offset(
+                        x: geometry.size.width * 0.2,
+                        y: -geometry.size.height * 0.06
+                    )
+                    .blur(radius: themeMarkBlur)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -79,45 +96,66 @@ extension View {
 }
 
 struct AppRootView: View {
+    @EnvironmentObject private var authStore: AuthStore
+    @EnvironmentObject private var streamingStore: StreamingFeatureStore
     @State private var selection: AppSection = .library
+    @State private var launchVisible = true
 
     var body: some View {
         ZStack {
             AppThemeBackground()
 
             TabView(selection: $selection) {
-                GameLibraryView()
+                GameLibraryView(isActive: selection == .library)
                     .tabItem {
                         Label("游戏库", systemImage: "rectangle.stack.fill")
                     }
                     .tag(AppSection.library)
 
-                AchievementsView()
+                HostListView(isActive: selection == .hosts)
+                    .tabItem {
+                        Label("主机", systemImage: "desktopcomputer")
+                    }
+                    .tag(AppSection.hosts)
+
+                AchievementsView(isActive: selection == .achievements)
                     .tabItem {
                         Label("成就", systemImage: "trophy.fill")
                     }
                     .tag(AppSection.achievements)
 
-                ProfileView()
+                ProfileView(isActive: selection == .my)
                     .tabItem {
-                        Label("账户", systemImage: "person.crop.circle.fill")
+                        Label("我的", systemImage: "person.crop.circle.fill")
                     }
-                    .tag(AppSection.profile)
-
-                SettingsView()
-                    .tabItem {
-                        Label("设置", systemImage: "gearshape.fill")
-                    }
-                    .tag(AppSection.settings)
+                    .tag(AppSection.my)
             }
             .tint(AppThemePalette.brand)
+
+            if launchVisible {
+                LaunchExperienceView(isRestoring: authStore.phase == .restoring) {
+                    launchVisible = false
+                }
+            }
+        }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { streamingStore.isPresentingPlayer },
+                set: { isPresented in
+                    if !isPresented {
+                        streamingStore.stop()
+                    }
+                }
+            )
+        ) {
+            StreamingPlayerView(store: streamingStore)
         }
     }
 }
 
 private enum AppSection: Hashable {
     case library
+    case hosts
     case achievements
-    case profile
-    case settings
+    case my
 }

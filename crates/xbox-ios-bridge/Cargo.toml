@@ -14,12 +14,17 @@ path = "src/lib.rs"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+chrono.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 url.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+async-trait.workspace = true
 uniffi = { version = "0.32.0", default-features = false, features = ["tokio"] }
 xbox-auth-flow = { path = "../xbox-auth-flow" }
 xbox-cloud-catalog-flow = { path = "../xbox-cloud-catalog-flow" }
+xbox-streaming-protocol = { package = "xbxengine-protocol", path = "../xbxengine/protocol" }
+xbox-streaming = { path = "../xbox-streaming" }
 xbox-webapi = { path = "../xbox-webapi" }
 
 [dev-dependencies]

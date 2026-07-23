@@ -7,12 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* WebRTC */; };
 		A00000000000000000000001 /* XBXRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* XBXRCApp.swift */; };
 		A00000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppRootView.swift */; };
+		A0000000000000000000002D /* LaunchExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000034 /* LaunchExperienceView.swift */; };
 		A00000000000000000000003 /* GameLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* GameLibraryView.swift */; };
 		A00000000000000000000004 /* AchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* AchievementsView.swift */; };
 		A00000000000000000000005 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ProfileView.swift */; };
 		A00000000000000000000006 /* StreamingRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* StreamingRuntime.swift */; };
+		A00000000000000000000026 /* StreamingContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002D /* StreamingContracts.swift */; };
+		A00000000000000000000027 /* StreamSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002E /* StreamSessionActor.swift */; };
+		A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002F /* LibWebRtcRuntime.swift */; };
+		A00000000000000000000029 /* StreamingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000030 /* StreamingPlayerView.swift */; };
+		A0000000000000000000002A /* XboxStreamDataChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000031 /* XboxStreamDataChannels.swift */; };
+		A0000000000000000000002C /* IOSStreamInputProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000033 /* IOSStreamInputProtocol.swift */; };
 		A00000000000000000000007 /* GameSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* GameSummary.swift */; };
 		A00000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* Assets.xcassets */; };
 		A00000000000000000000009 /* XBXRCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000A /* XBXRCTests.swift */; };
@@ -41,6 +49,9 @@
 		A00000000000000000000020 /* IOSRuntimeTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000027 /* IOSRuntimeTrace.swift */; };
 		A00000000000000000000021 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000028 /* AppSettingsStore.swift */; };
 		A00000000000000000000022 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000029 /* SettingsView.swift */; };
+		A00000000000000000000023 /* XboxHostSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002A /* XboxHostSummary.swift */; };
+		A00000000000000000000024 /* HostListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002B /* HostListView.swift */; };
+		A0000000000000000000002B /* OrbitCardCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000032 /* OrbitCardCarousel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +67,7 @@
 /* Begin PBXFileReference section */
 		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000034 /* LaunchExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperienceView.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* GameLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLibraryView.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* AchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsView.swift; sourceTree = "<group>"; };
 		B00000000000000000000005 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -94,6 +106,15 @@
 		B00000000000000000000027 /* IOSRuntimeTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRuntimeTrace.swift; sourceTree = "<group>"; };
 		B00000000000000000000028 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000029 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B0000000000000000000002A /* XboxHostSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxHostSummary.swift; sourceTree = "<group>"; };
+		B0000000000000000000002B /* HostListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostListView.swift; sourceTree = "<group>"; };
+		B0000000000000000000002D /* StreamingContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingContracts.swift; sourceTree = "<group>"; };
+		B0000000000000000000002E /* StreamSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionActor.swift; sourceTree = "<group>"; };
+		B0000000000000000000002F /* LibWebRtcRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibWebRtcRuntime.swift; sourceTree = "<group>"; };
+		B00000000000000000000030 /* StreamingPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingPlayerView.swift; sourceTree = "<group>"; };
+		B00000000000000000000031 /* XboxStreamDataChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxStreamDataChannels.swift; sourceTree = "<group>"; };
+		B00000000000000000000032 /* OrbitCardCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitCardCarousel.swift; sourceTree = "<group>"; };
+		B00000000000000000000033 /* IOSStreamInputProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSStreamInputProtocol.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000001 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,6 +164,7 @@
 			children = (
 				B00000000000000000000001 /* XBXRCApp.swift */,
 				B00000000000000000000002 /* AppRootView.swift */,
+				B00000000000000000000034 /* LaunchExperienceView.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -151,11 +174,20 @@
 			children = (
 				C00000000000000000000010 /* Authentication */,
 				C00000000000000000000005 /* Library */,
+				C00000000000000000000019 /* Hosts */,
 				C00000000000000000000006 /* Achievements */,
 				C00000000000000000000007 /* Profile */,
 				C00000000000000000000018 /* Settings */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000019 /* Hosts */ = {
+			isa = PBXGroup;
+			children = (
+				B0000000000000000000002B /* HostListView.swift */,
+			);
+			path = Hosts;
 			sourceTree = "<group>";
 		};
 		C00000000000000000000010 /* Authentication */ = {
@@ -247,6 +279,12 @@
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000006 /* StreamingRuntime.swift */,
+				B0000000000000000000002D /* StreamingContracts.swift */,
+				B0000000000000000000002E /* StreamSessionActor.swift */,
+				B0000000000000000000002F /* LibWebRtcRuntime.swift */,
+				B00000000000000000000030 /* StreamingPlayerView.swift */,
+				B00000000000000000000031 /* XboxStreamDataChannels.swift */,
+				B00000000000000000000033 /* IOSStreamInputProtocol.swift */,
 			);
 			path = Streaming;
 			sourceTree = "<group>";
@@ -279,6 +317,7 @@
 			children = (
 				B0000000000000000000001D /* GamerscoreCoinIcon.swift */,
 				B0000000000000000000001F /* CircularCardCarousel.swift */,
+				B00000000000000000000032 /* OrbitCardCarousel.swift */,
 				B0000000000000000000001C /* SkeletonPulse.swift */,
 			);
 			path = Components;
@@ -307,6 +346,7 @@
 			children = (
 				B00000000000000000000007 /* GameSummary.swift */,
 				B00000000000000000000020 /* CloudLibraryGame.swift */,
+				B0000000000000000000002A /* XboxHostSummary.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -362,6 +402,9 @@
 			dependencies = (
 			);
 			name = XBXRC;
+			packageProductDependencies = (
+				C10000000000000000000001 /* WebRTC */,
+			);
 			productName = XBXRC;
 			productReference = B00000000000000000000009 /* XBXRC.app */;
 			productType = "com.apple.product-type.application";
@@ -411,6 +454,9 @@
 				Base,
 			);
 			mainGroup = C00000000000000000000001;
+			packageReferences = (
+				B10000000000000000000001 /* XCLocalSwiftPackageReference \"WebRTC\" */,
+			);
 			productRefGroup = C0000000000000000000000E /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -451,6 +497,21 @@
 		};
 /* End PBXShellScriptBuildPhase section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		B10000000000000000000001 /* XCLocalSwiftPackageReference \"WebRTC\" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WebRTC;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C10000000000000000000001 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference \"WebRTC\" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
+
 /* Begin PBXSourcesBuildPhase section */
 		D00000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -458,6 +519,7 @@
 			files = (
 				A00000000000000000000001 /* XBXRCApp.swift in Sources */,
 				A00000000000000000000002 /* AppRootView.swift in Sources */,
+				A0000000000000000000002D /* LaunchExperienceView.swift in Sources */,
 				A0000000000000000000000B /* AuthStore.swift in Sources */,
 				A0000000000000000000000C /* WebAuthenticationPresenter.swift in Sources */,
 				A0000000000000000000000D /* XboxLoginView.swift in Sources */,
@@ -472,6 +534,12 @@
 				A0000000000000000000001A /* XboxCloudDataClient.swift in Sources */,
 				A0000000000000000000000F /* xbox_ios_bridge.swift in Sources */,
 				A00000000000000000000006 /* StreamingRuntime.swift in Sources */,
+				A00000000000000000000026 /* StreamingContracts.swift in Sources */,
+				A00000000000000000000027 /* StreamSessionActor.swift in Sources */,
+				A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */,
+				A00000000000000000000029 /* StreamingPlayerView.swift in Sources */,
+				A0000000000000000000002A /* XboxStreamDataChannels.swift in Sources */,
+				A0000000000000000000002C /* IOSStreamInputProtocol.swift in Sources */,
 				A00000000000000000000007 /* GameSummary.swift in Sources */,
 				A00000000000000000000019 /* CloudLibraryGame.swift in Sources */,
 				A00000000000000000000010 /* KeychainSessionStore.swift in Sources */,
@@ -487,6 +555,9 @@
 				A00000000000000000000020 /* IOSRuntimeTrace.swift in Sources */,
 				A00000000000000000000021 /* AppSettingsStore.swift in Sources */,
 				A00000000000000000000022 /* SettingsView.swift in Sources */,
+				A00000000000000000000023 /* XboxHostSummary.swift in Sources */,
+				A00000000000000000000024 /* HostListView.swift in Sources */,
+				A0000000000000000000002B /* OrbitCardCarousel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -623,7 +694,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconMidnight";
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -645,9 +717,14 @@
 					"$(inherited)",
 					"$(DERIVED_FILE_DIR)/rust",
 				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lxbox_ios_bridge",
+					"-ObjC",
 					"-framework",
 					Security,
 					"-framework",
@@ -671,7 +748,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconMidnight";
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -693,9 +771,14 @@
 					"$(inherited)",
 					"$(DERIVED_FILE_DIR)/rust",
 				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lxbox_ios_bridge",
+					"-ObjC",
 					"-framework",
 					Security,
 					"-framework",

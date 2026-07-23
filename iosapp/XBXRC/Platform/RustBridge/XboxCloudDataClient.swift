@@ -5,6 +5,49 @@ struct PreparedCloudAccess: Sendable {
     let handle: String
     let accountID: String
     let regionHost: String
+    let ownerGeneration: UInt64
+    let expiresAtMs: UInt64
+
+    init(
+        authSession: AuthSession,
+        handle: String,
+        accountID: String,
+        regionHost: String,
+        ownerGeneration: UInt64 = 0,
+        expiresAtMs: UInt64 = 0
+    ) {
+        self.authSession = authSession
+        self.handle = handle
+        self.accountID = accountID
+        self.regionHost = regionHost
+        self.ownerGeneration = ownerGeneration
+        self.expiresAtMs = expiresAtMs
+    }
+}
+
+struct PreparedHomeAccess: Sendable {
+    let authSession: AuthSession
+    let handle: String
+    let accountID: String
+    let regionHost: String
+    let ownerGeneration: UInt64
+    let expiresAtMs: UInt64
+
+    init(
+        authSession: AuthSession,
+        handle: String,
+        accountID: String,
+        regionHost: String,
+        ownerGeneration: UInt64 = 0,
+        expiresAtMs: UInt64 = 0
+    ) {
+        self.authSession = authSession
+        self.handle = handle
+        self.accountID = accountID
+        self.regionHost = regionHost
+        self.ownerGeneration = ownerGeneration
+        self.expiresAtMs = expiresAtMs
+    }
 }
 
 struct RemoteCloudCatalogSnapshot: Sendable {
@@ -32,6 +75,11 @@ protocol XboxCloudDataClient: Sendable {
         seedJSON: String,
         forceRegionIP: String
     ) async throws -> PreparedCloudAccess
+    func prepareHomeAccess(
+        refreshToken: String,
+        seedJSON: String,
+        forceRegionIP: String
+    ) async throws -> PreparedHomeAccess
     func loadCatalog(
         accessHandle: String,
         market: String,
@@ -74,6 +122,9 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                 payload: [
                     "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     "appLevel": .integer(Int64(result.authSession.appLevel)),
+                    "leaseGeneration": .integer(Int64(result.ownerGeneration)),
+                    "leaseExpiresAtMs": .integer(Int64(result.expiresAtMs)),
+                    "target": .string("cloud"),
                 ],
                 dimension: .network,
                 importance: .key,
@@ -83,7 +134,9 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                 authSession: result.authSession,
                 handle: result.accessHandle,
                 accountID: result.accountId,
-                regionHost: result.regionHost
+                regionHost: result.regionHost,
+                ownerGeneration: result.ownerGeneration,
+                expiresAtMs: result.expiresAtMs
             )
         } catch {
             IOSRuntimeTrace.event(
@@ -93,6 +146,71 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                     error,
                     extra: [
                         "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    ]
+                ),
+                dimension: .network,
+                importance: .essential,
+                operationID: operationID
+            )
+            throw error
+        }
+    }
+
+    func prepareHomeAccess(
+        refreshToken: String,
+        seedJSON: String,
+        forceRegionIP: String
+    ) async throws -> PreparedHomeAccess {
+        let operationID = UUID().uuidString
+        let startedAt = Date()
+        IOSRuntimeTrace.event(
+            domain: "auth",
+            event: "homeAccessUniFFIBoundaryStarted",
+            payload: [:],
+            dimension: .network,
+            importance: .key,
+            operationID: operationID
+        )
+        do {
+            let result = try await XBXRC.prepareHomeAccess(
+                refreshToken: refreshToken,
+                seedJson: seedJSON,
+                forceRegionIp: forceRegionIP
+            )
+            IOSRuntimeTrace.event(
+                domain: "auth",
+                event: "homeAccessUniFFIBoundarySucceeded",
+                payload: [
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))
+                    ),
+                    "appLevel": .integer(Int64(result.authSession.appLevel)),
+                    "leaseGeneration": .integer(Int64(result.ownerGeneration)),
+                    "leaseExpiresAtMs": .integer(Int64(result.expiresAtMs)),
+                    "target": .string("home"),
+                ],
+                dimension: .network,
+                importance: .key,
+                operationID: operationID
+            )
+            return PreparedHomeAccess(
+                authSession: result.authSession,
+                handle: result.accessHandle,
+                accountID: result.accountId,
+                regionHost: result.regionHost,
+                ownerGeneration: result.ownerGeneration,
+                expiresAtMs: result.expiresAtMs
+            )
+        } catch {
+            IOSRuntimeTrace.event(
+                domain: "auth",
+                event: "homeAccessUniFFIBoundaryFailed",
+                payload: CloudLibraryDiagnostics.errorPayload(
+                    error,
+                    extra: [
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))
+                        ),
                     ]
                 ),
                 dimension: .network,
@@ -278,7 +396,7 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
             importance: .debug,
             operationID: operationID
         )
-        try? releaseCloudAccess(accessHandle: handle)
+        try? releaseStreamAccess(accessHandle: handle)
         IOSRuntimeTrace.event(
             domain: "auth",
             event: "cloudAccessReleaseCompleted",

@@ -1,7 +1,8 @@
-use crate::cloud_access::load_cloud_access;
+use crate::cloud_access::{load_scoped_stream_access, StreamingAccessContext};
 use crate::XboxBridgeError;
 use std::time::{SystemTime, UNIX_EPOCH};
 use xbox_cloud_catalog_flow::{CloudCatalogScope, XboxCloudCatalogFlow};
+use xbox_streaming::Target;
 
 const INITIAL_HYDRATION_SIZE: usize = 75;
 
@@ -53,7 +54,7 @@ pub async fn fetch_cloud_catalog(
     market: String,
     language: String,
 ) -> Result<XboxCloudCatalogSnapshot, XboxBridgeError> {
-    let context = load_cloud_access(&access_handle)?;
+    let context = load_cloud_catalog_access(&access_handle)?;
     let market = normalize_locale_part(&market, "US");
     let language = normalize_locale_part(&language, "en-US");
     let scope = CloudCatalogScope {
@@ -144,7 +145,7 @@ pub async fn hydrate_cloud_catalog_page(
             "catalog metadata page supports at most {INITIAL_HYDRATION_SIZE} products"
         )));
     }
-    let context = load_cloud_access(&access_handle)?;
+    let context = load_cloud_catalog_access(&access_handle)?;
     let scope = CloudCatalogScope {
         market: normalize_locale_part(&market, "US"),
         language: normalize_locale_part(&language, "en-US"),
@@ -181,6 +182,21 @@ fn normalize_locale_part(value: &str, fallback: &str) -> String {
     } else {
         value.to_string()
     }
+}
+
+fn load_cloud_catalog_access(
+    access_handle: &str,
+) -> Result<StreamingAccessContext, XboxBridgeError> {
+    load_scoped_stream_access(access_handle, Target::Cloud, None, None)
+}
+
+#[cfg(test)]
+fn require_cloud_catalog_target(target: Target) -> Result<(), XboxBridgeError> {
+    (target == Target::Cloud).then_some(()).ok_or_else(|| {
+        XboxBridgeError::InvalidData(
+            "cloud catalog requires a cloud stream access handle".to_string(),
+        )
+    })
 }
 
 fn non_empty(value: String) -> Option<String> {
@@ -222,5 +238,11 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(ids.iter().take(INITIAL_HYDRATION_SIZE).count(), 75);
         assert_eq!(ids.iter().skip(INITIAL_HYDRATION_SIZE).count(), 925);
+    }
+
+    #[test]
+    fn cloud_catalog_rejects_home_access_target() {
+        assert!(require_cloud_catalog_target(Target::Cloud).is_ok());
+        assert!(require_cloud_catalog_target(Target::Home).is_err());
     }
 }

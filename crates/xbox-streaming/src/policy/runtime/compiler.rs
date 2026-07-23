@@ -258,7 +258,7 @@ mod tests {
 
         assert_eq!(runtime.video_pipeline.feedback_interval_ms, 100);
         assert_eq!(runtime.video_pipeline.nack_max_age_ms, 420);
-        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 48);
+        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 36);
         assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 900);
         assert_eq!(runtime.recovery.first_frame_grace_ms, 1_800);
         assert_eq!(runtime.recovery.keyframe_request_stall_ms, 300);

@@ -9,15 +9,29 @@ use xbox_webapi::{PeopleApi, ProfileApi, SocialApi, UserPresenceApi};
 mod cloud_access;
 mod cloud_catalog;
 mod data;
+mod streaming;
 
-pub use cloud_access::{prepare_cloud_access, release_cloud_access, CloudAccessResult};
+pub use cloud_access::{
+    prepare_cloud_access, prepare_home_access, release_stream_access, CloudAccessResult,
+    HomeAccessResult,
+};
 pub use cloud_catalog::{
     fetch_cloud_catalog, hydrate_cloud_catalog_page, XboxCloudCatalogMetadata,
     XboxCloudCatalogSnapshot, XboxCloudGame,
 };
 pub use data::{
-    fetch_achievements, fetch_game_library, fetch_playtimes, XboxAchievement,
-    XboxAchievementProgress, XboxGame, XboxPlaytime,
+    fetch_achievements, fetch_game_library, fetch_hosts, fetch_playtimes, power_off_console,
+    power_on_console, XboxAchievement, XboxAchievementProgress, XboxConsolePowerResult, XboxGame,
+    XboxHost, XboxHostStorageDevice, XboxPlaytime,
+};
+pub use streaming::{
+    create_scoped_stream_session, create_stream_session, is_stream_message_handshake_ack,
+    stream_control_bootstrap_payloads, stream_control_gamepad_added_payload,
+    stream_control_gamepad_changed_payload, stream_data_channel_profiles,
+    stream_input_metadata_bootstrap_payload, stream_message_handshake_payload,
+    stream_post_handshake_payloads, XboxIceCandidate, XboxIceServer, XboxPreparedSignaling,
+    XboxRemoteIceBatch, XboxStreamDataChannelProfile, XboxStreamSession, XboxStreamingError,
+    XboxWebRtcPlan,
 };
 
 const XAL_TITLE_ID: &str = "000000004c20a908";

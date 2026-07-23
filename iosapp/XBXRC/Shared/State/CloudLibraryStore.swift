@@ -133,6 +133,7 @@ enum CloudLibraryDiagnostics {
 }
 
 enum CloudCatalogRefreshReason: String, Equatable, Sendable {
+    case initialActivation
     case cacheMiss
     case expiredCache
     case pageEnter
@@ -158,7 +159,10 @@ final class CloudLibraryStore: ObservableObject {
     private var activitiesByTitleID: [String: GameSummary] = [:]
     private var inFlight: Task<RemoteLoadResult, Error>?
     private var inFlightOperationID: String?
+    private var refreshTask: Task<Void, Never>?
+    private var refreshTaskID: UUID?
     private var generation = 0
+    private var didRunInitialRefresh = false
 
     init(
         client: any XboxCloudDataClient = RustXboxCloudDataClient(),
@@ -237,10 +241,17 @@ final class CloudLibraryStore: ObservableObject {
         }
 
         let cancelledRefresh = inFlight != nil
+        let previousAccess = activeAccess
         generation += 1
+        didRunInitialRefresh = false
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshTaskID = nil
         inFlight?.cancel()
         inFlight = nil
         inFlightOperationID = nil
+        isRefreshing = false
+        refreshReason = nil
         IOSRuntimeTrace.decision(
             domain: "cloud-library",
             event: "cacheRestoreScopeChanged",
@@ -257,6 +268,9 @@ final class CloudLibraryStore: ObservableObject {
         activeScope = scope
         activeAccess = nil
         errorMessage = nil
+        if let previousAccess {
+            await client.releaseAccess(handle: previousAccess.handle)
+        }
 
         do {
             guard let snapshot = try await repository.load(scope: scope) else {
@@ -317,7 +331,7 @@ final class CloudLibraryStore: ObservableObject {
         }
     }
 
-    func activate(
+    func activateOnce(
         session: StoredAuthSession?,
         prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
     ) async {
@@ -344,13 +358,12 @@ final class CloudLibraryStore: ObservableObject {
             )
             return
         }
-        switch cacheState {
-        case .fresh, .stale:
+        guard !didRunInitialRefresh else {
             IOSRuntimeTrace.decision(
                 domain: "cloud-library",
                 event: "catalogActivationSkipped",
                 payload: [
-                    "reason": "cacheRenderable",
+                    "reason": "alreadyActivated",
                     "cacheState": .string(cacheState.rawValue),
                     "games": .integer(Int64(games.count)),
                 ],
@@ -358,32 +371,33 @@ final class CloudLibraryStore: ObservableObject {
                 importance: .key
             )
             return
-        case .expired:
-            IOSRuntimeTrace.decision(
-                domain: "cloud-library",
-                event: "catalogActivationRefreshRequired",
-                payload: ["reason": "expiredCache"],
-                dimension: .core,
-                importance: .key
-            )
-            await refresh(reason: .expiredCache, prepareAccess: prepareAccess)
-        case .miss:
-            IOSRuntimeTrace.decision(
-                domain: "cloud-library",
-                event: "catalogActivationRefreshRequired",
-                payload: ["reason": "cacheMiss"],
-                dimension: .core,
-                importance: .key
-            )
-            await refresh(reason: .cacheMiss, prepareAccess: prepareAccess)
         }
+        didRunInitialRefresh = true
+        IOSRuntimeTrace.decision(
+            domain: "cloud-library",
+            event: "catalogActivationRefreshRequired",
+            payload: [
+                "reason": "initialActivation",
+                "cacheState": .string(cacheState.rawValue),
+            ],
+            dimension: .core,
+            importance: .key
+        )
+        await refresh(reason: .initialActivation, prepareAccess: prepareAccess)
+    }
+
+    func activate(
+        session: StoredAuthSession?,
+        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
+    ) async {
+        await activateOnce(session: session, prepareAccess: prepareAccess)
     }
 
     func refresh(
         reason: CloudCatalogRefreshReason,
         prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
     ) async {
-        if let inFlight {
+        if let refreshTask {
             IOSRuntimeTrace.decision(
                 domain: "cloud-library",
                 event: "catalogRefreshCoalesced",
@@ -395,9 +409,28 @@ final class CloudLibraryStore: ObservableObject {
                 importance: .key,
                 operationID: inFlightOperationID
             )
-            _ = try? await inFlight.value
+            await refreshTask.value
             return
         }
+
+        let taskID = UUID()
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performRefresh(reason: reason, prepareAccess: prepareAccess)
+        }
+        refreshTask = task
+        refreshTaskID = taskID
+        await task.value
+        if refreshTaskID == taskID {
+            refreshTask = nil
+            refreshTaskID = nil
+        }
+    }
+
+    private func performRefresh(
+        reason: CloudCatalogRefreshReason,
+        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
+    ) async {
 
         let requestGeneration = generation
         let market = Self.market
@@ -691,6 +724,10 @@ final class CloudLibraryStore: ObservableObject {
             operationID: operationID
         )
         generation += 1
+        didRunInitialRefresh = false
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshTaskID = nil
         inFlight?.cancel()
         inFlight = nil
         inFlightOperationID = nil
