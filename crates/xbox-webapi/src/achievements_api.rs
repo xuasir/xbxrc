@@ -4,27 +4,36 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 
 const ACHIEVEMENTS_BASE_URL: &str = "https://achievements.xboxlive.com";
+const DEFAULT_ACHIEVEMENTS_ACCEPT_LANGUAGE: &str = "en-US";
 
 pub struct AchievementsApi {
     transport: HttpTransport,
     uhs: String,
     token: String,
+    accept_language: String,
 }
 
 impl AchievementsApi {
-    pub fn new(uhs: String, token: String) -> Self {
+    pub fn new(uhs: String, token: String, accept_language: String) -> Self {
         Self {
             transport: HttpTransport::new(),
             uhs,
             token,
+            accept_language: normalize_accept_language(&accept_language),
         }
     }
 
-    pub fn with_transport(transport: HttpTransport, uhs: String, token: String) -> Self {
+    pub fn with_transport(
+        transport: HttpTransport,
+        uhs: String,
+        token: String,
+        accept_language: String,
+    ) -> Self {
         Self {
             transport,
             uhs,
             token,
+            accept_language: normalize_accept_language(&accept_language),
         }
     }
 
@@ -42,7 +51,7 @@ impl AchievementsApi {
     fn headers(&self) -> Result<HeaderMap, WebApiError> {
         HttpTransport::create_header_map(&[
             ("Authorization", &self.authorization_header()),
-            ("Accept-Language", "en-US"),
+            ("Accept-Language", &self.accept_language),
             ("Accept", "application/json"),
             ("Content-Type", "application/json"),
             ("x-xbl-contract-version", "2"),
@@ -51,6 +60,15 @@ impl AchievementsApi {
 
     fn authorization_header(&self) -> String {
         format!("XBL3.0 x={};{}", self.uhs, self.token)
+    }
+}
+
+fn normalize_accept_language(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        DEFAULT_ACHIEVEMENTS_ACCEPT_LANGUAGE.to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 
@@ -89,7 +107,8 @@ fn numeric_id<'a>(value: &'a str, label: &str) -> Result<&'a str, WebApiError> {
 
 #[cfg(test)]
 mod tests {
-    use super::title_achievements_url;
+    use super::{title_achievements_url, AchievementsApi};
+    use crate::transport::HttpTransport;
 
     #[test]
     fn builds_title_achievements_url() {
@@ -112,5 +131,43 @@ mod tests {
                 .expect("url");
 
         assert!(url.contains("continuationToken=next+page%2F%2B"));
+    }
+
+    #[test]
+    fn sends_passed_accept_language() {
+        let api = AchievementsApi::with_transport(
+            HttpTransport::new(),
+            "uhs".to_string(),
+            "token".to_string(),
+            "zh-CN".to_string(),
+        );
+
+        let headers = api.headers().expect("headers");
+
+        assert_eq!(
+            headers
+                .get("Accept-Language")
+                .and_then(|value| value.to_str().ok()),
+            Some("zh-CN")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_default_accept_language() {
+        let api = AchievementsApi::with_transport(
+            HttpTransport::new(),
+            "uhs".to_string(),
+            "token".to_string(),
+            "  ".to_string(),
+        );
+
+        let headers = api.headers().expect("headers");
+
+        assert_eq!(
+            headers
+                .get("Accept-Language")
+                .and_then(|value| value.to_str().ok()),
+            Some("en-US")
+        );
     }
 }

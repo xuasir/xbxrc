@@ -1,6 +1,7 @@
 use super::*;
 use crate::session::monitor::{SessionRuntimeBinding, SessionRuntimeSnapshot};
 use crate::session::store::SessionRuntimeRecord;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Clone)]
 struct Snapshot {
@@ -59,6 +60,57 @@ impl SessionFlowSnapshot for Snapshot {
     }
 }
 
+#[derive(Clone, Default)]
+struct ConsolePreparationProvider {
+    wake_count: Arc<AtomicUsize>,
+    console_poll_count: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl SessionFlowProvider for ConsolePreparationProvider {
+    async fn get_streaming_token(&self, _target_type: &str) -> Result<Value, SessionFlowError> {
+        Ok(serde_json::json!({ "gsToken": "token" }))
+    }
+
+    async fn transfer_token(&self) -> Result<String, SessionFlowError> {
+        Ok("transfer-token".to_string())
+    }
+
+    async fn power_on_console(&self, _console_id: &str) -> Result<bool, SessionFlowError> {
+        self.wake_count.fetch_add(1, Ordering::SeqCst);
+        Ok(true)
+    }
+
+    async fn get_remote_consoles(&self) -> Result<Vec<RemoteConsoleSnapshot>, SessionFlowError> {
+        self.console_poll_count.fetch_add(1, Ordering::SeqCst);
+        let is_awake = self.wake_count.load(Ordering::SeqCst) > 0;
+        Ok(vec![RemoteConsoleSnapshot {
+            server_id: Some("console-1".to_string()),
+            power_state: Some(if is_awake { "On" } else { "ConnectedStandby" }.to_string()),
+            remote_management_enabled: Some(true),
+            console_streaming_enabled: Some(true),
+            ..Default::default()
+        }])
+    }
+}
+
+fn console_preparation_flow(
+    provider: ConsolePreparationProvider,
+) -> SessionFlowService<Snapshot, ConsolePreparationProvider> {
+    SessionFlowService::new(provider)
+}
+
+fn home_preparation_plan(wake_console: bool, require_console_ready: bool) -> Plan {
+    let mut plan = Plan::default();
+    plan.session.target = crate::policy::types::Target::Home;
+    plan.session.target_id = "console-1".to_string();
+    plan.session.schedule.wake_console = wake_console;
+    plan.session.schedule.require_console_ready = require_console_ready;
+    plan.session.schedule.monitor_interval_ms = 1;
+    plan.session.schedule.ready_timeout_ms = 1_000;
+    plan
+}
+
 fn snapshot_with_runtime(runtime: SessionRuntimeSnapshot) -> Snapshot {
     Snapshot {
         session_id: "session-1".to_string(),
@@ -67,6 +119,63 @@ fn snapshot_with_runtime(runtime: SessionRuntimeSnapshot) -> Snapshot {
         target_type: "cloud".to_string(),
         runtime,
     }
+}
+
+#[tokio::test]
+async fn home_initial_preparation_wakes_standby_console_then_waits_for_ready() {
+    let provider = ConsolePreparationProvider::default();
+    let flow = console_preparation_flow(provider.clone());
+    let plan = home_preparation_plan(true, true);
+
+    flow.prepare_remote_console::<NoopSessionStartupObserver>(&plan, None)
+        .await
+        .expect("home console should become ready after wake");
+
+    assert_eq!(provider.wake_count.load(Ordering::SeqCst), 1);
+    assert!(provider.console_poll_count.load(Ordering::SeqCst) >= 2);
+}
+
+#[tokio::test]
+async fn cloud_initial_preparation_never_wakes_or_polls_console() {
+    let provider = ConsolePreparationProvider::default();
+    let flow = console_preparation_flow(provider.clone());
+    let mut plan = home_preparation_plan(true, true);
+    plan.session.target = crate::policy::types::Target::Cloud;
+
+    flow.prepare_remote_console::<NoopSessionStartupObserver>(&plan, None)
+        .await
+        .expect("cloud preparation should skip console work");
+
+    assert_eq!(provider.wake_count.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.console_poll_count.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn home_initial_preparation_skips_console_when_policy_disables_both_gates() {
+    let provider = ConsolePreparationProvider::default();
+    let flow = console_preparation_flow(provider.clone());
+    let plan = home_preparation_plan(false, false);
+
+    flow.prepare_remote_console::<NoopSessionStartupObserver>(&plan, None)
+        .await
+        .expect("disabled home preparation should skip console work");
+
+    assert_eq!(provider.wake_count.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.console_poll_count.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn home_initial_preparation_can_wake_without_ready_gate() {
+    let provider = ConsolePreparationProvider::default();
+    let flow = console_preparation_flow(provider.clone());
+    let plan = home_preparation_plan(true, false);
+
+    flow.prepare_remote_console::<NoopSessionStartupObserver>(&plan, None)
+        .await
+        .expect("wake-only home preparation should succeed");
+
+    assert_eq!(provider.wake_count.load(Ordering::SeqCst), 1);
+    assert_eq!(provider.console_poll_count.load(Ordering::SeqCst), 0);
 }
 
 #[test]

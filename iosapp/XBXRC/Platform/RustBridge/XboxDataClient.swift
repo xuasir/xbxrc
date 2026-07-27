@@ -16,7 +16,11 @@ protocol XboxDataClient: Sendable {
     func powerOff(webTokenJSON: String, consoleID: String) async throws -> HostPowerCommandResult
     func loadGameLibrary(webTokenJSON: String) async throws -> [GameSummary]
     func loadPlaytimes(webTokenJSON: String, titleIDs: [String]) async throws -> [TitlePlaytime]
-    func loadAchievements(webTokenJSON: String, titleID: String) async throws -> [AchievementSummary]
+    func loadAchievements(
+        webTokenJSON: String,
+        titleID: String,
+        locale: String
+    ) async throws -> [AchievementSummary]
 }
 
 struct RustXboxDataClient: XboxDataClient {
@@ -204,14 +208,15 @@ struct RustXboxDataClient: XboxDataClient {
 
     func loadAchievements(
         webTokenJSON: String,
-        titleID: String
+        titleID: String,
+        locale: String
     ) async throws -> [AchievementSummary] {
         let operationID = UUID().uuidString
         let startedAt = Date()
         IOSRuntimeTrace.event(
             domain: "xbox-data",
             event: "achievementsBoundaryStarted",
-            payload: [:],
+            payload: ["locale": .string(locale)],
             dimension: .network,
             importance: .debug,
             operationID: operationID
@@ -219,7 +224,8 @@ struct RustXboxDataClient: XboxDataClient {
         do {
             let achievements = try await fetchAchievements(
                 webTokenJson: webTokenJSON,
-                titleId: titleID
+                titleId: titleID,
+                locale: locale
             ).map { achievement in
                 let visibleDescription: String
                 if achievement.isUnlocked || !achievement.isSecret {

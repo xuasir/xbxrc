@@ -8,16 +8,23 @@ private struct XboxDataSyncTaskIdentity: Equatable {
 @main
 struct XBXRCApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @UIApplicationDelegateAdaptor(XBXRCAppDelegate.self) private var appDelegate
     @StateObject private var settingsStore: AppSettingsStore
     @StateObject private var authStore: AuthStore
-    @StateObject private var dataStore = XboxDataStore()
+    @StateObject private var dataStore: XboxDataStore
     @StateObject private var cloudStore = CloudLibraryStore()
-    @StateObject private var streamingStore = StreamingFeatureStore()
+    @StateObject private var streamingStore: StreamingFeatureStore
 
     init() {
         let settingsStore = AppSettingsStore()
         _settingsStore = StateObject(wrappedValue: settingsStore)
         _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
+        _dataStore = StateObject(
+            wrappedValue: XboxDataStore(preferredGameLocaleProvider: settingsStore)
+        )
+        _streamingStore = StateObject(
+            wrappedValue: StreamingFeatureStore(settingsProvider: settingsStore)
+        )
         IOSRuntimeTrace.event(
             domain: "ios-app",
             event: "appLaunchStarted",
@@ -75,6 +82,11 @@ struct XBXRCApp: App {
                 }
                 .onChange(of: scenePhase) { previousPhase, phase in
                     streamingStore.handleScenePhase(phase)
+                    if phase == .active {
+                        AppOrientationCoordinator.shared.sync(
+                            streamingPresented: streamingStore.isPresentingPlayer
+                        )
+                    }
                     IOSRuntimeTrace.state(
                         domain: "ios-app",
                         event: "scenePhaseChanged",

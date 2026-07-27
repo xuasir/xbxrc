@@ -10,6 +10,7 @@
 		A10000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* WebRTC */; };
 		A00000000000000000000001 /* XBXRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* XBXRCApp.swift */; };
 		A00000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppRootView.swift */; };
+		A00000000000000000000035 /* AppOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* AppOrientation.swift */; };
 		A0000000000000000000002D /* LaunchExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000034 /* LaunchExperienceView.swift */; };
 		A00000000000000000000003 /* GameLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* GameLibraryView.swift */; };
 		A00000000000000000000004 /* AchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* AchievementsView.swift */; };
@@ -67,6 +68,7 @@
 /* Begin PBXFileReference section */
 		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000035 /* AppOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
 		B00000000000000000000034 /* LaunchExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperienceView.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* GameLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLibraryView.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* AchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsView.swift; sourceTree = "<group>"; };
@@ -164,6 +166,7 @@
 			children = (
 				B00000000000000000000001 /* XBXRCApp.swift */,
 				B00000000000000000000002 /* AppRootView.swift */,
+				B00000000000000000000035 /* AppOrientation.swift */,
 				B00000000000000000000034 /* LaunchExperienceView.swift */,
 			);
 			path = App;
@@ -519,6 +522,7 @@
 			files = (
 				A00000000000000000000001 /* XBXRCApp.swift in Sources */,
 				A00000000000000000000002 /* AppRootView.swift in Sources */,
+				A00000000000000000000035 /* AppOrientation.swift in Sources */,
 				A0000000000000000000002D /* LaunchExperienceView.swift in Sources */,
 				A0000000000000000000000B /* AuthStore.swift in Sources */,
 				A0000000000000000000000C /* WebAuthenticationPresenter.swift in Sources */,

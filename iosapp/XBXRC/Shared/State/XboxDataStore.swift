@@ -71,6 +71,7 @@ final class XboxDataStore: ObservableObject {
     @Published private var achievementErrors: [String: String] = [:]
 
     private let client: any XboxDataClient
+    private let preferredGameLocaleProvider: (any PreferredGameLocaleProviding)?
     private var webTokenJSON: String?
     private var boundOwnerGeneration: UInt64?
     private var fallbackOwnerKey: String?
@@ -84,8 +85,12 @@ final class XboxDataStore: ObservableObject {
     private var hostRefreshOperationID: String?
     private var hostPowerOperationID: String?
 
-    init(client: any XboxDataClient = RustXboxDataClient()) {
+    init(
+        client: any XboxDataClient = RustXboxDataClient(),
+        preferredGameLocaleProvider: (any PreferredGameLocaleProviding)? = nil
+    ) {
         self.client = client
+        self.preferredGameLocaleProvider = preferredGameLocaleProvider
     }
 
     func sync(
@@ -568,6 +573,7 @@ final class XboxDataStore: ObservableObject {
         let operationID = UUID().uuidString
         let startedAt = Date()
         let requestToken = webTokenJSON
+        let requestLocale = resolvedPreferredGameLocale()
         let requestGeneration = boundOwnerGeneration
         let requestFallbackOwnerKey = fallbackOwnerKey
         let hadContent = !(achievementsByTitleID[game.titleID] ?? []).isEmpty
@@ -589,7 +595,8 @@ final class XboxDataStore: ObservableObject {
         do {
             let achievements = try await client.loadAchievements(
                 webTokenJSON: requestToken,
-                titleID: game.titleID
+                titleID: game.titleID,
+                locale: requestLocale
             )
             guard ownsRequest(
                 generation: requestGeneration,
@@ -657,6 +664,12 @@ final class XboxDataStore: ObservableObject {
                 achievementProgress: game.achievementProgress
             )
         }
+    }
+
+    private func resolvedPreferredGameLocale() -> String {
+        let trimmed = preferredGameLocaleProvider?.preferredGameLocale
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "en-US" : trimmed
     }
 
     private func runPowerCommand(

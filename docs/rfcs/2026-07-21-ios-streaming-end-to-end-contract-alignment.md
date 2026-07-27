@@ -342,7 +342,15 @@ streamLaunchStarted
 - Date: 2026-07-23 | Status: in-progress
 - Audit: 发现 Rust signaling 固定输出 `a=candidate:`，iOS M137 native boundary 直接消费导致 xCloud poll ICE、xHome console/Teredo 候选格式错位；同时确认 iOS Ack 前扣住 control/input bootstrap，与桌面 pre-send + Ack replay 合同存在时序差距。
 - Update: Swift native ICE adapter 已剥离 `a=`、过滤 EOC 与异常 `UDP + tcptype`，单 candidate add 失败按候选隔离；DataChannel 已实现 open 后 pre-handshake 预发、Ack 后 post-handshake/control/input 幂等 replay、阶段内失败重试与 `controlReady`。
-- Update: `.playing` 现在要求 peer connected、control ready 与 first video frame；presentation surface 事件携带 attemptId/generation/peerEpoch；remote ICE batch received/applied/completed、pre/post bootstrap 与 control ready 已进入 canonical trace。
+- Update: `.playing` 现在要求 peer connected、control ready、first video frame 与当前 Metal renderer ready；presentation surface 事件携带 attemptId/generation/peerEpoch；remote ICE batch received/applied/completed、pre/post bootstrap 与 control ready 已进入 canonical trace。
 - Update: `.agents` 目录只读期间，项目内新增 `iosapp/scripts/check-streaming-core-trace.py`，复用基础 analyzer 并验证 remote/local ICE、四通道、Handshake、control ready、playing 因果、steady media、非零 Metal surface、唯一 terminal 与 cleanup。
 - Validation: Rust bridge/streaming/protocol 44/97/7 passed；streaming-core gate 11 项、既有 analyzer 3 项、全量 Swift parse、session boundary、Rust fmt 与全局 diff check 通过。隔离 Device `build-for-testing` 仍被 SwiftPM diagnostics cache 与 CoreSimulatorService 阻断，沙箱外审批服务返回 404。
-- Evidence gap: 现有 6 份 Simulator trace 共 767 rows 且没有 `ios-streaming` 事件；最终完成仍需 fresh xHome/xCloud 真机 trace 分别通过 streaming-core gate。
+- Validation: 2026-07-23 复跑 UniFFI bindings 生成、全量 Swift parse、streaming-core Python tests 11 项，均通过；Rust 44/97/7、session boundary、fmt 与 diff check 保持通过。
+- Update: Rust `audio_bitrate_kbps` 已贯通 `XboxWebRtcPlan`、UniFFI 和 Swift SDP projector，audio m-line 写入默认 128 kbps `b=AS`；RTX `apt` 保留和两种 `tcptype` wire 写法均有确定性测试。
+- Update: media stats 改为采样 delta，断流不再推进 `lastMediaAt` 或 `steadyMediaObserved`；`closeTransport` 独立关闭并置空四条 DataChannel；`.playing` 增加当前 attempt/generation/peerEpoch 的 Metal `videoSurfaceRendererReady` 门禁。
+- Update: xHome 初始启动消费 `wake_console/require_console_ready`，待机主机首轮唤醒后等待显式注册；Rust scheduler 在 SessionReady 后持续轮询远端 terminal，iOS bridge 投影脱敏 terminal，Swift 在 ICE EOC 后低频继续轮询并收口 cleanup。
+- Validation: 2026-07-23 第二轮复跑 Rust bridge/streaming/protocol 47/103/7、全量 Swift parse、streaming boundary、streaming-core 11 项、Rust fmt 与 diff check，均通过。
+- Update: 独立 iPhoneOS 26.1 / Swift 6 strict typecheck 捕获并修复 Metal renderer ready sink 的可选 trace context 编译错误；App 与 XCTest 使用真实 WebRTC M137 Device framework、UniFFI bridging header 完成 typecheck，XCTest 仅保留两处既有末表达式 warning。
+- Update: iOS 设置页与 `AppSettingsStore` 现在只暴露有消费点的串流设置，并已贯通到 Rust `control_plan`：`preferred_game_language`、xCloud/xHome resolution、codec、IPv6、xCloud/xHome/audio bitrate 与 xHome TURN fallback；`video_format`、`display_options`、`performance_style`、`super_resolution_experimental`、`stream_runtime_mode`、`use_vulkan` 等无 iOS 原生消费点的选项继续跳过。
+- Validation: 2026-07-24 复跑 Rust bridge/streaming/protocol 49/103/7、UniFFI bindings、全量 Swift parse、streaming boundary、streaming-core 11 项与 diff check，均通过；新增桥接测试固定验证 cloud/home 两条设置快照都会进入 Rust `Plan`。
+- Evidence gap: 现有 6 份 Simulator trace 共 849 rows，schema/sequence/privacy/budget 通过，但没有 `ios-streaming` 事件；streaming-core gate 唯一失败为 `missing-streaming-attempt`。最终完成仍需 fresh xHome/xCloud 真机 trace 分别通过 streaming-core gate。

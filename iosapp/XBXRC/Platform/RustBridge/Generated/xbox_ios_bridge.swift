@@ -529,6 +529,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -2321,12 +2337,107 @@ public func FfiConverterTypeXboxStreamDataChannelProfile_lower(_ value: XboxStre
 }
 
 
+public struct XboxStreamSettings: Equatable, Hashable {
+    public var preferredGameLocale: String
+    public var cloudResolution: Int64
+    public var homeResolution: Int64
+    public var preferIpv6: Bool
+    public var videoCodec: String
+    public var homeBitrateMode: String
+    public var homeBitrateMbps: Int64
+    public var cloudBitrateMode: String
+    public var cloudBitrateMbps: Int64
+    public var audioBitrateMode: String
+    public var audioBitrateKbps: Int64
+    public var homeTurnFallback: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(preferredGameLocale: String, cloudResolution: Int64, homeResolution: Int64, preferIpv6: Bool, videoCodec: String, homeBitrateMode: String, homeBitrateMbps: Int64, cloudBitrateMode: String, cloudBitrateMbps: Int64, audioBitrateMode: String, audioBitrateKbps: Int64, homeTurnFallback: Bool) {
+        self.preferredGameLocale = preferredGameLocale
+        self.cloudResolution = cloudResolution
+        self.homeResolution = homeResolution
+        self.preferIpv6 = preferIpv6
+        self.videoCodec = videoCodec
+        self.homeBitrateMode = homeBitrateMode
+        self.homeBitrateMbps = homeBitrateMbps
+        self.cloudBitrateMode = cloudBitrateMode
+        self.cloudBitrateMbps = cloudBitrateMbps
+        self.audioBitrateMode = audioBitrateMode
+        self.audioBitrateKbps = audioBitrateKbps
+        self.homeTurnFallback = homeTurnFallback
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxStreamSettings: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamSettings: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamSettings {
+        return
+            try XboxStreamSettings(
+                preferredGameLocale: FfiConverterString.read(from: &buf),
+                cloudResolution: FfiConverterInt64.read(from: &buf),
+                homeResolution: FfiConverterInt64.read(from: &buf),
+                preferIpv6: FfiConverterBool.read(from: &buf),
+                videoCodec: FfiConverterString.read(from: &buf),
+                homeBitrateMode: FfiConverterString.read(from: &buf),
+                homeBitrateMbps: FfiConverterInt64.read(from: &buf),
+                cloudBitrateMode: FfiConverterString.read(from: &buf),
+                cloudBitrateMbps: FfiConverterInt64.read(from: &buf),
+                audioBitrateMode: FfiConverterString.read(from: &buf),
+                audioBitrateKbps: FfiConverterInt64.read(from: &buf),
+                homeTurnFallback: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxStreamSettings, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.preferredGameLocale, into: &buf)
+        FfiConverterInt64.write(value.cloudResolution, into: &buf)
+        FfiConverterInt64.write(value.homeResolution, into: &buf)
+        FfiConverterBool.write(value.preferIpv6, into: &buf)
+        FfiConverterString.write(value.videoCodec, into: &buf)
+        FfiConverterString.write(value.homeBitrateMode, into: &buf)
+        FfiConverterInt64.write(value.homeBitrateMbps, into: &buf)
+        FfiConverterString.write(value.cloudBitrateMode, into: &buf)
+        FfiConverterInt64.write(value.cloudBitrateMbps, into: &buf)
+        FfiConverterString.write(value.audioBitrateMode, into: &buf)
+        FfiConverterInt64.write(value.audioBitrateKbps, into: &buf)
+        FfiConverterBool.write(value.homeTurnFallback, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamSettings_lift(_ buf: RustBuffer) throws -> XboxStreamSettings {
+    return try FfiConverterTypeXboxStreamSettings.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamSettings_lower(_ value: XboxStreamSettings) -> RustBuffer {
+    return FfiConverterTypeXboxStreamSettings.lower(value)
+}
+
+
 public struct XboxWebRtcPlan: Equatable, Hashable {
     public var audioDirection: String
     public var videoDirection: String
     public var videoCodecMimeType: String
     public var targetVideoWidth: UInt32
     public var targetVideoHeight: UInt32
+    public var audioBitrateKbps: UInt32?
     public var h264Profiles: [String]
     public var h264PacketizationMode: UInt8
     public var h264LevelAsymmetryAllowed: Bool
@@ -2345,12 +2456,13 @@ public struct XboxWebRtcPlan: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(audioDirection: String, videoDirection: String, videoCodecMimeType: String, targetVideoWidth: UInt32, targetVideoHeight: UInt32, h264Profiles: [String], h264PacketizationMode: UInt8, h264LevelAsymmetryAllowed: Bool, maxFrameSize: UInt32, maxFrameRate: UInt32, minVideoBitrateKbps: UInt32?, startVideoBitrateKbps: UInt32?, maxVideoBitrateKbps: UInt32?, stereoAudio: Bool, requiredVideoRtcpFeedback: [String], allowedCandidateTypes: [String], iceTransportPolicy: String, preferIpv6: Bool, normalizeEndOfCandidates: Bool, consoleAddresses: [XboxHostAddress]) {
+    public init(audioDirection: String, videoDirection: String, videoCodecMimeType: String, targetVideoWidth: UInt32, targetVideoHeight: UInt32, audioBitrateKbps: UInt32?, h264Profiles: [String], h264PacketizationMode: UInt8, h264LevelAsymmetryAllowed: Bool, maxFrameSize: UInt32, maxFrameRate: UInt32, minVideoBitrateKbps: UInt32?, startVideoBitrateKbps: UInt32?, maxVideoBitrateKbps: UInt32?, stereoAudio: Bool, requiredVideoRtcpFeedback: [String], allowedCandidateTypes: [String], iceTransportPolicy: String, preferIpv6: Bool, normalizeEndOfCandidates: Bool, consoleAddresses: [XboxHostAddress]) {
         self.audioDirection = audioDirection
         self.videoDirection = videoDirection
         self.videoCodecMimeType = videoCodecMimeType
         self.targetVideoWidth = targetVideoWidth
         self.targetVideoHeight = targetVideoHeight
+        self.audioBitrateKbps = audioBitrateKbps
         self.h264Profiles = h264Profiles
         self.h264PacketizationMode = h264PacketizationMode
         self.h264LevelAsymmetryAllowed = h264LevelAsymmetryAllowed
@@ -2389,6 +2501,7 @@ public struct FfiConverterTypeXboxWebRtcPlan: FfiConverterRustBuffer {
                 videoCodecMimeType: FfiConverterString.read(from: &buf),
                 targetVideoWidth: FfiConverterUInt32.read(from: &buf),
                 targetVideoHeight: FfiConverterUInt32.read(from: &buf),
+                audioBitrateKbps: FfiConverterOptionUInt32.read(from: &buf),
                 h264Profiles: FfiConverterSequenceString.read(from: &buf),
                 h264PacketizationMode: FfiConverterUInt8.read(from: &buf),
                 h264LevelAsymmetryAllowed: FfiConverterBool.read(from: &buf),
@@ -2413,6 +2526,7 @@ public struct FfiConverterTypeXboxWebRtcPlan: FfiConverterRustBuffer {
         FfiConverterString.write(value.videoCodecMimeType, into: &buf)
         FfiConverterUInt32.write(value.targetVideoWidth, into: &buf)
         FfiConverterUInt32.write(value.targetVideoHeight, into: &buf)
+        FfiConverterOptionUInt32.write(value.audioBitrateKbps, into: &buf)
         FfiConverterSequenceString.write(value.h264Profiles, into: &buf)
         FfiConverterUInt8.write(value.h264PacketizationMode, into: &buf)
         FfiConverterBool.write(value.h264LevelAsymmetryAllowed, into: &buf)
@@ -3284,11 +3398,11 @@ public func hydrateCloudCatalogPage(accessHandle: String, market: String, langua
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
-public func fetchAchievements(webTokenJson: String, titleId: String)async throws  -> [XboxAchievement]  {
+public func fetchAchievements(webTokenJson: String, titleId: String, locale: String)async throws  -> [XboxAchievement]  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_xbox_ios_bridge_fn_func_fetch_achievements(FfiConverterString.lower(webTokenJson),FfiConverterString.lower(titleId)
+                uniffi_xbox_ios_bridge_fn_func_fetch_achievements(FfiConverterString.lower(webTokenJson),FfiConverterString.lower(titleId),FfiConverterString.lower(locale)
                 )
             },
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
@@ -3371,7 +3485,7 @@ public func powerOnConsole(webTokenJson: String, consoleId: String)async throws 
 /**
  * 账户、代际和 target 都由 Swift 启动请求显式回传，bridge 在创建远端会话前校验。
  */
-public func createScopedStreamSession(accessHandle: String, targetType: String, targetId: String, accountId: String, ownerGeneration: UInt64)throws  -> XboxStreamSession  {
+public func createScopedStreamSession(accessHandle: String, targetType: String, targetId: String, accountId: String, ownerGeneration: UInt64, settings: XboxStreamSettings)throws  -> XboxStreamSession  {
     return try  FfiConverterTypeXboxStreamSession_lift(try rustCallWithError(FfiConverterTypeXboxStreamingError_lift) {
         uniffiCallStatus in
     uniffi_xbox_ios_bridge_fn_func_create_scoped_stream_session(
@@ -3379,7 +3493,8 @@ public func createScopedStreamSession(accessHandle: String, targetType: String, 
         FfiConverterString.lower(targetType),
         FfiConverterString.lower(targetId),
         FfiConverterString.lower(accountId),
-        FfiConverterUInt64.lower(ownerGeneration),uniffiCallStatus
+        FfiConverterUInt64.lower(ownerGeneration),
+        FfiConverterTypeXboxStreamSettings_lower(settings),uniffiCallStatus
     )
 })
 }
@@ -3495,7 +3610,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_hydrate_cloud_catalog_page() != 15721) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_fetch_achievements() != 48478) {
+    if (uniffi_xbox_ios_bridge_checksum_func_fetch_achievements() != 52189) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_game_library() != 59706) {
@@ -3513,7 +3628,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_power_on_console() != 2029) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_create_scoped_stream_session() != 42383) {
+    if (uniffi_xbox_ios_bridge_checksum_func_create_scoped_stream_session() != 16824) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_create_stream_session() != 16123) {

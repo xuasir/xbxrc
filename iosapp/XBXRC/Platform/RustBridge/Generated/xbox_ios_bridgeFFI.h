@@ -336,7 +336,7 @@ uint64_t uniffi_xbox_ios_bridge_fn_func_hydrate_cloud_catalog_page(RustBuffer ac
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_FETCH_ACHIEVEMENTS
 #define UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_FETCH_ACHIEVEMENTS
-uint64_t uniffi_xbox_ios_bridge_fn_func_fetch_achievements(RustBuffer web_token_json, RustBuffer title_id
+uint64_t uniffi_xbox_ios_bridge_fn_func_fetch_achievements(RustBuffer web_token_json, RustBuffer title_id, RustBuffer locale
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_FETCH_GAME_LIBRARY
@@ -366,7 +366,7 @@ uint64_t uniffi_xbox_ios_bridge_fn_func_power_on_console(RustBuffer web_token_js
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_CREATE_SCOPED_STREAM_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_CREATE_SCOPED_STREAM_SESSION
-uint64_t uniffi_xbox_ios_bridge_fn_func_create_scoped_stream_session(RustBuffer access_handle, RustBuffer target_type, RustBuffer target_id, RustBuffer account_id, uint64_t owner_generation, RustCallStatus *_Nonnull out_status
+uint64_t uniffi_xbox_ios_bridge_fn_func_create_scoped_stream_session(RustBuffer access_handle, RustBuffer target_type, RustBuffer target_id, RustBuffer account_id, uint64_t owner_generation, RustBuffer settings, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_CREATE_STREAM_SESSION

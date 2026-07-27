@@ -9,11 +9,15 @@ final class StreamingFeatureStore: ObservableObject {
     @Published private(set) var streamTarget: StreamingLaunchTarget?
 
     private let sessionActor: StreamSessionActor
+    private let settingsProvider: any StreamingSessionSettingsProviding
     private var generation: UInt64 = 0
     private var attemptID: String?
     private var launchTask: Task<Void, Never>?
 
-    init() {
+    init(
+        settingsProvider: any StreamingSessionSettingsProviding = StaticStreamingSettingsProvider()
+    ) {
+        self.settingsProvider = settingsProvider
         sessionActor = StreamSessionActor(
             controlFactory: RustStreamingControlSessionFactory(),
             peerFactory: LibWebRTCPeerRuntimeFactory()
@@ -21,10 +25,12 @@ final class StreamingFeatureStore: ObservableObject {
     }
 
     init(
+        settingsProvider: any StreamingSessionSettingsProviding = StaticStreamingSettingsProvider(),
         controlFactory: any StreamingControlSessionFactory,
         peerFactory: any StreamingPeerRuntimeFactory,
         remoteAnswerApplyTimeout: Duration = .seconds(10)
     ) {
+        self.settingsProvider = settingsProvider
         sessionActor = StreamSessionActor(
             controlFactory: controlFactory,
             peerFactory: peerFactory,
@@ -83,6 +89,7 @@ final class StreamingFeatureStore: ObservableObject {
         generation &+= 1
         let requestGeneration = generation
         let requestAttemptID = UUID().uuidString
+        let sessionSettings = settingsProvider.streamingSessionSettings
         attemptID = requestAttemptID
         launchTask?.cancel()
         streamTitleID = targetID
@@ -167,6 +174,7 @@ final class StreamingFeatureStore: ObservableObject {
                             regionHost: access.regionHost
                         ),
                         sessionGeneration: requestGeneration,
+                        settings: sessionSettings,
                         attemptID: requestAttemptID,
                         accountID: access.accountID,
                         ownerGeneration: access.ownerGeneration
@@ -274,6 +282,16 @@ final class StreamingFeatureStore: ObservableObject {
         stop(reason: .backgroundStop)
     }
 
+    func videoSurfaceRendererReady(context: StreamingPresentationTraceContext) {
+        guard context.generation == generation,
+              context.attemptID == attemptID,
+              videoTrack?.traceContext == context
+        else { return }
+        Task { [sessionActor] in
+            await sessionActor.videoSurfaceRendererReady(context: context)
+        }
+    }
+
     private func apply(state: StreamingFeatureState, generation: UInt64) {
         guard generation == self.generation else { return }
         self.state = state
@@ -334,6 +352,11 @@ private struct PreparedStreamingAccess: Sendable {
     let expiresAtMs: UInt64
 }
 
+@MainActor
+private final class StaticStreamingSettingsProvider: StreamingSessionSettingsProviding {
+    var streamingSessionSettings: StreamingSessionSettingsSnapshot { .standard }
+}
+
 struct RustStreamingControlSessionFactory: StreamingControlSessionFactory {
     func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession {
         let session = try createScopedStreamSession(
@@ -341,7 +364,21 @@ struct RustStreamingControlSessionFactory: StreamingControlSessionFactory {
             targetType: request.target == .cloud ? "cloud" : "home",
             targetId: request.targetID,
             accountId: request.accountID,
-            ownerGeneration: request.ownerGeneration
+            ownerGeneration: request.ownerGeneration,
+            settings: XboxStreamSettings(
+                preferredGameLocale: request.settings.preferredGameLocale,
+                cloudResolution: Int64(request.settings.cloudResolution),
+                homeResolution: Int64(request.settings.homeResolution),
+                preferIpv6: request.settings.preferIPv6,
+                videoCodec: request.settings.videoCodec,
+                homeBitrateMode: request.settings.homeBitrateMode,
+                homeBitrateMbps: Int64(request.settings.homeBitrateMbps),
+                cloudBitrateMode: request.settings.cloudBitrateMode,
+                cloudBitrateMbps: Int64(request.settings.cloudBitrateMbps),
+                audioBitrateMode: request.settings.audioBitrateMode,
+                audioBitrateKbps: Int64(request.settings.audioBitrateKbps),
+                homeTurnFallback: request.settings.homeTurnFallback
+            )
         )
         return RustStreamingControlSession(session: session)
     }
@@ -378,6 +415,7 @@ private actor RustStreamingControlSession: StreamingControlSession {
                 videoCodecMimeType: snapshot.webRtcPlan.videoCodecMimeType,
                 targetVideoWidth: Int(snapshot.webRtcPlan.targetVideoWidth),
                 targetVideoHeight: Int(snapshot.webRtcPlan.targetVideoHeight),
+                audioBitrateKbps: snapshot.webRtcPlan.audioBitrateKbps.map(Int.init),
                 h264Profiles: snapshot.webRtcPlan.h264Profiles,
                 h264PacketizationMode: Int(snapshot.webRtcPlan.h264PacketizationMode),
                 h264LevelAsymmetryAllowed: snapshot.webRtcPlan.h264LevelAsymmetryAllowed,

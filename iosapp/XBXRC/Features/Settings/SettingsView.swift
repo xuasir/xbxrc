@@ -160,13 +160,94 @@ struct CloudGamingSettingsView: View {
                     }
                 }
                 .disabled(isApplyingRegion)
+            } header: {
+                Text("地区路由")
             } footer: {
                 Text("地区路由会影响 Xbox streaming token 与云游戏区域选择。应用后会刷新当前会话和游戏库。")
+            }
+
+            Section {
+                Picker("游戏语言", selection: $settingsStore.preferredGameLocale) {
+                    ForEach(PreferredGameLanguageCatalog.all) { option in
+                        Text(option.title).tag(option.code)
+                    }
+                }
+
+                Picker("云游戏分辨率", selection: $settingsStore.cloudResolution) {
+                    ForEach(StreamingResolutionOption.cloudChoices) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+
+                Picker("主机串流分辨率", selection: $settingsStore.homeResolution) {
+                    ForEach(StreamingResolutionOption.homeChoices) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+            } header: {
+                Text("会话偏好")
+            } footer: {
+                Text("这些设置会在下一次启动云游戏或主机串流时生效。")
+            }
+
+            Section {
+                Toggle("优先 IPv6", isOn: $settingsStore.preferIPv6)
+
+                Picker("视频 Codec 档位", selection: $settingsStore.codecPreference) {
+                    ForEach(StreamingCodecOption.allCases) { option in
+                        Text("\(option.title) · \(option.summary)").tag(option)
+                    }
+                }
+
+                Toggle("允许 xHome 使用 TURN 中继", isOn: $settingsStore.homeTurnFallbackEnabled)
+            } header: {
+                Text("网络与协商")
+            } footer: {
+                Text("这组设置会直接进入共享 Rust plan，影响候选排序、视频编码档位和 xHome 的中继兜底。")
+            }
+
+            Section {
+                Picker("主机视频码率模式", selection: $settingsStore.homeBitrateMode) {
+                    ForEach(StreamingBitrateMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                if settingsStore.homeBitrateMode == .custom {
+                    Stepper(value: $settingsStore.homeBitrateMbps, in: 1...200) {
+                        LabeledContent("主机视频上限", value: "\(settingsStore.homeBitrateMbps) Mb/s")
+                    }
+                }
+
+                Picker("云游戏视频码率模式", selection: $settingsStore.cloudBitrateMode) {
+                    ForEach(StreamingBitrateMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                if settingsStore.cloudBitrateMode == .custom {
+                    Stepper(value: $settingsStore.cloudBitrateMbps, in: 1...200) {
+                        LabeledContent("云游戏视频上限", value: "\(settingsStore.cloudBitrateMbps) Mb/s")
+                    }
+                }
+
+                Picker("音频码率模式", selection: $settingsStore.audioBitrateMode) {
+                    ForEach(StreamingBitrateMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                if settingsStore.audioBitrateMode == .custom {
+                    Stepper(value: $settingsStore.audioBitrateKbps, in: 1...512) {
+                        LabeledContent("音频上限", value: "\(settingsStore.audioBitrateKbps) kb/s")
+                    }
+                }
+            } header: {
+                Text("码率上限")
+            } footer: {
+                Text("自动模式沿共享策略默认值运行；手动模式会把上限带入云游戏、主机串流和 SDP 音频码率。")
             }
         }
         .scrollContentBackground(.hidden)
         .appThemeCanvas()
-        .navigationTitle("云游戏")
+        .navigationTitle("云游戏与串流")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isApplyingRegion)
         .onAppear {

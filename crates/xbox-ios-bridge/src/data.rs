@@ -243,11 +243,12 @@ fn spawn_playtime_request(
 pub async fn fetch_achievements(
     web_token_json: String,
     title_id: String,
+    locale: String,
 ) -> Result<Vec<XboxAchievement>, XboxBridgeError> {
     validate_title_id(&title_id)?;
     let claims = claims_from_json(&web_token_json)?;
     let xuid = require_xuid(&claims.xuid)?;
-    let api = AchievementsApi::new(claims.uhs, claims.token);
+    let api = AchievementsApi::new(claims.uhs, claims.token, locale);
     let mut achievements = Vec::new();
     let mut continuation: Option<String> = None;
     let mut seen_tokens = HashSet::new();

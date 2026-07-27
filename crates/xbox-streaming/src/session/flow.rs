@@ -891,10 +891,29 @@ where
     where
         O: SessionStartupObserver,
     {
-        // 对齐浏览器链路：home 的 play -> state 路径内含主机唤醒与准备，
-        // 启动前不再执行任何独立的 wake / ready 编排。
         let _ = observer;
-        let _ = plan;
+        if !plan.session.target.is_home() {
+            return Ok(());
+        }
+
+        let schedule = &plan.session.schedule;
+        if schedule.require_console_ready {
+            self.wait_until_console_ready(
+                plan.session.target.as_str(),
+                &plan.session.target_id,
+                schedule,
+                schedule.wake_console,
+            )
+            .await?;
+            return Ok(());
+        }
+
+        if schedule.wake_console {
+            self.inner
+                .provider
+                .power_on_console(&plan.session.target_id)
+                .await?;
+        }
         Ok(())
     }
 
@@ -903,10 +922,11 @@ where
         target_type: &str,
         target_id: &str,
         schedule: &crate::policy::session::SessionSchedulePlan,
+        allow_wake: bool,
     ) -> Result<&'static str, SessionFlowError> {
         let interval_ms = schedule.monitor_interval_ms.max(200);
         let started_at_ms = now_ms();
-        let mut last_wake_attempt_at_ms = Some(started_at_ms);
+        let mut last_wake_attempt_at_ms = (!allow_wake).then_some(started_at_ms);
         let mut transient_wake_failure_count = 0u8;
 
         loop {
@@ -929,7 +949,12 @@ where
                 }
 
                 let power_state = console.power_state.as_deref();
-                if should_retry_wake_during_ready_wait(power_state, last_wake_attempt_at_ms, now_ms)
+                if allow_wake
+                    && should_retry_wake_during_ready_wait(
+                        power_state,
+                        last_wake_attempt_at_ms,
+                        now_ms,
+                    )
                 {
                     match self.inner.provider.power_on_console(target_id).await {
                         Ok(accepted) => {
@@ -1039,6 +1064,7 @@ where
                             plan.session.target.as_str(),
                             &plan.session.target_id,
                             &plan.session.schedule,
+                            plan.session.schedule.wake_console,
                         )
                         .await
                     {

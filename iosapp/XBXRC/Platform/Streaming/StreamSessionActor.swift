@@ -98,6 +98,7 @@ actor StreamSessionActor {
     private var didMarkConnected = false
     private var didReceiveFirstVideoFrame = false
     private var didBecomeControlReady = false
+    private var didBecomeVideoSurfaceRendererReady = false
     private var remoteDescriptionApplied = false
     private var localIceFlushInFlight = false
     private var localIceGatheringComplete = false
@@ -183,6 +184,7 @@ actor StreamSessionActor {
         didMarkConnected = false
         didReceiveFirstVideoFrame = false
         didBecomeControlReady = false
+        didBecomeVideoSurfaceRendererReady = false
         remoteDescriptionApplied = false
         localIceFlushInFlight = false
         localIceGatheringComplete = false
@@ -282,6 +284,18 @@ actor StreamSessionActor {
         await stopActiveSession(reason: reason, publishIdle: true)
     }
 
+    func videoSurfaceRendererReady(context: StreamingPresentationTraceContext) async {
+        guard isCurrent(context.generation),
+              context.attemptID == activeAttemptID,
+              context.peerEpoch == activePeerEpoch,
+              !didBecomeVideoSurfaceRendererReady
+        else { return }
+        didBecomeVideoSurfaceRendererReady = true
+        if playbackReady {
+            await publish(.playing, generation: context.generation)
+        }
+    }
+
     private func handlePeerEvent(
         _ event: StreamingPeerEvent,
         generation: UInt64,
@@ -343,7 +357,7 @@ actor StreamSessionActor {
             let isFirstFrame = !didReceiveFirstVideoFrame
             didReceiveFirstVideoFrame = true
             if isFirstFrame { trace("firstVideoFrame", dimension: .mediaSupply) }
-            if didMarkConnected, didBecomeControlReady {
+            if playbackReady {
                 await publish(.playing, generation: generation)
             }
         case .audioTrackReady:
@@ -406,7 +420,8 @@ actor StreamSessionActor {
                 importance: .key
             )
             if !didObserveSteadyMedia,
-               stats.framesDecoded > 0, stats.inboundVideoBytes > 0
+               stats.framesDecoded > 0, stats.inboundVideoBytes > 0,
+               stats.frameSupplyDelta.map({ $0 > 0 }) == true
             {
                 didObserveSteadyMedia = true
                 trace("steadyMediaObserved", dimension: .mediaSupply)
@@ -434,10 +449,11 @@ actor StreamSessionActor {
         didReceiveFirstVideoFrame = false
         dataChannelProfilesPendingTrace = false
         didBecomeControlReady = false
+        didBecomeVideoSurfaceRendererReady = false
         didObserveSteadyMedia = false
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
-        let peer = await peerFactory.makeRuntime { [weak self] event in
+        let peer = peerFactory.makeRuntime { [weak self] event in
             Task {
                 await self?.handlePeerEvent(
                     event,
@@ -483,7 +499,7 @@ actor StreamSessionActor {
                 traceDataChannelProfiles()
             }
             await publish(
-                didReceiveFirstVideoFrame && didBecomeControlReady
+                playbackReady
                     ? .playing
                     : .waitingForFirstFrame,
                 generation: generation
@@ -497,6 +513,7 @@ actor StreamSessionActor {
     private func startRemoteIceApplication(generation: UInt64, peerEpoch: UInt64) {
         remoteIceApplicationTask?.cancel()
         remoteIceApplicationTask = Task { [weak self] in
+            var didTraceRemoteIceCompleted = false
             while !Task.isCancelled {
                 do {
                     guard let self, await self.isCurrent(generation),
@@ -508,14 +525,19 @@ actor StreamSessionActor {
                     guard await self.isCurrent(generation),
                           await self.activePeerEpoch == peerEpoch
                     else { return }
-                    await self.traceRemoteIceBatchReceived(batch)
+                    if !didTraceRemoteIceCompleted {
+                        await self.traceRemoteIceBatchReceived(batch)
+                    }
                     if !batch.candidates.isEmpty {
                         try await peer.addRemoteCandidates(batch.candidates)
                         await self.traceRemoteIceBatchApplied(batch)
                     }
                     if batch.endOfCandidates {
-                        await self.traceRemoteIceCompleted()
-                        return
+                        if !didTraceRemoteIceCompleted {
+                            didTraceRemoteIceCompleted = true
+                            await self.traceRemoteIceCompleted()
+                        }
+                        try await Task.sleep(for: .seconds(1))
                     }
                 } catch is CancellationError {
                     return
@@ -641,7 +663,7 @@ actor StreamSessionActor {
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
         retiringPeerRuntime = peer
-        let peerStopTask = Task { @MainActor in
+        let peerStopTask = Task {
             await peer.stopInputAndHaptics()
         }
         retiringPeerStopTask = peerStopTask
@@ -939,12 +961,18 @@ actor StreamSessionActor {
             } else {
                 timedOut = false
             }
+            let peerSnapshot = await peer.debugSnapshot()
+            let nsError = error as NSError
             trace(
                 timedOut ? "remoteAnswerApplyTimedOut" : "remoteAnswerApplyFailed",
                 payload: [
                     "phase": .string(phase),
                     "elapsedMs": .integer(Int64(Date().timeIntervalSince(startedAt) * 1_000)),
                     "reason": .string(timedOut ? "timeout" : "applyError"),
+                    "errorType": .string(String(describing: type(of: error))),
+                    "errorDomain": .string(nsError.domain),
+                    "errorCode": .integer(Int64(nsError.code)),
+                    "peerSnapshot": peerDebugSnapshotValue(peerSnapshot),
                 ],
                 dimension: .network,
                 importance: .key,
@@ -965,6 +993,37 @@ actor StreamSessionActor {
         )
     }
 
+    private func peerDebugSnapshotValue(
+        _ snapshot: StreamingPeerDebugSnapshot
+    ) -> IOSRuntimeTraceValue {
+        .object([
+            "signalingState": .string(snapshot.signalingState),
+            "iceConnectionState": .string(snapshot.iceConnectionState),
+            "iceGatheringState": .string(snapshot.iceGatheringState),
+            "transceiverCount": .integer(Int64(snapshot.transceiverCount)),
+            "audioReceiverTrackCount": .integer(Int64(snapshot.audioReceiverTrackCount)),
+            "videoReceiverTrackCount": .integer(Int64(snapshot.videoReceiverTrackCount)),
+            "localDescriptionSet": .bool(snapshot.localDescriptionSet),
+            "remoteDescriptionSet": .bool(snapshot.remoteDescriptionSet),
+            "dataChannels": snapshot.dataChannels.map { dataChannels in
+                .object([
+                    "readyStates": .object(
+                        dataChannels.readyStates.mapValues(IOSRuntimeTraceValue.string)
+                    ),
+                    "phases": .object(
+                        dataChannels.phases.mapValues(IOSRuntimeTraceValue.string)
+                    ),
+                    "handshakeAcknowledged": .bool(dataChannels.handshakeAcknowledged),
+                    "controlReady": .bool(dataChannels.controlReady),
+                    "inputStarted": .bool(dataChannels.inputStarted),
+                    "terminalReason": dataChannels.terminalReason.map(
+                        IOSRuntimeTraceValue.string
+                    ) ?? .null,
+                ])
+            } ?? .null,
+        ])
+    }
+
     private func applyRemoteAnswerWithTimeout(
         _ answer: String,
         to peer: any StreamingPeerRuntime
@@ -974,7 +1033,7 @@ actor StreamSessionActor {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 gate.install(continuation)
-                let operationTask = Task { @MainActor in
+                let operationTask = Task {
                     do {
                         try await peer.applyAnswer(answer)
                         gate.resolve(.success(()))
@@ -1044,6 +1103,7 @@ actor StreamSessionActor {
         didMarkConnected = false
         didReceiveFirstVideoFrame = false
         didBecomeControlReady = false
+        didBecomeVideoSurfaceRendererReady = false
         remoteDescriptionApplied = false
         localIceFlushInFlight = false
         localIceGatheringComplete = false
@@ -1148,7 +1208,7 @@ actor StreamSessionActor {
                 dimension: .network
             )
             if let generation = activeGeneration,
-               didMarkConnected, didReceiveFirstVideoFrame
+               playbackReady
             {
                 await publish(.playing, generation: generation)
             }
@@ -1343,6 +1403,13 @@ actor StreamSessionActor {
         guard isCurrent(generation), !Task.isCancelled else {
             throw StreamingRuntimeError.superseded
         }
+    }
+
+    private var playbackReady: Bool {
+        didMarkConnected
+            && didReceiveFirstVideoFrame
+            && didBecomeControlReady
+            && didBecomeVideoSurfaceRendererReady
     }
 
     private func isCurrent(_ generation: UInt64) -> Bool {

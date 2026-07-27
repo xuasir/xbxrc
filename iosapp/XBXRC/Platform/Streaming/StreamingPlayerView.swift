@@ -11,7 +11,10 @@ struct StreamingPlayerView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            StreamingVideoSurface(track: store.videoTrack)
+            StreamingVideoSurface(
+                track: store.videoTrack,
+                rendererReadySink: store.videoSurfaceRendererReady
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
             if store.state != .playing {
@@ -65,18 +68,21 @@ private func presentationTracePayload(
 
 private struct StreamingVideoSurface: UIViewRepresentable {
     let track: StreamingVideoTrackHandle?
+    let rendererReadySink: @MainActor (StreamingPresentationTraceContext) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> StreamingVideoSurfaceView {
         let view = StreamingVideoSurfaceView()
         context.coordinator.view = view
+        view.rendererReadySink = rendererReadySink
         context.coordinator.update(track: track)
         return view
     }
 
     func updateUIView(_ uiView: StreamingVideoSurfaceView, context: Context) {
         context.coordinator.view = uiView
+        uiView.rendererReadySink = rendererReadySink
         context.coordinator.update(track: track)
     }
 
@@ -138,6 +144,7 @@ private struct StreamingVideoSurface: UIViewRepresentable {
 private final class StreamingVideoSurfaceView: UIView, @preconcurrency RTCVideoViewDelegate {
     let renderer: RTCVideoRenderer
     let rendererName: String
+    var rendererReadySink: (@MainActor (StreamingPresentationTraceContext) -> Void)?
     private var lastReportedSize: CGSize = .zero
     private var traceContext: StreamingPresentationTraceContext?
 
@@ -202,7 +209,7 @@ private final class StreamingVideoSurfaceView: UIView, @preconcurrency RTCVideoV
     }
 
     func videoView(_: RTCVideoRenderer, didChangeVideoSize size: CGSize) {
-        guard traceContext != nil, size.width > 0, size.height > 0 else { return }
+        guard let traceContext, size.width > 0, size.height > 0 else { return }
         IOSRuntimeTrace.state(
             domain: "ios-streaming",
             event: "videoSurfaceRendererReady",
@@ -216,13 +223,15 @@ private final class StreamingVideoSurfaceView: UIView, @preconcurrency RTCVideoV
             ),
             dimension: .presentation,
             importance: .key,
-            operationID: traceContext?.attemptID
+            operationID: traceContext.attemptID
         )
+        rendererReadySink?(traceContext)
     }
 }
 #else
 private struct StreamingVideoSurface: View {
     let track: StreamingVideoTrackHandle?
+    let rendererReadySink: @MainActor (StreamingPresentationTraceContext) -> Void
     var body: some View { Color.black }
 }
 #endif

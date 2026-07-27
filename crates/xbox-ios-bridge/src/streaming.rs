@@ -13,9 +13,10 @@ use tokio::sync::Mutex;
 use xbox_auth_flow::{AuthFlow, TransferTokenInput};
 use xbox_streaming::runtime::{RuntimeCapabilities, TurnContext};
 use xbox_streaming::{
-    compile, CompilerInput, Config, Context, IceCandidate, Plan, RemotePlayContext,
-    SessionFlowError, SessionFlowProvider, SessionFlowService, SessionFlowSnapshot,
-    SessionRuntimeBinding, SessionRuntimeSnapshot, Target,
+    compile, parse_resolution_preference, BitratePreference, CodecPreference, CompilerInput,
+    Config, Context, IceCandidate, Plan, RemotePlayContext, RuntimeLaunchState, SessionFlowError,
+    SessionFlowProvider, SessionFlowService, SessionFlowSnapshot, SessionPhase as FlowSessionPhase,
+    SessionProgressSnapshot, SessionRuntimeBinding, SessionRuntimeSnapshot, Target,
 };
 use xbox_streaming_protocol::{
     build_xbox_stream_control_authorization_payload,
@@ -159,6 +160,7 @@ pub struct XboxWebRtcPlan {
     pub video_codec_mime_type: String,
     pub target_video_width: u32,
     pub target_video_height: u32,
+    pub audio_bitrate_kbps: Option<u32>,
     pub h264_profiles: Vec<String>,
     pub h264_packetization_mode: u8,
     pub h264_level_asymmetry_allowed: bool,
@@ -174,6 +176,41 @@ pub struct XboxWebRtcPlan {
     pub prefer_ipv6: bool,
     pub normalize_end_of_candidates: bool,
     pub console_addresses: Vec<XboxHostAddress>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct XboxStreamSettings {
+    pub preferred_game_locale: String,
+    pub cloud_resolution: i64,
+    pub home_resolution: i64,
+    pub prefer_ipv6: bool,
+    pub video_codec: String,
+    pub home_bitrate_mode: String,
+    pub home_bitrate_mbps: i64,
+    pub cloud_bitrate_mode: String,
+    pub cloud_bitrate_mbps: i64,
+    pub audio_bitrate_mode: String,
+    pub audio_bitrate_kbps: i64,
+    pub home_turn_fallback: bool,
+}
+
+impl Default for XboxStreamSettings {
+    fn default() -> Self {
+        Self {
+            preferred_game_locale: "en-US".to_string(),
+            cloud_resolution: 720,
+            home_resolution: 1080,
+            prefer_ipv6: false,
+            video_codec: String::new(),
+            home_bitrate_mode: "Auto".to_string(),
+            home_bitrate_mbps: 20,
+            cloud_bitrate_mode: "Auto".to_string(),
+            cloud_bitrate_mbps: 20,
+            audio_bitrate_mode: "Auto".to_string(),
+            audio_bitrate_kbps: 20,
+            home_turn_fallback: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,9 +297,27 @@ impl SessionFlowSnapshot for IosSessionSnapshot {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemoteSessionTerminal {
+    Failed,
+    Closed,
+    TimedOut,
+}
+
+impl RemoteSessionTerminal {
+    fn error_code(self) -> &'static str {
+        match self {
+            Self::Failed => "remoteSessionFailed",
+            Self::Closed => "remoteSessionClosed",
+            Self::TimedOut => "remoteSessionTimedOut",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 struct SessionFlowProjection {
     session_id: Option<String>,
+    remote_terminal: Option<RemoteSessionTerminal>,
 }
 
 #[derive(Clone)]
@@ -360,6 +415,32 @@ impl SessionFlowProvider for IosSessionFlowProvider {
     ) {
         if let Ok(mut projection) = self.projection.lock() {
             projection.session_id = Some(session_id.to_string());
+            projection.remote_terminal = None;
+        }
+    }
+
+    fn on_session_monitor_tick(
+        &self,
+        session_id: &str,
+        _target_type: &str,
+        _target_id: &str,
+        progress: &SessionProgressSnapshot,
+        stream_state: Option<&str>,
+        _player_state: &str,
+        _should_continue: bool,
+        _should_send_connect_token: bool,
+    ) {
+        let terminal = remote_session_terminal(
+            progress.phase,
+            progress.runtime_launch_state,
+            stream_state,
+            progress.error_code.as_deref(),
+        );
+        let Some(terminal) = terminal else { return };
+        if let Ok(mut projection) = self.projection.lock() {
+            if projection.session_id.as_deref() == Some(session_id) {
+                projection.remote_terminal.get_or_insert(terminal);
+            }
         }
     }
 }
@@ -446,7 +527,7 @@ pub fn create_stream_session(
     let target_id = normalize_target_id(&target_id)?;
     let access = load_stream_access(access_handle.trim())
         .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
-    build_stream_session(access, target_id)
+    build_stream_session(access, target_id, XboxStreamSettings::default())
 }
 
 /// 账户、代际和 target 都由 Swift 启动请求显式回传，bridge 在创建远端会话前校验。
@@ -457,6 +538,7 @@ pub fn create_scoped_stream_session(
     target_id: String,
     account_id: String,
     owner_generation: u64,
+    settings: XboxStreamSettings,
 ) -> Result<Arc<XboxStreamSession>, XboxStreamingError> {
     let target = parse_target_type(&target_type)?;
     let target_id = normalize_target_id(&target_id)?;
@@ -473,14 +555,15 @@ pub fn create_scoped_stream_session(
         Some(owner_generation),
     )
     .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
-    build_stream_session(access, target_id)
+    build_stream_session(access, target_id, settings)
 }
 
 fn build_stream_session(
     access: StreamingAccessContext,
     target_id: String,
+    settings: XboxStreamSettings,
 ) -> Result<Arc<XboxStreamSession>, XboxStreamingError> {
-    let plan = control_plan(&access, &target_id)?;
+    let plan = control_plan(&access, &target_id, &settings)?;
     let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
     let flow = SessionFlowService::new(IosSessionFlowProvider {
         access,
@@ -594,11 +677,13 @@ impl XboxStreamSession {
         generation: u64,
     ) -> Result<XboxRemoteIceBatch, XboxStreamingError> {
         let session_id = self.session_id_for(generation).await?;
+        self.ensure_remote_session_active(&session_id)?;
         let poll_interval =
             Duration::from_millis(self.plan.session.schedule.ice_poll_interval_ms.max(100));
         let (signaling_epoch, restart) = {
             let state = self.state.lock().await;
             ensure_generation(&self.generation, generation)?;
+            self.ensure_remote_session_active(&session_id)?;
             (state.signaling_epoch, state.active_signaling_restart)
         };
 
@@ -635,6 +720,7 @@ impl XboxStreamSession {
                 .await
                 .map_err(map_session_flow_error)?;
             ensure_generation(&self.generation, generation)?;
+            self.ensure_remote_session_active(&session_id)?;
 
             let mut state = self.state.lock().await;
             ensure_generation(&self.generation, generation)?;
@@ -764,22 +850,72 @@ impl XboxStreamSession {
             .ok()
             .map(|projection| projection.clone())
     }
+
+    fn ensure_remote_session_active(&self, session_id: &str) -> Result<(), XboxStreamingError> {
+        let terminal = self.projection_snapshot().and_then(|projection| {
+            (projection.session_id.as_deref() == Some(session_id))
+                .then_some(projection.remote_terminal)
+                .flatten()
+        });
+        if let Some(terminal) = terminal {
+            return Err(XboxStreamingError::Remote(
+                terminal.error_code().to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn remote_session_terminal(
+    phase: FlowSessionPhase,
+    launch_state: RuntimeLaunchState,
+    stream_state: Option<&str>,
+    error_code: Option<&str>,
+) -> Option<RemoteSessionTerminal> {
+    if error_code.is_some_and(|code| code.eq_ignore_ascii_case("SessionStateTimeout")) {
+        return Some(RemoteSessionTerminal::TimedOut);
+    }
+    match (phase, launch_state, stream_state) {
+        (FlowSessionPhase::Failed, _, _) => Some(RemoteSessionTerminal::Failed),
+        (FlowSessionPhase::Closed, RuntimeLaunchState::Closed, _) => {
+            Some(RemoteSessionTerminal::Closed)
+        }
+        _ => None,
+    }
 }
 
 fn control_plan(
     access: &StreamingAccessContext,
     target_id: &str,
+    settings: &XboxStreamSettings,
 ) -> Result<Plan, XboxStreamingError> {
     let mut config = match access.target {
         Target::Cloud => Config::default(),
-        Target::Home => {
-            Config::new_home_config("en-US".to_string(), access.force_region_ip.clone(), 1080)
-        }
+        Target::Home => Config::new_home_config(
+            normalize_game_locale(&settings.preferred_game_locale),
+            access.force_region_ip.clone(),
+            settings.home_resolution,
+        ),
     };
+    config.session.preferred_game_locale = normalize_game_locale(&settings.preferred_game_locale);
+    config.session.cloud_resolution = parse_resolution_preference(settings.cloud_resolution);
+    config.session.home_resolution = parse_resolution_preference(settings.home_resolution);
+    config.negotiation.cloud_prefer_ipv6 = settings.prefer_ipv6;
+    config.negotiation.home_prefer_ipv6 = settings.prefer_ipv6;
+    config.negotiation.video_codec = parse_codec_preference(&settings.video_codec);
+    config.negotiation.home_video_bitrate =
+        parse_video_bitrate_preference(&settings.home_bitrate_mode, settings.home_bitrate_mbps);
+    config.negotiation.cloud_video_bitrate =
+        parse_video_bitrate_preference(&settings.cloud_bitrate_mode, settings.cloud_bitrate_mbps);
+    config.negotiation.audio_bitrate =
+        parse_audio_bitrate_preference(&settings.audio_bitrate_mode, settings.audio_bitrate_kbps);
     if !access.force_region_ip.trim().is_empty() {
         config.session.force_region_ip = Some(access.force_region_ip.clone());
     }
-    if access.target == Target::Home && access.fallback_turn.is_some() {
+    if access.target == Target::Home
+        && settings.home_turn_fallback
+        && access.fallback_turn.is_some()
+    {
         config.runtime.home_fallback_turn = true;
     }
     let (target_id, remote_play) = match access.target {
@@ -830,6 +966,48 @@ fn control_plan(
     compile(CompilerInput { config, context })
         .map(|output| output.plan)
         .map_err(|error| XboxStreamingError::InvalidArgument(error.to_string()))
+}
+
+fn normalize_game_locale(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        "en-US".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn parse_codec_preference(value: &str) -> CodecPreference {
+    match value.trim() {
+        "" => CodecPreference::Auto,
+        "video/H264-420" => CodecPreference::H264Low,
+        "video/H264-42e" => CodecPreference::H264Normal,
+        "video/H264-4d" => CodecPreference::H264Main,
+        "video/H264-64" => CodecPreference::H264High,
+        mime_type => CodecPreference::MimeType {
+            mime_type: mime_type.to_string(),
+        },
+    }
+}
+
+fn parse_video_bitrate_preference(mode: &str, bitrate_mbps: i64) -> BitratePreference {
+    if mode != "Custom" || bitrate_mbps <= 0 {
+        return BitratePreference::Auto;
+    }
+
+    BitratePreference::CustomKbps {
+        kbps: bitrate_mbps.saturating_mul(1000).clamp(1, u32::MAX as i64) as u32,
+    }
+}
+
+fn parse_audio_bitrate_preference(mode: &str, bitrate_kbps: i64) -> BitratePreference {
+    if mode != "Custom" || bitrate_kbps <= 0 {
+        return BitratePreference::Auto;
+    }
+
+    BitratePreference::CustomKbps {
+        kbps: bitrate_kbps.clamp(1, u32::MAX as i64) as u32,
+    }
 }
 
 fn validate_home_host_capability(facts: &HomeHostFacts) -> Result<(), XboxStreamingError> {
@@ -897,6 +1075,7 @@ fn project_web_rtc_plan(plan: &Plan) -> XboxWebRtcPlan {
         video_codec_mime_type,
         target_video_width: plan.session.device.max_width.max(1),
         target_video_height: plan.session.device.max_height.max(1),
+        audio_bitrate_kbps: plan.negotiation.audio_bitrate_kbps,
         h264_profiles,
         h264_packetization_mode: 1,
         h264_level_asymmetry_allowed: true,
@@ -1133,7 +1312,12 @@ mod tests {
     }
 
     fn test_session_for_target(target: Target) -> Arc<XboxStreamSession> {
-        build_stream_session(test_access(target), "1234abcd".to_string()).expect("session")
+        build_stream_session(
+            test_access(target),
+            "1234abcd".to_string(),
+            XboxStreamSettings::default(),
+        )
+        .expect("session")
     }
 
     fn test_session() -> Arc<XboxStreamSession> {
@@ -1150,6 +1334,117 @@ mod tests {
     }
 
     #[test]
+    fn remote_session_terminal_maps_timeout_and_terminal_states_without_server_text() {
+        assert_eq!(
+            remote_session_terminal(
+                FlowSessionPhase::Failed,
+                RuntimeLaunchState::Failed,
+                Some("Provisioning"),
+                Some("SessionStateTimeout")
+            ),
+            Some(RemoteSessionTerminal::TimedOut)
+        );
+        assert_eq!(
+            remote_session_terminal(
+                FlowSessionPhase::Failed,
+                RuntimeLaunchState::Failed,
+                Some("Failed"),
+                None
+            ),
+            Some(RemoteSessionTerminal::Failed)
+        );
+        assert_eq!(
+            remote_session_terminal(
+                FlowSessionPhase::Closed,
+                RuntimeLaunchState::Closed,
+                Some("Closed"),
+                None
+            ),
+            Some(RemoteSessionTerminal::Closed)
+        );
+        assert_eq!(
+            RemoteSessionTerminal::Failed.error_code(),
+            "remoteSessionFailed"
+        );
+    }
+
+    #[test]
+    fn remote_session_terminal_ignores_ready_and_recovering_states() {
+        assert_eq!(
+            remote_session_terminal(
+                FlowSessionPhase::SessionReady,
+                RuntimeLaunchState::Ready,
+                Some("Provisioned"),
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            remote_session_terminal(
+                FlowSessionPhase::Recovering,
+                RuntimeLaunchState::Blocked,
+                Some("Recovering"),
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn monitor_terminal_projection_rejects_stale_session_callbacks() {
+        let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
+        let provider = IosSessionFlowProvider {
+            access: test_access(Target::Cloud),
+            projection: Arc::clone(&projection),
+        };
+        provider.on_session_created(
+            "current-session",
+            "/v5/sessions/cloud/current-session",
+            "cloud",
+            "title-1",
+            None,
+        );
+        let progress = SessionProgressSnapshot {
+            session_id: "stale-session".to_string(),
+            phase: FlowSessionPhase::Failed,
+            runtime_launch_state: RuntimeLaunchState::Failed,
+            status_text_key: "streamPage.errors.startFailed".to_string(),
+            queue_seconds: None,
+            queue: None,
+            error_code: None,
+            error_message: None,
+            error_hint: None,
+        };
+
+        provider.on_session_monitor_tick(
+            "stale-session",
+            "cloud",
+            "title-1",
+            &progress,
+            Some("Failed"),
+            "failed",
+            false,
+            false,
+        );
+        assert_eq!(projection.lock().expect("projection").remote_terminal, None);
+
+        provider.on_session_monitor_tick(
+            "current-session",
+            "cloud",
+            "title-1",
+            &progress,
+            Some("Failed"),
+            "failed",
+            false,
+            false,
+        );
+        assert_eq!(
+            projection.lock().expect("projection").remote_terminal,
+            Some(RemoteSessionTerminal::Failed)
+        );
+    }
+
+    #[test]
     fn target_id_is_trimmed_and_validated() {
         assert_eq!(
             normalize_target_id("  ASDUSKFALLS ").unwrap(),
@@ -1163,7 +1458,12 @@ mod tests {
 
     #[test]
     fn control_plan_uses_domain_compiler_and_desktop_headers() {
-        let plan = control_plan(&test_access(Target::Cloud), "title-1").expect("plan");
+        let plan = control_plan(
+            &test_access(Target::Cloud),
+            "title-1",
+            &XboxStreamSettings::default(),
+        )
+        .expect("plan");
         assert_eq!(plan.session.target, Target::Cloud);
         assert_eq!(plan.session.target_id, "title-1");
         assert_eq!(plan.session.base_url, "https://cloud.example.com");
@@ -1174,20 +1474,26 @@ mod tests {
 
     #[test]
     fn web_rtc_plan_projects_desktop_direction_codec_feedback_and_ice_policy() {
-        let plan = control_plan(&test_access(Target::Cloud), "title-1").expect("plan");
+        let plan = control_plan(
+            &test_access(Target::Cloud),
+            "title-1",
+            &XboxStreamSettings::default(),
+        )
+        .expect("plan");
         let projection = project_web_rtc_plan(&plan);
         assert_eq!(projection.audio_direction, "sendrecv");
         assert_eq!(projection.video_direction, "recvonly");
         assert_eq!(projection.video_codec_mime_type, "video/H264");
         assert_eq!(projection.target_video_width, 1_280);
         assert_eq!(projection.target_video_height, 720);
+        assert_eq!(projection.audio_bitrate_kbps, Some(128));
         assert_eq!(projection.h264_packetization_mode, 1);
         assert!(projection.h264_level_asymmetry_allowed);
         assert_eq!(projection.max_frame_size, 3_600);
         assert_eq!(projection.max_frame_rate, 60);
         assert_eq!(projection.min_video_bitrate_kbps, Some(3_000));
         assert_eq!(projection.start_video_bitrate_kbps, Some(10_000));
-        assert_eq!(projection.max_video_bitrate_kbps, Some(20_000));
+        assert_eq!(projection.max_video_bitrate_kbps, Some(10_000));
         assert_eq!(projection.required_video_rtcp_feedback.len(), 5);
         assert_eq!(
             projection.allowed_candidate_types,
@@ -1199,7 +1505,12 @@ mod tests {
 
     #[test]
     fn control_plan_builds_home_target_with_desktop_profile() {
-        let plan = control_plan(&test_access(Target::Home), "console-command-id").expect("plan");
+        let plan = control_plan(
+            &test_access(Target::Home),
+            "console-command-id",
+            &XboxStreamSettings::default(),
+        )
+        .expect("plan");
         assert_eq!(plan.session.target, Target::Home);
         assert_eq!(plan.session.target_id, "1234abcd");
         assert_eq!(plan.session.base_url, "https://cloud.example.com");
@@ -1211,6 +1522,7 @@ mod tests {
         let web_rtc = project_web_rtc_plan(&plan);
         assert_eq!(web_rtc.target_video_width, 1_920);
         assert_eq!(web_rtc.target_video_height, 1_080);
+        assert_eq!(web_rtc.audio_bitrate_kbps, Some(128));
         assert_eq!(web_rtc.max_frame_size, 8_160);
         assert_eq!(web_rtc.min_video_bitrate_kbps, Some(5_000));
         assert_eq!(web_rtc.start_video_bitrate_kbps, Some(20_000));
@@ -1225,10 +1537,76 @@ mod tests {
     }
 
     #[test]
+    fn control_plan_projects_consumed_cloud_streaming_settings() {
+        let settings = XboxStreamSettings {
+            preferred_game_locale: "ja-JP".to_string(),
+            cloud_resolution: 1440,
+            prefer_ipv6: true,
+            video_codec: "video/H264-64".to_string(),
+            cloud_bitrate_mode: "Custom".to_string(),
+            cloud_bitrate_mbps: 42,
+            audio_bitrate_mode: "Custom".to_string(),
+            audio_bitrate_kbps: 256,
+            ..XboxStreamSettings::default()
+        };
+
+        let plan = control_plan(&test_access(Target::Cloud), "title-1", &settings).expect("plan");
+        let projection = project_web_rtc_plan(&plan);
+
+        assert_eq!(plan.session.locale, "ja-JP");
+        assert_eq!(plan.session.settings.locale, "ja-JP");
+        assert_eq!(projection.target_video_width, 2_560);
+        assert_eq!(projection.target_video_height, 1_440);
+        assert_eq!(projection.video_codec_mime_type, "video/H264");
+        assert_eq!(projection.h264_profiles, vec!["64"]);
+        assert_eq!(projection.audio_bitrate_kbps, Some(256));
+        assert_eq!(projection.min_video_bitrate_kbps, Some(8_000));
+        assert_eq!(projection.start_video_bitrate_kbps, Some(35_000));
+        assert_eq!(projection.max_video_bitrate_kbps, Some(42_000));
+        assert!(projection.prefer_ipv6);
+    }
+
+    #[test]
+    fn control_plan_projects_consumed_home_streaming_settings() {
+        let mut access = test_access_for_account(Target::Home, "settings-home");
+        access.fallback_turn = Some(TurnServer {
+            url: "turn:relay.example.com:3478".to_string(),
+            username: "user".to_string(),
+            credential: "credential".to_string(),
+        });
+        let settings = XboxStreamSettings {
+            preferred_game_locale: "".to_string(),
+            home_resolution: 720,
+            prefer_ipv6: true,
+            video_codec: "video/H264-420".to_string(),
+            home_bitrate_mode: "Custom".to_string(),
+            home_bitrate_mbps: 18,
+            home_turn_fallback: true,
+            ..XboxStreamSettings::default()
+        };
+
+        let plan = control_plan(&access, "console-command-id", &settings).expect("plan");
+        let projection = project_web_rtc_plan(&plan);
+
+        assert_eq!(plan.session.locale, "en-US");
+        assert_eq!(plan.session.settings.locale, "en-US");
+        assert_eq!(plan.runtime.turn.source, TurnSource::Fallback);
+        assert_eq!(projection.target_video_width, 1_280);
+        assert_eq!(projection.target_video_height, 720);
+        assert_eq!(projection.video_codec_mime_type, "video/H264");
+        assert_eq!(projection.h264_profiles, vec!["420"]);
+        assert_eq!(projection.min_video_bitrate_kbps, Some(3_000));
+        assert_eq!(projection.start_video_bitrate_kbps, Some(10_000));
+        assert_eq!(projection.max_video_bitrate_kbps, Some(18_000));
+        assert!(projection.prefer_ipv6);
+    }
+
+    #[test]
     fn home_plan_rejects_explicitly_disabled_streaming_capability() {
         let access = test_access_for_account(Target::Home, "capability-disabled");
         cache_home_fixture("capability-disabled", Some(true), Some(false));
-        let error = control_plan(&access, "1234abcd").expect_err("capability rejection");
+        let error = control_plan(&access, "1234abcd", &XboxStreamSettings::default())
+            .expect_err("capability rejection");
         assert!(error.to_string().contains("homeRemotePlayUnavailable"));
     }
 
@@ -1241,7 +1619,8 @@ mod tests {
             credential: "credential".to_string(),
         });
 
-        let plan = control_plan(&access, "console-device-id").expect("home plan");
+        let plan = control_plan(&access, "console-device-id", &XboxStreamSettings::default())
+            .expect("home plan");
         assert_eq!(plan.runtime.turn.source, TurnSource::Fallback);
         assert_eq!(plan.session.target_id, "1234abcd");
         let ice_servers = resolve_ice_servers(&plan);
@@ -1285,7 +1664,12 @@ mod tests {
 
     #[test]
     fn home_console_addresses_are_injected_once_per_signaling_epoch() {
-        let plan = control_plan(&test_access(Target::Home), "console-command-id").expect("plan");
+        let plan = control_plan(
+            &test_access(Target::Home),
+            "console-command-id",
+            &XboxStreamSettings::default(),
+        )
+        .expect("plan");
         let mut state = SessionState::new();
         assert!(!state.begin_offer_exchange());
 
@@ -1323,7 +1707,12 @@ mod tests {
 
     #[test]
     fn cloud_plan_does_not_inject_console_address_candidates() {
-        let plan = control_plan(&test_access(Target::Cloud), "title-1").expect("plan");
+        let plan = control_plan(
+            &test_access(Target::Cloud),
+            "title-1",
+            &XboxStreamSettings::default(),
+        )
+        .expect("plan");
         assert_eq!(console_address_ice_candidates(&plan).count(), 0);
     }
 
@@ -1411,7 +1800,12 @@ mod tests {
 
     #[test]
     fn official_stun_is_platform_default() {
-        let plan = control_plan(&test_access(Target::Cloud), "title-1").expect("plan");
+        let plan = control_plan(
+            &test_access(Target::Cloud),
+            "title-1",
+            &XboxStreamSettings::default(),
+        )
+        .expect("plan");
         let servers = resolve_ice_servers(&plan);
         assert_eq!(servers[0].urls, vec![OFFICIAL_XBOX_STUN_URL]);
     }

@@ -2,7 +2,7 @@ use crate::policy::Plan;
 use crate::session::api::session::WebApiSessionGateway;
 use crate::session::flow::{
     build_session_progress_snapshot, map_webapi_error, SessionFlowError, SessionFlowProvider,
-    SessionFlowServiceInner, SessionFlowSnapshot,
+    SessionFlowServiceInner, SessionFlowSnapshot, SessionPhase,
 };
 use crate::session::monitor::{apply_monitor_tick_to_record, SessionMonitorInput};
 use crate::session::store::{SessionCancelToken, SessionRuntimeRecord};
@@ -252,7 +252,7 @@ where
             }
         }
 
-        monitor_control.should_continue
+        should_continue_monitor_loop(progress.phase, monitor_control.should_continue)
     }
 
     pub(crate) async fn send_keepalive(&self, session_id: &str) -> Result<bool, SessionFlowError> {
@@ -375,4 +375,32 @@ fn now_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn should_continue_monitor_loop(phase: SessionPhase, state_should_continue: bool) -> bool {
+    match phase {
+        SessionPhase::Failed | SessionPhase::Closed => false,
+        SessionPhase::SessionReady => true,
+        _ => state_should_continue,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_continue_monitor_loop;
+    use crate::session::flow::SessionPhase;
+
+    #[test]
+    fn monitor_remains_active_after_session_ready() {
+        assert!(should_continue_monitor_loop(
+            SessionPhase::SessionReady,
+            false
+        ));
+    }
+
+    #[test]
+    fn monitor_stops_for_remote_terminal_phases() {
+        assert!(!should_continue_monitor_loop(SessionPhase::Failed, false));
+        assert!(!should_continue_monitor_loop(SessionPhase::Closed, true));
+    }
 }

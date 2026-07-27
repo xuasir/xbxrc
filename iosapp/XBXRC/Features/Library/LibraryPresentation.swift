@@ -101,6 +101,11 @@ enum LibraryPresentation {
 
         switch kind {
         case .recent:
+            if indexedGames.allSatisfy({ $0.element.isRecentlyPlayed != nil }) {
+                return indexedGames
+                    .filter { $0.element.isRecentlyPlayed == true }
+                    .map(\.element)
+            }
             return indexedGames.compactMap {
                 entry -> (offset: Int, element: CloudLibraryGame)? in
                 // xCloud MRU 是最近游玩栏目的事实来源；旧活动模型缺少该标记时回退日期。
@@ -132,7 +137,6 @@ enum LibraryPresentation {
         case .newlyAdded:
             return indexedGames
                 .filter { $0.element.isNew == true }
-                .sorted(by: nameThenIndex)
                 .map(\.element)
         case .all:
             return indexedGames.sorted(by: nameThenIndex).map(\.element)

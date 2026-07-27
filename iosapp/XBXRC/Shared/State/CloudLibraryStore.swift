@@ -1018,12 +1018,24 @@ final class CloudLibraryStore: ObservableObject {
         )
     }
 
+    static func catalogLanguage(preferredLanguage: String?) -> String {
+        let normalized = preferredLanguage?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return normalized.hasPrefix("zh") ? "zh-TW" : "en-US"
+    }
+
+    static func catalogMarket() -> String {
+        "US"
+    }
+
     private static var language: String {
-        Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        // 与桌面 XCloud 页保持同一目录查询合同，避免设备 Locale 直接改变目录集合。
+        catalogLanguage(preferredLanguage: Locale.preferredLanguages.first)
     }
 
     private static var market: String {
-        Locale.current.region?.identifier ?? "US"
+        catalogMarket()
     }
 }
 

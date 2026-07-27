@@ -4,6 +4,11 @@ import Foundation
 import GameController
 @preconcurrency import WebRTC
 
+struct XboxStreamCreatedDataChannel: @unchecked Sendable {
+    let label: String
+    let channel: RTCDataChannel
+}
+
 @MainActor
 final class XboxStreamDataChannels: NSObject {
     private static let gamepadAddedDelay = Duration.milliseconds(500)
@@ -69,6 +74,23 @@ final class XboxStreamDataChannels: NSObject {
         }
     }
 
+    func attachCreatedChannels(
+        _ createdChannels: [XboxStreamCreatedDataChannel],
+        failedLabels: [String]
+    ) {
+        locallyClosing = false
+        inputAndHapticsStopped = false
+        for label in failedLabels {
+            eventSink(label, "createFailed")
+            failureSink(StreamingTerminalReason.runtimeFailure.code)
+        }
+        for created in createdChannels {
+            created.channel.delegate = self
+            channels[created.label] = created.channel
+            eventSink(created.label, "created")
+        }
+    }
+
     func stopInputAndHaptics() {
         guard !inputAndHapticsStopped else { return }
         inputAndHapticsStopped = true
@@ -103,6 +125,20 @@ final class XboxStreamDataChannels: NSObject {
         stateMachine = StreamingDataChannelStateMachine(
             postHandshakeCount: postHandshakePayloads.count,
             controlBootstrapCount: controlBootstrapPayloads.count
+        )
+    }
+
+    func debugSnapshot() -> StreamingDataChannelDebugSnapshot {
+        let snapshot = stateMachine.snapshot
+        return StreamingDataChannelDebugSnapshot(
+            readyStates: channels.mapValues { Self.readyStateName($0.readyState) },
+            phases: Dictionary(
+                uniqueKeysWithValues: snapshot.phases.map { ($0.key.rawValue, $0.value.rawValue) }
+            ),
+            handshakeAcknowledged: snapshot.handshakeAcknowledged,
+            controlReady: snapshot.controlReady,
+            inputStarted: snapshot.inputStarted,
+            terminalReason: snapshot.terminalReason?.code
         )
     }
 
@@ -555,6 +591,16 @@ final class XboxStreamDataChannels: NSObject {
         for engine in hapticEngines.values { engine.stop(completionHandler: nil) }
         hapticEngines.removeAll()
         hapticsController = nil
+    }
+
+    private static func readyStateName(_ state: RTCDataChannelState) -> String {
+        switch state {
+        case .connecting: "connecting"
+        case .open: "open"
+        case .closing: "closing"
+        case .closed: "closed"
+        @unknown default: "unknown"
+        }
     }
 }
 

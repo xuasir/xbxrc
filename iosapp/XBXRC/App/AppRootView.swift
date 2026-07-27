@@ -103,52 +103,52 @@ struct AppRootView: View {
 
     var body: some View {
         ZStack {
-            AppThemeBackground()
+            if streamingStore.isPresentingPlayer {
+                StreamingPageRoot(store: streamingStore)
+            } else {
+                AppThemeBackground()
 
-            TabView(selection: $selection) {
-                GameLibraryView(isActive: selection == .library)
-                    .tabItem {
-                        Label("游戏库", systemImage: "rectangle.stack.fill")
-                    }
-                    .tag(AppSection.library)
+                TabView(selection: $selection) {
+                    GameLibraryView(isActive: selection == .library)
+                        .tabItem {
+                            Label("游戏库", systemImage: "rectangle.stack.fill")
+                        }
+                        .tag(AppSection.library)
 
-                HostListView(isActive: selection == .hosts)
-                    .tabItem {
-                        Label("主机", systemImage: "desktopcomputer")
-                    }
-                    .tag(AppSection.hosts)
+                    HostListView(isActive: selection == .hosts)
+                        .tabItem {
+                            Label("主机", systemImage: "desktopcomputer")
+                        }
+                        .tag(AppSection.hosts)
 
-                AchievementsView(isActive: selection == .achievements)
-                    .tabItem {
-                        Label("成就", systemImage: "trophy.fill")
-                    }
-                    .tag(AppSection.achievements)
+                    AchievementsView(isActive: selection == .achievements)
+                        .tabItem {
+                            Label("成就", systemImage: "trophy.fill")
+                        }
+                        .tag(AppSection.achievements)
 
-                ProfileView(isActive: selection == .my)
-                    .tabItem {
-                        Label("我的", systemImage: "person.crop.circle.fill")
-                    }
-                    .tag(AppSection.my)
+                    ProfileView(isActive: selection == .my)
+                        .tabItem {
+                            Label("我的", systemImage: "person.crop.circle.fill")
+                        }
+                        .tag(AppSection.my)
+                }
+                .tint(AppThemePalette.brand)
             }
-            .tint(AppThemePalette.brand)
 
-            if launchVisible {
+            if launchVisible && !streamingStore.isPresentingPlayer {
                 LaunchExperienceView(isRestoring: authStore.phase == .restoring) {
                     launchVisible = false
                 }
             }
         }
-        .fullScreenCover(
-            isPresented: Binding(
-                get: { streamingStore.isPresentingPlayer },
-                set: { isPresented in
-                    if !isPresented {
-                        streamingStore.stop()
-                    }
-                }
+        .onAppear {
+            AppOrientationCoordinator.shared.sync(
+                streamingPresented: streamingStore.isPresentingPlayer
             )
-        ) {
-            StreamingPlayerView(store: streamingStore)
+        }
+        .onChange(of: streamingStore.isPresentingPlayer) { _, isPresenting in
+            AppOrientationCoordinator.shared.sync(streamingPresented: isPresenting)
         }
     }
 }
@@ -158,4 +158,13 @@ private enum AppSection: Hashable {
     case hosts
     case achievements
     case my
+}
+
+private struct StreamingPageRoot: View {
+    @ObservedObject var store: StreamingFeatureStore
+
+    var body: some View {
+        StreamingPlayerView(store: store)
+            .ignoresSafeArea()
+    }
 }

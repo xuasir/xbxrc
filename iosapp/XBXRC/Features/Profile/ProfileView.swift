@@ -221,7 +221,7 @@ struct ProfileView: View {
                     CloudGamingSettingsView(isApplyingRegion: $isApplyingRegion)
                 } label: {
                     MySettingsRow(
-                        title: "云游戏",
+                        title: "云游戏与串流",
                         value: isApplyingRegion ? "正在应用" : settingsPresentation.cloudGamingSummary,
                         systemImage: "network",
                         tint: XBXProfileTokens.brand

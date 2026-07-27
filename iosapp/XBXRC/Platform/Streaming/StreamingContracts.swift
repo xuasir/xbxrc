@@ -67,6 +67,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
     let accountGeneration: UInt64
     let ownerGeneration: UInt64
     let sessionGeneration: UInt64
+    let settings: StreamingSessionSettingsSnapshot
 
     var streamTitleID: String { targetID }
 
@@ -75,6 +76,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         accessHandle: String,
         accountGeneration: UInt64,
         sessionGeneration: UInt64,
+        settings: StreamingSessionSettingsSnapshot = .standard,
         attemptID: String = UUID().uuidString,
         accountID: String = "",
         ownerGeneration: UInt64? = nil
@@ -87,6 +89,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         self.accountGeneration = accountGeneration
         self.ownerGeneration = ownerGeneration ?? accountGeneration
         self.sessionGeneration = sessionGeneration
+        self.settings = settings
     }
 
     init(
@@ -95,6 +98,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         accessHandle: String,
         accountGeneration: UInt64,
         sessionGeneration: UInt64,
+        settings: StreamingSessionSettingsSnapshot = .standard,
         attemptID: String = UUID().uuidString,
         accountID: String = "",
         ownerGeneration: UInt64? = nil
@@ -107,6 +111,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         self.accountGeneration = accountGeneration
         self.ownerGeneration = ownerGeneration ?? accountGeneration
         self.sessionGeneration = sessionGeneration
+        self.settings = settings
     }
 }
 
@@ -128,6 +133,7 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
     let videoCodecMimeType: String
     let targetVideoWidth: Int
     let targetVideoHeight: Int
+    let audioBitrateKbps: Int?
     let h264Profiles: [String]
     let h264PacketizationMode: Int
     let h264LevelAsymmetryAllowed: Bool
@@ -151,6 +157,7 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
         videoCodecMimeType: String = "video/H264",
         targetVideoWidth: Int = 1_920,
         targetVideoHeight: Int = 1_080,
+        audioBitrateKbps: Int? = 128,
         h264Profiles: [String] = ["4d", "42e", "420"],
         h264PacketizationMode: Int = 1,
         h264LevelAsymmetryAllowed: Bool = true,
@@ -173,6 +180,7 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
         self.videoCodecMimeType = videoCodecMimeType
         self.targetVideoWidth = max(targetVideoWidth, 1)
         self.targetVideoHeight = max(targetVideoHeight, 1)
+        self.audioBitrateKbps = audioBitrateKbps.map { max($0, 1) }
         self.h264Profiles = h264Profiles
         self.h264PacketizationMode = h264PacketizationMode
         self.h264LevelAsymmetryAllowed = h264LevelAsymmetryAllowed
@@ -307,6 +315,27 @@ struct StreamingPeerStats: Equatable, Sendable {
         self.lastMediaAtMilliseconds = lastMediaAtMilliseconds
         self.frameSupplyDelta = frameSupplyDelta
     }
+}
+
+struct StreamingDataChannelDebugSnapshot: Equatable, Sendable {
+    let readyStates: [String: String]
+    let phases: [String: String]
+    let handshakeAcknowledged: Bool
+    let controlReady: Bool
+    let inputStarted: Bool
+    let terminalReason: String?
+}
+
+struct StreamingPeerDebugSnapshot: Equatable, Sendable {
+    let signalingState: String
+    let iceConnectionState: String
+    let iceGatheringState: String
+    let transceiverCount: Int
+    let audioReceiverTrackCount: Int
+    let videoReceiverTrackCount: Int
+    let localDescriptionSet: Bool
+    let remoteDescriptionSet: Bool
+    let dataChannels: StreamingDataChannelDebugSnapshot?
 }
 
 struct StreamingPresentationTraceContext: Equatable, Sendable {
@@ -704,7 +733,6 @@ struct StreamingDataChannelStateMachine: Sendable {
     }
 }
 
-@MainActor
 protocol StreamingPeerRuntime: AnyObject, Sendable {
     func makeOffer(
         configuration: StreamingPreparedSignaling,
@@ -712,14 +740,14 @@ protocol StreamingPeerRuntime: AnyObject, Sendable {
     ) async throws -> String
     func applyAnswer(_ sdp: String) async throws
     func addRemoteCandidates(_ candidates: [StreamingIceCandidate]) async throws
+    func debugSnapshot() async -> StreamingPeerDebugSnapshot
     func stopInputAndHaptics() async
     func closeTransport() async
 }
 
-@MainActor
 protocol StreamingPeerRuntimeFactory: AnyObject, Sendable {
     func makeRuntime(
-        eventSink: @escaping @MainActor @Sendable (StreamingPeerEvent) -> Void
+        eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void
     ) -> any StreamingPeerRuntime
 }
 

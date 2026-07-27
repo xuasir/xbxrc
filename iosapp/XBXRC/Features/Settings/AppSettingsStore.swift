@@ -110,6 +110,147 @@ enum CloudRegionPreset: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum StreamingResolutionOption: Int, CaseIterable, Identifiable, Sendable {
+    case p720 = 720
+    case p1080 = 1080
+    case p1080Hq = 1081
+    case p1440 = 1440
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .p720: "720p"
+        case .p1080: "1080p"
+        case .p1080Hq: "自动（1080p HQ）"
+        case .p1440: "1440p"
+        }
+    }
+
+    static let cloudChoices: [StreamingResolutionOption] = [.p1440, .p1080Hq, .p1080, .p720]
+    static let homeChoices: [StreamingResolutionOption] = [.p1080Hq, .p1080, .p720]
+}
+
+enum StreamingBitrateMode: String, CaseIterable, Identifiable, Sendable {
+    case auto = "Auto"
+    case custom = "Custom"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto: "自动"
+        case .custom: "手动"
+        }
+    }
+}
+
+enum StreamingCodecOption: String, CaseIterable, Identifiable, Sendable {
+    case auto = ""
+    case h264High = "video/H264-64"
+    case h264Main = "video/H264-4d"
+    case h264Normal = "video/H264-42e"
+    case h264Low = "video/H264-420"
+
+    var id: String {
+        rawValue.isEmpty ? "auto" : rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .auto: "自动"
+        case .h264High: "H.264 High"
+        case .h264Main: "H.264 Main"
+        case .h264Normal: "H.264 Constrained Baseline"
+        case .h264Low: "H.264 Baseline"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .auto: "自动"
+        case .h264High: "更清晰"
+        case .h264Main: "更均衡"
+        case .h264Normal: "更兼容"
+        case .h264Low: "最兼容"
+        }
+    }
+}
+
+struct PreferredGameLanguageOption: Identifiable, Hashable, Sendable {
+    let code: String
+    let title: String
+
+    var id: String { code }
+}
+
+enum PreferredGameLanguageCatalog {
+    static let all: [PreferredGameLanguageOption] = [
+        .init(code: "en-US", title: "English (United States)"),
+        .init(code: "", title: "默认"),
+        .init(code: "ar-SA", title: "Arabic (Saudi Arabia)"),
+        .init(code: "cs-CZ", title: "Czech"),
+        .init(code: "da-DK", title: "Danish"),
+        .init(code: "de-DE", title: "German"),
+        .init(code: "el-GR", title: "Greek"),
+        .init(code: "en-GB", title: "English (United Kingdom)"),
+        .init(code: "es-ES", title: "Spanish (Spain)"),
+        .init(code: "es-MX", title: "Spanish (Mexico)"),
+        .init(code: "fi-FI", title: "Finnish"),
+        .init(code: "fr-FR", title: "French"),
+        .init(code: "he-IL", title: "Hebrew"),
+        .init(code: "hu-HU", title: "Hungarian"),
+        .init(code: "it-IT", title: "Italian"),
+        .init(code: "ja-JP", title: "日本語"),
+        .init(code: "ko-KR", title: "Korean"),
+        .init(code: "nb-NO", title: "Norwegian"),
+        .init(code: "nl-NL", title: "Dutch"),
+        .init(code: "pl-PL", title: "Polish"),
+        .init(code: "pt-BR", title: "Portuguese (Brazil)"),
+        .init(code: "pt-PT", title: "Portuguese (Portugal)"),
+        .init(code: "ru-RU", title: "Russian"),
+        .init(code: "sk-SK", title: "Slovak"),
+        .init(code: "sv-SE", title: "Swedish"),
+        .init(code: "tr-TR", title: "Turkish"),
+        .init(code: "zh-CN", title: "简体中文"),
+        .init(code: "zh-TW", title: "繁体中文"),
+    ]
+
+    static func title(for code: String) -> String {
+        all.first(where: { $0.code == code })?.title ?? code
+    }
+}
+
+struct StreamingSessionSettingsSnapshot: Equatable, Sendable {
+    let preferredGameLocale: String
+    let cloudResolution: Int
+    let homeResolution: Int
+    let preferIPv6: Bool
+    let videoCodec: String
+    let homeBitrateMode: String
+    let homeBitrateMbps: Int
+    let cloudBitrateMode: String
+    let cloudBitrateMbps: Int
+    let audioBitrateMode: String
+    let audioBitrateKbps: Int
+    let homeTurnFallback: Bool
+
+    static let standard = StreamingSessionSettingsSnapshot(
+        preferredGameLocale: "en-US",
+        cloudResolution: StreamingResolutionOption.p720.rawValue,
+        homeResolution: StreamingResolutionOption.p1080.rawValue,
+        preferIPv6: false,
+        videoCodec: StreamingCodecOption.auto.rawValue,
+        homeBitrateMode: StreamingBitrateMode.auto.rawValue,
+        homeBitrateMbps: 20,
+        cloudBitrateMode: StreamingBitrateMode.auto.rawValue,
+        cloudBitrateMbps: 20,
+        audioBitrateMode: StreamingBitrateMode.auto.rawValue,
+        audioBitrateKbps: 20,
+        homeTurnFallback: true
+    )
+}
+
 @MainActor
 protocol CloudRegionSettingsProviding: AnyObject {
     var cloudRegionPreset: CloudRegionPreset { get }
@@ -117,11 +258,33 @@ protocol CloudRegionSettingsProviding: AnyObject {
 }
 
 @MainActor
-final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding {
+protocol StreamingSessionSettingsProviding: AnyObject {
+    var streamingSessionSettings: StreamingSessionSettingsSnapshot { get }
+}
+
+@MainActor
+protocol PreferredGameLocaleProviding: AnyObject {
+    var preferredGameLocale: String { get }
+}
+
+@MainActor
+final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, StreamingSessionSettingsProviding, PreferredGameLocaleProviding {
     static let cloudRegionKey = "ios.cloud.forceRegionPreset"
     static let ephemeralLoginKey = "ios.auth.usesEphemeralWebSession"
     static let appearanceModeKey = "ios.appearance.mode"
     static let appIconPresetKey = "ios.appearance.appIconPreset"
+    static let preferredGameLocaleKey = "ios.streaming.preferredGameLocale"
+    static let cloudResolutionKey = "ios.streaming.cloudResolution"
+    static let homeResolutionKey = "ios.streaming.homeResolution"
+    static let preferIPv6Key = "ios.streaming.preferIPv6"
+    static let codecPreferenceKey = "ios.streaming.codecPreference"
+    static let homeBitrateModeKey = "ios.streaming.homeBitrateMode"
+    static let homeBitrateMbpsKey = "ios.streaming.homeBitrateMbps"
+    static let cloudBitrateModeKey = "ios.streaming.cloudBitrateMode"
+    static let cloudBitrateMbpsKey = "ios.streaming.cloudBitrateMbps"
+    static let audioBitrateModeKey = "ios.streaming.audioBitrateMode"
+    static let audioBitrateKbpsKey = "ios.streaming.audioBitrateKbps"
+    static let homeTurnFallbackKey = "ios.streaming.homeTurnFallback"
 
     @Published var appearanceMode: AppAppearanceMode {
         didSet {
@@ -141,6 +304,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding {
     @Published private(set) var cloudRegionPreset: CloudRegionPreset
     @Published var usesEphemeralLoginSession: Bool {
         didSet {
+            guard usesEphemeralLoginSession != oldValue else { return }
             defaults.set(usesEphemeralLoginSession, forKey: Self.ephemeralLoginKey)
             IOSRuntimeTrace.state(
                 domain: "settings",
@@ -148,6 +312,135 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding {
                 payload: ["enabled": .bool(usesEphemeralLoginSession)],
                 dimension: .core,
                 importance: .key
+            )
+        }
+    }
+
+    @Published var preferredGameLocale: String {
+        didSet {
+            guard preferredGameLocale != oldValue else { return }
+            defaults.set(preferredGameLocale, forKey: Self.preferredGameLocaleKey)
+            traceStreamingSettingChange(
+                key: "preferred_game_language",
+                value: .string(preferredGameLocale.isEmpty ? "default" : preferredGameLocale)
+            )
+        }
+    }
+
+    @Published var cloudResolution: StreamingResolutionOption {
+        didSet {
+            guard cloudResolution != oldValue else { return }
+            defaults.set(cloudResolution.rawValue, forKey: Self.cloudResolutionKey)
+            traceStreamingSettingChange(
+                key: "resolution",
+                value: .integer(Int64(cloudResolution.rawValue))
+            )
+        }
+    }
+
+    @Published var homeResolution: StreamingResolutionOption {
+        didSet {
+            guard homeResolution != oldValue else { return }
+            defaults.set(homeResolution.rawValue, forKey: Self.homeResolutionKey)
+            traceStreamingSettingChange(
+                key: "xhome_resolution",
+                value: .integer(Int64(homeResolution.rawValue))
+            )
+        }
+    }
+
+    @Published var preferIPv6: Bool {
+        didSet {
+            guard preferIPv6 != oldValue else { return }
+            defaults.set(preferIPv6, forKey: Self.preferIPv6Key)
+            traceStreamingSettingChange(key: "ipv6", value: .bool(preferIPv6))
+        }
+    }
+
+    @Published var codecPreference: StreamingCodecOption {
+        didSet {
+            guard codecPreference != oldValue else { return }
+            defaults.set(codecPreference.rawValue, forKey: Self.codecPreferenceKey)
+            traceStreamingSettingChange(
+                key: "codec",
+                value: .string(codecPreference.rawValue.isEmpty ? "auto" : codecPreference.rawValue)
+            )
+        }
+    }
+
+    @Published var homeBitrateMode: StreamingBitrateMode {
+        didSet {
+            guard homeBitrateMode != oldValue else { return }
+            defaults.set(homeBitrateMode.rawValue, forKey: Self.homeBitrateModeKey)
+            traceStreamingSettingChange(
+                key: "xhome_bitrate_mode",
+                value: .string(homeBitrateMode.rawValue)
+            )
+        }
+    }
+
+    @Published var homeBitrateMbps: Int {
+        didSet {
+            guard homeBitrateMbps != oldValue else { return }
+            defaults.set(homeBitrateMbps, forKey: Self.homeBitrateMbpsKey)
+            traceStreamingSettingChange(
+                key: "xhome_bitrate",
+                value: .integer(Int64(homeBitrateMbps))
+            )
+        }
+    }
+
+    @Published var cloudBitrateMode: StreamingBitrateMode {
+        didSet {
+            guard cloudBitrateMode != oldValue else { return }
+            defaults.set(cloudBitrateMode.rawValue, forKey: Self.cloudBitrateModeKey)
+            traceStreamingSettingChange(
+                key: "xcloud_bitrate_mode",
+                value: .string(cloudBitrateMode.rawValue)
+            )
+        }
+    }
+
+    @Published var cloudBitrateMbps: Int {
+        didSet {
+            guard cloudBitrateMbps != oldValue else { return }
+            defaults.set(cloudBitrateMbps, forKey: Self.cloudBitrateMbpsKey)
+            traceStreamingSettingChange(
+                key: "xcloud_bitrate",
+                value: .integer(Int64(cloudBitrateMbps))
+            )
+        }
+    }
+
+    @Published var audioBitrateMode: StreamingBitrateMode {
+        didSet {
+            guard audioBitrateMode != oldValue else { return }
+            defaults.set(audioBitrateMode.rawValue, forKey: Self.audioBitrateModeKey)
+            traceStreamingSettingChange(
+                key: "audio_bitrate_mode",
+                value: .string(audioBitrateMode.rawValue)
+            )
+        }
+    }
+
+    @Published var audioBitrateKbps: Int {
+        didSet {
+            guard audioBitrateKbps != oldValue else { return }
+            defaults.set(audioBitrateKbps, forKey: Self.audioBitrateKbpsKey)
+            traceStreamingSettingChange(
+                key: "audio_bitrate",
+                value: .integer(Int64(audioBitrateKbps))
+            )
+        }
+    }
+
+    @Published var homeTurnFallbackEnabled: Bool {
+        didSet {
+            guard homeTurnFallbackEnabled != oldValue else { return }
+            defaults.set(homeTurnFallbackEnabled, forKey: Self.homeTurnFallbackKey)
+            traceStreamingSettingChange(
+                key: "xhome_turn_fallback",
+                value: .bool(homeTurnFallbackEnabled)
             )
         }
     }
@@ -163,6 +456,54 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding {
         cloudRegionPreset = defaults.string(forKey: Self.cloudRegionKey)
             .flatMap(CloudRegionPreset.init(rawValue:)) ?? .default
         usesEphemeralLoginSession = defaults.bool(forKey: Self.ephemeralLoginKey)
+        preferredGameLocale = defaults.string(forKey: Self.preferredGameLocaleKey) ?? "en-US"
+        cloudResolution = StreamingResolutionOption(
+            rawValue: Self.integerValue(
+                defaults: defaults,
+                key: Self.cloudResolutionKey,
+                fallback: StreamingResolutionOption.p720.rawValue
+            )
+        ) ?? .p720
+        homeResolution = StreamingResolutionOption(
+            rawValue: Self.integerValue(
+                defaults: defaults,
+                key: Self.homeResolutionKey,
+                fallback: StreamingResolutionOption.p1080.rawValue
+            )
+        ) ?? .p1080
+        preferIPv6 = Self.boolValue(
+            defaults: defaults,
+            key: Self.preferIPv6Key,
+            fallback: false
+        )
+        codecPreference = defaults.string(forKey: Self.codecPreferenceKey)
+            .flatMap(StreamingCodecOption.init(rawValue:)) ?? .auto
+        homeBitrateMode = defaults.string(forKey: Self.homeBitrateModeKey)
+            .flatMap(StreamingBitrateMode.init(rawValue:)) ?? .auto
+        homeBitrateMbps = Self.integerValue(
+            defaults: defaults,
+            key: Self.homeBitrateMbpsKey,
+            fallback: 20
+        )
+        cloudBitrateMode = defaults.string(forKey: Self.cloudBitrateModeKey)
+            .flatMap(StreamingBitrateMode.init(rawValue:)) ?? .auto
+        cloudBitrateMbps = Self.integerValue(
+            defaults: defaults,
+            key: Self.cloudBitrateMbpsKey,
+            fallback: 20
+        )
+        audioBitrateMode = defaults.string(forKey: Self.audioBitrateModeKey)
+            .flatMap(StreamingBitrateMode.init(rawValue:)) ?? .auto
+        audioBitrateKbps = Self.integerValue(
+            defaults: defaults,
+            key: Self.audioBitrateKbpsKey,
+            fallback: 20
+        )
+        homeTurnFallbackEnabled = Self.boolValue(
+            defaults: defaults,
+            key: Self.homeTurnFallbackKey,
+            fallback: true
+        )
     }
 
     /// 仅在系统确认切换成功后提交偏好，失败时保留当前图标。
@@ -209,5 +550,69 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding {
             importance: .key
         )
         return true
+    }
+
+    var preferredGameLanguageTitle: String {
+        PreferredGameLanguageCatalog.title(for: preferredGameLocale)
+    }
+
+    var streamingSessionSettings: StreamingSessionSettingsSnapshot {
+        StreamingSessionSettingsSnapshot(
+            preferredGameLocale: normalizedGameLocale(preferredGameLocale),
+            cloudResolution: cloudResolution.rawValue,
+            homeResolution: homeResolution.rawValue,
+            preferIPv6: preferIPv6,
+            videoCodec: codecPreference.rawValue,
+            homeBitrateMode: homeBitrateMode.rawValue,
+            homeBitrateMbps: Self.clamp(homeBitrateMbps, min: 1, max: 200),
+            cloudBitrateMode: cloudBitrateMode.rawValue,
+            cloudBitrateMbps: Self.clamp(cloudBitrateMbps, min: 1, max: 200),
+            audioBitrateMode: audioBitrateMode.rawValue,
+            audioBitrateKbps: Self.clamp(audioBitrateKbps, min: 1, max: 512),
+            homeTurnFallback: homeTurnFallbackEnabled
+        )
+    }
+
+    private func normalizedGameLocale(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "en-US" : trimmed
+    }
+
+    private func traceStreamingSettingChange(
+        key: String,
+        value: IOSRuntimeTraceValue
+    ) {
+        IOSRuntimeTrace.state(
+            domain: "settings",
+            event: "streamingSettingChanged",
+            payload: [
+                "key": .string(key),
+                "value": value,
+            ],
+            dimension: .core,
+            importance: .key
+        )
+    }
+
+    private static func integerValue(
+        defaults: UserDefaults,
+        key: String,
+        fallback: Int
+    ) -> Int {
+        guard defaults.object(forKey: key) != nil else { return fallback }
+        return defaults.integer(forKey: key)
+    }
+
+    private static func boolValue(
+        defaults: UserDefaults,
+        key: String,
+        fallback: Bool
+    ) -> Bool {
+        guard defaults.object(forKey: key) != nil else { return fallback }
+        return defaults.bool(forKey: key)
+    }
+
+    private static func clamp(_ value: Int, min minValue: Int, max maxValue: Int) -> Int {
+        Swift.max(minValue, Swift.min(maxValue, value))
     }
 }

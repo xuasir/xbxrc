@@ -2,6 +2,52 @@ import XCTest
 @testable import XBXRC
 
 final class XBXRCTests: XCTestCase {
+    func testStreamingMediaSampleTrackerOnlyAdvancesOnPositiveDeltas() {
+        var tracker = StreamingMediaSampleTracker()
+
+        let first = tracker.observe(
+            inboundVideoBytes: 1_000,
+            packetsReceived: 10,
+            framesDecoded: 1,
+            observedAtMilliseconds: 1_000
+        )
+        XCTAssertTrue(first.mediaAdvanced)
+        XCTAssertEqual(first.firstMediaAtMilliseconds, 1_000)
+        XCTAssertEqual(first.lastMediaAtMilliseconds, 1_000)
+        XCTAssertNil(first.frameSupplyDelta)
+
+        let stalled = tracker.observe(
+            inboundVideoBytes: 1_000,
+            packetsReceived: 10,
+            framesDecoded: 1,
+            observedAtMilliseconds: 2_000
+        )
+        XCTAssertFalse(stalled.mediaAdvanced)
+        XCTAssertEqual(stalled.firstMediaAtMilliseconds, 1_000)
+        XCTAssertEqual(stalled.lastMediaAtMilliseconds, 1_000)
+        XCTAssertEqual(stalled.frameSupplyDelta, 0)
+
+        let advanced = tracker.observe(
+            inboundVideoBytes: 1_500,
+            packetsReceived: 14,
+            framesDecoded: 2,
+            observedAtMilliseconds: 3_000
+        )
+        XCTAssertTrue(advanced.mediaAdvanced)
+        XCTAssertEqual(advanced.lastMediaAtMilliseconds, 3_000)
+        XCTAssertEqual(advanced.frameSupplyDelta, 1)
+
+        let countersReset = tracker.observe(
+            inboundVideoBytes: 20,
+            packetsReceived: 1,
+            framesDecoded: 0,
+            observedAtMilliseconds: 4_000
+        )
+        XCTAssertFalse(countersReset.mediaAdvanced)
+        XCTAssertEqual(countersReset.lastMediaAtMilliseconds, 3_000)
+        XCTAssertNil(countersReset.frameSupplyDelta)
+    }
+
     func testIOSStreamInputPacketMatchesXboxGamepadWireLayout() {
         let packet = IOSStreamInputPacketEncoder.encodeGamepad(
             sequence: 0x01020304,
@@ -604,6 +650,47 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(collections.first { $0.kind == .recent }?.games.map(\.id), ["recent"])
     }
 
+    func testLibraryPresentationKeepsCloudSectionSourceOrder() {
+        let games = [
+            makeCloudGame(id: "new-b", isNew: true),
+            makeCloudGame(
+                id: "recent-b",
+                isRecentlyPlayed: true,
+                lastPlayedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            makeCloudGame(
+                id: "recent-a",
+                isRecentlyPlayed: true,
+                lastPlayedAt: Date(timeIntervalSince1970: 5_000)
+            ),
+            makeCloudGame(id: "new-a", isNew: true),
+            makeCloudGame(id: "all"),
+        ]
+
+        let collections = LibraryPresentation.collections(fromCloudGames: games)
+
+        XCTAssertEqual(
+            collections.first { $0.kind == .recent }?.games.map(\.id),
+            ["recent-b", "recent-a"]
+        )
+        XCTAssertEqual(
+            collections.first { $0.kind == .newlyAdded }?.games.map(\.id),
+            ["new-b", "new-a"]
+        )
+    }
+
+    func testCloudLibraryStoreUsesDesktopCatalogLocaleContract() {
+        XCTAssertEqual(
+            CloudLibraryStore.catalogLanguage(preferredLanguage: "zh-Hans-CN"),
+            "zh-TW"
+        )
+        XCTAssertEqual(
+            CloudLibraryStore.catalogLanguage(preferredLanguage: "en-US"),
+            "en-US"
+        )
+        XCTAssertEqual(CloudLibraryStore.catalogMarket(), "US")
+    }
+
     func testLibraryPresentationTruncatesHomeAndHeroWithoutTruncatingCollection() {
         let games = (0..<10).map { index in
             makeGame(
@@ -717,6 +804,53 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(restored.appIconPreset, .forest)
         XCTAssertEqual(AppIconPreset.forest.alternateIconName, "AppIconForest")
         XCTAssertEqual(AppIconPreset.midnight.alternateIconName, "AppIconMidnight")
+    }
+
+    @MainActor
+    func testAppSettingsStorePersistsConsumedStreamingSessionSettings() {
+        let suiteName = "XBXRC.StreamingSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = AppSettingsStore(defaults: defaults)
+        store.preferredGameLocale = "ja-JP"
+        store.cloudResolution = .p1440
+        store.homeResolution = .p720
+        store.preferIPv6 = true
+        store.codecPreference = .h264Main
+        store.homeBitrateMode = .custom
+        store.homeBitrateMbps = 35
+        store.cloudBitrateMode = .custom
+        store.cloudBitrateMbps = 18
+        store.audioBitrateMode = .custom
+        store.audioBitrateKbps = 192
+        store.homeTurnFallbackEnabled = false
+
+        let restored = AppSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.preferredGameLocale, "ja-JP")
+        XCTAssertEqual(restored.cloudResolution, .p1440)
+        XCTAssertEqual(restored.homeResolution, .p720)
+        XCTAssertTrue(restored.preferIPv6)
+        XCTAssertEqual(restored.codecPreference, .h264Main)
+        XCTAssertEqual(restored.homeBitrateMode, .custom)
+        XCTAssertEqual(restored.homeBitrateMbps, 35)
+        XCTAssertEqual(restored.cloudBitrateMode, .custom)
+        XCTAssertEqual(restored.cloudBitrateMbps, 18)
+        XCTAssertEqual(restored.audioBitrateMode, .custom)
+        XCTAssertEqual(restored.audioBitrateKbps, 192)
+        XCTAssertFalse(restored.homeTurnFallbackEnabled)
+
+        let snapshot = restored.streamingSessionSettings
+        XCTAssertEqual(snapshot.preferredGameLocale, "ja-JP")
+        XCTAssertEqual(snapshot.cloudResolution, 1440)
+        XCTAssertEqual(snapshot.homeResolution, 720)
+        XCTAssertTrue(snapshot.preferIPv6)
+        XCTAssertEqual(snapshot.videoCodec, "video/H264-4d")
+        XCTAssertEqual(snapshot.homeBitrateMode, "Custom")
+        XCTAssertEqual(snapshot.homeBitrateMbps, 35)
+        XCTAssertEqual(snapshot.cloudBitrateMbps, 18)
+        XCTAssertEqual(snapshot.audioBitrateKbps, 192)
+        XCTAssertFalse(snapshot.homeTurnFallback)
     }
 
     func testMySettingsPresentationDerivesAccountAndSettingsSummaries() {
@@ -1597,6 +1731,26 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(refreshedRequestCount, 2)
     }
 
+    @MainActor
+    func testXboxDataStorePassesPreferredGameLocaleToAchievements() async {
+        let recorder = XboxDataClientRecorder()
+        let settings = MockPreferredGameLocaleProvider(preferredGameLocale: "zh-CN")
+        let store = XboxDataStore(
+            client: MockXboxDataClient(
+                achievements: [Self.achievement],
+                recorder: recorder
+            ),
+            preferredGameLocaleProvider: settings
+        )
+        await store.sync(session: Self.storedSession)
+
+        await store.activateAchievementsOnce(for: Self.game)
+
+        XCTAssertEqual(store.achievements(for: Self.game.titleID), [Self.achievement])
+        let locales = await recorder.achievementLocales()
+        XCTAssertEqual(locales, ["zh-CN"])
+    }
+
     private static let profile = XboxProfile(
         xuid: "123",
         gamertag: "Player",
@@ -1723,6 +1877,18 @@ final class XBXRCTests: XCTestCase {
             Self.streamingAccess(handle: "access-1")
         }
 
+        try await waitUntil { store.videoTrack?.traceContext != nil }
+        let currentContext = try XCTUnwrap(store.videoTrack?.traceContext)
+        store.videoSurfaceRendererReady(
+            context: StreamingPresentationTraceContext(
+                attemptID: currentContext.attemptID,
+                generation: currentContext.generation,
+                peerEpoch: currentContext.peerEpoch &+ 1
+            )
+        )
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(store.state, .waitingForFirstFrame)
+        store.videoSurfaceRendererReady(context: currentContext)
         try await waitUntil { store.state == .playing }
         try await waitUntilAsync {
             (await recorder.snapshot()).remoteCandidatesApplied.count == 1
@@ -1778,6 +1944,7 @@ final class XBXRCTests: XCTestCase {
             (await recorder.snapshot()).markConnectedCalls == 1
         }
         peerFactory.emitFirstVideoFrame()
+        try await markCurrentVideoSurfaceReady(store)
         try await Task.sleep(for: .milliseconds(20))
         XCTAssertEqual(store.state, .waitingForFirstFrame)
 
@@ -1862,6 +2029,8 @@ final class XBXRCTests: XCTestCase {
             "a=rtpmap:97 H264/90000",
             "a=fmtp:97 profile-level-id=4d0032;packetization-mode=0",
             "a=rtpmap:98 VP8/90000",
+            "a=rtpmap:99 rtx/90000",
+            "a=fmtp:99 apt=97;rtx-time=200",
             "",
         ].joined(separator: "\r\n")
 
@@ -1877,12 +2046,14 @@ final class XBXRCTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(output.contains("m=video 9 UDP/TLS/RTP/SAVPF 97 96 98"))
+        XCTAssertTrue(output.contains("m=video 9 UDP/TLS/RTP/SAVPF 97 96 98 99"))
+        XCTAssertTrue(output.contains("b=AS:128"))
         XCTAssertTrue(output.contains("b=AS:12000"))
         XCTAssertTrue(output.contains("a=fmtp:97 profile-level-id=4d0032;packetization-mode=1;level-asymmetry-allowed=1;max-fs=3600;max-fr=60;x-google-min-bitrate=4000;x-google-start-bitrate=8000;x-google-max-bitrate=12000"))
         XCTAssertTrue(output.contains("a=fmtp:111 minptime=10;useinbandfec=1;stereo=1"))
         XCTAssertTrue(output.contains("a=rtcp-fb:97 transport-cc"))
         XCTAssertTrue(output.contains("a=rtcp-fb:97 nack pli"))
+        XCTAssertTrue(output.contains("a=fmtp:99 apt=97;rtx-time=200"))
     }
 
     func testStreamingPreparedSignalingDefaultsToDesktopDirections() {
@@ -1957,6 +2128,8 @@ final class XBXRCTests: XCTestCase {
             return snapshot.iceRestartOffers == [false, true]
                 && snapshot.markConnectedCalls == 2
         }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
         XCTAssertEqual(store.state, .playing)
         let snapshot = await recorder.snapshot()
         XCTAssertEqual(snapshot.peerStops, 0)
@@ -1990,6 +2163,8 @@ final class XBXRCTests: XCTestCase {
                 && snapshot.iceRestartOffers == [false, true, false]
                 && snapshot.markConnectedCalls == 2
         }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
         XCTAssertEqual(store.state, .playing)
         let snapshot = await recorder.snapshot()
         XCTAssertEqual(snapshot.peerStops, 1)
@@ -2128,6 +2303,7 @@ final class XBXRCTests: XCTestCase {
             Self.streamingHomeAccess(handle: "home-access-1")
         }
 
+        try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
         try await waitUntilAsync {
             (await recorder.snapshot()).remoteCandidatesApplied.count == 1
@@ -2138,6 +2314,59 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(snapshot.remoteCandidatesApplied.map(\.sdp), ["candidate:remote"])
         XCTAssertEqual(store.streamTarget, .home)
         XCTAssertEqual(store.streamTitleID, "console-server-id")
+    }
+
+    @MainActor
+    func testStreamingFeatureStoreForwardsConsumedSettingsIntoLaunchRequest() async throws {
+        let suiteName = "XBXRC.StreamingLaunchSettings.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settingsStore = AppSettingsStore(defaults: defaults)
+        settingsStore.preferredGameLocale = "ko-KR"
+        settingsStore.cloudResolution = .p1440
+        settingsStore.homeResolution = .p720
+        settingsStore.preferIPv6 = true
+        settingsStore.codecPreference = .h264High
+        settingsStore.homeBitrateMode = .custom
+        settingsStore.homeBitrateMbps = 28
+        settingsStore.cloudBitrateMode = .custom
+        settingsStore.cloudBitrateMbps = 16
+        settingsStore.audioBitrateMode = .custom
+        settingsStore.audioBitrateKbps = 160
+        settingsStore.homeTurnFallbackEnabled = false
+
+        let recorder = StreamingRuntimeRecorder()
+        let store = StreamingFeatureStore(
+            settingsProvider: settingsStore,
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder),
+                recorder: recorder
+            ),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder)
+        )
+
+        store.start(streamTitleID: "1234abcd") {
+            Self.streamingAccess(handle: "access-settings")
+        }
+
+        try await waitUntilAsync {
+            !(await recorder.snapshot()).settings.isEmpty
+        }
+        let snapshot = await recorder.snapshot()
+        let settings = try XCTUnwrap(snapshot.settings.first)
+        XCTAssertEqual(settings.preferredGameLocale, "ko-KR")
+        XCTAssertEqual(settings.cloudResolution, 1440)
+        XCTAssertEqual(settings.homeResolution, 720)
+        XCTAssertTrue(settings.preferIPv6)
+        XCTAssertEqual(settings.videoCodec, "video/H264-64")
+        XCTAssertEqual(settings.homeBitrateMode, "Custom")
+        XCTAssertEqual(settings.homeBitrateMbps, 28)
+        XCTAssertEqual(settings.cloudBitrateMode, "Custom")
+        XCTAssertEqual(settings.cloudBitrateMbps, 16)
+        XCTAssertEqual(settings.audioBitrateMode, "Custom")
+        XCTAssertEqual(settings.audioBitrateKbps, 160)
+        XCTAssertFalse(settings.homeTurnFallback)
     }
 
     @MainActor
@@ -2153,6 +2382,7 @@ final class XBXRCTests: XCTestCase {
         store.start(streamTitleID: "1234abcd") {
             Self.streamingAccess(handle: "access-stop")
         }
+        try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
 
         store.stop()
@@ -2182,6 +2412,7 @@ final class XBXRCTests: XCTestCase {
         store.start(streamTitleID: "1234abcd") {
             Self.streamingAccess(handle: "access-background")
         }
+        try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
 
         store.handleScenePhase(.background)
@@ -2206,12 +2437,14 @@ final class XBXRCTests: XCTestCase {
         store.start(streamTitleID: "1111aaaa") {
             Self.streamingAccess(handle: "access-first")
         }
+        try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
 
         store.stop()
         store.start(streamTitleID: "2222bbbb") {
             Self.streamingAccess(handle: "access-second")
         }
+        try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing && store.streamTitleID == "2222bbbb" }
         try await Task.sleep(for: .milliseconds(100))
 
@@ -2225,6 +2458,14 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(snapshot.peerStops, 2)
         XCTAssertEqual(snapshot.controlCloses, 2)
         XCTAssertEqual(snapshot.releasedAccessHandles, ["access-first", "access-second"])
+    }
+
+    @MainActor
+    private func markCurrentVideoSurfaceReady(_ store: StreamingFeatureStore) async throws {
+        try await waitUntil { store.videoTrack?.traceContext != nil }
+        store.videoSurfaceRendererReady(
+            context: try XCTUnwrap(store.videoTrack?.traceContext)
+        )
     }
 
     @MainActor
@@ -2329,6 +2570,7 @@ private actor StreamingAsyncGate {
 private struct StreamingRuntimeRecorderSnapshot: Sendable {
     let targets: [StreamingLaunchTarget]
     let streamTitleIDs: [String]
+    let settings: [StreamingSessionSettingsSnapshot]
     let offers: [String]
     let answersApplied: [String]
     let localCandidates: [StreamingIceCandidate]
@@ -2348,6 +2590,7 @@ private struct StreamingRuntimeRecorderSnapshot: Sendable {
 private actor StreamingRuntimeRecorder {
     private var targets: [StreamingLaunchTarget] = []
     private var streamTitleIDs: [String] = []
+    private var settings: [StreamingSessionSettingsSnapshot] = []
     private var offers: [String] = []
     private var answersApplied: [String] = []
     private var localCandidates: [StreamingIceCandidate] = []
@@ -2365,6 +2608,7 @@ private actor StreamingRuntimeRecorder {
 
     func recordTarget(_ value: StreamingLaunchTarget) { targets.append(value) }
     func recordTitleID(_ value: String) { streamTitleIDs.append(value) }
+    func recordSettings(_ value: StreamingSessionSettingsSnapshot) { settings.append(value) }
     func recordOffer(_ value: String) { offers.append(value) }
     func recordAnswer(_ value: String) { answersApplied.append(value) }
     func recordCandidate(_ value: StreamingIceCandidate) { localCandidates.append(value) }
@@ -2386,6 +2630,7 @@ private actor StreamingRuntimeRecorder {
         StreamingRuntimeRecorderSnapshot(
             targets: targets,
             streamTitleIDs: streamTitleIDs,
+            settings: settings,
             offers: offers,
             answersApplied: answersApplied,
             localCandidates: localCandidates,
@@ -2411,6 +2656,7 @@ private struct StreamingTestControlFactory: StreamingControlSessionFactory {
     func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession {
         await recorder.recordTarget(request.target)
         await recorder.recordTitleID(request.streamTitleID)
+        await recorder.recordSettings(request.settings)
         return session
     }
 
@@ -2483,8 +2729,7 @@ private actor StreamingTestControlSession: StreamingControlSession {
     }
 }
 
-@MainActor
-private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory {
+private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unchecked Sendable {
     let recorder: StreamingRuntimeRecorder
     let transientDisconnectAfterConnect: Bool
     let terminalStateAfterConnect: StreamingPeerConnectionState?
@@ -2494,7 +2739,7 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory {
     let emitsFirstVideoFrameAutomatically: Bool
     let firstPeerStopGate: StreamingAsyncGate?
     private(set) var runtimesCreated = 0
-    private var latestEventSink: (@MainActor @Sendable (StreamingPeerEvent) -> Void)?
+    private var latestEventSink: (@Sendable (StreamingPeerEvent) -> Void)?
 
     init(
         recorder: StreamingRuntimeRecorder,
@@ -2517,7 +2762,7 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory {
     }
 
     func makeRuntime(
-        eventSink: @escaping @MainActor @Sendable (StreamingPeerEvent) -> Void
+        eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void
     ) -> any StreamingPeerRuntime {
         runtimesCreated += 1
         latestEventSink = eventSink
@@ -2548,9 +2793,8 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory {
     }
 }
 
-@MainActor
-private final class StreamingTestPeerRuntime: StreamingPeerRuntime {
-    private let eventSink: @MainActor @Sendable (StreamingPeerEvent) -> Void
+private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked Sendable {
+    private let eventSink: @Sendable (StreamingPeerEvent) -> Void
     private let recorder: StreamingRuntimeRecorder
     private let transientDisconnectAfterConnect: Bool
     private let terminalStateAfterConnect: StreamingPeerConnectionState?
@@ -2562,7 +2806,7 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime {
     private var offerCount = 0
 
     init(
-        eventSink: @escaping @MainActor @Sendable (StreamingPeerEvent) -> Void,
+        eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void,
         recorder: StreamingRuntimeRecorder,
         transientDisconnectAfterConnect: Bool,
         terminalStateAfterConnect: StreamingPeerConnectionState?,
@@ -2625,7 +2869,7 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime {
             eventSink(.firstVideoFrame)
         }
         if offerCount == 1, transientDisconnectAfterConnect {
-            Task { @MainActor [eventSink] in
+            Task { [eventSink] in
                 try? await Task.sleep(for: .milliseconds(1))
                 eventSink(.connectionStateChanged(.disconnected))
             }
@@ -2637,6 +2881,37 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime {
 
     func addRemoteCandidates(_ candidates: [StreamingIceCandidate]) async throws {
         await recorder.recordRemoteCandidates(candidates)
+    }
+
+    func debugSnapshot() async -> StreamingPeerDebugSnapshot {
+        StreamingPeerDebugSnapshot(
+            signalingState: suspendAnswerApply ? "haveLocalOffer" : "stable",
+            iceConnectionState: suspendAnswerApply ? "checking" : "connected",
+            iceGatheringState: "complete",
+            transceiverCount: 2,
+            audioReceiverTrackCount: suspendAnswerApply ? 0 : 1,
+            videoReceiverTrackCount: suspendAnswerApply ? 0 : 1,
+            localDescriptionSet: true,
+            remoteDescriptionSet: !suspendAnswerApply,
+            dataChannels: StreamingDataChannelDebugSnapshot(
+                readyStates: [
+                    "input": suspendAnswerApply ? "connecting" : "open",
+                    "control": suspendAnswerApply ? "connecting" : "open",
+                    "chat": suspendAnswerApply ? "connecting" : "open",
+                    "message": suspendAnswerApply ? "connecting" : "open",
+                ],
+                phases: [
+                    "input": "created",
+                    "control": "created",
+                    "chat": "created",
+                    "message": "created",
+                ],
+                handshakeAcknowledged: false,
+                controlReady: false,
+                inputStarted: false,
+                terminalReason: nil
+            )
+        )
     }
 
     func stopInputAndHaptics() async {
@@ -2967,10 +3242,20 @@ private struct MockXboxDataClient: XboxDataClient {
 
     func loadAchievements(
         webTokenJSON _: String,
-        titleID _: String
+        titleID _: String,
+        locale: String
     ) async throws -> [AchievementSummary] {
-        await recorder?.recordAchievementRequest()
+        await recorder?.recordAchievementRequest(locale: locale)
         return achievements
+    }
+}
+
+@MainActor
+private final class MockPreferredGameLocaleProvider: PreferredGameLocaleProviding {
+    let preferredGameLocale: String
+
+    init(preferredGameLocale: String) {
+        self.preferredGameLocale = preferredGameLocale
     }
 }
 
@@ -2993,6 +3278,7 @@ private enum RecordedPowerCommand: Equatable, Sendable {
 
 private actor XboxDataClientRecorder {
     private var achievementRequests = 0
+    private var recordedAchievementLocales: [String] = []
     private var hostRequests = 0
     private var libraryRequests = 0
     private var recordedPowerCommands: [RecordedPowerCommand] = []
@@ -3005,8 +3291,9 @@ private actor XboxDataClientRecorder {
         recordedPowerCommands.append(command)
     }
 
-    func recordAchievementRequest() {
+    func recordAchievementRequest(locale: String) {
         achievementRequests += 1
+        recordedAchievementLocales.append(locale)
     }
 
     func recordLibraryRequest() {
@@ -3015,6 +3302,10 @@ private actor XboxDataClientRecorder {
 
     func achievementRequestCount() -> Int {
         achievementRequests
+    }
+
+    func achievementLocales() -> [String] {
+        recordedAchievementLocales
     }
 
     func hostRequestCount() -> Int {
