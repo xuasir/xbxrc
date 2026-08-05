@@ -2,6 +2,130 @@ import XCTest
 @testable import XBXRC
 
 final class XBXRCTests: XCTestCase {
+    @MainActor
+    func testAppOrientationGeometryTargetsStreamingAndApplicationModes() {
+        XCTAssertEqual(
+            XBXRCAppDelegate.requestedGeometryMask(for: .phone, mode: .streaming),
+            .landscape
+        )
+        XCTAssertEqual(
+            XBXRCAppDelegate.requestedGeometryMask(for: .phone, mode: .application),
+            .portrait
+        )
+        XCTAssertEqual(
+            XBXRCAppDelegate.requestedGeometryMask(for: .pad, mode: .application),
+            .all
+        )
+    }
+
+    func testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules() {
+        let slot = StreamingLatestIngressSlot<Int>()
+
+        XCTAssertTrue(slot.submit(1))
+        XCTAssertFalse(slot.submit(2))
+        XCTAssertFalse(slot.submit(3))
+        let firstDelivery = slot.take()
+        XCTAssertEqual(firstDelivery?.value, 3)
+        XCTAssertEqual(firstDelivery?.replacedCount, 2)
+
+        XCTAssertFalse(slot.submit(4))
+        XCTAssertTrue(slot.finishDelivery())
+        let secondDelivery = slot.take()
+        XCTAssertEqual(secondDelivery?.value, 4)
+        XCTAssertEqual(secondDelivery?.replacedCount, 0)
+        XCTAssertFalse(slot.finishDelivery())
+
+        XCTAssertTrue(slot.submit(5))
+        slot.reset()
+        XCTAssertNil(slot.take())
+        XCTAssertTrue(slot.submit(6))
+    }
+
+    func testStreamingRenderRetryWaitsForDisplayTickWhenFrameIsRequeued() {
+        XCTAssertFalse(
+            StreamingRenderRetryPolicy.shouldRequestImmediateTick(
+                requeueAsLatest: true,
+                hasPendingFrame: true
+            )
+        )
+        XCTAssertTrue(
+            StreamingRenderRetryPolicy.shouldRequestImmediateTick(
+                requeueAsLatest: false,
+                hasPendingFrame: true
+            )
+        )
+        XCTAssertFalse(
+            StreamingRenderRetryPolicy.shouldRequestImmediateTick(
+                requeueAsLatest: false,
+                hasPendingFrame: false
+            )
+        )
+    }
+
+    func testStreamingMailboxRequeueKeepsNewerCandidate() {
+        XCTAssertTrue(
+            StreamingMailboxRequeuePolicy.shouldRestoreInflight(
+                hasLatestCandidate: false
+            )
+        )
+        XCTAssertFalse(
+            StreamingMailboxRequeuePolicy.shouldRestoreInflight(
+                hasLatestCandidate: true
+            )
+        )
+    }
+
+    func testStreamingPresentationContextChangeDetectionIsValueBased() {
+        let baseline = StreamingPresentationTraceContext(
+            attemptID: "attempt-1",
+            generation: 3,
+            peerEpoch: 7
+        )
+
+        XCTAssertFalse(
+            streamingPresentationContextDidChange(previous: nil, next: nil)
+        )
+        XCTAssertTrue(
+            streamingPresentationContextDidChange(previous: nil, next: baseline)
+        )
+        XCTAssertTrue(
+            streamingPresentationContextDidChange(previous: baseline, next: nil)
+        )
+        XCTAssertFalse(
+            streamingPresentationContextDidChange(previous: baseline, next: baseline)
+        )
+        XCTAssertTrue(
+            streamingPresentationContextDidChange(
+                previous: baseline,
+                next: StreamingPresentationTraceContext(
+                    attemptID: "attempt-2",
+                    generation: baseline.generation,
+                    peerEpoch: baseline.peerEpoch
+                )
+            )
+        )
+        XCTAssertTrue(
+            streamingPresentationContextDidChange(
+                previous: baseline,
+                next: StreamingPresentationTraceContext(
+                    attemptID: baseline.attemptID,
+                    generation: baseline.generation &+ 1,
+                    peerEpoch: baseline.peerEpoch
+                )
+            )
+        )
+        XCTAssertTrue(
+            streamingPresentationContextDidChange(
+                previous: baseline,
+                next: StreamingPresentationTraceContext(
+                    attemptID: baseline.attemptID,
+                    generation: baseline.generation,
+                    peerEpoch: baseline.peerEpoch &+ 1
+                )
+            )
+        )
+    }
+
     func testStreamingMediaSampleTrackerOnlyAdvancesOnPositiveDeltas() {
         var tracker = StreamingMediaSampleTracker()
 
@@ -46,6 +170,43 @@ final class XBXRCTests: XCTestCase {
         XCTAssertFalse(countersReset.mediaAdvanced)
         XCTAssertEqual(countersReset.lastMediaAtMilliseconds, 3_000)
         XCTAssertNil(countersReset.frameSupplyDelta)
+    }
+
+    func testStreamingCodecPreferencePolicyUsesReceiverCapabilitiesForReceiveOnlyMedia() {
+        XCTAssertEqual(
+            StreamingCodecPreferencePolicy.capabilityRole(for: .receiveOnly),
+            .receiver
+        )
+        XCTAssertEqual(
+            StreamingCodecPreferencePolicy.capabilityRole(for: .sendReceive),
+            .sender
+        )
+        XCTAssertLessThan(
+            StreamingCodecPreferencePolicy.videoCodecRank("H264"),
+            StreamingCodecPreferencePolicy.videoCodecRank("VP8")
+        )
+        XCTAssertLessThan(
+            StreamingCodecPreferencePolicy.audioCodecRank("opus"),
+            StreamingCodecPreferencePolicy.audioCodecRank("PCMU")
+        )
+    }
+
+    func testStreamingStatsRequestGateIsSingleFlightAndRejectsStaleCallbacks() {
+        var gate = StreamingStatsRequestGate()
+        let firstGeneration = gate.activate()
+
+        XCTAssertTrue(gate.begin(generation: firstGeneration))
+        XCTAssertFalse(gate.begin(generation: firstGeneration))
+        XCTAssertTrue(gate.complete(generation: firstGeneration))
+        XCTAssertTrue(gate.begin(generation: firstGeneration))
+
+        gate.invalidate()
+        let secondGeneration = gate.activate()
+        XCTAssertTrue(gate.begin(generation: secondGeneration))
+        XCTAssertFalse(gate.complete(generation: firstGeneration))
+        XCTAssertTrue(gate.requestInFlight)
+        XCTAssertTrue(gate.complete(generation: secondGeneration))
+        XCTAssertFalse(gate.requestInFlight)
     }
 
     func testIOSStreamInputPacketMatchesXboxGamepadWireLayout() {
@@ -1879,16 +2040,18 @@ final class XBXRCTests: XCTestCase {
 
         try await waitUntil { store.videoTrack?.traceContext != nil }
         let currentContext = try XCTUnwrap(store.videoTrack?.traceContext)
-        store.videoSurfaceRendererReady(
-            context: StreamingPresentationTraceContext(
-                attemptID: currentContext.attemptID,
-                generation: currentContext.generation,
-                peerEpoch: currentContext.peerEpoch &+ 1
+        store.handlePresentationEvent(
+            .displayPipelineReady(
+                StreamingPresentationTraceContext(
+                    attemptID: currentContext.attemptID,
+                    generation: currentContext.generation,
+                    peerEpoch: currentContext.peerEpoch &+ 1
+                )
             )
         )
         try await Task.sleep(for: .milliseconds(20))
         XCTAssertEqual(store.state, .waitingForFirstFrame)
-        store.videoSurfaceRendererReady(context: currentContext)
+        try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
         try await waitUntilAsync {
             (await recorder.snapshot()).remoteCandidatesApplied.count == 1
@@ -2463,9 +2626,28 @@ final class XBXRCTests: XCTestCase {
     @MainActor
     private func markCurrentVideoSurfaceReady(_ store: StreamingFeatureStore) async throws {
         try await waitUntil { store.videoTrack?.traceContext != nil }
-        store.videoSurfaceRendererReady(
-            context: try XCTUnwrap(store.videoTrack?.traceContext)
+        let context = try XCTUnwrap(store.videoTrack?.traceContext)
+        store.handlePresentationEvent(.displayPipelineReady(context))
+        store.handlePresentationEvent(.firstFrameAccepted(context))
+        store.handlePresentationEvent(.firstFrameSubmitted(context))
+        store.handlePresentationEvent(
+            .displayHealth(
+                context,
+                StreamingDisplayHealthSnapshot(
+                    submitCount: 1,
+                    presentCount: 1,
+                    lastSubmitAtMilliseconds: 1_000,
+                    lastPresentAtMilliseconds: 1_016,
+                    submitToPresentP50Milliseconds: 16,
+                    submitToPresentP95Milliseconds: 16,
+                    displayedFrameDelta: 1,
+                    mailboxOverwriteCount: 0,
+                    dropCountByReason: [:],
+                    currentDrawableBusy: false
+                )
+            )
         )
+        store.handlePresentationEvent(.firstFramePresented(context))
     }
 
     @MainActor

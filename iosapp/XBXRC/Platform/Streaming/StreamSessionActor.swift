@@ -98,7 +98,10 @@ actor StreamSessionActor {
     private var didMarkConnected = false
     private var didReceiveFirstVideoFrame = false
     private var didBecomeControlReady = false
-    private var didBecomeVideoSurfaceRendererReady = false
+    private var didBecomeDisplayPipelineReady = false
+    private var didAcceptFirstFrameToMailbox = false
+    private var didSubmitFirstFrame = false
+    private var didPresentFirstFrame = false
     private var remoteDescriptionApplied = false
     private var localIceFlushInFlight = false
     private var localIceGatheringComplete = false
@@ -116,6 +119,7 @@ actor StreamSessionActor {
     private var nextNegotiationEpoch: UInt64 = 0
     private var pendingConnectedPeerEpoch: UInt64?
     private var pendingDisconnectedPeerEpoch: UInt64?
+    private var latestDisplayHealthSnapshot: StreamingDisplayHealthSnapshot?
 
     init(
         controlFactory: any StreamingControlSessionFactory,
@@ -184,7 +188,10 @@ actor StreamSessionActor {
         didMarkConnected = false
         didReceiveFirstVideoFrame = false
         didBecomeControlReady = false
-        didBecomeVideoSurfaceRendererReady = false
+        didBecomeDisplayPipelineReady = false
+        didAcceptFirstFrameToMailbox = false
+        didSubmitFirstFrame = false
+        didPresentFirstFrame = false
         remoteDescriptionApplied = false
         localIceFlushInFlight = false
         localIceGatheringComplete = false
@@ -200,6 +207,7 @@ actor StreamSessionActor {
         activeLocalIceEpoch = nil
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
+        latestDisplayHealthSnapshot = nil
 
         await publish(.creatingSession, generation: request.sessionGeneration)
         trace("sessionCreateStarted", dimension: .lifecycle)
@@ -284,13 +292,63 @@ actor StreamSessionActor {
         await stopActiveSession(reason: reason, publishIdle: true)
     }
 
-    func videoSurfaceRendererReady(context: StreamingPresentationTraceContext) async {
+    func displayPipelineReady(context: StreamingPresentationTraceContext) async {
         guard isCurrent(context.generation),
               context.attemptID == activeAttemptID,
               context.peerEpoch == activePeerEpoch,
-              !didBecomeVideoSurfaceRendererReady
+              !didBecomeDisplayPipelineReady
         else { return }
-        didBecomeVideoSurfaceRendererReady = true
+        didBecomeDisplayPipelineReady = true
+        if playbackReady {
+            await publish(.playing, generation: context.generation)
+        }
+    }
+
+    func firstFrameAcceptedToMailbox(context: StreamingPresentationTraceContext) async {
+        guard isCurrent(context.generation),
+              context.attemptID == activeAttemptID,
+              context.peerEpoch == activePeerEpoch,
+              !didAcceptFirstFrameToMailbox
+        else { return }
+        didAcceptFirstFrameToMailbox = true
+        if playbackReady {
+            await publish(.playing, generation: context.generation)
+        }
+    }
+
+    func firstFrameSubmitted(context: StreamingPresentationTraceContext) async {
+        guard isCurrent(context.generation),
+              context.attemptID == activeAttemptID,
+              context.peerEpoch == activePeerEpoch,
+              !didSubmitFirstFrame
+        else { return }
+        didSubmitFirstFrame = true
+        if playbackReady {
+            await publish(.playing, generation: context.generation)
+        }
+    }
+
+    func firstFramePresented(context: StreamingPresentationTraceContext) async {
+        guard isCurrent(context.generation),
+              context.attemptID == activeAttemptID,
+              context.peerEpoch == activePeerEpoch,
+              !didPresentFirstFrame
+        else { return }
+        didPresentFirstFrame = true
+        if playbackReady {
+            await publish(.playing, generation: context.generation)
+        }
+    }
+
+    func displayHealthUpdated(
+        context: StreamingPresentationTraceContext,
+        snapshot: StreamingDisplayHealthSnapshot
+    ) async {
+        guard isCurrent(context.generation),
+              context.attemptID == activeAttemptID,
+              context.peerEpoch == activePeerEpoch
+        else { return }
+        latestDisplayHealthSnapshot = snapshot
         if playbackReady {
             await publish(.playing, generation: context.generation)
         }
@@ -406,19 +464,14 @@ actor StreamSessionActor {
                 dimension: .mediaSupply,
                 importance: .key
             )
-            traceSnapshot(
-                "displayHealthSnapshot",
-                payload: [
-                    "submitCount": .string("unsupported"),
-                    "presentCount": .string("unsupported"),
-                    "lastSubmitAtMs": .string("unsupported"),
-                    "lastPresentAtMs": .string("unsupported"),
-                    "submitToPresentP95Ms": .string("unsupported"),
-                    "displayedFrameDelta": .string("unsupported"),
-                ],
-                dimension: .presentation,
-                importance: .key
-            )
+            if let latestDisplayHealthSnapshot {
+                traceSnapshot(
+                    "displayHealthSnapshot",
+                    payload: latestDisplayHealthSnapshot.tracePayload(),
+                    dimension: .presentation,
+                    importance: .key
+                )
+            }
             if !didObserveSteadyMedia,
                stats.framesDecoded > 0, stats.inboundVideoBytes > 0,
                stats.frameSupplyDelta.map({ $0 > 0 }) == true
@@ -449,10 +502,14 @@ actor StreamSessionActor {
         didReceiveFirstVideoFrame = false
         dataChannelProfilesPendingTrace = false
         didBecomeControlReady = false
-        didBecomeVideoSurfaceRendererReady = false
+        didBecomeDisplayPipelineReady = false
+        didAcceptFirstFrameToMailbox = false
+        didSubmitFirstFrame = false
+        didPresentFirstFrame = false
         didObserveSteadyMedia = false
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
+        latestDisplayHealthSnapshot = nil
         let peer = peerFactory.makeRuntime { [weak self] event in
             Task {
                 await self?.handlePeerEvent(
@@ -1103,7 +1160,10 @@ actor StreamSessionActor {
         didMarkConnected = false
         didReceiveFirstVideoFrame = false
         didBecomeControlReady = false
-        didBecomeVideoSurfaceRendererReady = false
+        didBecomeDisplayPipelineReady = false
+        didAcceptFirstFrameToMailbox = false
+        didSubmitFirstFrame = false
+        didPresentFirstFrame = false
         remoteDescriptionApplied = false
         localIceFlushInFlight = false
         localIceGatheringComplete = false
@@ -1118,6 +1178,7 @@ actor StreamSessionActor {
         activeLocalIceEpoch = nil
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
+        latestDisplayHealthSnapshot = nil
         if let peer {
             await peer.stopInputAndHaptics()
         }
@@ -1407,9 +1468,11 @@ actor StreamSessionActor {
 
     private var playbackReady: Bool {
         didMarkConnected
-            && didReceiveFirstVideoFrame
             && didBecomeControlReady
-            && didBecomeVideoSurfaceRendererReady
+            && didBecomeDisplayPipelineReady
+            && didAcceptFirstFrameToMailbox
+            && didSubmitFirstFrame
+            && didPresentFirstFrame
     }
 
     private func isCurrent(_ generation: UInt64) -> Bool {

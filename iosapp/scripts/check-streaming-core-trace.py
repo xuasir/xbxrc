@@ -23,6 +23,8 @@ ANALYZER_PATH = (
     / "analyze_ios_runtime_trace.py"
 )
 TRACE_REORDER_WINDOW_ROWS = 2
+SIMULATOR_I420_RENDERER = "metalSimulatorI420Compatibility"
+SIMULATOR_I420_PATH = "simulatorI420Upload"
 EXPECTED_CHANNEL_PROFILES = {
     "input": {"protocol": "1.0", "ordered": True},
     "control": {"protocol": "controlV1", "ordered": True},
@@ -55,7 +57,15 @@ PEER_CONTEXT_EVENTS = {
     "rtcHealthSnapshot",
     "videoSurfaceAttached",
     "videoSurfaceSized",
+    "displayPipelineReady",
     "videoSurfaceRendererReady",
+    "videoFrameAcceptedToMailbox",
+    "videoFrameDropped",
+    "displaySubmit",
+    "displayPresent",
+    "displayPresentSkipped",
+    "displayFirstPresent",
+    "displayHealthSnapshot",
 }
 CONTEXT_EVENTS = PEER_CONTEXT_EVENTS | {
     "sessionReady",
@@ -260,6 +270,82 @@ def has_positive_renderer_size(row: dict[str, Any]) -> bool:
     return has_positive_dimensions(row, "frameWidth", "frameHeight")
 
 
+def has_positive_present_count(row: dict[str, Any]) -> bool:
+    value = payload_for(row).get("presentCount")
+    return is_trace_integer(value) and value > 0
+
+
+def simulator_i420_evidence_check(
+    surface_attached: list[dict[str, Any]],
+    frame_accepted: list[dict[str, Any]],
+    display_submit: list[dict[str, Any]],
+    display_present: list[dict[str, Any]],
+    display_first_present: list[dict[str, Any]],
+) -> dict[str, Any]:
+    presentation_events = {
+        "videoFrameAcceptedToMailbox": frame_accepted,
+        "displaySubmit": display_submit,
+        "displayPresent": display_present,
+        "displayFirstPresent": display_first_present,
+    }
+    all_rows = [
+        row
+        for observed in [surface_attached, *presentation_events.values()]
+        for row in observed
+    ]
+    marker_rows = [
+        row for row in all_rows if "compatibilityPath" in payload_for(row)
+    ]
+    if not marker_rows:
+        return make_check(
+            [],
+            passed=True,
+            details={"active": False},
+        )
+
+    renderer_evidence = [
+        row
+        for row in surface_attached
+        if payload_for(row).get("renderer") == SIMULATOR_I420_RENDERER
+    ]
+    presentation_evidence = {
+        event: [
+            row
+            for row in observed
+            if payload_for(row).get("compatibilityPath") == SIMULATOR_I420_PATH
+        ]
+        for event, observed in presentation_events.items()
+    }
+    evidence = {
+        "videoSurfaceAttached": renderer_evidence,
+        **presentation_evidence,
+    }
+    missing = sorted(event for event, observed in evidence.items() if not observed)
+    unexpected_paths = sorted(
+        {
+            str(payload_for(row).get("compatibilityPath"))
+            for row in marker_rows
+            if payload_for(row).get("compatibilityPath") != SIMULATOR_I420_PATH
+        }
+    )
+    observed = [row for rows in evidence.values() for row in rows]
+    return make_check(
+        observed,
+        passed=not missing and not unexpected_paths,
+        details={
+            "active": True,
+            "renderer": SIMULATOR_I420_RENDERER,
+            "compatibilityPath": SIMULATOR_I420_PATH,
+            "missingEvidence": missing,
+            "unexpectedPaths": unexpected_paths,
+            "evidence": {
+                event: [row_reference(row) for row in rows]
+                for event, rows in evidence.items()
+            },
+        },
+    )
+
+
 def is_playing_state(row: dict[str, Any]) -> bool:
     return (
         row.get("event") == "streamingStateChanged"
@@ -301,8 +387,22 @@ def peer_epoch_report(
     surface_attached = event_rows(ordered_rows, "videoSurfaceAttached")
     surface_sizes = event_rows(ordered_rows, "videoSurfaceSized")
     positive_surface_sizes = [row for row in surface_sizes if has_positive_surface_size(row)]
+    display_pipeline_ready = event_rows(ordered_rows, "displayPipelineReady")
     renderer_ready = event_rows(ordered_rows, "videoSurfaceRendererReady")
     positive_renderer_ready = [row for row in renderer_ready if has_positive_renderer_size(row)]
+    frame_accepted = event_rows(ordered_rows, "videoFrameAcceptedToMailbox")
+    display_submit = event_rows(ordered_rows, "displaySubmit")
+    display_present = event_rows(ordered_rows, "displayPresent")
+    display_first_present = event_rows(ordered_rows, "displayFirstPresent")
+    display_health = event_rows(ordered_rows, "displayHealthSnapshot")
+    positive_display_health = [row for row in display_health if has_positive_present_count(row)]
+    simulator_i420_evidence = simulator_i420_evidence_check(
+        surface_attached,
+        frame_accepted,
+        display_submit,
+        display_present,
+        display_first_present,
+    )
 
     checks = {
         "answerApplied": make_check(answers),
@@ -394,6 +494,7 @@ def peer_epoch_report(
                 "positiveSizes": [row_reference(row) for row in positive_surface_sizes],
             },
         ),
+        "displayPipelineReady": make_check(display_pipeline_ready),
         "videoSurfaceRendererReady": make_check(
             renderer_ready,
             passed=bool(positive_renderer_ready),
@@ -402,6 +503,37 @@ def peer_epoch_report(
                 "positiveFrames": [row_reference(row) for row in positive_renderer_ready],
             },
         ),
+        "videoFrameAcceptedToMailbox": make_check(
+            frame_accepted,
+            passed=len(frame_accepted) >= 1,
+            details={"count": len(frame_accepted)},
+        ),
+        "displaySubmit": make_check(
+            display_submit,
+            passed=len(display_submit) >= 1,
+            details={"count": len(display_submit)},
+        ),
+        "displayFirstPresent": make_check(
+            display_first_present,
+            passed=len(display_first_present) == 1,
+            details={"count": len(display_first_present)},
+        ),
+        "displayPresent": make_check(
+            display_present,
+            passed=len(display_present) >= 1,
+            details={"count": len(display_present)},
+        ),
+        "displayHealthSnapshot": make_check(
+            display_health,
+            passed=bool(positive_display_health),
+            details={
+                "observedCount": len(display_health),
+                "positivePresentSnapshots": [
+                    row_reference(row) for row in positive_display_health
+                ],
+            },
+        ),
+        "simulatorI420Evidence": simulator_i420_evidence,
     }
 
     ordering_violations: list[dict[str, Any]] = []
@@ -471,11 +603,35 @@ def peer_epoch_report(
             ordering_violations,
             tolerated_reorders,
         )
+    if frame_accepted and display_submit:
+        record_causal_order(
+            frame_accepted[0],
+            display_submit[0],
+            "videoFrameAcceptedToMailbox < displaySubmit",
+            ordering_violations,
+            tolerated_reorders,
+        )
+    if display_submit and display_first_present:
+        record_causal_order(
+            display_submit[0],
+            display_first_present[0],
+            "displaySubmit < displayFirstPresent",
+            ordering_violations,
+            tolerated_reorders,
+        )
     if first_frame and steady_media:
         record_causal_order(
             first_frame[0],
             steady_media[0],
             "firstVideoFrame < steadyMediaObserved",
+            ordering_violations,
+            tolerated_reorders,
+        )
+    if display_first_present and steady_media:
+        record_causal_order(
+            display_first_present[0],
+            steady_media[0],
+            "displayFirstPresent < steadyMediaObserved",
             ordering_violations,
             tolerated_reorders,
         )
@@ -507,8 +663,11 @@ def playing_state_report(
         for peer_epoch, peer_rows in sorted(rows_by_peer.items()):
             prerequisites = {
                 "peerConnected": event_rows(peer_rows, "peerConnected"),
-                "firstVideoFrame": event_rows(peer_rows, "firstVideoFrame"),
                 "controlReady": selected_control_ready_rows(peer_rows)[0],
+                "videoFrameAcceptedToMailbox": event_rows(
+                    peer_rows, "videoFrameAcceptedToMailbox"
+                ),
+                "displayFirstPresent": event_rows(peer_rows, "displayFirstPresent"),
             }
             missing = sorted(name for name, observed in prerequisites.items() if not observed)
             if missing:

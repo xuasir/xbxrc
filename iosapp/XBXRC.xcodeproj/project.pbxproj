@@ -11,6 +11,7 @@
 		A00000000000000000000001 /* XBXRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* XBXRCApp.swift */; };
 		A00000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppRootView.swift */; };
 		A00000000000000000000035 /* AppOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* AppOrientation.swift */; };
+		A00000000000000000000036 /* StreamingMetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000036 /* StreamingMetalRenderer.swift */; };
 		A0000000000000000000002D /* LaunchExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000034 /* LaunchExperienceView.swift */; };
 		A00000000000000000000003 /* GameLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* GameLibraryView.swift */; };
 		A00000000000000000000004 /* AchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* AchievementsView.swift */; };
@@ -69,6 +70,7 @@
 		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		B00000000000000000000035 /* AppOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
+		B00000000000000000000036 /* StreamingMetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMetalRenderer.swift; sourceTree = "<group>"; };
 		B00000000000000000000034 /* LaunchExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperienceView.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* GameLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLibraryView.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* AchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsView.swift; sourceTree = "<group>"; };
@@ -286,6 +288,7 @@
 				B0000000000000000000002E /* StreamSessionActor.swift */,
 				B0000000000000000000002F /* LibWebRtcRuntime.swift */,
 				B00000000000000000000030 /* StreamingPlayerView.swift */,
+				B00000000000000000000036 /* StreamingMetalRenderer.swift */,
 				B00000000000000000000031 /* XboxStreamDataChannels.swift */,
 				B00000000000000000000033 /* IOSStreamInputProtocol.swift */,
 			);
@@ -542,6 +545,7 @@
 				A00000000000000000000027 /* StreamSessionActor.swift in Sources */,
 				A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */,
 				A00000000000000000000029 /* StreamingPlayerView.swift in Sources */,
+				A00000000000000000000036 /* StreamingMetalRenderer.swift in Sources */,
 				A0000000000000000000002A /* XboxStreamDataChannels.swift in Sources */,
 				A0000000000000000000002C /* IOSStreamInputProtocol.swift in Sources */,
 				A00000000000000000000007 /* GameSummary.swift in Sources */,

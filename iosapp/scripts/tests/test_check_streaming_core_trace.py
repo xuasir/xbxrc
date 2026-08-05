@@ -59,6 +59,7 @@ def healthy_rows(
     *,
     peer_epoch: int = 7,
     remote_candidate_from_snapshot: bool = False,
+    simulator_i420: bool = False,
 ) -> list[dict]:
     rows = [
         envelope(1, "streamLaunchStarted", payload={"target": "cloud"}),
@@ -112,32 +113,69 @@ def healthy_rows(
         [
             envelope(14, "controlReady", peer_epoch=peer_epoch),
             envelope(15, "firstVideoFrame", peer_epoch=peer_epoch),
+            envelope(16, "videoSurfaceAttached", peer_epoch=peer_epoch),
             envelope(
-                16,
-                "streamingStateChanged",
-                payload={"state": "playing"},
-            ),
-            envelope(17, "steadyMediaObserved", peer_epoch=peer_epoch),
-            envelope(18, "videoSurfaceAttached", peer_epoch=peer_epoch),
-            envelope(
-                19,
+                17,
                 "videoSurfaceSized",
                 peer_epoch=peer_epoch,
                 payload={"width": 1_920.0, "height": 1_080.0},
             ),
+            envelope(18, "displayPipelineReady", peer_epoch=peer_epoch),
             envelope(
-                20,
+                19,
                 "videoSurfaceRendererReady",
                 peer_epoch=peer_epoch,
                 payload={"frameWidth": 1_920.0, "frameHeight": 1_080.0},
             ),
-            envelope(21, "terminalSelected"),
-            envelope(22, "iceTasksCancelled"),
-            envelope(23, "peerClosed"),
-            envelope(24, "remoteSessionClosed"),
-            envelope(25, "accessReleased"),
+            envelope(20, "videoFrameAcceptedToMailbox", peer_epoch=peer_epoch),
+            envelope(
+                21,
+                "displaySubmit",
+                peer_epoch=peer_epoch,
+                payload={"submitCount": 1},
+            ),
+            envelope(
+                22,
+                "displayFirstPresent",
+                peer_epoch=peer_epoch,
+                payload={"presentCount": 1},
+            ),
+            envelope(
+                23,
+                "displayPresent",
+                peer_epoch=peer_epoch,
+                payload={"presentCount": 1},
+            ),
+            envelope(
+                24,
+                "streamingStateChanged",
+                payload={"state": "playing"},
+            ),
+            envelope(
+                25,
+                "displayHealthSnapshot",
+                peer_epoch=peer_epoch,
+                payload={"submitCount": 1, "presentCount": 1},
+            ),
+            envelope(26, "steadyMediaObserved", peer_epoch=peer_epoch),
+            envelope(27, "terminalSelected"),
+            envelope(28, "iceTasksCancelled"),
+            envelope(29, "peerClosed"),
+            envelope(30, "remoteSessionClosed"),
+            envelope(31, "accessReleased"),
         ]
     )
+    if simulator_i420:
+        for row in rows:
+            if row["event"] == "videoSurfaceAttached":
+                row["payload"]["renderer"] = "metalSimulatorI420Compatibility"
+            if row["event"] in {
+                "videoFrameAcceptedToMailbox",
+                "displaySubmit",
+                "displayPresent",
+                "displayFirstPresent",
+            }:
+                row["payload"]["compatibilityPath"] = "simulatorI420Upload"
     for seq, row in enumerate(rows, start=1):
         row["seq"] = seq
         row["tsMs"] = 1_000 + seq
@@ -194,6 +232,43 @@ class CheckStreamingCoreTraceTests(unittest.TestCase):
             ]["remoteIceApplied"]
             self.assertEqual(remote["details"]["sources"], ["selectedRemoteCandidate"])
 
+    def test_simulator_i420_compatibility_evidence_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
+            write_trace(path, healthy_rows(simulator_i420=True))
+
+            result = self.run_gate(path, "--strict")
+            report = json.loads(result.stdout)
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            check = report["streamingCore"]["attempts"][0]["peerEpochs"][0][
+                "checks"
+            ]["simulatorI420Evidence"]
+            self.assertTrue(check["passed"])
+            self.assertTrue(check["details"]["active"])
+            self.assertEqual(check["details"]["missingEvidence"], [])
+
+    def test_simulator_i420_compatibility_evidence_must_cover_present(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
+            rows = healthy_rows(simulator_i420=True)
+            present = next(row for row in rows if row["event"] == "displayPresent")
+            present["payload"].pop("compatibilityPath")
+            write_trace(path, rows)
+
+            result = self.run_gate(path, "--strict")
+            report = json.loads(result.stdout)
+
+            self.assertEqual(result.returncode, 2)
+            peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
+            self.assertIn("simulatorI420Evidence", peer["failedChecks"])
+            self.assertEqual(
+                peer["checks"]["simulatorI420Evidence"]["details"][
+                    "missingEvidence"
+                ],
+                ["displayPresent"],
+            )
+
     def test_full_core_chain_must_share_one_peer_epoch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
@@ -204,7 +279,13 @@ class CheckStreamingCoreTraceTests(unittest.TestCase):
                     "steadyMediaObserved",
                     "videoSurfaceAttached",
                     "videoSurfaceSized",
+                    "displayPipelineReady",
                     "videoSurfaceRendererReady",
+                    "videoFrameAcceptedToMailbox",
+                    "displaySubmit",
+                    "displayPresent",
+                    "displayFirstPresent",
+                    "displayHealthSnapshot",
                 }:
                     row["payload"]["peerEpoch"] = 8
             write_trace(path, rows)
@@ -220,12 +301,69 @@ class CheckStreamingCoreTraceTests(unittest.TestCase):
                 {violation["type"] for violation in attempt["violations"]},
             )
 
+    def test_first_video_frame_without_display_progress_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
+            missing_display_events = {
+                "videoFrameAcceptedToMailbox",
+                "displaySubmit",
+                "displayFirstPresent",
+                "displayPresent",
+                "displayHealthSnapshot",
+                "steadyMediaObserved",
+            }
+            rows = [
+                row
+                for row in healthy_rows()
+                if row["event"] not in missing_display_events
+                and not (
+                    row["event"] == "streamingStateChanged"
+                    and row["payload"].get("state") == "playing"
+                )
+            ]
+            write_trace(path, rows)
+
+            result = self.run_gate(path, "--strict")
+            report = json.loads(result.stdout)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(report["gate"], "FAIL")
+            attempt = report["streamingCore"]["attempts"][0]
+            peer = attempt["peerEpochs"][0]
+            self.assertTrue(peer["checks"]["firstVideoFrame"]["passed"])
+            self.assertEqual(
+                set(peer["failedChecks"]),
+                {
+                    "displayFirstPresent",
+                    "displayHealthSnapshot",
+                    "displayPresent",
+                    "displaySubmit",
+                    "steadyMediaObserved",
+                    "videoFrameAcceptedToMailbox",
+                },
+            )
+            self.assertEqual(attempt["completePeerEpochs"], [])
+            self.assertIn(
+                "no-complete-peer-epoch",
+                {violation["type"] for violation in attempt["violations"]},
+            )
+
     def test_missing_presentation_context_is_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
             rows = healthy_rows()
             for row in rows:
-                if row["event"].startswith("videoSurface"):
+                if row["event"] in {
+                    "videoSurfaceAttached",
+                    "videoSurfaceSized",
+                    "displayPipelineReady",
+                    "videoSurfaceRendererReady",
+                    "videoFrameAcceptedToMailbox",
+                    "displaySubmit",
+                    "displayPresent",
+                    "displayFirstPresent",
+                    "displayHealthSnapshot",
+                }:
                     row["payload"].pop("attemptId")
                     row["payload"].pop("generation")
                     row["payload"].pop("peerEpoch")
@@ -236,13 +374,19 @@ class CheckStreamingCoreTraceTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 2)
             violations = report["streamingCore"]["contextViolations"]
-            self.assertEqual(len(violations), 3)
+            self.assertEqual(len(violations), 9)
             self.assertEqual(
                 {violation["event"] for violation in violations},
                 {
                     "videoSurfaceAttached",
                     "videoSurfaceSized",
+                    "displayPipelineReady",
                     "videoSurfaceRendererReady",
+                    "videoFrameAcceptedToMailbox",
+                    "displaySubmit",
+                    "displayPresent",
+                    "displayFirstPresent",
+                    "displayHealthSnapshot",
                 },
             )
 
@@ -252,10 +396,10 @@ class CheckStreamingCoreTraceTests(unittest.TestCase):
             rows = healthy_rows()
             playing = next(row for row in rows if row["event"] == "streamingStateChanged")
             rows.remove(playing)
-            control_ready_index = next(
-                index for index, row in enumerate(rows) if row["event"] == "controlReady"
+            display_submit_index = next(
+                index for index, row in enumerate(rows) if row["event"] == "displaySubmit"
             )
-            rows.insert(control_ready_index, playing)
+            rows.insert(display_submit_index, playing)
             for seq, row in enumerate(rows, start=1):
                 row["seq"] = seq
                 row["tsMs"] = 1_000 + seq

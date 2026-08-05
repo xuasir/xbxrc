@@ -27,6 +27,18 @@ final class XBXRCAppDelegate: NSObject, UIApplicationDelegate {
             .landscape
         }
     }
+
+    static func requestedGeometryMask(
+        for idiom: UIUserInterfaceIdiom,
+        mode: AppOrientationMode
+    ) -> UIInterfaceOrientationMask {
+        switch mode {
+        case .application:
+            idiom == .pad ? .all : .portrait
+        case .streaming:
+            .landscape
+        }
+    }
 }
 
 @MainActor
@@ -54,11 +66,14 @@ final class AppOrientationCoordinator {
         let scenes = connectedWindowScenes()
         guard !scenes.isEmpty else { return }
         for scene in scenes {
-            let mask = XBXRCAppDelegate.supportedMask(for: scene.traitCollection.userInterfaceIdiom)
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in
-            }
             for window in scene.windows {
                 window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+            let mask = XBXRCAppDelegate.requestedGeometryMask(
+                for: scene.traitCollection.userInterfaceIdiom,
+                mode: mode
+            )
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in
             }
         }
     }

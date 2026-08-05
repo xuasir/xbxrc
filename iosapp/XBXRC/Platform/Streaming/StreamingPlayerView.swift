@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-#if canImport(WebRTC)
+#if canImport(WebRTC) && canImport(MetalKit)
 @preconcurrency import WebRTC
 #endif
 
@@ -13,7 +13,7 @@ struct StreamingPlayerView: View {
             Color.black.ignoresSafeArea()
             StreamingVideoSurface(
                 track: store.videoTrack,
-                rendererReadySink: store.videoSurfaceRendererReady
+                presentationEventSink: store.handlePresentationEvent
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
@@ -53,36 +53,26 @@ struct StreamingPlayerView: View {
     }
 }
 
-#if canImport(WebRTC)
-private func presentationTracePayload(
-    _ payload: [String: IOSRuntimeTraceValue],
-    context: StreamingPresentationTraceContext?
-) -> [String: IOSRuntimeTraceValue] {
-    guard let context else { return payload }
-    var contextualPayload = payload
-    contextualPayload["attemptId"] = .string(context.attemptID)
-    contextualPayload["generation"] = .integer(Int64(clamping: context.generation))
-    contextualPayload["peerEpoch"] = .integer(Int64(clamping: context.peerEpoch))
-    return contextualPayload
-}
+#if canImport(WebRTC) && canImport(MetalKit)
+private typealias StreamingVideoSurfaceView = StreamingMetalVideoSurfaceView
 
 private struct StreamingVideoSurface: UIViewRepresentable {
     let track: StreamingVideoTrackHandle?
-    let rendererReadySink: @MainActor (StreamingPresentationTraceContext) -> Void
+    let presentationEventSink: @MainActor (StreamingPresentationLifecycleEvent) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> StreamingVideoSurfaceView {
         let view = StreamingVideoSurfaceView()
         context.coordinator.view = view
-        view.rendererReadySink = rendererReadySink
+        view.presentationEventSink = presentationEventSink
         context.coordinator.update(track: track)
         return view
     }
 
     func updateUIView(_ uiView: StreamingVideoSurfaceView, context: Context) {
         context.coordinator.view = uiView
-        uiView.rendererReadySink = rendererReadySink
+        uiView.presentationEventSink = presentationEventSink
         context.coordinator.update(track: track)
     }
 
@@ -109,7 +99,7 @@ private struct StreamingVideoSurface: UIViewRepresentable {
                 IOSRuntimeTrace.state(
                     domain: "ios-streaming",
                     event: "videoSurfaceAttached",
-                    payload: presentationTracePayload(
+                    payload: streamingPresentationTracePayload(
                         ["renderer": .string(view.rendererName)],
                         context: traceContext
                     ),
@@ -121,7 +111,7 @@ private struct StreamingVideoSurface: UIViewRepresentable {
                 IOSRuntimeTrace.state(
                     domain: "ios-streaming",
                     event: "videoSurfaceTrackRejected",
-                    payload: presentationTracePayload(
+                    payload: streamingPresentationTracePayload(
                         ["reason": .string("trackTypeMismatch")],
                         context: traceContext
                     ),
@@ -136,102 +126,15 @@ private struct StreamingVideoSurface: UIViewRepresentable {
             if let currentTrack, let view { currentTrack.remove(view.renderer) }
             currentTrack = nil
             view?.updateTraceContext(nil)
+            view?.shutdown()
             view = nil
         }
-    }
-}
-
-private final class StreamingVideoSurfaceView: UIView, @preconcurrency RTCVideoViewDelegate {
-    let renderer: RTCVideoRenderer
-    let rendererName: String
-    var rendererReadySink: (@MainActor (StreamingPresentationTraceContext) -> Void)?
-    private var lastReportedSize: CGSize = .zero
-    private var traceContext: StreamingPresentationTraceContext?
-
-    override init(frame: CGRect) {
-        let videoView = RTCMTLVideoView(frame: .zero)
-        videoView.videoContentMode = .scaleAspectFit
-        videoView.isEnabled = true
-        rendererName = "metal"
-        renderer = videoView
-        super.init(frame: frame)
-
-        backgroundColor = .black
-        isOpaque = true
-        videoView.backgroundColor = .black
-        videoView.contentMode = .scaleAspectFit
-        videoView.translatesAutoresizingMaskIntoConstraints = false
-        videoView.delegate = self
-        addSubview(videoView)
-        NSLayoutConstraint.activate([
-            videoView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            videoView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            videoView.topAnchor.constraint(equalTo: topAnchor),
-            videoView.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        reportSurfaceSizeIfNeeded()
-    }
-
-    func updateTraceContext(_ context: StreamingPresentationTraceContext?) {
-        guard context != traceContext else { return }
-        traceContext = context
-        lastReportedSize = .zero
-        reportSurfaceSizeIfNeeded()
-    }
-
-    private func reportSurfaceSizeIfNeeded() {
-        guard traceContext != nil, bounds.width > 0, bounds.height > 0,
-              bounds.size != lastReportedSize
-        else { return }
-        lastReportedSize = bounds.size
-        IOSRuntimeTrace.state(
-            domain: "ios-streaming",
-            event: "videoSurfaceSized",
-            payload: presentationTracePayload(
-                [
-                    "width": .double(bounds.width),
-                    "height": .double(bounds.height),
-                    "renderer": .string(rendererName),
-                ],
-                context: traceContext
-            ),
-            dimension: .presentation,
-            importance: .key,
-            operationID: traceContext?.attemptID
-        )
-    }
-
-    func videoView(_: RTCVideoRenderer, didChangeVideoSize size: CGSize) {
-        guard let traceContext, size.width > 0, size.height > 0 else { return }
-        IOSRuntimeTrace.state(
-            domain: "ios-streaming",
-            event: "videoSurfaceRendererReady",
-            payload: presentationTracePayload(
-                [
-                    "frameWidth": .double(size.width),
-                    "frameHeight": .double(size.height),
-                    "renderer": .string(rendererName),
-                ],
-                context: traceContext
-            ),
-            dimension: .presentation,
-            importance: .key,
-            operationID: traceContext.attemptID
-        )
-        rendererReadySink?(traceContext)
     }
 }
 #else
 private struct StreamingVideoSurface: View {
     let track: StreamingVideoTrackHandle?
-    let rendererReadySink: @MainActor (StreamingPresentationTraceContext) -> Void
+    let presentationEventSink: @MainActor (StreamingPresentationLifecycleEvent) -> Void
     var body: some View { Color.black }
 }
 #endif

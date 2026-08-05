@@ -282,13 +282,25 @@ final class StreamingFeatureStore: ObservableObject {
         stop(reason: .backgroundStop)
     }
 
-    func videoSurfaceRendererReady(context: StreamingPresentationTraceContext) {
+    func handlePresentationEvent(_ event: StreamingPresentationLifecycleEvent) {
+        let context = event.context
         guard context.generation == generation,
               context.attemptID == attemptID,
               videoTrack?.traceContext == context
         else { return }
         Task { [sessionActor] in
-            await sessionActor.videoSurfaceRendererReady(context: context)
+            switch event {
+            case let .displayPipelineReady(context):
+                await sessionActor.displayPipelineReady(context: context)
+            case let .firstFrameAccepted(context):
+                await sessionActor.firstFrameAcceptedToMailbox(context: context)
+            case let .firstFrameSubmitted(context):
+                await sessionActor.firstFrameSubmitted(context: context)
+            case let .firstFramePresented(context):
+                await sessionActor.firstFramePresented(context: context)
+            case let .displayHealth(context, snapshot):
+                await sessionActor.displayHealthUpdated(context: context, snapshot: snapshot)
+            }
         }
     }
 
