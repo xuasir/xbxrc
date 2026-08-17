@@ -31,6 +31,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.games</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>启用串流麦克风和语音通信时使用麦克风。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>连接同一局域网中的 Xbox 主机以进行主机串流。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

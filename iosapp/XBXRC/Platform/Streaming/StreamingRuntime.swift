@@ -7,6 +7,10 @@ final class StreamingFeatureStore: ObservableObject {
     @Published private(set) var videoTrack: StreamingVideoTrackHandle?
     @Published private(set) var streamTitleID: String?
     @Published private(set) var streamTarget: StreamingLaunchTarget?
+    @Published private(set) var diagnostics: StreamingSessionDiagnostics = .empty
+    @Published private(set) var audioMuted = false
+    @Published private(set) var videoContentMode: StreamingVideoContentMode = .fit
+    @Published private(set) var controlMessage: String?
 
     private let sessionActor: StreamSessionActor
     private let settingsProvider: any StreamingSessionSettingsProviding
@@ -95,6 +99,10 @@ final class StreamingFeatureStore: ObservableObject {
         streamTitleID = targetID
         streamTarget = target
         videoTrack = nil
+        diagnostics = .empty
+        audioMuted = false
+        videoContentMode = .fit
+        controlMessage = nil
         state = .preparingAccess
         traceState(state, generation: requestGeneration)
         traceAttempt(
@@ -185,6 +193,10 @@ final class StreamingFeatureStore: ObservableObject {
                     videoSink: { [weak self] generation, track in
                         guard let self, generation == self.generation else { return }
                         self.videoTrack = track
+                    },
+                    diagnosticsSink: { [weak self] generation, diagnostics in
+                        guard let self, generation == self.generation else { return }
+                        self.diagnostics = diagnostics
                     }
                 )
             } catch is CancellationError {
@@ -219,6 +231,8 @@ final class StreamingFeatureStore: ObservableObject {
                 return
             } catch {
                 let wasSuperseded = Task.isCancelled || requestGeneration != self.generation
+                let permissionDenied = (error as? StreamingRuntimeError)
+                    == .microphonePermissionDenied
                 if !sessionActorOwnsTerminal {
                     let reason: StreamingTerminalReason = wasSuperseded
                         ? .superseded
@@ -229,7 +243,7 @@ final class StreamingFeatureStore: ObservableObject {
                         generation: requestGeneration,
                         payload: [
                             "reason": .string(reason.code),
-                            "retryable": .bool(reason.retryable),
+                            "retryable": .bool(permissionDenied ? false : reason.retryable),
                         ],
                         dimension: .lifecycle,
                         importance: .essential
@@ -238,7 +252,7 @@ final class StreamingFeatureStore: ObservableObject {
                 guard !wasSuperseded else { return }
                 self.state = .failed(
                     message: CloudLibraryDiagnostics.safeError(error),
-                    retryable: true
+                    retryable: !permissionDenied
                 )
                 self.traceState(self.state, generation: requestGeneration)
             }
@@ -253,9 +267,102 @@ final class StreamingFeatureStore: ObservableObject {
         stop(reason: .authRevoked)
     }
 
+    var controlCapabilities: StreamingControlCapabilities {
+        StreamingControlCapabilities(
+            canMuteAudio: state == .playing && diagnostics.audioTrackReady,
+            canSendText: state == .playing && streamTarget == .home,
+            canPowerOff: state == .playing && streamTarget == .home
+        )
+    }
+
+    var connectionSummary: StreamingConnectionSummary {
+        diagnostics.connectionSummary(featureState: state)
+    }
+
+    func setAudioMuted(_ muted: Bool) {
+        guard controlCapabilities.canMuteAudio else { return }
+        let requestGeneration = generation
+        traceControl("audioMute", phase: "invoked")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.sessionActor.setAudioMuted(muted, generation: requestGeneration)
+                guard requestGeneration == self.generation else { return }
+                self.audioMuted = muted
+                self.controlMessage = muted ? "声音已静音" : "声音已恢复"
+                self.traceControl("audioMute", phase: "completed", succeeded: true)
+            } catch {
+                guard requestGeneration == self.generation else { return }
+                self.controlMessage = "声音设置失败"
+                self.traceControl("audioMute", phase: "completed", succeeded: false)
+            }
+        }
+    }
+
+    func sendText(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard controlCapabilities.canSendText, !normalized.isEmpty else { return }
+        let requestGeneration = generation
+        traceControl("sendText", phase: "invoked")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let accepted = try await self.sessionActor.sendText(
+                    normalized,
+                    generation: requestGeneration
+                )
+                guard requestGeneration == self.generation else { return }
+                self.controlMessage = accepted ? "文字已发送" : "文字发送失败"
+                self.traceControl("sendText", phase: "completed", succeeded: accepted)
+            } catch {
+                guard requestGeneration == self.generation else { return }
+                self.controlMessage = "文字发送失败"
+                self.traceControl("sendText", phase: "completed", succeeded: false)
+            }
+        }
+    }
+
+    func powerOffAndStop() {
+        guard controlCapabilities.canPowerOff else { return }
+        let requestGeneration = generation
+        traceControl("powerOff", phase: "invoked")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let accepted = try await self.sessionActor.powerOffConsole(
+                    generation: requestGeneration
+                )
+                guard requestGeneration == self.generation else { return }
+                self.traceControl("powerOff", phase: "completed", succeeded: accepted)
+                if accepted { self.stop() } else { self.controlMessage = "关机请求失败" }
+            } catch {
+                guard requestGeneration == self.generation else { return }
+                self.controlMessage = "关机请求失败"
+                self.traceControl("powerOff", phase: "completed", succeeded: false)
+            }
+        }
+    }
+
+    func toggleVideoContentMode() {
+        setVideoContentMode(videoContentMode == .fit ? .fill : .fit)
+    }
+
+    func setVideoContentMode(_ mode: StreamingVideoContentMode) {
+        guard videoContentMode != mode else { return }
+        traceControl("videoContentMode", phase: "invoked")
+        videoContentMode = mode
+        controlMessage = "画面：\(videoContentMode.title)"
+        traceControl("videoContentMode", phase: "completed", succeeded: true)
+    }
+
+    func clearControlMessage(ifMatching message: String) {
+        if controlMessage == message { controlMessage = nil }
+    }
+
     private func stop(reason: StreamingTerminalReason) {
         guard state != .idle else { return }
         let sessionGeneration = generation
+        videoTrack = nil
         generation &+= 1
         let stoppedGeneration = generation
         launchTask?.cancel()
@@ -267,6 +374,9 @@ final class StreamingFeatureStore: ObservableObject {
             await self.sessionActor.stop(generation: sessionGeneration, reason: reason)
             guard stoppedGeneration == self.generation else { return }
             self.videoTrack = nil
+            self.diagnostics = .empty
+            self.audioMuted = false
+            self.controlMessage = nil
             self.streamTitleID = nil
             self.streamTarget = nil
             self.state = .idle
@@ -324,6 +434,24 @@ final class StreamingFeatureStore: ObservableObject {
             ],
             dimension: .lifecycle,
             importance: .key
+        )
+    }
+
+    private func traceControl(_ action: String, phase: String, succeeded: Bool? = nil) {
+        var payload: [String: IOSRuntimeTraceValue] = [
+            "action": .string(action),
+            "phase": .string(phase),
+            "generation": .integer(Int64(clamping: generation)),
+            "target": .string(streamTarget?.rawValue ?? "none"),
+        ]
+        if let succeeded { payload["succeeded"] = .bool(succeeded) }
+        IOSRuntimeTrace.event(
+            domain: "ios-streaming",
+            event: phase == "invoked" ? "streamControlInvoked" : "streamControlCompleted",
+            payload: payload,
+            dimension: .input,
+            importance: .debug,
+            operationID: attemptID
         )
     }
 
@@ -595,6 +723,14 @@ private actor RustStreamingControlSession: StreamingControlSession {
 
     func markConnected() async throws {
         try await session.markConnected(generation: requireGeneration())
+    }
+
+    func sendText(_ text: String) async throws -> Bool {
+        try await session.sendText(generation: requireGeneration(), text: text)
+    }
+
+    func powerOffConsole() async throws -> Bool {
+        try await session.powerOffConsole(generation: requireGeneration())
     }
 
     func close() async {

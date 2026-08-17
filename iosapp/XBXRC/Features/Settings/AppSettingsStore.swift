@@ -288,7 +288,8 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
 
     @Published var appearanceMode: AppAppearanceMode {
         didSet {
-            defaults.set(appearanceMode.rawValue, forKey: Self.appearanceModeKey)
+            guard appearanceMode != oldValue else { return }
+            persistSettings()
             IOSRuntimeTrace.state(
                 domain: "settings",
                 event: "appearanceModeChanged",
@@ -305,7 +306,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var usesEphemeralLoginSession: Bool {
         didSet {
             guard usesEphemeralLoginSession != oldValue else { return }
-            defaults.set(usesEphemeralLoginSession, forKey: Self.ephemeralLoginKey)
+            persistSettings()
             IOSRuntimeTrace.state(
                 domain: "settings",
                 event: "ephemeralLoginSessionChanged",
@@ -319,7 +320,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var preferredGameLocale: String {
         didSet {
             guard preferredGameLocale != oldValue else { return }
-            defaults.set(preferredGameLocale, forKey: Self.preferredGameLocaleKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "preferred_game_language",
                 value: .string(preferredGameLocale.isEmpty ? "default" : preferredGameLocale)
@@ -330,7 +331,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var cloudResolution: StreamingResolutionOption {
         didSet {
             guard cloudResolution != oldValue else { return }
-            defaults.set(cloudResolution.rawValue, forKey: Self.cloudResolutionKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "resolution",
                 value: .integer(Int64(cloudResolution.rawValue))
@@ -341,7 +342,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var homeResolution: StreamingResolutionOption {
         didSet {
             guard homeResolution != oldValue else { return }
-            defaults.set(homeResolution.rawValue, forKey: Self.homeResolutionKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "xhome_resolution",
                 value: .integer(Int64(homeResolution.rawValue))
@@ -352,7 +353,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var preferIPv6: Bool {
         didSet {
             guard preferIPv6 != oldValue else { return }
-            defaults.set(preferIPv6, forKey: Self.preferIPv6Key)
+            persistSettings()
             traceStreamingSettingChange(key: "ipv6", value: .bool(preferIPv6))
         }
     }
@@ -360,7 +361,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var codecPreference: StreamingCodecOption {
         didSet {
             guard codecPreference != oldValue else { return }
-            defaults.set(codecPreference.rawValue, forKey: Self.codecPreferenceKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "codec",
                 value: .string(codecPreference.rawValue.isEmpty ? "auto" : codecPreference.rawValue)
@@ -371,7 +372,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var homeBitrateMode: StreamingBitrateMode {
         didSet {
             guard homeBitrateMode != oldValue else { return }
-            defaults.set(homeBitrateMode.rawValue, forKey: Self.homeBitrateModeKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "xhome_bitrate_mode",
                 value: .string(homeBitrateMode.rawValue)
@@ -382,7 +383,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var homeBitrateMbps: Int {
         didSet {
             guard homeBitrateMbps != oldValue else { return }
-            defaults.set(homeBitrateMbps, forKey: Self.homeBitrateMbpsKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "xhome_bitrate",
                 value: .integer(Int64(homeBitrateMbps))
@@ -393,7 +394,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var cloudBitrateMode: StreamingBitrateMode {
         didSet {
             guard cloudBitrateMode != oldValue else { return }
-            defaults.set(cloudBitrateMode.rawValue, forKey: Self.cloudBitrateModeKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "xcloud_bitrate_mode",
                 value: .string(cloudBitrateMode.rawValue)
@@ -404,7 +405,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var cloudBitrateMbps: Int {
         didSet {
             guard cloudBitrateMbps != oldValue else { return }
-            defaults.set(cloudBitrateMbps, forKey: Self.cloudBitrateMbpsKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "xcloud_bitrate",
                 value: .integer(Int64(cloudBitrateMbps))
@@ -415,7 +416,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var audioBitrateMode: StreamingBitrateMode {
         didSet {
             guard audioBitrateMode != oldValue else { return }
-            defaults.set(audioBitrateMode.rawValue, forKey: Self.audioBitrateModeKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "audio_bitrate_mode",
                 value: .string(audioBitrateMode.rawValue)
@@ -426,7 +427,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var audioBitrateKbps: Int {
         didSet {
             guard audioBitrateKbps != oldValue else { return }
-            defaults.set(audioBitrateKbps, forKey: Self.audioBitrateKbpsKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "audio_bitrate",
                 value: .integer(Int64(audioBitrateKbps))
@@ -437,7 +438,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     @Published var homeTurnFallbackEnabled: Bool {
         didSet {
             guard homeTurnFallbackEnabled != oldValue else { return }
-            defaults.set(homeTurnFallbackEnabled, forKey: Self.homeTurnFallbackKey)
+            persistSettings()
             traceStreamingSettingChange(
                 key: "xhome_turn_fallback",
                 value: .bool(homeTurnFallbackEnabled)
@@ -445,65 +446,29 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
         }
     }
 
-    private let defaults: UserDefaults
+    private let persistence: AppSettingsPersistence
 
     init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        appearanceMode = defaults.string(forKey: Self.appearanceModeKey)
-            .flatMap(AppAppearanceMode.init(rawValue:)) ?? .system
-        appIconPreset = defaults.string(forKey: Self.appIconPresetKey)
-            .flatMap(AppIconPreset.init(rawValue:)) ?? .default
-        cloudRegionPreset = defaults.string(forKey: Self.cloudRegionKey)
-            .flatMap(CloudRegionPreset.init(rawValue:)) ?? .default
-        usesEphemeralLoginSession = defaults.bool(forKey: Self.ephemeralLoginKey)
-        preferredGameLocale = defaults.string(forKey: Self.preferredGameLocaleKey) ?? "en-US"
-        cloudResolution = StreamingResolutionOption(
-            rawValue: Self.integerValue(
-                defaults: defaults,
-                key: Self.cloudResolutionKey,
-                fallback: StreamingResolutionOption.p720.rawValue
-            )
-        ) ?? .p720
-        homeResolution = StreamingResolutionOption(
-            rawValue: Self.integerValue(
-                defaults: defaults,
-                key: Self.homeResolutionKey,
-                fallback: StreamingResolutionOption.p1080.rawValue
-            )
-        ) ?? .p1080
-        preferIPv6 = Self.boolValue(
-            defaults: defaults,
-            key: Self.preferIPv6Key,
-            fallback: false
-        )
-        codecPreference = defaults.string(forKey: Self.codecPreferenceKey)
-            .flatMap(StreamingCodecOption.init(rawValue:)) ?? .auto
-        homeBitrateMode = defaults.string(forKey: Self.homeBitrateModeKey)
-            .flatMap(StreamingBitrateMode.init(rawValue:)) ?? .auto
-        homeBitrateMbps = Self.integerValue(
-            defaults: defaults,
-            key: Self.homeBitrateMbpsKey,
-            fallback: 20
-        )
-        cloudBitrateMode = defaults.string(forKey: Self.cloudBitrateModeKey)
-            .flatMap(StreamingBitrateMode.init(rawValue:)) ?? .auto
-        cloudBitrateMbps = Self.integerValue(
-            defaults: defaults,
-            key: Self.cloudBitrateMbpsKey,
-            fallback: 20
-        )
-        audioBitrateMode = defaults.string(forKey: Self.audioBitrateModeKey)
-            .flatMap(StreamingBitrateMode.init(rawValue:)) ?? .auto
-        audioBitrateKbps = Self.integerValue(
-            defaults: defaults,
-            key: Self.audioBitrateKbpsKey,
-            fallback: 20
-        )
-        homeTurnFallbackEnabled = Self.boolValue(
-            defaults: defaults,
-            key: Self.homeTurnFallbackKey,
-            fallback: true
-        )
+        let persistence = AppSettingsPersistence(defaults: defaults)
+        let snapshot = persistence.load()
+        self.persistence = persistence
+        appearanceMode = AppAppearanceMode(rawValue: snapshot.appearanceMode) ?? .system
+        appIconPreset = AppIconPreset(rawValue: snapshot.appIconPreset) ?? .default
+        cloudRegionPreset = CloudRegionPreset(rawValue: snapshot.cloudRegionPreset) ?? .default
+        usesEphemeralLoginSession = snapshot.usesEphemeralLoginSession
+        preferredGameLocale = snapshot.preferredGameLocale
+        cloudResolution = StreamingResolutionOption(rawValue: snapshot.cloudResolution) ?? .p720
+        homeResolution = StreamingResolutionOption(rawValue: snapshot.homeResolution) ?? .p1080
+        preferIPv6 = snapshot.preferIPv6
+        codecPreference = StreamingCodecOption(rawValue: snapshot.codecPreference) ?? .auto
+        homeBitrateMode = StreamingBitrateMode(rawValue: snapshot.homeBitrateMode) ?? .auto
+        homeBitrateMbps = snapshot.homeBitrateMbps
+        cloudBitrateMode = StreamingBitrateMode(rawValue: snapshot.cloudBitrateMode) ?? .auto
+        cloudBitrateMbps = snapshot.cloudBitrateMbps
+        audioBitrateMode = StreamingBitrateMode(rawValue: snapshot.audioBitrateMode) ?? .auto
+        audioBitrateKbps = snapshot.audioBitrateKbps
+        homeTurnFallbackEnabled = snapshot.homeTurnFallbackEnabled
+        persistence.save(snapshot)
     }
 
     /// 仅在系统确认切换成功后提交偏好，失败时保留当前图标。
@@ -521,7 +486,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
         }
         guard let error else {
             appIconPreset = preset
-            defaults.set(preset.rawValue, forKey: Self.appIconPresetKey)
+            persistSettings()
             IOSRuntimeTrace.state(
                 domain: "settings",
                 event: "appIconPresetChanged",
@@ -538,7 +503,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
     func setCloudRegionPreset(_ preset: CloudRegionPreset) -> Bool {
         guard preset != cloudRegionPreset else { return false }
         cloudRegionPreset = preset
-        defaults.set(preset.rawValue, forKey: Self.cloudRegionKey)
+        persistSettings()
         IOSRuntimeTrace.state(
             domain: "settings",
             event: "cloudRegionPresetChanged",
@@ -558,7 +523,7 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
 
     var streamingSessionSettings: StreamingSessionSettingsSnapshot {
         StreamingSessionSettingsSnapshot(
-            preferredGameLocale: normalizedGameLocale(preferredGameLocale),
+            preferredGameLocale: PreferredGameLocaleNormalizer.normalize(preferredGameLocale),
             cloudResolution: cloudResolution.rawValue,
             homeResolution: homeResolution.rawValue,
             preferIPv6: preferIPv6,
@@ -573,9 +538,28 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
         )
     }
 
-    private func normalizedGameLocale(_ value: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "en-US" : trimmed
+    private func persistSettings() {
+        persistence.save(
+            AppSettingsSnapshotV1(
+                schemaVersion: AppSettingsSnapshotV1.schemaVersion,
+                appearanceMode: appearanceMode.rawValue,
+                appIconPreset: appIconPreset.rawValue,
+                cloudRegionPreset: cloudRegionPreset.rawValue,
+                usesEphemeralLoginSession: usesEphemeralLoginSession,
+                preferredGameLocale: PreferredGameLocaleNormalizer.normalizePreference(preferredGameLocale),
+                cloudResolution: cloudResolution.rawValue,
+                homeResolution: homeResolution.rawValue,
+                preferIPv6: preferIPv6,
+                codecPreference: codecPreference.rawValue,
+                homeBitrateMode: homeBitrateMode.rawValue,
+                homeBitrateMbps: Self.clamp(homeBitrateMbps, min: 1, max: 200),
+                cloudBitrateMode: cloudBitrateMode.rawValue,
+                cloudBitrateMbps: Self.clamp(cloudBitrateMbps, min: 1, max: 200),
+                audioBitrateMode: audioBitrateMode.rawValue,
+                audioBitrateKbps: Self.clamp(audioBitrateKbps, min: 1, max: 512),
+                homeTurnFallbackEnabled: homeTurnFallbackEnabled
+            )
+        )
     }
 
     private func traceStreamingSettingChange(
@@ -592,24 +576,6 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
             dimension: .core,
             importance: .key
         )
-    }
-
-    private static func integerValue(
-        defaults: UserDefaults,
-        key: String,
-        fallback: Int
-    ) -> Int {
-        guard defaults.object(forKey: key) != nil else { return fallback }
-        return defaults.integer(forKey: key)
-    }
-
-    private static func boolValue(
-        defaults: UserDefaults,
-        key: String,
-        fallback: Bool
-    ) -> Bool {
-        guard defaults.object(forKey: key) != nil else { return fallback }
-        return defaults.bool(forKey: key)
     }
 
     private static func clamp(_ value: Int, min minValue: Int, max maxValue: Int) -> Int {

@@ -67,6 +67,7 @@ private final class RemoteAnswerApplyGate: @unchecked Sendable {
 actor StreamSessionActor {
     typealias StateSink = @MainActor @Sendable (UInt64, StreamingFeatureState) -> Void
     typealias VideoSink = @MainActor @Sendable (UInt64, StreamingVideoTrackHandle?) -> Void
+    typealias DiagnosticsSink = @MainActor @Sendable (UInt64, StreamingSessionDiagnostics) -> Void
 
     private struct LocalIceEpoch: Equatable, Sendable {
         let peerEpoch: UInt64
@@ -95,20 +96,10 @@ actor StreamSessionActor {
     private var latestRequestedGeneration: UInt64 = 0
     private var stateSink: StateSink?
     private var videoSink: VideoSink?
-    private var didMarkConnected = false
-    private var didReceiveFirstVideoFrame = false
-    private var didBecomeControlReady = false
-    private var didBecomeDisplayPipelineReady = false
-    private var didAcceptFirstFrameToMailbox = false
-    private var didSubmitFirstFrame = false
-    private var didPresentFirstFrame = false
-    private var remoteDescriptionApplied = false
-    private var localIceFlushInFlight = false
-    private var localIceGatheringComplete = false
-    private var localIceCompletionSent = false
+    private var diagnosticsSink: DiagnosticsSink?
+    private var playbackReadiness = StreamingPlaybackReadiness()
+    private var localIceState = StreamingLocalIceState()
     private var reconnectInFlight = false
-    private var didObserveSteadyMedia = false
-    private var localIceTraceCompleted = false
     private var selectedTerminalReason: StreamingTerminalReason?
     private var pendingLocalCandidates: [StreamingIceCandidate] = []
     private var interactionEventCounts: [String: Int64] = [:]
@@ -120,6 +111,10 @@ actor StreamSessionActor {
     private var pendingConnectedPeerEpoch: UInt64?
     private var pendingDisconnectedPeerEpoch: UInt64?
     private var latestDisplayHealthSnapshot: StreamingDisplayHealthSnapshot?
+    private var latestPeerStats: StreamingPeerStats?
+    private var latestAudioLifecycleState: String?
+    private var latestAudioRoute: String?
+    private var audioTrackReady = false
 
     init(
         controlFactory: any StreamingControlSessionFactory,
@@ -134,7 +129,8 @@ actor StreamSessionActor {
     func start(
         request: StreamingLaunchRequest,
         stateSink: @escaping StateSink,
-        videoSink: @escaping VideoSink
+        videoSink: @escaping VideoSink,
+        diagnosticsSink: @escaping DiagnosticsSink
     ) async throws {
         guard request.sessionGeneration > latestRequestedGeneration else {
             traceAttempt(
@@ -185,20 +181,10 @@ actor StreamSessionActor {
         activeAccessHandle = request.accessHandle
         self.stateSink = stateSink
         self.videoSink = videoSink
-        didMarkConnected = false
-        didReceiveFirstVideoFrame = false
-        didBecomeControlReady = false
-        didBecomeDisplayPipelineReady = false
-        didAcceptFirstFrameToMailbox = false
-        didSubmitFirstFrame = false
-        didPresentFirstFrame = false
-        remoteDescriptionApplied = false
-        localIceFlushInFlight = false
-        localIceGatheringComplete = false
-        localIceCompletionSent = false
+        self.diagnosticsSink = diagnosticsSink
+        playbackReadiness.resetForPeer()
+        localIceState.reset()
         reconnectInFlight = false
-        didObserveSteadyMedia = false
-        localIceTraceCompleted = false
         selectedTerminalReason = nil
         pendingLocalCandidates.removeAll(keepingCapacity: true)
         interactionEventCounts.removeAll(keepingCapacity: true)
@@ -208,6 +194,10 @@ actor StreamSessionActor {
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
         latestDisplayHealthSnapshot = nil
+        latestPeerStats = nil
+        latestAudioLifecycleState = nil
+        latestAudioRoute = nil
+        audioTrackReady = false
 
         await publish(.creatingSession, generation: request.sessionGeneration)
         trace("sessionCreateStarted", dimension: .lifecycle)
@@ -245,7 +235,7 @@ actor StreamSessionActor {
             try ensureCurrent(request.sessionGeneration)
             trace("answerApplied", dimension: .network)
             trace("localIceStarted", dimension: .network)
-            remoteDescriptionApplied = true
+            localIceState.remoteDescriptionApplied = true
             try await flushLocalIceAndWait(
                 generation: request.sessionGeneration,
                 epoch: localIceEpoch
@@ -268,7 +258,7 @@ actor StreamSessionActor {
             return
         } catch {
             if isCurrent(request.sessionGeneration) {
-                if peerRuntime != nil, !remoteDescriptionApplied {
+                if peerRuntime != nil, !localIceState.remoteDescriptionApplied {
                     trace(
                         "signalingTerminal",
                         payload: ["reason": .string(StreamingTerminalReason.sessionFailed.code)],
@@ -292,13 +282,48 @@ actor StreamSessionActor {
         await stopActiveSession(reason: reason, publishIdle: true)
     }
 
+    func setAudioMuted(_ muted: Bool, generation: UInt64) async throws {
+        guard isCurrent(generation), let peerRuntime else {
+            throw StreamingRuntimeError.superseded
+        }
+        try await peerRuntime.setAudioMuted(muted)
+        trace(
+            muted ? "remoteAudioMuted" : "remoteAudioUnmuted",
+            dimension: .mediaSupply
+        )
+    }
+
+    func sendText(_ text: String, generation: UInt64) async throws -> Bool {
+        guard isCurrent(generation), let controlSession else {
+            throw StreamingRuntimeError.superseded
+        }
+        let accepted = try await controlSession.sendText(text)
+        trace(
+            accepted ? "consoleTextAccepted" : "consoleTextRejected",
+            dimension: .input
+        )
+        return accepted
+    }
+
+    func powerOffConsole(generation: UInt64) async throws -> Bool {
+        guard isCurrent(generation), let controlSession else {
+            throw StreamingRuntimeError.superseded
+        }
+        let accepted = try await controlSession.powerOffConsole()
+        trace(
+            accepted ? "consolePowerOffAccepted" : "consolePowerOffRejected",
+            dimension: .lifecycle
+        )
+        return accepted
+    }
+
     func displayPipelineReady(context: StreamingPresentationTraceContext) async {
         guard isCurrent(context.generation),
               context.attemptID == activeAttemptID,
               context.peerEpoch == activePeerEpoch,
-              !didBecomeDisplayPipelineReady
+              !playbackReadiness.contains(.displayPipelineReady)
         else { return }
-        didBecomeDisplayPipelineReady = true
+        playbackReadiness.mark(.displayPipelineReady)
         if playbackReady {
             await publish(.playing, generation: context.generation)
         }
@@ -308,9 +333,9 @@ actor StreamSessionActor {
         guard isCurrent(context.generation),
               context.attemptID == activeAttemptID,
               context.peerEpoch == activePeerEpoch,
-              !didAcceptFirstFrameToMailbox
+              !playbackReadiness.contains(.frameAcceptedToMailbox)
         else { return }
-        didAcceptFirstFrameToMailbox = true
+        playbackReadiness.mark(.frameAcceptedToMailbox)
         if playbackReady {
             await publish(.playing, generation: context.generation)
         }
@@ -320,9 +345,9 @@ actor StreamSessionActor {
         guard isCurrent(context.generation),
               context.attemptID == activeAttemptID,
               context.peerEpoch == activePeerEpoch,
-              !didSubmitFirstFrame
+              !playbackReadiness.contains(.frameSubmitted)
         else { return }
-        didSubmitFirstFrame = true
+        playbackReadiness.mark(.frameSubmitted)
         if playbackReady {
             await publish(.playing, generation: context.generation)
         }
@@ -332,9 +357,9 @@ actor StreamSessionActor {
         guard isCurrent(context.generation),
               context.attemptID == activeAttemptID,
               context.peerEpoch == activePeerEpoch,
-              !didPresentFirstFrame
+              !playbackReadiness.contains(.framePresented)
         else { return }
-        didPresentFirstFrame = true
+        playbackReadiness.mark(.framePresented)
         if playbackReady {
             await publish(.playing, generation: context.generation)
         }
@@ -356,10 +381,31 @@ actor StreamSessionActor {
 
     private func handlePeerEvent(
         _ event: StreamingPeerEvent,
+        attemptID: String,
         generation: UInt64,
         peerEpoch: UInt64
     ) async {
         guard isCurrent(generation), peerEpoch == activePeerEpoch else { return }
+        if case let .audioLifecycle(event, payload) = event {
+            latestAudioLifecycleState = Self.stringValue(payload["state"])
+                ?? latestAudioLifecycleState
+            latestAudioRoute = Self.stringValue(payload["route"])
+                ?? Self.stringValue(payload["outputRoute"])
+                ?? latestAudioRoute
+            var contextualPayload = payload
+            contextualPayload["peerEpoch"] = .integer(Int64(peerEpoch))
+            traceAttempt(
+                event,
+                attemptID: attemptID,
+                generation: generation,
+                payload: contextualPayload,
+                dimension: .mediaSupply,
+                importance: .key,
+                operationID: attemptID
+            )
+            await publishDiagnostics(generation: generation)
+            return
+        }
         switch event {
         case let .localCandidate(candidate):
             guard let epoch = activeLocalIceEpoch, epoch.peerEpoch == peerEpoch else { return }
@@ -367,18 +413,18 @@ actor StreamSessionActor {
             scheduleLocalIceFlush(generation: generation, epoch: epoch)
         case .localIceGatheringComplete:
             guard let epoch = activeLocalIceEpoch, epoch.peerEpoch == peerEpoch else { return }
-            localIceGatheringComplete = true
+            localIceState.gatheringComplete = true
             scheduleLocalIceFlush(generation: generation, epoch: epoch)
         case let .connectionStateChanged(state):
             switch state {
             case .connected:
-                guard remoteDescriptionApplied else {
+                guard localIceState.remoteDescriptionApplied else {
                     pendingConnectedPeerEpoch = peerEpoch
                     return
                 }
                 await markPeerConnected(generation: generation, peerEpoch: peerEpoch)
             case .disconnected:
-                guard remoteDescriptionApplied else {
+                guard localIceState.remoteDescriptionApplied else {
                     if !reconnectInFlight { pendingDisconnectedPeerEpoch = peerEpoch }
                     return
                 }
@@ -412,15 +458,19 @@ actor StreamSessionActor {
                 )
             )
         case .firstVideoFrame:
-            let isFirstFrame = !didReceiveFirstVideoFrame
-            didReceiveFirstVideoFrame = true
+            let isFirstFrame = playbackReadiness.mark(.firstVideoFrame)
             if isFirstFrame { trace("firstVideoFrame", dimension: .mediaSupply) }
             if playbackReady {
                 await publish(.playing, generation: generation)
             }
         case .audioTrackReady:
+            audioTrackReady = true
             trace("audioTrackReady", dimension: .mediaSupply)
+            await publishDiagnostics(generation: generation)
+        case .audioLifecycle:
+            break
         case let .stats(stats):
+            latestPeerStats = stats
             traceSnapshot(
                 "rtcHealthSnapshot",
                 payload: [
@@ -472,11 +522,12 @@ actor StreamSessionActor {
                     importance: .key
                 )
             }
-            if !didObserveSteadyMedia,
+            await publishDiagnostics(generation: generation)
+            if !playbackReadiness.contains(.steadyMedia),
                stats.framesDecoded > 0, stats.inboundVideoBytes > 0,
                stats.frameSupplyDelta.map({ $0 > 0 }) == true
             {
-                didObserveSteadyMedia = true
+                playbackReadiness.mark(.steadyMedia)
                 trace("steadyMediaObserved", dimension: .mediaSupply)
             }
         case let .dataChannelEvent(label, event):
@@ -495,25 +546,44 @@ actor StreamSessionActor {
         }
     }
 
+    private func publishDiagnostics(generation: UInt64) async {
+        guard isCurrent(generation) else { return }
+        let peerSnapshot = await peerRuntime?.debugSnapshot()
+        let snapshot = StreamingSessionDiagnostics(
+            peerStats: latestPeerStats,
+            displayHealth: latestDisplayHealthSnapshot,
+            peer: peerSnapshot,
+            audioLifecycleState: latestAudioLifecycleState,
+            audioRoute: latestAudioRoute,
+            audioTrackReady: audioTrackReady,
+            updatedAtMilliseconds: ProcessInfo.processInfo.systemUptime * 1_000
+        )
+        await diagnosticsSink?(generation, snapshot)
+    }
+
+    private static func stringValue(_ value: IOSRuntimeTraceValue?) -> String? {
+        guard case let .string(value) = value else { return nil }
+        return value
+    }
+
     private func makePeerRuntime(generation: UInt64) async throws -> any StreamingPeerRuntime {
+        guard let attemptID = activeAttemptID else {
+            throw StreamingRuntimeError.superseded
+        }
         nextPeerEpoch &+= 1
         let peerEpoch = nextPeerEpoch
         activePeerEpoch = peerEpoch
-        didReceiveFirstVideoFrame = false
+        playbackReadiness.resetForPeer()
         dataChannelProfilesPendingTrace = false
-        didBecomeControlReady = false
-        didBecomeDisplayPipelineReady = false
-        didAcceptFirstFrameToMailbox = false
-        didSubmitFirstFrame = false
-        didPresentFirstFrame = false
-        didObserveSteadyMedia = false
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
         latestDisplayHealthSnapshot = nil
+        audioTrackReady = false
         let peer = peerFactory.makeRuntime { [weak self] event in
             Task {
                 await self?.handlePeerEvent(
                     event,
+                    attemptID: attemptID,
                     generation: generation,
                     peerEpoch: peerEpoch
                 )
@@ -545,9 +615,10 @@ actor StreamSessionActor {
 
     private func markPeerConnected(generation: UInt64, peerEpoch: UInt64) async {
         guard isCurrent(generation), peerEpoch == activePeerEpoch,
-              remoteDescriptionApplied, !didMarkConnected
+              localIceState.remoteDescriptionApplied,
+              !playbackReadiness.contains(.peerConnected)
         else { return }
-        didMarkConnected = true
+        playbackReadiness.mark(.peerConnected)
         do {
             try await controlSession?.markConnected()
             trace("peerConnected", dimension: .network)
@@ -562,7 +633,7 @@ actor StreamSessionActor {
                 generation: generation
             )
         } catch {
-            didMarkConnected = false
+            playbackReadiness = StreamingPlaybackReadiness()
             await fail(reason: .sessionFailed, generation: generation, error: error)
         }
     }
@@ -618,8 +689,8 @@ actor StreamSessionActor {
         else { return }
         reconnectInFlight = true
         pendingDisconnectedPeerEpoch = nil
-        didMarkConnected = false
-        remoteDescriptionApplied = false
+        playbackReadiness.remove(.peerConnected)
+        localIceState.remoteDescriptionApplied = false
         pendingConnectedPeerEpoch = nil
         remoteIceApplicationTask?.cancel()
         remoteIceApplicationTask = nil
@@ -664,7 +735,7 @@ actor StreamSessionActor {
                 dimension: .network,
                 operationID: restartOperationID
             )
-            remoteDescriptionApplied = true
+            localIceState.remoteDescriptionApplied = true
             try await flushLocalIceAndWait(generation: generation, epoch: localIceEpoch)
             try ensureCurrent(generation)
             reconnectInFlight = false
@@ -711,15 +782,13 @@ actor StreamSessionActor {
         peerRuntime = nil
         activeLocalIceEpoch = nil
         await cancelAndAwaitLocalIceFlush()
-        remoteDescriptionApplied = false
-        localIceGatheringComplete = false
-        localIceCompletionSent = false
-        localIceTraceCompleted = false
+        localIceState.reset()
         pendingLocalCandidates.removeAll(keepingCapacity: true)
         dataChannelProfilesPendingTrace = false
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
         retiringPeerRuntime = peer
+        await videoSink?(generation, nil)
         let peerStopTask = Task {
             await peer.stopInputAndHaptics()
         }
@@ -731,7 +800,6 @@ actor StreamSessionActor {
         retiringPeerRuntime = nil
         retiringPeerStopTask = nil
         guard isCurrent(generation) else { return }
-        await videoSink?(generation, nil)
 
         var replacementPeerEpoch: UInt64 = 0
         do {
@@ -778,7 +846,7 @@ actor StreamSessionActor {
                 dimension: .network,
                 operationID: rebuildOperationID
             )
-            remoteDescriptionApplied = true
+            localIceState.remoteDescriptionApplied = true
             try await flushLocalIceAndWait(generation: generation, epoch: localIceEpoch)
             try ensureCurrent(generation)
             reconnectInFlight = false
@@ -822,15 +890,15 @@ actor StreamSessionActor {
             negotiationEpoch: nextNegotiationEpoch
         )
         activeLocalIceEpoch = epoch
-        localIceGatheringComplete = false
-        localIceCompletionSent = false
-        localIceTraceCompleted = false
+        localIceState.gatheringComplete = false
+        localIceState.completionSent = false
+        localIceState.traceCompleted = false
         pendingLocalCandidates.removeAll(keepingCapacity: true)
         return epoch
     }
 
     private func scheduleLocalIceFlush(generation: UInt64, epoch: LocalIceEpoch) {
-        guard remoteDescriptionApplied, localIceFlushTask == nil,
+        guard localIceState.remoteDescriptionApplied, localIceFlushTask == nil,
               activeLocalIceEpoch == epoch else { return }
         let (taskID, task) = installLocalIceFlushTask(
             generation: generation,
@@ -907,12 +975,12 @@ actor StreamSessionActor {
         generation: UInt64,
         epoch: LocalIceEpoch
     ) async throws {
-        guard isCurrent(generation), remoteDescriptionApplied,
-              activeLocalIceEpoch == epoch, !localIceFlushInFlight else { return }
-        localIceFlushInFlight = true
+        guard isCurrent(generation), localIceState.remoteDescriptionApplied,
+              activeLocalIceEpoch == epoch, !localIceState.flushInFlight else { return }
+        localIceState.flushInFlight = true
         defer {
             if isCurrent(generation), activeLocalIceEpoch == epoch {
-                localIceFlushInFlight = false
+                localIceState.flushInFlight = false
             }
         }
 
@@ -928,21 +996,21 @@ actor StreamSessionActor {
                 }
                 continue
             }
-            if localIceGatheringComplete, !localIceCompletionSent {
-                localIceCompletionSent = true
+            if localIceState.gatheringComplete, !localIceState.completionSent {
+                localIceState.completionSent = true
                 do {
                     try await controlSession?.completeLocalIceGathering()
                     try Task.checkCancellation()
                     guard isCurrent(generation), activeLocalIceEpoch == epoch else {
                         throw StreamingRuntimeError.superseded
                     }
-                    if !localIceTraceCompleted {
-                        localIceTraceCompleted = true
+                    if !localIceState.traceCompleted {
+                        localIceState.traceCompleted = true
                         trace("localIceCompleted", dimension: .network)
                     }
                 } catch {
                     if isCurrent(generation) {
-                        localIceCompletionSent = false
+                        localIceState.completionSent = false
                     }
                     throw error
                 }
@@ -959,7 +1027,7 @@ actor StreamSessionActor {
     ) async {
         guard taskID == activeLocalIceFlushTaskID else { return }
         localIceFlushTask = nil
-        localIceFlushInFlight = false
+        localIceState.flushInFlight = false
         guard isCurrent(generation), activeLocalIceEpoch == epoch else { return }
         if let error {
             await fail(reason: .sessionFailed, generation: generation, error: error)
@@ -971,12 +1039,12 @@ actor StreamSessionActor {
     private func clearLocalIceFlushTask(taskID: UInt64) {
         guard taskID == activeLocalIceFlushTaskID else { return }
         localIceFlushTask = nil
-        localIceFlushInFlight = false
+        localIceState.flushInFlight = false
     }
 
     private func cancelAndAwaitLocalIceFlush() async {
         guard let task = localIceFlushTask else {
-            localIceFlushInFlight = false
+            localIceState.flushInFlight = false
             return
         }
         let taskID = activeLocalIceFlushTaskID
@@ -1157,20 +1225,10 @@ actor StreamSessionActor {
         activeGeneration = nil
         stateSink = nil
         videoSink = nil
-        didMarkConnected = false
-        didReceiveFirstVideoFrame = false
-        didBecomeControlReady = false
-        didBecomeDisplayPipelineReady = false
-        didAcceptFirstFrameToMailbox = false
-        didSubmitFirstFrame = false
-        didPresentFirstFrame = false
-        remoteDescriptionApplied = false
-        localIceFlushInFlight = false
-        localIceGatheringComplete = false
-        localIceCompletionSent = false
+        diagnosticsSink = nil
+        playbackReadiness.resetForPeer()
+        localIceState.reset()
         reconnectInFlight = false
-        didObserveSteadyMedia = false
-        localIceTraceCompleted = false
         pendingLocalCandidates.removeAll(keepingCapacity: true)
         interactionEventCounts.removeAll(keepingCapacity: true)
         dataChannelProfilesPendingTrace = false
@@ -1179,6 +1237,18 @@ actor StreamSessionActor {
         pendingConnectedPeerEpoch = nil
         pendingDisconnectedPeerEpoch = nil
         latestDisplayHealthSnapshot = nil
+        latestPeerStats = nil
+        latestAudioLifecycleState = nil
+        latestAudioRoute = nil
+        audioTrackReady = false
+        if let generation {
+            await previousVideoSink?(generation, nil)
+            traceCleanup(
+                StreamingCleanupStage.presentationDetached.rawValue,
+                attemptID: attemptID,
+                generation: generation
+            )
+        }
         if let peer {
             await peer.stopInputAndHaptics()
         }
@@ -1188,13 +1258,25 @@ actor StreamSessionActor {
             await retiringPeer.stopInputAndHaptics()
         }
         if peer != nil || retiringPeer != nil {
-            traceCleanup("inputStopped", attemptID: attemptID, generation: generation)
-            traceCleanup("hapticsStopped", attemptID: attemptID, generation: generation)
+            traceCleanup(
+                StreamingCleanupStage.inputStopped.rawValue,
+                attemptID: attemptID,
+                generation: generation
+            )
+            traceCleanup(
+                StreamingCleanupStage.hapticsStopped.rawValue,
+                attemptID: attemptID,
+                generation: generation
+            )
         }
         remoteIceTask?.cancel()
         localIceTask?.cancel()
         _ = try? await localIceTask?.value
-        traceCleanup("iceTasksCancelled", attemptID: attemptID, generation: generation)
+        traceCleanup(
+            StreamingCleanupStage.iceTasksCancelled.rawValue,
+            attemptID: attemptID,
+            generation: generation
+        )
         remoteIceApplicationTask = nil
         localIceFlushTask = nil
         activeLocalIceFlushTaskID = 0
@@ -1205,20 +1287,29 @@ actor StreamSessionActor {
             await retiringPeer.closeTransport()
         }
         if peer != nil || retiringPeer != nil {
-            traceCleanup("peerClosed", attemptID: attemptID, generation: generation)
+            traceCleanup(
+                StreamingCleanupStage.peerClosed.rawValue,
+                attemptID: attemptID,
+                generation: generation
+            )
         }
         if let control {
             await control.close()
-            traceCleanup("remoteSessionClosed", attemptID: attemptID, generation: generation)
+            traceCleanup(
+                StreamingCleanupStage.remoteSessionClosed.rawValue,
+                attemptID: attemptID,
+                generation: generation
+            )
         }
         if let accessHandle {
             await controlFactory.releaseAccess(handle: accessHandle)
-            traceCleanup("accessReleased", attemptID: attemptID, generation: generation)
+            traceCleanup(
+                StreamingCleanupStage.accessReleased.rawValue,
+                attemptID: attemptID,
+                generation: generation
+            )
         }
-        if let generation {
-            await previousVideoSink?(generation, nil)
-            if publishIdle { await previousStateSink?(generation, .idle) }
-        }
+        if let generation, publishIdle { await previousStateSink?(generation, .idle) }
         if preserveStateSink { return }
     }
 
@@ -1254,15 +1345,14 @@ actor StreamSessionActor {
         }
         if label == "all", event == "profilesCreated" {
             dataChannelProfilesPendingTrace = true
-            if didMarkConnected {
+            if playbackReadiness.contains(.peerConnected) {
                 dataChannelProfilesPendingTrace = false
                 traceDataChannelProfiles()
             }
             return
         }
         if label == "control", event == "ready" {
-            guard !didBecomeControlReady else { return }
-            didBecomeControlReady = true
+            guard playbackReadiness.mark(.controlReady) else { return }
             trace(
                 "controlReady",
                 payload: ["channel": .string(label)],
@@ -1467,12 +1557,7 @@ actor StreamSessionActor {
     }
 
     private var playbackReady: Bool {
-        didMarkConnected
-            && didBecomeControlReady
-            && didBecomeDisplayPipelineReady
-            && didAcceptFirstFrameToMailbox
-            && didSubmitFirstFrame
-            && didPresentFirstFrame
+        playbackReadiness.isPlaybackReady
     }
 
     private func isCurrent(_ generation: UInt64) -> Bool {

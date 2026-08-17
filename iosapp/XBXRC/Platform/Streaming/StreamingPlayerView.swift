@@ -7,13 +7,17 @@ import UIKit
 
 struct StreamingPlayerView: View {
     @ObservedObject var store: StreamingFeatureStore
+    @State private var controlsRevealToken = 0
+    @State private var controlsRevealSource: StreamingControlsRevealSource = .singleTap
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             StreamingVideoSurface(
                 track: store.videoTrack,
-                presentationEventSink: store.handlePresentationEvent
+                contentMode: store.videoContentMode,
+                presentationEventSink: store.handlePresentationEvent,
+                controlsRevealSink: revealControls
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
@@ -33,23 +37,43 @@ struct StreamingPlayerView: View {
                         .padding(.horizontal, 28)
                 }
             }
-            VStack {
-                HStack {
-                    Spacer()
-                    Button { store.stop() } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline.bold())
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(.black.opacity(0.52), in: Circle())
+            if store.state == .playing {
+                StreamingControlsOverlay(
+                    store: store,
+                    revealToken: controlsRevealToken,
+                    revealSource: controlsRevealSource
+                )
+            } else {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button { store.stop() } label: {
+                            Image(systemName: "xmark")
+                                .font(.headline.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .glassEffect(.regular.interactive(), in: Circle())
+                        }
+                        .accessibilityLabel("结束串流")
                     }
-                    .accessibilityLabel("结束串流")
+                    Spacer()
                 }
-                Spacer()
+                .padding()
             }
-            .padding()
         }
         .statusBarHidden(true)
+    }
+
+    private func revealControls(_ source: StreamingControlsRevealSource) {
+        controlsRevealSource = source
+        controlsRevealToken &+= 1
+        IOSRuntimeTrace.event(
+            domain: "ios-streaming",
+            event: "streamControlsGestureRecognized",
+            payload: ["source": .string(source.rawValue)],
+            dimension: .input,
+            importance: .debug
+        )
     }
 }
 
@@ -58,7 +82,9 @@ private typealias StreamingVideoSurfaceView = StreamingMetalVideoSurfaceView
 
 private struct StreamingVideoSurface: UIViewRepresentable {
     let track: StreamingVideoTrackHandle?
+    let contentMode: StreamingVideoContentMode
     let presentationEventSink: @MainActor (StreamingPresentationLifecycleEvent) -> Void
+    let controlsRevealSink: @MainActor (StreamingControlsRevealSource) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -66,6 +92,8 @@ private struct StreamingVideoSurface: UIViewRepresentable {
         let view = StreamingVideoSurfaceView()
         context.coordinator.view = view
         view.presentationEventSink = presentationEventSink
+        view.updateVideoContentMode(contentMode)
+        context.coordinator.installGestures(on: view, revealSink: controlsRevealSink)
         context.coordinator.update(track: track)
         return view
     }
@@ -73,6 +101,8 @@ private struct StreamingVideoSurface: UIViewRepresentable {
     func updateUIView(_ uiView: StreamingVideoSurfaceView, context: Context) {
         context.coordinator.view = uiView
         uiView.presentationEventSink = presentationEventSink
+        uiView.updateVideoContentMode(contentMode)
+        context.coordinator.revealSink = controlsRevealSink
         context.coordinator.update(track: track)
     }
 
@@ -84,6 +114,35 @@ private struct StreamingVideoSurface: UIViewRepresentable {
     final class Coordinator {
         weak var view: StreamingVideoSurfaceView?
         private weak var currentTrack: RTCVideoTrack?
+        var revealSink: (@MainActor (StreamingControlsRevealSource) -> Void)?
+        private var inwardGesture: StreamingInwardGestureRecognizer?
+        private var tapGesture: UITapGestureRecognizer?
+
+        func installGestures(
+            on view: StreamingVideoSurfaceView,
+            revealSink: @escaping @MainActor (StreamingControlsRevealSource) -> Void
+        ) {
+            self.revealSink = revealSink
+            let inward = StreamingInwardGestureRecognizer(target: self, action: #selector(inward))
+            inward.cancelsTouchesInView = false
+            view.addGestureRecognizer(inward)
+            inwardGesture = inward
+
+            let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
+            tap.cancelsTouchesInView = false
+            view.addGestureRecognizer(tap)
+            tapGesture = tap
+        }
+
+        @objc private func inward() {
+            guard inwardGesture?.state == .recognized else { return }
+            revealSink?(.twoFingerInward)
+        }
+
+        @objc private func tapped() {
+            guard tapGesture?.state == .recognized else { return }
+            revealSink?(.singleTap)
+        }
 
         func update(track handle: StreamingVideoTrackHandle?) {
             let nextTrack = handle?.rawValue as? RTCVideoTrack
@@ -127,6 +186,9 @@ private struct StreamingVideoSurface: UIViewRepresentable {
             currentTrack = nil
             view?.updateTraceContext(nil)
             view?.shutdown()
+            if let inwardGesture { view?.removeGestureRecognizer(inwardGesture) }
+            if let tapGesture { view?.removeGestureRecognizer(tapGesture) }
+            revealSink = nil
             view = nil
         }
     }
@@ -134,7 +196,9 @@ private struct StreamingVideoSurface: UIViewRepresentable {
 #else
 private struct StreamingVideoSurface: View {
     let track: StreamingVideoTrackHandle?
+    let contentMode: StreamingVideoContentMode
     let presentationEventSink: @MainActor (StreamingPresentationLifecycleEvent) -> Void
+    let controlsRevealSink: @MainActor (StreamingControlsRevealSource) -> Void
     var body: some View { Color.black }
 }
 #endif

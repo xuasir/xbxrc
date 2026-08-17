@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 enum StreamingLaunchTarget: String, Equatable, Sendable {
     case cloud
@@ -126,6 +127,38 @@ enum StreamingMediaDirection: String, Equatable, Sendable {
     case receiveOnly
 }
 
+enum StreamingAudioPermissionCoordinator {
+    static func requiresMicrophonePermission(for direction: StreamingMediaDirection) -> Bool {
+        direction == .sendReceive
+    }
+
+    @MainActor
+    static func requestMicrophoneIfNeeded(
+        for direction: StreamingMediaDirection
+    ) async throws {
+        guard requiresMicrophonePermission(for: direction) else { return }
+
+        let permission = AVAudioApplication.shared.recordPermission
+        switch permission {
+        case .granted:
+            return
+        case .denied:
+            throw StreamingRuntimeError.microphonePermissionDenied
+        case .undetermined:
+            let granted = await withCheckedContinuation { continuation in
+                AVAudioApplication.requestRecordPermission { granted in
+                    continuation.resume(returning: granted)
+                }
+            }
+            guard granted else {
+                throw StreamingRuntimeError.microphonePermissionDenied
+            }
+        @unknown default:
+            throw StreamingRuntimeError.microphonePermissionDenied
+        }
+    }
+}
+
 /// WebRtcDirect negotiation 的 iOS 可消费投影，由 Rust plan 生成并保留桌面默认 fixture。
 struct StreamingWebRtcPlan: Equatable, Sendable {
     let audioDirection: StreamingMediaDirection
@@ -152,7 +185,7 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
     static let desktopWebRtcDirect = StreamingWebRtcPlan()
 
     init(
-        audioDirection: StreamingMediaDirection = .sendReceive,
+        audioDirection: StreamingMediaDirection = .receiveOnly,
         videoDirection: StreamingMediaDirection = .receiveOnly,
         videoCodecMimeType: String = "video/H264",
         targetVideoWidth: Int = 1_920,
@@ -230,6 +263,8 @@ protocol StreamingControlSession: Sendable {
     func completeLocalIceGathering() async throws
     func nextRemoteIceBatch() async throws -> StreamingRemoteIceBatch
     func markConnected() async throws
+    func sendText(_ text: String) async throws -> Bool
+    func powerOffConsole() async throws -> Bool
     func close() async
 }
 
@@ -364,6 +399,7 @@ enum StreamingPeerEvent: @unchecked Sendable {
     case videoTrack(StreamingVideoTrackHandle)
     case firstVideoFrame
     case audioTrackReady
+    case audioLifecycle(event: String, payload: [String: IOSRuntimeTraceValue])
     case stats(StreamingPeerStats)
     case dataChannelEvent(label: String, event: String)
     case failed(String)
@@ -741,6 +777,7 @@ protocol StreamingPeerRuntime: AnyObject, Sendable {
     func applyAnswer(_ sdp: String) async throws
     func addRemoteCandidates(_ candidates: [StreamingIceCandidate]) async throws
     func debugSnapshot() async -> StreamingPeerDebugSnapshot
+    func setAudioMuted(_ muted: Bool) async throws
     func stopInputAndHaptics() async
     func closeTransport() async
 }
@@ -759,6 +796,7 @@ enum StreamingRuntimeError: LocalizedError, Equatable {
     case missingLocalDescription
     case missingRemoteDescription
     case remoteDescriptionTimedOut
+    case microphonePermissionDenied
     case peerConnectionFailed
     case peerConnectionClosed
 
@@ -771,6 +809,7 @@ enum StreamingRuntimeError: LocalizedError, Equatable {
         case .missingLocalDescription: "WebRTC 本地协商描述缺失"
         case .missingRemoteDescription: "Xbox 远端协商描述缺失"
         case .remoteDescriptionTimedOut: "应用 Xbox 远端协商描述超时"
+        case .microphonePermissionDenied: "麦克风权限未授权"
         case .peerConnectionFailed: "WebRTC 连接已经失败"
         case .peerConnectionClosed: "WebRTC 连接已经关闭"
         }

@@ -514,6 +514,7 @@ type IosSessionFlow = SessionFlowService<IosSessionSnapshot, IosSessionFlowProvi
 pub struct XboxStreamSession {
     plan: Plan,
     flow: IosSessionFlow,
+    access: StreamingAccessContext,
     projection: Arc<StdMutex<SessionFlowProjection>>,
     state: Mutex<SessionState>,
     generation: AtomicU64,
@@ -566,13 +567,14 @@ fn build_stream_session(
     let plan = control_plan(&access, &target_id, &settings)?;
     let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
     let flow = SessionFlowService::new(IosSessionFlowProvider {
-        access,
+        access: access.clone(),
         projection: Arc::clone(&projection),
     });
 
     Ok(Arc::new(XboxStreamSession {
         plan,
         flow,
+        access,
         projection,
         state: Mutex::new(SessionState::new()),
         generation: AtomicU64::new(0),
@@ -794,9 +796,64 @@ impl XboxStreamSession {
         }
         Ok(())
     }
+
+    pub async fn send_text(
+        &self,
+        generation: u64,
+        text: String,
+    ) -> Result<bool, XboxStreamingError> {
+        self.ensure_active_home_generation(generation).await?;
+        let text = normalize_console_text(&text)?;
+        let command_id = self.home_command_id()?;
+        ConsoleApi::new(self.access.web_uhs.clone(), self.access.web_token.clone())
+            .send_text(&command_id, &text)
+            .await
+            .map(|response| response.accepted)
+            .map_err(|error| XboxStreamingError::Network(error.to_string()))
+    }
+
+    pub async fn power_off_console(&self, generation: u64) -> Result<bool, XboxStreamingError> {
+        self.ensure_active_home_generation(generation).await?;
+        let command_id = self.home_command_id()?;
+        ConsoleApi::new(self.access.web_uhs.clone(), self.access.web_token.clone())
+            .power_off(&command_id)
+            .await
+            .map(|response| response.accepted)
+            .map_err(|error| XboxStreamingError::Network(error.to_string()))
+    }
 }
 
 impl XboxStreamSession {
+    async fn ensure_active_home_generation(
+        &self,
+        generation: u64,
+    ) -> Result<(), XboxStreamingError> {
+        ensure_generation(&self.generation, generation)?;
+        if self.access.target != Target::Home {
+            return Err(XboxStreamingError::InvalidState(
+                "console commands require a home session".into(),
+            ));
+        }
+        let state = self.state.lock().await;
+        ensure_generation(&self.generation, generation)?;
+        if !matches!(
+            state.phase,
+            SessionPhase::Ready | SessionPhase::Negotiating | SessionPhase::Connected
+        ) {
+            return Err(XboxStreamingError::InvalidState(
+                "stream session cannot accept console commands".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn home_command_id(&self) -> Result<String, XboxStreamingError> {
+        find_home_host_facts(&self.access.account_id, &self.plan.session.target_id)
+            .map_err(|error| XboxStreamingError::InvalidState(error.to_string()))?
+            .and_then(|facts| facts.command_id().map(str::to_owned))
+            .ok_or_else(|| XboxStreamingError::InvalidState("homeCommandIdentityMissing".into()))
+    }
+
     async fn begin_generation(&self) -> Result<u64, XboxStreamingError> {
         let mut state = self.state.lock().await;
         let current_generation = self.generation.load(Ordering::Acquire);
@@ -1070,7 +1127,7 @@ fn project_web_rtc_plan(plan: &Plan) -> XboxWebRtcPlan {
     let max_video_bitrate_kbps =
         Some(max_video_bitrate_kbps.unwrap_or(tier_default_max_bitrate_kbps));
     XboxWebRtcPlan {
-        audio_direction: "sendrecv".to_string(),
+        audio_direction: "recvonly".to_string(),
         video_direction: "recvonly".to_string(),
         video_codec_mime_type,
         target_video_width: plan.session.device.max_width.max(1),
@@ -1127,6 +1184,16 @@ fn normalize_target_id(value: &str) -> Result<String, XboxStreamingError> {
         ));
     }
     Ok(target_id.to_string())
+}
+
+fn normalize_console_text(value: &str) -> Result<String, XboxStreamingError> {
+    let text = value.trim();
+    if text.is_empty() || text.chars().count() > 1_024 || text.chars().any(char::is_control) {
+        return Err(XboxStreamingError::InvalidArgument(
+            "text must be a bounded printable value".into(),
+        ));
+    }
+    Ok(text.to_string())
 }
 
 fn parse_target_type(value: &str) -> Result<Target, XboxStreamingError> {
@@ -1457,6 +1524,21 @@ mod tests {
     }
 
     #[test]
+    fn console_text_is_trimmed_and_bounded_before_network_use() {
+        assert_eq!(
+            normalize_console_text("  hello xbox  ").unwrap(),
+            "hello xbox"
+        );
+        assert_eq!(
+            normalize_console_text(&"x".repeat(1_024)).unwrap().len(),
+            1_024
+        );
+        assert!(normalize_console_text("   ").is_err());
+        assert!(normalize_console_text("line\nbreak").is_err());
+        assert!(normalize_console_text(&"x".repeat(1_025)).is_err());
+    }
+
+    #[test]
     fn control_plan_uses_domain_compiler_and_desktop_headers() {
         let plan = control_plan(
             &test_access(Target::Cloud),
@@ -1473,7 +1555,7 @@ mod tests {
     }
 
     #[test]
-    fn web_rtc_plan_projects_desktop_direction_codec_feedback_and_ice_policy() {
+    fn web_rtc_plan_projects_receive_only_audio_codec_feedback_and_ice_policy() {
         let plan = control_plan(
             &test_access(Target::Cloud),
             "title-1",
@@ -1481,7 +1563,7 @@ mod tests {
         )
         .expect("plan");
         let projection = project_web_rtc_plan(&plan);
-        assert_eq!(projection.audio_direction, "sendrecv");
+        assert_eq!(projection.audio_direction, "recvonly");
         assert_eq!(projection.video_direction, "recvonly");
         assert_eq!(projection.video_codec_mime_type, "video/H264");
         assert_eq!(projection.target_video_width, 1_280);

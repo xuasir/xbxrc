@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 struct CloudCatalogScope: Codable, Equatable, Hashable, Sendable {
@@ -7,8 +8,10 @@ struct CloudCatalogScope: Codable, Equatable, Hashable, Sendable {
     let market: String
 
     var cacheKey: String {
-        [accountID, regionHost, language, market]
-            .map(Self.sanitize)
+        let catalogFingerprint = Self.fingerprint(
+            [regionHost, language, market].joined(separator: "\u{1F}")
+        )
+        return [Self.fingerprint(accountID), catalogFingerprint]
             .joined(separator: "--")
     }
 
@@ -17,6 +20,12 @@ struct CloudCatalogScope: Codable, Equatable, Hashable, Sendable {
         return value.unicodeScalars.map { scalar in
             allowed.contains(scalar) ? String(scalar) : "_"
         }.joined()
+    }
+
+    static func fingerprint(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 }
 
@@ -85,7 +94,14 @@ struct CloudCatalogSnapshot: Codable, Equatable, Sendable {
 protocol CloudCatalogSnapshotStoring: Sendable {
     func load(scope: CloudCatalogScope) async throws -> CloudCatalogSnapshot?
     func save(_ snapshot: CloudCatalogSnapshot) async throws
+    func saveSuccessfulImagePreferences(_ snapshot: CloudCatalogSnapshot) async throws
     func clearOverlay(accountID: String) async throws
+}
+
+extension CloudCatalogSnapshotStoring {
+    func saveSuccessfulImagePreferences(_ snapshot: CloudCatalogSnapshot) async throws {
+        try await save(snapshot)
+    }
 }
 
 actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
@@ -116,8 +132,14 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             importance: .debug,
             operationID: operationID
         )
-        let overlayURL = overlaySnapshotURL(scope: scope)
-        guard FileManager.default.fileExists(atPath: overlayURL.path) else {
+        let currentOverlayURL = overlaySnapshotURL(scope: scope)
+        let legacyOverlayURL = legacyOverlaySnapshotURL(scope: scope)
+        let overlayURL: URL
+        if FileManager.default.fileExists(atPath: currentOverlayURL.path) {
+            overlayURL = currentOverlayURL
+        } else if FileManager.default.fileExists(atPath: legacyOverlayURL.path) {
+            overlayURL = legacyOverlayURL
+        } else {
             IOSRuntimeTrace.snapshot(
                 domain: "cloud-library",
                 event: "cacheDiskOverlayMissing",
@@ -152,7 +174,11 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             )
             return nil
         }
-        let baseURL = baseSnapshotURL(scope: scope)
+        let currentBaseURL = baseSnapshotURL(scope: scope)
+        let legacyBaseURL = legacyBaseSnapshotURL(scope: scope)
+        let baseURL = FileManager.default.fileExists(atPath: currentBaseURL.path)
+            ? currentBaseURL
+            : legacyBaseURL
         let base: CachedCloudCatalogBase? = if FileManager.default.fileExists(atPath: baseURL.path) {
             try? decoder.decode(
                 CachedCloudCatalogBase.self,
@@ -196,6 +222,16 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             overlayUpdatedAt: overlay.updatedAt,
             successfulImageURLs: base?.successfulImageURLs ?? [:]
         )
+        if overlayURL == legacyOverlayURL || baseURL == legacyBaseURL {
+            do {
+                try prepareRootDirectory()
+                try writeBase(snapshot)
+                try writeOverlay(snapshot)
+                removeLegacyFiles(scope: scope)
+            } catch {
+                // 保留旧缓存，下次读取时继续尝试迁移。
+            }
+        }
         IOSRuntimeTrace.snapshot(
             domain: "cloud-library",
             event: "cacheDiskLoadSucceeded",
@@ -228,30 +264,10 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             operationID: operationID
         )
         do {
-            try FileManager.default.createDirectory(
-                at: rootDirectory,
-                withIntermediateDirectories: true
-            )
-            let base = CachedCloudCatalogBase(
-                schemaVersion: snapshot.schemaVersion,
-                updatedAt: snapshot.baseUpdatedAt,
-                games: snapshot.games.map(CachedCloudCatalogBaseGame.init),
-                successfulImageURLs: snapshot.successfulImageURLs
-            )
-            let overlay = CachedCloudCatalogOverlay(
-                schemaVersion: snapshot.schemaVersion,
-                scope: snapshot.scope,
-                updatedAt: snapshot.overlayUpdatedAt,
-                games: snapshot.games.map(CachedCloudCatalogOverlayGame.init)
-            )
-            try encoder.encode(base).write(
-                to: baseSnapshotURL(scope: snapshot.scope),
-                options: .atomic
-            )
-            try encoder.encode(overlay).write(
-                to: overlaySnapshotURL(scope: snapshot.scope),
-                options: .atomic
-            )
+            try prepareRootDirectory()
+            try writeBase(snapshot)
+            try writeOverlay(snapshot)
+            removeLegacyFiles(scope: snapshot.scope)
         } catch {
             IOSRuntimeTrace.event(
                 domain: "cloud-library",
@@ -282,16 +298,44 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
         )
     }
 
+    func saveSuccessfulImagePreferences(_ snapshot: CloudCatalogSnapshot) async throws {
+        try prepareRootDirectory()
+        let url = baseSnapshotURL(scope: snapshot.scope)
+        let existingBase = try? decoder.decode(
+            CachedCloudCatalogBase.self,
+            from: Data(contentsOf: url)
+        )
+        let base: CachedCloudCatalogBase
+        if let existingBase,
+           existingBase.schemaVersion == snapshot.schemaVersion
+        {
+            base = CachedCloudCatalogBase(
+                schemaVersion: existingBase.schemaVersion,
+                updatedAt: existingBase.updatedAt,
+                games: existingBase.games,
+                successfulImageURLs: snapshot.successfulImageURLs
+            )
+        } else {
+            base = makeBase(snapshot)
+        }
+        try encoder.encode(base).write(to: url, options: .atomic)
+        try applyStorageProtection(to: url)
+        try? FileManager.default.removeItem(at: legacyBaseSnapshotURL(scope: snapshot.scope))
+    }
+
     func clearOverlay(accountID: String) async throws {
         guard FileManager.default.fileExists(atPath: rootDirectory.path) else {
             return
         }
-        let prefix = "overlay-v1-" + CloudCatalogScope.sanitize(accountID) + "--"
+        let prefixes = [
+            "overlay-v1-" + CloudCatalogScope.fingerprint(accountID) + "--",
+            "overlay-v1-" + CloudCatalogScope.sanitize(accountID) + "--",
+        ]
         var removedCount = 0
         for url in try FileManager.default.contentsOfDirectory(
             at: rootDirectory,
             includingPropertiesForKeys: nil
-        ) where url.lastPathComponent.hasPrefix(prefix) {
+        ) where prefixes.contains(where: url.lastPathComponent.hasPrefix) {
             try FileManager.default.removeItem(at: url)
             removedCount += 1
         }
@@ -305,14 +349,79 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
     }
 
     private func baseSnapshotURL(scope: CloudCatalogScope) -> URL {
+        let key = CloudCatalogScope.fingerprint(
+            [scope.regionHost, scope.language, scope.market].joined(separator: "\u{1F}")
+        )
+        return rootDirectory.appendingPathComponent("base-v1-\(key).json")
+    }
+
+    private func overlaySnapshotURL(scope: CloudCatalogScope) -> URL {
+        rootDirectory.appendingPathComponent("overlay-v1-\(scope.cacheKey).json")
+    }
+
+    private func legacyBaseSnapshotURL(scope: CloudCatalogScope) -> URL {
         let key = [scope.regionHost, scope.language, scope.market]
             .map(CloudCatalogScope.sanitize)
             .joined(separator: "--")
         return rootDirectory.appendingPathComponent("base-v1-\(key).json")
     }
 
-    private func overlaySnapshotURL(scope: CloudCatalogScope) -> URL {
-        rootDirectory.appendingPathComponent("overlay-v1-\(scope.cacheKey).json")
+    private func legacyOverlaySnapshotURL(scope: CloudCatalogScope) -> URL {
+        let key = [scope.accountID, scope.regionHost, scope.language, scope.market]
+            .map(CloudCatalogScope.sanitize)
+            .joined(separator: "--")
+        return rootDirectory.appendingPathComponent("overlay-v1-\(key).json")
+    }
+
+    private func prepareRootDirectory() throws {
+        try FileManager.default.createDirectory(
+            at: rootDirectory,
+            withIntermediateDirectories: true
+        )
+        try applyStorageProtection(to: rootDirectory)
+    }
+
+    private func writeBase(_ snapshot: CloudCatalogSnapshot) throws {
+        let url = baseSnapshotURL(scope: snapshot.scope)
+        try encoder.encode(makeBase(snapshot)).write(to: url, options: .atomic)
+        try applyStorageProtection(to: url)
+    }
+
+    private func makeBase(_ snapshot: CloudCatalogSnapshot) -> CachedCloudCatalogBase {
+        CachedCloudCatalogBase(
+            schemaVersion: snapshot.schemaVersion,
+            updatedAt: snapshot.baseUpdatedAt,
+            games: snapshot.games.map(CachedCloudCatalogBaseGame.init),
+            successfulImageURLs: snapshot.successfulImageURLs
+        )
+    }
+
+    private func writeOverlay(_ snapshot: CloudCatalogSnapshot) throws {
+        let overlay = CachedCloudCatalogOverlay(
+            schemaVersion: snapshot.schemaVersion,
+            scope: snapshot.scope,
+            updatedAt: snapshot.overlayUpdatedAt,
+            games: snapshot.games.map(CachedCloudCatalogOverlayGame.init)
+        )
+        let url = overlaySnapshotURL(scope: snapshot.scope)
+        try encoder.encode(overlay).write(to: url, options: .atomic)
+        try applyStorageProtection(to: url)
+    }
+
+    private func applyStorageProtection(to url: URL) throws {
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: url.path
+        )
+        var protectedURL = url
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try protectedURL.setResourceValues(resourceValues)
+    }
+
+    private func removeLegacyFiles(scope: CloudCatalogScope) {
+        try? FileManager.default.removeItem(at: legacyBaseSnapshotURL(scope: scope))
+        try? FileManager.default.removeItem(at: legacyOverlaySnapshotURL(scope: scope))
     }
 
     private static func defaultRootDirectory() -> URL {

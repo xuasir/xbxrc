@@ -1,8 +1,8 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use xbox_auth_flow::{
-    AuthFlow, AuthFlowSeed, CompleteOAuthLoginInput, PendingOAuthLogin, RefreshAndFinalizeInput,
-    StartOAuthLoginInput,
+    AuthFlow, AuthFlowError, AuthFlowSeed, CompleteOAuthLoginInput, PendingOAuthLogin,
+    RefreshAndFinalizeInput, StartOAuthLoginInput,
 };
 use xbox_webapi::{PeopleApi, ProfileApi, SocialApi, UserPresenceApi};
 
@@ -40,6 +40,8 @@ const XAL_CALLBACK_SCHEME: &str = "ms-xal-000000004c20a908";
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum XboxBridgeError {
+    #[error("Retryable authentication failure: {0}")]
+    RetryableAuthentication(String),
     #[error("Authentication failed: {0}")]
     Authentication(String),
     #[error("Invalid bridge data: {0}")]
@@ -90,7 +92,7 @@ pub async fn start_login() -> Result<LoginStartResult, XboxBridgeError> {
             device_version: XAL_DEVICE_VERSION.to_string(),
         })
         .await
-        .map_err(|error| XboxBridgeError::Authentication(error.to_string()))?;
+        .map_err(authentication_error)?;
 
     Ok(LoginStartResult {
         authorization_url: output.oauth_url,
@@ -120,7 +122,7 @@ pub async fn complete_login(
             include_streaming_tokens: true,
         })
         .await
-        .map_err(|error| XboxBridgeError::Authentication(error.to_string()))?;
+        .map_err(authentication_error)?;
 
     auth_session_from_bundle(output.auth_bundle, &seed)
 }
@@ -141,9 +143,17 @@ pub async fn refresh_login(
             include_streaming_tokens: true,
         })
         .await
-        .map_err(|error| XboxBridgeError::Authentication(error.to_string()))?;
+        .map_err(authentication_error)?;
 
     auth_session_from_bundle(output.auth_bundle, &seed)
+}
+
+fn authentication_error(error: AuthFlowError) -> XboxBridgeError {
+    if error.is_retriable() {
+        XboxBridgeError::RetryableAuthentication(error.to_string())
+    } else {
+        XboxBridgeError::Authentication(error.to_string())
+    }
 }
 
 #[uniffi::export(async_runtime = "tokio")]

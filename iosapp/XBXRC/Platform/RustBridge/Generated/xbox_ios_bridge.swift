@@ -649,6 +649,10 @@ public protocol XboxStreamSessionProtocol: AnyObject, Sendable {
 
     func nextRemoteIceBatch(generation: UInt64) async throws  -> XboxRemoteIceBatch
 
+    func powerOffConsole(generation: UInt64) async throws  -> Bool
+
+    func sendText(generation: UInt64, text: String) async throws  -> Bool
+
     func start() async throws  -> XboxPreparedSignaling
 
     func submitIce(generation: UInt64, candidates: [XboxIceCandidate]) async throws
@@ -788,6 +792,38 @@ open func nextRemoteIceBatch(generation: UInt64)async throws  -> XboxRemoteIceBa
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeXboxRemoteIceBatch_lift,
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func powerOffConsole(generation: UInt64)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_power_off_console(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(generation)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_i8,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_i8,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeXboxStreamingError_lift
+        )
+}
+
+open func sendText(generation: UInt64, text: String)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_send_text(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(generation),FfiConverterString.lower(text)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_i8,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_i8,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
 }
@@ -2566,6 +2602,8 @@ enum XboxBridgeError: Swift.Error, Equatable, Hashable, Foundation.LocalizedErro
 
 
 
+    case RetryableAuthentication(String
+    )
     case Authentication(String
     )
     case InvalidData(String
@@ -2603,16 +2641,19 @@ public struct FfiConverterTypeXboxBridgeError: FfiConverterRustBuffer {
 
 
 
-        case 1: return .Authentication(
+        case 1: return .RetryableAuthentication(
             try FfiConverterString.read(from: &buf)
             )
-        case 2: return .InvalidData(
+        case 2: return .Authentication(
             try FfiConverterString.read(from: &buf)
             )
-        case 3: return .Profile(
+        case 3: return .InvalidData(
             try FfiConverterString.read(from: &buf)
             )
-        case 4: return .Data(
+        case 4: return .Profile(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 5: return .Data(
             try FfiConverterString.read(from: &buf)
             )
 
@@ -2627,23 +2668,28 @@ public struct FfiConverterTypeXboxBridgeError: FfiConverterRustBuffer {
 
 
 
-        case let .Authentication(v1):
+        case let .RetryableAuthentication(v1):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .InvalidData(v1):
+        case let .Authentication(v1):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .Profile(v1):
+        case let .InvalidData(v1):
             writeInt(&buf, Int32(3))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .Data(v1):
+        case let .Profile(v1):
             writeInt(&buf, Int32(4))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Data(v1):
+            writeInt(&buf, Int32(5))
             FfiConverterString.write(v1, into: &buf)
 
         }
@@ -3671,6 +3717,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_next_remote_ice_batch() != 60123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_power_off_console() != 29859) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_send_text() != 62195) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_start() != 32767) {

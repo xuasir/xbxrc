@@ -1,5 +1,10 @@
+import AVFoundation
 import XCTest
 @testable import XBXRC
+
+#if canImport(WebRTC)
+@preconcurrency import WebRTC
+#endif
 
 final class XBXRCTests: XCTestCase {
     @MainActor
@@ -16,6 +21,30 @@ final class XBXRCTests: XCTestCase {
             XBXRCAppDelegate.requestedGeometryMask(for: .pad, mode: .application),
             .all
         )
+    }
+
+    func testStreamingPlaybackReadinessRequiresAllPresentationFacts() {
+        var readiness = StreamingPlaybackReadiness()
+        readiness.mark(.peerConnected)
+        readiness.mark(.controlReady)
+        readiness.mark(.displayPipelineReady)
+        readiness.mark(.frameAcceptedToMailbox)
+        readiness.mark(.frameSubmitted)
+
+        XCTAssertFalse(readiness.isPlaybackReady)
+        XCTAssertTrue(readiness.mark(.framePresented))
+        XCTAssertTrue(readiness.isPlaybackReady)
+        XCTAssertFalse(readiness.mark(.framePresented))
+
+        readiness.remove(.peerConnected)
+        XCTAssertFalse(readiness.isPlaybackReady)
+        readiness.resetForPeer()
+        XCTAssertTrue(readiness.facts.isEmpty)
+    }
+
+    func testStreamingCleanupStagesKeepPresentationFirstAndAccessLast() {
+        XCTAssertEqual(StreamingCleanupStage.allCases.first, .presentationDetached)
+        XCTAssertEqual(StreamingCleanupStage.allCases.last, .accessReleased)
     }
 
     func testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules() {
@@ -2219,14 +2248,45 @@ final class XBXRCTests: XCTestCase {
         XCTAssertTrue(output.contains("a=fmtp:99 apt=97;rtx-time=200"))
     }
 
-    func testStreamingPreparedSignalingDefaultsToDesktopDirections() {
+    func testStreamingPreparedSignalingDefaultsToReceiveOnlyAudio() {
         let signaling = StreamingPreparedSignaling(iceServers: [])
 
-        XCTAssertEqual(signaling.webRtcPlan.audioDirection, .sendReceive)
+        XCTAssertEqual(signaling.webRtcPlan.audioDirection, .receiveOnly)
         XCTAssertEqual(signaling.webRtcPlan.videoDirection, .receiveOnly)
         XCTAssertEqual(signaling.webRtcPlan.h264PacketizationMode, 1)
         XCTAssertEqual(signaling.webRtcPlan.h264Profiles, ["4d", "42e", "420"])
     }
+
+    func testStreamingAudioPermissionOnlyAppliesToSendReceive() {
+        XCTAssertFalse(
+            StreamingAudioPermissionCoordinator.requiresMicrophonePermission(for: .receiveOnly)
+        )
+        XCTAssertTrue(
+            StreamingAudioPermissionCoordinator.requiresMicrophonePermission(for: .sendReceive)
+        )
+    }
+
+    #if canImport(WebRTC)
+    func testStreamingAudioConfigurationsAreIndependentAndDirectionComplete() {
+        let receiveOnly = StreamingAudioLifecycleCoordinator.makeConfiguration(
+            for: .receiveOnly
+        )
+        let sendReceive = StreamingAudioLifecycleCoordinator.makeConfiguration(
+            for: .sendReceive
+        )
+
+        XCTAssertFalse(receiveOnly === sendReceive)
+        XCTAssertEqual(receiveOnly.category, AVAudioSession.Category.playback.rawValue)
+        XCTAssertEqual(receiveOnly.mode, AVAudioSession.Mode.default.rawValue)
+        XCTAssertEqual(receiveOnly.categoryOptions, [])
+        XCTAssertEqual(sendReceive.category, AVAudioSession.Category.playAndRecord.rawValue)
+        XCTAssertEqual(sendReceive.mode, AVAudioSession.Mode.voiceChat.rawValue)
+        XCTAssertEqual(
+            sendReceive.categoryOptions,
+            [.allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay]
+        )
+    }
+    #endif
 
     func testStreamingIceCandidatePolicyFiltersAndOrdersDeterministically() {
         let candidates = [
@@ -2547,8 +2607,10 @@ final class XBXRCTests: XCTestCase {
         }
         try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
+        XCTAssertNotNil(store.videoTrack)
 
         store.stop()
+        XCTAssertNil(store.videoTrack)
         store.stop()
         try await waitUntil { store.state == .idle }
 
@@ -2905,6 +2967,10 @@ private actor StreamingTestControlSession: StreamingControlSession {
         await recorder.recordMarkConnected()
     }
 
+    func sendText(_: String) async throws -> Bool { true }
+
+    func powerOffConsole() async throws -> Bool { true }
+
     func close() async {
         await recorder.recordControlClose()
         await recorder.recordCleanup("remoteSessionClosed")
@@ -3095,6 +3161,8 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
             )
         )
     }
+
+    func setAudioMuted(_: Bool) async throws {}
 
     func stopInputAndHaptics() async {
         await recorder.recordPeerInputStopStarted()

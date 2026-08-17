@@ -23,6 +23,23 @@
 		A00000000000000000000029 /* StreamingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000030 /* StreamingPlayerView.swift */; };
 		A0000000000000000000002A /* XboxStreamDataChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000031 /* XboxStreamDataChannels.swift */; };
 		A0000000000000000000002C /* IOSStreamInputProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000033 /* IOSStreamInputProtocol.swift */; };
+		A00000000000000000000037 /* AuthCredentialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000037 /* AuthCredentialCoordinator.swift */; };
+		A00000000000000000000038 /* SettingsPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000038 /* SettingsPersistence.swift */; };
+		A00000000000000000000039 /* StreamingSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000039 /* StreamingSessionState.swift */; };
+		A0000000000000000000003A /* AuthCredentialCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003A /* AuthCredentialCoordinatorTests.swift */; };
+		A0000000000000000000003B /* SettingsAndPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003B /* SettingsAndPersistenceTests.swift */; };
+		A0000000000000000000003C /* CloudLibraryDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003C /* CloudLibraryDiagnostics.swift */; };
+		A0000000000000000000003D /* CloudLibraryScopeLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003D /* CloudLibraryScopeLifecycle.swift */; };
+		A0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift */; };
+		A0000000000000000000003F /* XboxDataStoreLocaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003F /* XboxDataStoreLocaleTests.swift */; };
+		A00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */; };
+		A00000000000000000000041 /* StreamingAudioLifecycleState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000041 /* StreamingAudioLifecycleState.swift */; };
+		A00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift */; };
+		A00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */; };
+		A00000000000000000000044 /* StreamingControlsState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000044 /* StreamingControlsState.swift */; };
+		A00000000000000000000045 /* StreamingControlsGestureRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */; };
+		A00000000000000000000046 /* StreamingControlsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000046 /* StreamingControlsOverlay.swift */; };
+		A00000000000000000000047 /* StreamingControlsStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000047 /* StreamingControlsStateTests.swift */; };
 		A00000000000000000000007 /* GameSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* GameSummary.swift */; };
 		A00000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* Assets.xcassets */; };
 		A00000000000000000000009 /* XBXRCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000A /* XBXRCTests.swift */; };
@@ -119,6 +136,23 @@
 		B00000000000000000000031 /* XboxStreamDataChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxStreamDataChannels.swift; sourceTree = "<group>"; };
 		B00000000000000000000032 /* OrbitCardCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitCardCarousel.swift; sourceTree = "<group>"; };
 		B00000000000000000000033 /* IOSStreamInputProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSStreamInputProtocol.swift; sourceTree = "<group>"; };
+		B00000000000000000000037 /* AuthCredentialCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCredentialCoordinator.swift; sourceTree = "<group>"; };
+		B00000000000000000000038 /* SettingsPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPersistence.swift; sourceTree = "<group>"; };
+		B00000000000000000000039 /* StreamingSessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingSessionState.swift; sourceTree = "<group>"; };
+		B0000000000000000000003A /* AuthCredentialCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCredentialCoordinatorTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000003B /* SettingsAndPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndPersistenceTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000003C /* CloudLibraryDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryDiagnostics.swift; sourceTree = "<group>"; };
+		B0000000000000000000003D /* CloudLibraryScopeLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryScopeLifecycle.swift; sourceTree = "<group>"; };
+		B0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCatalogPersistenceCoordinator.swift; sourceTree = "<group>"; };
+		B0000000000000000000003F /* XboxDataStoreLocaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxDataStoreLocaleTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryStoreConcurrencyTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000041 /* StreamingAudioLifecycleState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioLifecycleState.swift; sourceTree = "<group>"; };
+		B00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioLifecycleCoordinator.swift; sourceTree = "<group>"; };
+		B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioLifecycleStateTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000044 /* StreamingControlsState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsState.swift; sourceTree = "<group>"; };
+		B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsGestureRecognizer.swift; sourceTree = "<group>"; };
+		B00000000000000000000046 /* StreamingControlsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsOverlay.swift; sourceTree = "<group>"; };
+		B00000000000000000000047 /* StreamingControlsStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsStateTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -199,6 +233,7 @@
 			isa = PBXGroup;
 			children = (
 				B0000000000000000000000E /* AuthStore.swift */,
+				B00000000000000000000037 /* AuthCredentialCoordinator.swift */,
 				B0000000000000000000000F /* WebAuthenticationPresenter.swift */,
 				B00000000000000000000010 /* XboxLoginView.swift */,
 			);
@@ -236,6 +271,7 @@
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000028 /* AppSettingsStore.swift */,
+				B00000000000000000000038 /* SettingsPersistence.swift */,
 				B00000000000000000000029 /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -285,6 +321,12 @@
 			children = (
 				B00000000000000000000006 /* StreamingRuntime.swift */,
 				B0000000000000000000002D /* StreamingContracts.swift */,
+				B00000000000000000000039 /* StreamingSessionState.swift */,
+				B00000000000000000000041 /* StreamingAudioLifecycleState.swift */,
+				B00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift */,
+				B00000000000000000000044 /* StreamingControlsState.swift */,
+				B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */,
+				B00000000000000000000046 /* StreamingControlsOverlay.swift */,
 				B0000000000000000000002E /* StreamSessionActor.swift */,
 				B0000000000000000000002F /* LibWebRtcRuntime.swift */,
 				B00000000000000000000030 /* StreamingPlayerView.swift */,
@@ -342,6 +384,9 @@
 			children = (
 				B00000000000000000000019 /* XboxDataStore.swift */,
 				B00000000000000000000022 /* CloudCatalogSnapshotRepository.swift */,
+				B0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift */,
+				B0000000000000000000003C /* CloudLibraryDiagnostics.swift */,
+				B0000000000000000000003D /* CloudLibraryScopeLifecycle.swift */,
 				B00000000000000000000023 /* CloudLibraryStore.swift */,
 			);
 			path = State;
@@ -370,6 +415,12 @@
 			isa = PBXGroup;
 			children = (
 				B0000000000000000000000A /* XBXRCTests.swift */,
+				B0000000000000000000003A /* AuthCredentialCoordinatorTests.swift */,
+				B0000000000000000000003B /* SettingsAndPersistenceTests.swift */,
+				B0000000000000000000003F /* XboxDataStoreLocaleTests.swift */,
+				B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */,
+				B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */,
+				B00000000000000000000047 /* StreamingControlsStateTests.swift */,
 			);
 			path = XBXRCTests;
 			sourceTree = "<group>";
@@ -528,6 +579,7 @@
 				A00000000000000000000035 /* AppOrientation.swift in Sources */,
 				A0000000000000000000002D /* LaunchExperienceView.swift in Sources */,
 				A0000000000000000000000B /* AuthStore.swift in Sources */,
+				A00000000000000000000037 /* AuthCredentialCoordinator.swift in Sources */,
 				A0000000000000000000000C /* WebAuthenticationPresenter.swift in Sources */,
 				A0000000000000000000000D /* XboxLoginView.swift in Sources */,
 				A00000000000000000000003 /* GameLibraryView.swift in Sources */,
@@ -542,6 +594,12 @@
 				A0000000000000000000000F /* xbox_ios_bridge.swift in Sources */,
 				A00000000000000000000006 /* StreamingRuntime.swift in Sources */,
 				A00000000000000000000026 /* StreamingContracts.swift in Sources */,
+				A00000000000000000000039 /* StreamingSessionState.swift in Sources */,
+				A00000000000000000000041 /* StreamingAudioLifecycleState.swift in Sources */,
+				A00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift in Sources */,
+				A00000000000000000000044 /* StreamingControlsState.swift in Sources */,
+				A00000000000000000000045 /* StreamingControlsGestureRecognizer.swift in Sources */,
+				A00000000000000000000046 /* StreamingControlsOverlay.swift in Sources */,
 				A00000000000000000000027 /* StreamSessionActor.swift in Sources */,
 				A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */,
 				A00000000000000000000029 /* StreamingPlayerView.swift in Sources */,
@@ -553,6 +611,9 @@
 				A00000000000000000000010 /* KeychainSessionStore.swift in Sources */,
 				A00000000000000000000012 /* XboxDataStore.swift in Sources */,
 				A0000000000000000000001B /* CloudCatalogSnapshotRepository.swift in Sources */,
+				A0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift in Sources */,
+				A0000000000000000000003C /* CloudLibraryDiagnostics.swift in Sources */,
+				A0000000000000000000003D /* CloudLibraryScopeLifecycle.swift in Sources */,
 				A0000000000000000000001C /* CloudLibraryStore.swift in Sources */,
 				A00000000000000000000016 /* GamerscoreCoinIcon.swift in Sources */,
 				A00000000000000000000015 /* SkeletonPulse.swift in Sources */,
@@ -562,6 +623,7 @@
 				A0000000000000000000001F /* IOSRuntimeTraceWriter.swift in Sources */,
 				A00000000000000000000020 /* IOSRuntimeTrace.swift in Sources */,
 				A00000000000000000000021 /* AppSettingsStore.swift in Sources */,
+				A00000000000000000000038 /* SettingsPersistence.swift in Sources */,
 				A00000000000000000000022 /* SettingsView.swift in Sources */,
 				A00000000000000000000023 /* XboxHostSummary.swift in Sources */,
 				A00000000000000000000024 /* HostListView.swift in Sources */,
@@ -574,6 +636,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000000000000000000009 /* XBXRCTests.swift in Sources */,
+				A0000000000000000000003A /* AuthCredentialCoordinatorTests.swift in Sources */,
+				A0000000000000000000003B /* SettingsAndPersistenceTests.swift in Sources */,
+				A0000000000000000000003F /* XboxDataStoreLocaleTests.swift in Sources */,
+				A00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift in Sources */,
+				A00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift in Sources */,
+				A00000000000000000000047 /* StreamingControlsStateTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

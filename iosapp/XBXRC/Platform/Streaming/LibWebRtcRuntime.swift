@@ -127,10 +127,12 @@ struct StreamingStatsRequestGate: Equatable, Sendable {
     }
 }
 
+#if canImport(WebRTC)
 private struct CreatedPeerDataChannelsResult: Sendable {
     let createdChannels: [XboxStreamCreatedDataChannel]
     let failedLabels: [String]
 }
+#endif
 
 private enum StreamingRuntimeDiagnostics {
     static func sdpSummaryPayload(_ sdp: String) -> IOSRuntimeTraceValue {
@@ -599,6 +601,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
     private let videoTrackLock = NSLock()
     private var acceptsVideoTracks = false
     private var attachedVideoTrack: RTCVideoTrack?
+    private var attachedAudioTrack: RTCAudioTrack?
     private var frameProbe: FirstVideoFrameProbe?
     private var didEmitAudioTrackReady = false
     private var dataChannels: XboxStreamDataChannels?
@@ -606,6 +609,10 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
     private var statsRequestGate = StreamingStatsRequestGate()
     private var statsProjectionState = StatsProjectionState()
     private var activePlan: StreamingWebRtcPlan?
+    private lazy var audioLifecycle = StreamingAudioLifecycleCoordinator {
+        [weak self] event, payload in
+        self?.eventSink(.audioLifecycle(event: event, payload: payload))
+    }
 
     init(eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void) {
         self.eventSink = eventSink
@@ -616,6 +623,9 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         iceRestart: Bool
     ) async throws -> String {
         activePlan = prepared.webRtcPlan
+        try await StreamingAudioPermissionCoordinator.requestMicrophoneIfNeeded(
+            for: prepared.webRtcPlan.audioDirection
+        )
         if iceRestart {
             guard let peerConnection else {
                 throw StreamingRuntimeError.peerConnectionCreationFailed
@@ -628,7 +638,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         }
 
         try await runOnAPIQueue { [self] in
-            try configureAudioSession()
+            try audioLifecycle.start(audioDirection: prepared.webRtcPlan.audioDirection)
             statsProjectionState = StatsProjectionState()
             let configuration = RTCConfiguration()
             configuration.sdpSemantics = .unifiedPlan
@@ -969,7 +979,17 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         )
     }
 
+    func setAudioMuted(_ muted: Bool) async throws {
+        try await runOnAPIQueue { [self] in
+            guard let attachedAudioTrack else {
+                throw StreamingRuntimeError.peerConnectionFailed
+            }
+            attachedAudioTrack.isEnabled = !muted
+        }
+    }
+
     func closeTransport() async {
+        audioLifecycle.stop()
         if let dataChannels {
             await dataChannels.closeAfterInputDrain()
         }
@@ -981,10 +1001,10 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             statsRequestGate.invalidate()
             peerConnection?.close()
             peerConnection = nil
+            attachedAudioTrack = nil
             statsProjectionState = StatsProjectionState()
         }
         activePlan = nil
-        deactivateAudioSession()
     }
 
     private func preferCodecs(
@@ -1069,43 +1089,6 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         }
     }
 
-    private func configureAudioSession() throws {
-        let session = RTCAudioSession.sharedInstance()
-        let configuration = RTCAudioSessionConfiguration.webRTC()
-        configuration.categoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay]
-        session.lockForConfiguration()
-        defer { session.unlockForConfiguration() }
-        try session.setConfiguration(configuration, active: true)
-        session.isAudioEnabled = true
-        let route = AVAudioSession.sharedInstance().currentRoute
-        IOSRuntimeTrace.state(
-            domain: "ios-streaming",
-            event: "audioSessionActivated",
-            payload: [
-                "mode": .string(configuration.mode),
-                "category": .string(configuration.category),
-                "outputPortTypes": .array(route.outputs.map {
-                    .string($0.portType.rawValue)
-                }),
-                "inputPortTypes": .array(route.inputs.map {
-                    .string($0.portType.rawValue)
-                }),
-                "sampleRate": .double(session.sampleRate),
-                "ioBufferDurationMs": .double(session.ioBufferDuration * 1_000),
-            ],
-            dimension: .mediaSupply,
-            importance: .key
-        )
-    }
-
-    private func deactivateAudioSession() {
-        let session = RTCAudioSession.sharedInstance()
-        session.lockForConfiguration()
-        defer { session.unlockForConfiguration() }
-        session.isAudioEnabled = false
-        try? session.setActive(false)
-    }
-
     @discardableResult
     private func attachVideoTrack(_ track: RTCVideoTrack) -> Bool {
         let probe = FirstVideoFrameProbe { [weak self] in
@@ -1139,6 +1122,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             return false
         }
         didEmitAudioTrackReady = true
+        attachedAudioTrack = track
         videoTrackLock.unlock()
         track.isEnabled = true
         eventSink(.audioTrackReady)
@@ -1154,6 +1138,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         attachedVideoTrack = nil
         frameProbe = nil
         didEmitAudioTrackReady = false
+        attachedAudioTrack = nil
         videoTrackLock.unlock()
     }
 
@@ -1616,6 +1601,9 @@ private final class UnavailableStreamingPeerRuntime: StreamingPeerRuntime, @unch
             remoteDescriptionSet: false,
             dataChannels: nil
         )
+    }
+    func setAudioMuted(_: Bool) async throws {
+        throw StreamingRuntimeError.webRTCUnavailable
     }
     func stopInputAndHaptics() async {}
     func closeTransport() async {}

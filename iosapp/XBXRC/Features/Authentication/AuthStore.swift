@@ -30,7 +30,10 @@ final class AuthStore: ObservableObject {
     private let keychain: any AuthSessionStoring
     private let webAuthentication: any WebAuthenticating
     private let settings: any CloudRegionSettingsProviding
+    private let credentialCoordinator = AuthCredentialCoordinator()
+    private var recoveryAction: AuthRecoveryAction = .signIn
     private var restored = false
+    private var isSigningOut = false
     private var profileInitialRefreshGeneration: UInt64?
     private var profileRefreshTask: Task<Void, Never>?
     private var profileRefreshTaskID: UUID?
@@ -83,6 +86,7 @@ final class AuthStore: ObservableObject {
         }
         let operationID = UUID().uuidString
         let startedAt = Date()
+        let requestRevision = credentialCoordinator.currentRevision
         restored = true
         phase = .restoring
         IOSRuntimeTrace.event(
@@ -96,7 +100,9 @@ final class AuthStore: ObservableObject {
 
         do {
             guard let stored = try await keychain.load() else {
+                guard credentialCoordinator.isCurrent(requestRevision) else { return }
                 phase = .signedOut
+                recoveryAction = .signIn
                 IOSRuntimeTrace.state(
                     domain: "auth",
                     event: "authRestoreSucceeded",
@@ -110,6 +116,7 @@ final class AuthStore: ObservableObject {
                 )
                 return
             }
+            guard credentialCoordinator.isCurrent(requestRevision) else { return }
             profile = nil
             IOSRuntimeTrace.decision(
                 domain: "auth",
@@ -119,10 +126,16 @@ final class AuthStore: ObservableObject {
                 importance: .key,
                 operationID: operationID
             )
-            await refreshSession(stored, markSignedIn: false)
+            let disposition = await refreshSession(
+                stored,
+                markSignedIn: false,
+                expectedRevision: requestRevision
+            )
+            guard disposition.establishesSignedInState else { return }
             ownerGeneration &+= 1
             profileInitialRefreshGeneration = nil
             phase = .signedIn
+            recoveryAction = .refreshProfile
             IOSRuntimeTrace.state(
                 domain: "auth",
                 event: "authRestoreSucceeded",
@@ -135,7 +148,9 @@ final class AuthStore: ObservableObject {
                 operationID: operationID
             )
         } catch {
+            guard credentialCoordinator.isCurrent(requestRevision) else { return }
             phase = .failed
+            recoveryAction = .signIn
             errorMessage = error.localizedDescription
             IOSRuntimeTrace.event(
                 domain: "auth",
@@ -166,6 +181,7 @@ final class AuthStore: ObservableObject {
         }
         let operationID = UUID().uuidString
         let startedAt = Date()
+        let requestRevision = credentialCoordinator.currentRevision
         phase = .authenticating
         errorMessage = nil
         IOSRuntimeTrace.event(
@@ -190,12 +206,22 @@ final class AuthStore: ObservableObject {
                 forceRegionIP: settings.cloudRegionPreset.forceRegionIP
             )
             let stored = StoredAuthSession(bridgeSession: bridgeSession)
-            try await keychain.save(stored)
-            session = stored
-            ownerGeneration &+= 1
-            profileInitialRefreshGeneration = nil
-            profile = nil
-            phase = .signedIn
+            _ = try await credentialCoordinator.perform(
+                expectedRevision: requestRevision,
+                advancesRevision: true
+            ) { [weak self] revision in
+                guard let self else { throw AuthStoreError.staleOperation }
+                try await self.keychain.save(stored)
+                guard self.credentialCoordinator.isCurrent(revision) else {
+                    throw AuthStoreError.staleOperation
+                }
+                self.session = stored
+                self.ownerGeneration &+= 1
+                self.profileInitialRefreshGeneration = nil
+                self.profile = nil
+                self.phase = .signedIn
+                self.recoveryAction = .refreshProfile
+            }
             IOSRuntimeTrace.state(
                 domain: "auth",
                 event: "authSignInSucceeded",
@@ -211,7 +237,9 @@ final class AuthStore: ObservableObject {
             )
         } catch let error as ASWebAuthenticationSessionError
             where error.code == .canceledLogin {
-            phase = .signedOut
+            guard credentialCoordinator.isCurrent(requestRevision) else { return }
+            phase = session == nil ? .signedOut : .failed
+            recoveryAction = .signIn
             IOSRuntimeTrace.decision(
                 domain: "auth",
                 event: "authSignInCancelled",
@@ -224,7 +252,10 @@ final class AuthStore: ObservableObject {
                 operationID: operationID
             )
         } catch {
+            guard credentialCoordinator.isCurrent(requestRevision), !AuthStoreError.isStale(error)
+            else { return }
             phase = .failed
+            recoveryAction = .signIn
             errorMessage = error.localizedDescription
             IOSRuntimeTrace.event(
                 domain: "auth",
@@ -337,6 +368,7 @@ final class AuthStore: ObservableObject {
             }
             profile = loadedProfile
             phase = .signedIn
+            recoveryAction = .refreshProfile
             IOSRuntimeTrace.state(
                 domain: "auth",
                 event: "profileRefreshSucceeded",
@@ -350,6 +382,7 @@ final class AuthStore: ObservableObject {
         } catch {
             guard requestGeneration == ownerGeneration else { return }
             phase = .signedIn
+            recoveryAction = .refreshProfile
             errorMessage = error.localizedDescription
             IOSRuntimeTrace.event(
                 domain: "auth",
@@ -368,7 +401,7 @@ final class AuthStore: ObservableObject {
     }
 
     func prepareCloudAccess() async throws -> PreparedCloudAccess {
-        guard let session else {
+        guard session != nil, !isSigningOut else {
             IOSRuntimeTrace.decision(
                 domain: "auth",
                 event: "cloudAccessBoundaryFailed",
@@ -378,29 +411,36 @@ final class AuthStore: ObservableObject {
             )
             throw AuthStoreError.signedOut
         }
+        let requestOwnerGeneration = ownerGeneration
         let operationID = UUID().uuidString
         let startedAt = Date()
         IOSRuntimeTrace.event(
             domain: "auth",
             event: "cloudAccessBoundaryStarted",
-            payload: ["appLevel": .integer(Int64(session.appLevel))],
+            payload: ["ownerGeneration": .integer(Int64(requestOwnerGeneration))],
             dimension: .network,
             importance: .key,
             operationID: operationID
         )
         do {
-            let result = try await cloudClient.prepareAccess(
-                refreshToken: session.refreshToken,
-                seedJSON: session.seedJSON,
-                forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+            let result = try await performAccessPreparation(
+                ownerGeneration: requestOwnerGeneration,
+                prepare: { [cloudClient, settings] currentSession in
+                    try await cloudClient.prepareAccess(
+                        refreshToken: currentSession.refreshToken,
+                        seedJSON: currentSession.seedJSON,
+                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+                    )
+                },
+                refreshedSession: { result, _ in
+                    StoredAuthSession(
+                        bridgeSession: result.authSession,
+                        cloudAccountID: result.accountID,
+                        cloudRegionHost: result.regionHost
+                    )
+                },
+                accessHandle: { $0.handle }
             )
-            let refreshed = StoredAuthSession(
-                bridgeSession: result.authSession,
-                cloudAccountID: result.accountID,
-                cloudRegionHost: result.regionHost
-            )
-            try await keychain.save(refreshed)
-            self.session = refreshed
             IOSRuntimeTrace.event(
                 domain: "auth",
                 event: "cloudAccessBoundarySucceeded",
@@ -422,7 +462,7 @@ final class AuthStore: ObservableObject {
                     error,
                     extra: [
                         "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                        "appLevel": .integer(Int64(session.appLevel)),
+                        "ownerGeneration": .integer(Int64(requestOwnerGeneration)),
                     ]
                 ),
                 dimension: .network,
@@ -434,7 +474,7 @@ final class AuthStore: ObservableObject {
     }
 
     func prepareHomeAccess() async throws -> PreparedHomeAccess {
-        guard let session else {
+        guard session != nil, !isSigningOut else {
             IOSRuntimeTrace.decision(
                 domain: "auth",
                 event: "homeAccessBoundaryFailed",
@@ -444,29 +484,36 @@ final class AuthStore: ObservableObject {
             )
             throw AuthStoreError.signedOut
         }
+        let requestOwnerGeneration = ownerGeneration
         let operationID = UUID().uuidString
         let startedAt = Date()
         IOSRuntimeTrace.event(
             domain: "auth",
             event: "homeAccessBoundaryStarted",
-            payload: ["appLevel": .integer(Int64(session.appLevel))],
+            payload: ["ownerGeneration": .integer(Int64(requestOwnerGeneration))],
             dimension: .network,
             importance: .key,
             operationID: operationID
         )
         do {
-            let result = try await cloudClient.prepareHomeAccess(
-                refreshToken: session.refreshToken,
-                seedJSON: session.seedJSON,
-                forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+            let result = try await performAccessPreparation(
+                ownerGeneration: requestOwnerGeneration,
+                prepare: { [cloudClient, settings] currentSession in
+                    try await cloudClient.prepareHomeAccess(
+                        refreshToken: currentSession.refreshToken,
+                        seedJSON: currentSession.seedJSON,
+                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+                    )
+                },
+                refreshedSession: { result, currentSession in
+                    StoredAuthSession(
+                        bridgeSession: result.authSession,
+                        cloudAccountID: currentSession.cloudAccountID,
+                        cloudRegionHost: currentSession.cloudRegionHost
+                    )
+                },
+                accessHandle: { $0.handle }
             )
-            let refreshed = StoredAuthSession(
-                bridgeSession: result.authSession,
-                cloudAccountID: session.cloudAccountID,
-                cloudRegionHost: session.cloudRegionHost
-            )
-            try await keychain.save(refreshed)
-            self.session = refreshed
             IOSRuntimeTrace.event(
                 domain: "auth",
                 event: "homeAccessBoundarySucceeded",
@@ -492,7 +539,7 @@ final class AuthStore: ObservableObject {
                         "elapsedMs": .integer(
                             Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))
                         ),
-                        "appLevel": .integer(Int64(session.appLevel)),
+                        "ownerGeneration": .integer(Int64(requestOwnerGeneration)),
                     ]
                 ),
                 dimension: .network,
@@ -503,16 +550,70 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    private func performAccessPreparation<Result: Sendable>(
+        ownerGeneration requestOwnerGeneration: UInt64,
+        prepare: @escaping @MainActor (StoredAuthSession) async throws -> Result,
+        refreshedSession: @escaping @MainActor (Result, StoredAuthSession) -> StoredAuthSession,
+        accessHandle: @escaping @MainActor (Result) -> String
+    ) async throws -> Result {
+        let commit = try await credentialCoordinator.perform(
+            advancesRevision: true
+        ) { [weak self] revision in
+            guard let self,
+                  !self.isSigningOut,
+                  self.ownerGeneration == requestOwnerGeneration,
+                  let currentSession = self.session
+            else {
+                throw AuthStoreError.staleOperation
+            }
+            let result = try await prepare(currentSession)
+            do {
+                guard self.canCommitAccess(
+                    revision: revision,
+                    ownerGeneration: requestOwnerGeneration
+                ) else {
+                    throw AuthStoreError.staleOperation
+                }
+                let refreshed = refreshedSession(result, currentSession)
+                try await self.keychain.save(refreshed)
+                guard self.canCommitAccess(
+                    revision: revision,
+                    ownerGeneration: requestOwnerGeneration
+                ) else {
+                    throw AuthStoreError.staleOperation
+                }
+                self.session = refreshed
+                return result
+            } catch {
+                await self.cloudClient.releaseAccess(handle: accessHandle(result))
+                throw error
+            }
+        }
+        return commit.value
+    }
+
+    private func canCommitAccess(revision: UInt64, ownerGeneration: UInt64) -> Bool {
+        credentialCoordinator.isCurrent(revision)
+            && !isSigningOut
+            && self.ownerGeneration == ownerGeneration
+    }
+
     func retry() async {
-        if session != nil {
+        switch recoveryAction {
+        case .signIn:
+            await signIn()
+        case .signOut:
+            await signOut()
+        case .refreshProfile where session != nil:
             await refreshProfile(reason: .manualRetry)
-        } else {
+        case .refreshProfile:
             await signIn()
         }
     }
 
     func refreshForRegionChange() async -> Bool {
-        guard let session else { return false }
+        guard let session, !isSigningOut else { return false }
+        let requestRevision = credentialCoordinator.currentRevision
         IOSRuntimeTrace.event(
             domain: "auth",
             event: "cloudRegionSessionRefreshStarted",
@@ -524,18 +625,37 @@ final class AuthStore: ObservableObject {
             importance: .key
         )
         phase = .refreshing
-        let renewed = await refreshSession(
+        let disposition = await refreshSession(
             session,
             preserveCloudScope: false,
-            markSignedIn: false
+            markSignedIn: false,
+            expectedRevision: requestRevision
         )
+        guard disposition.establishesSignedInState else { return false }
         ownerGeneration &+= 1
         profileInitialRefreshGeneration = nil
         phase = .signedIn
-        return renewed
+        return disposition == .renewed
     }
 
     func signOut() async {
+        guard !isSigningOut else {
+            IOSRuntimeTrace.decision(
+                domain: "auth",
+                event: "authSignOutSkipped",
+                payload: ["reason": "alreadySigningOut"],
+                dimension: .lifecycle,
+                importance: .debug
+            )
+            return
+        }
+        isSigningOut = true
+        defer { isSigningOut = false }
+        let signOutRevision = credentialCoordinator.invalidate()
+        ownerGeneration &+= 1
+        profileInitialRefreshGeneration = nil
+        phase = .refreshing
+        errorMessage = nil
         IOSRuntimeTrace.event(
             domain: "auth",
             event: "authSignOutStarted",
@@ -548,15 +668,38 @@ final class AuthStore: ObservableObject {
         profileRefreshTask = nil
         profileRefreshTaskID = nil
         do {
-            try await keychain.delete()
+            _ = try await credentialCoordinator.perform(
+                expectedRevision: signOutRevision,
+                advancesRevision: true
+            ) { [weak self] revision in
+                guard let self else { throw AuthStoreError.staleOperation }
+                try await self.keychain.delete()
+                guard self.credentialCoordinator.isCurrent(revision) else {
+                    throw AuthStoreError.staleOperation
+                }
+                self.session = nil
+                self.profile = nil
+                self.phase = .signedOut
+                self.recoveryAction = .signIn
+            }
         } catch {
+            guard credentialCoordinator.isCurrent(signOutRevision), !AuthStoreError.isStale(error)
+            else { return }
             errorMessage = error.localizedDescription
+            phase = .failed
+            recoveryAction = .signOut
+            IOSRuntimeTrace.event(
+                domain: "auth",
+                event: "authSignOutFailed",
+                payload: CloudLibraryDiagnostics.errorPayload(
+                    error,
+                    extra: ["sessionRetained": .bool(session != nil)]
+                ),
+                dimension: .lifecycle,
+                importance: .essential
+            )
+            return
         }
-        session = nil
-        profile = nil
-        ownerGeneration &+= 1
-        profileInitialRefreshGeneration = nil
-        phase = .signedOut
         IOSRuntimeTrace.state(
             domain: "auth",
             event: "authSignedOut",
@@ -570,10 +713,12 @@ final class AuthStore: ObservableObject {
     private func refreshSession(
         _ stored: StoredAuthSession,
         preserveCloudScope: Bool = true,
-        markSignedIn: Bool = true
-    ) async -> Bool {
+        markSignedIn: Bool = true,
+        expectedRevision: UInt64? = nil
+    ) async -> SessionRefreshDisposition {
         let operationID = UUID().uuidString
         let startedAt = Date()
+        let requestRevision = expectedRevision ?? credentialCoordinator.currentRevision
         phase = .refreshing
         errorMessage = nil
         IOSRuntimeTrace.event(
@@ -586,71 +731,110 @@ final class AuthStore: ObservableObject {
         )
 
         do {
-            let bridgeSession = try await client.renewLogin(
-                refreshToken: stored.refreshToken,
-                seedJSON: stored.seedJSON,
-                forceRegionIP: settings.cloudRegionPreset.forceRegionIP
-            )
-            let refreshed = StoredAuthSession(
-                bridgeSession: bridgeSession,
-                cloudAccountID: preserveCloudScope ? stored.cloudAccountID : nil,
-                cloudRegionHost: preserveCloudScope ? stored.cloudRegionHost : nil
-            )
-            try await keychain.save(refreshed)
-            session = refreshed
-            if markSignedIn {
-                phase = .signedIn
+            let commit = try await credentialCoordinator.perform(
+                expectedRevision: requestRevision,
+                advancesRevision: true
+            ) { [weak self] revision -> SessionRefreshDisposition in
+                guard let self else { throw AuthStoreError.staleOperation }
+                do {
+                    let bridgeSession = try await self.client.renewLogin(
+                        refreshToken: stored.refreshToken,
+                        seedJSON: stored.seedJSON,
+                        forceRegionIP: self.settings.cloudRegionPreset.forceRegionIP
+                    )
+                    guard self.credentialCoordinator.isCurrent(revision) else {
+                        throw AuthStoreError.staleOperation
+                    }
+                    let refreshed = StoredAuthSession(
+                        bridgeSession: bridgeSession,
+                        cloudAccountID: preserveCloudScope ? stored.cloudAccountID : nil,
+                        cloudRegionHost: preserveCloudScope ? stored.cloudRegionHost : nil
+                    )
+                    try await self.keychain.save(refreshed)
+                    guard self.credentialCoordinator.isCurrent(revision) else {
+                        throw AuthStoreError.staleOperation
+                    }
+                    self.session = refreshed
+                    if markSignedIn {
+                        self.phase = .signedIn
+                    }
+                    self.recoveryAction = .refreshProfile
+                    return .renewed
+                } catch {
+                    guard self.credentialCoordinator.isCurrent(revision),
+                          !AuthStoreError.isStale(error)
+                    else {
+                        throw AuthStoreError.staleOperation
+                    }
+                    self.errorMessage = CloudLibraryDiagnostics.safeError(error)
+                    let failureDisposition = AuthRenewalFailureDisposition(error: error)
+                    IOSRuntimeTrace.decision(
+                        domain: "auth",
+                        event: "authSessionRenewFailed",
+                        payload: CloudLibraryDiagnostics.errorPayload(
+                            error,
+                            extra: [
+                                "disposition": .string(failureDisposition.rawValue),
+                                "fallback": .string(
+                                    failureDisposition == .retryable
+                                        ? "storedWebToken"
+                                        : "rejected"
+                                ),
+                            ]
+                        ),
+                        dimension: .network,
+                        importance: .key,
+                        operationID: operationID
+                    )
+                    guard failureDisposition == .retryable else {
+                        self.phase = .failed
+                        self.recoveryAction = .signIn
+                        return .rejected
+                    }
+                    self.session = stored
+                    if markSignedIn {
+                        self.phase = .signedIn
+                    }
+                    self.recoveryAction = .refreshProfile
+                    return .retryableFallback
+                }
+            }
+            let disposition = commit.value
+            guard disposition == .renewed else {
+                if disposition == .retryableFallback {
+                    IOSRuntimeTrace.state(
+                        domain: "auth",
+                        event: "authSessionFallbackSucceeded",
+                        payload: [
+                            "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                            "fallback": "storedCredentials",
+                        ],
+                        dimension: .lifecycle,
+                        importance: .key,
+                        operationID: operationID
+                    )
+                }
+                return disposition
             }
             IOSRuntimeTrace.state(
                 domain: "auth",
                 event: "authSessionRenewSucceeded",
                 payload: [
                     "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                    "appLevel": .integer(Int64(refreshed.appLevel)),
+                    "appLevel": .integer(Int64(session?.appLevel ?? stored.appLevel)),
                     "regionPreset": .string(settings.cloudRegionPreset.rawValue),
                 ],
                 dimension: .network,
                 importance: .key,
                 operationID: operationID
             )
-            return true
+            return .renewed
         } catch {
+            guard !AuthStoreError.isStale(error) else { return .stale }
             errorMessage = CloudLibraryDiagnostics.safeError(error)
-            IOSRuntimeTrace.decision(
-                domain: "auth",
-                event: "authSessionRenewFailed",
-                payload: CloudLibraryDiagnostics.errorPayload(
-                    error,
-                    extra: ["fallback": "storedWebToken"]
-                ),
-                dimension: .network,
-                importance: .key,
-                operationID: operationID
-            )
-            session = stored
-            if markSignedIn {
-                phase = .signedIn
-            }
-            IOSRuntimeTrace.state(
-                domain: "auth",
-                event: "authSessionFallbackSucceeded",
-                payload: [
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                    "fallback": "storedCredentials",
-                ],
-                dimension: .lifecycle,
-                importance: .key,
-                operationID: operationID
-            )
-            return false
+            phase = .failed
+            recoveryAction = .signIn
+            return .rejected
         }
-    }
-}
-
-private enum AuthStoreError: LocalizedError {
-    case signedOut
-
-    var errorDescription: String? {
-        "Xbox 会话已经结束"
     }
 }

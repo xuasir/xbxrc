@@ -138,7 +138,7 @@ pub async fn prepare_cloud_access(
             include_streaming_tokens: true,
         })
         .await
-        .map_err(|error| XboxBridgeError::Authentication(error.to_string()))?;
+        .map_err(crate::authentication_error)?;
 
     let created_at_ms = now_ms();
     let expires_at_ms = cap_expiry_with_web_token(
@@ -196,7 +196,7 @@ pub async fn prepare_home_access(
             include_streaming_tokens: true,
         })
         .await
-        .map_err(|error| XboxBridgeError::Authentication(error.to_string()))?;
+        .map_err(crate::authentication_error)?;
 
     let created_at_ms = now_ms();
     let expires_at_ms = cap_expiry_with_web_token(

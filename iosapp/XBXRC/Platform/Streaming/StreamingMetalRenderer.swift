@@ -610,6 +610,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
     private var didReportFirstFrameAccepted = false
     private var didReportFirstFrameSubmitted = false
     private var didReportFirstFramePresented = false
+    private var videoContentMode: StreamingVideoContentMode = .fit
 
     convenience init() {
         self.init(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -692,6 +693,13 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
         frameIngress.frameSink = nil
         frameIngress.sizeSink = nil
         scheduler.invalidate()
+    }
+
+    func updateVideoContentMode(_ mode: StreamingVideoContentMode) {
+        stateLock.lock()
+        videoContentMode = mode
+        stateLock.unlock()
+        scheduler.requestTick()
     }
 
     private func consumeFrameSize(_ size: CGSize) {
@@ -1201,10 +1209,20 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
         }
         let frameAspect = frameWidth / frameHeight
         let drawableAspect = drawableWidth / drawableHeight
-        if frameAspect > drawableAspect {
-            return SIMD2<Float>(1, Float(drawableAspect / frameAspect))
-        } else {
+        stateLock.lock()
+        let contentMode = videoContentMode
+        stateLock.unlock()
+        switch contentMode {
+        case .fit:
+            if frameAspect > drawableAspect {
+                return SIMD2<Float>(1, Float(drawableAspect / frameAspect))
+            }
             return SIMD2<Float>(Float(frameAspect / drawableAspect), 1)
+        case .fill:
+            if frameAspect > drawableAspect {
+                return SIMD2<Float>(Float(frameAspect / drawableAspect), 1)
+            }
+            return SIMD2<Float>(1, Float(drawableAspect / frameAspect))
         }
     }
 

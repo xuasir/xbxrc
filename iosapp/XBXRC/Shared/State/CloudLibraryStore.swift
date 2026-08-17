@@ -1,137 +1,6 @@
 import Combine
 import Foundation
 
-enum CloudLibraryDiagnostics {
-    static func elapsedMilliseconds(since start: Date) -> Int {
-        max(0, Int(Date().timeIntervalSince(start) * 1_000))
-    }
-
-    static func errorPayload(
-        _ error: any Error,
-        extra: [String: IOSRuntimeTraceValue] = [:]
-    ) -> [String: IOSRuntimeTraceValue] {
-        let nsError = error as NSError
-        let safeMessage = safeError(error)
-        var payload = extra
-        payload["errorDomain"] = .string(nsError.domain)
-        payload["errorCode"] = .integer(Int64(nsError.code))
-        payload["errorType"] = .string(String(describing: type(of: error)))
-        payload["errorKind"] = .string(classifyError(safeMessage))
-        payload["timeout"] = .bool(isTimeout(nsError: nsError, message: safeMessage))
-        payload["retriable"] = .bool(isRetriable(nsError: nsError, message: safeMessage))
-        payload["error"] = .string(safeMessage)
-        if let statusCode = statusCode(in: safeMessage) {
-            payload["statusCode"] = .integer(Int64(statusCode))
-        }
-        if let offerings = capturedValues(named: "offering", in: safeMessage), !offerings.isEmpty {
-            payload["offerings"] = .string(offerings.joined(separator: ","))
-        }
-        if let forceRegionApplied = booleanValue(named: "forceRegionApplied", in: safeMessage) {
-            payload["forceRegionApplied"] = .bool(forceRegionApplied)
-        }
-        return payload
-    }
-
-    static func safeError(_ error: any Error) -> String {
-        let nsError = error as NSError
-        var value = "\(nsError.domain)#\(nsError.code): \(nsError.localizedDescription)"
-        let patterns = [
-            #"https?://[^\s,;]+"#,
-            #"(?i)(bearer|gstoken|refresh[_ -]?token)[=: ]+[^\s,;}]+"#,
-            #"cloud-[0-9a-fA-F]{16}"#,
-        ]
-        for pattern in patterns {
-            value = value.replacingOccurrences(
-                of: pattern,
-                with: "<redacted>",
-                options: .regularExpression
-            )
-        }
-        return value
-    }
-
-    private static func classifyError(_ message: String) -> String {
-        let normalized = message.lowercased()
-        if normalized.contains("xgpuwebf2p") {
-            return "xgpuwebf2p"
-        }
-        if normalized.contains("xgpuweb") {
-            return "xgpuweb"
-        }
-        if normalized.contains("xcloud token") {
-            return "xcloudTokenUnavailable"
-        }
-        if normalized.contains("cancel") || normalized.contains("取消") {
-            return "cancelled"
-        }
-        if normalized.contains("timed out") || normalized.contains("timeout") {
-            return "timeout"
-        }
-        return "requestFailed"
-    }
-
-    private static func isTimeout(nsError: NSError, message: String) -> Bool {
-        let projected = capturedValues(named: "timeout", in: message)
-        if let projected, !projected.isEmpty {
-            return projected.contains { $0.caseInsensitiveCompare("true") == .orderedSame }
-        }
-        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
-            || message.localizedCaseInsensitiveContains("timeout")
-            || message.localizedCaseInsensitiveContains("timed out")
-    }
-
-    private static func isRetriable(nsError: NSError, message: String) -> Bool {
-        let projected = capturedValues(named: "retriable", in: message)
-        if let projected, !projected.isEmpty {
-            return projected.contains { $0.caseInsensitiveCompare("true") == .orderedSame }
-        }
-        if nsError.domain == NSURLErrorDomain {
-            return true
-        }
-        guard let statusCode = statusCode(in: message) else {
-            return isTimeout(nsError: nsError, message: message)
-        }
-        return statusCode == 408 || statusCode == 429 || statusCode >= 500
-    }
-
-    private static func statusCode(in message: String) -> Int? {
-        let pattern = #"(?i)(?:status(?:Code)?|http)[^0-9]{0,12}([1-5][0-9]{2})"#
-        guard let expression = try? NSRegularExpression(pattern: pattern),
-              let match = expression.firstMatch(
-                  in: message,
-                  range: NSRange(message.startIndex..., in: message)
-              ),
-              let range = Range(match.range(at: 1), in: message)
-        else {
-            return nil
-        }
-        return Int(message[range])
-    }
-
-    private static func capturedValues(named name: String, in message: String) -> [String]? {
-        let pattern = "(?i)\\b\(name)=([a-z0-9_-]+)"
-        guard let expression = try? NSRegularExpression(pattern: pattern) else {
-            return nil
-        }
-        return expression.matches(
-            in: message,
-            range: NSRange(message.startIndex..., in: message)
-        ).compactMap { match in
-            guard let range = Range(match.range(at: 1), in: message) else { return nil }
-            return String(message[range])
-        }
-    }
-
-    private static func booleanValue(named name: String, in message: String) -> Bool? {
-        guard let value = capturedValues(named: name, in: message)?.first else { return nil }
-        switch value.lowercased() {
-        case "true": return true
-        case "false": return false
-        default: return nil
-        }
-    }
-}
-
 enum CloudCatalogRefreshReason: String, Equatable, Sendable {
     case initialActivation
     case cacheMiss
@@ -153,6 +22,7 @@ final class CloudLibraryStore: ObservableObject {
 
     private let client: any XboxCloudDataClient
     private let repository: any CloudCatalogSnapshotStoring
+    private let persistenceCoordinator: CloudCatalogPersistenceCoordinator
     private var activeScope: CloudCatalogScope?
     private var activeAccess: PreparedCloudAccess?
     private var cachedSnapshot: CloudCatalogSnapshot?
@@ -170,6 +40,7 @@ final class CloudLibraryStore: ObservableObject {
     ) {
         self.client = client
         self.repository = repository
+        persistenceCoordinator = CloudCatalogPersistenceCoordinator(repository: repository)
     }
 
     func restoreCached(
@@ -219,6 +90,8 @@ final class CloudLibraryStore: ObservableObject {
                     importance: .key,
                     operationID: operationID
                 )
+                let transition = beginScopeTransition(to: nil)
+                await settleScopeTransition(transition, clearOverlay: false)
             }
             return
         }
@@ -240,24 +113,14 @@ final class CloudLibraryStore: ObservableObject {
             return
         }
 
-        let cancelledRefresh = inFlight != nil
-        let previousAccess = activeAccess
-        generation += 1
-        didRunInitialRefresh = false
-        refreshTask?.cancel()
-        refreshTask = nil
-        refreshTaskID = nil
-        inFlight?.cancel()
-        inFlight = nil
-        inFlightOperationID = nil
-        isRefreshing = false
-        refreshReason = nil
+        let transition = beginScopeTransition(to: scope)
+        let revision = CloudLibraryScopeRevision(generation: generation, scope: scope)
         IOSRuntimeTrace.decision(
             domain: "cloud-library",
             event: "cacheRestoreScopeChanged",
             payload: [
                 "generation": .integer(Int64(generation)),
-                "cancelledRefresh": .bool(cancelledRefresh),
+                "cancelledRefresh": .bool(transition.cancelledRefresh),
                 "market": .string(scope.market),
                 "language": .string(scope.language),
             ],
@@ -265,15 +128,12 @@ final class CloudLibraryStore: ObservableObject {
             importance: .key,
             operationID: operationID
         )
-        activeScope = scope
-        activeAccess = nil
-        errorMessage = nil
-        if let previousAccess {
-            await client.releaseAccess(handle: previousAccess.handle)
-        }
+        await settleScopeTransition(transition, clearOverlay: false)
+        guard isCurrent(revision) else { return }
 
         do {
             guard let snapshot = try await repository.load(scope: scope) else {
+                guard isCurrent(revision) else { return }
                 cachedSnapshot = nil
                 games = []
                 cacheState = .miss
@@ -291,6 +151,7 @@ final class CloudLibraryStore: ObservableObject {
                 )
                 return
             }
+            guard isCurrent(revision), snapshot.scope == scope else { return }
             cachedSnapshot = snapshot
             cacheState = snapshot.cacheState()
             applyCatalogGames(snapshot.games)
@@ -309,6 +170,7 @@ final class CloudLibraryStore: ObservableObject {
                 operationID: operationID
             )
         } catch {
+            guard isCurrent(revision) else { return }
             cachedSnapshot = nil
             games = []
             cacheState = .miss
@@ -433,6 +295,10 @@ final class CloudLibraryStore: ObservableObject {
     ) async {
 
         let requestGeneration = generation
+        let requestRevision = CloudLibraryScopeRevision(
+            generation: generation,
+            scope: activeScope
+        )
         let market = Self.market
         let language = Self.language
         let existingAccess = activeAccess
@@ -497,7 +363,10 @@ final class CloudLibraryStore: ObservableObject {
 
         do {
             let result = try await task.value
-            guard requestGeneration == generation, !Task.isCancelled else {
+            guard isCurrent(requestRevision),
+                  !Task.isCancelled,
+                  requestRevision.scope == nil || requestRevision.scope == result.snapshot.scope
+            else {
                 IOSRuntimeTrace.decision(
                     domain: "cloud-library",
                     event: "catalogRefreshDiscarded",
@@ -511,8 +380,10 @@ final class CloudLibraryStore: ObservableObject {
                     importance: .key,
                     operationID: operationID
                 )
-                inFlight = nil
-                inFlightOperationID = nil
+                if existingAccess?.handle != result.access.handle {
+                    await client.releaseAccess(handle: result.access.handle)
+                }
+                clearRefreshOwnership(operationID: operationID)
                 return
             }
             IOSRuntimeTrace.snapshot(
@@ -529,9 +400,6 @@ final class CloudLibraryStore: ObservableObject {
                 importance: .key,
                 operationID: operationID
             )
-            activeAccess = result.access
-            activeScope = result.snapshot.scope
-            failedHydrationChunks = result.snapshot.failedHydrationChunks
             let mergedGames = mergeActivities(into: result.snapshot.games)
             let previousImageURLs = cachedSnapshot?.successfulImageURLs ?? [:]
             let snapshot = CloudCatalogSnapshot(
@@ -542,7 +410,30 @@ final class CloudLibraryStore: ObservableObject {
                 successfulImageURLs: previousImageURLs
             )
             try await repository.save(snapshot)
-            cachedSnapshot = snapshot
+            guard isCurrent(requestRevision), !Task.isCancelled else {
+                await discardPersistedOverlayIfOwnerChanged(scope: snapshot.scope)
+                if existingAccess?.handle != result.access.handle {
+                    await client.releaseAccess(handle: result.access.handle)
+                }
+                clearRefreshOwnership(operationID: operationID)
+                return
+            }
+            let committedRevision = CloudLibraryScopeRevision(
+                generation: requestGeneration,
+                scope: result.snapshot.scope
+            )
+            activeAccess = result.access
+            activeScope = result.snapshot.scope
+            persistenceCoordinator.synchronize(to: committedRevision)
+            failedHydrationChunks = result.snapshot.failedHydrationChunks
+            cachedSnapshot = CloudCatalogSnapshot(
+                scope: snapshot.scope,
+                games: snapshot.games,
+                baseUpdatedAt: snapshot.baseUpdatedAt,
+                overlayUpdatedAt: snapshot.overlayUpdatedAt,
+                successfulImageURLs: cachedSnapshot?.successfulImageURLs
+                    ?? snapshot.successfulImageURLs
+            )
             cacheState = .fresh
             let didPublishSnapshot = games != mergedGames
             if didPublishSnapshot {
@@ -562,7 +453,7 @@ final class CloudLibraryStore: ObservableObject {
                 importance: .key,
                 operationID: operationID
             )
-            failedHydrationChunks += await hydrateMetadataPages(
+            let hydrationFailures = await hydrateMetadataPages(
                 productIDs: result.snapshot.pendingHydrationProductIDs,
                 access: result.access,
                 scope: result.snapshot.scope,
@@ -570,6 +461,11 @@ final class CloudLibraryStore: ObservableObject {
                 requestGeneration: requestGeneration,
                 operationID: operationID
             )
+            guard isCurrent(committedRevision) else {
+                clearRefreshOwnership(operationID: operationID)
+                return
+            }
+            failedHydrationChunks += hydrationFailures
             if failedHydrationChunks > 0 {
                 errorMessage = "部分游戏图片和详情将在稍后补齐"
             }
@@ -587,7 +483,7 @@ final class CloudLibraryStore: ObservableObject {
                 operationID: operationID
             )
         } catch {
-            guard requestGeneration == generation else {
+            guard isCurrent(requestRevision) else {
                 IOSRuntimeTrace.decision(
                     domain: "cloud-library",
                     event: "catalogRefreshDiscarded",
@@ -604,8 +500,7 @@ final class CloudLibraryStore: ObservableObject {
                     importance: .key,
                     operationID: operationID
                 )
-                inFlight = nil
-                inFlightOperationID = nil
+                clearRefreshOwnership(operationID: operationID)
                 return
             }
             errorMessage = games.isEmpty
@@ -630,10 +525,8 @@ final class CloudLibraryStore: ObservableObject {
             )
         }
 
-        inFlight = nil
-        inFlightOperationID = nil
-        isRefreshing = false
-        refreshReason = nil
+        guard inFlightOperationID == operationID else { return }
+        clearRefreshOwnership(operationID: operationID)
         IOSRuntimeTrace.state(
             domain: "cloud-library",
             event: "libraryStateChanged",
@@ -683,12 +576,15 @@ final class CloudLibraryStore: ObservableObject {
 
     func recordSuccessfulImage(productID: String, url: URL) {
         guard let snapshot = cachedSnapshot,
+              let scope = activeScope,
+              snapshot.scope == scope,
               snapshot.successfulImageURLs[productID] != url
         else {
             return
         }
         let updated = snapshot.withSuccessfulImage(productID: productID, url: url)
         cachedSnapshot = updated
+        let revision = CloudLibraryScopeRevision(generation: generation, scope: scope)
         IOSRuntimeTrace.state(
             domain: "image",
             event: "preferredImageUpdated",
@@ -699,9 +595,10 @@ final class CloudLibraryStore: ObservableObject {
             dimension: .presentation,
             importance: .debug
         )
-        Task {
-            try? await repository.save(updated)
-        }
+        persistenceCoordinator.persistSuccessfulImagePreferences(
+            updated,
+            revision: revision
+        )
     }
 
     func preferredImageURL(for game: CloudLibraryGame) -> URL? {
@@ -723,32 +620,10 @@ final class CloudLibraryStore: ObservableObject {
             importance: .key,
             operationID: operationID
         )
-        generation += 1
-        didRunInitialRefresh = false
-        refreshTask?.cancel()
-        refreshTask = nil
-        refreshTaskID = nil
-        inFlight?.cancel()
-        inFlight = nil
-        inFlightOperationID = nil
-        let accountID = activeScope?.accountID
-        if let activeAccess {
-            await client.releaseAccess(handle: activeAccess.handle)
-        }
-        if let accountID {
-            try? await repository.clearOverlay(accountID: accountID)
-        }
-        activeAccess = nil
-        activeScope = nil
-        cachedSnapshot = nil
-        activitiesByTitleID = [:]
-        games = []
-        phase = .idle
-        cacheState = .miss
-        isRefreshing = false
-        refreshReason = nil
-        errorMessage = nil
-        failedHydrationChunks = 0
+        let transition = beginScopeTransition(to: nil)
+        let revision = CloudLibraryScopeRevision(generation: generation, scope: nil)
+        await settleScopeTransition(transition, clearOverlay: true)
+        guard isCurrent(revision) else { return }
         IOSRuntimeTrace.state(
             domain: "cloud-library",
             event: "libraryStateChanged",
@@ -762,6 +637,76 @@ final class CloudLibraryStore: ObservableObject {
             importance: .key,
             operationID: operationID
         )
+    }
+
+    private func beginScopeTransition(
+        to scope: CloudCatalogScope?
+    ) -> CloudLibraryScopeTransition {
+        generation += 1
+        let revision = CloudLibraryScopeRevision(generation: generation, scope: scope)
+        let previousRefreshTask = refreshTask
+        let transition = CloudLibraryScopeTransition(
+            previousAccess: activeAccess,
+            previousAccountID: activeScope?.accountID,
+            persistenceDrain: persistenceCoordinator.transition(to: revision),
+            refreshTask: previousRefreshTask,
+            cancelledRefresh: inFlight != nil || refreshTask != nil
+        )
+        didRunInitialRefresh = false
+        previousRefreshTask?.cancel()
+        refreshTask = nil
+        refreshTaskID = nil
+        inFlight?.cancel()
+        inFlight = nil
+        inFlightOperationID = nil
+        activeAccess = nil
+        activeScope = scope
+        cachedSnapshot = nil
+        activitiesByTitleID = [:]
+        games = []
+        phase = .idle
+        cacheState = .miss
+        isRefreshing = false
+        refreshReason = nil
+        errorMessage = nil
+        failedHydrationChunks = 0
+        return transition
+    }
+
+    private func settleScopeTransition(
+        _ transition: CloudLibraryScopeTransition,
+        clearOverlay: Bool
+    ) async {
+        await persistenceCoordinator.settle(transition.persistenceDrain)
+        await transition.refreshTask?.value
+        if let previousAccess = transition.previousAccess {
+            await client.releaseAccess(handle: previousAccess.handle)
+        }
+        if clearOverlay,
+           let accountID = transition.previousAccountID,
+           activeScope?.accountID != accountID
+        {
+            try? await repository.clearOverlay(accountID: accountID)
+        }
+    }
+
+    private func isCurrent(_ revision: CloudLibraryScopeRevision) -> Bool {
+        revision.generation == generation && revision.scope == activeScope
+    }
+
+    private func clearRefreshOwnership(operationID: String) {
+        guard inFlightOperationID == operationID else { return }
+        inFlight = nil
+        inFlightOperationID = nil
+        isRefreshing = false
+        refreshReason = nil
+    }
+
+    private func discardPersistedOverlayIfOwnerChanged(
+        scope: CloudCatalogScope
+    ) async {
+        guard activeScope?.accountID != scope.accountID else { return }
+        try? await repository.clearOverlay(accountID: scope.accountID)
     }
 
     private func applyCatalogGames(_ catalogGames: [CloudLibraryGame]) {
@@ -780,6 +725,10 @@ final class CloudLibraryStore: ObservableObject {
         operationID: String
     ) async -> Int {
         var failedPages = 0
+        let revision = CloudLibraryScopeRevision(
+            generation: requestGeneration,
+            scope: scope
+        )
         let pages = productIDs.chunked(maxCount: 75)
         guard !pages.isEmpty else {
             return 0
@@ -797,7 +746,7 @@ final class CloudLibraryStore: ObservableObject {
             operationID: operationID
         )
         for (pageIndex, page) in pages.enumerated() {
-            guard requestGeneration == generation, !Task.isCancelled else {
+            guard isCurrent(revision), !Task.isCancelled else {
                 IOSRuntimeTrace.decision(
                     domain: "cloud-library",
                     event: "metadataHydrationStopped",
@@ -834,7 +783,7 @@ final class CloudLibraryStore: ObservableObject {
                     language: scope.language,
                     productIDs: page
                 )
-                guard requestGeneration == generation else {
+                guard isCurrent(revision) else {
                     IOSRuntimeTrace.decision(
                         domain: "cloud-library",
                         event: "metadataPageDiscarded",
@@ -875,8 +824,32 @@ final class CloudLibraryStore: ObservableObject {
                     overlayUpdatedAt: fetchedAt,
                     successfulImageURLs: cachedSnapshot?.successfulImageURLs ?? [:]
                 )
-                cachedSnapshot = snapshot
                 try await repository.save(snapshot)
+                guard isCurrent(revision), !Task.isCancelled else {
+                    await discardPersistedOverlayIfOwnerChanged(scope: snapshot.scope)
+                    IOSRuntimeTrace.decision(
+                        domain: "cloud-library",
+                        event: "metadataPageDiscarded",
+                        payload: [
+                            "requestGeneration": .integer(Int64(requestGeneration)),
+                            "currentGeneration": .integer(Int64(generation)),
+                            "pageIndex": .integer(Int64(pageIndex)),
+                            "stage": "afterSave",
+                        ],
+                        dimension: .lifecycle,
+                        importance: .key,
+                        operationID: operationID
+                    )
+                    break
+                }
+                cachedSnapshot = CloudCatalogSnapshot(
+                    scope: snapshot.scope,
+                    games: snapshot.games,
+                    baseUpdatedAt: snapshot.baseUpdatedAt,
+                    overlayUpdatedAt: snapshot.overlayUpdatedAt,
+                    successfulImageURLs: cachedSnapshot?.successfulImageURLs
+                        ?? snapshot.successfulImageURLs
+                )
                 applyCatalogGames(updatedGames)
                 IOSRuntimeTrace.state(
                     domain: "cloud-library",

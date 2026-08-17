@@ -48,10 +48,26 @@ enum XboxDataRefreshReason: String, Equatable, Sendable {
     case commandResult
 }
 
+private struct AchievementCacheKey: Hashable, Sendable {
+    let titleID: String
+    let locale: String
+}
+
+private struct AchievementSurfaceState {
+    var achievements: [AchievementSummary] = []
+    var phase: DataLoadPhase = .idle
+    var errorMessage: String?
+}
+
+private struct AchievementRefreshHandle {
+    let id: UUID
+    let task: Task<Void, Never>
+}
+
 private enum XboxDataSurface: Hashable {
     case hosts
     case library
-    case achievements(String)
+    case achievements(AchievementCacheKey)
 }
 
 @MainActor
@@ -66,9 +82,7 @@ final class XboxDataStore: ObservableObject {
     @Published private(set) var isRefreshingLibrary = false
     @Published private(set) var libraryErrorMessage: String?
 
-    @Published private var achievementsByTitleID: [String: [AchievementSummary]] = [:]
-    @Published private var achievementPhases: [String: DataLoadPhase] = [:]
-    @Published private var achievementErrors: [String: String] = [:]
+    @Published private var achievementStates: [AchievementCacheKey: AchievementSurfaceState] = [:]
 
     private let client: any XboxDataClient
     private let preferredGameLocaleProvider: (any PreferredGameLocaleProviding)?
@@ -80,8 +94,7 @@ final class XboxDataStore: ObservableObject {
     private var hostRefreshTaskID: UUID?
     private var libraryRefreshTask: Task<Void, Never>?
     private var libraryRefreshTaskID: UUID?
-    private var achievementRefreshTasks: [String: Task<Void, Never>] = [:]
-    private var achievementRefreshTaskIDs: [String: UUID] = [:]
+    private var achievementRefreshes: [AchievementCacheKey: AchievementRefreshHandle] = [:]
     private var hostRefreshOperationID: String?
     private var hostPowerOperationID: String?
 
@@ -488,29 +501,36 @@ final class XboxDataStore: ObservableObject {
     }
 
     func achievements(for titleID: String) -> [AchievementSummary] {
-        achievementsByTitleID[titleID] ?? []
+        achievementStates[achievementCacheKey(for: titleID)]?.achievements ?? []
     }
 
     func achievementPhase(for titleID: String) -> DataLoadPhase {
-        achievementPhases[titleID] ?? .idle
+        achievementStates[achievementCacheKey(for: titleID)]?.phase ?? .idle
     }
 
     func achievementError(for titleID: String) -> String? {
-        achievementErrors[titleID]
+        achievementStates[achievementCacheKey(for: titleID)]?.errorMessage
     }
 
     func activateAchievementsOnce(for game: GameSummary) async {
-        await activateOnce(.achievements(game.titleID)) {
+        let key = achievementCacheKey(for: game.titleID)
+        await activateOnce(.achievements(key)) {
             await self.loadAchievements(
                 for: game,
                 force: false,
-                reason: .initialActivation
+                reason: .initialActivation,
+                using: key
             )
         }
     }
 
     func refreshAchievements(for game: GameSummary) async {
-        await loadAchievements(for: game, force: true, reason: .manualPull)
+        await loadAchievements(
+            for: game,
+            force: true,
+            reason: .manualPull,
+            using: achievementCacheKey(for: game.titleID)
+        )
     }
 
     func loadAchievements(
@@ -518,26 +538,44 @@ final class XboxDataStore: ObservableObject {
         force: Bool = false,
         reason: XboxDataRefreshReason? = nil
     ) async {
+        await loadAchievements(
+            for: game,
+            force: force,
+            reason: reason,
+            using: achievementCacheKey(for: game.titleID)
+        )
+    }
+
+    private func loadAchievements(
+        for game: GameSummary,
+        force: Bool,
+        reason: XboxDataRefreshReason?,
+        using key: AchievementCacheKey
+    ) async {
         let refreshReason = reason ?? (force ? .manualPull : .initialActivation)
-        if let achievementRefreshTask = achievementRefreshTasks[game.titleID] {
+        if let refresh = achievementRefreshes[key] {
             IOSRuntimeTrace.decision(
                 domain: "xbox-data",
                 event: "achievementsRefreshCoalesced",
                 payload: [
                     "titleID": .string(game.titleID),
+                    "locale": .string(key.locale),
                     "reason": .string(refreshReason.rawValue),
                 ],
                 dimension: .lifecycle,
                 importance: .debug
             )
-            await achievementRefreshTask.value
+            await refresh.task.value
             return
         }
-        if !force, achievementPhases[game.titleID] == .loaded {
+        if !force, achievementStates[key]?.phase == .loaded {
             IOSRuntimeTrace.decision(
                 domain: "xbox-data",
                 event: "achievementsLoadSkipped",
-                payload: ["reason": "alreadyLoaded"],
+                payload: [
+                    "reason": "alreadyLoaded",
+                    "locale": .string(key.locale),
+                ],
                 dimension: .core,
                 importance: .debug
             )
@@ -547,16 +585,20 @@ final class XboxDataStore: ObservableObject {
         let taskID = UUID()
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.performLoadAchievements(for: game, reason: refreshReason)
+            await self.performLoadAchievements(
+                for: game,
+                cacheKey: key,
+                reason: refreshReason
+            )
         }
-        achievementRefreshTasks[game.titleID] = task
-        achievementRefreshTaskIDs[game.titleID] = taskID
+        achievementRefreshes[key] = AchievementRefreshHandle(id: taskID, task: task)
         await task.value
-        clearAchievementTask(for: game.titleID, matching: taskID)
+        clearAchievementTask(for: key, matching: taskID)
     }
 
     private func performLoadAchievements(
         for game: GameSummary,
+        cacheKey: AchievementCacheKey,
         reason: XboxDataRefreshReason
     ) async {
         guard let webTokenJSON else {
@@ -573,19 +615,19 @@ final class XboxDataStore: ObservableObject {
         let operationID = UUID().uuidString
         let startedAt = Date()
         let requestToken = webTokenJSON
-        let requestLocale = resolvedPreferredGameLocale()
         let requestGeneration = boundOwnerGeneration
         let requestFallbackOwnerKey = fallbackOwnerKey
-        let hadContent = !(achievementsByTitleID[game.titleID] ?? []).isEmpty
+        let hadContent = !(achievementStates[cacheKey]?.achievements ?? []).isEmpty
         if !hadContent {
-            achievementPhases[game.titleID] = .loading
+            updateAchievementState(for: cacheKey) { $0.phase = .loading }
         }
-        achievementErrors[game.titleID] = nil
+        updateAchievementState(for: cacheKey) { $0.errorMessage = nil }
         IOSRuntimeTrace.event(
             domain: "xbox-data",
             event: "achievementsLoadStarted",
             payload: [
                 "hadContent": .bool(hadContent),
+                "locale": .string(cacheKey.locale),
                 "reason": .string(reason.rawValue),
             ],
             dimension: .network,
@@ -596,7 +638,7 @@ final class XboxDataStore: ObservableObject {
             let achievements = try await client.loadAchievements(
                 webTokenJSON: requestToken,
                 titleID: game.titleID,
-                locale: requestLocale
+                locale: cacheKey.locale
             )
             guard ownsRequest(
                 generation: requestGeneration,
@@ -605,15 +647,18 @@ final class XboxDataStore: ObservableObject {
                 IOSRuntimeTrace.decision(
                     domain: "xbox-data",
                     event: "achievementsLoadDiscarded",
-                    payload: [:],
+                    payload: ["locale": .string(cacheKey.locale)],
                     dimension: .lifecycle,
                     importance: .debug,
                     operationID: operationID
                 )
                 return
             }
-            achievementsByTitleID[game.titleID] = achievements
-            achievementPhases[game.titleID] = .loaded
+            updateAchievementState(for: cacheKey) { state in
+                state.achievements = achievements
+                state.phase = .loaded
+                state.errorMessage = nil
+            }
             IOSRuntimeTrace.state(
                 domain: "xbox-data",
                 event: "achievementsLoadSucceeded",
@@ -632,8 +677,10 @@ final class XboxDataStore: ObservableObject {
             ) else {
                 return
             }
-            achievementPhases[game.titleID] = hadContent ? .loaded : .failed
-            achievementErrors[game.titleID] = error.localizedDescription
+            updateAchievementState(for: cacheKey) { state in
+                state.phase = hadContent ? .loaded : .failed
+                state.errorMessage = error.localizedDescription
+            }
             IOSRuntimeTrace.event(
                 domain: "xbox-data",
                 event: "achievementsLoadFailed",
@@ -666,10 +713,23 @@ final class XboxDataStore: ObservableObject {
         }
     }
 
-    private func resolvedPreferredGameLocale() -> String {
-        let trimmed = preferredGameLocaleProvider?.preferredGameLocale
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? "en-US" : trimmed
+    private func achievementCacheKey(for titleID: String) -> AchievementCacheKey {
+        AchievementCacheKey(
+            titleID: titleID,
+            locale: PreferredGameLocaleNormalizer.normalize(
+                preferredGameLocaleProvider?.preferredGameLocale
+                    ?? PreferredGameLocaleNormalizer.fallback
+            )
+        )
+    }
+
+    private func updateAchievementState(
+        for key: AchievementCacheKey,
+        update: (inout AchievementSurfaceState) -> Void
+    ) {
+        var state = achievementStates[key] ?? AchievementSurfaceState()
+        update(&state)
+        achievementStates[key] = state
     }
 
     private func runPowerCommand(
@@ -820,9 +880,8 @@ final class XboxDataStore: ObservableObject {
         libraryRefreshTask?.cancel()
         libraryRefreshTask = nil
         libraryRefreshTaskID = nil
-        achievementRefreshTasks.values.forEach { $0.cancel() }
-        achievementRefreshTasks = [:]
-        achievementRefreshTaskIDs = [:]
+        achievementRefreshes.values.forEach { $0.task.cancel() }
+        achievementRefreshes = [:]
         initialActivations = []
         hostRefreshOperationID = nil
         hostPowerOperationID = nil
@@ -835,9 +894,7 @@ final class XboxDataStore: ObservableObject {
         libraryPhase = .idle
         isRefreshingLibrary = false
         libraryErrorMessage = nil
-        achievementsByTitleID = [:]
-        achievementPhases = [:]
-        achievementErrors = [:]
+        achievementStates = [:]
     }
 
     private func activateOnce(
@@ -870,10 +927,12 @@ final class XboxDataStore: ObservableObject {
         return fallbackOwnerKey == requestFallbackOwnerKey
     }
 
-    private func clearAchievementTask(for titleID: String, matching taskID: UUID) {
-        guard achievementRefreshTaskIDs[titleID] == taskID else { return }
-        achievementRefreshTasks[titleID] = nil
-        achievementRefreshTaskIDs[titleID] = nil
+    private func clearAchievementTask(
+        for key: AchievementCacheKey,
+        matching taskID: UUID
+    ) {
+        guard achievementRefreshes[key]?.id == taskID else { return }
+        achievementRefreshes[key] = nil
     }
 }
 
