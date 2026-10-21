@@ -25,7 +25,7 @@ use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_FORMAT_R8_UNORM, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory2, IDXGIOutput, IDXGISwapChain1,
+    CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory2, IDXGIOutput, IDXGISwapChain1, DXGI_PRESENT,
     DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG,
     DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
 };
@@ -753,6 +753,7 @@ fn run_windows_d3d11_render_tick(
         if size_changed {
             state.last_surface_size = Some((surface_width, surface_height));
         }
+        let has_cached_frame = state.latest_frame.is_some();
         let Some(renderer) = state.renderer.as_mut() else {
             return;
         };
@@ -770,7 +771,6 @@ fn run_windows_d3d11_render_tick(
                 return;
             }
         }
-        let has_cached_frame = state.latest_frame.is_some();
         let presented_frame = process_d3d11_render_take_outcome(
             renderer,
             take_result.outcome,
@@ -1150,7 +1150,7 @@ impl D3d11FrameRenderer {
         self.draw_nv12(&y_view, &uv_view, &params)?;
         unsafe {
             self.swap_chain
-                .Present(1, 0)
+                .Present(1, DXGI_PRESENT(0))
                 .ok()
                 .map_err(|error| format!("dxgiPresentFailed:{error}"))?;
         }
@@ -1166,7 +1166,7 @@ impl D3d11FrameRenderer {
             self.context
                 .ClearRenderTargetView(render_target_view, &[0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32]);
             self.swap_chain
-                .Present(1, 0)
+                .Present(1, DXGI_PRESENT(0))
                 .ok()
                 .map_err(|error| format!("dxgiPresentClearFailed:{error}"))?;
         }
@@ -1225,6 +1225,10 @@ impl D3d11FrameRenderer {
         uv_view: &ID3D11ShaderResourceView,
         params: &Nv12ColorParams,
     ) -> Result<(), String> {
+        let render_target_view = self
+            .render_target_view
+            .as_ref()
+            .ok_or_else(|| "d3d11RenderTargetViewMissing".to_string())?;
         unsafe {
             self.context.UpdateSubresource(
                 &self.params_buffer,
@@ -1311,7 +1315,7 @@ fn compile_shader(
             source.len(),
             PCSTR::null(),
             None,
-            None::<windows::Win32::Graphics::Direct3D::ID3DInclude>,
+            None::<&windows::Win32::Graphics::Direct3D::ID3DInclude>,
             PCSTR(entry.as_ptr()),
             PCSTR(target.as_ptr()),
             0,

@@ -30,6 +30,8 @@ use super::{
     MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState,
 };
 #[cfg(target_os = "windows")]
+use super::{finish_host_present_tick_guard_and_maybe_rerun, HostPresentTickGuard};
+#[cfg(target_os = "windows")]
 use super::{process_wgpu_render_take_outcome, take_wgpu_scheduled_frame};
 #[cfg(target_os = "windows")]
 use super::{HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS};
