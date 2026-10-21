@@ -46,6 +46,8 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
     },
     transport: {
       enableSdpPatch: true,
+      // 默认保守策略；runtime 层会在 createPlayerClient 时按 targetType 覆盖：
+      // home → balanced（本地串流不压缩 bitrate），cloud → conservative。
       sdpPatchProfile: 'conservative',
       maxVideoBitrateKbps: 0,
       maxAudioBitrateKbps: 0,

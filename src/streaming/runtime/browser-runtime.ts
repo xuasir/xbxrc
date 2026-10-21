@@ -381,7 +381,9 @@ function createPlayerClient(
     },
     transport: {
       enableSdpPatch: shouldEnableSdpPatch(),
-      sdpPatchProfile: 'conservative',
+      // 本地串流（home）链路不经过公网，bitrate 不是瓶颈，使用 balanced 保持完整码率预算；
+      // 公网 cloud 仍走 conservative，留出冗余应对网络波动。
+      sdpPatchProfile: spec.targetType === 'home' ? 'balanced' : 'conservative',
       codecPreference: toCodecPreference(spec.runtime),
       maxVideoBitrateKbps: spec.runtime.maxVideoBitrateKbps ?? 0,
       maxAudioBitrateKbps: spec.runtime.maxAudioBitrateKbps ?? 0,
@@ -2090,7 +2092,11 @@ export function createBrowserRuntime(options: {
     const nextMaxVideoBitrateKbps = Math.max(2_000, Math.round(baseVideoBitrateKbps * factor))
     assertClient().updateTransportConfig({
       enableSdpPatch: true,
-      sdpPatchProfile: clamped >= 2 ? 'conservative' : 'balanced',
+      // 本地串流不因带宽不足自动切到 conservative：applySdpDownshift 只调整
+      // maxVideoBitrateKbps 数值上限，profile 本身维持 balanced，避免恢复后画质偏低。
+      sdpPatchProfile: currentSpec?.targetType === 'home'
+        ? 'balanced'
+        : (clamped >= 2 ? 'conservative' : 'balanced'),
       maxVideoBitrateKbps: nextMaxVideoBitrateKbps,
     })
     const softPolicyResult = await assertClient().applyVideoSenderPolicy({
