@@ -18,11 +18,6 @@ pub mod rpc;
 pub mod state;
 pub mod window;
 
-#[cfg(target_os = "windows")]
-mod win_foreground;
-#[cfg(target_os = "windows")]
-pub mod win_hwnd;
-
 pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
 pub use gamepad_sampling::{
@@ -32,9 +27,6 @@ pub use gamepad_sampling::{
 };
 pub use state::{AppState, StartupFlagsState};
 pub use window::build_external_link_patch_script;
-
-#[cfg(target_os = "windows")]
-use gamepad_sampling::schedule_gamepad_fse_gate_fallback_nudge;
 
 #[cfg(target_os = "macos")]
 pub use window::handle_macos_window_event;
@@ -255,8 +247,6 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
 
     bind_background_tasks(app.handle(), &state).await?;
     input_gate::sync_gamepad_input_gate(app.handle());
-    #[cfg(target_os = "windows")]
-    refresh_gamepad_on_window_foreground(app.handle(), "shell-init");
     match state.gamepad.activate_sampling() {
         Ok(snapshot) => {
             trace_gamepad_runtime_snapshot(
@@ -328,21 +318,6 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
                 }),
             );
 
-            #[cfg(target_os = "windows")]
-            {
-                runtime_trace.record_event(
-                    "gamepad-shell",
-                    "startupActiveSamplingRearmSkipped",
-                    None,
-                    serde_json::json!({
-                        "delayMs": 900,
-                        "reason": "windows-cold-start-nudge-owns-single-reopen",
-                    }),
-                );
-                return;
-            }
-
-            #[cfg(not(target_os = "windows"))]
             match gamepad.resume_shell_sampling() {
                 Ok(next_snapshot) => {
                     trace_gamepad_runtime_snapshot(
@@ -578,11 +553,6 @@ async fn build_services(
     if let Some(main_window) = app_handle.get_webview_window("main") {
         let fullscreen = state.startup_flags.read().await.fullscreen;
         let _ = main_window.set_fullscreen(fullscreen);
-        #[cfg(target_os = "windows")]
-        {
-            mods::gamepad::fse_windows::init_fse_monitor(&app_handle);
-            schedule_gamepad_fse_gate_fallback_nudge(&app_handle);
-        }
     }
     mods::native_video::configure_main_window_video_host(&app_handle);
 
@@ -801,9 +771,6 @@ pub async fn terminate(app_handle: &AppHandle) {
             "source": "shell",
         }),
     );
-
-    #[cfg(target_os = "windows")]
-    mods::gamepad::fse_windows::shutdown_fse_monitor();
 
     state.gamepad.shutdown();
     state.xbxengine.shutdown().await;

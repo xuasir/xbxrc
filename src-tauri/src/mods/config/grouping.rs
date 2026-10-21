@@ -47,9 +47,7 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "vibration",
             "vibration_strength",
             "gamepad_device_profiles",
-            "gamepad_keyboard_mapping",
-            "gamepad_cold_start_sdl_binding_nudge",
-            "gamepad_fse_gate_fallback_nudge"
+            "gamepad_keyboard_mapping"
         ])
     })
 }

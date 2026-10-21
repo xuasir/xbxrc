@@ -1,23 +1,8 @@
-#[cfg(target_os = "windows")]
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use tauri::{AppHandle, Manager};
-#[cfg(target_os = "windows")]
-use tokio::time::{sleep, Duration};
 
-#[cfg(target_os = "windows")]
-use crate::mods;
 use crate::mods::gamepad::input_gate;
 
-#[cfg(target_os = "windows")]
-use super::trace_gamepad_runtime_snapshot;
 use super::{plan_foreground_refresh_actions, AppState, ForegroundRefreshPlan};
-
-#[cfg(target_os = "windows")]
-static GAMEPAD_COLD_START_SDL_NUDGE_TASK_SCHEDULED: AtomicBool = AtomicBool::new(false);
-
-#[cfg(target_os = "windows")]
-static GAMEPAD_FSE_GATE_FALLBACK_SCHEDULED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ShellSamplingRecoveryMode {
@@ -80,15 +65,7 @@ pub fn handle_gamepad_page_loaded(window: &tauri::Window, url: String) {
         }),
     );
 
-    let visible = window.is_visible().unwrap_or(false);
-    let minimized = window.is_minimized().unwrap_or(false);
     refresh_gamepad_on_window_foreground(&window.app_handle(), "page-load");
-    if visible && !minimized {
-        #[cfg(target_os = "windows")]
-        schedule_gamepad_cold_start_sdl_binding_nudge(&window.app_handle());
-        #[cfg(target_os = "windows")]
-        schedule_gamepad_fse_gate_fallback_nudge(&window.app_handle());
-    }
 }
 
 pub fn handle_gamepad_window_focus_changed(window: &tauri::Window, focused: bool) {
@@ -112,19 +89,6 @@ pub fn handle_gamepad_window_focus_changed(window: &tauri::Window, focused: bool
         .get_webview_window("main")
         .map(|main_window| {
             let hints = input_gate::current_shell_window_gate_hints(&main_window);
-            #[cfg(target_os = "windows")]
-            record_gamepad_shell_trace(
-                window,
-                "windowUnfocusedGateEvaluated",
-                serde_json::json!({
-                    "windowLabel": window.label(),
-                    "shellAppActive": hints.shell_app_active,
-                    "usesWin32ForegroundGate":
-                        mods::gamepad::fse_windows::uses_win32_foreground_gate(&main_window),
-                    "isFseActive": mods::gamepad::fse_windows::is_fse_active(),
-                    "isFullscreen": main_window.is_fullscreen().unwrap_or(false),
-                }),
-            );
             hints.shell_app_active
         })
         .unwrap_or(false);
@@ -191,42 +155,6 @@ pub fn handle_gamepad_app_resumed(app_handle: &AppHandle) {
         );
     }
     hint_gamepad_shell_interactive(app_handle, "app-resumed");
-}
-
-#[cfg(target_os = "windows")]
-fn request_main_window_focus_for_input_stack(app: &AppHandle, reason: &str) {
-    let Some(window) = app.get_webview_window("main") else {
-        log::warn!(
-            "request_main_window_focus_for_input_stack skipped reason={} (main window missing)",
-            reason
-        );
-        return;
-    };
-    let _ = window.show();
-    #[cfg(target_os = "windows")]
-    let used_win32_foreground =
-        super::win_foreground::try_force_webview_foreground_win32(&window, reason);
-    #[cfg(not(target_os = "windows"))]
-    let used_win32_foreground = false;
-    if let Err(error) = window.set_focus() {
-        log::warn!(
-            "request_main_window_focus_for_input_stack set_focus failed reason={} error={}",
-            reason,
-            error
-        );
-    }
-    if let Some(app_state) = window.try_state::<AppState>() {
-        app_state.runtime_trace.record_event(
-            "gamepad-shell",
-            "mainWindowFocusRequestedForInputRecovery",
-            None,
-            serde_json::json!({
-                "reason": reason,
-                "windowLabel": window.label(),
-                "usedWin32Foreground": used_win32_foreground,
-            }),
-        );
-    }
 }
 
 pub fn refresh_gamepad_on_window_foreground(app: &AppHandle, reason: &str) {
@@ -308,148 +236,4 @@ fn apply_shell_gamepad_sampling_recovery(
             );
         }
     }
-}
-
-#[cfg(target_os = "windows")]
-pub(super) fn schedule_gamepad_cold_start_sdl_binding_nudge(app: &AppHandle) {
-    if GAMEPAD_COLD_START_SDL_NUDGE_TASK_SCHEDULED.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        const PHASE_DELAYS_MS: [(u32, u64); 3] = [(0, 150), (1, 2850), (2, 5000)];
-        let mut config_checked = false;
-
-        for (phase_index, delay_ms) in PHASE_DELAYS_MS {
-            sleep(Duration::from_millis(delay_ms)).await;
-
-            let Some(state) = app.try_state::<AppState>() else {
-                log::warn!("gamepad_cold_start_sdl_binding_nudge skipped (AppState not ready)");
-                return;
-            };
-            if !config_checked {
-                let enabled = match state
-                    .config
-                    .get_by_keys(&[String::from("gamepad_cold_start_sdl_binding_nudge")])
-                {
-                    Ok(value) => value
-                        .get("gamepad_cold_start_sdl_binding_nudge")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
-                    Err(_) => true,
-                };
-                if !enabled {
-                    log::info!("gamepad_cold_start_sdl_binding_nudge disabled by config");
-                    return;
-                }
-                config_checked = true;
-            }
-
-            state.runtime_trace.record_event(
-                "gamepad-shell",
-                "gamepadColdStartSdlBindingNudgeRun",
-                None,
-                serde_json::json!({
-                    "phase": "begin",
-                    "phaseIndex": phase_index,
-                }),
-            );
-
-            if phase_index == 0 {
-                request_main_window_focus_for_input_stack(&app, "cold-start-sdl-binding-nudge");
-                input_gate::sync_gamepad_input_gate(&app);
-                if let Err(error) = state.gamepad.set_sampling_lifecycle(
-                    ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-                ) {
-                    log::warn!(
-                        "gamepad_cold_start_sdl_binding_nudge BackgroundWarm failed error={}",
-                        error
-                    );
-                }
-
-                sleep(Duration::from_millis(80)).await;
-
-                let Some(state) = app.try_state::<AppState>() else {
-                    log::warn!("gamepad_cold_start_sdl_binding_nudge mid-run lost AppState");
-                    return;
-                };
-
-                if let Err(error) = state.gamepad.set_sampling_lifecycle(
-                    ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active,
-                ) {
-                    log::warn!(
-                        "gamepad_cold_start_sdl_binding_nudge Active failed error={}",
-                        error
-                    );
-                }
-
-                refresh_gamepad_on_window_foreground(&app, "cold-start-sdl-binding-nudge");
-            }
-
-            if let Ok(snapshot) = state.gamepad.get_runtime_snapshot() {
-                trace_gamepad_runtime_snapshot(
-                    &state.runtime_trace,
-                    "gamepadColdStartSdlBindingNudgeCompleted",
-                    &snapshot,
-                    state.gamepad.stream_pad_forwarding(),
-                    serde_json::json!({
-                        "phase": "done",
-                        "phaseIndex": phase_index,
-                    }),
-                );
-            }
-        }
-    });
-}
-
-#[cfg(target_os = "windows")]
-pub(super) fn schedule_gamepad_fse_gate_fallback_nudge(app: &AppHandle) {
-    if GAMEPAD_FSE_GATE_FALLBACK_SCHEDULED.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        sleep(Duration::from_secs(4)).await;
-        let Some(state) = app.try_state::<AppState>() else {
-            return;
-        };
-        let enabled = match state
-            .config
-            .get_by_keys(&[String::from("gamepad_fse_gate_fallback_nudge")])
-        {
-            Ok(value) => value
-                .get("gamepad_fse_gate_fallback_nudge")
-                .and_then(|entry| entry.as_bool())
-                .unwrap_or(false),
-            Err(_) => false,
-        };
-        if !enabled {
-            return;
-        }
-        let Some(window) = app.get_webview_window("main") else {
-            return;
-        };
-        if !mods::gamepad::fse_windows::uses_win32_foreground_gate(&window) {
-            return;
-        }
-        let Ok(snapshot) = state.gamepad.get_runtime_snapshot() else {
-            return;
-        };
-        if snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Closed {
-            return;
-        }
-        if snapshot.slots.is_empty() {
-            return;
-        }
-        state.runtime_trace.record_event(
-            "gamepad-shell",
-            "gamepadFseGateFallbackNudge",
-            None,
-            serde_json::json!({
-                "inputGateReason": snapshot.input_gate_reason,
-                "slotCount": snapshot.slots.len(),
-            }),
-        );
-        hint_gamepad_shell_interactive(&app, "fse-gate-fallback-nudge");
-    });
 }
