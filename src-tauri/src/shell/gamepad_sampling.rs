@@ -2,12 +2,19 @@ use tauri::{AppHandle, Manager};
 
 use crate::mods::gamepad::input_gate;
 
-use super::{plan_foreground_refresh_actions, AppState, ForegroundRefreshPlan};
+use super::{
+    plan_foreground_refresh_actions, plan_interactive_refresh_actions, AppState,
+    ForegroundRefreshPlan,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ShellSamplingRecoveryMode {
+    /// 窗口事件带来的前台刷新：只在采样确实需要恢复时动设备。
     Foreground,
+    /// 前端触屏提示：仅「用户动了一下」，绝不主动重开设备。
     Interactive,
+    /// 系统级 resume（休眠/长时间挂起回来）：这是真正的恢复信号，强制恢复一次。
+    AppResumed,
 }
 
 impl ShellSamplingRecoveryMode {
@@ -15,6 +22,7 @@ impl ShellSamplingRecoveryMode {
         match self {
             Self::Foreground => "shellForegroundRefresh",
             Self::Interactive => "shellInteractiveHint",
+            Self::AppResumed => "shellAppResumedRefresh",
         }
     }
 }
@@ -129,7 +137,11 @@ pub fn handle_gamepad_app_resumed(app_handle: &AppHandle) {
             }),
         );
     }
-    hint_gamepad_shell_interactive(app_handle, "app-resumed");
+    apply_shell_gamepad_sampling_recovery(
+        app_handle,
+        "app-resumed",
+        ShellSamplingRecoveryMode::AppResumed,
+    );
 }
 
 pub fn refresh_gamepad_on_window_foreground(app: &AppHandle, reason: &str) {
@@ -164,6 +176,37 @@ fn apply_shell_gamepad_sampling_recovery(
         }
         return;
     };
+
+    let hints = input_gate::current_shell_window_gate_hints(&window);
+    let plan = match mode {
+        // 系统 resume 是真实的恢复信号（休眠/挂起回来），不依赖快照判定。
+        ShellSamplingRecoveryMode::AppResumed => ForegroundRefreshPlan {
+            should_resume_sampling: true,
+            should_try_stalled_self_heal: true,
+        },
+        _ => match app_state.gamepad.get_runtime_snapshot() {
+            Ok(snapshot) => match mode {
+                ShellSamplingRecoveryMode::Foreground => {
+                    plan_foreground_refresh_actions(&snapshot, &hints)
+                }
+                _ => plan_interactive_refresh_actions(&snapshot, &hints),
+            },
+            Err(error) => {
+                app_state.runtime_trace.record_event(
+                    "gamepad-shell",
+                    "shellSamplingRecoverySnapshotUnavailable",
+                    None,
+                    serde_json::json!({
+                        "reason": reason,
+                        "mode": mode.trace_event(),
+                        "error": error,
+                    }),
+                );
+                return;
+            }
+        },
+    };
+
     app_state.runtime_trace.record_event(
         "gamepad-shell",
         mode.trace_event(),
@@ -172,24 +215,27 @@ fn apply_shell_gamepad_sampling_recovery(
             "reason": reason,
             "windowLabel": window.label(),
             "streamPadForwarding": app_state.gamepad.stream_pad_forwarding(),
+            "shellAppActive": hints.shell_app_active,
+            "shouldResumeSampling": plan.should_resume_sampling,
+            "shouldTryStalledSelfHeal": plan.should_try_stalled_self_heal,
         }),
     );
 
-    let plan = match mode {
-        ShellSamplingRecoveryMode::Foreground => {
-            let Ok(snapshot) = app_state.gamepad.get_runtime_snapshot() else {
-                return;
-            };
-            plan_foreground_refresh_actions(
-                &snapshot,
-                &input_gate::current_shell_window_gate_hints(&window),
-            )
+    if !plan.should_resume_sampling && !plan.should_try_stalled_self_heal {
+        // 采样已经在正常工作：什么都不做。触屏、窗口事件都不允许打断正在跑的输入。
+        if mode == ShellSamplingRecoveryMode::Interactive {
+            app_state.runtime_trace.record_event(
+                "gamepad-shell",
+                "shellInteractiveHintSkipped",
+                None,
+                serde_json::json!({
+                    "reason": reason,
+                    "cause": "sampling-already-healthy",
+                }),
+            );
         }
-        ShellSamplingRecoveryMode::Interactive => ForegroundRefreshPlan {
-            should_resume_sampling: true,
-            should_try_stalled_self_heal: true,
-        },
-    };
+        return;
+    }
 
     if plan.should_resume_sampling {
         if let Err(error) = app_state.gamepad.resume_shell_sampling() {

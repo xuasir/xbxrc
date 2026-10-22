@@ -168,7 +168,6 @@ fn has_non_keyboard_connected_gamepad_device(
         .any(|device| device.connected && device.device_id != "virtual:keyboard")
 }
 
-#[cfg(any(test, target_os = "windows"))]
 fn should_resume_sampling_on_foreground_refresh(
     snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
     hints: &ohmygamepad_sdl3::ShellWindowGateHints,
@@ -178,6 +177,30 @@ fn should_resume_sampling_on_foreground_refresh(
     }
     snapshot.sampling_lifecycle != ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active
         || snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Open
+}
+
+/// 触屏 / 交互提示 → 采样恢复动作。
+///
+/// 触屏只说明「用户在窗口上动了一下」，本身不是采样故障信号。历史上前端每次
+/// `touchstart` 都会强制走一次 `resume_shell_sampling`，而 resume 内部会
+/// `reopen_devices_and_prime_sampling`（关闭并重开全部 SDL 手柄句柄、再重新枚举）。
+/// 在 FSE 这类枚举本来就不稳的环境里，这一下足以把正在工作的输入打断——表现出来
+/// 就是「碰一下屏幕，手柄就没反应了」。gate 与焦点解耦之后，触屏更没有必要承担
+/// 恢复职责：只有采样确实停了（lifecycle 非 Active / gate 关闭）才恢复，
+/// 其余情况一律不动设备。
+pub(super) fn plan_interactive_refresh_actions(
+    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
+    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
+) -> ForegroundRefreshPlan {
+    if !hints.shell_app_active {
+        return ForegroundRefreshPlan::default();
+    }
+
+    ForegroundRefreshPlan {
+        should_resume_sampling: should_resume_sampling_on_foreground_refresh(snapshot, hints),
+        should_try_stalled_self_heal: snapshot.sampling_health
+            == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled,
+    }
 }
 
 #[cfg(any(test, target_os = "windows"))]
@@ -810,8 +833,8 @@ pub async fn terminate(app_handle: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        plan_foreground_refresh_actions, should_force_gamepad_startup_rearm,
-        should_resume_sampling_on_foreground_refresh,
+        plan_foreground_refresh_actions, plan_interactive_refresh_actions,
+        should_force_gamepad_startup_rearm, should_resume_sampling_on_foreground_refresh,
     };
     use ohmygamepad_protocol::{
         OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto,
@@ -886,5 +909,75 @@ mod tests {
 
         assert!(!plan.should_resume_sampling);
         assert!(plan.should_try_stalled_self_heal);
+    }
+
+    #[test]
+    fn interactive_hint_never_touches_devices_while_sampling_is_healthy() {
+        // 触屏 → 采样健康时必须是纯空操作：resume 会重开 SDL 设备句柄，
+        // 在 FSE 下足以把正在工作的输入打断（「触屏就丢输入」）。
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
+            sampling_health: OhMyGamepadSamplingHealthDto::Healthy,
+            input_gate: OhMyGamepadInputGateModeDto::Open,
+            ..Default::default()
+        };
+        let hints = ShellWindowGateHints {
+            shell_app_active: true,
+            ..Default::default()
+        };
+
+        let plan = plan_interactive_refresh_actions(&snapshot, &hints);
+
+        assert!(!plan.should_resume_sampling);
+        assert!(!plan.should_try_stalled_self_heal);
+    }
+
+    #[test]
+    fn interactive_hint_resumes_when_lifecycle_left_active() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+            input_gate: OhMyGamepadInputGateModeDto::Open,
+            ..Default::default()
+        };
+        let hints = ShellWindowGateHints {
+            shell_app_active: true,
+            ..Default::default()
+        };
+
+        assert!(plan_interactive_refresh_actions(&snapshot, &hints).should_resume_sampling);
+    }
+
+    #[test]
+    fn interactive_hint_resumes_when_gate_is_closed() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
+            input_gate: OhMyGamepadInputGateModeDto::Closed,
+            ..Default::default()
+        };
+        let hints = ShellWindowGateHints {
+            shell_app_active: true,
+            ..Default::default()
+        };
+
+        assert!(plan_interactive_refresh_actions(&snapshot, &hints).should_resume_sampling);
+    }
+
+    #[test]
+    fn interactive_hint_does_nothing_when_window_is_background() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+            sampling_health: OhMyGamepadSamplingHealthDto::Stalled,
+            input_gate: OhMyGamepadInputGateModeDto::Closed,
+            ..Default::default()
+        };
+        let hints = ShellWindowGateHints {
+            shell_app_active: false,
+            ..Default::default()
+        };
+
+        let plan = plan_interactive_refresh_actions(&snapshot, &hints);
+
+        assert!(!plan.should_resume_sampling);
+        assert!(!plan.should_try_stalled_self_heal);
     }
 }
