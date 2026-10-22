@@ -1090,4 +1090,149 @@ describe('renderers', () => {
 
     expect(gl.drawArrays.mock.calls.length).toBeLessThanOrEqual(5)
   })
+
+  // 回归：1440p 源 → 1080p 输出档位属于「不放大」场景，旧实现直接走双线性呈现，
+  // 整个 RCAS 被跳过，观感比 CAS 更糊。现在必须先降采样到中间目标再跑 RCAS。
+  it('downsamples an oversized source through RCAS instead of a plain bilinear present', async () => {
+    const gl = {
+      viewport: vi.fn(),
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      getShaderParameter: vi.fn(() => true),
+      getShaderInfoLog: vi.fn(() => ''),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      deleteShader: vi.fn(),
+      deleteProgram: vi.fn(),
+      getProgramParameter: vi.fn(() => true),
+      getProgramInfoLog: vi.fn(() => ''),
+      useProgram: vi.fn(),
+      createBuffer: vi.fn(() => ({})),
+      bindBuffer: vi.fn(),
+      deleteBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      createTexture: vi.fn(() => ({})),
+      deleteTexture: vi.fn(),
+      bindTexture: vi.fn(),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      texImage2D: vi.fn(),
+      texSubImage2D: vi.fn(),
+      createFramebuffer: vi.fn(() => ({})),
+      deleteFramebuffer: vi.fn(),
+      bindFramebuffer: vi.fn(),
+      framebufferTexture2D: vi.fn(),
+      checkFramebufferStatus: vi.fn(() => 18),
+      getUniformLocation: vi.fn(() => ({})),
+      drawArrays: vi.fn(),
+      getError: vi.fn(() => 0),
+      activeTexture: vi.fn(),
+      uniform1i: vi.fn(),
+      uniform1f: vi.fn(),
+      uniform2f: vi.fn(),
+      uniform4fv: vi.fn(),
+      VERTEX_SHADER: 1,
+      FRAGMENT_SHADER: 2,
+      ARRAY_BUFFER: 3,
+      STATIC_DRAW: 4,
+      FLOAT: 5,
+      TEXTURE_2D: 6,
+      UNPACK_FLIP_Y_WEBGL: 7,
+      TEXTURE_WRAP_S: 8,
+      TEXTURE_WRAP_T: 9,
+      CLAMP_TO_EDGE: 10,
+      TEXTURE_MIN_FILTER: 11,
+      TEXTURE_MAG_FILTER: 12,
+      LINEAR: 13,
+      RGBA: 14,
+      RGB: 6407,
+      UNSIGNED_BYTE: 15,
+      FRAMEBUFFER: 16,
+      COLOR_ATTACHMENT0: 17,
+      FRAMEBUFFER_COMPLETE: 18,
+      COMPILE_STATUS: 19,
+      LINK_STATUS: 20,
+      TRIANGLES: 21,
+      NO_ERROR: 0,
+      TEXTURE0: 22,
+    }
+    const canvasNode = {
+      width: 1920,
+      height: 1080,
+      style: { position: '', inset: '', width: '', height: '', pointerEvents: '', opacity: '', objectFit: '', margin: '' },
+      isConnected: true,
+      remove: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      getContext: vi.fn(() => gl),
+    }
+    globalThis.document = {
+      createElement: (tag: string) => {
+        if (tag === 'canvas') {
+          return canvasNode
+        }
+        return { style: {} }
+      },
+    } as unknown as Document
+
+    // 用持有对象而不是裸 let：TS 会把只在方法里赋值的 `let` 收窄成 `null`，
+    // 导致 `callback?.()` 被判定为「类型 never 不可调用」。
+    const videoFrameMarker: { callback: (() => void) | null } = { callback: null }
+    class LocalVideoElement {
+      dataset: Record<string, string> = {}
+      // 1440p 源，输出档位 1080p —— 触发 noUpscale 分支。
+      videoWidth = 2560
+      videoHeight = 1440
+      insertAdjacentElement = vi.fn()
+      requestVideoFrameCallback(callback: () => void): number {
+        videoFrameMarker.callback = callback
+        return 1
+      }
+
+      cancelVideoFrameCallback(_id: number): void {}
+    }
+    globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
+    const rafCallbacks = new Map<number, FrameRequestCallback>()
+    let nextRafId = 1
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      const id = nextRafId++
+      rafCallbacks.set(id, callback)
+      return id
+    })
+    globalThis.cancelAnimationFrame = vi.fn((id: number) => {
+      rafCallbacks.delete(id)
+    })
+    const video = new LocalVideoElement() as unknown as HTMLVideoElement
+
+    const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
+      superResolutionEnabled: true,
+      superResolutionOutputWidth: 1920,
+      superResolutionOutputHeight: 1080,
+      targetFps: 60,
+    }))
+    await renderer.attach(video)
+    gl.drawArrays.mockClear()
+    gl.uniform1f.mockClear()
+
+    videoFrameMarker.callback?.()
+    const nextRaf = [...rafCallbacks.entries()].sort((a, b) => a[0] - b[0])[0]
+    if (nextRaf !== undefined) {
+      const [id, callback] = nextRaf
+      rafCallbacks.delete(id)
+      callback(0)
+    }
+
+    // 两次 drawArrays：① 降采样到中间目标 ② RCAS 输出到画布。
+    expect(gl.drawArrays).toHaveBeenCalledTimes(2)
+    // 降采样那一趟必须是色彩恒等（100/100/100），避免和 RCAS 叠加两次色彩变换。
+    // 配置里 brightness/contrast/saturation = 105/110/95，只有 RCAS 那趟才会用它们。
+    const colorValues = gl.uniform1f.mock.calls
+      .map(call => call[1])
+      .filter(value => value === 100 || value === 105 || value === 110 || value === 95)
+    expect(colorValues).toEqual([100, 100, 100, 105, 110, 95])
+  })
 })

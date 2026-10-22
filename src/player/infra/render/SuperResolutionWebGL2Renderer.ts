@@ -880,21 +880,41 @@ class SuperResolutionProcessor {
   }
 
   private drawPresentPass(gl: WebGL2RenderingContext, tex: WebGLTexture): boolean {
+    return this.drawPresentPassTo(gl, tex, null, false)
+  }
+
+  /**
+   * 呈现 pass（可选渲染到中间目标）。
+   *
+   * `colorNeutral=true` 时把 brightness/contrast/saturation 全按 100 传入，
+   * 此时 shader 里的三步色彩运算是恒等变换 —— 用来做「降采样到中间目标」的纯搬运，
+   * 避免后面 RCAS 再叠一次色彩变换。
+   */
+  private drawPresentPassTo(
+    gl: WebGL2RenderingContext,
+    tex: WebGLTexture,
+    target: WebGLFramebuffer | null,
+    colorNeutral: boolean,
+  ): boolean {
     if (this.presentProgram === null) {
       return false
     }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target)
     gl.viewport(0, 0, this.outW, this.outH)
     gl.useProgram(this.presentProgram)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.uniform1i(this.presentUniforms.uTex, 0)
-    gl.uniform1f(this.presentUniforms.brightness, this.brightness)
-    gl.uniform1f(this.presentUniforms.contrast, this.contrast)
-    gl.uniform1f(this.presentUniforms.saturation, this.saturation)
+    gl.uniform1f(this.presentUniforms.brightness, colorNeutral ? 100 : this.brightness)
+    gl.uniform1f(this.presentUniforms.contrast, colorNeutral ? 100 : this.contrast)
+    gl.uniform1f(this.presentUniforms.saturation, colorNeutral ? 100 : this.saturation)
     this.bindFullscreenTriangle(gl)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
-    return gl.getError() === gl.NO_ERROR
+    const ok = gl.getError() === gl.NO_ERROR
+    if (target !== null) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    }
+    return ok
   }
 
   private drawRcasPass(gl: WebGL2RenderingContext, tex: WebGLTexture): boolean {
@@ -1005,9 +1025,29 @@ class SuperResolutionProcessor {
         const rcasOnlyPreferred = sameResolution
           && this.pipelineMode !== 'linear'
           && this.rcasProgram !== null
-        const drawn = rcasOnlyPreferred
-          ? this.drawRcasPass(gl, this.easuTex)
-          : this.drawPresentPass(gl, this.easuTex)
+        // 输出档位低于源分辨率（例如 1440p 源 → 1080p 档位）时，EASU 没有放大可做，
+        // 但也不能退回「纯双线性缩小」：那样连 RCAS 锐化都没有，观感会比 CAS 更糊。
+        // 这里先按输出尺寸降采样到中间目标，再跑 RCAS，保持与 CAS 相当的锐度。
+        const midFbo = this.midFbo
+        const midTex = this.midTex
+        const rcasDownscalePreferred = !sameResolution
+          && this.pipelineMode !== 'linear'
+          && this.rcasProgram !== null
+          && midFbo !== null
+          && midTex !== null
+        let drawn = false
+        if (rcasDownscalePreferred && midFbo !== null && midTex !== null) {
+          const downscaled = this.drawPresentPassTo(gl, this.easuTex, midFbo, true)
+          drawn = downscaled && this.drawRcasPass(gl, midTex)
+          if (!drawn) {
+            this.clearGlErrors(gl)
+          }
+        }
+        if (!drawn) {
+          drawn = rcasOnlyPreferred
+            ? this.drawRcasPass(gl, this.easuTex)
+            : this.drawPresentPass(gl, this.easuTex)
+        }
         if (!drawn) {
           this.emitRuntimeDegradeOnce('srPresentDrawFailed')
         }
