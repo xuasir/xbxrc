@@ -37,8 +37,6 @@ use self::presenters::{
 };
 #[cfg(target_os = "macos")]
 use self::presenters::{MacOsVideoPresenter, MacOsWgpuPresenter};
-#[cfg(all(test, not(target_os = "macos")))]
-use self::scheduling::HostCadenceTelemetry;
 use self::scheduling::{
     HostCadenceTelemetry, HostCadenceTelemetryDiagnostics, ScheduledFrameSlot,
     ScheduledFrameTakeOutcome,

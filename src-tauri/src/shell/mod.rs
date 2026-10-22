@@ -150,6 +150,9 @@ fn gamepad_device_trace_signature(
         .join("|")
 }
 
+/// 连续多少个快照判定为「无任何焦点信号」后，主动请求一次前台归属。
+const GATE_FOREGROUND_REQUEST_STREAK: u32 = 3;
+
 fn should_force_gamepad_startup_rearm(
     snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
 ) -> bool {
@@ -613,6 +616,11 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
         let mut prev_input_gate = OhMyGamepadInputGateModeDto::default();
         let mut prev_signature: Option<String> = None;
         let mut last_background_warm_progress_promoted_at_ms: u64 = 0;
+        // 上一次同步给运行时的 gate 判定；用于在事件丢失时自愈。
+        let mut prev_synced_shell_app_active: Option<bool> = None;
+        // 连续「没有任何焦点信号」的快照计数，达到阈值后主动请求一次前台。
+        let mut gate_closed_streak: u32 = 0;
+        let mut gate_foreground_request_done = false;
 
         while !is_quitting_gamepad.load(Ordering::Relaxed) {
             if let Ok(snapshot) = rx.recv() {
@@ -683,10 +691,73 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 let _ = gamepad_events::emit_devices_changed(&app_handle_gamepad, &devices_value);
 
                 if let Some(window) = app_handle_gamepad.get_webview_window("main") {
-                    let visible = window.is_visible().unwrap_or(false);
-                    let minimized = window.is_minimized().unwrap_or(false);
-                    let shell_app_active =
-                        input_gate::current_shell_window_gate_hints(&window).shell_app_active;
+                    let (mut hints, mut gate_diagnostics) =
+                        input_gate::current_shell_window_gate_hints_with_diagnostics(&window);
+                    let visible = gate_diagnostics.visible;
+                    let minimized = gate_diagnostics.minimized;
+                    // 三级兜底：窗口可见且未最小化，但 focus 事件、is_focused、Win32
+                    // 前台归属全部为假，且本进程从没收到过任何 focus 事件 —— 典型是
+                    // 全屏/掌机由外部启动器拉起。此时主动请求一次前台，再重新判定。
+                    if !hints.shell_app_active && visible && !minimized {
+                        if gate_diagnostics.ever_focused {
+                            gate_closed_streak = 0;
+                        } else {
+                            gate_closed_streak = gate_closed_streak.saturating_add(1);
+                            if gate_closed_streak >= GATE_FOREGROUND_REQUEST_STREAK
+                                && !gate_foreground_request_done
+                            {
+                                gate_foreground_request_done = true;
+                                let requested =
+                                    input_gate::request_shell_window_foreground(&window);
+                                runtime_trace_gamepad.record_event(
+                                    "gamepad-shell",
+                                    "shellForegroundRequested",
+                                    None,
+                                    serde_json::json!({
+                                        "requested": requested,
+                                        "closedStreak": gate_closed_streak,
+                                    }),
+                                );
+                                let re_evaluated =
+                                    input_gate::current_shell_window_gate_hints_with_diagnostics(
+                                        &window,
+                                    );
+                                hints = re_evaluated.0;
+                                gate_diagnostics = re_evaluated.1;
+                            }
+                        }
+                    } else {
+                        gate_closed_streak = 0;
+                    }
+                    let shell_app_active = hints.shell_app_active;
+                    // 自愈：gate 只靠 window 事件同步时，一旦某个 Focused 事件丢失
+                    // 就会永久停在 Closed（手柄输入全无）。这里按轮询到的最新判定
+                    // 变化主动下发一次，保证状态最终一致。
+                    if prev_synced_shell_app_active != Some(shell_app_active) {
+                        prev_synced_shell_app_active = Some(shell_app_active);
+                        input_gate::sync_gamepad_input_gate(&app_handle_gamepad);
+                        runtime_trace_gamepad.record_event(
+                            "gamepad-shell",
+                            "inputGateHintsResynced",
+                            None,
+                            serde_json::json!({
+                                "shellAppActive": shell_app_active,
+                                "visible": visible,
+                                "minimized": minimized,
+                                "focusedFromEvent": gate_diagnostics.focused_from_event,
+                                "isFocused": gate_diagnostics.is_focused,
+                                "win32Foreground": gate_diagnostics.win32_foreground,
+                                "everFocused": gate_diagnostics.ever_focused,
+                            }),
+                        );
+                        if shell_app_active {
+                            // gate 由关变开：采样可能停在 BackgroundWarm，主动恢复。
+                            refresh_gamepad_on_window_foreground(
+                                &app_handle_gamepad,
+                                "input-gate-resynced-open",
+                            );
+                        }
+                    }
                     if should_auto_promote_background_warm(
                         &snapshot,
                         visible,
