@@ -94,26 +94,25 @@ pub struct ShellWindowGateHints {
     pub shell_app_active: bool,
 }
 
+/// gate 只由主窗口「前台 / 后台」决定：前台放行，后台不放行。
+///
+/// `sampling_lifecycle` 不参与判定 —— 它只影响采样节奏与健康度。此前把它作为
+/// 的第二个与条件，导致「窗口在前台、但 lifecycle 停在 BackgroundWarm」时输入
+/// 被静默吞掉，与 gate 判定本身无关，排查极易误判。
 pub fn derive_input_gate_from_hints(
     hints: &ShellWindowGateHints,
-    sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
 ) -> (OhMyGamepadInputGateModeDto, String) {
-    if sampling_lifecycle != OhMyGamepadSamplingLifecycleDto::Active {
-        return (
+    if hints.shell_app_active {
+        (
+            OhMyGamepadInputGateModeDto::Open,
+            "shell-foreground".to_owned(),
+        )
+    } else {
+        (
             OhMyGamepadInputGateModeDto::Closed,
-            "sampling-not-active".to_owned(),
-        );
+            "shell-background".to_owned(),
+        )
     }
-    if !hints.shell_app_active {
-        return (
-            OhMyGamepadInputGateModeDto::Closed,
-            "shell-app-inactive".to_owned(),
-        );
-    }
-    (
-        OhMyGamepadInputGateModeDto::Open,
-        "sampling-active-and-shell-app-active".to_owned(),
-    )
 }
 
 pub struct OhMyGamepadService {
@@ -310,12 +309,8 @@ impl OhMyGamepadService {
             .expect("lock shell window gate hints")
     }
 
-    pub fn peek_derived_input_gate(
-        &self,
-        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> (OhMyGamepadInputGateModeDto, String) {
-        let hints = self.shell_window_gate_hints();
-        derive_input_gate_from_hints(&hints, sampling_lifecycle)
+    pub fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String) {
+        derive_input_gate_from_hints(&self.shell_window_gate_hints())
     }
 
     pub fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
@@ -1186,28 +1181,20 @@ mod tests {
     };
 
     #[test]
-    fn derive_input_gate_matches_lifecycle_and_foreground_candidate() {
+    fn derive_input_gate_follows_foreground_only() {
         let open_hints = ShellWindowGateHints {
             shell_app_active: true,
         };
-        let (open, reason) =
-            derive_input_gate_from_hints(&open_hints, OhMyGamepadSamplingLifecycleDto::Active);
+        let (open, reason) = derive_input_gate_from_hints(&open_hints);
         assert_eq!(open, OhMyGamepadInputGateModeDto::Open);
-        assert_eq!(reason, "sampling-active-and-shell-app-active");
+        assert_eq!(reason, "shell-foreground");
 
-        let (warm_closed, _) = derive_input_gate_from_hints(
-            &open_hints,
-            OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-        );
-        assert_eq!(warm_closed, OhMyGamepadInputGateModeDto::Closed);
-
-        let not_foreground = ShellWindowGateHints {
+        let background = ShellWindowGateHints {
             shell_app_active: false,
         };
-        let (closed, reason) =
-            derive_input_gate_from_hints(&not_foreground, OhMyGamepadSamplingLifecycleDto::Active);
+        let (closed, reason) = derive_input_gate_from_hints(&background);
         assert_eq!(closed, OhMyGamepadInputGateModeDto::Closed);
-        assert_eq!(reason, "shell-app-inactive");
+        assert_eq!(reason, "shell-background");
     }
 
     #[test]

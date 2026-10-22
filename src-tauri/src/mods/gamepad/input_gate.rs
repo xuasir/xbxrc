@@ -1,125 +1,55 @@
-//! 主窗口 gate hints 同步到 ohmygamepad（与 runtime lifecycle 一起在 host enrich 中派生 `input_gate`）。
-
-use std::sync::atomic::{AtomicBool, Ordering};
+//! 主窗口前台状态 → ohmygamepad gate。
+//!
+//! 判定只有一个维度：**窗口是否在台前**（可见且未最小化）。
+//!
+//! 刻意**不**看焦点事件、也不看 Win32 前台窗口归属：全屏 / FSE / 掌机启动器
+//! 拉起的路径上这两个信号都不可靠，一旦拿它当关闭条件，就会出现「手柄已连接、
+//! 震动正常、输入全无」。gate 误关的代价是完全没有输入，误开的代价只是后台
+//! 多收几个包 —— 所以这里只做最保守的判定，宁可多放行。
 
 use ohmygamepad_sdl3::ShellWindowGateHints;
 use tauri::{AppHandle, Manager};
 
 use crate::shell::state::AppState;
 
-/// 主窗口是否处于 OS 认为的「获得焦点」态，**仅**由 `WindowEvent::Focused` 更新。
-static SHELL_MAIN_WINDOW_FOCUSED_FROM_EVENT: AtomicBool = AtomicBool::new(false);
-
-/// 进程启动至今是否收到过任何 `WindowEvent::Focused(true)`，仅用于诊断。
-///
-/// gate 判定本身不依赖它：`fse_windows::evaluate` 会同时看 `is_focused()` 与
-/// Win32 前台归属，避免事件通道失灵时 gate 永久 Closed。
-static SHELL_MAIN_WINDOW_EVER_FOCUSED: AtomicBool = AtomicBool::new(false);
-
-/// 一次 gate 判定的全部输入，写进 trace 便于定位「为什么关」。
+/// 一次前台判定的输入与结论，写进 trace 便于定位「为什么被当成后台」。
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ShellGateDiagnostics {
+pub struct ShellForegroundState {
     pub visible: bool,
     pub minimized: bool,
-    pub focused_from_event: bool,
-    pub is_focused: bool,
-    pub win32_foreground: bool,
-    pub ever_focused: bool,
 }
 
-/// 仅应由 `lib.rs` 里 `WindowEvent::Focused` 分支调用。
-pub fn record_shell_main_window_focused_from_os_event(focused: bool) {
-    if focused {
-        SHELL_MAIN_WINDOW_EVER_FOCUSED.store(true, Ordering::Relaxed);
+impl ShellForegroundState {
+    /// 台前 = 窗口可见 + 未最小化。
+    pub fn is_foreground(&self) -> bool {
+        self.visible && !self.minimized
     }
-    SHELL_MAIN_WINDOW_FOCUSED_FROM_EVENT.store(focused, Ordering::Relaxed);
-}
 
-/// 本进程是否曾经收到过 focus 事件（仅诊断用）。
-pub fn shell_main_window_ever_focused() -> bool {
-    SHELL_MAIN_WINDOW_EVER_FOCUSED.load(Ordering::Relaxed)
-}
-
-/// 壳层主动隐藏主窗口时，需要同步清掉上一次 OS focus 事件留下的标记。
-pub fn clear_shell_main_window_focus_from_shell_action() {
-    SHELL_MAIN_WINDOW_FOCUSED_FROM_EVENT.store(false, Ordering::Relaxed);
-}
-
-pub fn shell_main_window_focused_from_event() -> bool {
-    SHELL_MAIN_WINDOW_FOCUSED_FROM_EVENT.load(Ordering::Relaxed)
-}
-
-#[cfg(not(target_os = "windows"))]
-fn build_non_windows_gate_hints(focused_from_event: bool) -> ShellWindowGateHints {
-    ShellWindowGateHints {
-        shell_app_active: focused_from_event,
+    pub fn to_hints(&self) -> ShellWindowGateHints {
+        ShellWindowGateHints {
+            shell_app_active: self.is_foreground(),
+        }
     }
 }
 
-#[cfg(target_os = "windows")]
-fn build_gate_hints(
-    window: &tauri::WebviewWindow,
-    focused_from_event: bool,
-) -> (ShellWindowGateHints, ShellGateDiagnostics) {
-    let evaluation = super::fse_windows::evaluate(window, focused_from_event);
-    (
-        evaluation.to_hints(),
-        ShellGateDiagnostics {
-            visible: evaluation.visible,
-            minimized: evaluation.minimized,
-            focused_from_event,
-            is_focused: evaluation.is_focused,
-            win32_foreground: evaluation.win32_foreground,
-            ever_focused: shell_main_window_ever_focused(),
-        },
-    )
-}
-
-#[cfg(not(target_os = "windows"))]
-fn build_gate_hints(
-    window: &tauri::WebviewWindow,
-    focused_from_event: bool,
-) -> (ShellWindowGateHints, ShellGateDiagnostics) {
-    (
-        build_non_windows_gate_hints(focused_from_event),
-        ShellGateDiagnostics {
-            visible: window.is_visible().unwrap_or(true),
-            minimized: window.is_minimized().unwrap_or(false),
-            focused_from_event,
-            is_focused: window.is_focused().unwrap_or(false),
-            win32_foreground: false,
-            ever_focused: shell_main_window_ever_focused(),
-        },
-    )
-}
-
-fn evaluate_shell_window(
-    window: &tauri::WebviewWindow,
-) -> (ShellWindowGateHints, ShellGateDiagnostics) {
-    build_gate_hints(window, shell_main_window_focused_from_event())
+/// 判定主窗口是否台前。查询失败时按台前处理，绝不因查询异常吞输入。
+pub fn evaluate_shell_foreground(window: &tauri::WebviewWindow) -> ShellForegroundState {
+    ShellForegroundState {
+        visible: window.is_visible().unwrap_or(true),
+        minimized: window.is_minimized().unwrap_or(false),
+    }
 }
 
 pub fn current_shell_window_gate_hints(window: &tauri::WebviewWindow) -> ShellWindowGateHints {
-    evaluate_shell_window(window).0
+    evaluate_shell_foreground(window).to_hints()
 }
 
 /// gate hints + 判定输入，供 trace 记录「为什么开/关」。
-pub fn current_shell_window_gate_hints_with_diagnostics(
+pub fn current_shell_window_gate_hints_with_state(
     window: &tauri::WebviewWindow,
-) -> (ShellWindowGateHints, ShellGateDiagnostics) {
-    evaluate_shell_window(window)
-}
-
-/// 主动请求主窗口前台归属（仅在没有焦点信号时作为兜底调用）。
-pub fn request_shell_window_foreground(window: &tauri::WebviewWindow) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        super::fse_windows::request_main_window_foreground(window)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        window.set_focus().is_ok()
-    }
+) -> (ShellWindowGateHints, ShellForegroundState) {
+    let state = evaluate_shell_foreground(window);
+    (state.to_hints(), state)
 }
 
 pub fn sync_gamepad_input_gate(app: &AppHandle) {
@@ -140,30 +70,24 @@ pub fn sync_gamepad_input_gate(app: &AppHandle) {
         .set_shell_window_gate_hints(current_shell_window_gate_hints(&window));
 }
 
-#[cfg(all(test, not(target_os = "windows")))]
+#[cfg(test)]
 mod tests {
-    use super::{
-        build_non_windows_gate_hints, clear_shell_main_window_focus_from_shell_action,
-        record_shell_main_window_focused_from_os_event, shell_main_window_ever_focused,
-        shell_main_window_focused_from_event,
-    };
+    use super::ShellForegroundState;
 
-    #[test]
-    fn non_windows_gate_ignores_visibility_and_minimize_when_focused() {
-        let hints = build_non_windows_gate_hints(true);
-        assert!(hints.shell_app_active);
+    fn state(visible: bool, minimized: bool) -> ShellForegroundState {
+        ShellForegroundState { visible, minimized }
     }
 
     #[test]
-    fn shell_action_can_clear_stale_focus_flag() {
-        record_shell_main_window_focused_from_os_event(true);
-        assert!(shell_main_window_focused_from_event());
-        assert!(shell_main_window_ever_focused());
+    fn visible_and_restored_is_foreground() {
+        assert!(state(true, false).is_foreground());
+        assert!(state(true, false).to_hints().shell_app_active);
+    }
 
-        clear_shell_main_window_focus_from_shell_action();
-
-        assert!(!shell_main_window_focused_from_event());
-        // ever_focused 是「曾经收到过」的历史事实，清标记不应回退它。
-        assert!(shell_main_window_ever_focused());
+    #[test]
+    fn invisible_or_minimized_is_background() {
+        assert!(!state(false, false).is_foreground());
+        assert!(!state(true, true).is_foreground());
+        assert!(!state(false, true).is_foreground());
     }
 }

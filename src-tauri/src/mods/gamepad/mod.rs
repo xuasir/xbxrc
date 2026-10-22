@@ -1,6 +1,4 @@
 pub mod events;
-#[cfg(target_os = "windows")]
-pub mod fse_windows;
 pub mod input_gate;
 pub mod rpc;
 pub mod service;
@@ -84,10 +82,7 @@ pub struct GamepadFilterConfigDto {
 pub trait GamepadProvider: Send + Sync {
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn stream_pad_forwarding(&self) -> bool;
-    fn peek_derived_input_gate(
-        &self,
-        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> (OhMyGamepadInputGateModeDto, String);
+    fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String);
     fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints);
     fn set_stream_pad_forwarding(
         &self,

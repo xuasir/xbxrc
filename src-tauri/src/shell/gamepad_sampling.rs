@@ -69,7 +69,6 @@ pub fn handle_gamepad_page_loaded(window: &tauri::Window, url: String) {
 }
 
 pub fn handle_gamepad_window_focus_changed(window: &tauri::Window, focused: bool) {
-    input_gate::record_shell_main_window_focused_from_os_event(focused);
     record_gamepad_shell_trace(
         window,
         "windowFocused",
@@ -78,36 +77,11 @@ pub fn handle_gamepad_window_focus_changed(window: &tauri::Window, focused: bool
             "windowLabel": window.label(),
         }),
     );
-    input_gate::sync_gamepad_input_gate(&window.app_handle());
+    // 失焦不改变 gate、也不转 BackgroundWarm：窗口仍在台前时手柄输入必须继续
+    // 可用。只有隐藏 / 最小化才算「台后」，见 `handle_gamepad_window_resized`。
     if focused {
         refresh_gamepad_on_window_foreground(&window.app_handle(), "window-focused");
-        return;
     }
-
-    let shell_still_active = window
-        .app_handle()
-        .get_webview_window("main")
-        .map(|main_window| {
-            let hints = input_gate::current_shell_window_gate_hints(&main_window);
-            hints.shell_app_active
-        })
-        .unwrap_or(false);
-    if shell_still_active {
-        record_gamepad_shell_trace(
-            window,
-            "windowUnfocusedShellGateStillActive",
-            serde_json::json!({
-                "windowLabel": window.label(),
-            }),
-        );
-        refresh_gamepad_on_window_foreground(
-            &window.app_handle(),
-            "window-unfocused-shell-gate-still-active",
-        );
-        return;
-    }
-
-    hint_gamepad_shell_background(window, "window-unfocused");
 }
 
 pub fn handle_gamepad_window_resized(window: &tauri::Window) {
@@ -135,7 +109,8 @@ pub fn handle_gamepad_window_resized(window: &tauri::Window) {
                     "minimized": true,
                 }),
             );
-            input_gate::sync_gamepad_input_gate(&window.app_handle());
+            // 最小化是唯一会主动切「台后」的壳层动作。
+            hint_gamepad_shell_background(window, "window-minimized");
         }
         Err(error) => {
             log::warn!("Failed to inspect window minimized state: {}", error);

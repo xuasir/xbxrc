@@ -51,11 +51,8 @@ impl GamepadProvider for GamepadService {
         self.host.stream_pad_forwarding()
     }
 
-    fn peek_derived_input_gate(
-        &self,
-        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> (OhMyGamepadInputGateModeDto, String) {
-        self.host.peek_derived_input_gate(sampling_lifecycle)
+    fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String) {
+        self.host.peek_derived_input_gate()
     }
 
     fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {

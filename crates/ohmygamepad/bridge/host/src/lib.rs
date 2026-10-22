@@ -93,11 +93,8 @@ impl GamepadRuntimeHost {
         self.runtime.stream_pad_forwarding()
     }
 
-    pub fn peek_derived_input_gate(
-        &self,
-        sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> (OhMyGamepadInputGateModeDto, String) {
-        self.runtime.peek_derived_input_gate(sampling_lifecycle)
+    pub fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String) {
+        self.runtime.peek_derived_input_gate()
     }
 
     pub fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {
@@ -282,7 +279,7 @@ fn enrich_runtime_snapshot(
         default_device_id,
     };
     snapshot.stream_pad_forwarding = service.stream_pad_forwarding();
-    let (gate, reason) = service.peek_derived_input_gate(snapshot.sampling_lifecycle);
+    let (gate, reason) = service.peek_derived_input_gate();
     snapshot.input_gate = gate;
     snapshot.input_gate_reason = reason;
     snapshot

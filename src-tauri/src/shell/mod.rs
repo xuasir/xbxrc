@@ -150,9 +150,6 @@ fn gamepad_device_trace_signature(
         .join("|")
 }
 
-/// 连续多少个快照判定为「无任何焦点信号」后，主动请求一次前台归属。
-const GATE_FOREGROUND_REQUEST_STREAK: u32 = 3;
-
 fn should_force_gamepad_startup_rearm(
     snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
 ) -> bool {
@@ -169,22 +166,6 @@ fn has_non_keyboard_connected_gamepad_device(
         .devices
         .iter()
         .any(|device| device.connected && device.device_id != "virtual:keyboard")
-}
-
-fn should_auto_promote_background_warm(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-    visible: bool,
-    minimized: bool,
-    shell_app_active: bool,
-    last_background_warm_progress_promoted_at_ms: u64,
-) -> bool {
-    snapshot.sampling_lifecycle
-        == ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::BackgroundWarm
-        && snapshot.last_sample_progress_at_ms > 0
-        && snapshot.last_sample_progress_at_ms > last_background_warm_progress_promoted_at_ms
-        && visible
-        && !minimized
-        && shell_app_active
 }
 
 #[cfg(any(test, target_os = "windows"))]
@@ -615,12 +596,8 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
         let rx = gamepad_host.subscribe_runtime_snapshot();
         let mut prev_input_gate = OhMyGamepadInputGateModeDto::default();
         let mut prev_signature: Option<String> = None;
-        let mut last_background_warm_progress_promoted_at_ms: u64 = 0;
-        // 上一次同步给运行时的 gate 判定；用于在事件丢失时自愈。
+        // 上一次同步给运行时的前台判定；变化时重下发一次 gate。
         let mut prev_synced_shell_app_active: Option<bool> = None;
-        // 连续「没有任何焦点信号」的快照计数，达到阈值后主动请求一次前台。
-        let mut gate_closed_streak: u32 = 0;
-        let mut gate_foreground_request_done = false;
 
         while !is_quitting_gamepad.load(Ordering::Relaxed) {
             if let Ok(snapshot) = rx.recv() {
@@ -691,48 +668,10 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 let _ = gamepad_events::emit_devices_changed(&app_handle_gamepad, &devices_value);
 
                 if let Some(window) = app_handle_gamepad.get_webview_window("main") {
-                    let (mut hints, mut gate_diagnostics) =
-                        input_gate::current_shell_window_gate_hints_with_diagnostics(&window);
-                    let visible = gate_diagnostics.visible;
-                    let minimized = gate_diagnostics.minimized;
-                    // 三级兜底：窗口可见且未最小化，但 focus 事件、is_focused、Win32
-                    // 前台归属全部为假，且本进程从没收到过任何 focus 事件 —— 典型是
-                    // 全屏/掌机由外部启动器拉起。此时主动请求一次前台，再重新判定。
-                    if !hints.shell_app_active && visible && !minimized {
-                        if gate_diagnostics.ever_focused {
-                            gate_closed_streak = 0;
-                        } else {
-                            gate_closed_streak = gate_closed_streak.saturating_add(1);
-                            if gate_closed_streak >= GATE_FOREGROUND_REQUEST_STREAK
-                                && !gate_foreground_request_done
-                            {
-                                gate_foreground_request_done = true;
-                                let requested =
-                                    input_gate::request_shell_window_foreground(&window);
-                                runtime_trace_gamepad.record_event(
-                                    "gamepad-shell",
-                                    "shellForegroundRequested",
-                                    None,
-                                    serde_json::json!({
-                                        "requested": requested,
-                                        "closedStreak": gate_closed_streak,
-                                    }),
-                                );
-                                let re_evaluated =
-                                    input_gate::current_shell_window_gate_hints_with_diagnostics(
-                                        &window,
-                                    );
-                                hints = re_evaluated.0;
-                                gate_diagnostics = re_evaluated.1;
-                            }
-                        }
-                    } else {
-                        gate_closed_streak = 0;
-                    }
+                    let (hints, foreground) =
+                        input_gate::current_shell_window_gate_hints_with_state(&window);
                     let shell_app_active = hints.shell_app_active;
-                    // 自愈：gate 只靠 window 事件同步时，一旦某个 Focused 事件丢失
-                    // 就会永久停在 Closed（手柄输入全无）。这里按轮询到的最新判定
-                    // 变化主动下发一次，保证状态最终一致。
+                    // 自愈：前台判定与上次同步不同就重下发一次，不依赖 window 事件送达。
                     if prev_synced_shell_app_active != Some(shell_app_active) {
                         prev_synced_shell_app_active = Some(shell_app_active);
                         input_gate::sync_gamepad_input_gate(&app_handle_gamepad);
@@ -742,12 +681,8 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                             None,
                             serde_json::json!({
                                 "shellAppActive": shell_app_active,
-                                "visible": visible,
-                                "minimized": minimized,
-                                "focusedFromEvent": gate_diagnostics.focused_from_event,
-                                "isFocused": gate_diagnostics.is_focused,
-                                "win32Foreground": gate_diagnostics.win32_foreground,
-                                "everFocused": gate_diagnostics.ever_focused,
+                                "visible": foreground.visible,
+                                "minimized": foreground.minimized,
                             }),
                         );
                         if shell_app_active {
@@ -758,36 +693,29 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                             );
                         }
                     }
-                    if should_auto_promote_background_warm(
-                        &snapshot,
-                        visible,
-                        minimized,
-                        shell_app_active,
-                        last_background_warm_progress_promoted_at_ms,
-                    ) {
-                        last_background_warm_progress_promoted_at_ms =
-                            snapshot.last_sample_progress_at_ms;
-                        runtime_trace_gamepad.record_event(
-                            "gamepad-shell",
-                            "backgroundWarmProgressAutoPromoteRequested",
-                            None,
-                            serde_json::json!({
-                                "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
-                                "visible": visible,
-                                "minimized": minimized,
-                                "shellAppActive": shell_app_active,
-                            }),
-                        );
-                        let promote_result = gamepad_provider
-                            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
-                        if promote_result.is_ok() {
-                            if shell_app_active {
-                                input_gate::record_shell_main_window_focused_from_os_event(true);
-                            }
-                            input_gate::sync_gamepad_input_gate(&app_handle_gamepad);
+                    // 前台就必须在采样。sampling lifecycle 已不参与 gate 派生，
+                    // 若它停在 BackgroundWarm，这里直接提升，避免「门开着但没数据」。
+                    if shell_app_active
+                        && snapshot.sampling_lifecycle != OhMyGamepadSamplingLifecycleDto::Active
+                    {
+                        if let Err(error) = gamepad_provider
+                            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)
+                        {
+                            log::warn!("Failed to promote sampling on foreground: {}", error);
+                        } else {
+                            runtime_trace_gamepad.record_event(
+                                "gamepad-shell",
+                                "samplingPromotedOnForeground",
+                                None,
+                                serde_json::json!({
+                                "previousLifecycle": snapshot.sampling_lifecycle,
+                                "visible": foreground.visible,
+                                "minimized": foreground.minimized,
+                                }),
+                            );
                             refresh_gamepad_on_window_foreground(
                                 &app_handle_gamepad,
-                                "background-warm-progress-auto-promote",
+                                "sampling-promoted-on-foreground",
                             );
                         }
                     }
@@ -882,8 +810,8 @@ pub async fn terminate(app_handle: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        plan_foreground_refresh_actions, should_auto_promote_background_warm,
-        should_force_gamepad_startup_rearm, should_resume_sampling_on_foreground_refresh,
+        plan_foreground_refresh_actions, should_force_gamepad_startup_rearm,
+        should_resume_sampling_on_foreground_refresh,
     };
     use ohmygamepad_protocol::{
         OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto,
@@ -922,22 +850,6 @@ mod tests {
         };
 
         assert!(!should_force_gamepad_startup_rearm(&snapshot));
-    }
-
-    #[test]
-    fn background_warm_auto_promote_requires_shell_app_active() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-            last_sample_progress_at_ms: 1284,
-            ..Default::default()
-        };
-
-        assert!(!should_auto_promote_background_warm(
-            &snapshot, true, false, false, 0,
-        ));
-        assert!(should_auto_promote_background_warm(
-            &snapshot, true, false, true, 0,
-        ));
     }
 
     #[test]
