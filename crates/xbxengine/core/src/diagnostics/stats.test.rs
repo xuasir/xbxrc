@@ -1663,7 +1663,9 @@ fn audio_inbound_bitrate_is_estimated_from_audio_bytes_when_playback_is_absent()
 }
 
 #[test]
-fn video_inbound_bitrate_does_not_fallback_to_media_ingress_bytes_when_transport_stats_are_zero() {
+fn video_inbound_bitrate_falls_back_to_inbound_byte_average_when_transport_stats_are_zero() {
+    // 实时口径（TransportMetrics）没送到时，面板不能直接空掉：
+    // 退回「累计视频字节 / 首包以来时长」，与音频的兜底口径保持一致。
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1673,6 +1675,33 @@ fn video_inbound_bitrate_does_not_fallback_to_media_ingress_bytes_when_transport
         first_video_packet_arrival_time_ms: Some(now_ms - 2_000.0),
         latest_video_packet_arrival_time_ms: Some(now_ms - 16.0),
         inbound_video_bytes_total: 2_000_000,
+        inbound_video_bitrate_kbps: Some(0.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    // 2MB / 2s ≈ 8000 kbps
+    let bitrate = dto
+        .inbound_video_bitrate_kbps
+        .expect("fallback video bitrate should be present");
+    assert!(bitrate > 7_000.0 && bitrate < 9_000.0, "bitrate={bitrate}");
+    assert_eq!(dto.video_actual_bitrate_kbps, Some(bitrate));
+    assert_eq!(
+        dto.actual_video_bitrate_source.as_deref(),
+        Some("inbound-byte-average")
+    );
+}
+
+#[test]
+fn video_inbound_bitrate_stays_unavailable_without_any_video_bytes() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        first_video_packet_arrival_time_ms: Some(now_ms - 2_000.0),
+        inbound_video_bytes_total: 0,
         inbound_video_bitrate_kbps: Some(0.0),
         ..XbxEngineMediaRuntimeStats::default()
     };

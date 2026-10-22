@@ -783,10 +783,18 @@ pub fn build_xbxengine_stats(
     let latest_twcc = runtime_stats.and_then(|stats| stats.latest_video_twcc_observation.as_ref());
     // 主口径固定为 transport inbound video bitrate。TWCC 仅作为诊断/BWE输入。
     let actual_video_bitrate_kbps = resolved_video_bitrate_kbps;
-    let actual_video_bitrate_source = if resolved_video_bitrate_kbps.is_some() {
-        Some("transport-metrics".to_string())
-    } else {
-        Some("unavailable".to_string())
+    let actual_video_bitrate_source = {
+        let transport_bitrate = runtime_stats
+            .and_then(|stats| stats.inbound_video_bitrate_kbps)
+            .filter(|value| *value > 0.1);
+        if transport_bitrate.is_some() {
+            Some("transport-metrics".to_string())
+        } else if resolved_video_bitrate_kbps.is_some() {
+            // 实时口径没送到（或窗口内增量为 0）时退回累计字节均值，避免面板直接空掉。
+            Some("inbound-byte-average".to_string())
+        } else {
+            Some("unavailable".to_string())
+        }
     };
     let twcc_observation_state = runtime_stats.map(resolve_twcc_observation_state);
     let bitrate = resolved_video_bitrate_kbps
@@ -2715,11 +2723,33 @@ fn estimate_audio_inbound_bitrate_kbps(
 
 fn resolve_video_inbound_bitrate_kbps(
     stats: &XbxEngineMediaRuntimeStats,
-    _now_ms: f64,
+    now_ms: f64,
 ) -> Option<f64> {
     stats
         .inbound_video_bitrate_kbps
         .filter(|value| *value > 0.1)
+        .or_else(|| estimate_video_inbound_bitrate_kbps(stats, now_ms))
+}
+
+/// 视频码率的兜底估算：用累计视频字节 / 首包以来的时长。
+///
+/// 实时码率只来自 `TransportMetrics` 观测；一旦该观测在某些会话形态下没送到
+/// （或窗口内增量为 0），面板就只剩「--」。音频这边早就有同样的兜底，
+/// 视频缺一条，表现就是「运行时码率指标为空」。
+fn estimate_video_inbound_bitrate_kbps(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> Option<f64> {
+    let first_video_packet_at_ms = stats.first_video_packet_arrival_time_ms?;
+    let elapsed_ms = (now_ms - first_video_packet_at_ms).max(0.0);
+    if elapsed_ms <= 0.0 {
+        return None;
+    }
+    let bytes_total = stats.inbound_video_bytes_total;
+    if bytes_total == 0 {
+        return None;
+    }
+    Some((bytes_total as f64 * 8.0 / elapsed_ms).max(0.0))
 }
 
 fn resolve_audio_inbound_bitrate_kbps(
