@@ -1907,9 +1907,13 @@ fn capture_xinput_user_state(user_index: u32) -> Result<XInputSnapshot, u32> {
     buttons[15] = if pad.wButtons & 0x0008 != 0 { 1.0 } else { 0.0 };
 
     axes[0] = (pad.sThumbLX as f32 / 32767.0).clamp(-1.0, 1.0);
-    axes[1] = (pad.sThumbLY as f32 / 32767.0).clamp(-1.0, 1.0);
+    // XInput 的 `sThumbLY/sThumbRY` 是「上为正」，而采样层合同是 SDL 语义「上为负」
+    // （见 `normalize_stick_axis`）。这里必须翻一次符号，否则 XInput 直连 / fallback
+    // 路径（FSE 冷启动最常见）产出的逻辑态上下完全反向，发到流端再翻一次就成
+    // 「推上往下」的镜像输入。
+    axes[1] = normalize_xinput_stick_y(pad.sThumbLY);
     axes[2] = (pad.sThumbRX as f32 / 32767.0).clamp(-1.0, 1.0);
-    axes[3] = (pad.sThumbRY as f32 / 32767.0).clamp(-1.0, 1.0);
+    axes[3] = normalize_xinput_stick_y(pad.sThumbRY);
 
     let lt = (pad.bLeftTrigger as f32 / 255.0) * 2.0 - 1.0;
     let rt = (pad.bRightTrigger as f32 / 255.0) * 2.0 - 1.0;
@@ -2390,6 +2394,13 @@ fn normalize_stick_axis(value: i16) -> f32 {
     (value as f32 / i16::MAX as f32).clamp(-1.0, 1.0)
 }
 
+/// XInput 的 `sThumbLY/sThumbRY` 是「上为正」，与采样层合同（SDL：上为负）相反。
+/// 所有 XInput 采样入口都必须经过这里，保证两条采样路径产出同一套坐标符号。
+#[cfg(any(test, target_os = "windows"))]
+fn normalize_xinput_stick_y(value: i16) -> f32 {
+    (-(value as f32) / i16::MAX as f32).clamp(-1.0, 1.0)
+}
+
 fn normalize_trigger_axis(value: i16) -> f32 {
     let normalized = (value.max(0) as f32 / i16::MAX as f32).clamp(0.0, 1.0);
     (normalized * 2.0) - 1.0
@@ -2426,6 +2437,19 @@ fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xinput_stick_y_is_flipped_into_sdl_sign_contract() {
+        // XInput: 推上 = +32767；采样层合同（SDL）：推上 = 负。
+        assert_eq!(normalize_xinput_stick_y(i16::MAX), -1.0);
+        assert_eq!(normalize_xinput_stick_y(i16::MIN), 1.0);
+        assert_eq!(normalize_xinput_stick_y(0), 0.0);
+        // 与 SDL 路径必须落在同一套符号上：SDL 推上是 -32768 → -1.0。
+        assert_eq!(
+            normalize_xinput_stick_y(i16::MAX),
+            normalize_stick_axis(i16::MIN)
+        );
+    }
 
     #[test]
     fn translate_right_y_axis_keeps_normalized_sign() {
