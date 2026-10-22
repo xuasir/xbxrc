@@ -425,13 +425,31 @@ async fn build_services(
         )
     };
 
-    let runtime_trace = Arc::new(
-        mods::runtime_trace::RuntimeTraceRecorder::new_with_config(
-            &runtime_trace_mode,
-            runtime_trace_dimensions.as_deref(),
-        )
-        .map_err(|error| AppError::Internal(format!("Failed to init runtime trace: {error}")))?,
-    );
+    // trace 属于诊断设施，不能因为落盘失败阻断启动：
+    // 先绑定应用日志目录，再让初始化失败降级为 off。
+    let trace_root = app_handle
+        .path()
+        .app_log_dir()
+        .map(|dir| dir.join("runtime-logs"))
+        .unwrap_or_else(|_| std::env::temp_dir().join("xbxrc").join("runtime-logs"));
+    mods::runtime_trace::set_trace_root_dir(trace_root);
+
+    let runtime_trace = {
+        let build_recorder = |mode: &str, dimensions: Option<&str>| {
+            mods::runtime_trace::RuntimeTraceRecorder::new_with_config(mode, dimensions)
+        };
+        match build_recorder(&runtime_trace_mode, runtime_trace_dimensions.as_deref()) {
+            Ok(recorder) => Arc::new(recorder),
+            Err(error) => {
+                log::warn!(
+                    "Runtime trace init failed (mode={runtime_trace_mode}): {error}; fallback to off"
+                );
+                Arc::new(build_recorder("off", None).map_err(|error| {
+                    AppError::Internal(format!("Failed to init runtime trace: {error}"))
+                })?)
+            }
+        }
+    };
     let native_video = Arc::new(StdMutex::new(mods::native_video::NativeVideoRegistry::new(
         app_handle.clone(),
         Some(runtime_trace.clone()),

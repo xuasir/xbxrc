@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -16,9 +16,6 @@ use super::policy::{
     default_trace_metadata, RuntimeTraceProfile, TraceDimension, TraceDimensionSet,
     TraceFileBudget, TraceImportance, TraceMetadata,
 };
-
-#[cfg(test)]
-use std::sync::OnceLock;
 
 pub type RuntimeTraceRecorderRef = Arc<RuntimeTraceRecorder>;
 
@@ -658,6 +655,19 @@ fn flush_writer(file: &mut Option<File>, wrote_since_flush: &mut bool) {
     *wrote_since_flush = false;
 }
 
+/// 运行期 trace 根目录覆盖，由 shell 在启动时指向应用日志目录。
+///
+/// 历史实现用 `CARGO_MANIFEST_DIR` 推导落盘目录，等于把开发机的源码路径写进了
+/// 二进制：CI 打包后路径变成 `D:\a\<repo>\<repo>`，安装到其它机器上不可创建时
+/// 会让 `init_services` 直接失败并静默退出。因此这里改为运行期注入。
+static TRACE_ROOT_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+
+/// 设置 trace 落盘根目录；进程内只生效一次，重复调用会被忽略。
+pub fn set_trace_root_dir(root: PathBuf) {
+    let _ = TRACE_ROOT_OVERRIDE.set(root);
+}
+
+#[cfg(test)]
 fn project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -665,14 +675,17 @@ fn project_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn trace_root_dir() -> PathBuf {
+pub fn trace_root_dir() -> PathBuf {
     #[cfg(test)]
     {
         current_test_trace_run_dir()
     }
     #[cfg(not(test))]
     {
-        project_root().join("runtime-logs")
+        TRACE_ROOT_OVERRIDE
+            .get()
+            .cloned()
+            .unwrap_or_else(|| std::env::temp_dir().join("xbxrc").join("runtime-logs"))
     }
 }
 
