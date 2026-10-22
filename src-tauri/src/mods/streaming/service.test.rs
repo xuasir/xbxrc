@@ -272,6 +272,34 @@ fn fallback_progress_network_message_maps_retryable_network_error() {
 }
 
 #[test]
+fn fallback_progress_session_state_timeout_maps_to_session_ready_error() {
+    // monitor 在会话一直停在 Provisioning / ReadyToConnect 时会把 player_state 置为 failed，
+    // 并携带 `SessionStateTimeout` 码。它不能落到 Runtime 分支，否则用户看到的是
+    // 「串流播放器启动失败」，而真实原因在会话层。
+    let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
+        session_id: "session-1".to_string(),
+        phase: StreamingSessionPhase::Failed,
+        runtime_launch_state: StreamingRuntimeLaunchState::Failed,
+        status_text_key: "streamPage.errors.startFailed".to_string(),
+        queue_seconds: None,
+        queue: None,
+        error_code: Some("SessionStateTimeout".to_string()),
+        error_message: Some("Streaming session stayed in ReadyToConnect for 90000ms.".to_string()),
+        error: None,
+    });
+
+    let error = progress.error.expect("state timeout must surface an error");
+    assert_eq!(error.error_kind, StreamingStartupErrorKind::SessionReady);
+    assert_eq!(
+        error.user_message_key,
+        "streamPage.errors.sessionReadyFailed"
+    );
+    assert_eq!(error.retryable, true);
+    // 诊断摘要要保留卡住的状态名，方便线上直接判断卡在 ReadyToConnect 还是 Provisioning。
+    assert!(error.diagnostic_summary.contains("ReadyToConnect"));
+}
+
+#[test]
 fn build_console_ready_snapshot_includes_smartglass_ready_hosts() {
     let smartglass = vec![DataHostSummary {
         id: Some("console-1".to_string()),

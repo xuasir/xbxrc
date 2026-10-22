@@ -1557,6 +1557,14 @@ fn classify_progress_error_kind_fallback(
     if normalized.contains("streamingstarttimeout") {
         return StreamingStartupErrorKind::SessionReady;
     }
+    // monitor 的「卡在 Provisioning / ReadyToConnect」超时（错误码 `SessionStateTimeout`，
+    // 消息形如 "Streaming session stayed in ReadyToConnect for 90000ms."）。
+    // 这不是播放器自身失败：会话一直没能进入 Provisioned，播放器只是在空转等待。
+    // 必须归到 SessionReady，否则会落到 `phase=Failed → Runtime` 分支，
+    // 给用户显示「串流播放器启动失败」，把排查方向带偏。
+    if normalized.contains("sessionstatetimeout") || normalized.contains("session stayed in") {
+        return StreamingStartupErrorKind::SessionReady;
+    }
     if normalized.contains("targetmissing") {
         return StreamingStartupErrorKind::Target;
     }
