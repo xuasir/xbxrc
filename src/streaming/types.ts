@@ -250,6 +250,8 @@ export interface StreamPerformanceSnapshot {
   renderSuperResolutionOutputTarget?: string
   renderSuperResolutionFallbackReason?: string | null
   renderSharpenMode?: string
+  /** 策略层下发的锐化强度百分比（0..100），用于复盘颗粒感来源。 */
+  renderSharpenStrength?: number
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
   /** webrtc-direct 浏览器画像观测（xbxengine 路径通常为空） */
@@ -398,6 +400,8 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderSuperResolutionOutputTarget?: string
   renderSuperResolutionFallbackReason?: string | null
   renderSharpenMode?: string
+  /** 策略层下发的锐化强度百分比（0..100），用于复盘颗粒感来源。 */
+  renderSharpenStrength?: number
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
   frontEndProfileBaseline?: 'homeLan' | 'homeRelay' | 'cloud'

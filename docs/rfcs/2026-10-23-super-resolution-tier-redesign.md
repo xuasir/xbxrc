@@ -216,7 +216,7 @@ mode = output >  S_t ? 'upscale'
 
 ## Open Questions
 
-1. ~~SR 的目标上限~~ → 已定：`min(R, S)` 起点升一档，`D` 只作上限，不做「补到显示像素」。
+1. ~~SR 的目标上限~~ → **2026-10-23 修订**：改为 `target = min(configured, display)`，`D` 不再只是上限而是目标。原「恒升一档」在真机上暴露为「720p 源 + 1440p 屏只出 1080p」，用户口径要求补到 1440p。
 2. ~~是否反哺协商层~~ → 已定：本次不做，只在 trace 记录 `sourceAboveRequested`。
 3. `2160p` 档：新规则下它可达（`1440p 源 + 4K 显示`），保留。
 
@@ -234,3 +234,10 @@ mode = output >  S_t ? 'upscale'
 - Update: 初稿基于代码考古与 05-12 / 05-15 / 05-18 RFC 追溯；按用户口径把决策函数从「补到协商档位」修正为「`min(R,S)` 起点升一档 + 只升不降 + `D` 上限」；随后完成代码落地。
 - Decision: 只改档位设计，不动协商层；`2160p` 档保留（4K 显示下可达）；RCAS stops 沿用逐对调优值而非比例化重算，避免顺带改变观感。
 - Risk/Blocker: 真机未验证。`1080/1080` 由「不升档」变为渲染 1440p、`1440/1440` 在 4K 屏变为渲染 2160p，弱机帧率风险需实测；display degrade 与档位的交互只能在真机 trace 里确认。
+
+- Date: 2026-10-23（当日二次修订） | Status: in-progress
+- Update: 真机 trace（`runtime-trace-1792733722209-1.jsonl`）显示主机中途从 2560x1440 降到 1280x720，而 `superResolutionTierFrozen` 只发出 1 次（1440p passthrough），降档后没有重算，面板与渲染器长期不一致。据此做两处修正：
+  1. `targetTier = min(configured, display)`（仅当它不高于 `base` 时退回 `nextTier`），720p 源 + 1440p 屏直接出 1440p，新增 reason `upscale-to-display-budget` 与 `720p→1440p` 的 RCAS stops `0.78`；
+  2. SR 冻结跟随源尺寸变化重算：`PlaybackService` 监听 `video.resize` 重新广播 `media.videoReady`，`browser-runtime` 在 `stats.browserWebRtc` 采样里发现帧尺寸变化时也触发 `freezeSuperResolutionOutputIfNeeded`。
+- Decision: 「只升不降」不变；变的是升档幅度上限——由「一档」改为「到配置/显示预算」。
+- Risk/Blocker: 720p→1440p 是 2x 放大，EASU 重建会偏软；弱机 GPU 成本上升，需要真机确认帧率与 display degrade 交互。

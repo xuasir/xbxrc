@@ -228,6 +228,11 @@ export class PlayerClient {
     return this.sessionService.requestVideoKeyframe()
   }
 
+  /** 重建 video 元素以强制换新解码器；返回是否真的执行了。 */
+  resetVideoDecoder(): boolean {
+    return this.mediaService.resetVideoDecoder()
+  }
+
   getControlChannelHealthSnapshot(): ControlChannelHealthSnapshot {
     return this.sessionService.getControlChannelHealthSnapshot()
   }

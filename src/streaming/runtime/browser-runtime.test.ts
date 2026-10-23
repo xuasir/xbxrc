@@ -52,6 +52,8 @@ const testState = vi.hoisted(() => {
       reason: 'mock',
     }))
 
+    readonly resetVideoDecoder = vi.fn(() => true)
+
     readonly bind = vi.fn()
     readonly createOffer = vi.fn(async () => ({ type: 'offer', sdp: 'v=0\r\n' }))
     readonly setRemoteDescription = vi.fn(async () => {})
@@ -466,6 +468,36 @@ describe('browser-runtime super resolution state', () => {
       expect(snapshot.renderSuperResolutionEnabled).toBe(true)
       expect(snapshot.renderSuperResolutionActive).toBe(false)
 
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rebuilds the video element when the decoder stalls but packets keep arriving', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec())
+      const client = getClient()
+
+      // 收包正常（有码率）但没有任何可解码帧：L1 关键帧请求救不回来，必须能执行 L2。
+      client.statsController.snapshot.mockResolvedValue({
+        transportPath: 'direct/udp',
+        inboundVideoBitrateKbps: 3_000,
+        decodeFps: 0,
+        presentFps: 0,
+        inboundVideoFps: 0,
+      })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(20_000)
+
+      expect(client.resetVideoDecoder).toHaveBeenCalled()
       await runtime.stop()
     }
     finally {
@@ -1083,6 +1115,32 @@ describe('browser-runtime super resolution state', () => {
     expect(snapshot.primaryIssueChain).toBe('steady:healthy')
     expect(snapshot.latestDecisionSummary).toBe('owner:stable-serving:steady')
     expect(snapshot.stallKind).toBe('none')
+
+    await runtime.stop()
+  })
+
+  it('keeps a real recovery state visible instead of normalizing it to healthy', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    await runtime.launch(createLaunchSpec({ superResolutionExperimental: true }))
+    const client = getClient()
+
+    client.statsController.snapshot.mockResolvedValue({
+      recoveryOwnerState: 'seeking-anchor',
+      recoveryOwnerReason: 'seekingAnchor',
+      videoHealth: 'recovering',
+      presentationHealth: 'healthy',
+      primaryIssueChain: 'recovery:receiverWaitingKeyframe',
+      stallKind: 'waitingKeyframe',
+      presentFps: 30,
+    })
+    client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+
+    const snapshot = await runtime.snapshotStats()
+    // 只有启动态可以被清洗；真实恢复态必须原样透出，否则面板会谎报“稳定”。
+    expect(snapshot.primaryIssueChain).toBe('recovery:receiverWaitingKeyframe')
+    expect(snapshot.videoHealth).toBe('recovering')
+    expect(snapshot.stallKind).toBe('waitingKeyframe')
+    expect(snapshot.recoveryOwnerState).toBe('seeking-anchor')
 
     await runtime.stop()
   })

@@ -36,6 +36,11 @@ export class MediaService {
     this.audioEffectsService.updateVolume(this.audioConfig.volume || 1)
   }
 
+  /** 浏览器侧重建 video 元素，强制换新解码器。 */
+  resetVideoDecoder(): boolean {
+    return this.playbackService.resetVideoDecoder()
+  }
+
   updateRendererConfig(config: Partial<RendererRuntimeConfig>): void {
     this.rendererConfig = { ...this.rendererConfig, ...config }
     this.playbackService.updateRendererConfig(config)

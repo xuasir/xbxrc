@@ -412,6 +412,8 @@ export interface StreamStats {
   renderSuperResolutionRcasBaseStops?: number
   renderSuperResolutionFallbackReason?: string | null
   renderSharpenMode?: string
+  /** 策略层下发的锐化强度百分比（0..100），用于复盘颗粒感来源。 */
+  renderSharpenStrength?: number
   renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
   renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
   renderProcessing?: 'usm' | 'cas'

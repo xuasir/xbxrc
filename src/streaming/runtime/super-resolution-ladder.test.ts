@@ -114,11 +114,25 @@ describe('super-resolution-ladder', () => {
         // I3：mode 由像素关系唯一决定。
         expect(plan.mode === 'upscale').toBe(tierRank(plan.outputTier) > tierRank(source))
         expect(plan.mode === 'passthrough').toBe(plan.outputTier === source)
-        // I5：升档幅度不超过一档。
-        const ceiling = Math.min(3, Math.max(tierRank(configured), tierRank(source)) + 1)
+        // I5：输出不超过「一档」与「配置/显示预算较低者」中的更高者。
+        const base = Math.min(tierRank(configured), tierRank(source))
+        const ceiling = Math.max(
+          tierRank(source),
+          Math.min(3, base + 1),
+          Math.min(tierRank(configured), 3),
+        )
         expect(tierRank(plan.outputTier)).toBeLessThanOrEqual(ceiling)
       }
     }
+  })
+
+  it('upscales straight to the display budget when the source is two tiers below', () => {
+    // 720p 源 + 1440p 屏 + 1440p 配置：旧实现停在 1080p，面板与渲染器各说各话。
+    const p = resolveSuperResolutionTierPlan(2560, 1440, 1280, 720, 2560, 1440)
+    expect(p.mode).toBe('upscale')
+    expect(p.outputTier).toBe('1440p')
+    expect(p.reason).toBe('upscale-to-display-budget')
+    expect(resolveSuperResolutionRcasStops(p)).toBe(0.78)
   })
 
   it('maps output dimensions back to tier label', () => {

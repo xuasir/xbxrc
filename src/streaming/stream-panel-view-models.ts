@@ -58,7 +58,8 @@ export function buildStreamExperienceMetricsViewModel(input: {
     ),
     recvFps: formatPanelFps(snapshot?.inboundVideoFps),
     decodeFps: formatPanelFps(snapshot?.decodeFps),
-    presentFps: formatPanelFps(snapshot?.presentFps ?? snapshot?.fps),
+    // 呈现 FPS 只认渲染侧实测值：回退到 `fps`（接收帧率）会把两个指标显示成同一个数。
+    presentFps: formatPanelFps(snapshot?.presentFps),
     packetLoss: stringOrDash(
       snapshot?.pl !== undefined && snapshot.pl !== null ? String(snapshot.pl) : undefined,
     ),

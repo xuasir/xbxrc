@@ -18,6 +18,8 @@ export type SuperResolutionMode = 'upscale' | 'passthrough' | 'present-downscale
 export type SuperResolutionPlanReason
   /** 源低于目标档位，真超分一档。 */
   = | 'upscale-one-tier'
+  /** 显示预算/配置档高于「源 + 一档」，按目标档位一次补到位。 */
+    | 'upscale-to-display-budget'
   /** 显示预算低于理想档位，只补到显示预算。 */
     | 'display-budget-caps-upscale'
   /** 源已经达到或超过目标档位，EASU 无意义，走同档 RCAS。 */
@@ -132,6 +134,10 @@ export function resolveSuperResolutionRcasStops(plan: SuperResolutionTierPlan): 
   if (plan.actualSourceTier === '720p' && plan.outputTier === '1080p') {
     return 0.72
   }
+  if (plan.actualSourceTier === '720p' && plan.outputTier === '1440p') {
+    // 2x 放大：EASU 重建更软，RCAS 再柔一档，避免过冲被二次放大。
+    return 0.78
+  }
   if (plan.actualSourceTier === '1080p' && plan.outputTier === '1440p') {
     return 0.88
   }
@@ -193,7 +199,10 @@ export function resolveSuperResolutionTierPlan(
     : DISPLAY_TIER_UNBOUNDED
 
   const baseTier = minTier(configuredTier, actualSourceTier)
-  const targetTier = nextTier(baseTier)
+  // 目标档位 = 配置档与显示预算的较低者；只有它不高于源时才退回「升一档」。
+  // 这样 720p 源 + 1440p 屏 + 1440p 配置会直接补到 1440p，而不是停在 1080p。
+  const desiredTier = minTier(configuredTier, displayTier)
+  const targetTier = tierRank(desiredTier) > tierRank(baseTier) ? desiredTier : nextTier(baseTier)
   const cappedTier = minTier(targetTier, displayTier)
 
   let outputTier: SuperResolutionOutputTierLabel
@@ -206,7 +215,9 @@ export function resolveSuperResolutionTierPlan(
     // 真超分：源低于目标档位，且显示预算允许。
     outputTier = cappedTier
     mode = 'upscale'
-    reason = cappedTier === targetTier ? 'upscale-one-tier' : 'display-budget-caps-upscale'
+    reason = cappedTier !== targetTier
+      ? 'display-budget-caps-upscale'
+      : (targetTier === nextTier(baseTier) ? 'upscale-one-tier' : 'upscale-to-display-budget')
     const dims = outputDimensions(outputTier)
     outputWidth = dims.width
     outputHeight = dims.height

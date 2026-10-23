@@ -21,6 +21,7 @@ type ResolutionGlobal = typeof globalThis & {
 
 export class PlaybackService {
   private videoElement: HTMLVideoElement | null = null
+  private videoStream: MediaStream | null = null
   private audioElement: HTMLAudioElement | null = null
   private renderer: VideoRenderer
   private rendererAttach: RendererAttachSpec
@@ -66,7 +67,31 @@ export class PlaybackService {
     this.renderer.update(this.rendererConfig)
   }
 
+  /**
+   * 浏览器侧没有解码器句柄，重建 video 元素是唯一能强制换新解码器的动作。
+   * 卡在“收包但解不出帧”时（关键帧丢失 / 参考链断裂），重建比干等关键帧快得多。
+   */
+  resetVideoDecoder(): boolean {
+    const stream = this.videoStream
+    if (stream === null) {
+      return false
+    }
+    this.frameTrackingCleanup?.()
+    this.frameTrackingCleanup = null
+    this.renderer.destroy()
+    const previous = this.videoElement
+    if (previous !== null) {
+      previous.pause()
+      previous.srcObject = null
+      previous.remove()
+      this.videoElement = null
+    }
+    this.attachVideoStream(stream)
+    return true
+  }
+
   attachVideoStream(stream: MediaStream): void {
+    this.videoStream = stream
     const container = this.getContainer()
     const video = document.createElement('video')
     video.srcObject = stream
@@ -78,6 +103,15 @@ export class PlaybackService {
     video.muted = true
     video.playsInline = true
     video.addEventListener('loadedmetadata', () => {
+      ;(globalThis as ResolutionGlobal).resolution = `${video.videoWidth} x ${video.videoHeight}`
+      this.emitter.emit('media.videoReady', { width: video.videoWidth, height: video.videoHeight })
+    })
+    // 主机可能中途降档（1440p → 720p）。只在 loadedmetadata 记录一次会让面板、
+    // SR 档位与渲染器尺寸全部停在旧分辨率，这里跟随 video 元素的 resize 重新广播。
+    video.addEventListener('resize', () => {
+      if (video.videoWidth <= 0 || video.videoHeight <= 0) {
+        return
+      }
       ;(globalThis as ResolutionGlobal).resolution = `${video.videoWidth} x ${video.videoHeight}`
       this.emitter.emit('media.videoReady', { width: video.videoWidth, height: video.videoHeight })
     })

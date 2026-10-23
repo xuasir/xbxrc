@@ -6,6 +6,7 @@ import type {
   StreamStats,
   TransportRuntimeConfig,
 } from '../../player'
+import type { BrowserWebRtcStatsSample } from '../../player/domain/stats'
 import type { RuntimeLaunchSpec } from '../types'
 import type { BrowserRendererPlan, BrowserRendererPolicySource } from './browser-render-policy'
 import type {
@@ -73,7 +74,7 @@ import {
   tierRank,
 } from './super-resolution-ladder'
 
-const MEDIA_STALL_CHECK_INTERVAL_MS = 2_000
+const MEDIA_STALL_CHECK_INTERVAL_MS = 1_000
 const MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS = 10_000
 const MEDIA_STALL_RECOVERY_BACKOFF_MAX_MS = 60_000
 const MEDIA_STALL_RECOVERY_RESET_WINDOW_MS = 120_000
@@ -117,22 +118,13 @@ function normalizeObservedPresentationStats(stats: StreamStats): StreamStats {
     return stats
   }
 
-  const staleOwner
-    = stats.recoveryOwnerState === 'seeking-anchor'
-      || stats.recoveryOwnerState === 'priming'
-      || stats.recoveryOwnerReason === 'seekingAnchor'
-      || stats.recoveryOwnerReason === 'priming'
-  const staleHealth = stats.presentationHealth === 'priming' || stats.videoHealth === 'priming'
-  const staleIssue
+  // 只清「启动态」：`startup:priming` / `startupPriming` 在已经出画后不可能仍成立。
+  // 真实恢复态（`recovery:*`、`receiverWaitingKeyframe`、`waitingKeyframe`、`stalled`）
+  // 一律不改写——否则面板会在真正恢复时显示“稳定”，把问题藏起来。
+  const startupOnly
     = stats.primaryIssueChain === 'startup:priming'
-      || stats.primaryIssueChain === 'recovery:transportAwaitRecoveryAnchor'
-      || stats.primaryIssueChain === 'local-self-healing:transportAwaitRecoveryAnchor'
-      || stats.primaryIssueChain === 'recovery:receiverWaitingKeyframe'
-      || stats.primaryIssueChain === 'local-self-healing:receiverWaitingKeyframe'
-      || stats.primaryIssueChain === 'active-recovery:receiverWaitingKeyframe'
-      || stats.primaryIssueChain === 'recovery-eligible:receiverWaitingKeyframe'
-  const staleStall = stats.stallKind === 'startupPriming'
-  if (!staleOwner && !staleHealth && !staleIssue && !staleStall) {
+      || stats.stallKind === 'startupPriming'
+  if (!startupOnly) {
     return stats
   }
 
@@ -149,6 +141,104 @@ function normalizeObservedPresentationStats(stats: StreamStats): StreamStats {
       : 'owner:stable-serving:steady',
     stallKind: displaySupplyLimited ? 'displaySupplyStarved' : 'none',
   }
+}
+
+/**
+ * webrtc-direct 下视频由 webview 解码，Rust 引擎没有视频管线，
+ * `snapshotStats` 里的码率 / 分辨率 / FPS 全是空值或 0，面板因此「不显示码率」。
+ * 这里用浏览器侧 WebRTC 采样补齐；引擎已有有效值时不覆盖。
+ */
+export interface BrowserLossWindow {
+  packetsLost: number
+  packetsReceived: number
+  framesDropped: number
+  framesReceived: number
+}
+
+/**
+ * webrtc-direct 下视频由 webview 解码，Rust 引擎没有视频管线，
+ * `snapshotStats` 里的码率 / 分辨率 / FPS 全是空值或 0，面板因此「不显示码率」。
+ * 这里用浏览器侧 WebRTC 采样补齐；引擎已有有效值时不覆盖。
+ *
+ * 丢包 / 丢帧优先用最近 5s 窗口：累计值会把一次瞬时抖动永久留在面板上。
+ */
+export function resolveBrowserStatsFallback(
+  sample: BrowserWebRtcStatsSample | null,
+  totalKbps?: number,
+  lossWindow?: BrowserLossWindow | null,
+): Partial<StreamStats> {
+  if (sample === null) {
+    return {}
+  }
+  const video = sample.inboundVideo
+  const delta = sample.delta
+  const pair = sample.selectedCandidatePair
+  const elapsedMs = delta?.elapsedMs ?? 0
+  const perSecond = (value: number | undefined): number | undefined =>
+    value !== undefined && elapsedMs > 0 ? (value * 1000) / elapsedMs : undefined
+
+  const fallback: Partial<StreamStats> = {}
+
+  // webrtc-direct 下浏览器采样是唯一实时事实：主机可能中途降档（1440p → 720p），
+  // 引擎/缓存里的旧值必须让位，否则面板会一直显示首次协商的分辨率。
+  if (video?.frameWidth && video?.frameHeight) {
+    fallback.resolution = `${video.frameWidth}x${video.frameHeight}`
+  }
+  const inboundFps = video?.framesPerSecond ?? perSecond(delta?.framesDecodedDelta)
+  if (inboundFps !== undefined) {
+    fallback.inboundVideoFps = Math.round(inboundFps * 10) / 10
+  }
+  const decodeFps = perSecond(delta?.framesDecodedDelta)
+  if (decodeFps !== undefined) {
+    fallback.decodeFps = Math.round(decodeFps * 10) / 10
+  }
+  // 注意单位：bytes/ms × 8 已经是 kbps，不能再乘 1000（那是 frames→fps 的换算）。
+  const videoKbps = delta?.bytesReceivedDelta !== undefined && elapsedMs > 0
+    ? (delta.bytesReceivedDelta * 8) / elapsedMs
+    : undefined
+  if (videoKbps !== undefined) {
+    fallback.inboundVideoBitrateKbps = Math.round(videoKbps)
+    // 总下行优先用传输层字节（含音频/RTCP），拿不到才退化成视频单流。
+    fallback.inboundBitrateKbps = totalKbps ?? Math.round(videoKbps)
+    fallback.actualVideoBitrateSource = 'browser-webrtc'
+  }
+  if (pair?.currentRoundTripTime !== undefined) {
+    fallback.rtt = `${Math.round(pair.currentRoundTripTime * 1000)}ms`
+  }
+
+  const windowPacketsLost = lossWindow?.packetsLost
+  const windowPacketsReceived = lossWindow?.packetsReceived
+  if (windowPacketsReceived !== undefined && windowPacketsReceived > 0 && windowPacketsLost !== undefined) {
+    const percent = ((windowPacketsLost * 100) / windowPacketsReceived).toFixed(2)
+    fallback.pl = `${windowPacketsLost} (${percent}%)`
+  }
+  else {
+    const packetsLost = video?.packetsLost
+    const packetsReceived = video?.packetsReceived
+    if (packetsLost !== undefined && packetsReceived !== undefined) {
+      const percent = ((packetsLost * 100) / Math.max(1, packetsLost + packetsReceived)).toFixed(2)
+      fallback.pl = `${packetsLost} (${percent}%)`
+    }
+  }
+
+  const windowFramesDropped = lossWindow?.framesDropped
+  const windowFramesReceived = lossWindow?.framesReceived
+  if (windowFramesReceived !== undefined && windowFramesReceived > 0 && windowFramesDropped !== undefined) {
+    const percent = ((windowFramesDropped * 100) / windowFramesReceived).toFixed(2)
+    fallback.fl = `${windowFramesDropped} (${percent}%)`
+  }
+  else {
+    const framesDropped = video?.framesDropped
+    const framesReceived = video?.framesReceived
+    if (framesDropped !== undefined && framesReceived !== undefined) {
+      const percent = ((framesDropped * 100) / Math.max(1, framesDropped + framesReceived)).toFixed(2)
+      fallback.fl = `${framesDropped} (${percent}%)`
+    }
+  }
+  if (video?.jitter !== undefined) {
+    fallback.jit = `${Math.round(video.jitter * 1000)}ms`
+  }
+  return fallback
 }
 
 interface RecoveryActionEffectProbe {
@@ -406,6 +496,10 @@ export function createBrowserRuntime(options: {
   const listeners = new Set<(event: RuntimeEvent) => void>()
   const clientCleanups: Array<() => void> = []
   const playerElementId = options.playerElementId
+  /** runtime 创建时刻：连接耗时以此为起点，避免面板显示“已连接多久”。 */
+  const runtimeStartedAtMs = Date.now()
+  let connectedElapsedMsSnapshot: number | undefined
+  let mediaReadyElapsedMsSnapshot: number | undefined
   let currentSpec: RuntimeLaunchSpec | null = null
   let currentDisplayState: RuntimeDisplayState | null = null
   let client: PlayerClient | null = null
@@ -487,6 +581,27 @@ export function createBrowserRuntime(options: {
   let renderLastCallbackCountSinceLastSample: number | undefined
   let renderLastCallbackGapCountSinceLastSample: number | undefined
   let renderLastPresentedFramesAdvancedSinceLastSample: number | undefined
+  let renderSampleWindowStartedAtMs: number | null = null
+  /** 上一个采样窗口内浏览器真实上屏帧率（presentedFrames 推进量 / 窗口时长）。 */
+  let renderPresentedFpsLastSample: number | undefined
+  /** 传输层总下行（含音频/RTCP）：来自 selectedCandidatePair.bytesReceived 的增量。 */
+  let latestBrowserTotalKbps: number | undefined
+  let lastBrowserPairBytes: { bytes: number, atMs: number } | null = null
+  /** 丢包/丢帧窗口：累计值会把一次瞬时抖动永久留在面板上，这里只保留最近 5s。 */
+  const LOSS_WINDOW_MS = 5_000
+  const lossWindowSamples: Array<{
+    atMs: number
+    packetsLost: number
+    packetsReceived: number
+    framesDropped: number
+    framesReceived: number
+  }> = []
+  let latestLossWindow: {
+    packetsLost: number
+    packetsReceived: number
+    framesDropped: number
+    framesReceived: number
+  } | null = null
   let renderLastPresentedFramesJumpCountSinceLastSample: number | undefined
   let renderDroppedFramesSinceLastSample = 0
   let renderCallbackGapCountSinceLastSample = 0
@@ -523,6 +638,8 @@ export function createBrowserRuntime(options: {
   let lastDisplayContextDigest: string | undefined
   let estimatedDisplayRefreshHz: number | undefined
   let visibilityBudgetActive = false
+  /** 浏览器侧最新 WebRTC 采样：webrtc-direct 下 Rust 引擎没有视频，面板只能靠它。 */
+  let latestBrowserVideoSample: BrowserWebRtcStatsSample | null = null
   let icePolicyMode: IcePolicyMode = 'passthrough'
   let icePolicyDigest: string | undefined
   let fpsObservationState = createFpsObservationState()
@@ -1082,6 +1199,16 @@ export function createBrowserRuntime(options: {
         next,
         ...buildTraceReasonPayload(reason),
       })
+      // 显示预算随档位变化：SR 冻结档位必须跟着重算，否则从 L2 回到 L0 后
+      // 仍按 720p 直通，白白丢掉恢复出来的显示预算。
+      if (srIntent
+        && srState.outputFrozen !== null
+        && srState.latestVideoDimensions !== null) {
+        freezeSuperResolutionOutputIfNeeded(
+          srState.latestVideoDimensions.width,
+          srState.latestVideoDimensions.height,
+        )
+      }
     }
     if (previousPipelineType !== renderPipelineType) {
       recordRuntimeTraceEvent('renderPipelineSwitched', {
@@ -1443,6 +1570,7 @@ export function createBrowserRuntime(options: {
     emitConnectedMilestoneIfPending(now, 'mediaReady')
     if (connectedMilestoneAt !== null && mediaReadyMilestoneAt === null) {
       mediaReadyMilestoneAt = now
+      mediaReadyElapsedMsSnapshot = connectedAt === null ? undefined : Math.max(0, now - connectedAt)
       firstPresentedAtMs = now
       updateFirstFrameStage('firstPresented', now, 'framePresented')
       emitPresentationMilestone({
@@ -1475,6 +1603,8 @@ export function createBrowserRuntime(options: {
     if (state === 'connected') {
       const now = Date.now()
       connectedAt = now
+      connectedElapsedMsSnapshot = Math.max(0, now - runtimeStartedAtMs)
+      mediaReadyElapsedMsSnapshot = undefined
       connectedMilestoneAt = null
       mediaReadyMilestoneAt = null
       pendingConnectedMilestone = true
@@ -1529,6 +1659,9 @@ export function createBrowserRuntime(options: {
       renderFrameSourceFpsUnavailableReason = undefined
       renderDroppedLikeStreak = 0
       renderFrameEventsSinceLastSample = 0
+      renderSampleWindowStartedAtMs = null
+      lossWindowSamples.length = 0
+      latestLossWindow = null
       renderPresentedFramesAdvancedSinceLastSample = 0
       renderLastCallbackCountSinceLastSample = undefined
       renderLastCallbackGapCountSinceLastSample = undefined
@@ -1603,7 +1736,7 @@ export function createBrowserRuntime(options: {
 
   /** 冻结后允许跨档重算的最小驻留时间与次数上限，避免 canvas 反复 resize。 */
   const SR_REFREEZE_MIN_DWELL_MS = 1_000
-  const SR_REFREEZE_MAX_COUNT = 2
+  const SR_REFREEZE_MAX_COUNT = 4
   /** 显示预算 D：容器 CSS × DPR，受当前 display degrade 上限约束。 */
   function resolveSrDisplayBudget(): { width: number, height: number } | undefined {
     const context = resolveCurrentDisplayContext()
@@ -1783,6 +1916,52 @@ export function createBrowserRuntime(options: {
         }
       }),
       eventBus.on('stats.browserWebRtc', (sample) => {
+        latestBrowserVideoSample = sample
+        const lossDelta = sample.delta
+        if (lossDelta !== undefined) {
+          lossWindowSamples.push({
+            atMs: sample.sampledAtMs,
+            packetsLost: lossDelta.packetsLostDelta ?? 0,
+            packetsReceived: lossDelta.packetsReceivedDelta ?? 0,
+            framesDropped: lossDelta.framesDroppedDelta ?? 0,
+            framesReceived: lossDelta.framesReceivedDelta ?? 0,
+          })
+          const cutoff = sample.sampledAtMs - LOSS_WINDOW_MS
+          while (lossWindowSamples.length > 0 && lossWindowSamples[0]!.atMs < cutoff) {
+            lossWindowSamples.shift()
+          }
+          latestLossWindow = lossWindowSamples.reduce(
+            (sum, entry) => ({
+              packetsLost: sum.packetsLost + entry.packetsLost,
+              packetsReceived: sum.packetsReceived + entry.packetsReceived,
+              framesDropped: sum.framesDropped + entry.framesDropped,
+              framesReceived: sum.framesReceived + entry.framesReceived,
+            }),
+            { packetsLost: 0, packetsReceived: 0, framesDropped: 0, framesReceived: 0 },
+          )
+        }
+        const pair = sample.selectedCandidatePair
+        if (pair?.bytesReceived !== undefined) {
+          const previous = lastBrowserPairBytes
+          if (previous !== null
+            && sample.sampledAtMs > previous.atMs
+            && pair.bytesReceived >= previous.bytes) {
+            latestBrowserTotalKbps = Math.round(
+              ((pair.bytesReceived - previous.bytes) * 8) / (sample.sampledAtMs - previous.atMs),
+            )
+          }
+          lastBrowserPairBytes = { bytes: pair.bytesReceived, atMs: sample.sampledAtMs }
+        }
+        // 主机侧可能中途降档（1440p → 720p）。SR 只在 videoReady 冻结一次，
+        // 不跟随源尺寸变化就会一直按旧档位输出，面板与渲染器因此各说各话。
+        const width = sample.inboundVideo?.frameWidth
+        const height = sample.inboundVideo?.frameHeight
+        if (width !== undefined && height !== undefined && width > 0 && height > 0) {
+          const known = srState.latestVideoDimensions
+          if (known === null || known.width !== width || known.height !== height) {
+            freezeSuperResolutionOutputIfNeeded(width, height)
+          }
+        }
         void recordRuntimeTraceEvent('browserWebRtcStatsObserved', { ...sample })
       }),
       eventBus.on('stats.browserWebRtcTimeline', (event) => {
@@ -2362,13 +2541,23 @@ export function createBrowserRuntime(options: {
       bandwidthAction = 'decoderReset'
       nextAllowedStallRecoveryAt = now + 2_000
       beginRecoveryActionEffectProbe(action, now, context.stats)
-      markRecoveryAction(action, 'notSupported')
+      // 浏览器侧没有解码器句柄，重建 video 元素才是真正可执行的 L2 动作。
+      const resetApplied = assertClient().resetVideoDecoder()
+      if (resetApplied && keyframeBudgetRemaining > 0) {
+        // 新解码器只能从 IDR 起解，重建后立刻补一次关键帧请求，别等下一个自然 IDR。
+        const keyframeAfterReset = assertClient().requestVideoKeyframe()
+        if (keyframeAfterReset.sent) {
+          keyframeBudgetRemaining = Math.max(0, keyframeBudgetRemaining - 1)
+          lastKeyframeRequestAt = now
+        }
+      }
+      markRecoveryAction(action, resetApplied ? 'executed' : 'notSupported')
       recordRuntimeTraceEvent('recoveryActionExecuted', {
         triggerSource: 'stallChecker',
         epochId,
         action,
         level: 'L2',
-        result: 'notSupported',
+        result: resetApplied ? 'executed' : 'notSupported',
         budgetRemaining: formatRecoveryBudget(),
       })
       return true
@@ -2545,6 +2734,12 @@ export function createBrowserRuntime(options: {
         frontEndExpectedContentFps: expectedContentFpsResolved,
         frontEndVideoFrameSourceFpsCeiling: renderFrameSourceFpsCeiling ?? null,
       })
+      const sampleWindowMs = renderSampleWindowStartedAtMs === null
+        ? 0
+        : now - renderSampleWindowStartedAtMs
+      renderPresentedFpsLastSample = sampleWindowMs > 0
+        ? (renderPresentedFramesAdvancedSinceLastSample * 1000) / sampleWindowMs
+        : undefined
       renderFrameEventsSinceLastSample = 0
       renderPresentedFramesAdvancedSinceLastSample = 0
       renderDroppedFramesSinceLastSample = 0
@@ -2552,6 +2747,7 @@ export function createBrowserRuntime(options: {
       renderPresentedFramesJumpCountSinceLastSample = 0
       renderMaxCallbackIntervalMsSinceLastSample = undefined
       renderMaxPresentedFramesDeltaSinceLastSample = undefined
+      renderSampleWindowStartedAtMs = now
     }
     renderCause = resolveRenderCause(stats, expected)
     runtimeProfileClassification = buildRuntimeProfileClassification({
@@ -3281,6 +3477,9 @@ export function createBrowserRuntime(options: {
       renderFrameSourceFpsUnavailableReason = undefined
       renderDroppedLikeStreak = 0
       renderFrameEventsSinceLastSample = 0
+      renderSampleWindowStartedAtMs = null
+      lossWindowSamples.length = 0
+      latestLossWindow = null
       renderPresentedFramesAdvancedSinceLastSample = 0
       renderLastCallbackCountSinceLastSample = undefined
       renderLastCallbackGapCountSinceLastSample = undefined
@@ -3411,6 +3610,9 @@ export function createBrowserRuntime(options: {
       renderFrameSourceFpsUnavailableReason = undefined
       renderDroppedLikeStreak = 0
       renderFrameEventsSinceLastSample = 0
+      renderSampleWindowStartedAtMs = null
+      lossWindowSamples.length = 0
+      latestLossWindow = null
       renderPresentedFramesAdvancedSinceLastSample = 0
       renderLastCallbackCountSinceLastSample = undefined
       renderLastCallbackGapCountSinceLastSample = undefined
@@ -3563,8 +3765,12 @@ export function createBrowserRuntime(options: {
       const observedShaderPath = plan ? projectRenderShaderPathFromPlan(plan) : renderShaderPath
       const observedFpsBudget = plan?.targetFps ?? renderFpsBudget
       const observedPresentTarget = plan?.presentTarget
-      return normalizeObservedPresentationStats({
+      const snapshot = normalizeObservedPresentationStats({
         ...stats,
+        ...resolveBrowserStatsFallback(latestBrowserVideoSample, latestBrowserTotalKbps, latestLossWindow),
+        ...(renderPresentedFpsLastSample !== undefined
+          ? { presentFps: Math.round(renderPresentedFpsLastSample * 10) / 10 }
+          : {}),
         streamLifecyclePhase: runtimePhase,
         sessionPhase: runtimePhase,
         transportState,
@@ -3645,7 +3851,8 @@ export function createBrowserRuntime(options: {
           ? 'fsr1'
           : undefined,
         renderSuperResolutionConfiguredTarget: srState.outputFrozen?.configuredTier,
-        renderSuperResolutionOutputTarget: (() => {
+        // 面板必须报「渲染器实际用的档位」：冻结值优先，重算 plan 只作兜底。
+        renderSuperResolutionOutputTarget: srState.outputFrozen?.outputTier ?? (() => {
           const effectiveSr = plan?.sr
           if (effectiveSr !== undefined) {
             return resolveSuperResolutionOutputTierLabelFromDimensions(
@@ -3653,7 +3860,7 @@ export function createBrowserRuntime(options: {
               effectiveSr.outputHeight,
             )
           }
-          return srState.outputFrozen?.outputTier
+          return undefined
         })(),
         renderSuperResolutionRcasStops: resolveSuperResolutionIntent()
           ? srState.rcasStopsEffective
@@ -3665,6 +3872,7 @@ export function createBrowserRuntime(options: {
         renderSharpenMode: observedPipelineType === 'webgl2_sr'
           ? 'fsr1_rcas'
           : (observedShaderPath ?? 'none'),
+        renderSharpenStrength: plan?.sharpening.strength,
         icePolicyMode,
         icePolicyDigest,
         frontEndProfileBaseline: runtimeProfileClassification.baseline,
@@ -3677,13 +3885,28 @@ export function createBrowserRuntime(options: {
         frontEndUpshiftBlockedReason,
         presentationMilestone,
         presentationFailedStage: presentationStage ?? stats.presentationFailedStage,
-        connectedMilestoneElapsedMs: connectedMilestoneAt === null
-          ? undefined
-          : Math.max(0, now - connectedMilestoneAt),
-        mediaReadyMilestoneElapsedMs: mediaReadyMilestoneAt === null
-          ? undefined
-          : Math.max(0, now - mediaReadyMilestoneAt),
+        connectedMilestoneElapsedMs: connectedElapsedMsSnapshot
+          ?? (connectedMilestoneAt === null ? undefined : Math.max(0, now - connectedMilestoneAt)),
+        mediaReadyMilestoneElapsedMs: mediaReadyElapsedMsSnapshot
+          ?? (mediaReadyMilestoneAt === null ? undefined : Math.max(0, now - mediaReadyMilestoneAt)),
       })
+      // 面板字段直接落 trace：否则「面板显示得对不对」只能靠肉眼，没法复盘。
+      void recordRuntimeTraceEvent('panelStatsObserved', {
+        resolution: snapshot.resolution ?? null,
+        videoKbps: snapshot.inboundVideoBitrateKbps ?? null,
+        totalKbps: snapshot.inboundBitrateKbps ?? null,
+        bitrateSource: snapshot.actualVideoBitrateSource ?? null,
+        pl: snapshot.pl ?? null,
+        fl: snapshot.fl ?? null,
+        jit: snapshot.jit ?? null,
+        rtt: snapshot.rtt ?? null,
+        presentFps: snapshot.presentFps ?? null,
+        decodeFps: snapshot.decodeFps ?? null,
+        connectedElapsedMs: snapshot.connectedMilestoneElapsedMs ?? null,
+        mediaReadyElapsedMs: snapshot.mediaReadyMilestoneElapsedMs ?? null,
+        srTier: snapshot.renderSuperResolutionOutputTarget ?? null,
+      })
+      return snapshot
     },
     captureRenderedFrame: async () => {
       if (client === null) {

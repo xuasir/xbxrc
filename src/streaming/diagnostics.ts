@@ -128,6 +128,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const renderSuperResolutionOutputTarget = input.runtimeSnapshot?.renderSuperResolutionOutputTarget
   const renderSuperResolutionFallbackReason = input.runtimeSnapshot?.renderSuperResolutionFallbackReason
   const renderSharpenMode = input.runtimeSnapshot?.renderSharpenMode
+  const renderSharpenStrength = input.runtimeSnapshot?.renderSharpenStrength
   const icePolicyMode = input.runtimeSnapshot?.icePolicyMode
   const icePolicyDigest = input.runtimeSnapshot?.icePolicyDigest?.trim() || undefined
   const frontEndProfileBaseline = input.runtimeSnapshot?.frontEndProfileBaseline
@@ -369,6 +370,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
     renderSuperResolutionOutputTarget,
     renderSuperResolutionFallbackReason,
     renderSharpenMode,
+    renderSharpenStrength,
     icePolicyMode,
     icePolicyDigest,
     frontEndProfileBaseline,
