@@ -203,12 +203,20 @@ jobs:
           done
           cp release-assets/latest.json "$upload_dir/latest.json"
 
+          # rolling release 的 notes 必须在每次发布后重写：
+          # 只在 create 时传 --notes 会让 body 永远停在首次创建的那一版（历史遗留 beta.7）。
+          notes="Rolling beta channel (release/test). Version ${version} (commit ${GITHUB_SHA:0:7}). Do not delete this release."
+
           if ! gh release view beta >/dev/null 2>&1; then
             gh release create beta \
               --prerelease \
               --title "xbxrc beta" \
-              --notes "Rolling beta channel (release/test). Version ${version}. Do not delete this release."
+              --notes "$notes"
           fi
 
           gh release upload beta "$upload_dir"/* --clobber
+          gh release edit beta \
+            --prerelease \
+            --title "xbxrc beta" \
+            --notes "$notes"
           echo "Published beta ${version} to https://github.com/xuasir/xbxrc/releases/tag/beta"
