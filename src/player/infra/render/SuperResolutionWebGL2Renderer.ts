@@ -338,10 +338,17 @@ function resolveEffectiveSrOutputSize(config: RendererRuntimeConfig): { width: n
     return { width: tierW, height: tierH }
   }
   const scale = Math.min(budgetW / tierW, budgetH / tierH)
-  return {
-    width: Math.max(1, Math.floor(tierW * scale)),
-    height: Math.max(1, Math.floor(tierH * scale)),
+  let width = Math.max(1, Math.floor(tierW * scale))
+  let height = Math.max(1, Math.floor(tierH * scale))
+  // 超分只升不降：预算放得下源时，渲染尺寸不得被压到源以下；
+  // 只有显示预算本身小于源（present-downscale）才允许缩小。
+  const sourceW = config.renderSourceWidth ?? 0
+  const sourceH = config.renderSourceHeight ?? 0
+  if (sourceW > 0 && sourceH > 0 && budgetW >= sourceW && budgetH >= sourceH) {
+    width = Math.max(width, Math.round(sourceW))
+    height = Math.max(height, Math.round(sourceH))
   }
+  return { width, height }
 }
 
 class SuperResolutionProcessor {
@@ -1025,9 +1032,12 @@ class SuperResolutionProcessor {
         const rcasOnlyPreferred = sameResolution
           && this.pipelineMode !== 'linear'
           && this.rcasProgram !== null
-        // 输出档位低于源分辨率（例如 1440p 源 → 1080p 档位）时，EASU 没有放大可做，
-        // 但也不能退回「纯双线性缩小」：那样连 RCAS 锐化都没有，观感会比 CAS 更糊。
-        // 这里先按输出尺寸降采样到中间目标，再跑 RCAS，保持与 CAS 相当的锐度。
+        // 进入这里只有两种合法语义：
+        // - passthrough（out == 源）：EASU 无意义，对源纹理 1:1 跑 RCAS；
+        // - present-downscale（out < 源）：显示预算本身小于源，先降采样进中间目标
+        //   （色彩恒等，避免与 RCAS 叠加两次色彩运算）再跑 RCAS。
+        // 档位决策保证不会再出现「为了凑档位而降采样」，见 RFC
+        // docs/rfcs/2026-10-23-super-resolution-tier-redesign.md。
         const midFbo = this.midFbo
         const midTex = this.midTex
         const rcasDownscalePreferred = !sameResolution

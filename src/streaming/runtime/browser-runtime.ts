@@ -32,6 +32,7 @@ import {
   projectRenderShaderPathFromPlan,
   resolveBrowserRendererPlan,
   resolvePipelineOverrideFromRenderPreference,
+  resolveSuperResolutionDisplayBudget,
   resolveSuperResolutionUserIntent,
 } from './browser-render-policy'
 import {
@@ -69,6 +70,7 @@ import {
   resolveSuperResolutionOutputTierLabelFromDimensions,
   resolveSuperResolutionRcasStops,
   resolveSuperResolutionTierPlan,
+  tierRank,
 } from './super-resolution-ladder'
 
 const MEDIA_STALL_CHECK_INTERVAL_MS = 2_000
@@ -515,6 +517,8 @@ export function createBrowserRuntime(options: {
   let visibilityGovernorCleanup: (() => void) | null = null
   let displayGeometryObserverCleanup: (() => void) | null = null
   let displayGeometryRefreshTimer: number | null = null
+  /** SR 冻结后的 1s 复核定时器：首个 videoReady 的尺寸可能来自错误 metadata。 */
+  let srFreezeReviewTimer: number | null = null
   let pendingDisplayGeometryRefreshTrigger: DisplayGeometryRefreshTrigger | null = null
   let lastDisplayContextDigest: string | undefined
   let estimatedDisplayRefreshHz: number | undefined
@@ -1296,6 +1300,10 @@ export function createBrowserRuntime(options: {
     clearClientSubscriptions()
     clearVisibilityGovernor()
     clearDisplayGeometryObserver()
+    if (srFreezeReviewTimer !== null) {
+      window.clearTimeout(srFreezeReviewTimer)
+      srFreezeReviewTimer = null
+    }
     connectedMilestoneAt = null
     mediaReadyMilestoneAt = null
     pendingConnectedMilestone = false
@@ -1593,6 +1601,35 @@ export function createBrowserRuntime(options: {
     }
   }
 
+  /** 冻结后允许跨档重算的最小驻留时间与次数上限，避免 canvas 反复 resize。 */
+  const SR_REFREEZE_MIN_DWELL_MS = 1_000
+  const SR_REFREEZE_MAX_COUNT = 2
+  /** 显示预算 D：容器 CSS × DPR，受当前 display degrade 上限约束。 */
+  function resolveSrDisplayBudget(): { width: number, height: number } | undefined {
+    const context = resolveCurrentDisplayContext()
+    if (context === undefined) {
+      return undefined
+    }
+    // 容器尚未完成布局（路由切换 / 隐藏）时不要用退化尺寸当显示预算，
+    // 否则会把档位误判成 present-downscale。
+    if (context.containerWidthCss < 320 || context.containerHeightCss < 180) {
+      return undefined
+    }
+    return resolveSuperResolutionDisplayBudget({
+      containerWidthCss: context.containerWidthCss,
+      containerHeightCss: context.containerHeightCss,
+      devicePixelRatio: context.devicePixelRatio,
+      displayDegradeLevel,
+      refreshRateHz: context.refreshRateHz,
+    })
+  }
+
+  /**
+   * 冻结 SR 输出档位。
+   *
+   * 决策口径见 RFC `docs/rfcs/2026-10-23-super-resolution-tier-redesign.md`：
+   * 在 `min(协商档位, 真实源档位)` 之上升一档，输出永不小于真实源，显示预算只作上限。
+   */
   function freezeSuperResolutionOutputIfNeeded(videoWidth: number, videoHeight: number): boolean {
     if (client === null || currentSpec === null || currentDisplayState === null) {
       return false
@@ -1604,16 +1641,42 @@ export function createBrowserRuntime(options: {
     if (resolveRendererPipelineOverride() === 'video') {
       return false
     }
-    if (srState.outputFrozen !== null) {
-      return false
-    }
     if (videoWidth <= 0 || videoHeight <= 0) {
       return false
     }
+    const now = Date.now()
+    const frozen = srState.outputFrozen
+    if (frozen !== null) {
+      if (srState.refreezeCount >= SR_REFREEZE_MAX_COUNT) {
+        return false
+      }
+      if (now - (srState.frozenAtMs ?? 0) < SR_REFREEZE_MIN_DWELL_MS) {
+        return false
+      }
+      // 恢复期内不重算：canvas resize 会和恢复重建叠加成二次抖动。
+      if (recoveryEpochId !== null && now - (srState.frozenAtMs ?? 0) < 15_000) {
+        return false
+      }
+    }
     const tw = currentSpec.runtime.targetVideoWidth
     const th = currentSpec.runtime.targetVideoHeight
-    const plan = resolveSuperResolutionTierPlan(tw, th, videoWidth, videoHeight)
+    const budget = resolveSrDisplayBudget()
+    const plan = resolveSuperResolutionTierPlan(
+      tw,
+      th,
+      videoWidth,
+      videoHeight,
+      budget?.width,
+      budget?.height,
+    )
+    if (frozen !== null && frozen.outputTier === plan.outputTier && frozen.mode === plan.mode) {
+      return false
+    }
+    if (frozen !== null) {
+      srState.refreezeCount += 1
+    }
     srState.outputFrozen = plan
+    srState.frozenAtMs = now
     srState.rcasStopsBase = resolveSuperResolutionRcasStops(plan)
     srState.rcasStopsEffective = srState.rcasStopsBase
     assertClient().updateRenderer({
@@ -1627,11 +1690,46 @@ export function createBrowserRuntime(options: {
       outputTier: plan.outputTier,
       configuredTier: plan.configuredTier,
       actualSourceTier: plan.actualSourceTier,
+      baseTier: plan.baseTier,
+      displayTier: plan.displayTier,
+      mode: plan.mode,
+      reason: plan.reason,
+      clampedBy: plan.mode === 'present-downscale'
+        ? 'displayBudget'
+        : (plan.reason === 'display-budget-caps-upscale' ? 'displayBudget' : null),
+      refreezeCount: srState.refreezeCount,
       rcasStopsBase: srState.rcasStopsBase,
+      requestedAboveSource: plan.actualSourceTier !== plan.configuredTier,
     })
+    if (plan.actualSourceTier !== plan.configuredTier) {
+      void recordRuntimeTraceEvent('superResolutionTierMismatch', {
+        configuredTier: plan.configuredTier,
+        actualSourceTier: plan.actualSourceTier,
+        sourceAboveRequested: tierRank(plan.actualSourceTier) > tierRank(plan.configuredTier),
+      })
+    }
     void applyDisplayDegradeLevel(displayDegradeLevel, 'superResolutionTierFrozen').catch(() => {
       // stop/teardown 与异步 policy 重算可能竞态，忽略不可用态
     })
+    // 首个 media.videoReady 的尺寸可能来自错误的 metadata：1s 后直接读视频元素复核一次。
+    if (srFreezeReviewTimer === null) {
+      srFreezeReviewTimer = window.setTimeout(() => {
+        srFreezeReviewTimer = null
+        const latest = srState.latestVideoDimensions
+        if (latest === null) {
+          return
+        }
+        const container = document.getElementById(playerElementId)
+        const video = container?.querySelector('video') as HTMLVideoElement | null
+        if (video === null || video.videoWidth <= 0 || video.videoHeight <= 0) {
+          return
+        }
+        if (video.videoWidth === latest.width && video.videoHeight === latest.height) {
+          return
+        }
+        freezeSuperResolutionOutputIfNeeded(video.videoWidth, video.videoHeight)
+      }, SR_REFREEZE_MIN_DWELL_MS)
+    }
     return true
   }
 

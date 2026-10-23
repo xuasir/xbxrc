@@ -27,9 +27,15 @@ function baseInput(over: Partial<BrowserRendererPolicyInput> = {}): BrowserRende
   const tier: SuperResolutionTierPlan = {
     configuredTier: '1080p',
     actualSourceTier: '1080p',
+    displayTier: '1080p',
+    baseTier: '1080p',
     outputTier: '1080p',
     outputWidth: 1920,
     outputHeight: 1080,
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+    mode: 'passthrough',
+    reason: 'source-at-or-above-target',
   }
   return {
     displayDegradeLevel: 'displayL0',
@@ -344,9 +350,15 @@ describe('resolveBrowserRendererPlan', () => {
     const tier: SuperResolutionTierPlan = {
       configuredTier: '1440p',
       actualSourceTier: '1080p',
+      displayTier: '2160p',
+      baseTier: '1080p',
       outputTier: '1440p',
       outputWidth: 2560,
       outputHeight: 1440,
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      mode: 'upscale',
+      reason: 'upscale-one-tier',
     }
     const plan = resolveBrowserRendererPlan(baseInput({
       superResolutionExperimental: true,
@@ -371,10 +383,11 @@ describe('resolveBrowserRendererPlan', () => {
 
     expect(plan.presentTarget).toBeDefined()
     expect(plan.sr).toBeDefined()
+    // 只升不降：SR 输出被显示预算夹住，但不得低于真实源。
     expect(plan.sr!.outputWidth).toBeLessThanOrEqual(plan.presentTarget!.outputWidth)
     expect(plan.sr!.outputHeight).toBeLessThanOrEqual(plan.presentTarget!.outputHeight)
-    expect(plan.sr!.outputWidth).toBe(1920)
-    expect(plan.sr!.outputHeight).toBe(1080)
+    expect(plan.sr!.outputWidth).toBeGreaterThanOrEqual(1920)
+    expect(plan.sr!.outputHeight).toBeGreaterThanOrEqual(1080)
   })
 
   it('caps present target output on high-dpr display-constrained paths', () => {

@@ -15,6 +15,7 @@ import type {
 } from '../../player/domain/media'
 import type { FrontEndContentFpsClass } from './browser-runtime-profile'
 import type {
+  SuperResolutionMode,
   SuperResolutionOutputTierLabel,
   SuperResolutionTierPlan,
 } from './super-resolution-ladder'
@@ -140,6 +141,8 @@ export interface BrowserRendererPlan {
     outputWidth: number
     outputHeight: number
     rcasStops: number
+    /** 本次决策在放大还是同档直通；present-downscale 表示缩小来自显示预算。 */
+    mode: SuperResolutionMode
   }
   presentTarget?: RendererPresentTarget
 }
@@ -227,7 +230,10 @@ function degradeBaseProcessing(level: BrowserDisplayDegradeLevel): 'usm' | 'cas'
   return level === 'displayL0' ? 'cas' : 'usm'
 }
 
-function resolvePresentTargetOutputConstraint(input: BrowserRendererPolicyInput): {
+function resolvePresentTargetOutputConstraint(input: {
+  displayDegradeLevel: BrowserDisplayDegradeLevel
+  displayContext?: { refreshRateHz?: number }
+}): {
   maxOutputDevicePixelRatio: number
   maxOutputPixels: number
 } {
@@ -260,13 +266,53 @@ function minPositive(...values: Array<number | undefined>): number | undefined {
   return Math.min(...positives)
 }
 
+/**
+ * 显示预算（设备像素）：容器 CSS × DPR，再受 display degrade 的 DPR / 总像素上限约束。
+ *
+ * 这是 SR 档位决策里的 `D`：只回答「屏幕需要多少像素」，不含 `min(configured, source)`
+ * 那种内容侧上限——否则会把已经算对的超分档位再压回去。
+ */
+export function resolveSuperResolutionDisplayBudget(input: {
+  containerWidthCss: number
+  containerHeightCss: number
+  devicePixelRatio: number
+  displayDegradeLevel: BrowserDisplayDegradeLevel
+  refreshRateHz?: number
+}): { width: number, height: number } {
+  const constraint = resolvePresentTargetOutputConstraint({
+    displayContext: { refreshRateHz: input.refreshRateHz },
+    displayDegradeLevel: input.displayDegradeLevel,
+  })
+  const dpr = Math.max(
+    1,
+    Math.min(
+      Number.isFinite(input.devicePixelRatio) && input.devicePixelRatio > 0 ? input.devicePixelRatio : 1,
+      constraint.maxOutputDevicePixelRatio,
+    ),
+  )
+  let width = Math.max(1, input.containerWidthCss) * dpr
+  let height = Math.max(1, input.containerHeightCss) * dpr
+  const maxPixels = constraint.maxOutputPixels
+  if (maxPixels > 0 && width * height > maxPixels) {
+    const scale = Math.sqrt(maxPixels / (width * height))
+    width *= scale
+    height *= scale
+  }
+  return {
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  }
+}
+
 function resolvePresentTargetResolutionCap(input: {
   displayContext: NonNullable<BrowserRendererPolicyInput['displayContext']>
+  /** SR 自己负责分辨率重建，内容侧上限交给档位决策，这里只保留显示预算约束。 */
+  superResolutionActive: boolean
 }): {
   maxOutputWidth?: number
   maxOutputHeight?: number
 } {
-  if (!input.displayContext.fullscreen) {
+  if (!input.displayContext.fullscreen || input.superResolutionActive) {
     return {}
   }
   return {
@@ -307,7 +353,10 @@ export function resolveRendererPresentTargetFps(input: {
   return 60
 }
 
-function clampSrOutputToPresentTarget(plan: BrowserRendererPlan): void {
+function clampSrOutputToPresentTarget(
+  plan: BrowserRendererPlan,
+  source: { width: number, height: number },
+): void {
   if (plan.sr === undefined || plan.presentTarget === undefined) {
     return
   }
@@ -317,8 +366,16 @@ function clampSrOutputToPresentTarget(plan: BrowserRendererPlan): void {
     return
   }
   const scale = Math.min(maxW / plan.sr.outputWidth, maxH / plan.sr.outputHeight)
-  plan.sr.outputWidth = Math.max(1, Math.floor(plan.sr.outputWidth * scale))
-  plan.sr.outputHeight = Math.max(1, Math.floor(plan.sr.outputHeight * scale))
+  let nextW = Math.max(1, Math.floor(plan.sr.outputWidth * scale))
+  let nextH = Math.max(1, Math.floor(plan.sr.outputHeight * scale))
+  // 超分只升不降：只有「显示预算本身小于源」时才允许压到源以下，
+  // 其余情况把下限锁在真实源，避免把档位决策算对的结果再压回去。
+  if (source.width > 0 && source.height > 0 && maxW >= source.width && maxH >= source.height) {
+    nextW = Math.max(nextW, source.width)
+    nextH = Math.max(nextH, source.height)
+  }
+  plan.sr.outputWidth = nextW
+  plan.sr.outputHeight = nextH
 }
 
 /**
@@ -411,6 +468,7 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
       outputWidth: t.outputWidth,
       outputHeight: t.outputHeight,
       rcasStops: rcas,
+      mode: t.mode,
     }
   }
 
@@ -418,6 +476,7 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
     const outputConstraint = resolvePresentTargetOutputConstraint(input)
     const resolutionCap = resolvePresentTargetResolutionCap({
       displayContext: input.displayContext,
+      superResolutionActive: plan.kind === 'webgl2_sr',
     })
     const viewport = resolveDisplayViewport({
       containerWidthCss: input.displayContext.containerWidthCss,
@@ -442,7 +501,10 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
       sourceWidth: input.displayContext.sourceWidth,
       sourceHeight: input.displayContext.sourceHeight,
     }
-    clampSrOutputToPresentTarget(plan)
+    clampSrOutputToPresentTarget(plan, {
+      width: input.displayContext.sourceWidth,
+      height: input.displayContext.sourceHeight,
+    })
   }
 
   return plan
