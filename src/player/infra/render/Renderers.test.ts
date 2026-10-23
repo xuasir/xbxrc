@@ -187,7 +187,8 @@ describe('renderers', () => {
 
     expect(video.dataset.renderPipeline).toBe('webgl2')
     expect((video as unknown as LocalVideoElement).insertAdjacentElement).toHaveBeenCalled()
-    expect(gl.getUniformLocation).toHaveBeenCalledTimes(9)
+    // 主 pass 9 个 uniform + 呈现 pass 5 个（outputResolution/brightness/contrast/saturation/data）。
+    expect(gl.getUniformLocation).toHaveBeenCalledTimes(14)
     expect(gl.uniform1f).toHaveBeenCalled()
     expect(gl.texSubImage2D).toHaveBeenCalled()
     expect(canvasNode.remove).toHaveBeenCalled()
@@ -312,6 +313,122 @@ describe('renderers', () => {
       gl.UNSIGNED_BYTE,
       null,
     )
+  })
+
+  it('sharpens at source resolution before upscaling when present target differs', async () => {
+    const gl = {
+      drawingBufferWidth: 2880,
+      drawingBufferHeight: 1620,
+      viewport: vi.fn(),
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      getShaderParameter: vi.fn(() => true),
+      getShaderInfoLog: vi.fn(() => ''),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      getProgramParameter: vi.fn(() => true),
+      getProgramInfoLog: vi.fn(() => ''),
+      useProgram: vi.fn(),
+      createBuffer: vi.fn(() => ({})),
+      bindBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      createTexture: vi.fn(() => ({})),
+      deleteTexture: vi.fn(),
+      bindTexture: vi.fn(),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      uniform1i: vi.fn(),
+      getUniformLocation: vi.fn(() => ({})),
+      uniform2f: vi.fn(),
+      uniform1f: vi.fn(),
+      texImage2D: vi.fn(),
+      texSubImage2D: vi.fn(),
+      drawArrays: vi.fn(),
+      createFramebuffer: vi.fn(() => ({})),
+      bindFramebuffer: vi.fn(),
+      framebufferTexture2D: vi.fn(),
+      checkFramebufferStatus: vi.fn(() => 36053),
+      deleteFramebuffer: vi.fn(),
+      VERTEX_SHADER: 1,
+      FRAGMENT_SHADER: 2,
+      ARRAY_BUFFER: 3,
+      STATIC_DRAW: 4,
+      FLOAT: 5,
+      TEXTURE_2D: 6,
+      UNPACK_FLIP_Y_WEBGL: 7,
+      TEXTURE_WRAP_S: 8,
+      TEXTURE_WRAP_T: 9,
+      CLAMP_TO_EDGE: 10,
+      TEXTURE_MIN_FILTER: 11,
+      TEXTURE_MAG_FILTER: 12,
+      LINEAR: 13,
+      RGB: 14,
+      RGBA: 19,
+      UNSIGNED_BYTE: 15,
+      TRIANGLES: 16,
+      COMPILE_STATUS: 17,
+      LINK_STATUS: 18,
+      FRAMEBUFFER: 20,
+      COLOR_ATTACHMENT0: 21,
+      FRAMEBUFFER_COMPLETE: 36053,
+    }
+    const canvasNode = {
+      width: 1920,
+      height: 1080,
+      style: { position: '', inset: '', width: '', height: '', pointerEvents: '' },
+      isConnected: true,
+      remove: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      getContext: vi.fn(() => gl),
+    }
+    globalThis.document = {
+      createElement: (tag: string) => {
+        if (tag === 'canvas') {
+          return canvasNode
+        }
+        return { style: {} }
+      },
+    } as unknown as Document
+
+    class LocalVideoElement {
+      dataset: Record<string, string> = {}
+      videoWidth = 1920
+      videoHeight = 1080
+      frameCallback: (() => void) | null = null
+      insertAdjacentElement = vi.fn()
+      requestVideoFrameCallback(callback: () => void): number {
+        this.frameCallback = callback
+        return 1
+      }
+
+      cancelVideoFrameCallback(_id: number): void {}
+    }
+    globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
+    const video = new LocalVideoElement() as unknown as HTMLVideoElement
+
+    const renderer = new WebGL2VideoRenderer({
+      ...createRendererConfig(),
+      renderOutputWidth: 2880,
+      renderOutputHeight: 1620,
+      renderViewportWidth: 1920,
+      renderViewportHeight: 1080,
+    } as RendererRuntimeConfig)
+    await renderer.attach(video)
+    ;(video as unknown as LocalVideoElement).frameCallback?.()
+
+    // 两个 pass：① 源尺寸 1:1 锐化进 FBO ② 升采样 + 色彩上屏。
+    expect(gl.drawArrays).toHaveBeenCalledTimes(2)
+    expect(gl.viewport).toHaveBeenCalledWith(0, 0, 1920, 1080)
+    expect(gl.viewport).toHaveBeenCalledWith(0, 0, 2880, 1620)
+    expect(gl.bindFramebuffer).toHaveBeenCalledWith(gl.FRAMEBUFFER, expect.anything())
+    expect(gl.bindFramebuffer).toHaveBeenCalledWith(gl.FRAMEBUFFER, null)
+    // 锐化 pass 不能重复做色彩变换，否则会与呈现 pass 叠加。
+    expect(gl.uniform1i).toHaveBeenCalledWith(expect.anything(), 0)
   })
 
   it('does not re-viewport webgl2 when present target geometry is unchanged', async () => {
@@ -596,7 +713,8 @@ describe('renderers', () => {
       sharpenStrength: 80,
     }))
     await renderer.attach(video)
-    expect(gl.uniform1f).toHaveBeenCalledWith(expect.anything(), 3.84)
+    // strength 统一为 0..1：80% 锐度直接作为强度，不再经过 `/2` 外推。
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.anything(), 0.8)
   })
 
   it('throws when sr intermediate framebuffer is incomplete', async () => {

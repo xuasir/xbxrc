@@ -1,4 +1,14 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
+import {
+  CAS_CHROMA_BLEND,
+  CAS_EDGE_WEIGHT,
+  CAS_GAIN_MAX,
+  CAS_GATE_RAMP,
+  CAS_NOISE_FLOOR,
+  CAS_RING_BLEND,
+  CAS_RING_PAD,
+  USM_GAIN_SCALE,
+} from './sharpening-tuning'
 import { captureVideoElementToCanvas, readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
 
 interface StreamPlayerOptions {
@@ -170,13 +180,24 @@ function resolveCanvasObjectFit(format: RendererRuntimeConfig['format']): 'conta
   return 'contain'
 }
 
+/**
+ * 把「显示档位 / 用户锐度」归一成 0..1 的 strength。
+ *
+ * 旧实现用 `sharpenFactor / 2.0` 做 mix 权重，`清晰` 预设（sharpness=3）会算出 1.5，
+ * 即 `mix` 外推、等效 5× 高通，是颗粒/油画感最直接的来源。这里统一钳到 0..1。
+ */
+function resolveSharpenStrength(config: RendererRuntimeConfig): number {
+  const raw = config.sharpenStrength === undefined
+    ? config.sharpness / 5
+    : config.sharpenStrength / 100
+  return Math.max(0, Math.min(1, raw))
+}
+
 function resolveShaderPreset(
   config: RendererRuntimeConfig,
 ): ShaderPresetResolved {
   // 当前 shader preset 只在 USM/CAS 锐化后处理之间切换，不承载 FSR upscaling 语义。
-  const strength = config.sharpenStrength === undefined
-    ? config.sharpness
-    : Math.max(0, Math.min(100, config.sharpenStrength)) / 25
+  const strength = resolveSharpenStrength(config)
 
   if (config.shaderPreset === 'clarityL0') {
     return {
@@ -189,33 +210,39 @@ function resolveShaderPreset(
     return {
       processing: 'usm',
       processingMode: 'performance',
-      sharpenFactor: Math.max(0.5, strength * 0.8),
+      sharpenFactor: strength * 0.6,
     }
   }
   if (config.shaderPreset === 'clarityL2') {
     return {
       processing: 'usm',
       processingMode: 'quality',
-      sharpenFactor: Math.max(1, strength),
+      sharpenFactor: strength * 0.8,
     }
   }
   if (config.shaderPreset === 'clarityL3') {
     return {
       processing: 'cas',
       processingMode: 'quality',
-      sharpenFactor: Math.max(1.5, strength * 1.2),
+      sharpenFactor: strength,
     }
   }
   return {
     processing: config.processing,
     processingMode: config.processingMode,
-    sharpenFactor: config.sharpness,
+    sharpenFactor: strength,
   }
 }
 
 class WebGL2Processor extends BaseCanvasVideoProcessor {
   private gl: WebGL2RenderingContext | null = null
   private program: WebGLProgram | null = null
+  private presentProgram: WebGLProgram | null = null
+  private videoTexture: WebGLTexture | null = null
+  private sharpenFramebuffer: WebGLFramebuffer | null = null
+  private sharpenTexture: WebGLTexture | null = null
+  private sharpenTargetWidth = 0
+  private sharpenTargetHeight = 0
   private currentSourceWidth = 0
   private currentSourceHeight = 0
   private currentOutputWidth = 0
@@ -229,25 +256,39 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private outputResolutionUniform: WebGLUniformLocation | null = null
   private sourceResolutionUniform: WebGLUniformLocation | null = null
   private filterIdUniform: WebGLUniformLocation | null = null
-  private qualityModeUniform: WebGLUniformLocation | null = null
+  private applyColorUniform: WebGLUniformLocation | null = null
   private sharpenFactorUniform: WebGLUniformLocation | null = null
   private brightnessUniform: WebGLUniformLocation | null = null
   private contrastUniform: WebGLUniformLocation | null = null
   private saturationUniform: WebGLUniformLocation | null = null
+  private presentOutputResolutionUniform: WebGLUniformLocation | null = null
+  private presentBrightnessUniform: WebGLUniformLocation | null = null
+  private presentContrastUniform: WebGLUniformLocation | null = null
+  private presentSaturationUniform: WebGLUniformLocation | null = null
   private readonly frameCaptureWaiters: Array<(frame: HTMLCanvasElement | null) => void> = []
   private drewToScreenThisFrame = false
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault()
     this.gl = null
     this.program = null
+    this.presentProgram = null
+    this.videoTexture = null
+    this.sharpenFramebuffer = null
+    this.sharpenTexture = null
+    this.sharpenTargetWidth = 0
+    this.sharpenTargetHeight = 0
     this.outputResolutionUniform = null
     this.sourceResolutionUniform = null
     this.filterIdUniform = null
-    this.qualityModeUniform = null
+    this.applyColorUniform = null
     this.sharpenFactorUniform = null
     this.brightnessUniform = null
     this.contrastUniform = null
     this.saturationUniform = null
+    this.presentOutputResolutionUniform = null
+    this.presentBrightnessUniform = null
+    this.presentContrastUniform = null
+    this.presentSaturationUniform = null
     this.hasDrawnFrame = false
     this.canvas.style.opacity = '0'
   }
@@ -341,50 +382,77 @@ uniform sampler2D data;
 uniform vec2 outputResolution;
 uniform vec2 sourceResolution;
 uniform int filterId;
-uniform bool qualityMode;
+uniform bool applyColor;
 uniform float sharpenFactor;
 uniform float brightness;
 uniform float contrast;
 uniform float saturation;
 const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
-vec3 clarityBoost(vec2 uv, vec3 center) {
+const float CAS_EDGE_WEIGHT = ${CAS_EDGE_WEIGHT.toFixed(4)};
+const float CAS_GAIN_MAX = ${CAS_GAIN_MAX.toFixed(4)};
+const float CAS_NOISE_FLOOR = ${CAS_NOISE_FLOOR.toFixed(6)};
+const float CAS_GATE_RAMP = ${CAS_GATE_RAMP.toFixed(4)};
+const float CAS_RING_PAD = ${CAS_RING_PAD.toFixed(4)};
+const float CAS_RING_BLEND = ${CAS_RING_BLEND.toFixed(4)};
+const float CAS_CHROMA_BLEND = ${CAS_CHROMA_BLEND.toFixed(4)};
+const float USM_GAIN_SCALE = ${USM_GAIN_SCALE.toFixed(4)};
+vec3 usmBoost(vec2 uv, vec3 center) {
   vec2 texel = 1.0 / sourceResolution.xy;
   vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
   vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
   vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
   vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
-  if (filterId == 1) {
-    vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
-    vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
-    vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
-    vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
-    vec3 blur = (a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0;
-    blur /= 16.0;
-    return center + (center - blur) * (sharpenFactor / 3.0);
-  }
-  // filterId == 2 走 CAS 风格锐化；这里是单通道锐化后处理，不含 FSR 超分重建。
-  vec3 minRgb = min(min(min(d, center), min(f, b)), h);
-  vec3 maxRgb = max(max(max(d, center), max(f, b)), h);
-  vec3 reciprocalMaxRgb = 1.0 / maxRgb;
-  vec3 amplifyRgb = clamp(min(minRgb, 2.0 - maxRgb) * reciprocalMaxRgb, 0.0, 1.0);
-  amplifyRgb = inversesqrt(amplifyRgb);
-  float qualityWeight = qualityMode ? 5.2 : 5.6;
-  vec3 weightRgb = -(1.0 / (amplifyRgb * qualityWeight));
-  vec3 reciprocalWeightRgb = 1.0 / (4.0 * weightRgb + 1.0);
-  vec3 window = b + d + f + h;
-  vec3 outColor = clamp((window * weightRgb + center) * reciprocalWeightRgb, 0.0, 1.0);
-  return mix(center, outColor, sharpenFactor / 2.0);
+  vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
+  vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
+  vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
+  vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
+  vec3 blur = (a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0;
+  blur /= 16.0;
+  return clamp(center + (center - blur) * (clamp(sharpenFactor, 0.0, 1.0) * USM_GAIN_SCALE), 0.0, 1.0);
+}
+// CAS 风格锐化：显式增益 + luma 噪声门限 + 邻域钳制。
+// 原式等价于 out = center + (center - mean4) * G，平坦区 G=3.33 会把编码噪声放大成颗粒，
+// 强边缘 G->0 又让轮廓保持糊；这里给 G 加上限、给低对比残差加软门限，并限制过冲。
+vec3 casBoost(vec2 uv, vec3 center) {
+  vec2 texel = 1.0 / sourceResolution.xy;
+  vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
+  vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
+  vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
+  vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
+
+  vec3 min4 = min(min(min(d, f), min(b, h)), center);
+  vec3 max4 = max(max(max(d, f), max(b, h)), center);
+  float lumaMin = dot(min4, LUMINOSITY_FACTOR);
+  float lumaMax = dot(max4, LUMINOSITY_FACTOR);
+  float adaptive = clamp(min(lumaMin, 2.0 - lumaMax) / max(lumaMax, 1e-4), 0.0, 1.0);
+  float rootA = sqrt(adaptive);
+  float gain = min(4.0 * rootA / max(CAS_EDGE_WEIGHT - 4.0 * rootA, 1e-3), CAS_GAIN_MAX);
+
+  vec3 mean4 = (b + d + f + h) * 0.25;
+  vec3 residual = center - mean4;
+  float residualLuma = dot(residual, LUMINOSITY_FACTOR);
+  float gate = smoothstep(CAS_NOISE_FLOOR, CAS_NOISE_FLOOR * CAS_GATE_RAMP, abs(residualLuma));
+  residual = mix(residual, vec3(residualLuma), CAS_CHROMA_BLEND);
+  vec3 outColor = center + residual * gain * gate * clamp(sharpenFactor, 0.0, 1.0);
+
+  vec3 range = max4 - min4;
+  vec3 lo = min4 - range * CAS_RING_PAD - 1e-4;
+  vec3 hi = max4 + range * CAS_RING_PAD + 1e-4;
+  outColor = mix(outColor, clamp(outColor, lo, hi), CAS_RING_BLEND);
+  return clamp(outColor, 0.0, 1.0);
 }
 out vec4 fragColor;
 void main() {
   vec2 uv = gl_FragCoord.xy / outputResolution.xy;
   vec3 color = texture(data, uv).rgb;
   if (sharpenFactor > 0.0) {
-    color = clarityBoost(uv, color);
+    color = filterId == 1 ? usmBoost(uv, color) : casBoost(uv, color);
   }
-  color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
-  color = (contrast / 100.0) * (color - 0.5) + 0.5;
-  color = (brightness / 100.0) * color;
+  if (applyColor) {
+    color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+    color = (contrast / 100.0) * (color - 0.5) + 0.5;
+    color = (brightness / 100.0) * color;
+  }
   fragColor = vec4(color, 1.0);
 }`)
     gl.compileShader(fShader)
@@ -403,17 +471,58 @@ void main() {
     this.outputResolutionUniform = gl.getUniformLocation(program, 'outputResolution')
     this.sourceResolutionUniform = gl.getUniformLocation(program, 'sourceResolution')
     this.filterIdUniform = gl.getUniformLocation(program, 'filterId')
-    this.qualityModeUniform = gl.getUniformLocation(program, 'qualityMode')
+    this.applyColorUniform = gl.getUniformLocation(program, 'applyColor')
     this.sharpenFactorUniform = gl.getUniformLocation(program, 'sharpenFactor')
     this.brightnessUniform = gl.getUniformLocation(program, 'brightness')
     this.contrastUniform = gl.getUniformLocation(program, 'contrast')
     this.saturationUniform = gl.getUniformLocation(program, 'saturation')
+
+    // 呈现 pass：只做升采样 + 色彩，锐化已经在源尺寸 FBO 上按 1:1 完成。
+    const presentShader = gl.createShader(gl.FRAGMENT_SHADER)!
+    gl.shaderSource(presentShader, `#version 300 es
+precision highp float;
+uniform sampler2D data;
+uniform vec2 outputResolution;
+uniform float brightness;
+uniform float contrast;
+uniform float saturation;
+const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
+out vec4 fragColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / outputResolution.xy;
+  vec3 color = texture(data, uv).rgb;
+  color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+  color = (contrast / 100.0) * (color - 0.5) + 0.5;
+  color = (brightness / 100.0) * color;
+  fragColor = vec4(color, 1.0);
+}`)
+    gl.compileShader(presentShader)
+    if (!gl.getShaderParameter(presentShader, gl.COMPILE_STATUS)) {
+      throw new Error(`webgl2PresentShaderCompileFailed:${gl.getShaderInfoLog(presentShader) ?? 'unknown'}`)
+    }
+    const presentProgram = gl.createProgram()!
+    this.presentProgram = presentProgram
+    gl.attachShader(presentProgram, vShader)
+    gl.attachShader(presentProgram, presentShader)
+    gl.linkProgram(presentProgram)
+    if (!gl.getProgramParameter(presentProgram, gl.LINK_STATUS)) {
+      throw new Error(`webgl2PresentProgramLinkFailed:${gl.getProgramInfoLog(presentProgram) ?? 'unknown'}`)
+    }
+    gl.useProgram(presentProgram)
+    this.presentOutputResolutionUniform = gl.getUniformLocation(presentProgram, 'outputResolution')
+    this.presentBrightnessUniform = gl.getUniformLocation(presentProgram, 'brightness')
+    this.presentContrastUniform = gl.getUniformLocation(presentProgram, 'contrast')
+    this.presentSaturationUniform = gl.getUniformLocation(presentProgram, 'saturation')
+    gl.uniform1i(gl.getUniformLocation(presentProgram, 'data'), 0)
+
+    gl.useProgram(program)
     const buffer = gl.createBuffer()!
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, 3.0, -1.0, -1.0, 3.0]), gl.STATIC_DRAW)
     gl.enableVertexAttribArray(0)
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
     const texture = gl.createTexture()!
+    this.videoTexture = texture
     gl.bindTexture(gl.TEXTURE_2D, texture)
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -427,10 +536,13 @@ void main() {
 
   protected refresh(): void {
     const gl = this.gl!
+    if (this.program !== null) {
+      gl.useProgram(this.program)
+    }
     gl.uniform2f(this.outputResolutionUniform, this.currentOutputWidth, this.currentOutputHeight)
     gl.uniform2f(this.sourceResolutionUniform, this.currentSourceWidth, this.currentSourceHeight)
     gl.uniform1i(this.filterIdUniform, this.toFilterId(this.options.processing))
-    gl.uniform1i(this.qualityModeUniform, this.options.processingMode === 'quality' ? 1 : 0)
+    gl.uniform1i(this.applyColorUniform, 1)
     gl.uniform1f(this.sharpenFactorUniform, this.options.sharpness)
     gl.uniform1f(this.brightnessUniform, this.options.brightness)
     gl.uniform1f(this.contrastUniform, this.options.contrast)
@@ -499,12 +611,153 @@ void main() {
       )
       this.textureAllocated = true
     }
+    if (this.videoTexture !== null) {
+      gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
+    }
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    if (!this.drawThroughSharpenTarget(gl)) {
+      gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
+      gl.useProgram(this.program)
+      gl.uniform2f(this.outputResolutionUniform, this.currentOutputWidth, this.currentOutputHeight)
+      gl.uniform1i(this.applyColorUniform, 1)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+    }
     this.drewToScreenThisFrame = true
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true
       this.canvas.style.opacity = '1'
+    }
+  }
+
+  /**
+   * 输出尺寸与源尺寸不一致时，先把锐化按 1:1 渲进源尺寸 FBO，再升采样呈现。
+   *
+   * 单 pass 在非 1:1 采样下会让 5-tap 核落在非整数源像素上：`min/max` 窗口被双线性抹平、
+   * 核也不对称，观感会随窗口尺寸漂移（同一档锐度在窗口/全屏下颗粒感不同）。
+   */
+  private drawThroughSharpenTarget(gl: WebGL2RenderingContext): boolean {
+    if (!this.explicitPresentTarget || this.presentProgram === null) {
+      return false
+    }
+    if (this.currentOutputWidth === this.currentSourceWidth
+      && this.currentOutputHeight === this.currentSourceHeight) {
+      return false
+    }
+    if (!this.ensureSharpenTarget(gl)) {
+      return false
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.sharpenFramebuffer)
+    gl.viewport(0, 0, this.currentSourceWidth, this.currentSourceHeight)
+    gl.useProgram(this.program)
+    gl.uniform2f(this.outputResolutionUniform, this.currentSourceWidth, this.currentSourceHeight)
+    gl.uniform2f(this.sourceResolutionUniform, this.currentSourceWidth, this.currentSourceHeight)
+    gl.uniform1i(this.applyColorUniform, 0)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
+    gl.useProgram(this.presentProgram)
+    gl.bindTexture(gl.TEXTURE_2D, this.sharpenTexture)
+    gl.uniform2f(this.presentOutputResolutionUniform, this.currentOutputWidth, this.currentOutputHeight)
+    gl.uniform1f(this.presentBrightnessUniform, this.options.brightness)
+    gl.uniform1f(this.presentContrastUniform, this.options.contrast)
+    gl.uniform1f(this.presentSaturationUniform, this.options.saturation)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+
+    if (this.videoTexture !== null) {
+      gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
+    }
+    return true
+  }
+
+  /** 惰性创建源尺寸锐化目标；任何一步失败都回落到单 pass，不引入黑屏风险。 */
+  private ensureSharpenTarget(gl: WebGL2RenderingContext): boolean {
+    if (typeof gl.createFramebuffer !== 'function'
+      || typeof gl.framebufferTexture2D !== 'function'
+      || typeof gl.checkFramebufferStatus !== 'function') {
+      return false
+    }
+    if (this.sharpenFramebuffer !== null
+      && this.sharpenTexture !== null
+      && this.sharpenTargetWidth === this.currentSourceWidth
+      && this.sharpenTargetHeight === this.currentSourceHeight) {
+      return true
+    }
+    this.releaseSharpenTarget()
+
+    const texture = gl.createTexture()
+    if (texture === null) {
+      return false
+    }
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      this.currentSourceWidth,
+      this.currentSourceHeight,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      null,
+    )
+
+    const framebuffer = gl.createFramebuffer()
+    if (framebuffer === null) {
+      this.deleteTexture(gl, texture)
+      return false
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0)
+    const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    if (!complete) {
+      this.deleteFramebuffer(gl, framebuffer)
+      this.deleteTexture(gl, texture)
+      return false
+    }
+
+    this.sharpenFramebuffer = framebuffer
+    this.sharpenTexture = texture
+    this.sharpenTargetWidth = this.currentSourceWidth
+    this.sharpenTargetHeight = this.currentSourceHeight
+    if (this.videoTexture !== null) {
+      gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
+    }
+    return true
+  }
+
+  private releaseSharpenTarget(): void {
+    const gl = this.gl
+    if (gl === null) {
+      this.sharpenFramebuffer = null
+      this.sharpenTexture = null
+      this.sharpenTargetWidth = 0
+      this.sharpenTargetHeight = 0
+      return
+    }
+    this.deleteFramebuffer(gl, this.sharpenFramebuffer)
+    this.deleteTexture(gl, this.sharpenTexture)
+    this.sharpenFramebuffer = null
+    this.sharpenTexture = null
+    this.sharpenTargetWidth = 0
+    this.sharpenTargetHeight = 0
+  }
+
+  private deleteFramebuffer(gl: WebGL2RenderingContext, framebuffer: WebGLFramebuffer | null): void {
+    if (framebuffer !== null && typeof gl.deleteFramebuffer === 'function') {
+      gl.deleteFramebuffer(framebuffer)
+    }
+  }
+
+  private deleteTexture(gl: WebGL2RenderingContext, texture: WebGLTexture | null): void {
+    if (texture !== null && typeof gl.deleteTexture === 'function') {
+      gl.deleteTexture(texture)
     }
   }
 
@@ -518,6 +771,7 @@ void main() {
       this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener)
       this.contextListenersBound = false
     }
+    this.releaseSharpenTarget()
     super.destroy()
   }
 }

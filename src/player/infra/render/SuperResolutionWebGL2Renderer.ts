@@ -14,6 +14,7 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import { computeFsrEasuCon, computeFsrRcasCon, rcasStopsToMobileFsrSharpness } from './fsr1-cpu'
 import { FSR1_MOBILE_OPT_SINGLE_PASS_FRAGMENT } from './fsr1-mobile-opt-fragment'
+import { CAS_RING_BLEND, CAS_RING_PAD } from './sharpening-tuning'
 import { readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
 
 const FSR_RCAS_LIMIT = (0.25 - (1.0 / 16.0))
@@ -255,8 +256,11 @@ void main(){
   float eL=eB*0.5+(eR*0.5+eG);
   float fL=fB*0.5+(fR*0.5+fG);
   float hL=hB*0.5+(hR*0.5+hG);
+  // 噪声项：邻域 luma 方差越小（平坦噪点区）nz 越接近 0.5，把 lobe 压回去；
+  // 纹理/边缘区 nz 接近 1，保持完整锐化。range 加下限避免平坦色块除零。
+  float nzRange=max(AMax3F1(AMax3F1(bL,dL,eL),fL,hL)-AMin3F1(AMin3F1(bL,dL,eL),fL,hL), 1e-4);
   float nz=0.25*bL+0.25*dL+0.25*fL+0.25*hL-eL;
-  nz=ASatF1(abs(nz)*APrxMedRcpF1(AMax3F1(AMax3F1(bL,dL,eL),fL,hL)-AMin3F1(AMin3F1(bL,dL,eL),fL,hL)));
+  nz=ASatF1(abs(nz)*APrxMedRcpF1(nzRange));
   nz=-0.5*nz+1.0;
   float mn4R=min(AMin3F1(bR,dR,fR),hR);
   float mn4G=min(AMin3F1(bG,dG,fG),hG);
@@ -274,14 +278,15 @@ void main(){
   float lobeR=max(-hitMinR,hitMaxR);
   float lobeG=max(-hitMinG,hitMaxG);
   float lobeB=max(-hitMinB,hitMaxB);
-  float lobe=max(-${FSR_RCAS_LIMIT.toFixed(6)}, min(AMax3F1(lobeR,lobeG,lobeB), 0.0)) * uintBitsToFloat(floatBitsToUint(con.x));
+  float lobe=max(-${FSR_RCAS_LIMIT.toFixed(6)}, min(AMax3F1(lobeR,lobeG,lobeB), 0.0)) * uintBitsToFloat(floatBitsToUint(con.x)) * nz;
   float rcpL=APrxMedRcpF1(4.0*lobe+1.0);
   float pixR=(lobe*bR+lobe*dR+lobe*hR+lobe*fR+eR)*rcpL;
   float pixG=(lobe*bG+lobe*dG+lobe*hG+lobe*fG+eG)*rcpL;
   float pixB=(lobe*bB+lobe*dB+lobe*hB+lobe*fB+eB)*rcpL;
   // 邻域 ringing / 块边界控制：在 b,d,e,f,h 十字邻域 min/max 外扩一环后钳制 RCAS 输出，减轻低码率振铃与 DCT 块边界过冲。
-  const float SR_RCAS_RING_PAD_SCALE = 0.38;
-  const float SR_RCAS_RING_BLEND = 0.92;
+  // 与 webgl2 CAS 路径共用同一组常量，避免两条路径观感分裂。
+  const float SR_RCAS_RING_PAD_SCALE = ${CAS_RING_PAD.toFixed(4)};
+  const float SR_RCAS_RING_BLEND = ${CAS_RING_BLEND.toFixed(4)};
   vec3 sharpened = vec3(pixR, pixG, pixB);
   vec3 ringLo = vec3(min(mn4R, eR), min(mn4G, eG), min(mn4B, eB));
   vec3 ringHi = vec3(max(mx4R, eR), max(mx4G, eG), max(mx4B, eB));
