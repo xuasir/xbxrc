@@ -1,11 +1,12 @@
 //! 主窗口前台状态 → ohmygamepad gate。
 //!
-//! 判定只有一个维度：**窗口是否在台前**（可见且未最小化）。
+//! 判定只有一个维度：**窗口是否最小化**（macOS 额外要求可见，因为收起走 hide）。
 //!
-//! 刻意**不**看焦点事件、也不看 Win32 前台窗口归属：全屏 / FSE / 掌机启动器
-//! 拉起的路径上这两个信号都不可靠，一旦拿它当关闭条件，就会出现「手柄已连接、
-//! 震动正常、输入全无」。gate 误关的代价是完全没有输入，误开的代价只是后台
-//! 多收几个包 —— 所以这里只做最保守的判定，宁可多放行。
+//! 刻意**不**看焦点事件、Win32 前台归属，Windows 上也不看 `is_visible()`：
+//! 全屏 / FSE / 掌机启动器拉起的路径上 `is_visible()` 会短暂或长期返回 false，
+//! 拿它当关闭条件就正好是历史上反复出现的「启动没输入、碰一下屏幕也没输入」。
+//! gate 误关的代价是完全没有输入，误开的代价只是后台多收几个包 —— 所以只认
+//! 「用户亲手最小化」这一个硬信号，宁可多放行。
 
 use ohmygamepad_sdl3::ShellWindowGateHints;
 use tauri::{AppHandle, Manager};
@@ -20,9 +21,12 @@ pub struct ShellForegroundState {
 }
 
 impl ShellForegroundState {
-    /// 台前 = 窗口可见 + 未最小化。
+    /// 台前 = 未最小化；macOS 额外要求可见（收起窗口是 `hide()`，不一定会最小化）。
     pub fn is_foreground(&self) -> bool {
-        self.visible && !self.minimized
+        if self.minimized {
+            return false;
+        }
+        !cfg!(target_os = "macos") || self.visible
     }
 
     pub fn to_hints(&self) -> ShellWindowGateHints {
@@ -57,11 +61,9 @@ pub fn sync_gamepad_input_gate(app: &AppHandle) {
         return;
     };
     let Some(window) = app.get_webview_window("main") else {
-        state
-            .gamepad
-            .set_shell_window_gate_hints(ShellWindowGateHints {
-                shell_app_active: false,
-            });
+        // 取不到窗口时保持上一次判定，**不要**写 `shell_app_active: false`：
+        // FSE / 冷启动窗口尚未就绪就会走这条路径，一旦写成 Closed 又没有任何
+        // 后续事件来纠正，输入就永久死掉。宁可多放行，绝不静默关死。
         return;
     };
 
@@ -85,9 +87,23 @@ mod tests {
     }
 
     #[test]
-    fn invisible_or_minimized_is_background() {
-        assert!(!state(false, false).is_foreground());
+    fn minimized_is_background() {
         assert!(!state(true, true).is_foreground());
         assert!(!state(false, true).is_foreground());
+    }
+
+    /// FSE / 全屏下 `is_visible()` 会误报 false，Windows 上不能拿它关 gate。
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn windows_ignores_invisible_so_fse_keeps_input() {
+        assert!(state(false, false).is_foreground());
+        assert!(state(false, false).to_hints().shell_app_active);
+    }
+
+    /// macOS 收起窗口走 hide()，不可见就是台后。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_hidden_window_is_background() {
+        assert!(!state(false, false).is_foreground());
     }
 }
