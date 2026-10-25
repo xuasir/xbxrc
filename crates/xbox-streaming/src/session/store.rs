@@ -46,6 +46,7 @@ impl<T: Clone> SessionRuntimeRecord<T> {
                 state_observed_at_ms: None,
                 repeated_state_count: 0,
                 monitor_attempt_count: 0,
+                reached_provisioned: false,
             },
             cancelled: SessionCancelToken::default(),
         }

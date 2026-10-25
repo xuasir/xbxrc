@@ -25,6 +25,14 @@ pub struct SessionMonitorMetadata {
     pub state_observed_at_ms: Option<u64>,
     pub repeated_state_count: u32,
     pub monitor_attempt_count: u32,
+    /// 会话是否曾经观测到 `Provisioned`。
+    ///
+    /// 该事实一旦成立就不再回退：启动期「卡在 Provisioning / ReadyToConnect」
+    /// 的超时门槛只对还没 Provisioned 过的会话成立。播放期服务端把状态退回
+    /// `Provisioning` / `ReadyToConnect`（重新准备或重新握手）时，本地媒体链路
+    /// 往往仍然在正常出图，此时判成启动超时只会制造「报错但画面还在动」。
+    #[serde(default)]
+    pub reached_provisioned: bool,
 }
 
 /// 会话监控的内部状态，由运行时快照与元数据组合而成。
@@ -108,12 +116,21 @@ pub fn apply_monitor_tick(
         state.metadata.repeated_state_count = 1;
     }
 
-    if let Some(timeout_error) = get_state_timeout_error(
-        &state,
-        input.now_ms,
-        input.stream_state.as_deref(),
-        input.state_timeout_ms,
-    ) {
+    // 启动期超时门槛只对「还没进入过 Provisioned」的会话成立。
+    // 一旦会话已经 Provisioned 过（也就是已经可以出图），后续再把
+    // Provisioning / ReadyToConnect 判成启动超时就是误报：播放期状态回退
+    // 由下面的 match 分支吸收，不再升级成 failed。
+    let timeout_error = if state.metadata.reached_provisioned {
+        None
+    } else {
+        get_state_timeout_error(
+            &state,
+            input.now_ms,
+            input.stream_state.as_deref(),
+            input.state_timeout_ms,
+        )
+    };
+    if let Some(timeout_error) = timeout_error {
         state.runtime.player_state = "failed".to_string();
         state.runtime.stream_state = input.stream_state;
         state.runtime.error_details = Some(timeout_error);
@@ -127,6 +144,7 @@ pub fn apply_monitor_tick(
 
     match input.stream_state.as_deref() {
         Some("Provisioned") => {
+            state.metadata.reached_provisioned = true;
             state.runtime.player_state = "started".to_string();
             state.runtime.stream_state = input.stream_state;
             state.runtime.queue = None;
@@ -135,6 +153,20 @@ pub fn apply_monitor_tick(
                 runtime: state.runtime,
                 metadata: state.metadata,
                 should_continue: false,
+                should_send_connect_token: false,
+            }
+        }
+        // 播放期状态回退：会话已经 Provisioned 过，服务端又退回 Provisioning /
+        // ReadyToConnect，说明它正在重新准备或等待重新握手，而不是「启动卡死」。
+        // 这里不做降级也不结束监控，只把真实状态写回快照供 trace 复盘；
+        // 播放期的媒体链路与 session 状态机是两条独立的路径，不能因为一个
+        // 状态字符串就把已经在出图的会话判成 failed。
+        Some("Provisioning" | "ReadyToConnect") if state.metadata.reached_provisioned => {
+            state.runtime.stream_state = input.stream_state;
+            SessionMonitorResult {
+                runtime: state.runtime,
+                metadata: state.metadata,
+                should_continue: true,
                 should_send_connect_token: false,
             }
         }
@@ -186,7 +218,17 @@ pub fn apply_monitor_tick(
             }
         }
         _ => {
-            state.runtime.player_state = "pending".to_string();
+            // 播放期拿到空 body / 未知枚举时不要降级：会话已经出图，写回 pending
+            // 只会让 UI 莫名退回「等待会话就绪」。Closing / Closed / Recovering
+            // 是真实阶段信号，仍然照常驱动 phase。
+            let keeps_playback_phase = state.metadata.reached_provisioned
+                && !matches!(
+                    input.stream_state.as_deref(),
+                    Some("Closing" | "Closed" | "Recovering")
+                );
+            if !keeps_playback_phase {
+                state.runtime.player_state = "pending".to_string();
+            }
             state.runtime.stream_state = input.stream_state;
             SessionMonitorResult {
                 runtime: state.runtime,
@@ -274,6 +316,7 @@ mod tests {
                 state_observed_at_ms: None,
                 repeated_state_count: 0,
                 monitor_attempt_count: 0,
+                reached_provisioned: false,
             },
         }
     }
@@ -354,6 +397,98 @@ mod tests {
         assert_eq!(result.runtime.player_state, "failed");
         assert!(!result.should_continue);
         assert!(result.runtime.error_details.is_some());
+    }
+
+    /// 会话已经 Provisioned 过（已经出图）后的监控状态。
+    fn started_state() -> SessionMonitorState {
+        let mut state = sample_state();
+        state.runtime.player_state = "started".to_string();
+        state.runtime.stream_state = Some("Provisioned".to_string());
+        state.metadata.last_observed_state = Some("Provisioned".to_string());
+        state.metadata.state_observed_at_ms = Some(1000);
+        state.metadata.reached_provisioned = true;
+        state
+    }
+
+    #[test]
+    fn ready_to_connect_after_provisioned_does_not_fail_playback() {
+        // 真机现象：串流游玩一会后报「会话状态超时」，但画面仍在正常出。
+        // 根因是播放期服务端把已 Provisioned 的会话退回 ReadyToConnect，
+        // 启动期超时门槛继续生效，把已经在出图的会话判成 failed。
+        let state = started_state();
+        let result = apply_monitor_tick(
+            state,
+            SessionMonitorInput {
+                now_ms: 1000 + TEST_TIMEOUT_MS * 2,
+                state_timeout_ms: TEST_TIMEOUT_MS,
+                stream_state: Some("ReadyToConnect".to_string()),
+                error_details: None,
+                waiting_queue: None,
+            },
+        );
+
+        assert_eq!(result.runtime.player_state, "started");
+        assert!(result.runtime.error_details.is_none());
+        assert!(result.should_continue);
+        assert!(!result.should_send_connect_token);
+        assert_eq!(
+            result.runtime.stream_state.as_deref(),
+            Some("ReadyToConnect")
+        );
+    }
+
+    #[test]
+    fn provisioning_after_provisioned_does_not_regress_to_pending() {
+        let state = started_state();
+        let result = apply_monitor_tick(
+            state,
+            SessionMonitorInput {
+                now_ms: 1000 + TEST_TIMEOUT_MS * 2,
+                state_timeout_ms: TEST_TIMEOUT_MS,
+                stream_state: Some("Provisioning".to_string()),
+                error_details: None,
+                waiting_queue: None,
+            },
+        );
+
+        assert_eq!(result.runtime.player_state, "started");
+        assert!(result.should_continue);
+    }
+
+    #[test]
+    fn empty_state_after_provisioned_keeps_playback_phase() {
+        let state = started_state();
+        let result = apply_monitor_tick(
+            state,
+            SessionMonitorInput {
+                now_ms: 2000,
+                state_timeout_ms: TEST_TIMEOUT_MS,
+                stream_state: None,
+                error_details: None,
+                waiting_queue: None,
+            },
+        );
+
+        assert_eq!(result.runtime.player_state, "started");
+        assert!(result.should_continue);
+    }
+
+    #[test]
+    fn closed_after_provisioned_still_drives_phase() {
+        let state = started_state();
+        let result = apply_monitor_tick(
+            state,
+            SessionMonitorInput {
+                now_ms: 2000,
+                state_timeout_ms: TEST_TIMEOUT_MS,
+                stream_state: Some("Closed".to_string()),
+                error_details: None,
+                waiting_queue: None,
+            },
+        );
+
+        assert_eq!(result.runtime.player_state, "pending");
+        assert_eq!(result.runtime.stream_state.as_deref(), Some("Closed"));
     }
 
     #[test]

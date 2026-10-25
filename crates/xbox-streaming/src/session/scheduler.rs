@@ -179,11 +179,31 @@ where
         let monitor_input = SessionMonitorInput {
             now_ms: now_ms(),
             state_timeout_ms: plan.session.schedule.startup_timeout_ms,
-            stream_state: state,
+            stream_state: state.clone(),
             error_details,
             waiting_queue,
         };
+        // 播放期状态回退：已经出图的会话被服务端退回 Provisioning / ReadyToConnect。
+        // monitor 侧的门槛已经不再判失败（媒体可能仍在正常出图），这里只补一条
+        // 状态迁移日志，避免线上再出现「报错但画面在动」却查不到状态轨迹。
+        let playback_regression_stream_state =
+            matches!(state.as_deref(), Some("Provisioning" | "ReadyToConnect"))
+                .then(|| state.clone().unwrap_or_default());
         let monitor_control = apply_monitor_tick_to_record(&mut record, monitor_input);
+        if let Some(regressed_state) = playback_regression_stream_state {
+            if record.metadata.repeated_state_count == 1
+                && record.metadata.reached_provisioned
+                && record.snapshot.runtime_snapshot().player_state == "started"
+            {
+                log::warn!(
+                    "session regressed after provisioned: session_id={side} target_id={} stream_state={} monitor_attempt_count={}",
+                    plan.session.target_id,
+                    regressed_state,
+                    record.metadata.monitor_attempt_count,
+                    side = session_id,
+                );
+            }
+        }
         let progress = build_session_progress_snapshot(record.clone());
         let runtime = record.snapshot.runtime_snapshot();
         self.inner.provider.on_session_monitor_tick(
