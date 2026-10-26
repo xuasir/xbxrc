@@ -93,7 +93,7 @@ struct TrackedDevice {
     sample_observed_at_ms: u64,
     buttons: Vec<f32>,
     axes: Vec<f32>,
-    dirty_sample: bool,
+    has_sample: bool,
 }
 
 impl TrackedDevice {
@@ -104,7 +104,7 @@ impl TrackedDevice {
             sample_observed_at_ms: observed_at_ms,
             buttons: Vec::new(),
             axes: Vec::new(),
-            dirty_sample: false,
+            has_sample: false,
         }
     }
 
@@ -120,56 +120,21 @@ impl TrackedDevice {
         changed
     }
 
-    fn update_button(&mut self, index: usize, value: f32, observed_at_ms: u64) {
-        if index >= self.buttons.len() {
-            self.buttons.resize(index + 1, 0.0);
-        }
-        if (self.buttons[index] - value).abs() <= f32::EPSILON {
-            return;
-        }
-
-        self.buttons[index] = value;
-        self.sample_observed_at_ms = observed_at_ms;
-        self.dirty_sample = true;
-    }
-
-    fn update_axis(&mut self, index: usize, value: f32, observed_at_ms: u64) {
-        if index >= self.axes.len() {
-            self.axes.resize(index + 1, 0.0);
-        }
-        if (self.axes[index] - value).abs() <= f32::EPSILON {
-            return;
-        }
-
-        self.axes[index] = value;
-        self.sample_observed_at_ms = observed_at_ms;
-        self.dirty_sample = true;
-    }
-
-    fn sync_snapshot(
-        &mut self,
-        buttons: Vec<f32>,
-        axes: Vec<f32>,
-        observed_at_ms: u64,
-        force_dirty: bool,
-    ) {
-        let first_snapshot = self.buttons.is_empty() && self.axes.is_empty();
-        let changed = first_snapshot || self.buttons != buttons || self.axes != axes;
+    fn sync_snapshot(&mut self, buttons: Vec<f32>, axes: Vec<f32>, observed_at_ms: u64) {
         self.buttons = buttons;
         self.axes = axes;
         self.sample_observed_at_ms = observed_at_ms;
-        // 同一轮 backend poll 里可能先收到“建立基线”的 Snapshot，
-        // 随后又收到多条内容完全相同的轮询 Snapshot。这里一旦本轮已标脏，
-        // 后续相同快照不能把 dirty 再冲掉，否则 runtime 会错过首条 raw sample。
-        self.dirty_sample |= changed || force_dirty;
+        // 每次全量快照都产出一条待取样本，保证 4ms 常驻采样持续推进，
+        // 即使连续两条快照内容完全相同也不会被丢弃。
+        self.has_sample = true;
     }
 
     fn take_sample(&mut self) -> Option<RawDeviceSample> {
-        if !self.dirty_sample {
+        if !self.has_sample {
             return None;
         }
 
-        self.dirty_sample = false;
+        self.has_sample = false;
         Some(RawDeviceSample {
             device_id: self.descriptor.device_id.clone(),
             observed_at_ms: self.sample_observed_at_ms,
@@ -266,21 +231,8 @@ where
             }
             Sdl3InputEventKind::Snapshot { buttons, axes } => {
                 let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
-                device.sync_snapshot(buttons, axes, event.observed_at_ms, false);
+                device.sync_snapshot(buttons, axes, event.observed_at_ms);
             }
-            Sdl3InputEventKind::PrimeSnapshot { buttons, axes } => {
-                let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
-                device.sync_snapshot(buttons, axes, event.observed_at_ms, true);
-            }
-            Sdl3InputEventKind::ButtonChanged { index, value } => {
-                let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
-                device.update_button(index, value, event.observed_at_ms);
-            }
-            Sdl3InputEventKind::AxisChanged { index, value } => {
-                let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
-                device.update_axis(index, value, event.observed_at_ms);
-            }
-            Sdl3InputEventKind::Dropped => {}
         }
     }
 
@@ -364,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn stable_snapshots_do_not_clear_initial_dirty_sample() {
+    fn identical_snapshots_still_emit_latest_sample() {
         let device = Sdl3DeviceDescriptor {
             device_id: "pad-1".to_owned(),
             name: "Test Pad".to_owned(),
@@ -406,57 +358,5 @@ mod tests {
         assert_eq!(poll.samples[0].observed_at_ms, 12);
         assert_eq!(poll.samples[0].axes[4], -1.0);
         assert_eq!(poll.samples[0].axes[5], -1.0);
-    }
-
-    #[test]
-    fn prime_snapshot_forces_backend_sample_when_vectors_unchanged() {
-        let device = Sdl3DeviceDescriptor {
-            device_id: "pad-prime".to_owned(),
-            name: "Test Pad Prime".to_owned(),
-            ..Sdl3DeviceDescriptor::default()
-        };
-        let snapshot_buttons = vec![0.0; 17];
-        let snapshot_axes = vec![0.0_f32; 6];
-        let events = vec![
-            Sdl3InputEvent {
-                device: device.clone(),
-                observed_at_ms: 10,
-                kind: Sdl3InputEventKind::Connected,
-            },
-            Sdl3InputEvent {
-                device: device.clone(),
-                observed_at_ms: 11,
-                kind: Sdl3InputEventKind::Snapshot {
-                    buttons: snapshot_buttons.clone(),
-                    axes: snapshot_axes.clone(),
-                },
-            },
-            Sdl3InputEvent {
-                device: device.clone(),
-                observed_at_ms: 12,
-                kind: Sdl3InputEventKind::Snapshot {
-                    buttons: snapshot_buttons.clone(),
-                    axes: snapshot_axes.clone(),
-                },
-            },
-            Sdl3InputEvent {
-                device: device.clone(),
-                observed_at_ms: 13,
-                kind: Sdl3InputEventKind::PrimeSnapshot {
-                    buttons: snapshot_buttons,
-                    axes: snapshot_axes,
-                },
-            },
-        ];
-
-        let mut config = Sdl3BackendConfig::default();
-        config.max_events_per_poll = 2;
-        let mut backend = Sdl3Backend::with_source(config, QueueSource::new(events));
-        let first = backend.poll();
-        assert_eq!(first.samples.len(), 1);
-        let second = backend.poll();
-        assert_eq!(second.samples.len(), 1);
-        assert_eq!(second.samples[0].observed_at_ms, 13);
-        assert_eq!(second.samples[0].device_id, "pad-prime");
     }
 }

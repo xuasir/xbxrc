@@ -113,8 +113,6 @@ const testState = vi.hoisted(() => {
         decideRecovery: vi.fn(async () => ({ action: 'observe' })),
       },
       gamepad: {
-        activateSampling: vi.fn(async () => {}),
-        resumeShellSampling: vi.fn(async () => {}),
         setStreamPadForwarding: vi.fn(async () => {}),
       },
       runtimeTrace: {
@@ -1143,14 +1141,6 @@ describe('browser-runtime super resolution state', () => {
     expect(snapshot.recoveryOwnerState).toBe('seeking-anchor')
 
     await runtime.stop()
-  })
-
-  it('does not require resumeShellSampling when attaching a stream session', async () => {
-    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
-
-    await runtime.launch(createLaunchSpec())
-
-    expect(testState.rpc.gamepad.resumeShellSampling).not.toHaveBeenCalled()
   })
 
   it('promotes quality ladder after warmup when browser-direct has no local video sender', async () => {

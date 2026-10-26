@@ -3,7 +3,7 @@ import type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 import type {
   GamepadDevicesChangedRendererEvent,
   GamepadInputBaselineAbsorbedRendererEvent,
-  GamepadInputGateChangedRendererEvent,
+  GamepadInputRouteChangedRendererEvent,
   GamepadRuntimeSnapshotRendererEvent,
   GamepadSlotSnapshotRendererEvent,
 } from './gamepad'
@@ -15,7 +15,7 @@ import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
 import {
   GAMEPAD_DEVICES_CHANGED_CHANNEL,
   GAMEPAD_INPUT_BASELINE_ABSORBED_CHANNEL,
-  GAMEPAD_INPUT_GATE_CHANGED_CHANNEL,
+  GAMEPAD_INPUT_ROUTE_CHANGED_CHANNEL,
   GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
   GAMEPAD_SLOT_SNAPSHOT_CHANNEL,
 
@@ -34,7 +34,7 @@ export type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 export type {
   GamepadDevicesChangedRendererEvent,
   GamepadInputBaselineAbsorbedRendererEvent,
-  GamepadInputGateChangedRendererEvent,
+  GamepadInputRouteChangedRendererEvent,
   GamepadRuntimeSnapshotRendererEvent,
   GamepadSlotSnapshotRendererEvent,
 } from './gamepad'
@@ -53,9 +53,9 @@ export interface XBoxEventSchema {
   'gamepad.runtimeSnapshot': GamepadRuntimeSnapshotRendererEvent
   'gamepad.devicesChanged': GamepadDevicesChangedRendererEvent
   'gamepad.slotSnapshot': GamepadSlotSnapshotRendererEvent
-  /** @deprecated Prefer `gamepad.inputGateChanged`. */
+  /** @deprecated Prefer `gamepad.inputRouteChanged`. */
   'gamepad.inputBaselineAbsorbed': GamepadInputBaselineAbsorbedRendererEvent
-  'gamepad.inputGateChanged': GamepadInputGateChangedRendererEvent
+  'gamepad.inputRouteChanged': GamepadInputRouteChangedRendererEvent
   'streaming.startupEvent': StreamingStartupEventRendererEvent
   'streaming.xbxEngineRuntimeEvent': XbxEngineRuntimeEventRendererEvent
   'updater.progress': UpdaterProgressEvent
@@ -75,7 +75,7 @@ export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
   'gamepad.devicesChanged': GAMEPAD_DEVICES_CHANGED_CHANNEL,
   'gamepad.slotSnapshot': GAMEPAD_SLOT_SNAPSHOT_CHANNEL,
   'gamepad.inputBaselineAbsorbed': GAMEPAD_INPUT_BASELINE_ABSORBED_CHANNEL,
-  'gamepad.inputGateChanged': GAMEPAD_INPUT_GATE_CHANGED_CHANNEL,
+  'gamepad.inputRouteChanged': GAMEPAD_INPUT_ROUTE_CHANGED_CHANNEL,
   'streaming.startupEvent': STREAMING_STARTUP_EVENT_CHANNEL,
   'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
   'updater.progress': UPDATER_PROGRESS_CHANNEL,

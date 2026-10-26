@@ -26,7 +26,6 @@ import { devWarn, devWarnRateLimited } from '../../shared/dev-log'
 import GamepadProfileCard from '../navigation/GamepadProfileCard.vue'
 import TopNavBar from '../navigation/TopNavBar.vue'
 import UserProfileMenu from '../navigation/UserProfileMenu.vue'
-import { useGamepadShellInteractiveHint } from './useGamepadShellInteractiveHint'
 
 type AuthState = Awaited<ReturnType<typeof rpc.auth.getState>>
 type UserProfile = Awaited<ReturnType<typeof rpc.data.getUserProfile>>
@@ -246,16 +245,6 @@ function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapsho
   })
 }
 
-const { hintShellInteractive } = useGamepadShellInteractiveHint({
-  getSnapshot: () => gamepadSnapshot.value,
-  setSnapshot: (snapshot) => {
-    gamepadSnapshot.value = snapshot
-  },
-  traceSnapshotTransition,
-  resolveSnapshotTracePayload,
-  recordTrace: recordGamepadRecoveryTrace,
-})
-
 function handleDocumentVisibilityChange(): void {
   recordGamepadRecoveryTrace('gamepadDocumentVisibilityChanged', {
     visibilityState: document.visibilityState,
@@ -405,7 +394,6 @@ const SWIPE_TIMEOUT = 300 // 最大滑动时间
 function handleTouchStart(e: TouchEvent): void {
   touchStartX = e.touches[0].clientX
   touchStartTime = Date.now()
-  void hintShellInteractive('frontend-touchstart')
 }
 
 function handleTouchEnd(e: TouchEvent): void {

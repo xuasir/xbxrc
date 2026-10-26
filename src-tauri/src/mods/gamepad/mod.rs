@@ -1,16 +1,15 @@
 pub mod events;
-pub mod input_gate;
+pub mod input_route;
 pub mod rpc;
 pub mod service;
 
-pub use ohmygamepad_sdl3::ShellWindowGateHints;
+pub use ohmygamepad_sdl3::ShellWindowRouteHints;
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
-    LogicalPadStateDto, MultiControllerSamplingStrategyDto, OhMyGamepadInputGateModeDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
-    OhMyGamepadSamplingLifecycleDto,
+    LogicalPadStateDto, MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -81,15 +80,14 @@ pub struct GamepadFilterConfigDto {
 
 pub trait GamepadProvider: Send + Sync {
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn rescan_devices(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn stream_pad_forwarding(&self) -> bool;
-    fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String);
-    fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints);
+    fn set_shell_window_route_hints(&self, hints: ShellWindowRouteHints);
     fn set_stream_pad_forwarding(
         &self,
         enabled: bool,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn resume_shell_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn set_ui_capture(&self, capturing: bool) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn update_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,
@@ -110,13 +108,6 @@ pub trait GamepadProvider: Send + Sync {
         &self,
         device_id: &str,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn set_suspended(&self, suspended: bool) -> Result<(), String>;
-    fn set_sampling_lifecycle(
-        &self,
-        lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> Result<(), String>;
-    fn try_stalled_sampling_self_heal(&self) -> Result<bool, String>;
-    fn try_startup_sampling_self_heal(&self) -> Result<bool, String>;
     fn play_rumble(
         &self,
         request: OhMyGamepadRumbleRequestDto,

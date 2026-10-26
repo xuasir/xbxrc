@@ -12,6 +12,14 @@ vi.mock('../../navigation/core/gamepad-listener', () => ({
   requestGamepadUiListenerReset: vi.fn(),
 }))
 
+vi.mock('../../services/rpc', () => ({
+  rpc: {
+    gamepad: {
+      setUiCapture: vi.fn(async () => ({})),
+    },
+  },
+}))
+
 describe('streamInputRouteController', () => {
   beforeEach(async () => {
     waitForPadNeutralMock.mockReset()
@@ -19,7 +27,7 @@ describe('streamInputRouteController', () => {
     await streamInputRouteController.resetOnLeaveStream()
     businessInputArbiter.patch({
       appScene: 'stream',
-      backendGate: 'open',
+      backendRoute: 'stream',
       overlayCapturing: false,
     })
     await streamInputRouteController.setStreamActive(true)
@@ -29,7 +37,7 @@ describe('streamInputRouteController', () => {
     await streamInputRouteController.resetOnLeaveStream()
     businessInputArbiter.patch({
       appScene: 'shell',
-      backendGate: 'open',
+      backendRoute: undefined,
       streamActive: false,
       overlayCapturing: false,
     })

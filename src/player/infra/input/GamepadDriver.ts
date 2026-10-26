@@ -135,7 +135,7 @@ export class GamepadDriver {
     if (!snapshot) {
       return [DEFAULT_GAMEPAD_FRAME()]
     }
-    if (snapshot.inputGate !== 'open' || businessInputArbiter.getOwner() !== 'stream') {
+    if (snapshot.inputRoute === 'blocked' || businessInputArbiter.getOwner() !== 'stream') {
       return [DEFAULT_GAMEPAD_FRAME()]
     }
 
@@ -188,7 +188,7 @@ export class GamepadDriver {
         reason,
         slotCount: snapshot.slots.length,
         streamPadForwarding: snapshot.streamPadForwarding ?? false,
-        inputGate: snapshot.inputGate ?? 'open',
+        inputRoute: snapshot.inputRoute ?? 'blocked',
         ...getBusinessInputTracePayload(),
       })
     }
@@ -203,13 +203,13 @@ export class GamepadDriver {
     recordDriverTrace('gamepadDriverRuntimeSnapshotApplied', {
       slotCount: nativePads.length,
       streamPadForwarding: snapshot.streamPadForwarding ?? false,
-      inputGate: snapshot.inputGate ?? 'open',
+      inputRoute: snapshot.inputRoute ?? 'blocked',
       maxSampleSeq: nativePads.reduce((max, pad) => Math.max(max, pad.sampleSeq), 0),
       ...getBusinessInputTracePayload(),
     })
     const hasController = nativePads.length > 0
     const allowNativeFrames
-      = snapshot.inputGate === 'open' && businessInputArbiter.getOwner() === 'stream'
+      = snapshot.inputRoute !== 'blocked' && businessInputArbiter.getOwner() === 'stream'
     if (hasController === this.nativeControllerConnected) {
       if (!this.isVirtualButtonPressing && nativePads.length > 0 && allowNativeFrames) {
         recordDriverTrace('gamepadDriverFrameEmitted', {

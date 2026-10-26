@@ -1,21 +1,25 @@
 /**
  * RFC: gamepad business input ownership — 前端唯一 owner 真相源（ui | stream | none）。
- * 后端 coarse `inputGate` 仅映射为 `backendGate`，不参与 UI/Stream 细分。
+ * Phase 5：后端三态 `inputRoute` 已成为唯一真相源，arbiter 镜像之。
+ * 本地 appScene / streamActive / overlayCapturing 保留，但 owner 派生只看 backendRoute。
  */
 
-import type { GamepadInputGateModeDto } from './contract'
+import type { GamepadInputRouteModeDto } from './contract'
 import { events } from '../../services/events'
 
 export type BusinessInputOwner = 'ui' | 'stream' | 'none'
-
-/** 与快照 `inputGate` 对齐的粗粒度总闸（open | closed） */
-export type BackendCoarseGate = 'open' | 'closed'
 
 export type AppScene = 'shell' | 'stream'
 
 export interface BusinessInputRouteState {
   appScene: AppScene
-  backendGate: BackendCoarseGate
+  /**
+   * Phase 4+：后端三态输入路由（唯一真相源，镜像自 snapshot.inputRoute）。
+   * 主要由 installGamepadGateBridge 从 `gamepad.runtimeSnapshot` / `gamepad.inputRouteChanged`
+   * 事件写入；stream-input-route-controller 为压低路由延迟会乐观 patch 相同目标值，
+   * 两者最终收敛到后端真实 route，不应写入互斥目标。
+   */
+  backendRoute?: GamepadInputRouteModeDto
   /**
    * 串流执行层是否认为会话路径仍活跃（覆盖 sessionId 暂空的竞态窗口）。
    */
@@ -27,34 +31,27 @@ export interface BusinessInputRouteState {
 function defaultRouteState(): BusinessInputRouteState {
   return {
     appScene: 'shell',
-    backendGate: 'open',
+    // 故障默认放行：首个 runtime 快照到达前默认 `ui`（= 前台 shell 拥有输入），
+    // 避免冷启动首键被 `none` 吞掉。后端真实 route 到达后由 bridge 覆盖。
+    backendRoute: 'ui',
     streamActive: false,
     overlayCapturing: false,
   }
 }
 
-export function snapshotGateToBackendGate(gate: GamepadInputGateModeDto | undefined): BackendCoarseGate {
-  if (gate === 'closed') {
-    return 'closed'
+/** Phase 5：直接从后端三态 route 映射 owner（唯一真相源）。 */
+export function snapshotRouteToOwner(route: GamepadInputRouteModeDto | undefined): BusinessInputOwner {
+  switch (route) {
+    case 'blocked': return 'none'
+    case 'ui': return 'ui'
+    case 'stream': return 'stream'
+    default: return 'none'
   }
-  return 'open'
 }
 
-/** RFC 五步派生：仅依赖四字段 routing state。 */
+/** Phase 5：owner 只由 backendRoute 决定（后端统一真相源）。 */
 export function deriveBusinessInputOwner(state: BusinessInputRouteState): BusinessInputOwner {
-  if (state.backendGate !== 'open') {
-    return 'none'
-  }
-  if (state.appScene !== 'stream') {
-    return 'ui'
-  }
-  if (!state.streamActive) {
-    return 'ui'
-  }
-  if (state.overlayCapturing) {
-    return 'ui'
-  }
-  return 'stream'
+  return snapshotRouteToOwner(state.backendRoute)
 }
 
 type Listener = (snapshot: { state: BusinessInputRouteState, owner: BusinessInputOwner }) => void
@@ -62,7 +59,7 @@ type Listener = (snapshot: { state: BusinessInputRouteState, owner: BusinessInpu
 export interface BusinessInputTracePayload {
   businessInputOwner: BusinessInputOwner
   businessInputAppScene: AppScene
-  businessInputBackendGate: BackendCoarseGate
+  businessInputBackendRoute: GamepadInputRouteModeDto | undefined
   businessInputStreamActive: boolean
   businessInputOverlayCapturing: boolean
 }
@@ -75,7 +72,7 @@ export function toBusinessInputTracePayload(
   return {
     businessInputOwner: owner,
     businessInputAppScene: state.appScene,
-    businessInputBackendGate: state.backendGate,
+    businessInputBackendRoute: state.backendRoute,
     businessInputStreamActive: state.streamActive,
     businessInputOverlayCapturing: state.overlayCapturing,
   }
@@ -84,7 +81,7 @@ export function toBusinessInputTracePayload(
 class BusinessInputArbiterImpl {
   private state: BusinessInputRouteState = defaultRouteState()
   private listeners = new Set<Listener>()
-  private gateBridgeInstalled = false
+  private bridgeInstalled = false
 
   getState(): BusinessInputRouteState {
     return { ...this.state }
@@ -112,16 +109,18 @@ class BusinessInputArbiterImpl {
   }
 
   installGamepadGateBridge(): void {
-    if (this.gateBridgeInstalled) {
+    if (this.bridgeInstalled) {
       return
     }
-    this.gateBridgeInstalled = true
-    const applySnapshot = (snapshot: { inputGate?: GamepadInputGateModeDto }) => {
-      this.patch({ backendGate: snapshotGateToBackendGate(snapshot.inputGate) })
+    this.bridgeInstalled = true
+    const applySnapshot = (snapshot: { inputRoute?: GamepadInputRouteModeDto }) => {
+      if (snapshot.inputRoute !== undefined) {
+        this.patch({ backendRoute: snapshot.inputRoute })
+      }
     }
     events.on('gamepad.runtimeSnapshot', applySnapshot)
-    events.on('gamepad.inputGateChanged', (payload: { inputGate?: GamepadInputGateModeDto }) => {
-      this.patch({ backendGate: snapshotGateToBackendGate(payload.inputGate) })
+    events.on('gamepad.inputRouteChanged', (payload: { inputRoute?: GamepadInputRouteModeDto }) => {
+      applySnapshot(payload)
     })
   }
 }

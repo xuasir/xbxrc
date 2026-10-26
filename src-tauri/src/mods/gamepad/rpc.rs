@@ -13,13 +13,9 @@ use tauri::{AppHandle, Manager};
 #[serde(tag = "method", content = "params", rename_all = "camelCase")]
 pub enum GamepadCommand {
     GetRuntimeSnapshot,
+    RescanDevices,
     SetStreamPadForwarding {
         enabled: bool,
-    },
-    ActivateSampling,
-    ResumeShellSampling,
-    HintShellInteractive {
-        reason: String,
     },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
@@ -53,6 +49,10 @@ pub enum GamepadCommand {
     },
     ResetDeviceProfiles,
     ResetKeyboardMapping,
+    /// Phase 4：前端 overlay / 菜单 / 诊断页等上报"正在捕获输入"。
+    SetUiCapture {
+        capturing: bool,
+    },
 }
 
 pub async fn handle_rpc(
@@ -76,17 +76,10 @@ pub async fn handle_rpc(
         GamepadCommand::GetRuntimeSnapshot => {
             Ok(serde_json::to_value(service.get_runtime_snapshot()?)?)
         }
+        GamepadCommand::RescanDevices => Ok(serde_json::to_value(service.rescan_devices()?)?),
         GamepadCommand::SetStreamPadForwarding { enabled } => Ok(serde_json::to_value(
             service.set_stream_pad_forwarding(enabled)?,
         )?),
-        GamepadCommand::ActivateSampling => Ok(serde_json::to_value(service.activate_sampling()?)?),
-        GamepadCommand::ResumeShellSampling => {
-            Ok(serde_json::to_value(service.resume_shell_sampling()?)?)
-        }
-        GamepadCommand::HintShellInteractive { reason } => {
-            crate::shell::hint_gamepad_shell_interactive(&app_handle, &reason);
-            Ok(serde_json::to_value(service.get_runtime_snapshot()?)?)
-        }
         GamepadCommand::UpdateSampling { sampling } => {
             Ok(serde_json::to_value(service.update_sampling(sampling)?)?)
         }
@@ -122,6 +115,9 @@ pub async fn handle_rpc(
         }
         GamepadCommand::ResetKeyboardMapping => {
             Ok(serde_json::to_value(service.reset_keyboard_mapping()?)?)
+        }
+        GamepadCommand::SetUiCapture { capturing } => {
+            Ok(serde_json::to_value(service.set_ui_capture(capturing)?)?)
         }
     }
 }

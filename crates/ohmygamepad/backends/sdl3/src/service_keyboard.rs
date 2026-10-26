@@ -144,7 +144,17 @@ pub(crate) fn spawn_keyboard_listener_thread(
             );
             return;
         };
-        let mut last_state = LogicalPadStateDto::default();
+        let Ok(mut last_state) =
+            std::panic::catch_unwind(AssertUnwindSafe(|| listener.poll_state()))
+        else {
+            log::warn!("ohmygamepad keyboard listener poll panicked; stopping listener");
+            return;
+        };
+        // 先推一帧全量快照，补齐虚拟键盘的首帧基线，避免逻辑层在首次按键前没有样本。
+        if send_keyboard_state_events(&virtual_input_tx, last_state.clone(), now_ms).is_err() {
+            log::warn!("ohmygamepad keyboard state dispatch failed; stopping listener");
+            return;
+        }
 
         loop {
             match drain_keyboard_listener_commands(
@@ -217,11 +227,24 @@ fn send_keyboard_state_events(
 }
 
 fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<Sdl3InputEvent> {
-    let device = keyboard_descriptor();
+    vec![state_snapshot_event(
+        keyboard_descriptor(),
+        observed_at_ms,
+        &state,
+    )]
+}
+
+/// 把逻辑态组装成一条固定长度的全量 `Snapshot`（17 buttons / 6 axes）。
+/// 虚拟键盘与模拟手柄共用这套索引，避免按 index 递增 resize 造成越界。
+pub(crate) fn state_snapshot_event(
+    device: Sdl3DeviceDescriptor,
+    observed_at_ms: u64,
+    state: &LogicalPadStateDto,
+) -> Sdl3InputEvent {
     let left_trigger_value = state.buttons.l2.max(state.left_trigger);
     let right_trigger_value = state.buttons.r2.max(state.right_trigger);
 
-    let mut events = Vec::new();
+    let mut buttons = vec![0.0_f32; 17];
     for (index, value) in [
         (0, state.buttons.south),
         (1, state.buttons.east),
@@ -241,13 +264,10 @@ fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<
         (15, state.buttons.dpad_right),
         (16, state.buttons.home),
     ] {
-        events.push(Sdl3InputEvent {
-            device: device.clone(),
-            observed_at_ms,
-            kind: Sdl3InputEventKind::ButtonChanged { index, value },
-        });
+        buttons[index] = value;
     }
 
+    let mut axes = vec![0.0_f32; 6];
     for (index, value) in [
         (0, state.left_stick.x),
         (1, state.left_stick.y),
@@ -256,14 +276,14 @@ fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<
         (4, trigger_axis_value(state.left_trigger)),
         (5, trigger_axis_value(state.right_trigger)),
     ] {
-        events.push(Sdl3InputEvent {
-            device: device.clone(),
-            observed_at_ms,
-            kind: Sdl3InputEventKind::AxisChanged { index, value },
-        });
+        axes[index] = value;
     }
 
-    events
+    Sdl3InputEvent {
+        device,
+        observed_at_ms,
+        kind: Sdl3InputEventKind::Snapshot { buttons, axes },
+    }
 }
 
 fn keyboard_descriptor() -> Sdl3DeviceDescriptor {

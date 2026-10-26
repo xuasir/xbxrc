@@ -73,7 +73,7 @@ class GamepadUIListener {
     const disposeRuntime = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.applyRuntimeSnapshot(snapshot)
     })
-    const disposeGate = events.on('gamepad.inputGateChanged', () => {
+    const disposeRoute = events.on('gamepad.inputRouteChanged', () => {
       this.resetAllInputState()
     })
     window.addEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
@@ -84,7 +84,7 @@ class GamepadUIListener {
 
     this.dispose = () => {
       disposeRuntime()
-      disposeGate()
+      disposeRoute()
       window.removeEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
       disposeSlot()
     }
@@ -200,7 +200,7 @@ class GamepadUIListener {
       recordUiTrace('gamepadUiRuntimeSnapshotRefreshed', {
         reason,
         streamPadForwarding: snapshot.streamPadForwarding ?? false,
-        inputGate: snapshot.inputGate ?? 'open',
+        inputRoute: snapshot.inputRoute ?? 'blocked',
         slotCount: snapshot.slots.length,
         ...getBusinessInputTracePayload(),
       })
@@ -211,14 +211,16 @@ class GamepadUIListener {
   }
 
   private applyRuntimeSnapshot(snapshot: GamepadRuntimeSnapshotDto): void {
+    const route = snapshot.inputRoute ?? 'blocked'
     recordUiTrace('gamepadUiRuntimeSnapshotApplied', {
       streamPadForwarding: snapshot.streamPadForwarding ?? false,
-      inputGate: snapshot.inputGate ?? 'open',
+      inputRoute: route,
       slotCount: snapshot.slots.length,
       maxSampleSeq: snapshot.slots.reduce((max, slot) => Math.max(max, slot.sampleSeq), 0),
       ...getBusinessInputTracePayload(),
     })
-    if (snapshot.inputGate !== 'open') {
+    // Phase 5：Blocked 时跳过前端 pad 状态推进，Ui/Stream 时都允许推进（区别仅在后端 route 路由归属）。
+    if (route === 'blocked') {
       return
     }
     for (const slot of snapshot.slots) {

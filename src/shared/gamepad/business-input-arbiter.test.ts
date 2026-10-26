@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   businessInputArbiter,
   deriveBusinessInputOwner,
-  snapshotGateToBackendGate,
   toBusinessInputTracePayload,
 } from './business-input-arbiter'
 import {
@@ -14,7 +13,7 @@ import {
 function baseState(over: Partial<BusinessInputRouteState> = {}): BusinessInputRouteState {
   return {
     appScene: 'stream',
-    backendGate: 'open',
+    backendRoute: 'stream',
     streamActive: true,
     overlayCapturing: false,
     ...over,
@@ -22,34 +21,20 @@ function baseState(over: Partial<BusinessInputRouteState> = {}): BusinessInputRo
 }
 
 describe('deriveBusinessInputOwner', () => {
-  it('returns none when backend gate is closed', () => {
-    expect(deriveBusinessInputOwner(baseState({ backendGate: 'closed' }))).toBe('none')
+  it('returns none when backendRoute is blocked', () => {
+    expect(deriveBusinessInputOwner(baseState({ backendRoute: 'blocked' }))).toBe('none')
   })
 
-  it('returns ui on shell scene even when stream active', () => {
-    expect(deriveBusinessInputOwner(baseState({ appScene: 'shell' }))).toBe('ui')
+  it('returns ui when backendRoute is ui', () => {
+    expect(deriveBusinessInputOwner(baseState({ backendRoute: 'ui' }))).toBe('ui')
   })
 
-  it('returns ui when stream session not active', () => {
-    expect(deriveBusinessInputOwner(baseState({ streamActive: false }))).toBe('ui')
+  it('returns stream when backendRoute is stream', () => {
+    expect(deriveBusinessInputOwner(baseState({ backendRoute: 'stream' }))).toBe('stream')
   })
 
-  it('returns ui when overlay is capturing', () => {
-    expect(deriveBusinessInputOwner(baseState({ overlayCapturing: true }))).toBe('ui')
-  })
-
-  it('returns stream when stream active and overlay not capturing', () => {
-    expect(deriveBusinessInputOwner(baseState())).toBe('stream')
-  })
-})
-
-describe('snapshotGateToBackendGate', () => {
-  it('maps closed', () => {
-    expect(snapshotGateToBackendGate('closed')).toBe('closed')
-  })
-  it('defaults open', () => {
-    expect(snapshotGateToBackendGate(undefined)).toBe('open')
-    expect(snapshotGateToBackendGate('open')).toBe('open')
+  it('defaults to none when backendRoute is undefined', () => {
+    expect(deriveBusinessInputOwner(baseState({ backendRoute: undefined }))).toBe('none')
   })
 })
 
@@ -57,8 +42,7 @@ describe('toBusinessInputTracePayload', () => {
   it('projects owner and route state into stable trace fields', () => {
     expect(toBusinessInputTracePayload({
       state: baseState({
-        appScene: 'stream',
-        backendGate: 'open',
+        backendRoute: 'ui',
         streamActive: true,
         overlayCapturing: true,
       }),
@@ -66,7 +50,7 @@ describe('toBusinessInputTracePayload', () => {
     })).toEqual({
       businessInputOwner: 'ui',
       businessInputAppScene: 'stream',
-      businessInputBackendGate: 'open',
+      businessInputBackendRoute: 'ui',
       businessInputStreamActive: true,
       businessInputOverlayCapturing: true,
     })
@@ -77,7 +61,7 @@ describe('businessInputArbiter', () => {
   afterEach(() => {
     businessInputArbiter.patch({
       appScene: 'shell',
-      backendGate: 'open',
+      backendRoute: undefined,
       streamActive: false,
       overlayCapturing: false,
     })
@@ -86,11 +70,13 @@ describe('businessInputArbiter', () => {
   it('patches partial state', () => {
     businessInputArbiter.patch({
       appScene: 'stream',
+      backendRoute: 'ui',
       streamActive: true,
       overlayCapturing: true,
     })
     const state = businessInputArbiter.getState()
     expect(state.appScene).toBe('stream')
+    expect(state.backendRoute).toBe('ui')
     expect(state.streamActive).toBe(true)
     expect(state.overlayCapturing).toBe(true)
     expect(businessInputArbiter.getOwner()).toBe('ui')

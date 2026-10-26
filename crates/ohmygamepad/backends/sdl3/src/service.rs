@@ -1,30 +1,29 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
         mpsc::{self, Receiver, Sender},
         Arc, Mutex,
     },
     thread,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use ohmygamepad_core::{
-    DeviceProfile, HapticsProvider, InputCoreConfig, InputRuntimeError, InputRuntimeHandle,
-    NoopStreamSink, NoopUiSink,
+    ArcSwap, DeviceProfile, HapticsProvider, InputCoreConfig, InputRuntimeError,
+    InputRuntimeHandle, NoopStreamSink, NoopUiSink,
 };
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, LogicalPadId, LogicalPadStateDto, MultiControllerSamplingModeDto,
-    MultiControllerSamplingStrategyDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadInputGateModeDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
-    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
-    OhMyGamepadSamplingPresetDto, OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
+    LogicalPadBindingDto, LogicalPadId, LogicalPadSnapshotDto, LogicalPadStateDto,
+    MultiControllerSamplingModeDto, MultiControllerSamplingStrategyDto, OhMyGamepadBindingModeDto,
+    OhMyGamepadDeviceDto, OhMyGamepadInputRouteDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingPresetDto,
+    OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
 };
 
 use crate::service_keyboard::{
-    spawn_keyboard_listener_thread, ServiceKeyboardListenerHandle, KEYBOARD_FALLBACK_DEVICE_ID,
-    KEYBOARD_FALLBACK_DEVICE_NAME,
+    spawn_keyboard_listener_thread, state_snapshot_event, ServiceKeyboardListenerHandle,
+    KEYBOARD_FALLBACK_DEVICE_ID, KEYBOARD_FALLBACK_DEVICE_NAME,
 };
 use crate::service_rumble::{
     prepare_rumble_dispatch, resolve_connected_target_devices,
@@ -40,7 +39,6 @@ use crate::{
 const EMPTY_SAMPLING_DEVICE_ID: &str = "__service:none__";
 const SERVICE_SYNC_RETRY_COUNT: usize = 40;
 const SERVICE_SYNC_RETRY_DELAY_MS: u64 = 2;
-const SAMPLING_SELF_HEAL_COOLDOWN: Duration = Duration::from_secs(2);
 
 pub type MultiControllerSamplingMode = MultiControllerSamplingModeDto;
 pub type MultiControllerSamplingStrategy = MultiControllerSamplingStrategyDto;
@@ -87,41 +85,50 @@ struct OhMyGamepadServiceState {
     rumble_backend: Option<Box<dyn ServiceRumbleBackend>>,
 }
 
-/// 主窗口 gate hints，由 Tauri 写入；在 host enrich 中与 runtime lifecycle 一起派生 `input_gate`。
+/// 主窗口 route hints，由 Tauri 写入；在 host enrich 中派生统一三态 `input_route`。
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ShellWindowGateHints {
+pub struct ShellWindowRouteHints {
     /// 壳层当前是否拥有输入归属。
     pub shell_app_active: bool,
 }
 
-/// gate 只由主窗口「前台 / 后台」决定：前台放行，后台不放行。
+/// 统一输入路由（Phase 4 引入）：比旧 gate 更完整的三态真相源。
 ///
-/// `sampling_lifecycle` 不参与判定 —— 它只影响采样节奏与健康度。此前把它作为
-/// 的第二个与条件，导致「窗口在前台、但 lifecycle 停在 BackgroundWarm」时输入
-/// 被静默吞掉，与 gate 判定本身无关，排查极易误判。
-pub fn derive_input_gate_from_hints(
-    hints: &ShellWindowGateHints,
-) -> (OhMyGamepadInputGateModeDto, String) {
-    if hints.shell_app_active {
-        (
-            OhMyGamepadInputGateModeDto::Open,
-            "shell-foreground".to_owned(),
-        )
+/// ```text
+/// foreground  = shell_window_route_hints.shell_app_active（= `!minimized`）
+/// route =
+///   !foreground                     → Blocked  // 旧 gate Closed
+///   stream_forwarding && !ui_capture → Stream
+///   otherwise                         → Ui
+/// ```
+pub fn derive_input_route(
+    hints: &ShellWindowRouteHints,
+    stream_forwarding: bool,
+    ui_capture: bool,
+) -> (OhMyGamepadInputRouteDto, String) {
+    if !hints.shell_app_active {
+        return (
+            OhMyGamepadInputRouteDto::Blocked,
+            "route:blocked-shell-background".to_owned(),
+        );
+    }
+    if stream_forwarding && !ui_capture {
+        (OhMyGamepadInputRouteDto::Stream, "route:stream".to_owned())
     } else {
-        (
-            OhMyGamepadInputGateModeDto::Closed,
-            "shell-background".to_owned(),
-        )
+        (OhMyGamepadInputRouteDto::Ui, "route:ui".to_owned())
     }
 }
 
 pub struct OhMyGamepadService {
     runtime: InputRuntimeHandle,
     state: Mutex<OhMyGamepadServiceState>,
-    last_sampling_self_heal_at: Mutex<Option<Instant>>,
     /// When true, RTC input loop may forward logical pad samples to the stream transport.
     stream_pad_forwarding: Arc<AtomicBool>,
-    shell_window_gate_hints: Arc<Mutex<ShellWindowGateHints>>,
+    /// 前端 overlay / 菜单 / 诊断页等 UI 正在捕获输入：route 切回 Ui。
+    ui_capture: Arc<AtomicBool>,
+    shell_window_route_hints: Arc<Mutex<ShellWindowRouteHints>>,
+    /// 最近一次派生的 input_route discriminant（Phase 4 引入，取代旧 gate）。
+    latest_input_route: Arc<AtomicU8>,
 }
 
 impl OhMyGamepadService {
@@ -202,29 +209,27 @@ impl OhMyGamepadService {
                 source_handle,
                 rumble_backend,
             }),
-            last_sampling_self_heal_at: Mutex::new(None),
             stream_pad_forwarding: Arc::new(AtomicBool::new(false)),
-            shell_window_gate_hints: Arc::new(Mutex::new(ShellWindowGateHints::default())),
+            ui_capture: Arc::new(AtomicBool::new(false)),
+            shell_window_route_hints: Arc::new(Mutex::new(ShellWindowRouteHints::default())),
+            latest_input_route: Arc::new(AtomicU8::new(
+                OhMyGamepadInputRouteDto::Blocked.discriminant(),
+            )),
         }
     }
 
-    fn prime_and_refresh_runtime_sampling(&self) -> Result<(), InputRuntimeError> {
-        if let Some(source_handle) = self
+    /// 用户手动「重新扫描手柄」：唯一允许关闭并重开设备句柄的入口。
+    pub fn rescan_devices(&self) -> Result<(), InputRuntimeError> {
+        let source_handle = self
             .state
             .lock()
             .expect("lock service state")
             .source_handle
-            .as_ref()
-            .cloned()
-        {
-            if let Err(error) = source_handle.reopen_devices_and_prime_sampling() {
-                log::warn!(
-                    "ohmygamepad_reopen_prime_sampling_failed error={} fallback=prime_sampling",
-                    error
-                );
-                if let Err(error) = source_handle.prime_sampling() {
-                    log::warn!("ohmygamepad_prime_sampling_failed error={}", error);
-                }
+            .clone();
+        if let Some(source_handle) = source_handle {
+            if let Err(error) = source_handle.rescan_devices() {
+                log::warn!("ohmygamepad_rescan_devices_failed error={}", error);
+                return Err(InputRuntimeError::SourceCommandFailed);
             }
         }
         self.runtime.refresh_snapshot()
@@ -259,21 +264,6 @@ impl OhMyGamepadService {
         true
     }
 
-    fn try_mark_sampling_self_heal_attempt(&self) -> bool {
-        let now = Instant::now();
-        let mut last = self
-            .last_sampling_self_heal_at
-            .lock()
-            .expect("lock sampling self heal");
-        if let Some(prev) = *last {
-            if now.duration_since(prev) < SAMPLING_SELF_HEAL_COOLDOWN {
-                return false;
-            }
-        }
-        *last = Some(now);
-        true
-    }
-
     pub fn snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
         self.snapshot_with_strategy_sync()
     }
@@ -282,45 +272,64 @@ impl OhMyGamepadService {
         self.runtime.subscribe_runtime_snapshot()
     }
 
+    /// 无锁读取最新 pad 状态的原子单元；高频读方（如串流输入环）直接 load。
+    pub fn get_latest_pad_states(&self) -> Arc<ArcSwap<Vec<LogicalPadSnapshotDto>>> {
+        self.runtime.latest_pad_states()
+    }
+
     pub fn refresh_snapshot(&self) -> Result<(), InputRuntimeError> {
         self.runtime.refresh_snapshot()
     }
 
     pub fn set_stream_pad_forwarding(&self, enabled: bool) {
         self.stream_pad_forwarding.store(enabled, Ordering::Relaxed);
+        self.refresh_input_route_cache();
     }
 
     pub fn stream_pad_forwarding(&self) -> bool {
         self.stream_pad_forwarding.load(Ordering::Relaxed)
     }
 
-    pub fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {
-        *self
-            .shell_window_gate_hints
+    fn refresh_input_route_cache(&self) {
+        let hints = *self
+            .shell_window_route_hints
             .lock()
-            .expect("lock shell window gate hints") = hints;
+            .expect("lock shell window route hints");
+        let (route, _) = derive_input_route(
+            &hints,
+            self.stream_pad_forwarding.load(Ordering::Relaxed),
+            self.ui_capture.load(Ordering::Relaxed),
+        );
+        self.latest_input_route
+            .store(route.discriminant(), Ordering::Relaxed);
+    }
+
+    pub fn set_shell_window_route_hints(&self, hints: ShellWindowRouteHints) {
+        *self
+            .shell_window_route_hints
+            .lock()
+            .expect("lock shell window route hints") = hints;
+        self.refresh_input_route_cache();
         let _ = self.runtime.refresh_snapshot();
     }
 
-    pub fn shell_window_gate_hints(&self) -> ShellWindowGateHints {
+    /// 无锁读取最近一次派生的三态输入路由（Phase 4 真相源）。
+    pub fn peek_input_route(&self) -> OhMyGamepadInputRouteDto {
+        OhMyGamepadInputRouteDto::from_discriminant(self.latest_input_route.load(Ordering::Relaxed))
+    }
+
+    /// 前端 overlay / 菜单 / 诊断页等上报"正在捕获输入"：route 切回 Ui。
+    /// Release 后前端再次 set_ui_capture(false) 切回正常 Stream 判定。
+    pub fn set_ui_capture(&self, capturing: bool) {
+        self.ui_capture.store(capturing, Ordering::Relaxed);
+        self.refresh_input_route_cache();
+    }
+
+    pub fn shell_window_route_hints(&self) -> ShellWindowRouteHints {
         *self
-            .shell_window_gate_hints
+            .shell_window_route_hints
             .lock()
-            .expect("lock shell window gate hints")
-    }
-
-    pub fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String) {
-        derive_input_gate_from_hints(&self.shell_window_gate_hints())
-    }
-
-    pub fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.perform_resume_recovery("activate_sampling")
-    }
-
-    pub fn resume_shell_sampling(
-        &self,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.perform_resume_recovery("resume_shell_sampling")
+            .expect("lock shell window route hints")
     }
 
     pub fn list_devices(&self) -> Result<Vec<OhMyGamepadDeviceDto>, InputRuntimeError> {
@@ -373,104 +382,6 @@ impl OhMyGamepadService {
         }
         let _ = self.snapshot_with_strategy_sync()?;
         Ok(())
-    }
-
-    pub fn set_suspended(&self, suspended: bool) -> Result<(), InputRuntimeError> {
-        if suspended {
-            log::info!("ohmygamepad_suspend_transition action=suspend");
-            self.runtime.set_suspended(true)
-        } else {
-            let _ = self.perform_resume_recovery("set_suspended(false)")?;
-            Ok(())
-        }
-    }
-
-    pub fn set_sampling_lifecycle(
-        &self,
-        lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> Result<(), InputRuntimeError> {
-        self.runtime.set_sampling_lifecycle(lifecycle)
-    }
-
-    fn try_sampling_self_heal_with_snapshot(
-        &self,
-        snapshot: &OhMyGamepadRuntimeSnapshotDto,
-    ) -> Result<bool, InputRuntimeError> {
-        let is_stalled = snapshot.sampling_health == OhMyGamepadSamplingHealthDto::Stalled;
-        let is_awaiting_baseline =
-            snapshot.sampling_health == OhMyGamepadSamplingHealthDto::AwaitingBaseline;
-        let has_non_keyboard_connected = has_non_keyboard_connected_device(snapshot);
-        let has_keyboard_fallback_connected = has_keyboard_fallback_connected_device(snapshot);
-        // `AwaitingBaseline`：仅在逻辑层仍未写入 progress 时触发（与 `evaluate_sampling_health` 的 lp==0 语义一致）。
-        // `Stalled`：逻辑 progress 长时间停顿；`last_sample_progress_at_ms` 可能已在首轮 seq bump 被置为非 0，
-        // 若仍要求 lp==0 则 prime/reopen 自愈链永远不会执行（蓝牙/虚拟手柄冷启动 SDL 签名冻结等 case）。
-        let sampling_needs_recovery =
-            (is_awaiting_baseline && snapshot.last_sample_progress_at_ms == 0) || is_stalled;
-        let should_apply_physical = has_non_keyboard_connected && sampling_needs_recovery;
-        let should_apply_keyboard = has_keyboard_fallback_connected
-            && !has_non_keyboard_connected
-            && sampling_needs_recovery;
-
-        if should_apply_keyboard {
-            if !self.try_mark_sampling_self_heal_attempt() {
-                return Ok(false);
-            }
-            let restarted =
-                self.ensure_keyboard_listener_running("keyboard-fallback-sampling-self-heal");
-            log::info!(
-                "ohmygamepad_sampling_self_heal_keyboard_fallback health={:?} lifecycle={:?} listener_restarted={}",
-                snapshot.sampling_health,
-                snapshot.sampling_lifecycle,
-                restarted
-            );
-            if restarted {
-                self.runtime.bump_sampling_self_heal_count()?;
-            }
-            return Ok(restarted);
-        }
-
-        if !should_apply_physical {
-            if snapshot.devices.iter().any(|device| device.connected) && !has_non_keyboard_connected
-            {
-                log::info!(
-                    "ohmygamepad_sampling_self_heal_skipped reason=keyboard-fallback-only health={:?} lifecycle={:?}",
-                    snapshot.sampling_health,
-                    snapshot.sampling_lifecycle
-                );
-            }
-            return Ok(false);
-        }
-
-        if !self.try_mark_sampling_self_heal_attempt() {
-            return Ok(false);
-        }
-
-        log::info!(
-            "ohmygamepad_sampling_self_heal_attempt health={:?} lifecycle={:?}",
-            snapshot.sampling_health,
-            snapshot.sampling_lifecycle
-        );
-        self.prime_and_refresh_runtime_sampling()?;
-        self.runtime.bump_sampling_self_heal_count()?;
-        Ok(true)
-    }
-
-    /// 当快照报告 `stalled` 时尝试 prime + refresh，带冷却；成功执行链后置 `bump_sampling_self_heal_count`。
-    pub fn try_stalled_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
-        let snapshot = self.snapshot_with_strategy_sync()?;
-        if snapshot.sampling_health != OhMyGamepadSamplingHealthDto::Stalled {
-            return Ok(false);
-        }
-        self.try_sampling_self_heal_with_snapshot(&snapshot)
-    }
-
-    /// 首开可见态长期停留 `awaitingBaseline` 时，也允许复用同一条 prime/reopen 自愈链。
-    pub fn try_startup_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
-        let snapshot = self.snapshot_with_strategy_sync()?;
-        if snapshot.sampling_health != OhMyGamepadSamplingHealthDto::AwaitingBaseline {
-            return Ok(false);
-        }
-        self.try_sampling_self_heal_with_snapshot(&snapshot)
     }
 
     pub fn set_primary_sampling_device(
@@ -744,42 +655,6 @@ impl OhMyGamepadService {
         Ok(())
     }
 
-    fn perform_resume_recovery(
-        &self,
-        reason: &str,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        let initial_snapshot = self.snapshot_with_strategy_sync()?;
-        let should_force_lifecycle_rearm = initial_snapshot.sampling_lifecycle
-            == OhMyGamepadSamplingLifecycleDto::Active
-            && initial_snapshot.last_sample_progress_at_ms == 0
-            && initial_snapshot.last_backend_sample_activity_at_ms > 0
-            && initial_snapshot
-                .devices
-                .iter()
-                .any(|device| device.connected);
-        log::info!(
-            "ohmygamepad_resume_recovery_start reason={} force_lifecycle_rearm={}",
-            reason,
-            should_force_lifecycle_rearm,
-        );
-        if has_keyboard_fallback_connected_device(&initial_snapshot) {
-            self.ensure_keyboard_listener_running("resume-recovery");
-        }
-        // 恢复 API 的语义是重新进入可操作采样态；仅 prime/refresh 不足以让
-        // BackgroundWarm 下的 slotSnapshot/input action 重新对外发布。
-        if should_force_lifecycle_rearm {
-            self.runtime
-                .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)?;
-        }
-        self.runtime
-            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)?;
-        self.runtime.set_suspended(false)?;
-        self.prime_and_refresh_runtime_sampling()?;
-        let snapshot = self.snapshot_with_strategy_sync()?;
-        log_resume_snapshot(reason, &snapshot, self.stream_pad_forwarding());
-        Ok(snapshot)
-    }
-
     fn snapshot_with_strategy_sync(
         &self,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
@@ -879,7 +754,7 @@ fn normalize_core_config(
         core.bindings = vec![match strategy.mode {
             MultiControllerSamplingMode::Merge => LogicalPadBindingDto {
                 slot: LogicalPadId::Pad0,
-                mode: OhMyGamepadBindingModeDto::Merged,
+                mode: OhMyGamepadBindingModeDto::LastActiveFailover,
                 device_ids: Vec::new(),
             },
             MultiControllerSamplingMode::PrimaryPreferred => LogicalPadBindingDto {
@@ -914,21 +789,11 @@ fn build_binding(
         .collect::<Vec<_>>();
 
     match strategy.mode {
-        MultiControllerSamplingMode::Merge => {
-            if paused.is_empty() {
-                LogicalPadBindingDto {
-                    slot: LogicalPadId::Pad0,
-                    mode: OhMyGamepadBindingModeDto::Merged,
-                    device_ids: Vec::new(),
-                }
-            } else {
-                LogicalPadBindingDto {
-                    slot: LogicalPadId::Pad0,
-                    mode: OhMyGamepadBindingModeDto::Merged,
-                    device_ids: non_empty_device_ids(connected_ids),
-                }
-            }
-        }
+        MultiControllerSamplingMode::Merge => LogicalPadBindingDto {
+            slot: LogicalPadId::Pad0,
+            mode: OhMyGamepadBindingModeDto::LastActiveFailover,
+            device_ids: non_empty_device_ids(connected_ids),
+        },
         MultiControllerSamplingMode::PrimaryPreferred => {
             if let Some(primary_device_id) = strategy.primary_device_id.as_ref() {
                 if connected_ids
@@ -999,102 +864,12 @@ fn logical_state_to_events(
     observed_at_ms: u64,
     state: LogicalPadStateDto,
 ) -> Vec<Sdl3InputEvent> {
-    let device = simulated_descriptor(descriptor);
-    let left_trigger_value = state.buttons.l2.max(state.left_trigger);
-    let right_trigger_value = state.buttons.r2.max(state.right_trigger);
-
-    let mut events = Vec::new();
-    for (index, value) in [
-        (0, state.buttons.south),
-        (1, state.buttons.east),
-        (2, state.buttons.west),
-        (3, state.buttons.north),
-        (4, state.buttons.l1),
-        (5, state.buttons.r1),
-        (6, left_trigger_value),
-        (7, right_trigger_value),
-        (8, state.buttons.view),
-        (9, state.buttons.menu),
-        (10, state.buttons.l3),
-        (11, state.buttons.r3),
-        (12, state.buttons.dpad_up),
-        (13, state.buttons.dpad_down),
-        (14, state.buttons.dpad_left),
-        (15, state.buttons.dpad_right),
-        (16, state.buttons.home),
-    ] {
-        events.push(Sdl3InputEvent {
-            device: device.clone(),
-            observed_at_ms,
-            kind: Sdl3InputEventKind::ButtonChanged { index, value },
-        });
-    }
-
-    for (index, value) in [
-        (0, state.left_stick.x),
-        (1, state.left_stick.y),
-        (2, state.right_stick.x),
-        (3, state.right_stick.y),
-        (4, trigger_axis_value(state.left_trigger)),
-        (5, trigger_axis_value(state.right_trigger)),
-    ] {
-        events.push(Sdl3InputEvent {
-            device: device.clone(),
-            observed_at_ms,
-            kind: Sdl3InputEventKind::AxisChanged { index, value },
-        });
-    }
-
-    events
-}
-
-fn trigger_axis_value(value: f32) -> f32 {
-    (value.clamp(0.0, 1.0) * 2.0) - 1.0
-}
-
-fn log_resume_snapshot(
-    reason: &str,
-    snapshot: &OhMyGamepadRuntimeSnapshotDto,
-    stream_pad_forwarding: bool,
-) {
-    let connected_devices = snapshot
-        .devices
-        .iter()
-        .filter(|device| device.connected)
-        .map(|device| {
-            format!(
-                "{}|{}|{:04x}:{:04x}|{}|{}|{}|{}",
-                device.device_id,
-                device.name,
-                device.vendor_id.unwrap_or_default(),
-                device.product_id.unwrap_or_default(),
-                device.path.as_deref().unwrap_or_default(),
-                device
-                    .mapping
-                    .as_deref()
-                    .map(mapping_guid_hint)
-                    .unwrap_or_default(),
-                device.serial_number.as_deref().unwrap_or_default(),
-                device
-                    .player_index
-                    .map(|value| value.to_string())
-                    .unwrap_or_default(),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(";");
-    log::info!(
-        "ohmygamepad_resume_recovery_done reason={} devices={} slots={} stream_pad_forwarding={} connected=[{}]",
-        reason,
-        snapshot.devices.len(),
-        snapshot.slots.len(),
-        stream_pad_forwarding,
-        connected_devices,
-    );
-}
-
-fn mapping_guid_hint(mapping: &str) -> &str {
-    mapping.split(',').next().unwrap_or_default()
+    // 单源模型下一个逻辑态只产出这一条全量快照。
+    vec![state_snapshot_event(
+        simulated_descriptor(descriptor),
+        observed_at_ms,
+        &state,
+    )]
 }
 
 fn logical_state_contains(actual: &LogicalPadStateDto, expected: &LogicalPadStateDto) -> bool {
@@ -1141,20 +916,6 @@ fn contains_axis(actual: f32, expected: f32) -> bool {
     }
 }
 
-fn has_non_keyboard_connected_device(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> bool {
-    snapshot
-        .devices
-        .iter()
-        .any(|device| device.connected && device.device_id != KEYBOARD_FALLBACK_DEVICE_ID)
-}
-
-fn has_keyboard_fallback_connected_device(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> bool {
-    snapshot
-        .devices
-        .iter()
-        .any(|device| device.connected && device.device_id == KEYBOARD_FALLBACK_DEVICE_ID)
-}
-
 fn normalize_keyboard_mapping(
     mapping: OhMyGamepadKeyboardMappingDto,
 ) -> OhMyGamepadKeyboardMappingDto {
@@ -1166,120 +927,13 @@ fn normalize_keyboard_mapping(
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
+    ohmygamepad_core::monotonic_now_ms()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::NoopSdl3Source;
-    use ohmygamepad_protocol::{
-        OhMyGamepadInputGateModeDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
-    };
-
-    #[test]
-    fn derive_input_gate_follows_foreground_only() {
-        let open_hints = ShellWindowGateHints {
-            shell_app_active: true,
-        };
-        let (open, reason) = derive_input_gate_from_hints(&open_hints);
-        assert_eq!(open, OhMyGamepadInputGateModeDto::Open);
-        assert_eq!(reason, "shell-foreground");
-
-        let background = ShellWindowGateHints {
-            shell_app_active: false,
-        };
-        let (closed, reason) = derive_input_gate_from_hints(&background);
-        assert_eq!(closed, OhMyGamepadInputGateModeDto::Closed);
-        assert_eq!(reason, "shell-background");
-    }
-
-    #[test]
-    fn resume_shell_sampling_promotes_background_warm_to_active() {
-        let service = OhMyGamepadService::spawn_with_source(
-            OhMyGamepadServiceConfig::default(),
-            NoopSdl3Source,
-        );
-
-        service
-            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
-            .expect("set background warm");
-
-        let snapshot = service
-            .resume_shell_sampling()
-            .expect("resume shell sampling");
-
-        assert_eq!(
-            snapshot.sampling_lifecycle,
-            OhMyGamepadSamplingLifecycleDto::Active
-        );
-    }
-
-    #[test]
-    fn sampling_self_heal_requires_non_keyboard_connected_device() {
-        let keyboard_only = OhMyGamepadRuntimeSnapshotDto {
-            sampling_health: OhMyGamepadSamplingHealthDto::AwaitingBaseline,
-            devices: vec![OhMyGamepadDeviceDto {
-                device_id: KEYBOARD_FALLBACK_DEVICE_ID.to_owned(),
-                connected: true,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        assert!(!has_non_keyboard_connected_device(&keyboard_only));
-
-        let physical = OhMyGamepadRuntimeSnapshotDto {
-            sampling_health: OhMyGamepadSamplingHealthDto::AwaitingBaseline,
-            devices: vec![OhMyGamepadDeviceDto {
-                device_id: "sdl3:1".to_owned(),
-                connected: true,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        assert!(has_non_keyboard_connected_device(&physical));
-    }
-
-    #[test]
-    fn keyboard_fallback_self_heal_restarts_missing_listener() {
-        let service = OhMyGamepadService::spawn_with_source(
-            OhMyGamepadServiceConfig::default(),
-            NoopSdl3Source,
-        );
-        if let Some(listener) = service
-            .state
-            .lock()
-            .expect("lock service state")
-            .keyboard_listener
-            .take()
-        {
-            listener.shutdown();
-        }
-
-        let keyboard_only = OhMyGamepadRuntimeSnapshotDto {
-            sampling_health: OhMyGamepadSamplingHealthDto::AwaitingBaseline,
-            devices: vec![OhMyGamepadDeviceDto {
-                device_id: KEYBOARD_FALLBACK_DEVICE_ID.to_owned(),
-                connected: true,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        assert!(service
-            .try_sampling_self_heal_with_snapshot(&keyboard_only)
-            .expect("keyboard fallback self heal"));
-        assert!(service
-            .state
-            .lock()
-            .expect("lock service state")
-            .keyboard_listener
-            .is_some());
-        service.shutdown().expect("shutdown service");
-    }
 
     #[test]
     fn empty_keyboard_mapping_resets_to_default_mapping() {

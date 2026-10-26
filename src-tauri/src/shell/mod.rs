@@ -3,11 +3,10 @@ use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_keepawake::TauriPluginKeepawakeExt;
 use tokio::sync::RwLock;
-use tokio::time::{sleep, Duration};
 
 use crate::error::{AppError, AppResult};
 use crate::mods;
-use crate::mods::gamepad::input_gate;
+use crate::mods::gamepad::input_route;
 use crate::mods::gamepad::service::sanitize_runtime_snapshot_for_external_consumers;
 use crate::mods::{auth::events as auth_events, gamepad::events as gamepad_events};
 
@@ -22,20 +21,13 @@ pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineW
 pub use cli::parse_startup_flags;
 pub use gamepad_sampling::{
     handle_gamepad_app_resumed, handle_gamepad_page_loaded, handle_gamepad_window_focus_changed,
-    handle_gamepad_window_resized, hint_gamepad_shell_interactive,
-    refresh_gamepad_on_window_foreground,
+    handle_gamepad_window_resized,
 };
 pub use state::{AppState, StartupFlagsState};
 pub use window::build_external_link_patch_script;
 
 #[cfg(target_os = "macos")]
 pub use window::handle_macos_window_event;
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(super) struct ForegroundRefreshPlan {
-    pub(super) should_resume_sampling: bool,
-    pub(super) should_try_stalled_self_heal: bool,
-}
 
 pub(super) fn trace_gamepad_runtime_snapshot(
     runtime_trace: &mods::runtime_trace::RuntimeTraceRecorderRef,
@@ -150,93 +142,6 @@ fn gamepad_device_trace_signature(
         .join("|")
 }
 
-fn should_force_gamepad_startup_rearm(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-) -> bool {
-    snapshot.sampling_lifecycle == ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active
-        && snapshot.last_sample_progress_at_ms == 0
-        && snapshot.last_backend_sample_activity_at_ms > 0
-        && has_non_keyboard_connected_gamepad_device(snapshot)
-}
-
-fn has_non_keyboard_connected_gamepad_device(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-) -> bool {
-    snapshot
-        .devices
-        .iter()
-        .any(|device| device.connected && device.device_id != "virtual:keyboard")
-}
-
-fn should_resume_sampling_on_foreground_refresh(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
-) -> bool {
-    if !hints.shell_app_active {
-        return false;
-    }
-    snapshot.sampling_lifecycle != ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active
-        || snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Open
-}
-
-/// 触屏 / 交互提示 → 采样恢复动作。
-///
-/// 触屏只说明「用户在窗口上动了一下」，本身不是采样故障信号。历史上前端每次
-/// `touchstart` 都会强制走一次 `resume_shell_sampling`，而 resume 内部会
-/// `reopen_devices_and_prime_sampling`（关闭并重开全部 SDL 手柄句柄、再重新枚举）。
-/// 在 FSE 这类枚举本来就不稳的环境里，这一下足以把正在工作的输入打断——表现出来
-/// 就是「碰一下屏幕，手柄就没反应了」。gate 与焦点解耦之后，触屏更没有必要承担
-/// 恢复职责：只有采样确实停了（lifecycle 非 Active / gate 关闭）才恢复，
-/// 其余情况一律不动设备。
-pub(super) fn plan_interactive_refresh_actions(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
-) -> ForegroundRefreshPlan {
-    if !hints.shell_app_active {
-        return ForegroundRefreshPlan::default();
-    }
-
-    ForegroundRefreshPlan {
-        should_resume_sampling: should_resume_sampling_on_foreground_refresh(snapshot, hints),
-        should_try_stalled_self_heal: snapshot.sampling_health
-            == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled,
-    }
-}
-
-#[cfg(any(test, target_os = "windows"))]
-pub(super) fn plan_foreground_refresh_actions(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
-) -> ForegroundRefreshPlan {
-    if !hints.shell_app_active {
-        return ForegroundRefreshPlan::default();
-    }
-
-    ForegroundRefreshPlan {
-        should_resume_sampling: should_resume_sampling_on_foreground_refresh(snapshot, hints),
-        should_try_stalled_self_heal: snapshot.sampling_health
-            == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled,
-    }
-}
-
-#[cfg(not(any(test, target_os = "windows")))]
-pub(super) fn plan_foreground_refresh_actions(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-    hints: &ohmygamepad_sdl3::ShellWindowGateHints,
-) -> ForegroundRefreshPlan {
-    if !hints.shell_app_active {
-        return ForegroundRefreshPlan::default();
-    }
-
-    ForegroundRefreshPlan {
-        should_resume_sampling: snapshot.sampling_lifecycle
-            != ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active
-            || snapshot.input_gate != ohmygamepad_protocol::OhMyGamepadInputGateModeDto::Open,
-        should_try_stalled_self_heal: snapshot.sampling_health
-            == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled,
-    }
-}
-
 pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     log::info!("Starting application initialization...");
 
@@ -253,12 +158,13 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     );
 
     bind_background_tasks(app.handle(), &state).await?;
-    input_gate::sync_gamepad_input_gate(app.handle());
-    match state.gamepad.activate_sampling() {
+    input_route::sync_gamepad_input_route(app.handle());
+    // 采样随 host bootstrap 常驻启动，这里只记录一次初始快照。
+    match state.gamepad.get_runtime_snapshot() {
         Ok(snapshot) => {
             trace_gamepad_runtime_snapshot(
                 &state.runtime_trace,
-                "initServicesActivateSamplingCompleted",
+                "initServicesSamplingReady",
                 &snapshot,
                 state.gamepad.stream_pad_forwarding(),
                 serde_json::json!({
@@ -269,7 +175,7 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
         Err(error) => {
             state.runtime_trace.record_event(
                 "gamepad-shell",
-                "initServicesActivateSamplingFailed",
+                "initServicesSnapshotFailed",
                 None,
                 serde_json::json!({
                     "reason": "shell-init",
@@ -277,81 +183,6 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
                 }),
             );
         }
-    }
-    {
-        let gamepad = state.gamepad.clone();
-        let runtime_trace = state.runtime_trace.clone();
-        tauri::async_runtime::spawn(async move {
-            sleep(Duration::from_millis(900)).await;
-            let snapshot = match gamepad.get_runtime_snapshot() {
-                Ok(snapshot) => snapshot,
-                Err(error) => {
-                    runtime_trace.record_event(
-                        "gamepad-shell",
-                        "startupActiveSamplingCheckFailed",
-                        None,
-                        serde_json::json!({
-                            "error": error,
-                        }),
-                    );
-                    return;
-                }
-            };
-            trace_gamepad_runtime_snapshot(
-                &runtime_trace,
-                "startupActiveSamplingCheckObserved",
-                &snapshot,
-                gamepad.stream_pad_forwarding(),
-                serde_json::json!({
-                    "delayMs": 900,
-                    "shouldForceRearm": should_force_gamepad_startup_rearm(&snapshot),
-                }),
-            );
-            if !should_force_gamepad_startup_rearm(&snapshot) {
-                return;
-            }
-
-            runtime_trace.record_event(
-                "gamepad-shell",
-                "startupActiveSamplingRearmTriggered",
-                None,
-                serde_json::json!({
-                    "delayMs": 900,
-                    "streamPadForwarding": gamepad.stream_pad_forwarding(),
-                    "samplingLifecycle": snapshot.sampling_lifecycle,
-                    "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
-                    "lastBackendSampleActivityAtMs": snapshot.last_backend_sample_activity_at_ms,
-                    "connectedDevices": snapshot.devices.iter().filter(|device| device.connected).count(),
-                }),
-            );
-
-            match gamepad.resume_shell_sampling() {
-                Ok(next_snapshot) => {
-                    trace_gamepad_runtime_snapshot(
-                        &runtime_trace,
-                        "startupActiveSamplingRearmCompleted",
-                        &next_snapshot,
-                        gamepad.stream_pad_forwarding(),
-                        serde_json::json!({
-                            "delayMs": 900,
-                            "reason": "startup-active-without-progress",
-                        }),
-                    );
-                }
-                Err(error) => {
-                    runtime_trace.record_event(
-                        "gamepad-shell",
-                        "startupActiveSamplingRearmFailed",
-                        None,
-                        serde_json::json!({
-                            "delayMs": 900,
-                            "reason": "startup-active-without-progress",
-                            "error": error,
-                        }),
-                    );
-                }
-            }
-        });
     }
     log::info!("Application initialization completed.");
 
@@ -611,13 +442,10 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
     let is_quitting_gamepad = state.is_quitting.clone();
     let runtime_trace_gamepad = state.runtime_trace.clone();
     tauri::async_runtime::spawn(async move {
-        use ohmygamepad_protocol::{
-            OhMyGamepadInputGateModeDto, OhMyGamepadSamplingHealthDto,
-            OhMyGamepadSamplingLifecycleDto,
-        };
+        use ohmygamepad_protocol::OhMyGamepadInputRouteDto;
 
         let rx = gamepad_host.subscribe_runtime_snapshot();
-        let mut prev_input_gate = OhMyGamepadInputGateModeDto::default();
+        let mut prev_input_route = OhMyGamepadInputRouteDto::default();
         let mut prev_signature: Option<String> = None;
         // 上一次同步给运行时的前台判定；变化时重下发一次 gate。
         let mut prev_synced_shell_app_active: Option<bool> = None;
@@ -628,7 +456,7 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                     "{:?}|{:?}|{:?}|{}|{}|{}|{}|{}|{}",
                     snapshot.sampling_lifecycle,
                     snapshot.sampling_health,
-                    snapshot.input_gate,
+                    snapshot.input_route,
                     gamepad_provider.stream_pad_forwarding(),
                     snapshot
                         .devices
@@ -661,19 +489,20 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 });
                 let _ = gamepad_events::emit_runtime_snapshot(&app_handle_gamepad, &snapshot_value);
 
-                let previous_gate = prev_input_gate;
-                if snapshot.input_gate != prev_input_gate {
-                    let gate_payload = serde_json::json!({
-                        "previousGate": previous_gate,
-                        "inputGate": snapshot.input_gate,
-                        "reason": snapshot.input_gate_reason,
+                let previous_route = prev_input_route;
+                if snapshot.input_route != prev_input_route {
+                    let route_payload = serde_json::json!({
+                        "previousRoute": previous_route,
+                        "inputRoute": snapshot.input_route,
                     });
-                    let _ =
-                        gamepad_events::emit_input_gate_changed(&app_handle_gamepad, &gate_payload);
-                    prev_input_gate = snapshot.input_gate;
+                    let _ = gamepad_events::emit_input_route_changed(
+                        &app_handle_gamepad,
+                        &route_payload,
+                    );
+                    prev_input_route = snapshot.input_route;
                 }
 
-                if snapshot.input_gate.allows_business_input() {
+                if snapshot.input_route.allows_business_input() {
                     for slot in &snapshot.slots {
                         let slot_value = serde_json::to_value(slot).unwrap_or_else(|e| {
                             log::warn!("Failed to serialize gamepad slot snapshot: {}", e);
@@ -692,15 +521,15 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
 
                 if let Some(window) = app_handle_gamepad.get_webview_window("main") {
                     let (hints, foreground) =
-                        input_gate::current_shell_window_gate_hints_with_state(&window);
+                        input_route::current_shell_window_route_hints_with_state(&window);
                     let shell_app_active = hints.shell_app_active;
                     // 自愈：前台判定与上次同步不同就重下发一次，不依赖 window 事件送达。
                     if prev_synced_shell_app_active != Some(shell_app_active) {
                         prev_synced_shell_app_active = Some(shell_app_active);
-                        input_gate::sync_gamepad_input_gate(&app_handle_gamepad);
+                        input_route::sync_gamepad_input_route(&app_handle_gamepad);
                         runtime_trace_gamepad.record_event(
                             "gamepad-shell",
-                            "inputGateHintsResynced",
+                            "inputRouteHintsResynced",
                             None,
                             serde_json::json!({
                                 "shellAppActive": shell_app_active,
@@ -708,63 +537,7 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                                 "minimized": foreground.minimized,
                             }),
                         );
-                        if shell_app_active {
-                            // gate 由关变开：采样可能停在 BackgroundWarm，主动恢复。
-                            refresh_gamepad_on_window_foreground(
-                                &app_handle_gamepad,
-                                "input-gate-resynced-open",
-                            );
-                        }
                     }
-                    // 前台就必须在采样。sampling lifecycle 已不参与 gate 派生，
-                    // 若它停在 BackgroundWarm，这里直接提升，避免「门开着但没数据」。
-                    if shell_app_active
-                        && snapshot.sampling_lifecycle != OhMyGamepadSamplingLifecycleDto::Active
-                    {
-                        if let Err(error) = gamepad_provider
-                            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)
-                        {
-                            log::warn!("Failed to promote sampling on foreground: {}", error);
-                        } else {
-                            runtime_trace_gamepad.record_event(
-                                "gamepad-shell",
-                                "samplingPromotedOnForeground",
-                                None,
-                                serde_json::json!({
-                                "previousLifecycle": snapshot.sampling_lifecycle,
-                                "visible": foreground.visible,
-                                "minimized": foreground.minimized,
-                                }),
-                            );
-                            refresh_gamepad_on_window_foreground(
-                                &app_handle_gamepad,
-                                "sampling-promoted-on-foreground",
-                            );
-                        }
-                    }
-                }
-
-                if snapshot.sampling_health == OhMyGamepadSamplingHealthDto::Stalled {
-                    let self_healed = gamepad_provider.try_stalled_sampling_self_heal();
-                    runtime_trace_gamepad.record_event(
-                        "gamepad-shell",
-                        "stalledSelfHealTriggered",
-                        None,
-                        serde_json::json!({
-                            "result": match &self_healed {
-                                Ok(applied) => serde_json::json!({
-                                    "ok": true,
-                                    "applied": applied,
-                                }),
-                                Err(error) => serde_json::json!({
-                                    "ok": false,
-                                    "error": error,
-                                }),
-                            },
-                            "samplingLifecycle": snapshot.sampling_lifecycle,
-                            "samplingHealth": snapshot.sampling_health,
-                        }),
-                    );
                 }
             } else {
                 break;
@@ -828,156 +601,4 @@ pub async fn terminate(app_handle: &AppHandle) {
     );
 
     log::info!("Application termination completed.");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        plan_foreground_refresh_actions, plan_interactive_refresh_actions,
-        should_force_gamepad_startup_rearm, should_resume_sampling_on_foreground_refresh,
-    };
-    use ohmygamepad_protocol::{
-        OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto,
-        OhMyGamepadSamplingLifecycleDto,
-    };
-    use ohmygamepad_sdl3::ShellWindowGateHints;
-
-    #[test]
-    fn startup_rearm_stays_independent_from_focus_state() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
-            last_sample_progress_at_ms: 0,
-            last_backend_sample_activity_at_ms: 42,
-            devices: vec![ohmygamepad_protocol::OhMyGamepadDeviceDto {
-                connected: true,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        assert!(should_force_gamepad_startup_rearm(&snapshot));
-    }
-
-    #[test]
-    fn startup_rearm_ignores_keyboard_fallback_only_snapshot() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
-            last_sample_progress_at_ms: 0,
-            last_backend_sample_activity_at_ms: 42,
-            devices: vec![ohmygamepad_protocol::OhMyGamepadDeviceDto {
-                device_id: "virtual:keyboard".to_owned(),
-                connected: true,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        assert!(!should_force_gamepad_startup_rearm(&snapshot));
-    }
-
-    #[test]
-    fn foreground_refresh_resumes_when_fse_foreground_returns_from_background_warm() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-            input_gate: OhMyGamepadInputGateModeDto::Closed,
-            ..Default::default()
-        };
-        let hints = ShellWindowGateHints {
-            shell_app_active: true,
-            ..Default::default()
-        };
-
-        assert!(should_resume_sampling_on_foreground_refresh(
-            &snapshot, &hints
-        ));
-    }
-
-    #[test]
-    fn foreground_refresh_still_attempts_self_heal_when_active_gate_is_open_but_sampling_stalled() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
-            sampling_health: OhMyGamepadSamplingHealthDto::Stalled,
-            input_gate: OhMyGamepadInputGateModeDto::Open,
-            ..Default::default()
-        };
-        let hints = ShellWindowGateHints {
-            shell_app_active: true,
-            ..Default::default()
-        };
-
-        let plan = plan_foreground_refresh_actions(&snapshot, &hints);
-
-        assert!(!plan.should_resume_sampling);
-        assert!(plan.should_try_stalled_self_heal);
-    }
-
-    #[test]
-    fn interactive_hint_never_touches_devices_while_sampling_is_healthy() {
-        // 触屏 → 采样健康时必须是纯空操作：resume 会重开 SDL 设备句柄，
-        // 在 FSE 下足以把正在工作的输入打断（「触屏就丢输入」）。
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
-            sampling_health: OhMyGamepadSamplingHealthDto::Healthy,
-            input_gate: OhMyGamepadInputGateModeDto::Open,
-            ..Default::default()
-        };
-        let hints = ShellWindowGateHints {
-            shell_app_active: true,
-            ..Default::default()
-        };
-
-        let plan = plan_interactive_refresh_actions(&snapshot, &hints);
-
-        assert!(!plan.should_resume_sampling);
-        assert!(!plan.should_try_stalled_self_heal);
-    }
-
-    #[test]
-    fn interactive_hint_resumes_when_lifecycle_left_active() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-            input_gate: OhMyGamepadInputGateModeDto::Open,
-            ..Default::default()
-        };
-        let hints = ShellWindowGateHints {
-            shell_app_active: true,
-            ..Default::default()
-        };
-
-        assert!(plan_interactive_refresh_actions(&snapshot, &hints).should_resume_sampling);
-    }
-
-    #[test]
-    fn interactive_hint_resumes_when_gate_is_closed() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
-            input_gate: OhMyGamepadInputGateModeDto::Closed,
-            ..Default::default()
-        };
-        let hints = ShellWindowGateHints {
-            shell_app_active: true,
-            ..Default::default()
-        };
-
-        assert!(plan_interactive_refresh_actions(&snapshot, &hints).should_resume_sampling);
-    }
-
-    #[test]
-    fn interactive_hint_does_nothing_when_window_is_background() {
-        let snapshot = OhMyGamepadRuntimeSnapshotDto {
-            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
-            sampling_health: OhMyGamepadSamplingHealthDto::Stalled,
-            input_gate: OhMyGamepadInputGateModeDto::Closed,
-            ..Default::default()
-        };
-        let hints = ShellWindowGateHints {
-            shell_app_active: false,
-            ..Default::default()
-        };
-
-        let plan = plan_interactive_refresh_actions(&snapshot, &hints);
-
-        assert!(!plan.should_resume_sampling);
-        assert!(!plan.should_try_stalled_self_heal);
-    }
 }

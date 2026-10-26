@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use ohmygamepad_protocol::{
     GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto, LogicalPadId,
     LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadInputRouteDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
     OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
@@ -93,8 +93,7 @@ where
             last_backend_sample_activity_at_ms: self.last_backend_sample_activity_at_ms,
             sampling_self_heal_count: 0,
             stream_pad_forwarding: false,
-            input_gate: OhMyGamepadInputGateModeDto::default(),
-            input_gate_reason: String::new(),
+            input_route: OhMyGamepadInputRouteDto::default(),
         }
     }
 
@@ -115,11 +114,6 @@ where
         self.sample_once();
     }
 
-    pub fn tick_for_lifecycle(&mut self, lifecycle: OhMyGamepadSamplingLifecycleDto) {
-        self.poll_backend();
-        self.sample_once_for_lifecycle(lifecycle);
-    }
-
     pub fn sync_clock_ms(&mut self, now_ms: u64) {
         self.clock_ms = self.clock_ms.max(now_ms);
     }
@@ -130,22 +124,10 @@ where
     }
 
     pub fn sample_once(&mut self) {
-        self.sample_once_for_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
-    }
-
-    pub fn sample_once_for_lifecycle(&mut self, lifecycle: OhMyGamepadSamplingLifecycleDto) {
-        self.refresh_pad_snapshots(lifecycle);
+        self.refresh_pad_snapshots();
     }
 
     pub fn push_pad_snapshot(&mut self, snapshot: LogicalPadSnapshotDto) {
-        self.push_pad_snapshot_for_lifecycle(snapshot, OhMyGamepadSamplingLifecycleDto::Active);
-    }
-
-    pub fn push_pad_snapshot_for_lifecycle(
-        &mut self,
-        snapshot: LogicalPadSnapshotDto,
-        lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) {
         // 这里先固定按逻辑 pad 覆盖快照，后续再补采样/过滤流水线。
         if let Some(existing) = self
             .pads
@@ -156,42 +138,12 @@ where
         } else {
             self.pads.push(snapshot.clone());
         }
-        if lifecycle == OhMyGamepadSamplingLifecycleDto::Active {
-            self.ui_sink.emit_pad_snapshot(&snapshot);
-            self.stream_sink.emit_pad_snapshot(&snapshot);
-        }
+        self.ui_sink.emit_pad_snapshot(&snapshot);
+        self.stream_sink.emit_pad_snapshot(&snapshot);
     }
 
     pub fn pad_snapshot(&self, pad_id: LogicalPadId) -> Option<&LogicalPadSnapshotDto> {
         self.pads.iter().find(|snapshot| snapshot.slot == pad_id)
-    }
-
-    pub fn reset_state(&mut self) {
-        // 清理原始采样，防止恢复时使用过期的硬件状态
-        self.raw_samples.clear();
-        self.last_active_at.clear();
-        self.last_stream_emit_at_ms = [self.clock_ms; 4];
-        self.last_backend_sample_activity_at_ms = 0;
-
-        // 将所有逻辑手柄重置为中性状态
-        for snapshot in &mut self.pads {
-            snapshot.state = default_logical_pad_state();
-            self.sample_seq = self.sample_seq.saturating_add(1);
-            snapshot.sample_seq = self.sample_seq;
-            snapshot.sampled_at_ms = self.clock_ms;
-            // 与 `next_sample_seq` 一致：避免首帧 `clock_ms == 0` 时 progress 恒为 0，导致采样健康度永久卡在 awaitingBaseline。
-            self.last_sample_progress_at_ms = self.clock_ms.max(1);
-            // 立即向接收端同步“按键全部弹起”的状态，防止 UI 粘滞。
-            self.ui_sink.emit_pad_snapshot(snapshot);
-            self.stream_sink.emit_pad_snapshot(snapshot);
-        }
-    }
-
-    pub fn absorb_current_state_as_baseline(&mut self) {
-        for snapshot in &self.pads {
-            let slot_index = pad_slot(snapshot.slot);
-            self.last_stream_emit_at_ms[slot_index] = self.clock_ms.max(snapshot.sampled_at_ms);
-        }
     }
 
     fn apply_backend_poll(&mut self, poll: BackendPollResult) {
@@ -206,9 +158,7 @@ where
             devices_changed |= self.apply_device_event(event);
         }
 
-        for mut sample in samples {
-            sample.observed_at_ms =
-                normalize_backend_observed_at_ms(sample.observed_at_ms, self.clock_ms);
+        for sample in samples {
             let observed = sample.observed_at_ms;
             self.last_backend_sample_activity_at_ms =
                 self.last_backend_sample_activity_at_ms.max(observed);
@@ -217,9 +167,8 @@ where
         }
 
         if let Some(activity_ms) = activity_observed_at_ms {
-            self.last_backend_sample_activity_at_ms = self
-                .last_backend_sample_activity_at_ms
-                .max(normalize_backend_observed_at_ms(activity_ms, self.clock_ms));
+            self.last_backend_sample_activity_at_ms =
+                self.last_backend_sample_activity_at_ms.max(activity_ms);
         }
 
         if devices_changed {
@@ -260,7 +209,7 @@ where
         true
     }
 
-    fn refresh_pad_snapshots(&mut self, lifecycle: OhMyGamepadSamplingLifecycleDto) {
+    fn refresh_pad_snapshots(&mut self) {
         let bindings = self.effective_bindings();
         let mut next_pads = Vec::with_capacity(bindings.len());
         let mut reserved_split_devices = HashSet::new();
@@ -281,7 +230,7 @@ where
                 .find(|current| current.slot == snapshot.slot)
                 .map(|current| pad_payload_changed(current, snapshot))
                 .unwrap_or(true);
-            if changed && lifecycle == OhMyGamepadSamplingLifecycleDto::Active {
+            if changed {
                 self.ui_sink.emit_pad_snapshot(snapshot);
                 self.stream_sink.emit_pad_snapshot(snapshot);
             }
@@ -461,9 +410,8 @@ where
 
     fn next_sample_seq(&mut self) -> u64 {
         self.sample_seq = self.sample_seq.saturating_add(1);
-        // `evaluate_sampling_health` 用 `last_sample_progress_at_ms == 0` 表示「尚未产生逻辑进度」。
-        // 首轮 `tick` 时 runner 的 `elapsed` 可能仍为 0，若此处写入 0 会与已推进的 `sample_seq` 矛盾，
-        // 使会话长期停留在 `AwaitingBaseline`（首开输入门控/恢复条件误判）。
+        // 首轮 `tick` 时 runner 的 `elapsed` 可能仍为 0；进度时间戳用 0 表示「尚未产生逻辑进度」，
+        // 因此这里至少写入 1，避免首帧被误判为没有采样进度。
         self.last_sample_progress_at_ms = self.clock_ms.max(1);
         self.sample_seq
     }
@@ -591,17 +539,6 @@ fn pad_slot(pad_id: LogicalPadId) -> usize {
 
 fn pad_order(pad_id: LogicalPadId) -> u8 {
     pad_slot(pad_id) as u8
-}
-
-fn normalize_backend_observed_at_ms(observed_at_ms: u64, clock_ms: u64) -> u64 {
-    const MAX_BACKEND_TIMESTAMP_FUTURE_DRIFT_MS: u64 = 1_000;
-    if observed_at_ms == 0
-        || observed_at_ms > clock_ms.saturating_add(MAX_BACKEND_TIMESTAMP_FUTURE_DRIFT_MS)
-    {
-        clock_ms
-    } else {
-        observed_at_ms
-    }
 }
 
 fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotDto) -> bool {

@@ -14,6 +14,7 @@ publish = false
 
 [dependencies]
 ohmygamepad-protocol = { path = "../protocol" }
+arc-swap = "1.7"
 
 [lib]
 path = "src/lib.rs"

@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-/// 对外仅 `active` / `backgroundWarm` 两态；停机语义由 `set_suspended` 独立表达（runner 内单独布尔，不在此枚举）。
+/// 采样生命周期枚举保留用于协议兼容；runtime 常驻采样后固定为 `active`。
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OhMyGamepadSamplingLifecycleDto {
@@ -25,20 +25,46 @@ pub enum OhMyGamepadSamplingHealthDto {
     Stalled,
 }
 
-/// Tauri 推导并写入窗口 hints 后，由 host enrich 映射到快照；仅决定物理采样是否进入业务输入流。
+/// 统一输入路由（Phase 4 引入，取代旧 gate 的真相源）。
+///
+/// ```text
+/// foreground  = !minimized（macOS 额外要求 visible）
+/// route =
+///   !foreground                         → Blocked  // 等同旧 gate Closed
+///   stream_pad_forwarding && !ui_capture → Stream
+///   otherwise                           → Ui
+/// ```
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum OhMyGamepadInputGateModeDto {
-    /// 业务输入不进入后续业务处理（物理采样仍继续）。
+pub enum OhMyGamepadInputRouteDto {
+    /// 输入全部阻挡（非前台）。
     #[default]
-    Closed,
-    /// 业务输入允许继续进入后续业务处理；UI / stream 归属由消费层决定。
-    Open,
+    Blocked,
+    /// 输入交给 UI（菜单、诊断页、串流前 UI、overlay capturing 等）。
+    Ui,
+    /// 输入交给串流传输（stream_pad_forwarding && !ui_capture）。
+    Stream,
 }
 
-impl OhMyGamepadInputGateModeDto {
+impl OhMyGamepadInputRouteDto {
+    pub fn discriminant(self) -> u8 {
+        match self {
+            Self::Blocked => 0,
+            Self::Ui => 1,
+            Self::Stream => 2,
+        }
+    }
+
+    pub fn from_discriminant(value: u8) -> Self {
+        match value {
+            1 => Self::Ui,
+            2 => Self::Stream,
+            _ => Self::Blocked,
+        }
+    }
+
     pub fn allows_business_input(self) -> bool {
-        matches!(self, Self::Open)
+        matches!(self, Self::Ui | Self::Stream)
     }
 }
 
@@ -50,10 +76,10 @@ pub struct OhMyGamepadRuntimeSnapshotDto {
     pub sampling: OhMyGamepadSamplingConfigDto,
     pub slots: Vec<GamepadSlotSnapshotDto>,
     pub haptics: OhMyGamepadRuntimeHapticsDto,
-    /// Runtime sampling lifecycle（仅 Active / BackgroundWarm）；诊断/兼容，业务放行判定已收口到 `input_gate`。
+    /// Runtime sampling lifecycle（诊断/兼容字段）；常驻采样后固定为 `active`。
     #[serde(default)]
     pub sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
-    /// Sampling chain health for diagnostics and stalled self-heal.
+    /// Sampling chain health（诊断/兼容字段）；常驻采样后固定为 `healthy`。
     #[serde(default)]
     pub sampling_health: OhMyGamepadSamplingHealthDto,
     /// Last `clock_ms` when logical sample progress was observed (`sample_seq` advanced).
@@ -62,18 +88,15 @@ pub struct OhMyGamepadRuntimeSnapshotDto {
     /// Last `clock_ms` when backend delivered raw device samples into the core.
     #[serde(default)]
     pub last_backend_sample_activity_at_ms: u64,
-    /// Monotonic count of backend-driven sampling self-heal attempts (for diagnostics).
+    /// 采样自愈计数（诊断/兼容字段）；自愈链已删除，固定为 0。
     #[serde(default)]
     pub sampling_self_heal_count: u32,
-    /// When true, logical pad samples may be forwarded to the active streaming/RTC session (仍受 `input_gate` 放行约束)。
+    /// When true, logical pad samples may be forwarded to the active streaming/RTC session.
     #[serde(default)]
     pub stream_pad_forwarding: bool,
-    /// 业务输入门控：由壳层窗口 hints 与 runtime lifecycle 推导并写入快照。
+    /// 统一输入路由（Phase 4 引入，真相源）：取代旧 input_gate。
     #[serde(default)]
-    pub input_gate: OhMyGamepadInputGateModeDto,
-    /// 最近一次门控推导原因（便于诊断）。
-    #[serde(default)]
-    pub input_gate_reason: String,
+    pub input_route: OhMyGamepadInputRouteDto,
 }
 
 #[derive(Clone, Debug, PartialEq)]

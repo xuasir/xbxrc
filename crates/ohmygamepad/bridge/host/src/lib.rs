@@ -4,16 +4,16 @@ use std::sync::{
 };
 
 use ohmygamepad_core::{
-    DesktopDriverSelector, DesktopHapticsProviderKind, DeviceProfile, InputRuntimeError,
+    ArcSwap, DesktopDriverSelector, DesktopHapticsProviderKind, DeviceProfile, InputRuntimeError,
 };
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
-    OhMyGamepadHapticsProviderKindDto, OhMyGamepadInputGateModeDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
-    OhMyGamepadSamplingLifecycleDto,
+    LogicalPadBindingDto, LogicalPadSnapshotDto, LogicalPadStateDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadHapticsProviderKindDto,
+    OhMyGamepadInputRouteDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
-use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig, ShellWindowGateHints};
+use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig, ShellWindowRouteHints};
 #[cfg(target_os = "windows")]
 use ohmygamepad_win_xbox_haptics::WindowsXboxHapticsProvider;
 
@@ -76,6 +76,12 @@ impl GamepadRuntimeHost {
             .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider, &self.runtime))
     }
 
+    /// 无锁读取最新 pad 状态的原子单元；串流输入环等高频读方直接 load，
+    /// 避免对 runtime 线程的阻塞往返。
+    pub fn latest_pad_states(&self) -> Arc<ArcSwap<Vec<LogicalPadSnapshotDto>>> {
+        self.runtime.get_latest_pad_states()
+    }
+
     pub fn subscribe_runtime_snapshot(&self) -> Receiver<OhMyGamepadRuntimeSnapshotDto> {
         self.snapshot_broadcaster.subscribe()
     }
@@ -93,27 +99,26 @@ impl GamepadRuntimeHost {
         self.runtime.stream_pad_forwarding()
     }
 
-    pub fn peek_derived_input_gate(&self) -> (OhMyGamepadInputGateModeDto, String) {
-        self.runtime.peek_derived_input_gate()
-    }
-
-    pub fn set_shell_window_gate_hints(&self, hints: ShellWindowGateHints) {
-        self.runtime.set_shell_window_gate_hints(hints);
+    pub fn set_shell_window_route_hints(&self, hints: ShellWindowRouteHints) {
+        self.runtime.set_shell_window_route_hints(hints);
         let _ = self.publish_current_snapshot();
     }
 
-    pub fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.runtime
-            .activate_sampling()
-            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider, &self.runtime))
+    /// 无锁读取最近一次派生的三态输入路由（Phase 4 真相源）。
+    pub fn peek_input_route(&self) -> OhMyGamepadInputRouteDto {
+        self.runtime.peek_input_route()
     }
 
-    pub fn resume_shell_sampling(
-        &self,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.runtime
-            .resume_shell_sampling()
-            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider, &self.runtime))
+    /// 前端 overlay / 菜单 / 诊断页等上报"正在捕获输入"：route 切回 Ui。
+    pub fn set_ui_capture(&self, capturing: bool) {
+        self.runtime.set_ui_capture(capturing);
+        let _ = self.publish_current_snapshot();
+    }
+
+    /// 手动重新枚举手柄：仅此入口允许重开设备句柄。
+    pub fn rescan_devices(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        self.runtime.rescan_devices()?;
+        self.snapshot()
     }
 
     pub fn set_sampling(
@@ -135,25 +140,6 @@ impl GamepadRuntimeHost {
         strategy: MultiControllerSamplingStrategyDto,
     ) -> Result<(), InputRuntimeError> {
         self.runtime.set_sampling_strategy(strategy)
-    }
-
-    pub fn set_suspended(&self, suspended: bool) -> Result<(), InputRuntimeError> {
-        self.runtime.set_suspended(suspended)
-    }
-
-    pub fn set_sampling_lifecycle(
-        &self,
-        lifecycle: OhMyGamepadSamplingLifecycleDto,
-    ) -> Result<(), InputRuntimeError> {
-        self.runtime.set_sampling_lifecycle(lifecycle)
-    }
-
-    pub fn try_stalled_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
-        self.runtime.try_stalled_sampling_self_heal()
-    }
-
-    pub fn try_startup_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
-        self.runtime.try_startup_sampling_self_heal()
     }
 
     fn publish_current_snapshot(&self) -> Result<(), InputRuntimeError> {
@@ -279,9 +265,8 @@ fn enrich_runtime_snapshot(
         default_device_id,
     };
     snapshot.stream_pad_forwarding = service.stream_pad_forwarding();
-    let (gate, reason) = service.peek_derived_input_gate();
-    snapshot.input_gate = gate;
-    snapshot.input_gate_reason = reason;
+    // Phase 4 真相源：统一输入路由（取代旧 input_gate）
+    snapshot.input_route = service.peek_input_route();
     snapshot
 }
 
@@ -448,27 +433,24 @@ fn is_rog_xbox_ally_x_xinput_view(device: &ohmygamepad_protocol::OhMyGamepadDevi
 #[cfg(test)]
 mod tests {
     use super::HostRuntimeSnapshotBroadcaster;
-    use ohmygamepad_protocol::{OhMyGamepadInputGateModeDto, OhMyGamepadRuntimeSnapshotDto};
+    use ohmygamepad_protocol::{OhMyGamepadInputRouteDto, OhMyGamepadRuntimeSnapshotDto};
 
     #[test]
-    fn host_runtime_snapshot_broadcaster_publishes_gate_only_changes() {
+    fn host_runtime_snapshot_broadcaster_publishes_route_only_changes() {
         let broadcaster = HostRuntimeSnapshotBroadcaster::default();
         let rx = broadcaster.subscribe();
 
         let mut snapshot = OhMyGamepadRuntimeSnapshotDto::default();
-        snapshot.input_gate = OhMyGamepadInputGateModeDto::Closed;
-        snapshot.input_gate_reason = "shell-app-inactive".to_owned();
+        snapshot.input_route = OhMyGamepadInputRouteDto::Blocked;
         broadcaster.publish(snapshot.clone());
 
         let first = rx.recv().expect("receive first snapshot");
-        assert_eq!(first.input_gate, OhMyGamepadInputGateModeDto::Closed);
+        assert_eq!(first.input_route, OhMyGamepadInputRouteDto::Blocked);
 
-        snapshot.input_gate = OhMyGamepadInputGateModeDto::Open;
-        snapshot.input_gate_reason = "sampling-active-and-shell-app-active".to_owned();
+        snapshot.input_route = OhMyGamepadInputRouteDto::Stream;
         broadcaster.publish(snapshot.clone());
 
         let second = rx.recv().expect("receive second snapshot");
-        assert_eq!(second.input_gate, OhMyGamepadInputGateModeDto::Open);
-        assert_eq!(second.input_gate_reason, snapshot.input_gate_reason);
+        assert_eq!(second.input_route, OhMyGamepadInputRouteDto::Stream);
     }
 }

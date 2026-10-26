@@ -609,6 +609,23 @@ async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
   }
 }
 
+async function handleRescanDevices(): Promise<void> {
+  deviceActionPending.value = '__rescan__'
+  deviceActionMessage.value = ''
+  try {
+    gamepadSnapshot.value = await rpc.gamepad.rescanDevices()
+    deviceActionMessageTone.value = 'success'
+    deviceActionMessage.value = t('setting.gamepad.rescanDevicesDone')
+  }
+  catch {
+    deviceActionMessageTone.value = 'error'
+    deviceActionMessage.value = t('setting.gamepad.rescanDevicesFailed')
+  }
+  finally {
+    deviceActionPending.value = null
+  }
+}
+
 function handleToggleGamepadDebug(): void {
   gamepadDebugEnabled.value = !gamepadDebugEnabled.value
 }
@@ -726,6 +743,19 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
         <p class="setting-gamepad__summary-desc">
           {{ t('setting.gamepad.summaryDescription') }}
         </p>
+        <div class="setting-gamepad__summary-actions">
+          <Focusable
+            :id="`${props.navNodeBaseId}.gamepad.rescanDevices`"
+            as="button"
+            type="button"
+            class="setting-gamepad__chip"
+            :scope-id="props.scopeId"
+            :disabled="deviceActionPending !== null"
+            @click="() => void handleRescanDevices()"
+          >
+            {{ t('setting.gamepad.rescanDevices') }}
+          </Focusable>
+        </div>
       </div>
 
       <div class="setting-gamepad__grid">
@@ -951,6 +981,12 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
   margin: 0;
   font-size: 13px;
   color: var(--color-text-tertiary);
+}
+
+.setting-gamepad__summary-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
 }
 
 .setting-gamepad__grid {

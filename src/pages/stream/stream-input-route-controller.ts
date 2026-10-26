@@ -2,6 +2,7 @@ import type { StreamInputConsumerAdapter } from '@shared/gamepad/stream-input-co
 import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
 import { waitForPadNeutral } from '@shared/gamepad/wait-pad-neutral'
 import { requestGamepadUiListenerReset } from '../../navigation/core/gamepad-listener'
+import { rpc } from '../../services/rpc'
 
 export type UiCaptureReason = 'menu' | 'diagnostics' | 'sheet' | 'warning' | 'failed'
 export type UiReleaseReason = 'menu-close' | 'diagnostics-close' | 'sheet-close' | 'warning-close' | 'failed-close' | 'page-unmount'
@@ -76,10 +77,8 @@ class StreamInputRouteControllerImpl {
       this.routeGeneration += 1
       this.heldCaptures.clear()
       this.pendingNeutralRelease = false
-      businessInputArbiter.patch({
-        streamActive: false,
-        overlayCapturing: false,
-      })
+      businessInputArbiter.patch({ streamActive: false, backendRoute: 'ui' })
+      this.syncOverlayCapturingFlag()
       await this.deactivateStreamInput()
     })
   }
@@ -170,6 +169,9 @@ class StreamInputRouteControllerImpl {
   private syncOverlayCapturingFlag(): void {
     const overlayCapturing = this.heldCaptures.size > 0 || this.pendingNeutralRelease
     businessInputArbiter.patch({ overlayCapturing })
+    // Phase 4：每次 overlayCapturing 变化同步上报后端 route。
+    // catch 吞掉错误（app 未 ready 时 RPC 会临时失败，后端默认 ui_capture=false 符合预期）。
+    void rpc.gamepad.setUiCapture({ capturing: overlayCapturing }).catch(() => {})
   }
 
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
@@ -190,6 +192,8 @@ class StreamInputRouteControllerImpl {
     this.pendingNeutralRelease = false
     this.heldCaptures.add(reason)
     this.syncOverlayCapturingFlag()
+    // Phase 5：同步镜像后端 route 变化（后端 ui_capture=true 会推 route=ui）。
+    businessInputArbiter.patch({ backendRoute: 'ui' })
     requestGamepadUiListenerReset(`capture:${reason}`)
     await this.deactivateStreamInput()
   }
@@ -206,6 +210,8 @@ class StreamInputRouteControllerImpl {
   }
 
   private async activateStreamInputIfNeeded(): Promise<void> {
+    // Phase 5：backendRoute 镜像要先设（不依赖 adapter 是否存在）。
+    businessInputArbiter.patch({ backendRoute: 'stream' })
     if (this.streamInputActive) {
       return
     }

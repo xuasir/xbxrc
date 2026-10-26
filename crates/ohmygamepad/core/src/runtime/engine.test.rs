@@ -403,7 +403,7 @@ fn all_zero_raw_sample_establishes_logical_progress() {
 }
 
 #[test]
-fn backend_sample_timestamps_are_normalized_to_runtime_clock() {
+fn backend_sample_timestamps_are_passed_through_unchanged() {
     let backend = ScriptedBackend::new(vec![BackendPollResult {
         device_events: vec![DeviceLifecycleEvent::Added(device("pad-clock"))],
         samples: vec![sample(
@@ -425,8 +425,12 @@ fn backend_sample_timestamps_are_normalized_to_runtime_clock() {
     core.tick();
 
     let snapshot = core.runtime_snapshot();
-    assert_eq!(snapshot.slots[0].sampled_at_ms, 10);
-    assert_eq!(snapshot.last_backend_sample_activity_at_ms, 10);
+    // 采样层已统一使用进程级单调时钟，engine 不再做时钟归一化，直接透传。
+    assert_eq!(snapshot.slots[0].sampled_at_ms, 1_780_000_000_000_000_000);
+    assert_eq!(
+        snapshot.last_backend_sample_activity_at_ms,
+        1_780_000_000_000_000_000
+    );
 }
 
 #[test]
