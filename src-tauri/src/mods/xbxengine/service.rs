@@ -240,13 +240,6 @@ struct StopRuntimeParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PressControllerButtonParams {
-    button: String,
-    duration_ms: u64,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct SetAudioVolumeParams {
     value: f32,
 }
@@ -394,13 +387,6 @@ fn parse_control_command(
                         brightness: params.state.display_options.brightness,
                     },
                 },
-            })
-        }
-        "PressControllerButton" => {
-            let params: PressControllerButtonParams = parse_required_params(command_name, params)?;
-            Ok(XbxEngineControlCommandDto::PressControllerButton {
-                button: params.button,
-                duration_ms: params.duration_ms,
             })
         }
         "SetKeyboardPointerEnabled" => {

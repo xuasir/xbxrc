@@ -145,7 +145,7 @@ export function useAppUpdater() {
   let unsubscribeProgress: (() => void) | null = null
 
   onMounted(async () => {
-    unsubscribeProgress = events['updater.progress'](handleProgress)
+    unsubscribeProgress = events.on('updater.progress', handleProgress)
     await Promise.all([refreshCurrentVersion(), loadChannel()])
   })
 

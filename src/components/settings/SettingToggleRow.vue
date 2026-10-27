@@ -6,6 +6,7 @@ interface SettingToggleRowProps {
   scopeId: string
   label: string
   enabled: boolean
+  disabled?: boolean
   upNeighborId?: string
   downNeighborId?: string
   leftNeighborId?: string
@@ -38,6 +39,9 @@ function handleConfirm(): void {
     :class="{ 'setting-toggle-row--active': props.enabled }"
     :scope-id="props.scopeId"
     :aria-label="props.label"
+    :disabled="props.disabled"
+    role="switch"
+    :aria-checked="props.enabled"
     @click="handleConfirm"
   >
     <span class="setting-toggle-row__label">{{ props.label }}</span>
@@ -151,5 +155,9 @@ function handleConfirm(): void {
 :global(html[data-ui-density='compact']) .setting-toggle-row__label,
 :global(html[data-ui-density='narrow']) .setting-toggle-row__label {
   font-size: var(--ui-settings-row-label-size);
+}
+.setting-toggle-row:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 </style>

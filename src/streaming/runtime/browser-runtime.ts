@@ -1459,7 +1459,6 @@ export function createBrowserRuntime(options: {
 
   async function detachGamepadSession(sessionId: string | null): Promise<void> {
     void sessionId
-    void rpc.gamepad.setStreamPadForwarding({ enabled: false })
   }
 
   function markFrameReady(meta?: PresentedVideoFrameMetadata): void {

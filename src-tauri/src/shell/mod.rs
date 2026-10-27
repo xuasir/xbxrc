@@ -6,141 +6,21 @@ use tokio::sync::RwLock;
 
 use crate::error::{AppError, AppResult};
 use crate::mods;
-use crate::mods::gamepad::input_route;
-use crate::mods::gamepad::service::sanitize_runtime_snapshot_for_external_consumers;
-use crate::mods::{auth::events as auth_events, gamepad::events as gamepad_events};
+use crate::mods::auth::events as auth_events;
 
 pub mod bridge;
 pub mod cli;
-mod gamepad_sampling;
 pub mod rpc;
 pub mod state;
 pub mod window;
 
 pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
-pub use gamepad_sampling::{
-    handle_gamepad_app_resumed, handle_gamepad_page_loaded, handle_gamepad_window_focus_changed,
-    handle_gamepad_window_resized,
-};
 pub use state::{AppState, StartupFlagsState};
 pub use window::build_external_link_patch_script;
 
 #[cfg(target_os = "macos")]
 pub use window::handle_macos_window_event;
-
-pub(super) fn trace_gamepad_runtime_snapshot(
-    runtime_trace: &mods::runtime_trace::RuntimeTraceRecorderRef,
-    event: &str,
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-    stream_pad_forwarding: bool,
-    payload: serde_json::Value,
-) {
-    let max_sample_seq = snapshot
-        .slots
-        .iter()
-        .map(|slot| slot.sample_seq)
-        .max()
-        .unwrap_or(0);
-    let max_sampled_at_ms = snapshot
-        .slots
-        .iter()
-        .map(|slot| slot.sampled_at_ms)
-        .max()
-        .unwrap_or(0);
-    let connected_device_ids = connected_gamepad_device_ids(snapshot);
-    let keyboard_fallback_connected = snapshot
-        .devices
-        .iter()
-        .any(|device| device.connected && device.device_id == "virtual:keyboard");
-    let sdl_physical_connected_devices = snapshot
-        .devices
-        .iter()
-        .filter(|device| {
-            device.connected
-                && device.backend == Some(ohmygamepad_protocol::OhMyGamepadBackendKindDto::Sdl3)
-                && device.device_id != "virtual:keyboard"
-        })
-        .count();
-    runtime_trace.record_event(
-        "gamepad-shell",
-        event,
-        None,
-        serde_json::json!({
-            "samplingLifecycle": snapshot.sampling_lifecycle,
-            "samplingHealth": snapshot.sampling_health,
-            "streamPadForwarding": stream_pad_forwarding,
-            "connectedDevices": snapshot.devices.iter().filter(|device| device.connected).count(),
-            "connectedDeviceIds": connected_device_ids,
-            "keyboardFallbackConnected": keyboard_fallback_connected,
-            "sdlPhysicalConnectedDevices": sdl_physical_connected_devices,
-            "deviceSummaries": gamepad_device_trace_summaries(snapshot),
-            "slotCount": snapshot.slots.len(),
-            "maxSampleSeq": max_sample_seq,
-            "maxSampledAtMs": max_sampled_at_ms,
-            "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
-            "lastBackendSampleActivityAtMs": snapshot.last_backend_sample_activity_at_ms,
-            "samplingSelfHealCount": snapshot.sampling_self_heal_count,
-            "payload": payload,
-        }),
-    );
-}
-
-fn connected_gamepad_device_ids(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-) -> Vec<String> {
-    let mut ids = snapshot
-        .devices
-        .iter()
-        .filter(|device| device.connected)
-        .map(|device| device.device_id.clone())
-        .collect::<Vec<_>>();
-    ids.sort();
-    ids
-}
-
-fn gamepad_device_trace_summaries(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-) -> Vec<serde_json::Value> {
-    snapshot
-        .devices
-        .iter()
-        .filter(|device| device.connected)
-        .map(|device| {
-            serde_json::json!({
-                "deviceId": device.device_id,
-                "name": device.name,
-                "backend": device.backend,
-                "vendorId": device.vendor_id,
-                "productId": device.product_id,
-                "gamepadType": device.gamepad_type,
-                "connection": device.connection,
-                "isVirtualController": device.classification.is_virtual_controller,
-                "isHandheldBuiltin": device.classification.is_handheld_builtin,
-                "classificationReasons": device.classification.reasons,
-            })
-        })
-        .collect()
-}
-
-fn gamepad_device_trace_signature(
-    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
-) -> String {
-    connected_gamepad_device_ids(snapshot)
-        .into_iter()
-        .map(|device_id| {
-            let backend = snapshot
-                .devices
-                .iter()
-                .find(|device| device.device_id == device_id)
-                .and_then(|device| device.backend)
-                .map(|backend| format!("{backend:?}"))
-                .unwrap_or_else(|| "None".to_owned());
-            format!("{backend}:{device_id}")
-        })
-        .collect::<Vec<_>>()
-        .join("|")
-}
 
 pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     log::info!("Starting application initialization...");
@@ -158,32 +38,6 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     );
 
     bind_background_tasks(app.handle(), &state).await?;
-    input_route::sync_gamepad_input_route(app.handle());
-    // 采样随 host bootstrap 常驻启动，这里只记录一次初始快照。
-    match state.gamepad.get_runtime_snapshot() {
-        Ok(snapshot) => {
-            trace_gamepad_runtime_snapshot(
-                &state.runtime_trace,
-                "initServicesSamplingReady",
-                &snapshot,
-                state.gamepad.stream_pad_forwarding(),
-                serde_json::json!({
-                    "reason": "shell-init",
-                }),
-            );
-        }
-        Err(error) => {
-            state.runtime_trace.record_event(
-                "gamepad-shell",
-                "initServicesSnapshotFailed",
-                None,
-                serde_json::json!({
-                    "reason": "shell-init",
-                    "error": error,
-                }),
-            );
-        }
-    }
     log::info!("Application initialization completed.");
 
     Ok(())
@@ -308,7 +162,7 @@ async fn build_services(
             );
         })
     });
-    ohmygamepad_host::set_runtime_trace_sink(Some({
+    ohmygamepad_sdl3::set_runtime_trace_sink(Some({
         let runtime_trace = runtime_trace.clone();
         Arc::new(move |event, payload| {
             runtime_trace.record_event("gamepad-source", event, None, payload);
@@ -374,12 +228,7 @@ async fn build_services(
         runtime_trace.clone(),
     ));
 
-    let gamepad_host = ohmygamepad_host::GamepadRuntimeHost::shared()
-        .map_err(|e| AppError::Internal(format!("Failed to init ohmygamepad host: {}", e)))?;
-    let gamepad_service = Arc::new(mods::gamepad::GamepadService::new(
-        app_handle.clone(),
-        gamepad_host.clone(),
-    ));
+    let gamepad_service = Arc::new(mods::gamepad::GamepadService::new(app_handle.clone()));
 
     let app_state_service: mods::app_state::AppStateProviderRef =
         Arc::new(mods::app_state::AppStateService::new(
@@ -434,117 +283,6 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
     });
 
     state.xbxengine.bind_tasks(state.is_quitting.clone());
-
-    let gamepad_host = ohmygamepad_host::GamepadRuntimeHost::shared()
-        .map_err(|e| AppError::Internal(format!("Failed to get gamepad host: {}", e)))?;
-    let gamepad_provider = state.gamepad.clone();
-    let app_handle_gamepad = app_handle.clone();
-    let is_quitting_gamepad = state.is_quitting.clone();
-    let runtime_trace_gamepad = state.runtime_trace.clone();
-    tauri::async_runtime::spawn(async move {
-        use ohmygamepad_protocol::OhMyGamepadInputRouteDto;
-
-        let rx = gamepad_host.subscribe_runtime_snapshot();
-        let mut prev_input_route = OhMyGamepadInputRouteDto::default();
-        let mut prev_signature: Option<String> = None;
-        // 上一次同步给运行时的前台判定；变化时重下发一次 gate。
-        let mut prev_synced_shell_app_active: Option<bool> = None;
-
-        while !is_quitting_gamepad.load(Ordering::Relaxed) {
-            if let Ok(snapshot) = rx.recv() {
-                let signature = format!(
-                    "{:?}|{:?}|{:?}|{}|{}|{}|{}|{}|{}",
-                    snapshot.sampling_lifecycle,
-                    snapshot.sampling_health,
-                    snapshot.input_route,
-                    gamepad_provider.stream_pad_forwarding(),
-                    snapshot
-                        .devices
-                        .iter()
-                        .filter(|device| device.connected)
-                        .count(),
-                    snapshot.slots.len(),
-                    snapshot.last_sample_progress_at_ms,
-                    snapshot.last_backend_sample_activity_at_ms,
-                    gamepad_device_trace_signature(&snapshot),
-                );
-                if prev_signature.as_deref() != Some(signature.as_str()) {
-                    trace_gamepad_runtime_snapshot(
-                        &runtime_trace_gamepad,
-                        "runtimeSnapshotTransitionObserved",
-                        &snapshot,
-                        gamepad_provider.stream_pad_forwarding(),
-                        serde_json::json!({
-                            "previousSignature": prev_signature.clone(),
-                            "signature": signature,
-                        }),
-                    );
-                    prev_signature = Some(signature);
-                }
-                let external_snapshot =
-                    sanitize_runtime_snapshot_for_external_consumers(snapshot.clone());
-                let snapshot_value = serde_json::to_value(&external_snapshot).unwrap_or_else(|e| {
-                    log::warn!("Failed to serialize gamepad runtime snapshot: {}", e);
-                    serde_json::json!({})
-                });
-                let _ = gamepad_events::emit_runtime_snapshot(&app_handle_gamepad, &snapshot_value);
-
-                let previous_route = prev_input_route;
-                if snapshot.input_route != prev_input_route {
-                    let route_payload = serde_json::json!({
-                        "previousRoute": previous_route,
-                        "inputRoute": snapshot.input_route,
-                    });
-                    let _ = gamepad_events::emit_input_route_changed(
-                        &app_handle_gamepad,
-                        &route_payload,
-                    );
-                    prev_input_route = snapshot.input_route;
-                }
-
-                if snapshot.input_route.allows_business_input() {
-                    for slot in &snapshot.slots {
-                        let slot_value = serde_json::to_value(slot).unwrap_or_else(|e| {
-                            log::warn!("Failed to serialize gamepad slot snapshot: {}", e);
-                            serde_json::json!({})
-                        });
-                        let _ =
-                            gamepad_events::emit_slot_snapshot(&app_handle_gamepad, &slot_value);
-                    }
-                }
-
-                let devices_value = serde_json::to_value(&snapshot.devices).unwrap_or_else(|e| {
-                    log::warn!("Failed to serialize gamepad devices: {}", e);
-                    serde_json::json!([])
-                });
-                let _ = gamepad_events::emit_devices_changed(&app_handle_gamepad, &devices_value);
-
-                if let Some(window) = app_handle_gamepad.get_webview_window("main") {
-                    let (hints, foreground) =
-                        input_route::current_shell_window_route_hints_with_state(&window);
-                    let shell_app_active = hints.shell_app_active;
-                    // 自愈：前台判定与上次同步不同就重下发一次，不依赖 window 事件送达。
-                    if prev_synced_shell_app_active != Some(shell_app_active) {
-                        prev_synced_shell_app_active = Some(shell_app_active);
-                        input_route::sync_gamepad_input_route(&app_handle_gamepad);
-                        runtime_trace_gamepad.record_event(
-                            "gamepad-shell",
-                            "inputRouteHintsResynced",
-                            None,
-                            serde_json::json!({
-                                "shellAppActive": shell_app_active,
-                                "visible": foreground.visible,
-                                "minimized": foreground.minimized,
-                            }),
-                        );
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-        log::info!("Gamepad subscription loop stopped.");
-    });
 
     let _ = app_handle.tauri_plugin_keepawake().start(
         app_handle,

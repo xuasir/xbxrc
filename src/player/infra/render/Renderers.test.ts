@@ -1057,7 +1057,7 @@ describe('renderers', () => {
     }))
     await renderer.attach(video)
     renderer.update({ targetFps: 0 })
-    rVfcCallback?.()
+    ;(rVfcCallback as (() => void) | null)?.()
     const drawCallsBefore = gl.drawArrays.mock.calls.length
     const rafId = [...rafCallbacks.keys()][0]
     rafCallbacks.get(rafId)?.(0)

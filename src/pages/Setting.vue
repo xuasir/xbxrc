@@ -128,7 +128,6 @@ const isLoading = ref(true)
 const pendingActionKey = ref<string | null>(null)
 const activeSingleSelectRow = ref<SettingIndexedRow | null>(null)
 const activeValueEditorRow = ref<SettingIndexedRow | null>(null)
-const inputToolsRef = ref<InstanceType<typeof SettingInputToolsSection> | null>(null)
 
 const { t, te } = useI18n()
 let disposeTabSwitch: (() => void) | undefined
@@ -239,24 +238,6 @@ function buildPanelSections(): SettingIndexedSection[] {
           })
           navOrder += 1
         }
-        else if (item.kind === 'tool') {
-          entries.push({
-            kind: 'tool',
-            toolId: item.toolId,
-            nodeId: createToolNodeId(pageKey, item.toolId),
-            label: translateOrFallback(
-              `setting.pages.inputDevices.tools.${item.toolId}.label`,
-              item.toolId,
-            ),
-            description:
-              te(`setting.pages.inputDevices.tools.${item.toolId}.description`)
-                ? t(`setting.pages.inputDevices.tools.${item.toolId}.description`)
-                : undefined,
-            valueText: translateOrFallback('setting.pages.inputDevices.tools.open', 'Open'),
-            index: navOrder,
-          })
-          navOrder += 1
-        }
         else if (item.kind === 'action') {
           entries.push({
             kind: 'action',
@@ -308,7 +289,7 @@ const focusableNodeIds = computed(() => {
       if (entry.kind === 'field') {
         out.push(entry.row.nodeId)
       }
-      else if (entry.kind === 'tool' || entry.kind === 'action') {
+      else if (entry.kind === 'action') {
         out.push(entry.nodeId)
       }
     }
@@ -380,10 +361,6 @@ function handleTabChange(tabKey: string): void {
 
 function createSettingItemNodeId(pageKey: SettingPageKey, configKey: string): string {
   return `setting.items.${pageKey}.${configKey}`
-}
-
-function createToolNodeId(pageKey: SettingPageKey, toolId: string): string {
-  return `setting.tools.${pageKey}.${toolId}`
 }
 
 function createActionNodeId(pageKey: SettingPageKey, actionId: string): string {
@@ -509,18 +486,6 @@ async function handleRowConfirm(row: SettingIndexedRow): Promise<void> {
 
   if (row.control === 'textInput' || row.control === 'numberInput') {
     activeValueEditorRow.value = row
-  }
-}
-
-function handleToolClick(toolId: string): void {
-  if (pendingActionKey.value !== null) {
-    return
-  }
-  if (toolId === 'inputDebug') {
-    inputToolsRef.value?.openInputDebug()
-  }
-  else if (toolId === 'gamepadMapping') {
-    inputToolsRef.value?.openMapping()
   }
 }
 
@@ -672,7 +637,7 @@ onUnmounted(() => {
               </h1>
             </header>
 
-            <div v-if="!isLoading && !hasPanelContent" class="setting-panel__state">
+            <div v-if="!isLoading && !hasPanelContent && activeTabKey !== 'inputDevices'" class="setting-panel__state">
               {{ t('setting.states.emptyGroup') }}
             </div>
 
@@ -684,12 +649,12 @@ onUnmounted(() => {
               }"
             >
               <SettingSectionList
+                v-if="activeTabKey !== 'inputDevices'"
                 :sections="activeSections"
                 :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                 :pending-action-key="pendingActionKey"
                 :expert-reset-pending="isExpertResetPending"
                 @row-confirm="(row) => void handleRowConfirm(row)"
-                @tool-click="handleToolClick"
                 @action-click="(id) => void handleActionClick(id)"
               />
 
@@ -701,10 +666,8 @@ onUnmounted(() => {
 
               <SettingInputToolsSection
                 v-if="activeTabKey === 'inputDevices'"
-                ref="inputToolsRef"
                 :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                 :nav-node-base-id="SPATIAL_NAV_NODE_IDS.settingTabs.inputDevices"
-                :suppress-tool-buttons="true"
               />
             </div>
           </div>

@@ -102,6 +102,71 @@ fn normalize_keyboard_mapping(value: &Value, fallback: &Value) -> Value {
     }
 }
 
+fn normalize_game_controls(value: &Value) -> Value {
+    const BUTTONS: [&str; 17] = [
+        "south",
+        "east",
+        "west",
+        "north",
+        "l1",
+        "r1",
+        "l2",
+        "r2",
+        "view",
+        "menu",
+        "l3",
+        "r3",
+        "dpadUp",
+        "dpadDown",
+        "dpadLeft",
+        "dpadRight",
+        "home",
+    ];
+    let mapping = value.get("buttons").and_then(Value::as_object);
+    let sources: Vec<&str> = BUTTONS
+        .iter()
+        .map(|key| {
+            mapping
+                .and_then(|map| map.get(*key))
+                .map_or(Some(*key), Value::as_str)
+                .unwrap_or("")
+        })
+        .collect();
+    let valid = sources.iter().all(|key| BUTTONS.contains(key))
+        && sources
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            == BUTTONS.len()
+        && sources[16] == "home"
+        && ["l2", "r2"].contains(&sources[6])
+        && ["l2", "r2"].contains(&sources[7]);
+    let buttons: Map<String, Value> = BUTTONS
+        .iter()
+        .enumerate()
+        .map(|(index, key)| {
+            (
+                (*key).to_owned(),
+                Value::from(if valid { sources[index] } else { *key }),
+            )
+        })
+        .collect();
+    let deadzone = |key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_f64)
+            .filter(|value| value.is_finite())
+            .unwrap_or(0.1)
+            .clamp(0.0, 0.3)
+    };
+    serde_json::json!({
+        "buttons": buttons,
+        "leftDeadzone": deadzone("leftDeadzone"),
+        "rightDeadzone": deadzone("rightDeadzone"),
+        "invertRightY": value.get("invertRightY").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
 fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
     match key {
         "locale"
@@ -169,6 +234,14 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         ),
         "runtime_trace_mode" => normalize_runtime_trace_mode(value, fallback),
         "display_options" => normalize_display_options(key, value, fallback),
+        "gamepad_backend" => normalize_string_enum(key, value, "browser", &["browser", "native"]),
+        "gamepad_background_policy" => {
+            normalize_string_enum(key, value, "keep-active", &["keep-active", "follow-app"])
+        }
+        "gamepad_control_source" => {
+            normalize_string_enum(key, value, "gamepad", &["gamepad", "keyboard"])
+        }
+        "gamepad_game_controls" => normalize_game_controls(value),
         "gamepad_device_profiles" => {
             if value.is_array() {
                 value.clone()
@@ -212,6 +285,44 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn game_controls_enforce_bijection_analog_roles_and_bounds() {
+        let valid = normalize_game_controls(&json!({
+            "buttons": {"south": "east", "east": "south", "l2": "r2", "r2": "l2"},
+            "leftDeadzone": -1, "rightDeadzone": 2, "invertRightY": true
+        }));
+        assert_eq!(valid["buttons"]["south"], "east");
+        assert_eq!(valid["buttons"]["l2"], "r2");
+        assert_eq!(valid["leftDeadzone"], 0.0);
+        assert_eq!(valid["rightDeadzone"], 0.3);
+        assert_eq!(valid["invertRightY"], true);
+        for buttons in [
+            json!({"south": "east"}),
+            json!({"south": "home", "home": "south"}),
+            json!({"south": "l2", "l2": "south"}),
+            json!({"south": 7}),
+        ] {
+            let normalized = normalize_game_controls(&json!({"buttons": buttons}));
+            assert_eq!(normalized["buttons"]["south"], "south");
+            assert_eq!(normalized["buttons"]["home"], "home");
+        }
+    }
+
+    #[test]
+    fn gamepad_migration_preserves_all_legacy_profiles_and_valid_preferences() {
+        let profiles =
+            json!([{"id": "one", "buttons": {"south": 1}}, {"id": "two", "unknown": 42}]);
+        let mut source = Map::new();
+        source.insert("gamepad_device_profiles".into(), profiles.clone());
+        source.insert("gamepad_background_policy".into(), json!("follow-app"));
+        source.insert("ui_haptics".into(), json!(true));
+        let normalized = normalize_config(source);
+        assert_eq!(normalized["gamepad_device_profiles"], profiles);
+        assert_eq!(normalized["gamepad_background_policy"], "follow-app");
+        assert_eq!(normalized["ui_haptics"], true);
+        assert_eq!(normalized["gamepad_backend"], "browser");
+    }
 
     #[test]
     fn default_keyboard_mapping_is_non_empty() {

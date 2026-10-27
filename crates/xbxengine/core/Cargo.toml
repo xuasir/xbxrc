@@ -25,7 +25,6 @@ h264-reader.workspace = true
 
 hex-literal.workspace = true
 
-ohmygamepad-host = { path = "../../ohmygamepad/bridge/host" }
 ohmygamepad-protocol = { path = "../../ohmygamepad/protocol" }
 
 opus.workspace = true

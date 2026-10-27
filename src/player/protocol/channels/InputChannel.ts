@@ -1,5 +1,5 @@
 import type { LogicalButtonDto } from '@shared/gamepad/contract'
-import type { ControlTransport, InputService, InputTransport } from '../../app/input/InputService'
+import type { InputService, InputTransport } from '../../app/input/InputService'
 import type { GamepadFrame } from '../../domain/input'
 import type { ChannelContext } from './BaseChannel'
 import { BaseChannel } from './BaseChannel'
@@ -7,7 +7,6 @@ import { BaseChannel } from './BaseChannel'
 export class InputChannel extends BaseChannel {
   private started = false
   private pendingStart = false
-  private pendingControlTransport: ControlTransport | null = null
 
   constructor(
     context: ChannelContext,
@@ -16,8 +15,7 @@ export class InputChannel extends BaseChannel {
     super(context)
   }
 
-  start(controlTransport: ControlTransport): void {
-    this.pendingControlTransport = controlTransport
+  start(): void {
     if (this.started) {
       return
     }
@@ -26,19 +24,19 @@ export class InputChannel extends BaseChannel {
       return
     }
 
-    // 输入通道负责驱动输入上报，更接近 legacy player 的 channel 职责划分。
+    // 输入通道打开后启动公共手柄状态上报。
     const inputTransport: InputTransport = {
       send: data => this.send(data),
       getReadyState: () => this.context.readyState(),
     }
-    this.inputService.start(inputTransport, controlTransport)
+    this.inputService.start(inputTransport)
     this.started = true
     this.pendingStart = false
   }
 
   onOpen(): void {
-    if (this.pendingStart && this.pendingControlTransport !== null) {
-      this.start(this.pendingControlTransport)
+    if (this.pendingStart) {
+      this.start()
     }
   }
 
@@ -75,7 +73,6 @@ export class InputChannel extends BaseChannel {
   onClose(): void {
     this.started = false
     this.pendingStart = false
-    this.pendingControlTransport = null
     this.inputService.stop()
   }
 }

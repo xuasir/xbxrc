@@ -38,16 +38,6 @@ export interface SettingSectionEntryField {
   row: SettingIndexedRow
 }
 
-export interface SettingSectionEntryTool {
-  kind: 'tool'
-  toolId: string
-  nodeId: string
-  label: string
-  description?: string
-  valueText: string
-  index: number
-}
-
 export interface SettingSectionEntryAction {
   kind: 'action'
   actionId: string
@@ -71,7 +61,6 @@ export interface SettingSectionEntrySummary {
 
 export type SettingSectionEntry
   = | SettingSectionEntryField
-    | SettingSectionEntryTool
     | SettingSectionEntryAction
     | SettingSectionEntryNotice
     | SettingSectionEntrySummary
@@ -81,6 +70,3 @@ export interface SettingIndexedSection {
   label: string
   entries: SettingSectionEntry[]
 }
-
-/** @deprecated 已由 schema entry 模型替代，保留别名避免大范围引用断裂 */
-export type SettingSection = SettingIndexedSection

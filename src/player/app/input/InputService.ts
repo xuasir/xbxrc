@@ -1,6 +1,7 @@
 import type { LogicalButtonDto } from '@shared/gamepad/contract'
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { GamepadFrame, InputRuntimeConfig, ProcessedVideoFrameMetadata } from '../../domain/input'
+import type { GamepadFrame, ProcessedVideoFrameMetadata } from '../../domain/input'
+import { inputController } from '@shared/gamepad/runtime'
 import { rpc } from '../../../services/rpc'
 import { InputPacketEncoder } from '../../protocol/input/InputPacketEncoder'
 import { RumbleService } from './RumbleService'
@@ -23,7 +24,6 @@ function recordInputTrace(event: string, payload: Record<string, unknown>): void
 export interface InputDriverLike {
   start: () => void
   stop: () => void
-  run?: () => void
   requestStates: () => Array<GamepadFrame>
   setGamepadState?: (frame: GamepadFrame) => void
   pressButtonStart?: (button: LogicalButtonDto) => void
@@ -37,59 +37,37 @@ export interface InputTransport {
   getReadyState: () => RTCDataChannelState | 'closed'
 }
 
-export interface ControlTransport {
-  sendGamepadAdded: (index: number) => void
-  sendGamepadRemoved: (index: number) => void
-}
-
 export class InputService {
   private inputSequenceNum = 0
   private frameMetadataQueue: Array<ProcessedVideoFrameMetadata> = []
   private currentInputTransport?: InputTransport
   private readonly rumbleService: RumbleService
-  private streamMenuComboActive = false
-  private suspendRtcGamepadTransport = false
-  private overlayBypassFrameBudget = 0
-  private readonly onStreamUiInputModeChanged = (event: Event): void => {
-    const detail = (event as CustomEvent<{ enabled?: boolean, overlayOpen?: boolean }>).detail
-    // 仅在 overlay/menu 真正打开时暂停 RTC 输入；chrome 显示不应阻断游戏输入。
-    this.suspendRtcGamepadTransport = detail?.overlayOpen === true
-  }
-
   readonly gamepadDriver: InputDriverLike
 
   constructor(
-    private runtime: InputRuntimeConfig,
     gamepadDriver: InputDriverLike,
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
   ) {
     this.gamepadDriver = gamepadDriver
-    this.rumbleService = new RumbleService(runtime)
+    this.rumbleService = new RumbleService()
   }
 
-  updateRuntime(runtime: Partial<InputRuntimeConfig>): void {
-    this.runtime = { ...this.runtime, ...runtime }
-    this.rumbleService.updateRuntime(this.runtime)
-  }
-
-  start(inputTransport: InputTransport, controlTransport: ControlTransport): void {
-    this.currentInputTransport = inputTransport
-    void controlTransport
+  start(inputTransport: InputTransport): void {
     this.stop()
-    window.addEventListener('stream-ui-input-mode', this.onStreamUiInputModeChanged)
-
-    this.gamepadDriver.start()
-
+    this.inputSequenceNum = 0
+    this.frameMetadataQueue = []
+    this.currentInputTransport = inputTransport
     const metadataPacket = new InputPacketEncoder(this.inputSequenceNum)
     metadataPacket.setMetadata(64) // 默认值
     inputTransport.send(metadataPacket.toBuffer())
+    this.gamepadDriver.start()
+    inputController.setStreamReady(true)
   }
 
   stop(): void {
-    window.removeEventListener('stream-ui-input-mode', this.onStreamUiInputModeChanged)
-    this.suspendRtcGamepadTransport = false
-    this.overlayBypassFrameBudget = 0
+    inputController.setStreamReady(false)
     this.gamepadDriver.stop()
+    this.currentInputTransport = undefined
     this.rumbleService.destroy()
   }
 
@@ -108,20 +86,9 @@ export class InputService {
       })
       return
     }
-    const bypassOverlaySuspend = this.overlayBypassFrameBudget > 0
-    if (bypassOverlaySuspend) {
-      this.overlayBypassFrameBudget -= 1
-    }
-    if (this.suspendRtcGamepadTransport && !bypassOverlaySuspend) {
-      recordInputTrace('gamepadFrameDropped', {
-        reason: 'overlay-suspended',
-      })
-      return
-    }
-
     // 每次收到手柄帧时，立即打包发送（包含当前的 metadata 队列）
     const metadataQueue = this.frameMetadataQueue.splice(0, 29)
-    const gamepadQueue = [this.applyReservedCombos(frame)]
+    const gamepadQueue = [frame]
 
     this.inputSequenceNum++
     const packet = new InputPacketEncoder(this.inputSequenceNum)
@@ -149,47 +116,15 @@ export class InputService {
     })
   }
 
-  private applyReservedCombos(frame: GamepadFrame): GamepadFrame {
-    const buttons = frame.state.buttons
-    const active = buttons.menu > 0.5 && buttons.view > 0.5
-    if (!active) {
-      this.streamMenuComboActive = false
-      return frame
-    }
-
-    if (!this.streamMenuComboActive) {
-      this.streamMenuComboActive = true
-      window.dispatchEvent(
-        new CustomEvent('stream-menu-toggle-requested', {
-          detail: { source: 'stream-session', combo: 'menu+view' },
-        }),
-      )
-    }
-
-    return {
-      ...frame,
-      state: {
-        ...frame.state,
-        buttons: {
-          ...buttons,
-          menu: 0,
-          view: 0,
-        },
-      },
-    }
-  }
-
   setGamepadState(frame: GamepadFrame): void {
     this.gamepadDriver.setGamepadState?.(frame)
   }
 
   pressButtonStart(button: LogicalButtonDto): void {
-    this.allowNextVirtualInputFrame()
     this.gamepadDriver.pressButtonStart?.(button)
   }
 
   pressButtonEnd(button: LogicalButtonDto): void {
-    this.allowNextVirtualInputFrame()
     this.gamepadDriver.pressButtonEnd?.(button)
   }
 
@@ -199,11 +134,6 @@ export class InputService {
 
   moveRightStick(x: number, y: number): void {
     this.gamepadDriver.moveRightStick?.(x, y)
-  }
-
-  private allowNextVirtualInputFrame(): void {
-    // 菜单 overlay 打开时会暂停常规手柄帧；这里为程序化注入（如 Nexus 动作）放行单帧。
-    this.overlayBypassFrameBudget = Math.min(this.overlayBypassFrameBudget + 1, 4)
   }
 
   addProcessedFrame(frame: ProcessedVideoFrameMetadata): void {

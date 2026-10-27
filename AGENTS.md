@@ -41,6 +41,7 @@
 - 核心领域逻辑、协议、传输、性能敏感路径与系统侧集成继续放在 Rust。
 - WebRTC / streaming / transport 继续沿当前 Rust 主线演进。
 - Gamepad navigation / focus routing / controller UX 继续使用 geometric pathfinding engine。参考 [`dev-docs/gamepad-navigation.md`](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/gamepad-navigation.md)。
+- 手柄接入遵循统一 GamepadBackend：Browser API 与 Rust 为两个实现，稳定版默认 Browser；公共层决定 UI/串流归属，Windows 默认后台保持输入。依据用户已确认的 [`统一手柄输入 RFC`](docs/rfcs/2026-10-27-unified-gamepad-input.md) 执行，输入后端与媒体运行时分别装配。
 
 # Streaming / WebRTC Behavior Standard
 

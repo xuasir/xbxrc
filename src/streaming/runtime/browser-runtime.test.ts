@@ -113,7 +113,6 @@ const testState = vi.hoisted(() => {
         decideRecovery: vi.fn(async () => ({ action: 'observe' })),
       },
       gamepad: {
-        setStreamPadForwarding: vi.fn(async () => {}),
       },
       runtimeTrace: {
         recordEvent: vi.fn(async (_entry: { event?: string, payload?: unknown }) => {}),

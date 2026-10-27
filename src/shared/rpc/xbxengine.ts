@@ -658,11 +658,6 @@ export interface XbxEngineApplyDisplayStateParams {
   state: XbxEngineDisplayStateDto
 }
 
-export interface XbxEnginePressControllerButtonParams {
-  button: string
-  durationMs: number
-}
-
 export interface XbxEngineKeyboardPointerEnabledParams {
   enabled: boolean
 }

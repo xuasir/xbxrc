@@ -73,6 +73,19 @@ where
     pub fn runtime_snapshot(&self) -> OhMyGamepadRuntimeSnapshotDto {
         OhMyGamepadRuntimeSnapshotDto {
             devices: self.devices.clone(),
+            device_samples: self
+                .devices
+                .iter()
+                .filter(|device| device.connected)
+                .map(|device| ohmygamepad_protocol::GamepadDeviceSampleDto {
+                    device_id: device.device_id.clone(),
+                    state: self
+                        .raw_samples
+                        .get(&device.device_id)
+                        .map(crate::mapping::map_unfiltered_standard_sample)
+                        .unwrap_or_default(),
+                })
+                .collect(),
             slot_bindings: self
                 .config
                 .bindings

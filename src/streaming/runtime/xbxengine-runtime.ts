@@ -6,6 +6,8 @@ import type {
   RuntimePort,
   StreamRuntimeReconnectReason,
 } from './runtime-contract'
+import { inputController } from '@shared/gamepad/runtime'
+import { startRustStreamInput } from '@shared/gamepad/rust-stream-input'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
 
@@ -35,6 +37,8 @@ export function createXbxEngineRuntime(options: {
     paused: false,
   }
   let pendingLegacyMediaReady = false
+  let stopInput: (() => Promise<void>) | undefined
+  let homeTimer: ReturnType<typeof setTimeout> | undefined
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -81,6 +85,7 @@ export function createXbxEngineRuntime(options: {
     }
     if (event.type === 'transport.connectionState') {
       transportState = event.state as RTCPeerConnectionState
+      inputController.setStreamReady(transportState === 'connected')
       emit({
         type: 'connectionStateChanged',
         state: transportState,
@@ -129,6 +134,7 @@ export function createXbxEngineRuntime(options: {
 
   return {
     async launch(spec) {
+      stopInput = await startRustStreamInput(spec.sessionId)
       recordLaunchTraceEvent('runtimeAttachViewportRequested', {
         viewportId: viewportElementId,
         targetType: spec.targetType,
@@ -169,6 +175,10 @@ export function createXbxEngineRuntime(options: {
       }, spec.sessionId)
     },
     async stop(reason?: string) {
+      clearTimeout(homeTimer)
+      inputController.setSystemHome(false)
+      await stopInput?.()
+      stopInput = undefined
       unsubscribe()
       microphoneState = {
         capturing: false,
@@ -217,10 +227,9 @@ export function createXbxEngineRuntime(options: {
       return false
     },
     pressHome(durationMs) {
-      void rpc.xbxEngine.pressControllerButton({
-        button: 'home',
-        durationMs,
-      })
+      clearTimeout(homeTimer)
+      inputController.setSystemHome(true)
+      homeTimer = setTimeout(() => inputController.setSystemHome(false), Math.max(40, Math.min(1000, durationMs)))
     },
     snapshotStats: async (): Promise<StreamStats> => {
       const snapshot = await rpc.xbxEngine.snapshotStats()

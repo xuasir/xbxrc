@@ -1,11 +1,7 @@
 import type {
   GamepadRumbleEffectDto,
-  GamepadRumbleTargetDto,
 } from '@shared/gamepad/contract'
-import type { InputRuntimeConfig, VibrationStrengthPreset } from '../../domain/input'
-import { GAMEPAD_SLOT_IDS } from '@shared/gamepad/contract'
-import { rpc } from '../../../services/rpc'
-import { devWarnRateLimited } from '../../../shared/dev-log'
+import { inputController } from '@shared/gamepad/runtime'
 
 const GAMEPAD_RUMBLE_REPORT_TYPE = 128
 const GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE = 1
@@ -18,71 +14,7 @@ const GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY = 2
 const GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY = 12
 const STREAM_RUMBLE_IGNORE_DURATION_MS = 8
 const STREAM_RUMBLE_IGNORE_MAGNITUDE = 0.02
-const STREAM_RUMBLE_STOP_LEAD_MS = 10
-
-const VIBRATION_PROFILE_PRESETS: Record<VibrationStrengthPreset, {
-  handleScale: number
-  handleGamma: number
-  triggerScale: number
-  triggerGamma: number
-}> = {
-  realistic: {
-    handleScale: 0.66,
-    handleGamma: 1.32,
-    triggerScale: 0.58,
-    triggerGamma: 1.26,
-  },
-  enhanced: {
-    handleScale: 0.82,
-    handleGamma: 1.18,
-    triggerScale: 0.74,
-    triggerGamma: 1.14,
-  },
-  full: {
-    handleScale: 1,
-    handleGamma: 1,
-    triggerScale: 1,
-    triggerGamma: 1,
-  },
-}
-
-interface TargetRumbleState {
-  requestSeq: number
-  packetEffect: GamepadRumbleEffectDto | null
-  packetStopTimer: number | null
-  packetRepeatTimer: number | null
-}
-
-function targetKey(target: GamepadRumbleTargetDto): string {
-  if (target.kind === 'slot') {
-    return `${target.kind}:${target.slot}`
-  }
-  if (target.kind === 'device') {
-    return `${target.kind}:${target.deviceId}`
-  }
-  return 'auto'
-}
-
-function logicalPadTargetFromIndex(gamepadIndex: number): GamepadRumbleTargetDto | null {
-  const slot = GAMEPAD_SLOT_IDS[gamepadIndex]
-  if (slot === undefined) {
-    return { kind: 'auto' }
-  }
-  return {
-    kind: 'slot',
-    slot,
-  }
-}
-
 export class RumbleService {
-  private targetStates = new Map<string, TargetRumbleState>()
-
-  constructor(private runtime: InputRuntimeConfig) {}
-
-  updateRuntime(runtime: InputRuntimeConfig): void {
-    this.runtime = runtime
-  }
-
   onMessage(dataView: DataView): void {
     const parsedEffects = this.parseBetterXcloudPacket(dataView)
       ?? this.parseLegacyPacket(dataView)
@@ -90,15 +22,16 @@ export class RumbleService {
       return
     }
 
-    for (const effect of parsedEffects) {
-      this.onRumbleEffect(effect.target, effect.effect)
+    for (const value of parsedEffects) {
+      if (!value.strongMagnitude && !value.weakMagnitude && !value.leftTrigger && !value.rightTrigger) {
+        if (inputController.getSnapshot().owner === 'stream')
+          void inputController.stopRumble()
+      }
+      else { void inputController.rumble(value, 'game') }
     }
   }
 
-  private parseBetterXcloudPacket(dataView: DataView): Array<{
-    target: GamepadRumbleTargetDto
-    effect: GamepadRumbleEffectDto
-  }> | null {
+  private parseBetterXcloudPacket(dataView: DataView): GamepadRumbleEffectDto[] | null {
     if (dataView.byteLength < GAMEPAD_RUMBLE_PACKET_SIZE_V8) {
       return null
     }
@@ -134,16 +67,15 @@ export class RumbleService {
     }
 
     const gamepadIndex = dataView.getUint8(offset)
-    const target = logicalPadTargetFromIndex(gamepadIndex)
-    if (target === null) {
+    if (gamepadIndex !== 0) {
       return []
     }
 
     const effect: GamepadRumbleEffectDto = {
-      leftTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 3), 'trigger'),
-      rightTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 4), 'trigger'),
-      weakMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 2), 'handle'),
-      strongMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 1), 'handle'),
+      leftTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 3)),
+      rightTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 4)),
+      weakMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 2)),
+      strongMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 1)),
       durationMs: dataView.getUint16(offset + 5, true),
       startDelayMs: 0,
       repeat: 0,
@@ -153,13 +85,10 @@ export class RumbleService {
       return []
     }
 
-    return [{ target, effect }]
+    return [effect]
   }
 
-  private parseLegacyPacket(dataView: DataView): Array<{
-    target: GamepadRumbleTargetDto
-    effect: GamepadRumbleEffectDto
-  }> | null {
+  private parseLegacyPacket(dataView: DataView): GamepadRumbleEffectDto[] | null {
     if (dataView.byteLength < GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY + GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY) {
       return null
     }
@@ -168,37 +97,26 @@ export class RumbleService {
       return null
     }
 
-    const effects: Array<{
-      target: GamepadRumbleTargetDto
-      effect: GamepadRumbleEffectDto
-    }> = []
+    const effects: GamepadRumbleEffectDto[] = []
     let offset = GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY
     while (offset + GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY <= dataView.byteLength) {
-      if (offset + 11 >= dataView.byteLength) {
-        break
-      }
-
       const gamepadIndex = dataView.getUint8(offset + 1)
-      const target = logicalPadTargetFromIndex(gamepadIndex)
-      if (target === null) {
+      if (gamepadIndex !== 0) {
         offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY
         continue
       }
 
       const effect: GamepadRumbleEffectDto = {
-        leftTrigger: this.normalizeUnitMotor(dataView.getUint16(offset + 2, true) / 1023, 'trigger'),
-        rightTrigger: this.normalizeUnitMotor(dataView.getUint16(offset + 4, true) / 1023, 'trigger'),
-        weakMagnitude: this.normalizeUnitMotor(dataView.getUint16(offset + 6, true) / 1023, 'handle'),
-        strongMagnitude: this.normalizeUnitMotor(dataView.getUint16(offset + 8, true) / 1023, 'handle'),
+        leftTrigger: this.normalizeUnitMotor(dataView.getUint16(offset + 2, true) / 1023),
+        rightTrigger: this.normalizeUnitMotor(dataView.getUint16(offset + 4, true) / 1023),
+        weakMagnitude: this.normalizeUnitMotor(dataView.getUint16(offset + 6, true) / 1023),
+        strongMagnitude: this.normalizeUnitMotor(dataView.getUint16(offset + 8, true) / 1023),
         durationMs: dataView.getUint16(offset + 10, true),
         startDelayMs: 0,
         repeat: 0,
       }
       if (!this.shouldIgnoreEffect(effect)) {
-        effects.push({
-          target,
-          effect,
-        })
+        effects.push(effect)
       }
       offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY
     }
@@ -206,20 +124,17 @@ export class RumbleService {
     return effects
   }
 
-  private normalizePercentMotor(value: number, channel: 'handle' | 'trigger'): number {
-    return this.normalizeUnitMotor(Math.max(0, Math.min(100, value)) / 100, channel)
+  private normalizePercentMotor(value: number): number {
+    return this.normalizeUnitMotor(value / 100)
   }
 
-  // 默认曲线先向实机 Xbox 电机体感回靠，再把“增强/完整”作为上浮档位暴露给用户。
-  private normalizeUnitMotor(value: number, channel: 'handle' | 'trigger'): number {
-    const normalized = Math.max(0, Math.min(1, value))
-    const preset = VIBRATION_PROFILE_PRESETS[this.runtime.vibrationStrength] ?? VIBRATION_PROFILE_PRESETS.realistic
-    const scale = channel === 'trigger' ? preset.triggerScale : preset.handleScale
-    const gamma = channel === 'trigger' ? preset.triggerGamma : preset.handleGamma
-    return Math.max(0, Math.min(1, normalized ** gamma * scale))
+  private normalizeUnitMotor(value: number): number {
+    return Math.max(0, Math.min(1, value))
   }
 
   private shouldIgnoreEffect(effect: GamepadRumbleEffectDto): boolean {
+    if (!effect.strongMagnitude && !effect.weakMagnitude && !effect.leftTrigger && !effect.rightTrigger)
+      return false
     if (effect.durationMs >= STREAM_RUMBLE_IGNORE_DURATION_MS) {
       return false
     }
@@ -233,145 +148,6 @@ export class RumbleService {
   }
 
   destroy(): void {
-    for (const state of this.targetStates.values()) {
-      this.clearPacketTimers(state)
-    }
-    this.targetStates.clear()
-  }
-
-  private onRumbleEffect(target: GamepadRumbleTargetDto, effect: GamepadRumbleEffectDto): void {
-    const state = this.stateForTarget(target)
-    const isStop = effect.durationMs === 0
-      && effect.leftTrigger === 0
-      && effect.rightTrigger === 0
-      && effect.weakMagnitude === 0
-      && effect.strongMagnitude === 0
-
-    if (isStop) {
-      this.clearPacketTimers(state)
-      state.packetEffect = null
-      this.dispatchRumble(target, null, state)
-      this.pruneTargetState(target, state)
-      return
-    }
-
-    const cycleIntervalMs = Math.max(1, (effect.startDelayMs || 0) + (effect.durationMs || 0))
-
-    this.clearPacketTimers(state)
-    state.packetEffect = effect
-    this.dispatchRumble(target, effect, state)
-
-    if (effect.repeat > 0) {
-      let repeatCount = effect.repeat
-      state.packetRepeatTimer = window.setInterval(() => {
-        if (repeatCount <= 0) {
-          this.clearPacketRepeatTimer(state)
-          this.pruneTargetState(target, state)
-          return
-        }
-
-        this.dispatchRumble(target, effect, state)
-        repeatCount--
-      }, cycleIntervalMs)
-      return
-    }
-
-    // Core Haptics 的 continuous pattern 会比逻辑时长略拖尾，提前一点发 stop 能让收尾更干脆。
-    state.packetStopTimer = window.setTimeout(() => {
-      state.packetStopTimer = null
-      state.packetEffect = null
-      this.dispatchRumble(target, null, state)
-      this.pruneTargetState(target, state)
-    }, Math.max(1, cycleIntervalMs - STREAM_RUMBLE_STOP_LEAD_MS))
-  }
-
-  private dispatchRumble(
-    target: GamepadRumbleTargetDto,
-    effect: GamepadRumbleEffectDto | null,
-    state: TargetRumbleState,
-  ): void {
-    const seq = ++state.requestSeq
-    void this.dispatchTargetEffect(target, effect, seq)
-  }
-
-  private async dispatchTargetEffect(
-    target: GamepadRumbleTargetDto,
-    effect: GamepadRumbleEffectDto | null,
-    requestSeq: number,
-  ): Promise<void> {
-    try {
-      const result = effect === null
-        ? await rpc.gamepad.stopRumble({ target })
-        : await rpc.gamepad.playRumble({
-            request: {
-              target,
-              effect,
-            },
-          })
-
-      const state = this.targetStates.get(targetKey(target))
-      if (state !== undefined && requestSeq === state.requestSeq && !result.accepted) {
-        devWarnRateLimited('rumble:native-unavailable', '[player][rumble] native rumble unavailable', {
-          target,
-          effect,
-          reason: result.reason,
-          resolvedDeviceIds: result.resolvedDeviceIds,
-        })
-      }
-    }
-    catch (error) {
-      const state = this.targetStates.get(targetKey(target))
-      if (state !== undefined && requestSeq === state.requestSeq) {
-        devWarnRateLimited('rumble:native-request-failed', '[player][rumble] native rumble request failed', error)
-      }
-    }
-  }
-
-  private stateForTarget(target: GamepadRumbleTargetDto): TargetRumbleState {
-    const key = targetKey(target)
-    const existing = this.targetStates.get(key)
-    if (existing !== undefined) {
-      return existing
-    }
-
-    const nextState: TargetRumbleState = {
-      requestSeq: 0,
-      packetEffect: null,
-      packetStopTimer: null,
-      packetRepeatTimer: null,
-    }
-    this.targetStates.set(key, nextState)
-    return nextState
-  }
-
-  private pruneTargetState(target: GamepadRumbleTargetDto, state: TargetRumbleState): void {
-    if (
-      state.packetEffect !== null
-      || state.packetStopTimer !== null
-      || state.packetRepeatTimer !== null
-    ) {
-      return
-    }
-
-    this.targetStates.delete(targetKey(target))
-  }
-
-  private clearPacketTimers(state: TargetRumbleState): void {
-    this.clearPacketStopTimer(state)
-    this.clearPacketRepeatTimer(state)
-  }
-
-  private clearPacketStopTimer(state: TargetRumbleState): void {
-    if (state.packetStopTimer !== null) {
-      window.clearTimeout(state.packetStopTimer)
-      state.packetStopTimer = null
-    }
-  }
-
-  private clearPacketRepeatTimer(state: TargetRumbleState): void {
-    if (state.packetRepeatTimer !== null) {
-      window.clearInterval(state.packetRepeatTimer)
-      state.packetRepeatTimer = null
-    }
+    void inputController.stopRumble()
   }
 }

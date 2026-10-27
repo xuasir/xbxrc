@@ -153,24 +153,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .on_page_load(|webview, _payload| {
-            shell::handle_gamepad_page_loaded(
-                &webview.window(),
-                webview
-                    .url()
-                    .map(|value| value.to_string())
-                    .unwrap_or_default(),
-            );
             let _ = webview.eval(shell::build_external_link_patch_script());
         })
         .on_window_event(|window, event| {
-            match event {
-                tauri::WindowEvent::Focused(focused) => {
-                    shell::handle_gamepad_window_focus_changed(window, *focused);
-                }
-                tauri::WindowEvent::Resized(_) => shell::handle_gamepad_window_resized(window),
-                _ => {}
-            }
-
             #[cfg(target_os = "macos")]
             shell::handle_macos_window_event(window, event);
         })
@@ -205,9 +190,6 @@ pub fn run() {
         }
 
         match event {
-            tauri::RunEvent::Resumed => {
-                shell::handle_gamepad_app_resumed(app_handle);
-            }
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                 tauri::async_runtime::block_on(shell::terminate(app_handle));
             }

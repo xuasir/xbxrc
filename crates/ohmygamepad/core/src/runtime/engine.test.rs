@@ -516,6 +516,11 @@ fn custom_device_profile_is_applied_during_snapshot_build() {
     let latest = pads.last().expect("expected pad snapshot");
     assert_eq!(latest.state.buttons.south, 1.0);
     assert!(latest.state.left_stick.x > 0.04);
+    let snapshot = core.runtime_snapshot();
+    let raw = &snapshot.device_samples[0].state;
+    assert_eq!(raw.buttons.south, 0.0);
+    assert_eq!(raw.buttons.north, 1.0);
+    assert_eq!(raw.left_stick.x, 0.05);
 }
 
 #[test]

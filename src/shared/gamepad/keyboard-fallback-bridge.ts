@@ -4,9 +4,9 @@ import type {
   GamepadKeyboardMappingDto,
   LogicalPadStateDto,
 } from './contract'
-import { rpc } from '../../services/rpc'
+import { gamepadConfig, inputController } from './runtime'
 
-const DEFAULT_KEYBOARD_MAPPING: GamepadKeyboardMappingDto = {
+export const DEFAULT_KEYBOARD_MAPPING: GamepadKeyboardMappingDto = {
   bindings: [
     { key: 'keyW', control: 'leftStickUp' },
     { key: 'keyS', control: 'leftStickDown' },
@@ -38,7 +38,7 @@ const DEFAULT_KEYBOARD_MAPPING: GamepadKeyboardMappingDto = {
   ],
 }
 
-const KEY_CODE_TO_DTO: Record<string, GamepadKeyboardKeyDto | undefined> = {
+export const KEY_CODE_TO_DTO: Record<string, GamepadKeyboardKeyDto | undefined> = {
   KeyA: 'keyA',
   KeyB: 'keyB',
   KeyC: 'keyC',
@@ -87,7 +87,6 @@ const KEY_CODE_TO_DTO: Record<string, GamepadKeyboardKeyDto | undefined> = {
 
 let installed = false
 let mapping = DEFAULT_KEYBOARD_MAPPING
-let submitSeq = 0
 const pressedKeys = new Set<GamepadKeyboardKeyDto>()
 
 export function installKeyboardFallbackBridge(): void {
@@ -95,7 +94,12 @@ export function installKeyboardFallbackBridge(): void {
     return
   }
   installed = true
-  void loadMapping()
+  inputController.subscribe((snapshot) => {
+    const stored = gamepadConfig().gamepad_keyboard_mapping as GamepadKeyboardMappingDto | undefined
+    mapping = stored?.bindings?.length ? stored : DEFAULT_KEYBOARD_MAPPING
+    if (snapshot.preferences.controlSource !== 'keyboard')
+      clearPressedKeys()
+  })
 
   window.addEventListener('keydown', handleKeyDown, true)
   window.addEventListener('keyup', handleKeyUp, true)
@@ -107,26 +111,16 @@ export function installKeyboardFallbackBridge(): void {
   })
 }
 
-async function loadMapping(): Promise<void> {
-  try {
-    const config = await rpc.config.get({ keys: ['gamepad_keyboard_mapping'] }) as {
-      gamepad_keyboard_mapping?: GamepadKeyboardMappingDto
-    }
-    if (config.gamepad_keyboard_mapping?.bindings?.length) {
-      mapping = config.gamepad_keyboard_mapping
-    }
-  }
-  catch {
-    mapping = DEFAULT_KEYBOARD_MAPPING
-  }
-}
-
 function handleKeyDown(event: KeyboardEvent): void {
+  const snapshot = inputController.getSnapshot()
+  if (snapshot.preferences.controlSource !== 'keyboard' || event.ctrlKey || event.metaKey || event.altKey)
+    return
   const key = KEY_CODE_TO_DTO[event.code]
-  if (key === undefined || isEditableTarget(event.target)) {
+  if (key === undefined || isEditableTarget(event.target) || !mapping.bindings.some(binding => binding.key === key)) {
     return
   }
-  event.preventDefault()
+  if (snapshot.owner === 'stream')
+    event.preventDefault()
   if (!pressedKeys.has(key)) {
     pressedKeys.add(key)
     submitCurrentState('keydown')
@@ -135,11 +129,8 @@ function handleKeyDown(event: KeyboardEvent): void {
 
 function handleKeyUp(event: KeyboardEvent): void {
   const key = KEY_CODE_TO_DTO[event.code]
-  if (key === undefined || isEditableTarget(event.target)) {
-    return
-  }
-  event.preventDefault()
-  if (pressedKeys.delete(key)) {
+  if (key && pressedKeys.delete(key)) {
+    event.preventDefault()
     submitCurrentState('keyup')
   }
 }
@@ -152,22 +143,8 @@ function clearPressedKeys(): void {
   submitCurrentState('clear')
 }
 
-function submitCurrentState(reason: string): void {
-  const seq = ++submitSeq
-  const state = buildState()
-  void rpc.gamepad.submitKeyboardState({ state })
-    .then(() => {
-      void rpc.runtimeTrace.recordEvent({
-        event: 'keyboardFallbackDomStateSubmitted',
-        payload: {
-          activeControlCount: countActiveControls(state),
-          pressedKeyCount: pressedKeys.size,
-          reason,
-          seq,
-        },
-      }).catch(() => {})
-    })
-    .catch(() => {})
+function submitCurrentState(_reason: string): void {
+  inputController.setKeyboardState(buildState())
 }
 
 function buildState(): LogicalPadStateDto {
@@ -263,18 +240,6 @@ function defaultLogicalPadState(): LogicalPadStateDto {
     leftTrigger: 0,
     rightTrigger: 0,
   }
-}
-
-function countActiveControls(state: LogicalPadStateDto): number {
-  return [
-    ...Object.values(state.buttons),
-    state.leftStick.x,
-    state.leftStick.y,
-    state.rightStick.x,
-    state.rightStick.y,
-    state.leftTrigger,
-    state.rightTrigger,
-  ].filter(value => Math.abs(value) > 0.001).length
 }
 
 function clampAxis(value: number): number {

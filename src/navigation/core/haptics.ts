@@ -1,3 +1,4 @@
+import { inputController } from '@shared/gamepad/runtime'
 import { rpc } from '../../services/rpc'
 
 export interface HapticsConfig {
@@ -6,7 +7,7 @@ export interface HapticsConfig {
 }
 
 const configState: HapticsConfig = {
-  hapticsEnabled: true,
+  hapticsEnabled: false,
   audioEnabled: true,
 }
 
@@ -18,7 +19,7 @@ async function initConfig() {
   try {
     const groups = await rpc.config.getGroups()
     const appConfig = groups.app as Record<string, unknown>
-    configState.hapticsEnabled = appConfig.ui_haptics !== false
+    configState.hapticsEnabled = appConfig.ui_haptics === true
     configState.audioEnabled = appConfig.ui_audio !== false
     isInitialized = true
   }
@@ -46,8 +47,6 @@ export function playNavSound(_type: 'move' | 'action' | 'back' | 'boundary') {
 
 export function triggerNavHaptic(type: 'move' | 'action' | 'back' | 'boundary') {
   void initConfig()
-  if (!configState.hapticsEnabled)
-    return
 
   // 映射不同意图到震动效果
   let strongMagnitude = 0
@@ -73,26 +72,5 @@ export function triggerNavHaptic(type: 'move' | 'action' | 'back' | 'boundary') 
       break
   }
 
-  // 触发 real rumble via RPC
-  // 注意：某些手柄（如模拟手柄或部分 macOS 驱动下的手柄）可能不支持震动。
-  // 震动属于增强型体验，不应因为硬件不支持而导致整个导航逻辑报错。
-  rpc.gamepad.playRumble({
-    request: {
-      // UI 导航震动默认交给宿主自动挑选当前最合适的手柄，
-      // 避免前端长期维护 active pad id。
-      target: { kind: 'auto' },
-      effect: {
-        startDelayMs: 0,
-        durationMs,
-        strongMagnitude,
-        weakMagnitude,
-        leftTrigger: 0,
-        rightTrigger: 0,
-        repeat: 0,
-      },
-    },
-  }).catch(() => {
-    // 彻底静默震动相关的 RPC 错误（如 HapticsUnavailable）
-    // 防止在没有物理手柄连接或手柄不支持震动时弹出错误 Toast
-  })
+  void inputController.rumble({ startDelayMs: 0, durationMs, strongMagnitude, weakMagnitude, leftTrigger: 0, rightTrigger: 0, repeat: 0 }, 'ui')
 }

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { EventUnsubscribe } from '@shared/events/client'
-import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
+import type { InputSnapshot } from '@shared/gamepad/input-controller'
 import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
-import { businessInputArbiter, toBusinessInputTracePayload } from '@shared/gamepad/business-input-arbiter'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { inputController } from '@shared/gamepad/runtime'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core'
@@ -22,7 +22,7 @@ import {
 } from '../../navigation/spatial-nav.constants'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
-import { devWarn, devWarnRateLimited } from '../../shared/dev-log'
+import { devWarn } from '../../shared/dev-log'
 import GamepadProfileCard from '../navigation/GamepadProfileCard.vue'
 import TopNavBar from '../navigation/TopNavBar.vue'
 import UserProfileMenu from '../navigation/UserProfileMenu.vue'
@@ -49,9 +49,7 @@ const isGamepadCardOpen = ref(false)
 const isLoggingOut = ref(false)
 let disposeAuthSessionReady: EventUnsubscribe | undefined
 let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
-const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
-let lastSnapshotTraceSignature: string | null = null
-let shellFocusRepairFrame: number | null = null
+const gamepadSnapshot = shallowRef<InputSnapshot>(inputController.getSnapshot())
 
 // LB/RB 一级页面切换顺序
 const PAGE_NAV_ORDER: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
@@ -85,7 +83,7 @@ const resolvedSecondaryName = computed(() => {
 const resolvedScore = computed(() => userProfile.value?.gamerscore || '0')
 const resolvedAvatarUrl = computed(() => userProfile.value?.gameDisplayPicRaw || '')
 const hasConnectedGamepad = computed(() =>
-  (gamepadSnapshot.value?.devices ?? []).some(device => device.connected),
+  gamepadSnapshot.value.devices.length > 0,
 )
 const resolvedStatusText = computed(() => {
   return authState.value?.isAuthenticated ? t('userMenu.loggedIn') : t('userMenu.loggedOut')
@@ -110,195 +108,6 @@ async function loadShellUserState(): Promise<void> {
   catch (error) {
     devWarn('[AppShell] load user state failed:', error)
   }
-}
-
-async function loadGamepadSnapshot(): Promise<void> {
-  try {
-    gamepadSnapshot.value = await rpc.gamepad.getRuntimeSnapshot()
-    traceSnapshotTransition('loadGamepadSnapshot', gamepadSnapshot.value)
-  }
-  catch (error) {
-    recordGamepadRecoveryTrace('gamepadRuntimeSnapshotLoadFailed', {
-      source: 'loadGamepadSnapshot',
-      error: error instanceof Error ? error.message : String(error),
-      documentVisibility: document.visibilityState,
-      hasFocus: document.hasFocus(),
-    })
-    devWarnRateLimited('app-shell:load-gamepad-snapshot-failed', '[AppShell] load gamepad snapshot failed:', error)
-  }
-}
-
-function recordGamepadRecoveryTrace(event: string, payload: Record<string, unknown>): void {
-  void rpc.runtimeTrace.recordEvent({
-    event,
-    payload,
-  }).catch(() => {})
-}
-
-function connectedDeviceCount(snapshot: GamepadRuntimeSnapshotDto | null): number {
-  return snapshot?.devices.filter(device => device.connected).length ?? 0
-}
-
-function connectedDeviceIds(snapshot: GamepadRuntimeSnapshotDto | null): string[] {
-  return [...(snapshot?.devices.filter(device => device.connected).map(device => device.deviceId) ?? [])].sort()
-}
-
-function gamepadDeviceTraceSummaries(snapshot: GamepadRuntimeSnapshotDto | null): Array<Record<string, unknown>> {
-  return snapshot?.devices
-    .filter(device => device.connected)
-    .map(device => ({
-      deviceId: device.deviceId,
-      name: device.name,
-      backend: device.backend,
-      vendorId: device.vendorId,
-      productId: device.productId,
-      gamepadType: device.gamepadType,
-      connection: device.connection,
-      isVirtualController: device.classification.isVirtualController,
-      isHandheldBuiltin: device.classification.isHandheldBuiltin,
-      classificationReasons: device.classification.reasons,
-    })) ?? []
-}
-
-function keyboardFallbackConnected(snapshot: GamepadRuntimeSnapshotDto | null): boolean {
-  return snapshot?.devices.some(device => device.connected && device.deviceId === 'virtual:keyboard') ?? false
-}
-
-function sdlPhysicalConnectedDeviceCount(snapshot: GamepadRuntimeSnapshotDto | null): number {
-  return snapshot?.devices.filter(device =>
-    device.connected
-    && device.backend === 'sdl3'
-    && device.deviceId !== 'virtual:keyboard',
-  ).length ?? 0
-}
-
-function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null): Record<string, unknown> {
-  const businessInputTrace = toBusinessInputTracePayload({
-    state: businessInputArbiter.getState(),
-    owner: businessInputArbiter.getOwner(),
-  })
-  if (!snapshot) {
-    return {
-      hasSnapshot: false,
-      documentVisibility: document.visibilityState,
-      hasFocus: document.hasFocus(),
-      ...businessInputTrace,
-    }
-  }
-
-  let maxSampleSeq = -1
-  let maxSampledAtMs = -1
-  for (const slot of snapshot.slots) {
-    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
-    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
-  }
-
-  return {
-    hasSnapshot: true,
-    streamPadForwarding: snapshot.streamPadForwarding ?? false,
-    samplingLifecycle: snapshot.samplingLifecycle ?? 'active',
-    samplingHealth: snapshot.samplingHealth ?? 'healthy',
-    connectedDevices: connectedDeviceCount(snapshot),
-    connectedDeviceIds: connectedDeviceIds(snapshot),
-    keyboardFallbackConnected: keyboardFallbackConnected(snapshot),
-    sdlPhysicalConnectedDevices: sdlPhysicalConnectedDeviceCount(snapshot),
-    deviceSummaries: gamepadDeviceTraceSummaries(snapshot),
-    slotCount: snapshot.slots.length,
-    maxSampleSeq,
-    maxSampledAtMs,
-    lastSampleProgressAtMs: snapshot.lastSampleProgressAtMs ?? null,
-    lastBackendSampleActivityAtMs: snapshot.lastBackendSampleActivityAtMs ?? null,
-    samplingSelfHealCount: snapshot.samplingSelfHealCount ?? null,
-    documentVisibility: document.visibilityState,
-    hasFocus: document.hasFocus(),
-    ...businessInputTrace,
-  }
-}
-
-function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapshotDto | null): void {
-  const payload = resolveSnapshotTracePayload(snapshot)
-  const signature = JSON.stringify([
-    source,
-    payload.streamPadForwarding ?? false,
-    payload.samplingLifecycle ?? null,
-    payload.samplingHealth ?? null,
-    payload.connectedDevices ?? 0,
-    payload.connectedDeviceIds ?? [],
-    payload.keyboardFallbackConnected ?? false,
-    payload.sdlPhysicalConnectedDevices ?? 0,
-    payload.slotCount ?? 0,
-    payload.maxSampleSeq ?? null,
-    payload.maxSampledAtMs ?? null,
-    payload.lastSampleProgressAtMs ?? null,
-    payload.lastBackendSampleActivityAtMs ?? null,
-    payload.samplingSelfHealCount ?? null,
-    payload.documentVisibility,
-    payload.hasFocus,
-  ])
-  if (signature === lastSnapshotTraceSignature) {
-    return
-  }
-  lastSnapshotTraceSignature = signature
-  recordGamepadRecoveryTrace('gamepadRuntimeSnapshotObserved', {
-    source,
-    ...payload,
-  })
-}
-
-function handleDocumentVisibilityChange(): void {
-  recordGamepadRecoveryTrace('gamepadDocumentVisibilityChanged', {
-    visibilityState: document.visibilityState,
-    hasFocus: document.hasFocus(),
-    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-  })
-  if (document.visibilityState !== 'visible') {
-    return
-  }
-  void ensureShellFocusReady('document-visible')
-}
-
-function clearShellFocusRepairFrame(): void {
-  if (shellFocusRepairFrame !== null) {
-    window.cancelAnimationFrame(shellFocusRepairFrame)
-    shellFocusRepairFrame = null
-  }
-}
-
-async function ensureShellFocusReady(reason: string): Promise<void> {
-  if (isProfileMenuOpen.value || isGamepadCardOpen.value) {
-    return
-  }
-  if (document.querySelector('[data-focused="true"]') instanceof HTMLElement) {
-    return
-  }
-
-  await nextTick()
-  clearShellFocusRepairFrame()
-  shellFocusRepairFrame = window.requestAnimationFrame(() => {
-    shellFocusRepairFrame = null
-    if (document.querySelector('[data-focused="true"]') instanceof HTMLElement) {
-      return
-    }
-    const defaultFocus = document.getElementById(SPATIAL_NAV_NODE_IDS.topNav.brand)
-    if (defaultFocus instanceof HTMLElement) {
-      navigationEngine.focusElement(defaultFocus, false)
-      recordGamepadRecoveryTrace('gamepadShellFocusRepaired', {
-        reason,
-        targetId: SPATIAL_NAV_NODE_IDS.topNav.brand,
-        visibilityState: document.visibilityState,
-        hasFocus: document.hasFocus(),
-      })
-    }
-  })
-}
-
-function handleWindowFocus(): void {
-  recordGamepadRecoveryTrace('gamepadWindowFocused', {
-    visibilityState: document.visibilityState,
-    hasFocus: document.hasFocus(),
-    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-  })
-  void ensureShellFocusReady('window-focus')
 }
 
 function closeProfileMenu(): void {
@@ -426,25 +235,14 @@ watch(
 )
 
 onMounted(() => {
-  recordGamepadRecoveryTrace('gamepadShellMounted', {
-    routeName: String(route.name ?? ''),
-    routePath: route.fullPath,
-    visibilityState: document.visibilityState,
-    hasFocus: document.hasFocus(),
-  })
   void loadShellUserState()
-  void loadGamepadSnapshot()
   disposeAuthSessionReady = events.on('auth.sessionReady', () => {
     void loadShellUserState()
   })
-  disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
+  disposeGamepadRuntimeSnapshot = inputController.subscribe((snapshot) => {
     gamepadSnapshot.value = snapshot
-    traceSnapshotTransition('runtimeSnapshotEvent', snapshot)
   })
   window.addEventListener('keydown', handleEscapeKeydown)
-  document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
-  window.addEventListener('focus', handleWindowFocus)
-  void ensureShellFocusReady('app-shell-mounted')
 
   // 注册 LB/RB 一级页面切换
   disposePageSwitch = navigationEngine.onPageSwitch((direction) => {
@@ -465,13 +263,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  recordGamepadRecoveryTrace('gamepadShellUnmounted', {
-    routeName: String(route.name ?? ''),
-    routePath: route.fullPath,
-    visibilityState: document.visibilityState,
-    hasFocus: document.hasFocus(),
-    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-  })
   if (disposeAuthSessionReady !== undefined) {
     disposeAuthSessionReady()
     disposeAuthSessionReady = undefined
@@ -481,9 +272,6 @@ onUnmounted(() => {
     disposeGamepadRuntimeSnapshot = undefined
   }
   window.removeEventListener('keydown', handleEscapeKeydown)
-  document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
-  window.removeEventListener('focus', handleWindowFocus)
-  clearShellFocusRepairFrame()
   if (disposePageSwitch !== undefined) {
     disposePageSwitch()
     disposePageSwitch = undefined

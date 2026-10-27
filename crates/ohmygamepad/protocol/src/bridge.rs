@@ -68,10 +68,20 @@ impl OhMyGamepadInputRouteDto {
     }
 }
 
+/// 每台物理设备的标准状态，保留原始模拟幅度；业务映射与死区由公共输入层处理。
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GamepadDeviceSampleDto {
+    pub device_id: String,
+    pub state: crate::LogicalPadStateDto,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRuntimeSnapshotDto {
     pub devices: Vec<OhMyGamepadDeviceDto>,
+    #[serde(default)]
+    pub device_samples: Vec<GamepadDeviceSampleDto>,
     pub slot_bindings: Vec<crate::GamepadSlotBindingDto>,
     pub sampling: OhMyGamepadSamplingConfigDto,
     pub slots: Vec<GamepadSlotSnapshotDto>,

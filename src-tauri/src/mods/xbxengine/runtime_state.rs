@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use ohmygamepad_protocol::OhMyGamepadRumbleRequestDto;
 use tauri::{AppHandle, Manager};
 use xbxengine::{
-    create_active_media_backend, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
+    create_active_media_backend, ApplicationXbxEngineInputBackend, XbxEngineEventSink,
     XbxEngineHostBridge, XbxEngineHostPresentRoute, XbxEngineHostVideoPresentMetrics,
     XbxEngineMediaBackend, XbxEngineRenderFrame, XbxEngineRuntime, XbxEngineRuntimeConfig,
     XbxEngineRuntimeError, XbxHostRenderFramePush, XbxHostRenderFramePushOutcome,
@@ -163,7 +163,7 @@ fn create_tauri_runtime(
         last_runtime_event,
         runtime_trace: runtime_trace.clone(),
     };
-    let input_backend = Box::new(OhMyGamepadXbxEngineInputBackend::new());
+    let input_backend = Box::new(ApplicationXbxEngineInputBackend::new());
     let host_render_frame_push: Arc<dyn XbxHostRenderFramePush> =
         Arc::new(NativeVideoHostRenderFramePush {
             native_video: native_video.clone(),

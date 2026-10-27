@@ -84,7 +84,7 @@ export class PlayerClient {
     }
     const nextInputDriver = this.resolveInputDriverOption(options.inputDriver)
     this.gamepadDriver = this.createInputDriver(nextInputDriver)
-    this.inputService = new InputService(this.options.input, this.gamepadDriver, this.emitter)
+    this.inputService = new InputService(this.gamepadDriver, this.emitter)
     if (nextInputDriver && typeof nextInputDriver.setApplication === 'function') {
       nextInputDriver.setApplication(this)
     }
@@ -204,7 +204,6 @@ export class PlayerClient {
 
   updateInputConfig(config: Partial<InputRuntimeConfig>): void {
     this.options.input = { ...this.options.input, ...config }
-    this.inputService.updateRuntime(config)
   }
 
   updateAudioConfig(config: Partial<AudioRuntimeConfig>): void {
@@ -380,7 +379,6 @@ export class PlayerClient {
       onGamepadRemoved: index =>
         this.sessionService.getControlChannel()?.sendGamepadRemoved(index),
       onFrame: frame => this.inputService.queueGamepadState(frame),
-      getRuntimeConfig: () => this.options.input,
     })
   }
 

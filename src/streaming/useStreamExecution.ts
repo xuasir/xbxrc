@@ -119,7 +119,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   let disposeStartupEvents: (() => void) | null = null
 
   function setStreamSessionPresent(active: boolean): void {
-    void streamInputRouteController.setStreamActive(active)
+    if (!active)
+      void streamInputRouteController.resetOnLeaveStream()
   }
 
   async function recordExecutionTraceEvent(
@@ -482,7 +483,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionExecution.value = null
     sessionHealth.value = null
     setStreamSessionPresent(false)
-    void rpc.gamepad.setStreamPadForwarding({ enabled: false })
     dispatchViewAction({ type: 'disconnected' })
 
     if (optionsInput?.navigateBack === true) {
@@ -549,7 +549,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionHealth.value = null
     closing.value = false
     setStreamSessionPresent(false)
-    void rpc.gamepad.setStreamPadForwarding({ enabled: false })
     dispatchViewAction({ type: 'retryRequested' })
     await runtimeHost.closeRuntime('retry')
     await startStream()

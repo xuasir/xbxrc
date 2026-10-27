@@ -1,15 +1,12 @@
 pub mod events;
-pub mod input_route;
 pub mod rpc;
 pub mod service;
 
-pub use ohmygamepad_sdl3::ShellWindowRouteHints;
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
-    LogicalPadStateDto, MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto,
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadRuntimeSnapshotDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -79,35 +76,9 @@ pub struct GamepadFilterConfigDto {
 }
 
 pub trait GamepadProvider: Send + Sync {
+    fn start_backend(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn stop_backend(&self) -> Result<(), String>;
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn rescan_devices(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn stream_pad_forwarding(&self) -> bool;
-    fn set_shell_window_route_hints(&self, hints: ShellWindowRouteHints);
-    fn set_stream_pad_forwarding(
-        &self,
-        enabled: bool,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn set_ui_capture(&self, capturing: bool) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn update_sampling(
-        &self,
-        sampling: OhMyGamepadSamplingConfigDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn set_sampling_strategy(
-        &self,
-        strategy: MultiControllerSamplingStrategyDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn set_primary_sampling_device(
-        &self,
-        device_id: Option<String>,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn pause_sampling_device(
-        &self,
-        device_id: &str,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn resume_sampling_device(
-        &self,
-        device_id: &str,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn play_rumble(
         &self,
         request: OhMyGamepadRumbleRequestDto,
@@ -116,21 +87,9 @@ pub trait GamepadProvider: Send + Sync {
         &self,
         target: OhMyGamepadRumbleTargetDto,
     ) -> Result<OhMyGamepadRumbleResultDto, String>;
-    fn replace_device_profiles(
-        &self,
-        profiles: Vec<GamepadDeviceProfileDto>,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn replace_keyboard_mapping(
-        &self,
-        mapping: OhMyGamepadKeyboardMappingDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn submit_keyboard_state(
-        &self,
-        state: LogicalPadStateDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn reset_device_profiles(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn reset_keyboard_mapping(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn shutdown(&self);
+    fn shutdown(&self) {
+        let _ = self.stop_backend();
+    }
 }
 
 pub type GamepadProviderRef = Arc<dyn GamepadProvider>;

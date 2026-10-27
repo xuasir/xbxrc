@@ -144,7 +144,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     activeSheet.value = 'none'
     lastOpenedSheet.value = null
     if (closing !== null) {
-      void streamInputRouteController.releaseUiInputAfterNeutral(releaseReasonForSheet(closing))
+      void streamInputRouteController.releaseUiInput(releaseReasonForSheet(closing))
     }
   }
 
@@ -159,7 +159,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
       return
     }
     if (wasVisible) {
-      void streamInputRouteController.releaseUiInputAfterNeutral(releaseReason)
+      void streamInputRouteController.releaseUiInput(releaseReason)
     }
   }
 

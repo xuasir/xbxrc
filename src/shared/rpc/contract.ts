@@ -1,12 +1,8 @@
 import type {
-  GamepadDeviceProfileDto,
-  GamepadKeyboardMappingDto,
   GamepadRumbleRequestDto,
   GamepadRumbleResultDto,
   GamepadRumbleTargetDto,
   GamepadRuntimeSnapshotDto,
-  GamepadSamplingConfigDto,
-  GamepadSamplingStrategyDto,
   LogicalPadStateDto,
 } from '../gamepad/contract'
 import type {
@@ -37,7 +33,6 @@ import type {
   XbxEngineApplyDisplayStateParams,
   XbxEngineAttachViewportParams,
   XbxEngineKeyboardPointerEnabledParams,
-  XbxEnginePressControllerButtonParams,
   XbxEnginePushInputParams,
   XbxEngineRequestReconnectParams,
   XbxEngineRuntimeEventDto,
@@ -122,25 +117,13 @@ export interface XBoxRpcSchema {
     >
   }
   gamepad: {
+    startBackend: RpcMethod<void, GamepadRuntimeSnapshotDto>
+    stopBackend: RpcMethod<void, void>
+    submitStreamState: RpcMethod<{ sessionId: string, sequence: number, state: LogicalPadStateDto }, boolean>
     getRuntimeSnapshot: RpcMethod<void, GamepadRuntimeSnapshotDto>
-    setStreamPadForwarding: RpcMethod<{ enabled: boolean }, GamepadRuntimeSnapshotDto>
-    setUiCapture: RpcMethod<{ capturing: boolean }, GamepadRuntimeSnapshotDto>
-    rescanDevices: RpcMethod<void, GamepadRuntimeSnapshotDto>
-    updateSampling: RpcMethod<{ sampling: GamepadSamplingConfigDto }, GamepadRuntimeSnapshotDto>
-    setSamplingStrategy: RpcMethod<
-      { strategy: GamepadSamplingStrategyDto },
-      GamepadRuntimeSnapshotDto
-    >
-    setPrimarySamplingDevice: RpcMethod<{ deviceId: string | null }, GamepadRuntimeSnapshotDto>
-    pauseSamplingDevice: RpcMethod<{ deviceId: string }, GamepadRuntimeSnapshotDto>
-    resumeSamplingDevice: RpcMethod<{ deviceId: string }, GamepadRuntimeSnapshotDto>
     playRumble: RpcMethod<{ request: GamepadRumbleRequestDto }, GamepadRumbleResultDto>
     stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
-    replaceDeviceProfiles: RpcMethod<{ profiles: GamepadDeviceProfileDto[] }, GamepadRuntimeSnapshotDto>
-    replaceKeyboardMapping: RpcMethod<{ mapping: GamepadKeyboardMappingDto }, GamepadRuntimeSnapshotDto>
-    submitKeyboardState: RpcMethod<{ state: LogicalPadStateDto }, GamepadRuntimeSnapshotDto>
-    resetDeviceProfiles: RpcMethod<void, GamepadRuntimeSnapshotDto>
-    resetKeyboardMapping: RpcMethod<void, GamepadRuntimeSnapshotDto>
+
   }
   data: {
     getUserProfile: RpcMethod<
@@ -289,7 +272,6 @@ export interface XBoxRpcSchema {
     attachViewport: RpcMethod<XbxEngineAttachViewportParams, XbxEngineAckResult>
     detachViewport: RpcMethod<void, XbxEngineAckResult>
     applyDisplayState: RpcMethod<XbxEngineApplyDisplayStateParams, XbxEngineAckResult>
-    pressControllerButton: RpcMethod<XbxEnginePressControllerButtonParams, XbxEngineAckResult>
     setKeyboardPointerEnabled: RpcMethod<
       XbxEngineKeyboardPointerEnabledParams,
       XbxEngineAckResult

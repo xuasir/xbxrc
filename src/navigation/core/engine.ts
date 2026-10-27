@@ -132,7 +132,7 @@ export class NavigationEngine {
         this.isCacheDirty = true
 
         if (this.currentFocus && this.getZoneId(this.currentFocus) === scopeId) {
-          if (state.previousFocus && document.contains(state.previousFocus)) {
+          if (state.previousFocus && document.contains(state.previousFocus) && state.previousFocus.matches(FOCUSABLE_SELECTOR)) {
             this.focusElement(state.previousFocus)
           }
           else {

@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use ohmygamepad_host::GamepadRuntimeHost;
-use ohmygamepad_protocol::{LogicalPadSnapshotDto, OhMyGamepadInputRouteDto};
+use crate::api::input::{acknowledge_application_gamepad_frame, application_gamepad_frame};
+use ohmygamepad_protocol::LogicalPadSnapshotDto;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration};
 
@@ -28,8 +28,8 @@ struct RtcInputStreamState {
     // 上次成功发出的 pad 帧（含 slot）：transition 补发中性帧时保留 slot 归零，
     // 避免 `LogicalPadSnapshotDto::default()` 的 Pad0 槽覆盖非 Pad0 槽。
     last_gamepad_frames: Vec<LogicalPadSnapshotDto>,
-    // Phase 4：上次的三态输入路由，用来检测 Stream → 非 Stream transition 补发中性帧。
-    last_route: OhMyGamepadInputRouteDto,
+    // 会话结束时向远端释放最后一次成功发送的状态。
+    session_was_active: bool,
 }
 
 impl Default for RtcInputStreamState {
@@ -43,7 +43,7 @@ impl Default for RtcInputStreamState {
             last_metadata_frame_seq: 0,
             last_metadata_frame_rtp_timestamp: None,
             last_gamepad_frames: Vec::new(),
-            last_route: OhMyGamepadInputRouteDto::Blocked,
+            session_was_active: false,
         }
     }
 }
@@ -123,19 +123,7 @@ impl RtcInputStreamController {
     }
 
     fn collect_gamepad_frames(input_state: &mut RtcInputStreamState) -> Vec<LogicalPadSnapshotDto> {
-        let Ok(host) = GamepadRuntimeHost::shared() else {
-            return Vec::new();
-        };
-        // 无锁三态路由判断（Phase 4 真相源）+ AtomicBool forwarding + ArcSwap.load()。
-        // 全程不跨 runtime 线程阻塞。
-        if !host.stream_pad_forwarding() {
-            return Vec::new();
-        }
-        if host.peek_input_route() != OhMyGamepadInputRouteDto::Stream {
-            return Vec::new();
-        }
-        let states = host.latest_pad_states();
-        let latest = states.load();
+        let latest = application_gamepad_frame().into_iter().collect::<Vec<_>>();
         let mut frames = Vec::with_capacity(4);
         let mut sample_count = 0usize;
         for frame in latest.iter().take(4) {
@@ -158,17 +146,12 @@ impl RtcInputStreamController {
         let Ok(mut input_state) = input_stream_state.lock() else {
             return;
         };
-        // Phase 4：先 peek 当前 route，做 Stream → 非 Stream transition 检测。
-        let current_route = GamepadRuntimeHost::shared()
-            .map(|h| h.peek_input_route())
-            .unwrap_or(OhMyGamepadInputRouteDto::Blocked);
-        // Stream → 非 Stream transition 补发中性帧：远端需要归零所有 pad 状态。
-        if input_state.last_route == OhMyGamepadInputRouteDto::Stream
-            && current_route != OhMyGamepadInputRouteDto::Stream
+        let session_active = application_gamepad_frame().is_some();
+        if input_state.session_was_active
+            && !session_active
             && input_state.last_gamepad_sample_count > 0
         {
-            // 保留上次发出的 slot，只把 state 归零：多槽（Split / FixedDevice 多绑定 / 键盘
-            // fallback 非 Pad0）场景下，`default()` 会全部落到 Pad0，导致其他槽在远端卡键。
+            // 按最后成功发送的槽位归零，失败时保留下一 tick 重试。
             let neutral_frames: Vec<LogicalPadSnapshotDto> = input_state
                 .last_gamepad_frames
                 .iter()
@@ -196,6 +179,9 @@ impl RtcInputStreamController {
                         .ok()
                 })
                 .unwrap_or(false);
+            if !sent {
+                return;
+            }
             if sent {
                 input_state.input_sequence = input_state.input_sequence.wrapping_add(1);
                 input_state.last_input_packet_sent_at_ms = now_ms;
@@ -205,8 +191,8 @@ impl RtcInputStreamController {
             input_state.last_gamepad_sample_signature = [0; 4];
             input_state.last_gamepad_frames.clear();
         }
-        input_state.last_route = current_route;
-        // --- 正常输入帧路径（当前 route == Stream） ---
+        input_state.session_was_active = session_active;
+        // 发送公共控制器已经完成归属与映射的输入状态。
         let (metadata, pointer_events, mouse_frames, keyboard_frames, frames, now_ms) = {
             let mut last_metadata_frame_seq = input_state.last_metadata_frame_seq;
             let mut last_metadata_frame_rtp_timestamp =
@@ -286,6 +272,9 @@ impl RtcInputStreamController {
         input_state.input_sequence = input_state.input_sequence.wrapping_add(1);
         input_state.last_input_packet_sent_at_ms = now_ms;
         if !frames.is_empty() {
+            for frame in &frames {
+                acknowledge_application_gamepad_frame(frame.sample_seq);
+            }
             input_state.last_gamepad_sample_count = frames.len();
             input_state.last_gamepad_frames = frames.clone();
             let current_signature = input_state.gamepad_sample_signature;

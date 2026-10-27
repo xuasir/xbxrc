@@ -144,10 +144,7 @@ export class SessionService {
           {
             onHandshakeAck: () => {
               controlChannel.start()
-              inputChannel.start({
-                sendGamepadAdded: index => controlChannel.sendGamepadAdded(index),
-                sendGamepadRemoved: index => controlChannel.sendGamepadRemoved(index),
-              })
+              inputChannel.start()
             },
           },
           this.emitter,

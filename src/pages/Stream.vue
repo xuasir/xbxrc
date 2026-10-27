@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
-import {
-  createBrowserPlayerStreamInputAdapter,
-  createRustEngineStreamInputAdapter,
-} from '@shared/gamepad/stream-input-consumer-adapters'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core/engine'
@@ -131,22 +127,6 @@ onBeforeUnmount(() => {
   void streamInputRouteController.resetOnLeaveStream()
   window.removeEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
-
-watch(
-  runtimeMode,
-  (mode) => {
-    if (mode === 'rust-owned') {
-      streamInputRouteController.installStreamInputConsumerAdapter(
-        createRustEngineStreamInputAdapter(rpc.gamepad),
-      )
-      return
-    }
-    streamInputRouteController.installStreamInputConsumerAdapter(
-      createBrowserPlayerStreamInputAdapter(),
-    )
-  },
-  { immediate: true },
-)
 
 // 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
 const defaultFocusId = computed(() =>

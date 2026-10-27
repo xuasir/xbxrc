@@ -12,13 +12,10 @@ export type SettingPageKey
     | 'inputDevices'
     | 'advancedDiagnostics'
 
-export type SettingToolId = 'inputDebug' | 'gamepadMapping'
-
 export type SettingActionId = 'expertReset' | 'unlockDangerZone'
 
 export type SettingSchemaItemDef
   = | { kind: 'field', fieldKey: string }
-    | { kind: 'tool', toolId: SettingToolId }
     | { kind: 'action', actionId: SettingActionId }
     | { kind: 'notice', noticeKey: string }
     | { kind: 'groupSummary', summaryId: string }
@@ -94,7 +91,6 @@ const PAGE_GENERAL: SettingSchemaSectionDef[] = [
       { kind: 'field', fieldKey: 'locale' },
       { kind: 'field', fieldKey: 'theme' },
       { kind: 'field', fieldKey: 'fullscreen' },
-      { kind: 'field', fieldKey: 'ui_haptics' },
       { kind: 'field', fieldKey: 'ui_audio' },
       { kind: 'field', fieldKey: 'background_keepalive' },
     ],
@@ -163,25 +159,7 @@ const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
   },
 ]
 
-const PAGE_INPUT: SettingSchemaSectionDef[] = [
-  {
-    key: 'controller',
-    labelKey: 'setting.pages.inputDevices.sectionController',
-    items: [
-      { kind: 'field', fieldKey: 'polling_rate' },
-      { kind: 'field', fieldKey: 'vibration' },
-      { kind: 'field', fieldKey: 'vibration_strength' },
-    ],
-  },
-  {
-    key: 'tools',
-    labelKey: 'setting.pages.inputDevices.sectionTools',
-    items: [
-      { kind: 'tool', toolId: 'inputDebug' },
-      { kind: 'tool', toolId: 'gamepadMapping' },
-    ],
-  },
-]
+const PAGE_INPUT: SettingSchemaSectionDef[] = []
 
 export function getAdvancedDiagnosticsSections(dangerUnlocked: boolean): SettingSchemaSectionDef[] {
   const base: SettingSchemaSectionDef[] = [

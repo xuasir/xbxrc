@@ -53,6 +53,56 @@ pub(crate) fn map_standard_sample(sample: &RawDeviceSample) -> LogicalPadStateDt
     map_sample_with_profile(sample, &default_profile())
 }
 
+pub(crate) fn map_unfiltered_standard_sample(sample: &RawDeviceSample) -> LogicalPadStateDto {
+    let button = |index| {
+        let value = read_button(sample, index);
+        if value.is_finite() {
+            value.clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    };
+    let axis = |index| {
+        let value = read_axis(sample, index);
+        if value.is_finite() {
+            value.clamp(-1.0, 1.0)
+        } else {
+            0.0
+        }
+    };
+    LogicalPadStateDto {
+        buttons: LogicalButtonsStateDto {
+            south: button(0),
+            east: button(1),
+            west: button(2),
+            north: button(3),
+            l1: button(4),
+            r1: button(5),
+            l2: button(6),
+            r2: button(7),
+            view: button(8),
+            menu: button(9),
+            l3: button(10),
+            r3: button(11),
+            dpad_up: button(12),
+            dpad_down: button(13),
+            dpad_left: button(14),
+            dpad_right: button(15),
+            home: button(16),
+        },
+        left_stick: LogicalStickDto {
+            x: axis(0),
+            y: axis(1),
+        },
+        right_stick: LogicalStickDto {
+            x: axis(2),
+            y: axis(3),
+        },
+        left_trigger: button(6),
+        right_trigger: button(7),
+    }
+}
+
 pub(crate) fn map_sample_with_profile(
     sample: &RawDeviceSample,
     profile: &DeviceProfile,
@@ -176,6 +226,25 @@ mod tests {
         default_logical_pad_state, map_sample_with_profile, map_standard_sample, merge_states,
     };
     use crate::{ButtonMapping, DeviceProfile, FilterConfig, RawDeviceSample};
+
+    #[test]
+    fn raw_standard_sample_preserves_small_analog_values_and_clamps_invalid_values() {
+        let mapped = super::map_unfiltered_standard_sample(&sample(
+            vec![0.02, f32::NAN, 1.5, -0.4, 0.0, 0.0, 0.01, 0.03],
+            vec![0.02, -0.02, f32::INFINITY, -2.0],
+        ));
+        assert_eq!(mapped.buttons.south, 0.02);
+        assert_eq!(mapped.buttons.east, 0.0);
+        assert_eq!(mapped.buttons.west, 1.0);
+        assert_eq!(mapped.buttons.north, 0.0);
+        assert_eq!(mapped.left_stick.x, 0.02);
+        assert_eq!(mapped.left_stick.y, -0.02);
+        assert_eq!(mapped.right_stick.x, 0.0);
+        assert_eq!(mapped.right_stick.y, -1.0);
+        assert_eq!(mapped.left_trigger, 0.01);
+        assert_eq!(mapped.right_trigger, 0.03);
+        assert_eq!(mapped.buttons.l2, mapped.left_trigger);
+    }
 
     fn sample(buttons: Vec<f32>, axes: Vec<f32>) -> RawDeviceSample {
         RawDeviceSample {

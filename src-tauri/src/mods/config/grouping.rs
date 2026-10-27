@@ -46,6 +46,10 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "polling_rate",
             "vibration",
             "vibration_strength",
+            "gamepad_backend",
+            "gamepad_background_policy",
+            "gamepad_control_source",
+            "gamepad_game_controls",
             "gamepad_device_profiles",
             "gamepad_keyboard_mapping"
         ])

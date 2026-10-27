@@ -13,7 +13,6 @@ pub enum XbxEngineCommand {
     AttachViewport(Option<Value>),
     DetachViewport,
     ApplyDisplayState(Option<Value>),
-    PressControllerButton(Option<Value>),
     SetKeyboardPointerEnabled(Option<Value>),
     PushKeyboardPointerInput(Option<Value>),
     SetAudioVolume(Option<Value>),
@@ -63,10 +62,6 @@ pub async fn handle_rpc(
         }
         XbxEngineCommand::ApplyDisplayState(p) => {
             service.dispatch_control("ApplyDisplayState", p).await?;
-            Ok(json!({ "accepted": true }))
-        }
-        XbxEngineCommand::PressControllerButton(p) => {
-            service.dispatch_control("PressControllerButton", p).await?;
             Ok(json!({ "accepted": true }))
         }
         XbxEngineCommand::SetKeyboardPointerEnabled(p) => {

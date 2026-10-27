@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAttrs } from 'vue'
+import { navigationEngine } from '../engine'
 
 interface Props {
   as?: string
@@ -23,6 +24,9 @@ function handleClick(event: MouseEvent) {
     event.preventDefault()
     return
   }
+  // 触屏和鼠标入口同步到几何导航，弹层可恢复到本次操作的来源行。
+  if (event.currentTarget instanceof HTMLElement)
+    navigationEngine.focusElement(event.currentTarget, false)
   emit('click', event)
 }
 </script>
@@ -34,6 +38,7 @@ function handleClick(event: MouseEvent) {
     :id="props.id"
     :data-focusable="!props.disabled ? 'true' : undefined"
     :aria-disabled="props.disabled"
+    :disabled="props.as === 'button' ? props.disabled : undefined"
     :style="!props.as ? { display: 'contents' } : undefined"
     @click="handleClick"
   >
