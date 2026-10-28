@@ -1,23 +1,43 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::policy::Plan;
 use crate::session::monitor::SessionMonitorMetadata;
 
 /// 会话取消令牌：监控循环只读这个标记，不关心存储实现。
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SessionCancelToken {
-    inner: Arc<AtomicBool>,
+    inner: Arc<tokio::sync::watch::Sender<bool>>,
+    generation: u64,
+}
+
+impl Default for SessionCancelToken {
+    fn default() -> Self {
+        static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let (sender, _) = tokio::sync::watch::channel(false);
+        Self {
+            inner: Arc::new(sender),
+            generation: NEXT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        }
+    }
 }
 
 impl SessionCancelToken {
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     pub fn is_cancelled(&self) -> bool {
-        self.inner.load(Ordering::Relaxed)
+        *self.inner.borrow()
     }
 
     pub fn cancel(&self) {
-        self.inner.store(true, Ordering::Relaxed);
+        self.inner.send_replace(true);
+    }
+
+    pub async fn cancelled(&self) {
+        let mut receiver = self.inner.subscribe();
+        let _ = receiver.wait_for(|cancelled| *cancelled).await;
     }
 
     pub(crate) fn same_instance(&self, other: &Self) -> bool {
@@ -42,6 +62,7 @@ impl<T: Clone> SessionRuntimeRecord<T> {
             plan,
             metadata: SessionMonitorMetadata {
                 created_at_ms,
+                last_observed_at_ms: created_at_ms,
                 last_observed_state: None,
                 state_observed_at_ms: None,
                 repeated_state_count: 0,

@@ -7,6 +7,7 @@ import {
   DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
   hasDirectPathExhausted,
   resolveLaunchDelayMs,
+  shouldRecoverMediaConnection,
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'
 
@@ -177,5 +178,18 @@ describe('runtime-host-policy', () => {
     })
     expect(second.allowed).toBe(false)
     expect(second.suppressedBy).toBe('reasonWindow')
+  })
+})
+
+describe('connection recovery fault domain', () => {
+  it('keeps fresh ingress, decoded frames and display stalls in their local domains', () => {
+    for (const supply of [{ hasInboundProgress: true }, { inboundVideoFps: 60 }, { decodeFps: 60 }, { packetAgeMs: 100 }]) {
+      expect(shouldRecoverMediaConnection({ connectionState: 'connected', controlChannelState: 'open', hasInboundProgress: false, ...supply })).toBe(false)
+    }
+  })
+  it('allows transport failure, prolonged media loss and failed control channels', () => {
+    for (const failure of [{ connectionState: 'failed' as const }, { controlChannelState: 'closed' }, { packetAgeMs: 15_000 }]) {
+      expect(shouldRecoverMediaConnection({ connectionState: 'connected', controlChannelState: 'open', hasInboundProgress: false, ...failure })).toBe(true)
+    }
   })
 })

@@ -588,6 +588,8 @@ pub struct XbxEngineVideoTwccObservationDto {
 #[serde(rename_all = "camelCase")]
 pub struct XbxEngineBuildFingerprintDto {
     pub git_commit_short: String,
+    #[serde(default)]
+    pub source_fingerprint_sha256: Option<String>,
     pub workspace_dirty: bool,
     pub build_timestamp_unix_ms: String,
     pub cargo_profile: String,

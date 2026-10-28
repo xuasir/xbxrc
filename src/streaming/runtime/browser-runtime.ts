@@ -1,5 +1,4 @@
 import type {
-  CreateOfferOptions,
   PlayerClient,
   PresentedVideoFrameMetadata,
   RendererRuntimeConfig,
@@ -15,6 +14,7 @@ import type {
   RuntimeProfileClassification,
 } from './browser-runtime-profile'
 import type { BrowserSuperResolutionState } from './browser-super-resolution-state'
+import type { ConnectionRecoveryOperation } from './connection-recovery'
 import type {
   RuntimeDisplayState,
   RuntimeEvent,
@@ -22,10 +22,12 @@ import type {
   StreamRuntimePhase,
   StreamRuntimeReconnectReason,
 } from './runtime-contract'
-import type { RecoveryGateState } from './runtime-host-policy'
 import { PlayerClient as BrowserPlayerClient } from '../../player'
 import { rpc } from '../../services/rpc'
+import { monotonicNowMs } from '../clock'
+import { withOperationTimeout } from '../execution/async-operation'
 import { normalizeDisplayOptions } from '../utils'
+import { createBrowserNegotiation } from './browser-negotiation'
 import {
   planToRendererAttachSpec,
   planToRendererUpdatePatch,
@@ -58,15 +60,14 @@ import {
   createBrowserSuperResolutionStateForLaunch,
   defaultBrowserSuperResolutionState,
 } from './browser-super-resolution-state'
+import { createBrowserSupervision } from './browser-supervision'
 import {
   applyBrowserVideoDisplay,
 } from './browser-video-display'
-import { applyIceCandidatePolicy } from './ice-candidate-policy'
-import {
-  decideRecoveryArbiter,
-  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
+import { createConnectionRecoveryCoordinator } from './connection-recovery'
+import { shouldRecoverMediaConnection } from './runtime-host-policy'
+import { createSerialOperationQueue } from './serial-operation'
 
-} from './runtime-host-policy'
 import {
   resolveSuperResolutionOutputTierLabelFromDimensions,
   resolveSuperResolutionRcasStops,
@@ -74,34 +75,10 @@ import {
   tierRank,
 } from './super-resolution-ladder'
 
-const MEDIA_STALL_CHECK_INTERVAL_MS = 1_000
-const MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS = 10_000
-const MEDIA_STALL_RECOVERY_BACKOFF_MAX_MS = 60_000
-const MEDIA_STALL_RECOVERY_RESET_WINDOW_MS = 120_000
 const MEDIA_STALL_EVIDENCE_GRACE_MS = 8_000
 const SHORT_STATS_WINDOW_MS = 3_000
 const LONG_STATS_WINDOW_MS = 15_000
 const FIRST_FRAME_GUARD_TIMEOUT_MS = 4_000
-
-type ProtocolChannel = 'media' | 'chat'
-
-interface NegotiationAttempt {
-  attempt: number
-  client: PlayerClient
-}
-
-interface NegotiatedOffer extends RTCSessionDescriptionInit {
-  sdp: string
-}
-
-interface StallEvidenceSnapshot {
-  observedAtMs: number
-  inboundBytesTotal?: number
-  inboundVideoPacketCountTotal?: number
-  inboundVideoFps?: number
-  decodeFps?: number
-  presentFps?: number
-}
 
 function normalizeObservedPresentationStats(stats: StreamStats): StreamStats {
   const snapshot = stats as StreamStats & {
@@ -301,44 +278,8 @@ function createUnavailableError(): Error {
   return new Error('streamRuntimeNotStarted')
 }
 
-function shouldLogRawSdp(): boolean {
-  return false
-}
-
-function buildSdpSummary(sdp: string): string {
-  const lines = sdp.split(/\r?\n/).filter(Boolean)
-  const mediaSections = lines.filter(line => line.startsWith('m=')).length
-  const candidateLines = lines.filter(line => line.startsWith('a=candidate:')).length
-  return `len=${sdp.length} media=${mediaSections} candidates=${candidateLines}`
-}
-
 function shouldEnableSdpPatch(): boolean {
   return true
-}
-
-function resolveIceCandidatePolicyConfig(spec: RuntimeLaunchSpec): {
-  enabled: boolean
-  preferIpv6: boolean
-  preferUdp: boolean
-  allowTcpFallback: boolean
-  relayBias: 'prefer' | 'neutral'
-  enableTeredoDerivation: boolean
-  enableFamilyMismatchGate: boolean
-  source: 'settings' | 'debugOverride'
-} {
-  if (spec.runtime.iceCandidatePolicy !== undefined) {
-    return spec.runtime.iceCandidatePolicy
-  }
-  return {
-    enabled: true,
-    preferIpv6: false,
-    preferUdp: true,
-    allowTcpFallback: true,
-    relayBias: 'neutral',
-    enableTeredoDerivation: spec.targetType === 'home',
-    enableFamilyMismatchGate: true,
-    source: 'settings',
-  }
 }
 
 function detectWebgl2Capability(): { supported: boolean, reason: string } {
@@ -352,39 +293,6 @@ function detectWebgl2Capability(): { supported: boolean, reason: string } {
   catch {
     return { supported: false, reason: 'webgl2ContextException' }
   }
-}
-
-function debugLog(..._args: Array<unknown>): void {}
-
-function detectCandidateFamily(raw: string): 'ipv4' | 'ipv6' | 'unknown' {
-  const tokens = raw.replace(/^candidate:/i, '').trim().split(/\s+/)
-  const ip = tokens[4] ?? ''
-  if (ip.includes(':')) {
-    return 'ipv6'
-  }
-  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) {
-    return 'ipv4'
-  }
-  return 'unknown'
-}
-
-function isHostCandidate(raw: string): boolean {
-  return /\btyp\s+host\b/i.test(raw)
-}
-
-function resolveLocalAddressFamily(families: Set<'ipv4' | 'ipv6'>): 'ipv4' | 'ipv6' | 'mixed' | 'unknown' {
-  const hasV4 = families.has('ipv4')
-  const hasV6 = families.has('ipv6')
-  if (hasV4 && hasV6) {
-    return 'mixed'
-  }
-  if (hasV4) {
-    return 'ipv4'
-  }
-  if (hasV6) {
-    return 'ipv6'
-  }
-  return 'unknown'
 }
 
 function toRendererFormat(videoFormat: string | undefined): RendererRuntimeConfig['format'] {
@@ -492,18 +400,18 @@ function createPlayerClient(
 export function createBrowserRuntime(options: {
   playerElementId: string
   initialAudioVolume: number
+  connectionRecovery?: ReturnType<typeof createConnectionRecoveryCoordinator>
 }): RuntimePort {
   const listeners = new Set<(event: RuntimeEvent) => void>()
   const clientCleanups: Array<() => void> = []
   const playerElementId = options.playerElementId
   /** runtime 创建时刻：连接耗时以此为起点，避免面板显示“已连接多久”。 */
-  const runtimeStartedAtMs = Date.now()
+  const runtimeStartedAtMs = monotonicNowMs()
   let connectedElapsedMsSnapshot: number | undefined
   let mediaReadyElapsedMsSnapshot: number | undefined
   let currentSpec: RuntimeLaunchSpec | null = null
   let currentDisplayState: RuntimeDisplayState | null = null
   let client: PlayerClient | null = null
-  let connectAttempt = 0
   let reconnectPromise: Promise<void> | null = null
   let audioVolume = options.initialAudioVolume
   let transportState: RTCPeerConnectionState = 'new'
@@ -511,14 +419,28 @@ export function createBrowserRuntime(options: {
   let connectedAt: number | null = null
   let lastMediaActivityAt: number | null = null
   let frameIntervalEstimateMs: number | null = null
-  let stallCheckTimer: number | null = null
-  let nextAllowedStallRecoveryAt = 0
-  let stallRecoveryAttemptCount = 0
-  let lastStallRecoveryAt = 0
   let lastReconnectReason: StreamRuntimeReconnectReason | undefined
   let lastStallReason: string | undefined
-  let recoveryGate: RecoveryGateState = {}
-  let lastStallEvidenceSnapshot: StallEvidenceSnapshot | null = null
+  const connectionRecovery = options.connectionRecovery ?? createConnectionRecoveryCoordinator({ trace: recordRuntimeTraceEvent })
+  const negotiationQueue = createSerialOperationQueue()
+  let resourceGeneration = 0
+  let runtimeAbort = new AbortController()
+  const supervision = createBrowserSupervision({
+    check: checkMediaStalled,
+    onError: error => emit({ type: 'error', error }),
+  })
+  const negotiation = createBrowserNegotiation({
+    getClient: assertClient,
+    getSpec: assertSpec,
+    isCurrentSpec: spec => currentSpec === spec,
+    getGeneration: () => resourceGeneration,
+    getSignal: () => runtimeAbort.signal,
+    getOfferPolicy: getNegotiationOfferPolicy,
+    updateIcePolicy: updateNegotiationIcePolicy,
+    publishPhase,
+    trace: recordRuntimeTraceEvent,
+    queue: negotiationQueue,
+  })
   let connectedMilestoneAt: number | null = null
   let mediaReadyMilestoneAt: number | null = null
   let pendingConnectedMilestone = false
@@ -642,6 +564,15 @@ export function createBrowserRuntime(options: {
   let latestBrowserVideoSample: BrowserWebRtcStatsSample | null = null
   let icePolicyMode: IcePolicyMode = 'passthrough'
   let icePolicyDigest: string | undefined
+
+  function getNegotiationOfferPolicy() {
+    return { patchEnabled: shouldEnableSdpPatch(), downshiftLevel: sdpDownshiftLevel, baseVideoBitrateKbps }
+  }
+
+  function updateNegotiationIcePolicy(mode: IcePolicyMode, digest: string): void {
+    icePolicyMode = mode
+    icePolicyDigest = digest
+  }
   let fpsObservationState = createFpsObservationState()
   let effectiveFrontEndPolicy: EffectiveFrontEndPolicy = defaultEffectiveFrontEndPolicy()
   let runtimeProfileClassification: RuntimeProfileClassification = {
@@ -795,6 +726,8 @@ export function createBrowserRuntime(options: {
   }
 
   function emit(event: RuntimeEvent): void {
+    if (event.type === 'frameReady' && event.fresh !== false)
+      connectionRecovery.observeFrame()
     for (const listener of listeners) {
       listener(event)
     }
@@ -806,8 +739,8 @@ export function createBrowserRuntime(options: {
   ): void {
     void rpc.runtimeTrace.recordEvent({
       event,
-      sessionId: currentSpec?.sessionId ?? null,
-      payload,
+      sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : currentSpec?.sessionId ?? null,
+      payload: { clockDomain: 'monotonic', ...payload },
     }).catch(() => {
       // trace 失败不能影响串流主链
     })
@@ -865,7 +798,7 @@ export function createBrowserRuntime(options: {
   }): { level: DisplayDegradeLevel, reason: string } {
     if (input.renderCause === 'renderStable' && !input.renderBackpressure) {
       renderPressureConsecutiveCount = 0
-      return { level: 'displayL0', reason: displayWarmupUntilMs > Date.now() ? 'displayWarmup' : 'renderStable' }
+      return { level: 'displayL0', reason: displayWarmupUntilMs > monotonicNowMs() ? 'displayWarmup' : 'renderStable' }
     }
     if (input.renderCause === 'decodeBackpressure') {
       renderPressureConsecutiveCount = 0
@@ -1086,7 +1019,7 @@ export function createBrowserRuntime(options: {
     if (client === null || currentSpec === null || currentDisplayState === null) {
       return
     }
-    const now = Date.now()
+    const now = monotonicNowMs()
     const levelUnchanged = next === displayDegradeLevel
     const withinDisplayDwell = levelUnchanged
       && now - displayDegradeLevelChangedAtMs < effectiveFrontEndPolicy.displayLevelMinDwellMs
@@ -1422,6 +1355,7 @@ export function createBrowserRuntime(options: {
   }
 
   function destroyClient(): void {
+    supervision.stop()
     const currentClient = client
     client = null
     clearClientSubscriptions()
@@ -1453,16 +1387,9 @@ export function createBrowserRuntime(options: {
     })
   }
 
-  async function attachGamepadSession(sessionId: string): Promise<void> {
-    void sessionId
-  }
-
-  async function detachGamepadSession(sessionId: string | null): Promise<void> {
-    void sessionId
-  }
-
   function markFrameReady(meta?: PresentedVideoFrameMetadata): void {
-    const now = Date.now()
+    supervision.clearFirstFrameGuard()
+    const now = monotonicNowMs()
     renderFrameEventsSinceLastSample += 1
     renderPresentedFramesAdvancedSinceLastSample += meta?.presentedFramesDelta ?? 1
     if (meta?.callbackIntervalMs !== undefined) {
@@ -1553,6 +1480,10 @@ export function createBrowserRuntime(options: {
         droppedLikeStreak: renderDroppedLikeStreak,
       })
     }
+    if (meta?.presentedFramesDelta !== undefined && meta.presentedFramesDelta <= 0) {
+      emit({ type: 'frameReady', fresh: false })
+      return
+    }
     if (lastMediaActivityAt !== null) {
       const frameInterval = now - lastMediaActivityAt
       if (frameInterval > 0 && frameInterval < 2_000) {
@@ -1579,7 +1510,7 @@ export function createBrowserRuntime(options: {
         stage: 'mediaReady',
       })
     }
-    emit({ type: 'frameReady' })
+    emit({ type: 'frameReady', fresh: meta?.presentedFramesDelta === undefined || meta.presentedFramesDelta > 0 })
   }
 
   function applyCurrentDisplayState(): void {
@@ -1600,7 +1531,7 @@ export function createBrowserRuntime(options: {
   function handleTransportStateChanged(state: RTCPeerConnectionState): void {
     transportState = state
     if (state === 'connected') {
-      const now = Date.now()
+      const now = monotonicNowMs()
       connectedAt = now
       connectedElapsedMsSnapshot = Math.max(0, now - runtimeStartedAtMs)
       mediaReadyElapsedMsSnapshot = undefined
@@ -1608,15 +1539,11 @@ export function createBrowserRuntime(options: {
       mediaReadyMilestoneAt = null
       pendingConnectedMilestone = true
       lastMediaActivityAt = now
-      nextAllowedStallRecoveryAt = 0
-      stallRecoveryAttemptCount = 0
-      lastStallRecoveryAt = 0
+      supervision.resetEpisode()
       lastStallReason = undefined
-      recoveryGate = {}
-      lastStallEvidenceSnapshot = null
       bandwidthState = 'stable'
       bandwidthAction = 'none'
-      bandwidthStateChangedAtMs = Date.now()
+      bandwidthStateChangedAtMs = monotonicNowMs()
       sdpDownshiftLevel = 0
       recoveryEpochId = undefined
       lastRecoveryActionLevel = undefined
@@ -1696,7 +1623,7 @@ export function createBrowserRuntime(options: {
       icePolicyMode = 'passthrough'
       icePolicyDigest = undefined
       updateFirstFrameStage('connecting', now, 'transportConnected')
-      window.setTimeout(() => {
+      supervision.armFirstFrameGuard(() => {
         if (connectedAt === null || firstPresentedAtMs !== undefined || firstFrameGuardTriggered) {
           return
         }
@@ -1712,12 +1639,13 @@ export function createBrowserRuntime(options: {
           state: requested.state,
           error: requested.error ?? null,
         })
-      }, FIRST_FRAME_GUARD_TIMEOUT_MS)
+      })
       applyCurrentDisplayState()
       return
     }
 
     if (state === 'closed' || state === 'failed' || state === 'disconnected') {
+      supervision.clearFirstFrameGuard()
       connectedAt = null
       lastMediaActivityAt = null
       pendingConnectedMilestone = false
@@ -1729,7 +1657,7 @@ export function createBrowserRuntime(options: {
       })
       connectedMilestoneAt = null
       mediaReadyMilestoneAt = null
-      updateFirstFrameStage('idle', Date.now(), 'transportDisconnected')
+      updateFirstFrameStage('idle', monotonicNowMs(), 'transportDisconnected')
     }
   }
 
@@ -1776,7 +1704,7 @@ export function createBrowserRuntime(options: {
     if (videoWidth <= 0 || videoHeight <= 0) {
       return false
     }
-    const now = Date.now()
+    const now = monotonicNowMs()
     const frozen = srState.outputFrozen
     if (frozen !== null) {
       if (srState.refreezeCount >= SR_REFREEZE_MAX_COUNT) {
@@ -1904,8 +1832,8 @@ export function createBrowserRuntime(options: {
         if (firstPresentedTrace) {
           void recordRuntimeTraceEvent('browserWebRtcTimelineObserved', {
             kind: 'firstPresented',
-            observedAtMs: Date.now(),
-            elapsedSinceConnectedMs: connectedAt === null ? null : Math.max(0, Date.now() - connectedAt),
+            observedAtMs: monotonicNowMs(),
+            elapsedSinceConnectedMs: connectedAt === null ? null : Math.max(0, monotonicNowMs() - connectedAt),
             trackingSource: meta?.trackingSource ?? null,
             callbackIntervalMs: meta?.callbackIntervalMs ?? null,
             presentedFramesDelta: meta?.presentedFramesDelta ?? null,
@@ -1971,7 +1899,7 @@ export function createBrowserRuntime(options: {
       }),
       eventBus.on('media.videoReady', ({ width, height }) => {
         if (transportState === 'connected') {
-          emitConnectedMilestoneIfPending(Date.now(), 'connected')
+          emitConnectedMilestoneIfPending(monotonicNowMs(), 'connected')
         }
         const previousDisplayContext = resolveCurrentDisplayContext()
         const previousSourceWidth = previousDisplayContext?.sourceWidth
@@ -2016,49 +1944,6 @@ export function createBrowserRuntime(options: {
   function publishPhase(phase: 'binding' | 'exchangingOffer' | 'gatheringIce' | 'exchangingIce' | 'connecting' | 'reconnecting'): void {
     runtimePhase = phase
     emit({ type: 'phaseChanged', phase })
-  }
-
-  function resolveStallThresholdMs(now: number): number {
-    if (connectedAt !== null && now - connectedAt < 15_000) {
-      return 8_000
-    }
-    if (frameIntervalEstimateMs !== null) {
-      const adaptiveThreshold = frameIntervalEstimateMs * 12
-      return Math.max(1_500, Math.min(7_000, adaptiveThreshold))
-    }
-    return 5_000
-  }
-
-  function computeNextStallRecoveryBackoffMs(now: number): number {
-    if (now - lastStallRecoveryAt > MEDIA_STALL_RECOVERY_RESET_WINDOW_MS) {
-      stallRecoveryAttemptCount = 0
-    }
-    stallRecoveryAttemptCount += 1
-    lastStallRecoveryAt = now
-    const nextBackoff = MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS * 2 ** (stallRecoveryAttemptCount - 1)
-    return Math.min(MEDIA_STALL_RECOVERY_BACKOFF_MAX_MS, nextBackoff)
-  }
-
-  function createStallEvidenceSnapshot(stats: StreamStats): StallEvidenceSnapshot {
-    return {
-      observedAtMs: Date.now(),
-      inboundBytesTotal: stats.inboundBytesTotal,
-      inboundVideoPacketCountTotal: stats.inboundVideoPacketCountTotal,
-      inboundVideoFps: stats.inboundVideoFps,
-      decodeFps: stats.decodeFps,
-      presentFps: stats.presentFps ?? stats.fps,
-    }
-  }
-
-  function hasInboundProgressSinceLastProbe(current: StallEvidenceSnapshot): boolean {
-    const previous = lastStallEvidenceSnapshot
-    if (previous === null) {
-      return false
-    }
-    const bytesProgress = (current.inboundBytesTotal ?? 0) - (previous.inboundBytesTotal ?? 0)
-    const packetsProgress = (current.inboundVideoPacketCountTotal ?? 0) - (previous.inboundVideoPacketCountTotal ?? 0)
-    const fpsProgress = (current.inboundVideoFps ?? 0) >= 1 || (current.decodeFps ?? 0) >= 1
-    return bytesProgress > 16 * 1024 || packetsProgress >= 12 || fpsProgress
   }
 
   function resolveDefaultVideoBitrateKbps(spec: RuntimeLaunchSpec): number {
@@ -2290,7 +2175,7 @@ export function createBrowserRuntime(options: {
     if (client === null) {
       return
     }
-    const now = Date.now()
+    const now = monotonicNowMs()
     if (next === qualityLadderLevel && now - qualityLevelChangedAtMs < effectiveFrontEndPolicy.qualityLevelMinDwellMs) {
       return
     }
@@ -2392,10 +2277,10 @@ export function createBrowserRuntime(options: {
     if (softPolicyResult.status !== 'applied'
       && currentSpec !== null
       && reconnectPromise === null
-      && Date.now() - lastSoftRenegotiateAt > 6_000) {
-      lastSoftRenegotiateAt = Date.now()
+      && monotonicNowMs() - lastSoftRenegotiateAt > 6_000) {
+      lastSoftRenegotiateAt = monotonicNowMs()
       try {
-        await connectMediaProtocol(currentSpec, { restart: true })
+        await negotiation.connectMediaProtocol(currentSpec, { restart: true })
         fallbackRenegotiated = true
       }
       catch {
@@ -2409,6 +2294,17 @@ export function createBrowserRuntime(options: {
       nextMaxVideoBitrateKbps,
       softPolicyResult: softPolicyResult.status,
       fallbackRenegotiated,
+    })
+  }
+
+  function recordLocalRecoverySuppressed(action: RecoveryAction, suppressedBy: RecoverySuppressedBy, details: Record<string, unknown> = {}): void {
+    recordRuntimeTraceEvent('recoveryActionSuppressed', {
+      triggerSource: 'stallChecker',
+      epochId: recoveryEpochId ?? null,
+      action,
+      suppressedBy,
+      budgetRemaining: formatRecoveryBudget(),
+      ...details,
     })
   }
 
@@ -2431,7 +2327,7 @@ export function createBrowserRuntime(options: {
 
     if (action === 'observe') {
       bandwidthAction = 'observe'
-      nextAllowedStallRecoveryAt = now + 2_000
+      supervision.deferUntil(now + 2_000)
       beginRecoveryActionEffectProbe(action, now, context.stats)
       markRecoveryAction(action, 'executed')
       recordRuntimeTraceEvent('recoveryActionExecuted', {
@@ -2462,24 +2358,12 @@ export function createBrowserRuntime(options: {
       }
       if (keyframeBudgetRemaining <= 0) {
         markRecoverySuppressed('budget', action)
-        recordRuntimeTraceEvent('recoveryActionSuppressed', {
-          triggerSource: 'stallChecker',
-          epochId,
-          action,
-          suppressedBy: 'budget',
-          budgetRemaining: formatRecoveryBudget(),
-        })
+        recordLocalRecoverySuppressed(action, 'budget')
         return false
       }
       if (now - lastKeyframeRequestAt < 2_000) {
         markRecoverySuppressed('cooldown', action)
-        recordRuntimeTraceEvent('recoveryActionSuppressed', {
-          triggerSource: 'stallChecker',
-          epochId,
-          action,
-          suppressedBy: 'cooldown',
-          budgetRemaining: formatRecoveryBudget(),
-        })
+        recordLocalRecoverySuppressed(action, 'cooldown')
         return false
       }
       const requestResult = assertClient().requestVideoKeyframe()
@@ -2499,7 +2383,7 @@ export function createBrowserRuntime(options: {
       keyframeBudgetRemaining = Math.max(0, keyframeBudgetRemaining - 1)
       lastKeyframeRequestAt = now
       bandwidthAction = 'keyframeRequest'
-      nextAllowedStallRecoveryAt = now + 2_000
+      supervision.deferUntil(now + 2_000)
       beginRecoveryActionEffectProbe(action, now, context.stats)
       markRecoveryAction(action, 'executed')
       recordRuntimeTraceEvent('recoveryActionExecuted', {
@@ -2515,30 +2399,18 @@ export function createBrowserRuntime(options: {
     if (action === 'decoderReset') {
       if (decoderResetBudgetRemaining <= 0) {
         markRecoverySuppressed('budget', action)
-        recordRuntimeTraceEvent('recoveryActionSuppressed', {
-          triggerSource: 'stallChecker',
-          epochId,
-          action,
-          suppressedBy: 'budget',
-          budgetRemaining: formatRecoveryBudget(),
-        })
+        recordLocalRecoverySuppressed(action, 'budget')
         return false
       }
       if (now - lastDecoderResetAt < 8_000) {
         markRecoverySuppressed('cooldown', action)
-        recordRuntimeTraceEvent('recoveryActionSuppressed', {
-          triggerSource: 'stallChecker',
-          epochId,
-          action,
-          suppressedBy: 'cooldown',
-          budgetRemaining: formatRecoveryBudget(),
-        })
+        recordLocalRecoverySuppressed(action, 'cooldown')
         return false
       }
       decoderResetBudgetRemaining = Math.max(0, decoderResetBudgetRemaining - 1)
       lastDecoderResetAt = now
       bandwidthAction = 'decoderReset'
-      nextAllowedStallRecoveryAt = now + 2_000
+      supervision.deferUntil(now + 2_000)
       beginRecoveryActionEffectProbe(action, now, context.stats)
       // 浏览器侧没有解码器句柄，重建 video 元素才是真正可执行的 L2 动作。
       const resetApplied = assertClient().resetVideoDecoder()
@@ -2575,19 +2447,11 @@ export function createBrowserRuntime(options: {
   }
 
   function stopMediaStallMonitoring(): void {
-    if (stallCheckTimer !== null) {
-      window.clearInterval(stallCheckTimer)
-      stallCheckTimer = null
-    }
+    supervision.stop()
   }
 
   function startMediaStallMonitoring(): void {
-    stopMediaStallMonitoring()
-    stallCheckTimer = window.setInterval(() => {
-      void checkMediaStalled().catch((error) => {
-        emit({ type: 'error', error })
-      })
-    }, MEDIA_STALL_CHECK_INTERVAL_MS)
+    supervision.startMonitoring()
   }
 
   function applyFrontEndWarmupProfile(input: {
@@ -2654,7 +2518,7 @@ export function createBrowserRuntime(options: {
 
   function applyProfileWarmupAfterReconnect(reason: string, icePath: string): void {
     const specNow = currentSpec
-    const ts = Date.now()
+    const ts = monotonicNowMs()
     if (specNow === null) {
       return
     }
@@ -2873,39 +2737,32 @@ export function createBrowserRuntime(options: {
       return
     }
 
-    const now = Date.now()
-    const stats = await assertClient().stats().snapshot()
+    const generation = resourceGeneration
+    let stats: StreamStats
+    try {
+      stats = await withOperationTimeout(assertClient().stats().snapshot(), 3_000, 'mediaObservationTimeout')
+    }
+    catch (error) {
+      if (generation === resourceGeneration)
+        recordRuntimeTraceEvent('mediaObservationUnavailable', { error: error instanceof Error ? error.message : String(error) })
+      return
+    }
+    if (generation !== resourceGeneration || currentSpec !== spec)
+      return
+    const now = monotonicNowMs()
     const channelHealth = assertClient().getControlChannelHealthSnapshot()
     refreshFrontEndPolicyState(now, spec, stats, channelHealth)
-    if (now < nextAllowedStallRecoveryAt) {
+    if (supervision.isCoolingDown(now)) {
       return
     }
     const lastActivity = lastMediaActivityAt ?? connectedAt
     const inactivityElapsedMs = Math.max(0, now - lastActivity)
-    const stallThresholdMs = resolveStallThresholdMs(now)
+    const stallThresholdMs = supervision.stallThreshold(now, connectedAt, frameIntervalEstimateMs)
     if (inactivityElapsedMs < stallThresholdMs) {
       return
     }
-    const factGateDecision = decideRecoveryArbiter({
-      factKey: 'mediaHealth',
-      observedAtMs: now,
-      gate: recoveryGate,
-      windowMs: DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
-    })
-    if (!factGateDecision.allowed) {
-      markRecoverySuppressed((factGateDecision.suppressedBy as RecoverySuppressedBy | undefined) ?? 'unknown', 'reconnect')
-      recordRuntimeTraceEvent('recoveryArbiterSuppressed', {
-        source: 'browser-runtime',
-        factKey: 'mediaHealth',
-        suppressedBy: factGateDecision.suppressedBy ?? 'unknown',
-        epochId: recoveryEpochId ?? null,
-      })
-      return
-    }
     evaluateRecoveryActionEffect(now, stats)
-    const evidenceSnapshot = createStallEvidenceSnapshot(stats)
-    const hasInboundProgress = hasInboundProgressSinceLastProbe(evidenceSnapshot)
-    lastStallEvidenceSnapshot = evidenceSnapshot
+    const { snapshot: evidenceSnapshot, hasInboundProgress } = supervision.observeEvidence(stats)
     if (bandwidthState === 'warning') {
       await executeRecoveryAction('observe', now, {
         inactivityElapsedMs,
@@ -2916,14 +2773,14 @@ export function createBrowserRuntime(options: {
     }
     if (bandwidthState === 'congested' && sdpDownshiftLevel < 2) {
       await applySdpDownshift(sdpDownshiftLevel + 1)
-      nextAllowedStallRecoveryAt = now + 4_000
+      supervision.deferUntil(now + 4_000)
       return
     }
     if ((bandwidthState === 'stable' || bandwidthState === 'recovering') && sdpDownshiftLevel > 0) {
       await applySdpDownshift(0)
     }
     if (hasInboundProgress && inactivityElapsedMs < stallThresholdMs + MEDIA_STALL_EVIDENCE_GRACE_MS) {
-      nextAllowedStallRecoveryAt = now + 2_000
+      supervision.deferUntil(now + 2_000)
       recordRuntimeTraceEvent('stallRecoverySuppressedByInboundProgress', {
         inactivityElapsedMs,
         stallThresholdMs,
@@ -2970,424 +2827,57 @@ export function createBrowserRuntime(options: {
     if (actionHandled) {
       return
     }
-    const decision = await rpc.streaming.decideRecovery({
+    if (!shouldRecoverMediaConnection({ connectionState: transportState, controlChannelState: channelHealth.state, hasInboundProgress, inboundVideoFps: stats.inboundVideoFps, decodeFps: stats.decodeFps, packetAgeMs: stats.packetAgeMs })) {
+      recordRuntimeTraceEvent('recoveryArbiterSuppressed', { factKey: 'mediaHealth', suppressedBy: 'localFaultDomain', recoveryCause, hasInboundProgress })
+      return
+    }
+    await connectionRecovery.run({
+      factKey: 'mediaHealth',
       sessionId: spec.sessionId,
-      fact: {
-        type: 'mediaHealth',
-        connectionState: transportState,
-        connectedElapsedMs: Math.max(0, now - connectedAt),
-        inactivityElapsedMs,
+      runtimeGeneration: generation,
+      isCurrent: () => generation === resourceGeneration && currentSpec === spec,
+      decide: () => rpc.streaming.decideRecovery({ sessionId: spec.sessionId, fact: { type: 'mediaHealth', connectionState: transportState, connectedElapsedMs: Math.max(0, now - connectedAt!), inactivityElapsedMs }, isClosing: false }),
+      execute: async (reason, operation) => {
+        lastStallReason = reason
+        bandwidthAction = 'reconnect'
+        ensureRecoveryEpoch(now)
+        beginRecoveryActionEffectProbe('reconnect', now, stats)
+        markRecoveryAction('reconnect', 'executed')
+        recordRuntimeTraceEvent('recoveryArbiterAllowed', {
+          source: 'browser-runtime',
+          factKey: 'mediaHealth',
+          reason,
+          bandwidthState,
+          epochId: recoveryEpochId ?? null,
+          budgetRemaining: formatRecoveryBudget(),
+        })
+        recordRuntimeTraceEvent('recoveryActionExecuted', {
+          triggerSource: 'stallChecker',
+          epochId: recoveryEpochId ?? null,
+          action: 'reconnect',
+          level: 'L3',
+          result: 'executed',
+          budgetRemaining: formatRecoveryBudget(),
+        })
+
+        // eslint-disable-next-line ts/no-use-before-define
+        await runtime.requestReconnect(reason, operation)
       },
-      isClosing: false,
-    })
-    if (!decision.shouldReconnect || decision.reason === undefined) {
-      return
-    }
-    const reasonGateDecision = decideRecoveryArbiter({
-      factKey: 'mediaHealth',
-      reason: decision.reason,
-      observedAtMs: Date.now(),
-      gate: factGateDecision.nextGate,
-      windowMs: DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
-    })
-    if (!reasonGateDecision.allowed) {
-      recoveryGate = reasonGateDecision.nextGate
-      markRecoverySuppressed((reasonGateDecision.suppressedBy as RecoverySuppressedBy | undefined) ?? 'unknown', 'reconnect')
-      recordRuntimeTraceEvent('recoveryArbiterSuppressed', {
-        source: 'browser-runtime',
-        factKey: 'mediaHealth',
-        reason: decision.reason,
-        suppressedBy: reasonGateDecision.suppressedBy ?? 'unknown',
-        epochId: recoveryEpochId ?? null,
-      })
-      return
-    }
-    recoveryGate = reasonGateDecision.nextGate
-    // 本地做指数退避去抖，避免恢复失败后被定时器连续触发重连风暴。
-    nextAllowedStallRecoveryAt = now + computeNextStallRecoveryBackoffMs(now)
-    lastStallReason = decision.reason
-    bandwidthAction = 'reconnect'
-    ensureRecoveryEpoch(now)
-    beginRecoveryActionEffectProbe('reconnect', now, stats)
-    markRecoveryAction('reconnect', 'executed')
-    recordRuntimeTraceEvent('recoveryArbiterAllowed', {
-      source: 'browser-runtime',
-      factKey: 'mediaHealth',
-      reason: decision.reason,
-      bandwidthState,
-      epochId: recoveryEpochId ?? null,
-      budgetRemaining: formatRecoveryBudget(),
-    })
-    recordRuntimeTraceEvent('recoveryActionExecuted', {
-      triggerSource: 'stallChecker',
-      epochId: recoveryEpochId ?? null,
-      action: 'reconnect',
-      level: 'L3',
-      result: 'executed',
-      budgetRemaining: formatRecoveryBudget(),
-    })
-    // eslint-disable-next-line ts/no-use-before-define
-    await runtime.requestReconnect(decision.reason)
-  }
-
-  function createNegotiationAttempt(): NegotiationAttempt {
-    return {
-      attempt: ++connectAttempt,
-      client: assertClient(),
-    }
-  }
-
-  function isAttemptActive(attempt: number): boolean {
-    return attempt === connectAttempt
-  }
-
-  async function withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    errorMessage: string,
-  ): Promise<T> {
-    return await new Promise<T>((resolve, reject) => {
-      const timer = window.setTimeout(() => {
-        reject(new Error(errorMessage))
-      }, timeoutMs)
-
-      void promise.then(
-        (value) => {
-          window.clearTimeout(timer)
-          resolve(value)
-        },
-        (error) => {
-          window.clearTimeout(timer)
-          reject(error)
-        },
-      )
+      onFailure: error => emit({ type: 'error', error }),
     })
   }
 
-  async function createChannelOffer(input: {
-    negotiation: NegotiationAttempt
-    restart?: boolean
-  }): Promise<NegotiatedOffer | null> {
-    const createOfferOptions: CreateOfferOptions | undefined = input.restart
-      ? { iceRestart: true }
-      : undefined
-
-    publishPhase('exchangingOffer')
-    const offer = await withTimeout(
-      input.negotiation.client.createOffer(createOfferOptions),
-      10_000,
-      'createOfferTimeout',
-    )
-    if (!isAttemptActive(input.negotiation.attempt)) {
-      return null
-    }
-    if (typeof offer.sdp !== 'string') {
-      throw new TypeError('invalidOffer')
-    }
-    recordRuntimeTraceEvent('offerPatchApplied', {
-      stage: input.restart ? 'restart' : 'initial',
-      sdpPatchEnabled: shouldEnableSdpPatch(),
-      sdpDownshiftLevel,
-      maxVideoBitrateKbps: baseVideoBitrateKbps > 0
-        ? Math.max(2_000, Math.round(baseVideoBitrateKbps * ([1, 0.75, 0.55][sdpDownshiftLevel] ?? 1)))
-        : null,
-    })
-    return offer as NegotiatedOffer
-  }
-
-  async function applyRemoteAnswer(input: {
-    spec: RuntimeLaunchSpec
-    negotiation: NegotiationAttempt
-    channel: ProtocolChannel
-    offerSdp: string
-    restart: boolean
-  }): Promise<void> {
-    const answer = await rpc.streaming.exchangeOffer({
-      sessionId: input.spec.sessionId,
-      channel: input.channel,
-      sdp: input.offerSdp,
-      restart: input.restart,
-    })
-    const summary = buildSdpSummary(answer.answer.sdp)
-    debugLog(`[streaming][browser-runtime] remote ${input.channel} answer ${summary}`)
-    if (shouldLogRawSdp()) {
-      debugLog(`[streaming][browser-runtime] remote ${input.channel} answer raw\n${answer.answer.sdp}`)
-    }
-    if (!isAttemptActive(input.negotiation.attempt)) {
-      return
-    }
-    await input.negotiation.client.setRemoteDescription(answer.answer.sdp)
-  }
-
-  function iceCandidateKey(candidate: Parameters<PlayerClient['addIceCandidates']>[0][number]): string {
-    return [
-      candidate.candidate,
-      candidate.sdpMid ?? '',
-      candidate.sdpMLineIndex ?? '',
-    ].join('|')
-  }
-
-  async function exchangeIceCandidatesIncrementally(input: {
-    spec: RuntimeLaunchSpec
-    negotiation: NegotiationAttempt
-    restart: boolean
-  }): Promise<void> {
-    const peer = input.negotiation.client.getPeer()
-    if (peer === undefined) {
-      await completeConnecting({
-        negotiation: input.negotiation,
-        remoteCandidates: [],
-      })
-      return
-    }
-    const activePeer = peer
-
-    publishPhase('gatheringIce')
-    let flushTimer: number | null = null
-    let settled = false
-    let flushInFlight = false
-    let gatheringComplete = activePeer.iceGatheringState === 'complete'
-    let finalPollSent = false
-    let resolvePromise: () => void = () => {}
-    const pendingLocalCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]> = []
-    const appliedRemoteCandidates = new Set<string>()
-    const localHostFamilies = new Set<'ipv4' | 'ipv6'>()
-
-    const clearFlushTimer = (): void => {
-      if (flushTimer !== null) {
-        window.clearTimeout(flushTimer)
-        flushTimer = null
-      }
-    }
-
-    const applyRemoteCandidates = async (
-      candidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]>,
-    ): Promise<void> => {
-      const nextCandidates = candidates.filter((candidate) => {
-        const key = iceCandidateKey(candidate)
-        if (appliedRemoteCandidates.has(key)) {
-          return false
-        }
-        appliedRemoteCandidates.add(key)
-        return true
-      })
-      if (nextCandidates.length === 0 || !isAttemptActive(input.negotiation.attempt)) {
-        return
-      }
-      const policyConfigBase = resolveIceCandidatePolicyConfig(assertSpec())
-      const policyConfig = {
-        ...policyConfigBase,
-        localAddressFamily: resolveLocalAddressFamily(localHostFamilies),
-      }
-      const policyResult = applyIceCandidatePolicy({
-        candidates: nextCandidates,
-        config: policyConfig,
-      })
-      icePolicyMode = policyResult.trace.mode
-      icePolicyDigest = policyResult.trace.digest
-      recordRuntimeTraceEvent('icePolicyEvaluated', {
-        mode: policyResult.trace.mode,
-        source: policyConfig.source,
-        inputCount: policyResult.trace.inputCount,
-        outputCount: policyResult.trace.outputCount,
-        filteredCount: policyResult.trace.filteredCount,
-        derivedCount: policyResult.trace.derivedCount,
-        skippedByFamilyMismatchCount: policyResult.trace.skippedByFamilyMismatchCount,
-        familyMismatchObservedCount: policyResult.trace.familyMismatchObservedCount,
-        endOfCandidatesSeen: policyResult.trace.endOfCandidatesSeen,
-        digest: policyResult.trace.digest,
-        orderPreview: policyResult.trace.orderPreview,
-        preferIpv6: policyConfig.preferIpv6,
-        preferUdp: policyConfig.preferUdp,
-        allowTcpFallback: policyConfig.allowTcpFallback,
-        relayBias: policyConfig.relayBias,
-        enableTeredoDerivation: policyConfig.enableTeredoDerivation,
-        enableFamilyMismatchGate: policyConfig.enableFamilyMismatchGate,
-        localAddressFamily: policyConfig.localAddressFamily,
-      })
-      await input.negotiation.client.addIceCandidates(policyResult.candidates)
-      recordRuntimeTraceEvent('icePolicyApplied', {
-        mode: policyResult.trace.mode,
-        outputCount: policyResult.trace.outputCount,
-        digest: policyResult.trace.digest,
-      })
-    }
-
-    const finishIfIdle = (resolve: () => void): void => {
-      if (settled || flushInFlight || pendingLocalCandidates.length > 0 || !gatheringComplete) {
-        return
-      }
-      settled = true
-      clearFlushTimer()
-      activePeer.removeEventListener('icecandidate', handleIceCandidate)
-      activePeer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
-      resolve()
-    }
-
-    const flushPendingCandidates = async (resolve: () => void): Promise<void> => {
-      if (settled || flushInFlight || !isAttemptActive(input.negotiation.attempt)) {
-        return
-      }
-      const localCandidates = pendingLocalCandidates.splice(0)
-      if (localCandidates.length === 0) {
-        if (gatheringComplete && !finalPollSent) {
-          finalPollSent = true
-        }
-        else {
-          finishIfIdle(resolve)
-          return
-        }
-      }
-
-      flushInFlight = true
-      let shouldFlushAgain = false
-      publishPhase('exchangingIce')
-      try {
-        await rpc.streaming.submitIce({
-          sessionId: input.spec.sessionId,
-          candidate: localCandidates,
-          restart: input.restart,
-        })
-        const remoteCandidates = await rpc.streaming.pollIce({
-          sessionId: input.spec.sessionId,
-          restart: input.restart,
-        })
-        await applyRemoteCandidates(remoteCandidates.candidates)
-        if (isAttemptActive(input.negotiation.attempt)) {
-          publishPhase('connecting')
-        }
-      }
-      finally {
-        flushInFlight = false
-        if (pendingLocalCandidates.length > 0) {
-          shouldFlushAgain = true
-        }
-      }
-      if (shouldFlushAgain) {
-        void flushPendingCandidates(resolve)
-        return
-      }
-      finishIfIdle(resolve)
-    }
-
-    function scheduleFlush(resolve: () => void): void {
-      if (settled || flushInFlight) {
-        return
-      }
-      clearFlushTimer()
-      flushTimer = window.setTimeout(() => {
-        flushTimer = null
-        void flushPendingCandidates(resolve)
-      }, 60)
-    }
-
-    function handleIceCandidate(event: RTCPeerConnectionIceEvent): void {
-      if (!isAttemptActive(input.negotiation.attempt)) {
-        return
-      }
-      if (event.candidate === null) {
-        gatheringComplete = true
-        scheduleFlush(resolvePromise)
-        return
-      }
-      if (isHostCandidate(event.candidate.candidate)) {
-        const family = detectCandidateFamily(event.candidate.candidate)
-        if (family === 'ipv4' || family === 'ipv6') {
-          localHostFamilies.add(family)
-        }
-      }
-      pendingLocalCandidates.push({
-        candidate: event.candidate.candidate,
-        sdpMid: event.candidate.sdpMid,
-        sdpMLineIndex: event.candidate.sdpMLineIndex,
-      })
-      scheduleFlush(resolvePromise)
-    }
-
-    function handleGatheringStateChange(): void {
-      if (activePeer.iceGatheringState === 'complete') {
-        gatheringComplete = true
-        scheduleFlush(resolvePromise)
-      }
-    }
-
-    await new Promise<void>((resolve) => {
-      resolvePromise = resolve
-      activePeer.addEventListener('icecandidate', handleIceCandidate)
-      activePeer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
-
-      for (const candidate of input.negotiation.client.getIceCandidates()) {
-        if (isHostCandidate(candidate.candidate)) {
-          const family = detectCandidateFamily(candidate.candidate)
-          if (family === 'ipv4' || family === 'ipv6') {
-            localHostFamilies.add(family)
-          }
-        }
-        pendingLocalCandidates.push(candidate)
-      }
-      if (pendingLocalCandidates.length > 0 || gatheringComplete) {
-        scheduleFlush(resolve)
-      }
-    })
-  }
-
-  async function completeConnecting(input: {
-    negotiation: NegotiationAttempt
-    remoteCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]>
-  }): Promise<void> {
-    await input.negotiation.client.addIceCandidates(input.remoteCandidates)
-    if (!isAttemptActive(input.negotiation.attempt)) {
-      return
-    }
-    publishPhase('connecting')
-  }
-
-  async function connectMediaProtocol(spec: RuntimeLaunchSpec, input: { restart: boolean }): Promise<void> {
-    const negotiation = createNegotiationAttempt()
-    const offer = await createChannelOffer({
-      negotiation,
-      restart: input.restart,
-    })
-    if (offer === null) {
-      return
-    }
-    await applyRemoteAnswer({
-      spec,
-      negotiation,
-      channel: 'media',
-      offerSdp: offer.sdp,
-      restart: input.restart,
-    })
-    await exchangeIceCandidatesIncrementally({
-      spec,
-      negotiation,
-      restart: input.restart,
-    })
-  }
-
-  async function renegotiateChatProtocol(spec: RuntimeLaunchSpec): Promise<void> {
-    const negotiation = createNegotiationAttempt()
-    const offer = await createChannelOffer({ negotiation })
-    if (offer === null) {
-      return
-    }
-    await applyRemoteAnswer({
-      spec,
-      negotiation,
-      channel: 'chat',
-      offerSdp: offer.sdp,
-      restart: false,
-    })
-  }
-
-  async function rebuildBrowserRuntime(spec: RuntimeLaunchSpec, input: { restoreMicrophone: boolean }): Promise<void> {
+  async function rebuildBrowserRuntime(spec: RuntimeLaunchSpec, input: { restoreMicrophone: boolean, operation?: ConnectionRecoveryOperation }): Promise<void> {
     prepareFreshClient(spec)
     bindProtocolSession(spec)
-    await connectMediaProtocol(spec, { restart: false })
+    await negotiation.connectMediaProtocolNow(spec, { restart: false, operation: input.operation })
 
     if (input.restoreMicrophone) {
-      await assertClient().audio().startMic()
-      await renegotiateChatProtocol(spec)
+      if (input.operation && !input.operation.isCurrent())
+        throw new Error('streamRuntimeSuperseded')
+      const mic = assertClient().audio().startMic()
+      await (input.operation?.wait(mic, 10_000, 'microphoneRestoreTimeout') ?? withOperationTimeout(mic, 10_000, 'microphoneRestoreTimeout'))
+      await negotiation.renegotiateChatProtocolNow(spec, input.operation)
     }
   }
 
@@ -3400,7 +2890,12 @@ export function createBrowserRuntime(options: {
   }
 
   const runtime: RuntimePort = {
-    async launch(spec) {
+    async launch(spec, operation) {
+      const generation = ++resourceGeneration
+      runtimeAbort.abort()
+      runtimeAbort = new AbortController()
+      if (options.connectionRecovery === undefined)
+        connectionRecovery.reset()
       currentSpec = spec
       srState = createBrowserSuperResolutionStateForLaunch({
         targetVideoWidth: spec.runtime.targetVideoWidth,
@@ -3417,16 +2912,12 @@ export function createBrowserRuntime(options: {
       connectedAt = null
       lastMediaActivityAt = null
       frameIntervalEstimateMs = null
-      nextAllowedStallRecoveryAt = 0
-      stallRecoveryAttemptCount = 0
-      lastStallRecoveryAt = 0
+      supervision.resetEpisode()
       lastReconnectReason = undefined
       lastStallReason = undefined
-      recoveryGate = {}
-      lastStallEvidenceSnapshot = null
       bandwidthState = 'stable'
       bandwidthAction = 'none'
-      bandwidthStateChangedAtMs = Date.now()
+      bandwidthStateChangedAtMs = monotonicNowMs()
       sdpDownshiftLevel = 0
       baseVideoBitrateKbps = resolveDefaultVideoBitrateKbps(spec)
       recoveryEpochId = undefined
@@ -3530,18 +3021,24 @@ export function createBrowserRuntime(options: {
       latestTransportPath = undefined
       presentationMilestone = 'idle'
       presentationStage = null
-      await attachGamepadSession(spec.sessionId)
+      if (generation !== resourceGeneration || currentSpec !== spec)
+        return
       prepareFreshClient(spec)
       bindVisibilityGovernor()
       bindDisplayGeometryObserver()
       startMediaStallMonitoring()
       bindProtocolSession(spec)
-      await connectMediaProtocol(spec, { restart: false })
+      await negotiation.connectMediaProtocol(spec, { restart: false, operation })
+      if (generation !== resourceGeneration || currentSpec !== spec)
+        return
       applyCurrentDisplayState()
     },
     async stop(_reason?: string) {
-      const stoppedSessionId = currentSpec?.sessionId ?? null
-      connectAttempt += 1
+      resourceGeneration += 1
+      runtimeAbort.abort()
+      if (options.connectionRecovery === undefined)
+        connectionRecovery.reset()
+      negotiation.invalidate()
       reconnectPromise = null
       currentSpec = null
       stopMediaStallMonitoring()
@@ -3550,16 +3047,12 @@ export function createBrowserRuntime(options: {
       connectedAt = null
       lastMediaActivityAt = null
       frameIntervalEstimateMs = null
-      nextAllowedStallRecoveryAt = 0
-      stallRecoveryAttemptCount = 0
-      lastStallRecoveryAt = 0
+      supervision.resetEpisode()
       lastReconnectReason = undefined
       lastStallReason = undefined
-      recoveryGate = {}
-      lastStallEvidenceSnapshot = null
       bandwidthState = 'stable'
       bandwidthAction = 'none'
-      bandwidthStateChangedAtMs = Date.now()
+      bandwidthStateChangedAtMs = monotonicNowMs()
       sdpDownshiftLevel = 0
       baseVideoBitrateKbps = 0
       recoveryEpochId = undefined
@@ -3659,20 +3152,24 @@ export function createBrowserRuntime(options: {
       presentationMilestone = 'idle'
       presentationStage = null
       destroyClient()
-      await detachGamepadSession(stoppedSessionId)
     },
-    async requestReconnect(reason: StreamRuntimeReconnectReason) {
+    async requestReconnect(reason: StreamRuntimeReconnectReason, operation) {
       const spec = assertSpec()
       lastReconnectReason = reason
       if (reconnectPromise !== null) {
         return await reconnectPromise
       }
 
-      reconnectPromise = (async () => {
+      const generation = resourceGeneration
+      reconnectPromise = negotiationQueue.run(() => generation === resourceGeneration && currentSpec === spec, async () => {
+        if (operation && !operation.isCurrent())
+          throw new Error('streamRuntimeSuperseded')
         const restoreMicrophone = shouldRestoreMicrophone()
         publishPhase('reconnecting')
         try {
-          await connectMediaProtocol(spec, { restart: true })
+          await negotiation.connectMediaProtocolNow(spec, { restart: true, operation })
+          if (generation !== resourceGeneration || currentSpec !== spec)
+            throw new Error('streamRuntimeSuperseded')
           applyProfileWarmupAfterReconnect(reason, 'iceRestart')
           recordRuntimeTraceEvent('reconnectResult', {
             result: 'success',
@@ -3681,8 +3178,12 @@ export function createBrowserRuntime(options: {
           })
         }
         catch (error) {
+          if (generation !== resourceGeneration || currentSpec !== spec)
+            throw error
+          if ((operation && !operation.isCurrent()) || !connectionRecovery.reserveFollowup(operation))
+            throw error
           try {
-            await rebuildBrowserRuntime(spec, { restoreMicrophone })
+            await rebuildBrowserRuntime(spec, { restoreMicrophone, operation })
             applyProfileWarmupAfterReconnect(reason, 'rebuildRuntime')
             recordRuntimeTraceEvent('reconnectResult', {
               result: 'success',
@@ -3700,11 +3201,12 @@ export function createBrowserRuntime(options: {
             throw error
           }
         }
-      })().finally(() => {
-        reconnectPromise = null
+      }).finally(() => {
+        if (generation === resourceGeneration)
+          reconnectPromise = null
       })
 
-      return await reconnectPromise
+      return await (operation?.wait(reconnectPromise) ?? reconnectPromise)
     },
     applyDisplayState(state) {
       const previousUiSuperResolution = currentDisplayState?.superResolutionExperimental === true
@@ -3733,28 +3235,30 @@ export function createBrowserRuntime(options: {
     },
     async setMicrophoneEnabled(enabled) {
       const spec = assertSpec()
-      const audio = assertClient().audio()
-      const micState = audio.getMicState()
-      if (enabled) {
-        if (!micState.capturing || micState.paused) {
-          await audio.startMic()
-          await renegotiateChatProtocol(spec)
+      const generation = resourceGeneration
+      return await negotiationQueue.run(() => generation === resourceGeneration && currentSpec === spec, async () => {
+        const audio = assertClient().audio()
+        const micState = audio.getMicState()
+        if (enabled) {
+          if (!micState.capturing || micState.paused) {
+            await audio.startMic()
+            await negotiation.renegotiateChatProtocolNow(spec)
+          }
+          return true
         }
-        return true
-      }
-
-      if (micState.capturing && !micState.paused) {
-        await audio.stopMic()
-        await renegotiateChatProtocol(spec)
-      }
-      return false
+        if (micState.capturing && !micState.paused) {
+          await audio.stopMic()
+          await negotiation.renegotiateChatProtocolNow(spec)
+        }
+        return false
+      })
     },
     pressHome(durationMs) {
       client?.pressButton('home', durationMs)
     },
     snapshotStats: async () => {
       const stats = await assertClient().stats().snapshot()
-      const now = Date.now()
+      const now = monotonicNowMs()
       const controlChannelHealth = assertClient().getControlChannelHealthSnapshot()
       const plan = lastBrowserRendererPlan
       const observedPipelineType = plan?.kind ?? renderPipelineType

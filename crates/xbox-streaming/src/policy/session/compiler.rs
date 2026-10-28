@@ -256,6 +256,8 @@ fn compile_session_schedule(
         monitor_interval_ms,
         keepalive_interval_ms,
         offer_poll_interval_ms,
+        offer_exchange_timeout_ms: 45_000,
+        ice_exchange_timeout_ms: 45_000,
         ice_poll_interval_ms,
         startup_timeout_ms,
         ready_timeout_ms,

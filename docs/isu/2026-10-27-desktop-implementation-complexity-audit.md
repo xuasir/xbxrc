@@ -4,6 +4,8 @@
 
 后续方向更新：用户随后明确优先交付浏览器输入与媒体稳定版，推荐路线见[浏览器稳定版方案](/Users/guo.xu/Documents/code/games/xbxrc/docs/isu/2026-10-27-browser-stable-desktop-plan.md)。本文保留当时的实现分析与证据。
 
+2026-10-28 串流公共主线细化：可靠性与代码精简计划见[串流公共主线 RFC](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-10-28-streaming-common-reliability-simplification.md)。计划基于当前 `02f6db40` 重新核对播放期超时、启动取消、恢复去重与清理路径，按故障回归、生命周期闭环、恢复收敛、结构精简、实机验收推进，并完整保留现有功能。
+
 ## 问题界定
 
 当前复杂度主要来自三个方面：Rust 自建媒体接收与恢复闭环；浏览器运行时集中维护大量相互影响的策略状态；公共控制层与具体 runtime 之间存在重复决策和契约错位。手柄底层已经完成一轮实质性收敛，输入消费端仍有遗留的不一致。

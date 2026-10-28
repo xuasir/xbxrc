@@ -148,3 +148,25 @@ export function decideRecoveryArbiter(input: RecoveryArbiterInput): RecoveryArbi
     },
   }
 }
+
+/** 连接动作使用传输与媒体供给事实；解码和显示故障继续交给所属领域恢复。 */
+export function shouldRecoverMediaConnection(input: {
+  connectionState: RTCPeerConnectionState
+  controlChannelState: string
+  hasInboundProgress: boolean
+  inboundVideoFps?: number
+  decodeFps?: number
+  packetAgeMs?: number
+}): boolean {
+  if (input.connectionState === 'failed' || input.connectionState === 'closed')
+    return true
+  if (input.connectionState !== 'connected')
+    return false
+  if (input.controlChannelState === 'closed' || input.controlChannelState === 'closing')
+    return true
+  const supplied = input.hasInboundProgress
+    || (input.inboundVideoFps ?? 0) >= 1
+    || (input.decodeFps ?? 0) >= 1
+    || (input.packetAgeMs !== undefined && input.packetAgeMs < 1_500)
+  return !supplied
+}

@@ -4,6 +4,7 @@ import type {
   StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
+import { monotonicNowMs } from './clock'
 import { NO_FRAME_RECENT_ACTIVITY_MS } from './no-frame-warning'
 
 const DIAGNOSTICS_NOTICE_LATCH_MS = 2_000
@@ -27,7 +28,7 @@ function hasRecentHostPresentFrame(lastHostFrameAtMs: number | null | undefined)
   if (lastHostFrameAtMs === null || lastHostFrameAtMs === undefined) {
     return false
   }
-  return Date.now() - lastHostFrameAtMs < NO_FRAME_RECENT_ACTIVITY_MS
+  return monotonicNowMs() - lastHostFrameAtMs < NO_FRAME_RECENT_ACTIVITY_MS
 }
 
 /**
@@ -599,7 +600,7 @@ function resolveLatchedDiagnosticsNotice(input: {
   isRecovering: boolean
   transportAnchorRecovering: boolean
 }): { preferDisplaySupply: boolean, isRecovering: boolean } {
-  const now = Date.now()
+  const now = monotonicNowMs()
   let targetMode: DiagnosticsNoticeLatchMode | null = null
   if (input.preferDisplaySupply) {
     targetMode = 'displaySupply'

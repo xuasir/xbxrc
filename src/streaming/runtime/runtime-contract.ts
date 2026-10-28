@@ -4,6 +4,7 @@ import type {
   RuntimeLaunchSpec,
   StreamRenderProjection,
 } from '../types'
+import type { ConnectionRecoveryOperation } from './connection-recovery'
 
 export type StreamRuntimePhase
   = | 'binding'
@@ -41,7 +42,7 @@ export type RuntimeEvent
       stage?: string | null
     }
     | { type: 'microphoneStateChanged', capturing: boolean, paused: boolean }
-    | { type: 'frameReady' }
+    | { type: 'frameReady', fresh?: boolean }
     | { type: 'error', error: unknown }
 
 /**
@@ -49,9 +50,9 @@ export type RuntimeEvent
  * 下行是 launch/stop/命令；上行统一走 subscribe(event)。
  */
 export interface RuntimePort {
-  launch: (spec: RuntimeLaunchSpec) => Promise<void>
+  launch: (spec: RuntimeLaunchSpec, operation?: ConnectionRecoveryOperation) => Promise<void>
   stop: (reason?: string) => Promise<void>
-  requestReconnect: (reason: StreamRuntimeReconnectReason) => Promise<void>
+  requestReconnect: (reason: StreamRuntimeReconnectReason, operation?: ConnectionRecoveryOperation) => Promise<void>
   applyDisplayState: (state: RuntimeDisplayState) => void
   setAudioVolume: (value: number) => void
   setMicrophoneEnabled: (enabled: boolean) => Promise<boolean>

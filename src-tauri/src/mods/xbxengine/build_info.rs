@@ -17,6 +17,7 @@ pub(crate) fn current_build_fingerprint_with_effective(
 ) -> XbxEngineBuildFingerprintDto {
     XbxEngineBuildFingerprintDto {
         git_commit_short: env!("XBX_BUILD_GIT_COMMIT_SHORT").to_string(),
+        source_fingerprint_sha256: Some(env!("XBX_BUILD_SOURCE_SHA256").to_string()),
         workspace_dirty: env!("XBX_BUILD_WORKSPACE_DIRTY") == "true",
         build_timestamp_unix_ms: env!("XBX_BUILD_TIMESTAMP_UNIX_MS").to_string(),
         cargo_profile: env!("XBX_BUILD_CARGO_PROFILE").to_string(),

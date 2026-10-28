@@ -39,6 +39,10 @@ export function createXbxEngineRuntime(options: {
   let pendingLegacyMediaReady = false
   let stopInput: (() => Promise<void>) | undefined
   let homeTimer: ReturnType<typeof setTimeout> | undefined
+  let generation = 0
+  let active = false
+  let activeSessionId: string | undefined
+  let lastDecodedFrameAt: number | null = null
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -79,6 +83,8 @@ export function createXbxEngineRuntime(options: {
   }
 
   const unsubscribe = events.on('streaming.xbxEngineRuntimeEvent', (event) => {
+    if (!active)
+      return
     if (event.type === 'runtime.phaseChanged') {
       emit({ type: 'phaseChanged', phase: event.phase })
       return
@@ -121,7 +127,10 @@ export function createXbxEngineRuntime(options: {
       return
     }
     if (event.type === 'stats.videoFrameRendered') {
-      emit({ type: 'frameReady' })
+      const fresh = lastDecodedFrameAt === null || event.frameDecodedTimeMs > lastDecodedFrameAt
+      if (fresh)
+        lastDecodedFrameAt = event.frameDecodedTimeMs
+      emit({ type: 'frameReady', fresh })
       return
     }
     if (event.type === 'error') {
@@ -134,7 +143,16 @@ export function createXbxEngineRuntime(options: {
 
   return {
     async launch(spec) {
-      stopInput = await startRustStreamInput(spec.sessionId)
+      const startedGeneration = ++generation
+      active = true
+      activeSessionId = spec.sessionId
+      lastDecodedFrameAt = null
+      const releaseInput = await startRustStreamInput(spec.sessionId, () => startedGeneration === generation)
+      if (startedGeneration !== generation) {
+        await releaseInput()
+        return
+      }
+      stopInput = releaseInput
       recordLaunchTraceEvent('runtimeAttachViewportRequested', {
         viewportId: viewportElementId,
         targetType: spec.targetType,
@@ -142,6 +160,8 @@ export function createXbxEngineRuntime(options: {
       await rpc.xbxEngine.attachViewport({
         viewportId: viewportElementId,
       })
+      if (startedGeneration !== generation)
+        return
       recordLaunchTraceEvent('runtimeAttachViewportCompleted', {
         viewportId: viewportElementId,
         targetType: spec.targetType,
@@ -168,6 +188,8 @@ export function createXbxEngineRuntime(options: {
         iceCandidatePolicy: spec.runtime.iceCandidatePolicy ?? null,
         audioVolume,
       })
+      if (startedGeneration !== generation)
+        return
       recordLaunchTraceEvent('runtimeStartCompleted', {
         viewportId: viewportElementId,
         targetType: spec.targetType,
@@ -175,10 +197,12 @@ export function createXbxEngineRuntime(options: {
       }, spec.sessionId)
     },
     async stop(reason?: string) {
+      generation += 1
+      active = false
+      activeSessionId = undefined
       clearTimeout(homeTimer)
       inputController.setSystemHome(false)
-      await stopInput?.()
-      stopInput = undefined
+      inputController.setStreamReady(false)
       unsubscribe()
       microphoneState = {
         capturing: false,
@@ -188,18 +212,29 @@ export function createXbxEngineRuntime(options: {
         viewportId: viewportElementId,
         reason: reason ?? 'unspecified',
       })
-      await rpc.xbxEngine.stopRuntime({
-        reason,
-      })
+      const releasedInput = stopInput
+      const results = await Promise.allSettled([
+        Promise.resolve().then(() => releasedInput?.()).then(() => {
+          if (stopInput === releasedInput)
+            stopInput = undefined
+        }),
+        rpc.xbxEngine.stopRuntime({ reason }),
+      ])
+      const errors = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected').map(result => result.reason)
+      if (errors.length > 0)
+        throw new AggregateError(errors, 'rustRuntimeCleanupPending')
       recordLaunchTraceEvent('runtimeStopCompleted', {
         viewportId: viewportElementId,
         reason: reason ?? 'unspecified',
       })
     },
-    async requestReconnect(reason) {
-      await rpc.xbxEngine.requestReconnect({
-        reason: toRuntimeReconnectReason(reason),
-      })
+    async requestReconnect(reason, operation) {
+      if (operation && !operation.isCurrent())
+        return
+      if (!active || activeSessionId === undefined)
+        return
+      const requested = rpc.xbxEngine.requestReconnect({ reason: toRuntimeReconnectReason(reason), sessionId: activeSessionId })
+      await (operation?.wait(requested) ?? requested)
     },
     applyDisplayState(state: RuntimeDisplayState) {
       void rpc.xbxEngine.applyDisplayState({

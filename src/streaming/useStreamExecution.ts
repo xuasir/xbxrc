@@ -1,30 +1,29 @@
 import type {
-  StreamingStartupBoundedRetry,
   StreamingStartupEvent,
 } from '@shared/rpc/streaming'
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
 import type { StreamExecutionViewAction, StreamExecutionViewState } from './execution/view-state'
-import type { SessionHealthSnapshot, SessionUiPhase } from './session'
+import type { SessionHealthSnapshot } from './session'
 import type {
   DisplayOptionsValue,
   IceCandidatePolicySpec,
   RuntimeLaunchSpec,
   StreamConfigSnapshot,
   StreamEnhancementMountSnapshot,
-  StreamErrorKind,
   StreamingSessionExecution,
   StreamingSessionProgress,
   StreamSessionCapabilitiesProjection,
   StreamSessionDiagnosticsSnapshot,
-  StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
+import { monotonicNowMs } from './clock'
 import { buildStreamDiagnosticsSnapshot, resetDiagnosticsNoticeLatch } from './diagnostics'
 import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
+import { withOperationTimeout } from './execution/async-operation'
 import {
   reduceViewState,
   RUNTIME_PHASE_STATUS_KEYS,
@@ -37,6 +36,7 @@ import {
 import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
+  cancelRemoteStreamStartup,
   closeRemoteStreamSession,
   createSessionProgressSubscription,
   createStartupAttemptId,
@@ -95,15 +95,26 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const routeState = createStreamRouteState(options.route)
   const diagnosticsTe = options.te ?? (() => false)
 
-  const sessionUiPhase = ref<SessionUiPhase>('idle')
-  const isLoading = ref(true)
-  const isConnected = ref(false)
-  const statusText = ref('')
-  const errorText = ref('')
-  const errorDiagnosticText = ref('')
-  const errorKind = ref<StreamErrorKind>('none')
-  const startupBoundedRetry = ref<StreamingStartupBoundedRetry | null>(null)
-  const lifecyclePhase = ref<StreamSessionLifecyclePhase>('idle')
+  const viewState = shallowRef<StreamExecutionViewState>({
+    sessionUiPhase: 'idle',
+    isLoading: true,
+    isConnected: false,
+    statusText: '',
+    errorText: '',
+    errorDiagnosticText: '',
+    errorKind: 'none',
+    startupBoundedRetry: null,
+    lifecyclePhase: 'idle',
+  })
+  const sessionUiPhase = computed(() => viewState.value.sessionUiPhase)
+  const isLoading = computed(() => viewState.value.isLoading)
+  const isConnected = computed(() => viewState.value.isConnected)
+  const statusText = computed(() => viewState.value.statusText)
+  const errorText = computed(() => viewState.value.errorText)
+  const errorDiagnosticText = computed(() => viewState.value.errorDiagnosticText)
+  const errorKind = computed(() => viewState.value.errorKind)
+  const startupBoundedRetry = computed(() => viewState.value.startupBoundedRetry)
+  const lifecyclePhase = computed(() => viewState.value.lifecyclePhase)
   const sessionId = ref('')
   const startupAttemptId = ref('')
   const sessionExecution = ref<StreamingSessionExecution | null>(null)
@@ -117,11 +128,13 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
   let disposeStartupEvents: (() => void) | null = null
-
-  function setStreamSessionPresent(active: boolean): void {
-    if (!active)
-      void streamInputRouteController.resetOnLeaveStream()
-  }
+  let executionGeneration = 0
+  let disposed = false
+  let closePromise: Promise<void> | null = null
+  let retryPromise: Promise<void> | null = null
+  let cleanupAllowsRetry = true
+  let pendingCleanupSessionId = ''
+  let pendingCleanupAttemptId = ''
 
   async function recordExecutionTraceEvent(
     event: string,
@@ -140,35 +153,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
   }
 
-  function readViewState(): StreamExecutionViewState {
-    return {
-      sessionUiPhase: sessionUiPhase.value,
-      isLoading: isLoading.value,
-      isConnected: isConnected.value,
-      statusText: statusText.value,
-      errorText: errorText.value,
-      errorDiagnosticText: errorDiagnosticText.value,
-      errorKind: errorKind.value,
-      startupBoundedRetry: startupBoundedRetry.value,
-      lifecyclePhase: lifecyclePhase.value,
-    }
-  }
-
-  // 单一写入口：startup/progress/runtime 只能通过 reducer 改这组 UI 状态。
-  function applyViewState(next: StreamExecutionViewState): void {
-    sessionUiPhase.value = next.sessionUiPhase
-    isLoading.value = next.isLoading
-    isConnected.value = next.isConnected
-    statusText.value = next.statusText
-    errorText.value = next.errorText
-    errorDiagnosticText.value = next.errorDiagnosticText
-    errorKind.value = next.errorKind
-    startupBoundedRetry.value = next.startupBoundedRetry
-    lifecyclePhase.value = next.lifecyclePhase
-  }
-
   function dispatchViewAction(action: StreamExecutionViewAction): void {
-    applyViewState(reduceViewState(readViewState(), action))
+    viewState.value = reduceViewState(viewState.value, action)
   }
 
   const runtimeHost = useStreamRuntimeHost({
@@ -330,8 +316,14 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     onProgress: (progress) => {
       applySessionProgress(progress, 'subscription')
     },
+    onMissing: () => {
+      applyResolvedError(new Error('streamingSessionMissing'))
+    },
     onError: (error) => {
-      applyResolvedError(error)
+      void recordExecutionTraceEvent('sessionObservationUnavailable', {
+        error: error instanceof Error ? error.message : String(error),
+        playing: isConnected.value,
+      })
     },
   })
 
@@ -350,7 +342,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       }
 
       const lastFrameAt = runtimeHost.lastFrameAt.value
-      if (lastFrameAt !== null && Date.now() - lastFrameAt < NO_FRAME_RECENT_ACTIVITY_MS) {
+      if (lastFrameAt !== null && monotonicNowMs() - lastFrameAt < NO_FRAME_RECENT_ACTIVITY_MS) {
         scheduleExecutionWarning()
         return
       }
@@ -369,11 +361,14 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   }
 
   function applyResolvedError(error: unknown): void {
+    if (closing.value || disposed)
+      return
     const resolved = resolveStreamError({
       error,
       t: options.t,
     })
     dispatchViewAction({ type: 'resolvedError', resolved })
+    void closeExecution({ reason: 'executionFailed' })
   }
 
   function disposeStartupEventSubscription(): void {
@@ -384,7 +379,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   }
 
   function applyStartupEvent(event: StreamingStartupEvent): void {
-    if (event.attemptId !== startupAttemptId.value) {
+    if (closing.value || disposed || event.attemptId !== startupAttemptId.value) {
       return
     }
 
@@ -393,10 +388,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       event,
       statusText: options.t(resolveStartupPhasePrimaryStatusTextKey(event.phase)),
     })
-  }
-
-  async function loadStreamConfig(): Promise<void> {
-    streamConfig.value = await loadStreamConfigSnapshot()
   }
 
   function enableSessionHealthReporting(): void {
@@ -416,6 +407,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     progress: StreamingSessionProgress,
     source: SessionProgressSource,
   ): void {
+    if (closing.value || disposed || progress.sessionId !== sessionId.value)
+      return
     sessionHealth.value = buildSessionHealthSnapshot(progress)
     const resolvedFailed
       = progress.phase === 'failed' ? resolveProgressError(progress, options.t) : undefined
@@ -429,77 +422,19 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
     if (progress.phase === 'failed') {
       disableSessionHealthReporting()
+      void closeExecution({ reason: 'remoteFailed' })
       return
     }
 
     if (progress.phase === 'closed') {
       disableSessionHealthReporting()
+      void closeExecution({ reason: 'remoteClosed' })
     }
-  }
-
-  async function disconnectStream(optionsInput?: { navigateBack?: boolean, reason?: string }): Promise<void> {
-    if (closing.value) {
-      return
-    }
-
-    closing.value = true
-    dispatchViewAction({ type: 'disconnecting' })
-    disableSessionHealthReporting()
-    resetExecutionWarning()
-
-    await recordExecutionTraceEvent('closeExecutionRequested', {
-      source: 'stream-execution',
-      stage: 'disconnectStream',
-      navigateBack: optionsInput?.navigateBack ?? false,
-      reason: optionsInput?.reason ?? 'unspecified',
-      hasSessionId: sessionId.value !== '',
-    })
-
-    if (sessionId.value !== '') {
-      try {
-        await recordExecutionTraceEvent('closeSessionRequestedByClient', {
-          source: 'stream-execution',
-          reason: optionsInput?.reason ?? 'unspecified',
-          navigateBack: optionsInput?.navigateBack ?? false,
-        })
-        await closeRemoteStreamSession(sessionId.value)
-        await recordExecutionTraceEvent('closeSessionCompletedByClient', {
-          source: 'stream-execution',
-          reason: optionsInput?.reason ?? 'unspecified',
-          navigateBack: optionsInput?.navigateBack ?? false,
-        })
-      }
-      catch {
-        await recordExecutionTraceEvent('closeSessionFailedByClient', {
-          source: 'stream-execution',
-          reason: optionsInput?.reason ?? 'unspecified',
-          navigateBack: optionsInput?.navigateBack ?? false,
-        })
-        // 忽略关闭阶段错误，避免阻断页面退出。
-      }
-    }
-
-    sessionId.value = ''
-    sessionExecution.value = null
-    sessionHealth.value = null
-    setStreamSessionPresent(false)
-    dispatchViewAction({ type: 'disconnected' })
-
-    if (optionsInput?.navigateBack === true) {
-      try {
-        resetStreamUiHost()
-        await options.router.push(routeState.exitRoute.value)
-      }
-      finally {
-        closing.value = false
-      }
-      return
-    }
-
-    closing.value = false
   }
 
   async function startStream(): Promise<void> {
+    if (disposed || closing.value)
+      return
     if (routeState.targetId.value === '') {
       dispatchViewAction({
         type: 'targetMissing',
@@ -508,15 +443,21 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       return
     }
 
+    const generation = ++executionGeneration
+    const attemptId = createStartupAttemptId()
+    const active = () => !disposed && !closing.value && generation === executionGeneration
     try {
       disableSessionHealthReporting()
       dispatchViewAction({ type: 'startRequested' })
       sessionHealth.value = null
-      startupAttemptId.value = createStartupAttemptId()
+      startupAttemptId.value = attemptId
       disposeStartupEventSubscription()
       disposeStartupEvents = events.on('streaming.startupEvent', applyStartupEvent)
 
-      await loadStreamConfig()
+      const config = await withOperationTimeout(loadStreamConfigSnapshot(), 12_000, 'streamConfigTimeout')
+      if (!active())
+        return
+      streamConfig.value = config
 
       dispatchViewAction({
         type: 'startPreparing',
@@ -525,33 +466,43 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       const started = await startRemoteStreamSessionWithAttempt(
         routeState.targetType.value,
         routeState.targetId.value,
-        startupAttemptId.value,
+        attemptId,
       )
+
+      if (!active()) {
+        await settleCleanup('lateStartupCleanup', () => cancelRemoteStreamStartup(attemptId), started.execution.session.id)
+        return
+      }
 
       sessionExecution.value = started.execution
       sessionId.value = started.execution.session.id
-      setStreamSessionPresent(true)
       disposeStartupEventSubscription()
       enableSessionHealthReporting()
       applySessionProgress(started.progress, 'start')
     }
     catch (error) {
+      if (!active())
+        return
       disposeStartupEventSubscription()
       applyResolvedError(error)
     }
   }
 
-  async function handleRetry(): Promise<void> {
-    disableSessionHealthReporting()
-    resetExecutionWarning()
-    sessionId.value = ''
-    sessionExecution.value = null
-    sessionHealth.value = null
-    closing.value = false
-    setStreamSessionPresent(false)
-    dispatchViewAction({ type: 'retryRequested' })
-    await runtimeHost.closeRuntime('retry')
-    await startStream()
+  function handleRetry(): Promise<void> {
+    if (retryPromise !== null)
+      return retryPromise
+    retryPromise = (async () => {
+      await closeExecution({ reason: 'retry' })
+      if (disposed)
+        return
+      dispatchViewAction({ type: 'retryRequested' })
+      if (!cleanupAllowsRetry) {
+        applyResolvedError(new Error('previousExecutionCleanupPending'))
+        return
+      }
+      await startStream()
+    })().finally(() => { retryPromise = null })
+    return retryPromise
   }
 
   async function powerOffConsole(): Promise<boolean> {
@@ -608,17 +559,75 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     applyResolvedError(message)
   }
 
-  async function closeExecution(input?: { navigateBack?: boolean, reason?: string }): Promise<void> {
+  let cleanupSequence = 0
+
+  async function settleCleanup(stage: string, action: () => Promise<unknown>, traceSessionId: string | null): Promise<boolean> {
+    const operationId = `execution-cleanup-${executionGeneration}-${++cleanupSequence}`
+    const cleanupGeneration = executionGeneration
+    const startedAt = monotonicNowMs()
+    void recordExecutionTraceEvent('cleanupStarted', { operationId, stage, generation: cleanupGeneration, deadlineMs: 15_000 }, traceSessionId)
+    try {
+      await withOperationTimeout(action(), 15_000, `${stage}Timeout`)
+      void recordExecutionTraceEvent('cleanupFinished', { operationId, stage, generation: cleanupGeneration, result: 'success', elapsedMs: monotonicNowMs() - startedAt }, traceSessionId)
+      return true
+    }
+    catch (error) {
+      void recordExecutionTraceEvent('cleanupPending', {
+        operationId,
+        stage,
+        generation: cleanupGeneration,
+        elapsedMs: monotonicNowMs() - startedAt,
+        error: error instanceof Error ? error.message : String(error),
+      }, traceSessionId)
+      return false
+    }
+  }
+
+  function closeExecution(input?: { navigateBack?: boolean, reason?: string }): Promise<void> {
+    if (closePromise !== null)
+      return closePromise
+    // 先撤销写入资格，再等待资源停止；所有清理使用捕获的旧资源标识。
+    executionGeneration += 1
+    const stoppedSessionId = sessionId.value || pendingCleanupSessionId
+    const stoppedAttemptId = startupAttemptId.value || pendingCleanupAttemptId
+    startupAttemptId.value = ''
+    closing.value = true
+    disposeStartupEventSubscription()
+    disableSessionHealthReporting()
+    dispatchViewAction({ type: 'disconnecting' })
     resetDiagnosticsNoticeLatch()
     resetExecutionWarning()
-    await recordExecutionTraceEvent('closeExecutionRequested', {
+    void recordExecutionTraceEvent('closeExecutionRequested', {
       source: 'stream-execution',
       stage: 'closeExecution',
       navigateBack: input?.navigateBack ?? false,
       reason: input?.reason ?? 'unspecified',
     })
-    await runtimeHost.closeRuntime(input?.reason)
-    await disconnectStream(input)
+    closePromise = (async () => {
+      const cancellation = stoppedAttemptId === ''
+        ? Promise.resolve(true)
+        : settleCleanup('cancelStartup', () => cancelRemoteStreamStartup(stoppedAttemptId), stoppedSessionId || null)
+      const inputReleased = await settleCleanup('releaseInput', () => streamInputRouteController.resetOnLeaveStream(), stoppedSessionId || null)
+      const runtimeStopped = await settleCleanup('stopRuntime', () => runtimeHost.closeRuntime(input?.reason), stoppedSessionId || null)
+      const remoteClosed = stoppedSessionId === ''
+        || await settleCleanup('closeSession', () => closeRemoteStreamSession(stoppedSessionId), stoppedSessionId)
+      const startupCancelled = await cancellation
+      pendingCleanupSessionId = remoteClosed ? '' : stoppedSessionId
+      pendingCleanupAttemptId = startupCancelled ? '' : stoppedAttemptId
+      cleanupAllowsRetry = inputReleased && runtimeStopped && remoteClosed && startupCancelled
+      sessionId.value = ''
+      sessionExecution.value = null
+      sessionHealth.value = null
+      dispatchViewAction({ type: 'disconnected' })
+      if (input?.navigateBack === true) {
+        resetStreamUiHost()
+        await options.router.push(routeState.exitRoute.value)
+      }
+    })().finally(() => {
+      closing.value = false
+      closePromise = null
+    })
+    return closePromise
   }
 
   async function toggleFullscreen(): Promise<void> {
@@ -626,9 +635,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   }
 
   async function powerOffAndDisconnect(): Promise<void> {
-    resetExecutionWarning()
-    await runtimeHost.closeRuntime('powerOff')
-    await disconnectStream({ reason: 'powerOff' })
+    await closeExecution({ reason: 'powerOff' })
     const accepted = await powerOffConsole()
     if (!accepted) {
       handlePlayerError(options.t('streamPage.errors.powerOffFailed'))
@@ -714,7 +721,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         type: 'runtimeLaunchRequested',
         statusText: options.t('streamPage.status.startingPlayer'),
       })
+      const generation = executionGeneration
       void runtimeHost.startRuntime(spec).catch((error: unknown) => {
+        if (disposed || closing.value || generation !== executionGeneration)
+          return
         handlePlayerError(error instanceof Error ? error.message : String(error))
         handlePlayerDisconnected()
       })
@@ -787,6 +797,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   })
 
   onBeforeUnmount(() => {
+    disposed = true
     resetDiagnosticsNoticeLatch()
     resetExecutionWarning()
     runtimeHost.setExperienceMetricsEnabled(false)

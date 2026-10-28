@@ -15,6 +15,7 @@ use crate::{
     XbxEngineRuntimeHealth,
 };
 
+mod connection_recovery;
 mod lifecycle;
 mod sync;
 
@@ -277,6 +278,28 @@ impl Display for XbxEngineRuntimeError {
 impl Error for XbxEngineRuntimeError {}
 
 pub trait XbxEngineHostBridge {
+    fn set_operation_epoch(&mut self, _epoch: Option<u64>) {}
+
+    fn connection_recovery_deadline(&self) -> Option<std::time::Instant> {
+        None
+    }
+    fn allows_connection_recovery(
+        &mut self,
+        _session_id: &str,
+    ) -> Result<bool, XbxEngineRuntimeError> {
+        Ok(true)
+    }
+
+    fn set_connection_recovery_deadline(&mut self, _deadline: Option<std::time::Instant>) {}
+
+    fn on_connection_recovery_event(
+        &self,
+        _event: &str,
+        _session_id: &str,
+        _payload: serde_json::Value,
+    ) {
+    }
+
     fn request(
         &mut self,
         request: XbxEngineHostRequestDto,
@@ -404,6 +427,8 @@ pub struct XbxEngineRuntime<
     snapshot: XbxEngineRuntimeSnapshot,
     health: XbxEngineRuntimeHealth,
     h264_profile_fallback: Option<XbxEngineH264ProfileFallbackState>,
+    connection_recovery: connection_recovery::ConnectionRecoveryState,
+    control_operation_epoch: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -454,6 +479,8 @@ where
             snapshot: XbxEngineRuntimeSnapshot::default(),
             health: XbxEngineRuntimeHealth::default(),
             h264_profile_fallback: None,
+            connection_recovery: Default::default(),
+            control_operation_epoch: None,
         }
     }
 
@@ -463,6 +490,17 @@ where
 
     pub fn state(&self) -> &XbxEngineRuntimeState {
         &self.state
+    }
+
+    pub fn current_session_id(&self) -> Option<&str> {
+        self.session
+            .as_ref()
+            .map(|session| session.session_id.as_str())
+    }
+
+    fn operation_epoch(&self) -> u64 {
+        self.control_operation_epoch
+            .unwrap_or_else(|| self.host_bridge.current_cancellation_epoch())
     }
 
     pub fn snapshot(&self) -> &XbxEngineRuntimeSnapshot {

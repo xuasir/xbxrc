@@ -70,6 +70,7 @@ where
         render: Option<XbxEngineRenderProjectionDto>,
         ice_candidate_policy: Option<XbxEngineIceCandidatePolicyDto>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        self.reset_connection_recovery();
         self.host_bridge.clear_pending_gamepad_rumble_requests()?;
         let previous_config = self.config.clone();
         let previous_state = self.state.clone();
@@ -81,7 +82,7 @@ where
         self.session = Some(session);
         self.snapshot.viewport = Some(viewport);
         self.snapshot.audio_volume = audio_volume;
-        let operation_epoch = self.host_bridge.current_cancellation_epoch();
+        let operation_epoch = self.operation_epoch();
 
         let start_result = (|| {
             self.apply_execution_spec(
@@ -116,10 +117,11 @@ where
     }
 
     /// `restart=true` 的宿主侧协商仅允许经由本入口；`trigger_source` 用于观测与去双轨验收。
-    pub fn request_reconnect(
+    pub(super) fn perform_connection_reconnect(
         &mut self,
         reason: XbxEngineReconnectReasonDto,
         trigger_source: XbxEngineReconnectTriggerSource,
+        operation_epoch: u64,
     ) -> Result<(), XbxEngineRuntimeError> {
         let previous_state = self.state.clone();
         let previous_session = self.session.clone();
@@ -131,7 +133,6 @@ where
         let pre_reconnect_last_recovery_action = self.snapshot.last_recovery_action.clone();
         let pre_reconnect_last_recovery_action_at_ms = self.snapshot.last_recovery_action_at_ms;
         let reconnect_settled_last_keyframe_request_at = self.health.last_keyframe_request_at_ms;
-        let operation_epoch = self.host_bridge.current_cancellation_epoch();
         self.state = XbxEngineRuntimeState::Reconnecting;
         self.health.mark_reconnect_started(reconnect_started_at_ms);
         self.snapshot.recovery_reconnect_count =
@@ -156,7 +157,7 @@ where
             if self.snapshot.microphone_capturing {
                 self.ensure_operation_active(operation_epoch)?;
                 self.media_backend.set_microphone_capturing(true)?;
-                self.renegotiate_chat_channel()?;
+                self.renegotiate_chat_channel_with_epoch(operation_epoch)?;
             }
             Ok(())
         })();
@@ -191,6 +192,7 @@ where
     }
 
     pub fn stop(&mut self) {
+        self.reset_connection_recovery();
         self.clear_h264_profile_fallback_for_new_execution();
         if let Err(error) = self.host_bridge.clear_pending_gamepad_rumble_requests() {
             self.emit_error("clearPendingGamepadRumbleRequestsFailed", error.to_string());
@@ -304,6 +306,9 @@ where
     }
 
     pub fn tick(&mut self) {
+        if self.expire_connection_recovery() {
+            return;
+        }
         if !matches!(
             self.state,
             XbxEngineRuntimeState::Running | XbxEngineRuntimeState::Reconnecting
@@ -323,6 +328,7 @@ where
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+        self.observe_connection_recovery(&runtime_stats);
         self.maybe_retry_reconnect_settled_keyframe(&runtime_stats);
         self.maybe_reset_native_presenter_for_host_stall(&runtime_stats);
         self.drive_pending_gamepad_rumble_requests();
@@ -1110,6 +1116,26 @@ where
         }
     }
 
+    /// 宿主入队时的身份贯穿整个同步操作，Stop 到达后每个阶段沿原 epoch 撤销。
+    pub fn apply_control_with_epoch(
+        &mut self,
+        command: XbxEngineControlCommandDto,
+        epoch: u64,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if self.host_bridge.current_cancellation_epoch() != epoch {
+            return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeCancelled"));
+        }
+        let previous = self.control_operation_epoch.replace(epoch);
+        self.host_bridge.set_operation_epoch(Some(epoch));
+        self.host_bridge.set_connection_recovery_deadline(deadline);
+        let result = self.apply_control(command);
+        self.control_operation_epoch = previous;
+        self.host_bridge.set_operation_epoch(None);
+        self.host_bridge.set_connection_recovery_deadline(None);
+        result
+    }
+
     fn apply_execution_spec(
         &mut self,
         runtime: Option<&XbxEngineRuntimeProjectionDto>,
@@ -1208,7 +1234,17 @@ where
     }
 
     fn renegotiate_chat_channel(&mut self) -> Result<(), XbxEngineRuntimeError> {
+        let operation_epoch = self.operation_epoch();
+        self.renegotiate_chat_channel_with_epoch(operation_epoch)
+    }
+
+    fn renegotiate_chat_channel_with_epoch(
+        &mut self,
+        operation_epoch: u64,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.ensure_operation_active(operation_epoch)?;
         let local_offer_sdp = self.media_backend.create_offer()?;
+        self.ensure_operation_active(operation_epoch)?;
         let answer_sdp = Self::extract_offer_response(self.host_bridge.request(
             XbxEngineHostRequestDto::ExchangeOffer {
                 session_id: self.require_session_id()?,
@@ -1217,6 +1253,7 @@ where
                 restart: false,
             },
         )?)?;
+        self.ensure_operation_active(operation_epoch)?;
         self.media_backend
             .apply_remote_description(answer_sdp.clone(), Vec::new())?;
         self.snapshot.last_offer_sdp = Some(local_offer_sdp);
@@ -1583,11 +1620,14 @@ where
         Ok(aggregated_remote_candidates)
     }
 
-    fn ensure_operation_active(&self, operation_epoch: u64) -> Result<(), XbxEngineRuntimeError> {
+    pub(super) fn ensure_operation_active(
+        &self,
+        operation_epoch: u64,
+    ) -> Result<(), XbxEngineRuntimeError> {
         if self.host_bridge.current_cancellation_epoch() != operation_epoch {
             return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeCancelled"));
         }
-        Ok(())
+        self.connection_recovery.ensure_active()
     }
 
     fn collect_unsent_local_candidates(

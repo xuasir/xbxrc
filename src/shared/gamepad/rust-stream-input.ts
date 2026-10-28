@@ -5,7 +5,7 @@ import { inputController } from './runtime'
 import { clonePadState, neutralState, stateEquals } from './state'
 
 /** 单一会话输入端口：按序提交公共层的最终状态，媒体后端只负责编码和发送。 */
-export async function startRustStreamInput(sessionId: string): Promise<() => Promise<void>> {
+export async function startRustStreamInput(sessionId: string, isCurrent: () => boolean = () => true): Promise<() => Promise<void>> {
   let sequence = 0
   let lastQueued: LogicalPadStateDto | undefined
   let pending: LogicalPadStateDto[] = []
@@ -55,7 +55,7 @@ export async function startRustStreamInput(sessionId: string): Promise<() => Pro
     flush()
   }
   const disposeRumble = await listen<{ effect: GamepadRumbleEffectDto }>('xbxrc:gamepad:stream-rumble', ({ payload }) => {
-    if (stopped)
+    if (stopped || !isCurrent())
       return
     const effect = payload.effect
     if (effect.durationMs === 0 && !effect.strongMagnitude && !effect.weakMagnitude && !effect.leftTrigger && !effect.rightTrigger) {
@@ -66,10 +66,19 @@ export async function startRustStreamInput(sessionId: string): Promise<() => Pro
       void inputController.rumble(effect, 'game')
     }
   })
-  const disposeInput = inputController.subscribe(snapshot => enqueue(snapshot.gameState))
+  // 监听器注册晚于退出时只释放本次订阅，资源归属由 runtime 代际提供。
+  if (!isCurrent()) {
+    disposeRumble()
+    return async () => {}
+  }
+  const disposeInput = inputController.subscribe((snapshot) => {
+    if (isCurrent())
+      enqueue(snapshot.gameState)
+  })
   return async () => {
     stopped = true
-    inputController.setStreamReady(false)
+    if (isCurrent())
+      inputController.setStreamReady(false)
     enqueue(neutralState())
     disposeInput()
     disposeRumble()

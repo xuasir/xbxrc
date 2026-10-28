@@ -20,6 +20,7 @@ crate-type = [
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+sha2.workspace = true
 
 [dependencies]
 async-trait.workspace = true

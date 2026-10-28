@@ -1,0 +1,1 @@
+{"schemaVersion": 3, "seq": 1, "tsMs": 1793150001000, "traceProfile": "production", "dimension": "lifecycle", "importance": "key", "category": "event", "domain": "streaming", "event": "statsSnapshot", "sessionId": "session", "payload": {"presentFps": 60}}

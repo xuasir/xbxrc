@@ -288,6 +288,14 @@ export interface StreamingStartSessionResult {
   progress: StreamingSessionProgressSnapshot
 }
 
+export interface StreamingCancelStartupParams {
+  attemptId: string
+}
+
+export interface StreamingCancelStartupResult {
+  cancelled: boolean
+}
+
 export interface StreamingGetSessionProgressParams {
   sessionId: string
 }

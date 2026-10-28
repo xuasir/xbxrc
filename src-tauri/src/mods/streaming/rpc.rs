@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager};
 #[serde(tag = "method", content = "params", rename_all = "camelCase")]
 pub enum StreamingCommand {
     StartSession(StreamingStartSessionParams),
+    CancelStartup(StreamingCancelStartupParams),
     GetSessionProgress(StreamingGetSessionProgressParams),
     CloseSession(StreamingCloseSessionParams),
     ExchangeOffer(StreamingExchangeOfferParams),
@@ -39,6 +40,9 @@ pub async fn handle_rpc(
         StreamingCommand::StartSession(payload) => {
             Ok(serde_json::to_value(service.start_session(payload).await?)?)
         }
+        StreamingCommand::CancelStartup(payload) => Ok(serde_json::to_value(
+            service.cancel_startup(payload).await?,
+        )?),
         StreamingCommand::GetSessionProgress(payload) => Ok(serde_json::to_value(
             service.get_session_progress(payload).await?,
         )?),

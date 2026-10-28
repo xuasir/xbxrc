@@ -1,6 +1,7 @@
 import type { RuntimeLaunchSpec } from '../types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBrowserRuntime } from './browser-runtime'
+import { createConnectionRecoveryCoordinator } from './connection-recovery'
 import { resolveSuperResolutionTierPlan } from './super-resolution-ladder'
 
 const testState = vi.hoisted(() => {
@@ -1725,5 +1726,74 @@ describe('browser-runtime super resolution state', () => {
     finally {
       vi.useRealTimers()
     }
+  })
+  it('queues microphone negotiation until the in-flight ICE restart has completed', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec())
+      const client = getClient()
+      let resolveAnswer!: (value: { answer: { sdp: string } }) => void
+      testState.rpc.streaming.exchangeOffer.mockImplementationOnce(() => new Promise((resolve) => {
+        resolveAnswer = resolve
+      }))
+      const reconnect = runtime.requestReconnect('ice-failed')
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+      const microphone = runtime.setMicrophoneEnabled(true)
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+      expect(client.audioController.startMic).toHaveBeenCalledTimes(0)
+      resolveAnswer({ answer: { sdp: 'v=0\r\n' } })
+      await Promise.all([reconnect, microphone])
+      expect(client.audioController.startMic).toHaveBeenCalledTimes(1)
+      expect(client.createOffer).toHaveBeenCalledTimes(3)
+      await runtime.stop()
+    }
+    finally { vi.useRealTimers() }
+  })
+
+  it('cancels pending ICE gathering and removes peer listeners on stop', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec())
+      const client = getClient()
+      const peer = { iceGatheringState: 'gathering', addEventListener: vi.fn(), removeEventListener: vi.fn() }
+      client.getPeer.mockReturnValue(peer as never)
+      const reconnect = runtime.requestReconnect('ice-failed')
+      const rejected = expect(reconnect).rejects.toThrow('streamRuntimeSuperseded')
+      for (let i = 0; i < 20; i++) await Promise.resolve()
+      expect(peer.addEventListener).toHaveBeenCalledTimes(2)
+      await runtime.stop()
+      await rejected
+      expect(peer.removeEventListener).toHaveBeenCalledTimes(2)
+      expect(testState.MockPlayerClient.instances).toHaveLength(1)
+    }
+    finally { vi.useRealTimers() }
+  })
+  it('revokes a hung restart at the parent deadline and absorbs a late SDP answer', async () => {
+    vi.useFakeTimers()
+    try {
+      const trace = vi.fn()
+      const coordinator = createConnectionRecoveryCoordinator({ trace, timeoutMs: 25_000 })
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1, connectionRecovery: coordinator })
+      await runtime.launch(createLaunchSpec())
+      const client = getClient()
+      let answer!: (value: { answer: { sdp: string } }) => void
+      testState.rpc.streaming.exchangeOffer.mockImplementationOnce(() => new Promise((resolve) => {
+        answer = resolve
+      }))
+      const failure = vi.fn()
+      const work = coordinator.run({ factKey: 'failed', isCurrent: () => true, decide: async () => ({ shouldReconnect: true, reason: 'ice-failed' }), execute: (reason, operation) => runtime.requestReconnect(reason, operation), onFailure: failure })
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(await work).toBe(false)
+      expect(failure).toHaveBeenCalledTimes(1)
+      expect(testState.MockPlayerClient.instances).toHaveLength(1)
+      answer({ answer: { sdp: 'late-answer' } })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(client.setRemoteDescription).toHaveBeenCalledTimes(1)
+      await runtime.stop()
+      coordinator.reset()
+    }
+    finally { vi.useRealTimers() }
   })
 })

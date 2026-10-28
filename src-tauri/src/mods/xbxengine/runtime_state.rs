@@ -34,7 +34,7 @@ use crate::mods::xbxengine::trace_projection::{
 use crate::shell::bridge::{TauriEngineEventBridge, TauriEngineWindowHost};
 use crate::AppState;
 
-const XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT: Duration = Duration::from_secs(20);
+const XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT: Duration = Duration::from_secs(45);
 static XBXENGINE_HOST_EXCHANGE_OFFER_REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
 const XBXENGINE_RUNTIME_LOCK_TRACE_INTERVAL: Duration = Duration::from_millis(1_000);
 const XBXENGINE_INITIAL_RUNTIME_GENERATION: u64 = 1;
@@ -184,6 +184,9 @@ fn create_tauri_runtime(
             host_present_route,
             cancellation_epoch,
             rumble_worker,
+            recovery_deadline: None,
+            operation_epoch: None,
+            runtime_generation: event_generation,
         },
         TauriXbxEngineEventSink {
             bridge: Arc::new(StdMutex::new(event_bridge)),
@@ -372,9 +375,21 @@ impl XbxEngineRuntimeState {
         (runtime, generation)
     }
 
+    /// 在进入 blocking 队列前捕获资格；Stop 立即撤销正在等待的旧控制请求。
+    pub fn prepare_control(&self, command: &XbxEngineControlCommandDto) -> u64 {
+        if matches!(command, XbxEngineControlCommandDto::StopRuntime { .. }) {
+            self.cancellation_epoch.fetch_add(1, Ordering::SeqCst) + 1
+        } else {
+            self.cancellation_epoch.load(Ordering::SeqCst)
+        }
+    }
+
     pub fn apply_control(
         &self,
         command: XbxEngineControlCommandDto,
+        expected_epoch: u64,
+        expected_session_id: Option<&str>,
+        deadline: Option<Instant>,
     ) -> Result<(), XbxEngineRuntimeError> {
         let _pending_control = self.enter_pending_control();
         let command_value = serde_json::to_value(&command).unwrap_or(serde_json::Value::Null);
@@ -389,7 +404,6 @@ impl XbxEngineRuntimeState {
         match &command {
             // Stop 需要先发出取消信号，打断正在路上的 keepalive/offer/ice。
             XbxEngineControlCommandDto::StopRuntime { reason } => {
-                self.cancellation_epoch.fetch_add(1, Ordering::SeqCst);
                 log::warn!(
                     "[xbxengine][control] stop runtime requested reason={}",
                     reason.as_deref().unwrap_or("unspecified")
@@ -398,19 +412,8 @@ impl XbxEngineRuntimeState {
             XbxEngineControlCommandDto::StartRuntime { .. } => {}
             _ => {}
         }
-        if let Ok(mut active_session_id) = self.active_session_id.lock() {
-            match &command {
-                XbxEngineControlCommandDto::StartRuntime { session, .. } => {
-                    *active_session_id = Some(session.session_id.clone());
-                }
-                XbxEngineControlCommandDto::StopRuntime { .. } => {
-                    *active_session_id = None;
-                }
-                _ => {}
-            }
-        }
         if matches!(command, XbxEngineControlCommandDto::StopRuntime { .. }) {
-            return self.apply_stop_runtime_control(command);
+            return self.apply_stop_runtime_control(command, expected_epoch);
         }
         let lock_started_at = Instant::now();
         let mut runtime = match self.runtime.try_lock() {
@@ -428,6 +431,23 @@ impl XbxEngineRuntimeState {
                 return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"));
             }
         };
+        validate_control_scope(
+            expected_epoch,
+            self.cancellation_epoch.load(Ordering::SeqCst),
+            expected_session_id,
+            runtime.current_session_id(),
+        )?;
+        let apply_epoch = if let XbxEngineControlCommandDto::StartRuntime { session, .. } = &command
+        {
+            // 会话替换同时撤销此前排队的显示、输入和连接操作。
+            let epoch = self.cancellation_epoch.fetch_add(1, Ordering::SeqCst) + 1;
+            if let Ok(mut active_session_id) = self.active_session_id.lock() {
+                *active_session_id = Some(session.session_id.clone());
+            }
+            epoch
+        } else {
+            expected_epoch
+        };
         record_control_apply_trace(
             &self.runtime_trace,
             &command,
@@ -437,7 +457,7 @@ impl XbxEngineRuntimeState {
         );
         let started_at = Instant::now();
         let command_for_trace = command.clone();
-        let result = runtime.apply_control(command);
+        let result = runtime.apply_control_with_epoch(command, apply_epoch, deadline);
         self.sync_host_present_route_from_runtime(&runtime);
         record_control_apply_trace(
             &self.runtime_trace,
@@ -452,6 +472,7 @@ impl XbxEngineRuntimeState {
     fn apply_stop_runtime_control(
         &self,
         command: XbxEngineControlCommandDto,
+        expected_epoch: u64,
     ) -> Result<(), XbxEngineRuntimeError> {
         let lock_started_at = Instant::now();
         let mut runtime = match self.runtime.try_lock() {
@@ -469,6 +490,15 @@ impl XbxEngineRuntimeState {
                 return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"));
             }
         };
+        validate_control_scope(
+            expected_epoch,
+            self.cancellation_epoch.load(Ordering::SeqCst),
+            None,
+            None,
+        )?;
+        if let Ok(mut active_session_id) = self.active_session_id.lock() {
+            *active_session_id = None;
+        }
         record_control_apply_trace(
             &self.runtime_trace,
             &command,
@@ -785,6 +815,20 @@ impl XbxEngineRuntimeState {
     }
 }
 
+fn validate_control_scope(
+    expected_epoch: u64,
+    current_epoch: u64,
+    expected_session_id: Option<&str>,
+    current_session_id: Option<&str>,
+) -> Result<(), XbxEngineRuntimeError> {
+    if expected_epoch != current_epoch
+        || expected_session_id.is_some_and(|id| Some(id) != current_session_id)
+    {
+        return Err(XbxEngineRuntimeError::new("xbxEngineRuntimeCancelled"));
+    }
+    Ok(())
+}
+
 // 为 runtime trace 生成一份稳定的 SDP 能力摘要，便于直接判断远端是否宣告 repair/fec 能力。
 fn summarize_sdp_capabilities(sdp: &str) -> serde_json::Value {
     let mut video_payload_order = Vec::new();
@@ -916,9 +960,28 @@ struct TauriXbxEngineHostBridge {
     host_present_route: Arc<StdMutex<XbxEngineHostPresentRoute>>,
     cancellation_epoch: Arc<AtomicU64>,
     rumble_worker: GamepadRumbleWorkerHandle,
+    recovery_deadline: Option<Instant>,
+    operation_epoch: Option<u64>,
+    runtime_generation: u64,
 }
 
 impl TauriXbxEngineHostBridge {
+    fn wait_request<T>(
+        &self,
+        stage: &'static str,
+        timeout: Duration,
+        request: impl Future<Output = AppResult<T>>,
+    ) -> AppResult<T> {
+        tauri::async_runtime::block_on(host_request_with_scope(
+            request,
+            timeout,
+            self.recovery_deadline,
+            self.cancellation_epoch.clone(),
+            self.operation_epoch
+                .unwrap_or_else(|| self.cancellation_epoch.load(Ordering::SeqCst)),
+            stage,
+        ))
+    }
     fn app_state(&self) -> AppResult<tauri::State<'_, AppState>> {
         self.app_handle.try_state::<AppState>().ok_or_else(|| {
             AppError::XbxEngine("AppState unavailable for xbxengine host bridge".to_string())
@@ -958,10 +1021,11 @@ impl TauriXbxEngineHostBridge {
                 sdp,
                 restart,
             });
-        let result = match tauri::async_runtime::block_on(exchange_offer_with_timeout(
-            exchange,
+        let result = match self.wait_request(
+            "exchangeOffer",
             XBXENGINE_HOST_EXCHANGE_OFFER_TIMEOUT,
-        )) {
+            exchange,
+        ) {
             Ok(result) => result,
             Err(error) => {
                 let failure_kind = exchange_offer_failure_kind(&error);
@@ -1020,7 +1084,9 @@ impl TauriXbxEngineHostBridge {
                 "candidates": candidates,
             }),
         );
-        tauri::async_runtime::block_on(
+        self.wait_request(
+            "submitIce",
+            Duration::from_secs(15),
             state.streaming.submit_ice(StreamingSubmitIceParams {
                 session_id,
                 candidate: candidates
@@ -1063,11 +1129,15 @@ impl TauriXbxEngineHostBridge {
                 "restart": restart,
             }),
         );
-        let result =
-            tauri::async_runtime::block_on(state.streaming.poll_ice(StreamingPollIceParams {
-                session_id,
-                restart,
-            }))
+        let result = self
+            .wait_request(
+                "pollIce",
+                Duration::from_secs(45),
+                state.streaming.poll_ice(StreamingPollIceParams {
+                    session_id,
+                    restart,
+                }),
+            )
             .map_err(map_app_error("pollIce"))?;
         self.runtime_trace.record_event(
             "xbxengine-host",
@@ -1226,6 +1296,50 @@ impl TauriXbxEngineHostBridge {
 }
 
 impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
+    fn set_operation_epoch(&mut self, epoch: Option<u64>) {
+        self.operation_epoch = epoch;
+    }
+
+    fn connection_recovery_deadline(&self) -> Option<Instant> {
+        self.recovery_deadline
+    }
+    fn set_connection_recovery_deadline(&mut self, deadline: Option<Instant>) {
+        self.recovery_deadline = deadline;
+    }
+
+    fn allows_connection_recovery(
+        &mut self,
+        session_id: &str,
+    ) -> Result<bool, XbxEngineRuntimeError> {
+        let state = self
+            .app_state()
+            .map_err(map_app_error("recoveryAdmission"))?;
+        self.wait_request(
+            "recoveryAdmission",
+            Duration::from_secs(12),
+            state.streaming.decide_recovery(
+                crate::mods::streaming::StreamingDecideRecoveryParams {
+                    session_id: session_id.to_owned(),
+                    fact: crate::mods::streaming::StreamingRuntimeFact::MediaStalled,
+                    is_closing: false,
+                },
+            ),
+        )
+        .map(|result| result.should_reconnect)
+        .map_err(map_app_error("recoveryAdmission"))
+    }
+
+    fn on_connection_recovery_event(
+        &self,
+        event: &str,
+        session_id: &str,
+        mut payload: serde_json::Value,
+    ) {
+        payload["runtimeGeneration"] = serde_json::json!(self.runtime_generation);
+        self.runtime_trace
+            .record_event("streaming", event, Some(session_id), payload);
+    }
+
     fn current_cancellation_epoch(&self) -> u64 {
         self.cancellation_epoch.load(Ordering::SeqCst)
     }
@@ -1327,9 +1441,13 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
                 let state = self
                     .app_state()
                     .map_err(map_app_error("keepAliveRemoteSession"))?;
-                let accepted =
-                    tauri::async_runtime::block_on(state.streaming.send_keepalive(session_id))
-                        .map_err(map_app_error("keepAliveRemoteSession"))?;
+                let accepted = self
+                    .wait_request(
+                        "keepAliveRemoteSession",
+                        Duration::from_secs(15),
+                        state.streaming.send_keepalive(session_id),
+                    )
+                    .map_err(map_app_error("keepAliveRemoteSession"))?;
                 self.runtime_trace.record_event(
                     "xbxengine-host",
                     "keepAliveRemoteSession",
@@ -1374,19 +1492,30 @@ pub(super) fn map_app_error(
     move |error| XbxEngineRuntimeError::new(format!("{action}:{error}"))
 }
 
-async fn exchange_offer_with_timeout<F>(
-    exchange: F,
+async fn host_request_with_scope<T>(
+    request: impl Future<Output = AppResult<T>>,
     timeout: Duration,
-) -> AppResult<crate::mods::streaming::StreamingExchangeOfferResult>
-where
-    F: Future<Output = AppResult<crate::mods::streaming::StreamingExchangeOfferResult>>,
-{
-    match tokio::time::timeout(timeout, exchange).await {
-        Ok(result) => result,
-        Err(_) => Err(AppError::XbxEngine(format!(
-            "exchange offer timed out after {}ms",
-            timeout.as_millis()
-        ))),
+    recovery_deadline: Option<Instant>,
+    cancellation_epoch: Arc<AtomicU64>,
+    expected_epoch: u64,
+    stage: &'static str,
+) -> AppResult<T> {
+    let deadline = recovery_deadline
+        .map(|deadline| deadline.min(Instant::now() + timeout))
+        .unwrap_or_else(|| Instant::now() + timeout);
+    let cancelled = async {
+        loop {
+            if cancellation_epoch.load(Ordering::SeqCst) != expected_epoch {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    tokio::select! {
+        biased;
+        _ = cancelled => Err(AppError::XbxEngine("xbxEngineRuntimeCancelled".to_owned())),
+        _ = tokio::time::sleep_until(deadline.into()) => Err(AppError::XbxEngine(format!("operationTimeout:stage={stage}"))),
+        result = request => result,
     }
 }
 
@@ -1443,7 +1572,7 @@ fn exchange_offer_failure_kind(error: &AppError) -> &'static str {
 }
 
 fn exchange_offer_failure_kind_from_message(message: &str) -> &'static str {
-    if message.contains("timed out") {
+    if message.contains("timed out") || message.contains("operationTimeout:") {
         "timeout"
     } else {
         "error"
@@ -1521,9 +1650,8 @@ mod tests {
 
     use super::{
         control_apply_event_name, exchange_offer_failure_kind_from_message,
-        exchange_offer_with_timeout, summarize_sdp_capabilities,
-        update_host_present_route_on_attach, update_host_present_route_on_detach,
-        NativeVideoHostRenderFramePush,
+        summarize_sdp_capabilities, update_host_present_route_on_attach,
+        update_host_present_route_on_detach, NativeVideoHostRenderFramePush,
     };
     use crate::mods::native_video::NativeVideoRegistry;
     use crate::mods::runtime_trace::{RuntimeTraceRecorder, RuntimeTraceRecorderRef};
@@ -1536,6 +1664,44 @@ mod tests {
 
     fn test_runtime_trace() -> RuntimeTraceRecorderRef {
         Arc::new(RuntimeTraceRecorder::new_with_mode("off").expect("runtime trace"))
+    }
+
+    #[test]
+    fn queued_control_is_revoked_by_stop_and_session_replacement() {
+        assert!(super::validate_control_scope(1, 2, Some("old"), Some("old")).is_err());
+        assert!(super::validate_control_scope(2, 2, Some("old"), Some("new")).is_err());
+        assert!(super::validate_control_scope(2, 2, Some("new"), Some("new")).is_ok());
+        // 复用 sessionId 时也必须保留代际校验。
+        assert!(super::validate_control_scope(1, 2, Some("same"), Some("same")).is_err());
+    }
+
+    #[tokio::test]
+    async fn host_wait_uses_remaining_deadline_and_stop_cancellation() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let epoch = Arc::new(AtomicU64::new(4));
+        let error = super::host_request_with_scope(
+            std::future::pending::<crate::error::AppResult<()>>(),
+            Duration::from_secs(45),
+            Some(std::time::Instant::now() + Duration::from_millis(5)),
+            epoch.clone(),
+            4,
+            "answer",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("operationTimeout:stage=answer"));
+        epoch.store(5, Ordering::SeqCst);
+        let error = super::host_request_with_scope(
+            async { Ok(()) },
+            Duration::from_secs(45),
+            None,
+            epoch,
+            4,
+            "answer",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("xbxEngineRuntimeCancelled"));
     }
 
     fn test_render_frame(frame_seq: u64) -> XbxEngineRenderFrame {
@@ -1578,8 +1744,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn exchange_offer_with_timeout_returns_error_when_future_stalls() {
-        let result = exchange_offer_with_timeout(
+    async fn host_exchange_offer_returns_error_when_future_stalls() {
+        let result = super::host_request_with_scope(
             async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 Ok(StreamingExchangeOfferResult {
@@ -1590,17 +1756,23 @@ mod tests {
                 })
             },
             Duration::from_millis(5),
+            None,
+            Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            0,
+            "exchangeOffer",
         )
         .await;
 
         let error = result.expect_err("exchange offer should time out");
-        assert!(error.to_string().contains("exchange offer timed out"));
+        assert!(error
+            .to_string()
+            .contains("operationTimeout:stage=exchangeOffer"));
     }
 
     #[test]
     fn exchange_offer_failure_kind_marks_timeout() {
         assert_eq!(
-            exchange_offer_failure_kind_from_message("exchange offer timed out after 20000ms"),
+            exchange_offer_failure_kind_from_message("operationTimeout:stage=exchangeOffer"),
             "timeout"
         );
         assert_eq!(

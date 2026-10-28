@@ -473,6 +473,8 @@ fn classify_dimension(domain: &str, event: &str) -> TraceDimension {
         || key.contains("session")
         || key.contains("launch")
         || key.contains("stop")
+        || key.contains("operation")
+        || key.contains("cleanup")
     {
         return TraceDimension::Lifecycle;
     }

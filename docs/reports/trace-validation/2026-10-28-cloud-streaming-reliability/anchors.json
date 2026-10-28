@@ -1,0 +1,535 @@
+[
+  {
+    "seq": 224,
+    "tsMs": 1793169481086,
+    "event": "runtimeBuildInfo",
+    "payload": {
+      "buildFingerprint": {
+        "buildTimestampUnixMs": "1793169354844",
+        "cargoProfile": "debug",
+        "controlledTwccRegistry": true,
+        "defaultFeedbackIntervalMs": 1000,
+        "effectiveFeedbackIntervalMs": 1000,
+        "gitCommitShort": "02f6db40",
+        "sourceFingerprintSha256": "59c93f67fa6cf6a5690b93d53cd3b852746136692d59d34197944ac8c710e595",
+        "workspaceDirty": true
+      }
+    }
+  },
+  {
+    "seq": 225,
+    "tsMs": 1793169481087,
+    "event": "operationStarted",
+    "payload": {
+      "generation": 1,
+      "operationId": "startup-1",
+      "stage": "startup"
+    }
+  },
+  {
+    "seq": 248,
+    "tsMs": 1793169488113,
+    "event": "sessionResourceCreated",
+    "payload": {
+      "generation": 2
+    }
+  },
+  {
+    "seq": 302,
+    "tsMs": 1793169507805,
+    "event": "sessionExecutionStarted",
+    "payload": {}
+  },
+  {
+    "seq": 305,
+    "tsMs": 1793169507805,
+    "event": "operationFinished",
+    "payload": {
+      "elapsedMs": 26718,
+      "generation": 1,
+      "operationId": "startup-1",
+      "result": "success",
+      "stage": "startup"
+    }
+  },
+  {
+    "seq": 349,
+    "tsMs": 1793169511794,
+    "event": "browserWebRtcTimelineObserved",
+    "payload": {
+      "kind": "remoteAnswerSet"
+    }
+  },
+  {
+    "seq": 390,
+    "tsMs": 1793169519265,
+    "event": "browserWebRtcTimelineObserved",
+    "payload": {
+      "connectionState": "connected",
+      "kind": "connectionStateChanged"
+    }
+  },
+  {
+    "seq": 398,
+    "tsMs": 1793169520365,
+    "event": "browserWebRtcTimelineObserved",
+    "payload": {
+      "connectionState": "connected",
+      "kind": "firstInboundPacket"
+    }
+  },
+  {
+    "seq": 400,
+    "tsMs": 1793169520464,
+    "event": "browserWebRtcTimelineObserved",
+    "payload": {
+      "connectionState": "connected",
+      "kind": "firstDecoded"
+    }
+  },
+  {
+    "seq": 401,
+    "tsMs": 1793169520465,
+    "event": "browserWebRtcTimelineObserved",
+    "payload": {
+      "connectionState": "connected",
+      "kind": "firstKeyframeDecoded"
+    }
+  },
+  {
+    "seq": 404,
+    "tsMs": 1793169520465,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 308,
+        "packetsLost": 0,
+        "framesReceived": 1,
+        "framesDecoded": 1,
+        "keyFramesDecoded": 1,
+        "freezeCount": 0,
+        "totalFreezesDuration": 0,
+        "nackCount": 0,
+        "pliCount": 0,
+        "jitter": 0
+      }
+    }
+  },
+  {
+    "seq": 408,
+    "tsMs": 1793169520466,
+    "event": "browserWebRtcTimelineObserved",
+    "payload": {
+      "callbackIntervalMs": null,
+      "kind": "firstPresented",
+      "mediaTimeDeltaSec": null,
+      "presentedFramesDelta": null
+    }
+  },
+  {
+    "seq": 525,
+    "tsMs": 1793169522836,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 833,
+        "packetsLost": 15,
+        "framesReceived": 70,
+        "framesDecoded": 64,
+        "keyFramesDecoded": 4,
+        "freezeCount": 3,
+        "totalFreezesDuration": 0.946,
+        "nackCount": 43,
+        "pliCount": 2,
+        "jitter": 0.002
+      }
+    }
+  },
+  {
+    "seq": 538,
+    "tsMs": 1793169523100,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 911,
+        "packetsLost": 15,
+        "framesReceived": 70,
+        "framesDecoded": 64,
+        "keyFramesDecoded": 4,
+        "freezeCount": 3,
+        "totalFreezesDuration": 0.946,
+        "nackCount": 46,
+        "pliCount": 3,
+        "jitter": 0.002
+      }
+    }
+  },
+  {
+    "seq": 542,
+    "tsMs": 1793169523369,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 985,
+        "packetsLost": 16,
+        "framesReceived": 70,
+        "framesDecoded": 64,
+        "keyFramesDecoded": 4,
+        "freezeCount": 3,
+        "totalFreezesDuration": 0.946,
+        "nackCount": 50,
+        "pliCount": 4,
+        "jitter": 0.004
+      }
+    }
+  },
+  {
+    "seq": 546,
+    "tsMs": 1793169523635,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 1074,
+        "packetsLost": 18,
+        "framesReceived": 73,
+        "framesDecoded": 64,
+        "keyFramesDecoded": 4,
+        "freezeCount": 3,
+        "totalFreezesDuration": 0.946,
+        "nackCount": 58,
+        "pliCount": 6,
+        "jitter": 0.009
+      }
+    }
+  },
+  {
+    "seq": 551,
+    "tsMs": 1793169523850,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 1124,
+        "packetsLost": 21,
+        "framesReceived": 73,
+        "framesDecoded": 64,
+        "keyFramesDecoded": 4,
+        "freezeCount": 3,
+        "totalFreezesDuration": 0.946,
+        "nackCount": 63,
+        "pliCount": 6,
+        "jitter": 0.011
+      }
+    }
+  },
+  {
+    "seq": 553,
+    "tsMs": 1793169523850,
+    "event": "recoveryCauseClassified",
+    "payload": {
+      "cause": "unknown",
+      "longWindow": {
+        "decodeFpsAvg": 0,
+        "jitterMsAvg": -1,
+        "lossAvg": 0,
+        "presentAgeMsAvg": 0,
+        "rttMsAvg": 139,
+        "sampleCount": 5
+      },
+      "shortWindow": {
+        "decodeFpsAvg": 0,
+        "jitterMsAvg": -1,
+        "lossAvg": 0,
+        "presentAgeMsAvg": 0,
+        "rttMsAvg": 174,
+        "sampleCount": 4
+      }
+    }
+  },
+  {
+    "seq": 555,
+    "tsMs": 1793169523885,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 1124,
+        "packetsLost": 21,
+        "framesReceived": 73,
+        "framesDecoded": 64,
+        "keyFramesDecoded": 4,
+        "freezeCount": 3,
+        "totalFreezesDuration": 0.946,
+        "nackCount": 63,
+        "pliCount": 6,
+        "jitter": 0.011
+      }
+    }
+  },
+  {
+    "seq": 557,
+    "tsMs": 1793169523917,
+    "event": "renderFrameDropped",
+    "payload": {
+      "callbackIntervalMs": 1297,
+      "mediaTimeDeltaSec": 0,
+      "presentedFramesDelta": 1,
+      "sourceFpsUnavailableReason": "mediaTimeDeltaTooSmall"
+    }
+  },
+  {
+    "seq": 563,
+    "tsMs": 1793169524150,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 1214,
+        "packetsLost": 23,
+        "framesReceived": 77,
+        "framesDecoded": 67,
+        "keyFramesDecoded": 5,
+        "freezeCount": 4,
+        "totalFreezesDuration": 2.246,
+        "nackCount": 71,
+        "pliCount": 6,
+        "jitter": 0.016
+      }
+    }
+  },
+  {
+    "seq": 755,
+    "tsMs": 1793169528613,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 2380,
+        "packetsLost": 46,
+        "framesReceived": 230,
+        "framesDecoded": 219,
+        "keyFramesDecoded": 6,
+        "freezeCount": 7,
+        "totalFreezesDuration": 3.021,
+        "nackCount": 132,
+        "pliCount": 6,
+        "jitter": 0.009
+      }
+    }
+  },
+  {
+    "seq": 757,
+    "tsMs": 1793169528645,
+    "event": "renderFpsBudgetChanged",
+    "payload": {
+      "next": 0,
+      "previous": 30,
+      "reason": "documentHidden"
+    }
+  },
+  {
+    "seq": 851,
+    "tsMs": 1793169532917,
+    "event": "renderFrameDropped",
+    "payload": {
+      "callbackIntervalMs": 667,
+      "mediaTimeDeltaSec": 0,
+      "presentedFramesDelta": 8,
+      "sourceFpsUnavailableReason": "mediaTimeDeltaTooSmall"
+    }
+  },
+  {
+    "seq": 867,
+    "tsMs": 1793169533792,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 3545,
+        "packetsLost": 66,
+        "framesReceived": 377,
+        "framesDecoded": 357,
+        "keyFramesDecoded": 6,
+        "freezeCount": 12,
+        "totalFreezesDuration": 4.655,
+        "nackCount": 200,
+        "pliCount": 6,
+        "jitter": 0.021
+      }
+    }
+  },
+  {
+    "seq": 1252,
+    "tsMs": 1793169554790,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 7849,
+        "packetsLost": 169,
+        "framesReceived": 1006,
+        "framesDecoded": 978,
+        "keyFramesDecoded": 7,
+        "freezeCount": 30,
+        "totalFreezesDuration": 10.355,
+        "nackCount": 428,
+        "pliCount": 6,
+        "jitter": 0.025
+      }
+    }
+  },
+  {
+    "seq": 1254,
+    "tsMs": 1793169554791,
+    "event": "renderTelemetryObserved",
+    "payload": {
+      "callbackIntervalMs": 34,
+      "mediaTimeDeltaSec": 0,
+      "presentedFramesDelta": 1,
+      "sourceFpsUnavailableReason": "mediaTimeDeltaTooSmall"
+    }
+  },
+  {
+    "seq": 1256,
+    "tsMs": 1793169554793,
+    "event": "recoveryCauseClassified",
+    "payload": {
+      "cause": "unknown",
+      "longWindow": {
+        "decodeFpsAvg": 0,
+        "jitterMsAvg": -1,
+        "lossAvg": 0,
+        "presentAgeMsAvg": 0,
+        "rttMsAvg": 171.375,
+        "sampleCount": 8
+      },
+      "shortWindow": {
+        "decodeFpsAvg": 0,
+        "jitterMsAvg": -1,
+        "lossAvg": 0,
+        "presentAgeMsAvg": 0,
+        "rttMsAvg": 228.5,
+        "sampleCount": 2
+      }
+    }
+  },
+  {
+    "seq": 1543,
+    "tsMs": 1793169572436,
+    "event": "displayHysteresisEvaluated",
+    "payload": {
+      "next": "displayL0",
+      "previous": "displayL0",
+      "reason": "documentVisibleResume"
+    }
+  },
+  {
+    "seq": 1556,
+    "tsMs": 1793169572441,
+    "event": "renderPolicyApplied",
+    "payload": {
+      "reason": "documentVisibleResume"
+    }
+  },
+  {
+    "seq": 1565,
+    "tsMs": 1793169572489,
+    "event": "renderFpsBudgetChanged",
+    "payload": {
+      "next": 0,
+      "previous": 30,
+      "reason": "documentHidden"
+    }
+  },
+  {
+    "seq": 1905,
+    "tsMs": 1793169579511,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 15876,
+        "packetsLost": 301,
+        "framesReceived": 1754,
+        "framesDecoded": 1726,
+        "keyFramesDecoded": 7,
+        "freezeCount": 48,
+        "totalFreezesDuration": 15.097,
+        "nackCount": 805,
+        "pliCount": 6,
+        "jitter": 0.009
+      }
+    }
+  },
+  {
+    "seq": 1906,
+    "tsMs": 1793169579512,
+    "event": "renderTelemetryObserved",
+    "payload": {
+      "callbackIntervalMs": 33,
+      "mediaTimeDeltaSec": 0,
+      "presentedFramesDelta": 1,
+      "sourceFpsUnavailableReason": "mediaTimeDeltaTooSmall"
+    }
+  },
+  {
+    "seq": 1909,
+    "tsMs": 1793169579513,
+    "event": "recoveryCauseClassified",
+    "payload": {
+      "cause": "unknown",
+      "longWindow": {
+        "decodeFpsAvg": 0,
+        "jitterMsAvg": -1,
+        "lossAvg": 0,
+        "presentAgeMsAvg": 0,
+        "rttMsAvg": 225.33333333333337,
+        "sampleCount": 12
+      },
+      "shortWindow": {
+        "decodeFpsAvg": 0,
+        "jitterMsAvg": -1,
+        "lossAvg": 0,
+        "presentAgeMsAvg": 0,
+        "rttMsAvg": 230,
+        "sampleCount": 3
+      }
+    }
+  },
+  {
+    "seq": 1922,
+    "tsMs": 1793169579790,
+    "event": "browserWebRtcStatsObserved",
+    "payload": {
+      "connectionState": "connected",
+      "inboundVideo": {
+        "packetsReceived": 16056,
+        "packetsLost": 302,
+        "framesReceived": 1765,
+        "framesDecoded": 1737,
+        "keyFramesDecoded": 7,
+        "freezeCount": 48,
+        "totalFreezesDuration": 15.097,
+        "nackCount": 810,
+        "pliCount": 6,
+        "jitter": 0.013
+      }
+    }
+  },
+  {
+    "seq": 1923,
+    "tsMs": 1793169579815,
+    "event": "renderFrameDropped",
+    "payload": {
+      "callbackIntervalMs": 33,
+      "mediaTimeDeltaSec": 0,
+      "presentedFramesDelta": 2,
+      "sourceFpsUnavailableReason": "mediaTimeDeltaTooSmall"
+    }
+  }
+]

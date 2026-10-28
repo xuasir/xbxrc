@@ -676,6 +676,18 @@ pub struct StreamingStartSessionParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct StreamingCancelStartupParams {
+    pub attempt_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingCancelStartupResult {
+    pub cancelled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StreamingGetSessionProgressParams {
     pub session_id: String,
 }

@@ -15,6 +15,7 @@ import type {
 } from './types'
 import { computed } from 'vue'
 import { rpc } from '../services/rpc'
+import { withOperationTimeout } from './execution/async-operation'
 import { isRecord, normalizeErrorMessage } from './utils'
 
 export type SessionUiPhase
@@ -53,6 +54,7 @@ interface SessionProgressSubscriptionInput {
   loadProgress: (sessionId: string) => Promise<StreamingSessionProgress | null>
   onProgress: (progress: StreamingSessionProgress) => void
   onError: (error: unknown) => void
+  onMissing?: (sessionId: string) => void
 }
 
 type BrowserInterval = number
@@ -182,6 +184,10 @@ export async function closeRemoteStreamSession(sessionId: string): Promise<void>
   await rpc.streaming.closeSession({
     sessionId,
   })
+}
+
+export async function cancelRemoteStreamStartup(attemptId: string): Promise<void> {
+  await rpc.streaming.cancelStartup({ attemptId })
 }
 
 export async function getRemoteSessionProgress(
@@ -440,11 +446,13 @@ function isStreamingStartupBoundedRetry(value: unknown): value is StreamingStart
  */
 export function createSessionProgressSubscription(input: SessionProgressSubscriptionInput) {
   let timer: BrowserInterval | null = null
-  let polling = false
+  const polling = new Set<number>()
+  let missingSince: number | null = null
   let subscriptionToken = 0
 
   function stop(): void {
     subscriptionToken += 1
+    missingSince = null
     if (timer !== null) {
       window.clearInterval(timer)
       timer = null
@@ -452,7 +460,7 @@ export function createSessionProgressSubscription(input: SessionProgressSubscrip
   }
 
   async function pollOnce(token: number): Promise<void> {
-    if (!input.getEnabled() || token !== subscriptionToken || polling) {
+    if (!input.getEnabled() || token !== subscriptionToken || polling.has(token)) {
       return
     }
 
@@ -461,26 +469,35 @@ export function createSessionProgressSubscription(input: SessionProgressSubscrip
       return
     }
 
-    polling = true
+    polling.add(token)
     try {
-      const progress = await input.loadProgress(sessionId)
+      const progress = await withOperationTimeout(input.loadProgress(sessionId), 12_000, 'sessionObservationTimeout')
       if (
         token !== subscriptionToken
+        || !input.getEnabled()
         || input.getSessionId() !== sessionId
-        || progress === null
       ) {
         return
       }
+      if (progress === null) {
+        missingSince ??= performance.now()
+        if (performance.now() - missingSince >= 15_000) {
+          stop()
+          input.onMissing?.(sessionId)
+        }
+        return
+      }
+      missingSince = null
       input.onProgress(progress)
     }
     catch (error) {
-      if (token !== subscriptionToken) {
+      if (token !== subscriptionToken || input.getSessionId() !== sessionId) {
         return
       }
       input.onError(error)
     }
     finally {
-      polling = false
+      polling.delete(token)
     }
   }
 

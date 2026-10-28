@@ -79,6 +79,7 @@ export interface XbxEngineStatsDto {
   fps: number
   build_fingerprint?: {
     git_commit_short: string
+    source_fingerprint_sha256?: string | null
     workspace_dirty: boolean
     build_timestamp_unix_ms: string
     cargo_profile: string
@@ -672,6 +673,7 @@ export interface XbxEngineSetAudioVolumeParams {
 
 export interface XbxEngineRequestReconnectParams {
   reason: XbxEngineReconnectReason
+  sessionId?: string
 }
 
 export interface XbxEngineStopRuntimeParams {

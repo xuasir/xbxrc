@@ -1,0 +1,156 @@
+{
+  "trace": {
+    "file": "runtime-trace-1793169376818-1.jsonl",
+    "sha256": "56b823316dc3ce2fbfee08198b5273bff875cecca4b4ba30ab235e4f9e7a9d02",
+    "sizeBytes": 5646838,
+    "rows": 1923,
+    "firstSeq": 1,
+    "lastSeq": 1923,
+    "timeRangeMs": [
+      1793169376821,
+      1793169579815
+    ],
+    "endCondition": "User confirmed force-closing the application."
+  },
+  "buildFingerprints": [
+    {
+      "buildTimestampUnixMs": "1793169354844",
+      "cargoProfile": "debug",
+      "controlledTwccRegistry": true,
+      "defaultFeedbackIntervalMs": 1000,
+      "effectiveFeedbackIntervalMs": 1000,
+      "gitCommitShort": "02f6db40",
+      "sourceFingerprintSha256": "59c93f67fa6cf6a5690b93d53cd3b852746136692d59d34197944ac8c710e595",
+      "workspaceDirty": true
+    },
+    {
+      "buildTimestampUnixMs": "1793169354844",
+      "cargoProfile": "debug",
+      "controlledTwccRegistry": true,
+      "defaultFeedbackIntervalMs": 1000,
+      "effectiveFeedbackIntervalMs": 1000,
+      "gitCommitShort": "02f6db40",
+      "sourceFingerprintSha256": "59c93f67fa6cf6a5690b93d53cd3b852746136692d59d34197944ac8c710e595",
+      "workspaceDirty": true
+    }
+  ],
+  "traceCounts": {
+    "traceModes": {
+      "dev": 1923
+    },
+    "traceProfiles": {
+      "dev": 1923
+    },
+    "dimensions": {
+      "core": 419,
+      "lifecycle": 67,
+      "input": 143,
+      "recovery": 2,
+      "presentation": 2,
+      "network": 6,
+      "frontend": 1284
+    },
+    "importance": {
+      "essential": 3,
+      "key": 1920
+    },
+    "traceBudgetNotices": 0,
+    "categories": {
+      "state": 9,
+      "event": 1477,
+      "decision": 2,
+      "snapshot": 435
+    },
+    "domains": {
+      "trace": 1,
+      "xbxengine": 412,
+      "gamepad-shell": 1,
+      "streaming-runtime-host": 1426,
+      "streaming": 83
+    },
+    "eventsTop": {
+      "event/streaming-runtime-host/renderFrameDropped": 302,
+      "event/streaming-runtime-host/browserWebRtcStatsObserved": 294,
+      "snapshot/xbxengine/statsSnapshot": 202,
+      "snapshot/xbxengine/observabilitySnapshot": 202,
+      "event/streaming-runtime-host/renderBackpressureChanged": 182,
+      "event/streaming-runtime-host/gamepadFrameSent": 135,
+      "event/streaming-runtime-host/renderAdaptiveProfileResolved": 121,
+      "event/streaming-runtime-host/renderPolicyApplied": 121,
+      "event/streaming-runtime-host/displayHysteresisEvaluated": 40,
+      "event/streaming-runtime-host/renderCauseClassified": 39,
+      "event/streaming-runtime-host/recoveryCauseClassified": 39,
+      "event/streaming-runtime-host/renderTelemetryObserved": 37,
+      "event/streaming-runtime-host/displayDegradeLevelChanged": 33,
+      "event/streaming/sessionStatePolled": 29,
+      "snapshot/streaming/sessionMonitorSnapshot": 29,
+      "event/streaming-runtime-host/browserWebRtcTimelineObserved": 20,
+      "event/streaming-runtime-host/renderFpsBudgetChanged": 15,
+      "event/streaming/startupPhase": 8,
+      "event/streaming-runtime-host/gamepadInputChanged": 7,
+      "event/streaming-runtime-host/displayHysteresisTransitionBlocked": 7
+    },
+    "phaseSegments": 2,
+    "longGaps": 167,
+    "anomalyWindows": 4,
+    "suspiciousRows": 1534
+  },
+  "browserBehavior": {
+    "browserWebRtcBehaviorGate": "PASS",
+    "failures": [],
+    "selectedRemoteAnswer": {
+      "seq": 349,
+      "tsMs": 1793169511794,
+      "observedAtMs": 134499.0,
+      "elapsedSinceBindMs": 3470.0,
+      "selectedPayloadType": "98",
+      "selectedMimeType": "video/H264",
+      "selectedProfileLevelId": "42e02a",
+      "profileFamily": "constrained-baseline"
+    },
+    "firstFrameLatencies": {
+      "connectedToFirstInboundPacketMs": 1007.0,
+      "connectedToFirstDecodedMs": 1106.0,
+      "connectedToFirstKeyframeDecodedMs": 1106.0,
+      "connectedToFirstPresentedMs": 1204.0,
+      "bindToRemoteAnswerSetMs": 3470.0
+    }
+  },
+  "playbackLifecycle": {
+    "lifecycleGate": "PASS",
+    "scope": "activeInspection",
+    "summary": {
+      "pendingActionDrains": 0,
+      "operations": 1,
+      "recoveries": 0,
+      "cleanups": 0,
+      "resources": 1
+    },
+    "violations": [],
+    "evidenceGaps": [],
+    "contract": "Checks the captured playback portion; normal teardown and hard-disconnect recovery remain pending."
+  },
+  "completeLifecycle": {
+    "lifecycleGate": "FAIL",
+    "scope": "completeLifecycle",
+    "summary": {
+      "pendingActionDrains": 0,
+      "operations": 1,
+      "recoveries": 0,
+      "cleanups": 0,
+      "resources": 1
+    },
+    "violations": [
+      {
+        "code": "remoteResourceUnclosed",
+        "sessionId": "S1",
+        "generation": 2
+      }
+    ],
+    "evidenceGaps": [
+      {
+        "code": "cleanupEvidenceMissing"
+      }
+    ]
+  }
+}

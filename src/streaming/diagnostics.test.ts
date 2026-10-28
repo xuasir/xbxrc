@@ -1,10 +1,11 @@
 import type { StreamPerformanceSnapshot } from './types'
 import { describe, expect, it, vi } from 'vitest'
+import * as clock from './clock'
 import { buildStreamDiagnosticsSnapshot, resetDiagnosticsNoticeLatch } from './diagnostics'
 
 describe('buildStreamDiagnosticsSnapshot', () => {
   it('projects browser runtime key fields for diagnostics panel', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(50_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(50_000)
     const snapshot: StreamPerformanceSnapshot = {
       resolution: '1920x1080',
       rtt: '20ms',
@@ -185,7 +186,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
   })
 
   it('projects render runtime fields for replay diagnostics', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(88_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(88_000)
     const snapshot: StreamPerformanceSnapshot = {
       resolution: '1920x1080',
       rtt: '18ms',
@@ -273,7 +274,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
   })
 
   it('suppresses recovering overlay after displayed-idr with healthy presentation in recovering session', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(130_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(130_000)
     const snapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'active-recovery',
       sessionPhase: 'recovering',
@@ -302,7 +303,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
   })
 
   it('keeps stable panel status when recovery-eligible still has healthy presentation', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(120_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(120_000)
     const snapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'recovery-eligible',
       sessionPhase: 'recovery-eligible',
@@ -329,7 +330,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
   })
 
   it('keeps active recovery visible when presentation is still unhealthy', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(140_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(140_000)
     const snapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'active-recovery',
       sessionPhase: 'active-recovery',
@@ -358,7 +359,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
   })
 
   it('recovery-eligible with display supply starvation does not stick recovering overlay', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(200_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(200_000)
     const snapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'recovery-eligible',
       sessionPhase: 'recovery-eligible',
@@ -388,7 +389,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
   })
 
   it('display supply wins when owner starved but diagnosis still waiting keyframe', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(210_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(210_000)
     const snapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'recovery-eligible',
       sessionPhase: 'recovery-eligible',
@@ -418,7 +419,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
 
   it('decode-ahead-of-present without transport anchor prefers display supply', () => {
     resetDiagnosticsNoticeLatch()
-    vi.spyOn(Date, 'now').mockReturnValue(220_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(220_000)
     const snapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'recovery-eligible',
       sessionPhase: 'recovery-eligible',
@@ -448,7 +449,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
 
   it('notice latch holds display supply over brief recovering flip', () => {
     resetDiagnosticsNoticeLatch()
-    vi.spyOn(Date, 'now').mockReturnValue(300_000)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(300_000)
     const supplySnapshot: StreamPerformanceSnapshot = {
       streamLifecyclePhase: 'recovery-eligible',
       sessionPhase: 'recovery-eligible',
@@ -468,7 +469,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       lastHostFrameAtMs: 299_950,
     })
 
-    vi.spyOn(Date, 'now').mockReturnValue(300_500)
+    vi.spyOn(clock, 'monotonicNowMs').mockReturnValue(300_500)
     const flipSnapshot: StreamPerformanceSnapshot = {
       ...supplySnapshot,
       videoHealth: 'recovering',

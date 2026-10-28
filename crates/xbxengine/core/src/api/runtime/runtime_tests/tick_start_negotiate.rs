@@ -24,6 +24,71 @@ use crate::{
 };
 
 #[test]
+fn native_policy_and_control_reconnect_share_pending_media_observation() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(Rc::new(RefCell::new(Vec::new()))),
+        PlaceholderXbxEngineMediaBackend::default(),
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .unwrap();
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::IceFailed,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .unwrap();
+    runtime
+        .apply_control(XbxEngineControlCommandDto::RequestReconnect {
+            reason: XbxEngineReconnectReasonDto::IceFailed,
+        })
+        .unwrap();
+    assert_eq!(runtime.snapshot().recovery_reconnect_count, 1);
+    assert_eq!(
+        requests
+            .borrow()
+            .iter()
+            .filter(|request| matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { restart: true, .. }
+            ))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn native_scoped_control_rejects_epoch_revoked_before_execution() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let host = TestHostBridge::new(requests.clone());
+    let epoch = host.cancellation_epoch.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        host,
+        TestEventSink::new(Rc::new(RefCell::new(Vec::new()))),
+        PlaceholderXbxEngineMediaBackend::default(),
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .unwrap();
+    let before = requests.borrow().len();
+    epoch.set(1);
+    let result = runtime.apply_control_with_epoch(
+        XbxEngineControlCommandDto::RequestReconnect {
+            reason: XbxEngineReconnectReasonDto::IceFailed,
+        },
+        0,
+        None,
+    );
+    assert!(result.unwrap_err().is_cancelled());
+    assert_eq!(requests.borrow().len(), before);
+    assert_eq!(runtime.snapshot().recovery_reconnect_count, 0);
+}
+
+#[test]
 fn default_runtime_prefers_main_h264_profile_for_rust_owned_negotiation() {
     assert_eq!(
         XbxEngineRuntimeConfig::default()

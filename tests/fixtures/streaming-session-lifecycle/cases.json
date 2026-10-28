@@ -1,0 +1,178 @@
+[
+  {
+    "file": "pass-ready-regression-terminal.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {
+      "require_cleanup": true,
+      "require_closed": true
+    }
+  },
+  {
+    "file": "pass-startup-timeout.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {}
+  },
+  {
+    "file": "pass-recovery-stable.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {
+      "require_recovery": true,
+      "require_cleanup": true,
+      "require_closed": true
+    }
+  },
+  {
+    "file": "pass-cancel-late-grant.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {}
+  },
+  {
+    "file": "pass-cleanup-after-network-restored.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {}
+  },
+  {
+    "file": "fail-timeout-after-ready.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "startupTimeoutAfterReady"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-grant-never-executed.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "grantedRecoveryNeverExecuted"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-commit-after-cancel.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "commitAfterOperationTerminal"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-close-leak.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "cleanupUnfinished",
+      "remoteResourceUnclosed"
+    ],
+    "options": {
+      "require_closed": true
+    }
+  },
+  {
+    "file": "fail-duplicate-recovery.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "duplicateRecoveryCommit"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-recovery-effect-unproven.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "recoveryObservationMissing"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-overall-deadline.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "operationDeadlineExceeded"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-old-generation.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "oldGenerationCommitted"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-no-evidence.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "commonLifecycleEvidenceMissing"
+    ],
+    "options": {}
+  },
+  {
+    "file": "fail-unknown-create.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "createOutcomeUnresolved"
+    ],
+    "options": {}
+  },
+  {
+    "file": "pass-wall-clock-jumps.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {}
+  },
+  {
+    "file": "fail-drain-pending.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "recoveryActionDrainUnfinished"
+    ],
+    "options": {}
+  },
+  {
+    "file": "pass-drain-finished.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {}
+  },
+  {
+    "file": "fail-drain-without-start.jsonl",
+    "gate": "FAIL",
+    "codes": [
+      "recoveryDrainStartMissing"
+    ],
+    "options": {}
+  },
+  {
+    "file": "pass-independent-runs.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {
+      "require_closed": true
+    }
+  },
+  {
+    "file": "pass-runtime-generations.jsonl",
+    "gate": "PASS",
+    "codes": [],
+    "options": {
+      "require_recovery": true
+    }
+  },
+  {
+    "files": [
+      "pass-rotation-2.jsonl",
+      "pass-rotation-1.jsonl"
+    ],
+    "gate": "PASS",
+    "codes": [],
+    "options": {
+      "require_closed": true,
+      "require_recovery": true
+    }
+  }
+]

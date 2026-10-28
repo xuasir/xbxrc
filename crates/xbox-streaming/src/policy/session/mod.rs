@@ -147,6 +147,10 @@ pub struct SessionSchedulePlan {
     pub monitor_interval_ms: u64,
     pub keepalive_interval_ms: u64,
     pub offer_poll_interval_ms: u64,
+    #[serde(default = "default_signaling_timeout_ms")]
+    pub offer_exchange_timeout_ms: u64,
+    #[serde(default = "default_signaling_timeout_ms")]
+    pub ice_exchange_timeout_ms: u64,
     pub ice_poll_interval_ms: u64,
     pub startup_timeout_ms: u64,
     pub ready_timeout_ms: u64,
@@ -155,12 +159,18 @@ pub struct SessionSchedulePlan {
     pub require_console_ready: bool,
 }
 
+fn default_signaling_timeout_ms() -> u64 {
+    45_000
+}
+
 impl Default for SessionSchedulePlan {
     fn default() -> Self {
         Self {
             monitor_interval_ms: 1_000,
             keepalive_interval_ms: 30_000,
             offer_poll_interval_ms: 1_000,
+            offer_exchange_timeout_ms: default_signaling_timeout_ms(),
+            ice_exchange_timeout_ms: default_signaling_timeout_ms(),
             ice_poll_interval_ms: 1_000,
             // xHome 慢启动与服务注册完成可能超过 45 秒，默认窗口保持 90 秒更稳妥。
             startup_timeout_ms: 90_000,

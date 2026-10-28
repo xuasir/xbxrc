@@ -20,6 +20,7 @@ use super::policy::{
 pub type RuntimeTraceRecorderRef = Arc<RuntimeTraceRecorder>;
 
 const TRACE_SCHEMA_VERSION: u32 = 3;
+static TRACE_RECORDER_ID: AtomicU64 = AtomicU64::new(1);
 const WRITER_FLUSH_INTERVAL: Duration = Duration::from_millis(40);
 const WRITER_BATCH_LIMIT: usize = 256;
 const WRITER_PENDING_ROW_LIMIT: u64 = 8_192;
@@ -83,6 +84,7 @@ enum WriterCommand {
 
 /// 开发期协助日志：独立写入项目目录，便于后续整体清理。
 pub struct RuntimeTraceRecorder {
+    trace_run_id: String,
     inner: Mutex<TraceInner>,
     writer_tx: Sender<WriterCommand>,
     writer_thread: Mutex<Option<JoinHandle<()>>>,
@@ -112,6 +114,12 @@ impl RuntimeTraceRecorder {
         let dimensions = TraceDimensionSet::effective_for_profile(profile, dimensions_expression);
         let budget = profile.budget();
         let recorder = Self {
+            trace_run_id: format!(
+                "{}-{}-{}",
+                now_ms(),
+                std::process::id(),
+                TRACE_RECORDER_ID.fetch_add(1, Ordering::Relaxed)
+            ),
             inner: Mutex::new(TraceInner {
                 trace_mode: profile.as_str().to_string(),
                 profile,
@@ -451,6 +459,7 @@ impl RuntimeTraceRecorder {
         }
         let line = json!({
             "schemaVersion": TRACE_SCHEMA_VERSION,
+            "traceRunId": self.trace_run_id,
             "seq": self.sequence.fetch_add(1, Ordering::Relaxed) + 1,
             "tsMs": now,
             "traceMode": trace_mode,

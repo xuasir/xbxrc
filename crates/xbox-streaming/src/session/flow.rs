@@ -13,10 +13,20 @@ use crate::session::lifecycle::{
     is_remote_session_not_found, parse_session_id_from_path, resolve_active_target_type,
 };
 use crate::session::monitor::SessionRuntimeBinding;
+use crate::session::operation::{
+    cancelled_error, now_ms, PreparationBudget, SessionStartupScope, StartupRegistry,
+};
 use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
-use crate::session::signaling::logic::{decide_ice_poll, decide_offer_poll, PollDecision};
+use crate::session::signaling::logic::{decide_ice_poll, PollDecision};
 use crate::session::store::{SessionCancelToken, SessionRuntimeRecord, SessionRuntimeStore};
+
+#[path = "cleanup.rs"]
+mod cleanup_flow;
+#[path = "signaling/flow.rs"]
+mod signaling_flow;
+#[path = "startup.rs"]
+mod startup_flow;
 
 const STARTUP_CLOSED_RECOVERY_GRACE_MS_MIN: u64 = 1_200;
 const STARTUP_CLOSED_RECOVERY_GRACE_MS_MAX: u64 = 5_000;
@@ -236,6 +246,9 @@ pub struct RemoteConsoleSnapshot {
 /// RFC: 策略与执行细节已收口在 crate，Provider 仅提供运行事实。
 #[async_trait]
 pub trait SessionFlowProvider: Send + Sync + 'static {
+    /// 宿主复用现有 trace recorder，核心层仅提供脱敏生命周期事实。
+    fn on_session_lifecycle_event(&self, _event: &str, _session_id: Option<&str>, _payload: Value) {
+    }
     async fn get_streaming_token(&self, target_type: &str) -> Result<Value, SessionFlowError>;
     async fn transfer_token(&self) -> Result<String, SessionFlowError>;
     async fn power_on_console(&self, _console_id: &str) -> Result<bool, SessionFlowError> {
@@ -344,6 +357,35 @@ where
     pub(crate) sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
     pub(crate) signaling: tokio::sync::RwLock<HashMap<String, SessionSignalingState>>,
     pub(crate) mutations: tokio::sync::RwLock<HashMap<String, Arc<SessionMutationEntry>>>,
+    startups: Arc<Mutex<StartupRegistry>>,
+    cleanups: tokio::sync::Mutex<HashMap<String, Arc<SessionCleanupEntry>>>,
+}
+
+impl<S: SessionFlowSnapshot, P: SessionFlowProvider> SessionFlowServiceInner<S, P> {
+    /// 资源删除与信令删除共用当前身份锁，旧操作只能收口自己的代际。
+    pub(crate) async fn clear_session(&self, session_id: &str, cancelled: &SessionCancelToken) {
+        let mut sessions = self.sessions.write().await;
+        if sessions.remove_if_same(session_id, cancelled).is_none() {
+            return;
+        }
+        self.signaling.write().await.remove(session_id);
+        let mut mutations = self.mutations.write().await;
+        if mutations
+            .get(session_id)
+            .is_some_and(|entry| entry.cancelled.same_instance(cancelled))
+        {
+            mutations.remove(session_id);
+        }
+    }
+}
+
+struct SessionCleanupEntry {
+    plan: Plan,
+    cancelled: SessionCancelToken,
+    result: tokio::sync::Mutex<Option<Result<bool, SessionFlowError>>>,
+    completion: std::sync::atomic::AtomicU64,
+    retry_scheduled: std::sync::atomic::AtomicBool,
+    started_at: std::time::Instant,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -362,6 +404,8 @@ pub(crate) struct SessionMutationState {
 pub(crate) struct SessionMutationEntry {
     pub cancelled: SessionCancelToken,
     pub state: tokio::sync::Mutex<SessionMutationState>,
+    pub negotiation: tokio::sync::Mutex<()>,
+    pub ice: tokio::sync::Mutex<()>,
 }
 
 impl<S, P> SessionFlowService<S, P>
@@ -376,291 +420,9 @@ where
                 sessions: tokio::sync::RwLock::new(SessionRuntimeStore::default()),
                 signaling: tokio::sync::RwLock::new(HashMap::new()),
                 mutations: tokio::sync::RwLock::new(HashMap::new()),
+                startups: Arc::new(Mutex::new(StartupRegistry::default())),
+                cleanups: tokio::sync::Mutex::new(HashMap::new()),
             }),
-        }
-    }
-
-    pub async fn create_session(&self, plan: Plan) -> Result<S, SessionFlowError> {
-        self.create_session_with_observer::<NoopSessionStartupObserver>(plan, None, None)
-            .await
-    }
-
-    async fn create_session_with_observer<O>(
-        &self,
-        plan: Plan,
-        observer: Option<&O>,
-        recreate_from_session_id: Option<&str>,
-    ) -> Result<S, SessionFlowError>
-    where
-        O: SessionStartupObserver,
-    {
-        let monitor_interval_ms = plan.session.schedule.monitor_interval_ms.max(200);
-        let keepalive_interval_ms = plan.session.schedule.keepalive_interval_ms.max(1_000);
-        let api = self.create_session_api(&plan).await?;
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::CreatingSession,
-            SessionStartupPhaseStatus::Entered,
-            None,
-        );
-        let session_path = self.start_stream_with_retry(&api, &plan).await?;
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::CreatingSession,
-            SessionStartupPhaseStatus::Succeeded,
-            None,
-        );
-
-        let session_id = parse_session_id_from_path(&session_path)
-            .map_err(|error| SessionFlowError::message(error.to_string()))?;
-
-        let target_type = plan.session.target.as_str();
-        self.inner.provider.on_session_created(
-            &session_id,
-            &session_path,
-            target_type,
-            &plan.session.target_id,
-            recreate_from_session_id,
-        );
-        let snapshot = S::new_pending(
-            session_id.clone(),
-            session_path,
-            plan.session.target_id.clone(),
-            target_type.to_string(),
-        );
-        let cancelled = {
-            let mut sessions = self.inner.sessions.write().await;
-            sessions.insert_new_with_plan(session_id.clone(), snapshot.clone(), plan, now_ms())
-        };
-        self.inner.mutations.write().await.insert(
-            session_id.clone(),
-            Arc::new(SessionMutationEntry {
-                cancelled: cancelled.clone(),
-                state: tokio::sync::Mutex::new(SessionMutationState::default()),
-            }),
-        );
-
-        let scheduler = SessionScheduler::new(Arc::clone(&self.inner));
-        scheduler
-            .start_loops(
-                session_id,
-                cancelled,
-                monitor_interval_ms,
-                keepalive_interval_ms,
-            )
-            .await;
-
-        Ok(snapshot)
-    }
-
-    pub async fn create_session_execution<R, E, FR, FE>(
-        &self,
-        plan: Plan,
-        project_runtime: FR,
-        project_render: FE,
-    ) -> Result<SessionExecutionSnapshot<S, R, E>, SessionFlowError>
-    where
-        R: Clone,
-        E: Clone,
-        FR: Fn(&Plan) -> R,
-        FE: Fn(&Plan) -> E,
-    {
-        let runtime = project_runtime(&plan);
-        let render = project_render(&plan);
-        let session = self.create_session(plan).await?;
-        Ok(SessionExecutionSnapshot {
-            session,
-            runtime,
-            render,
-        })
-    }
-
-    /// 启动编排入口：在 session 层串起 wake/preflight/create/wait-started。
-    pub async fn start_session_execution<R, E, FR, FE>(
-        &self,
-        plan: Plan,
-        project_runtime: FR,
-        project_render: FE,
-    ) -> Result<SessionExecutionSnapshot<S, R, E>, SessionFlowError>
-    where
-        R: Clone,
-        E: Clone,
-        FR: Fn(&Plan) -> R,
-        FE: Fn(&Plan) -> E,
-    {
-        self.start_session_execution_with_observer::<R, E, FR, FE, NoopSessionStartupObserver>(
-            plan,
-            project_runtime,
-            project_render,
-            None,
-        )
-        .await
-    }
-
-    pub async fn start_session_execution_with_observer<R, E, FR, FE, O>(
-        &self,
-        plan: Plan,
-        project_runtime: FR,
-        project_render: FE,
-        observer: Option<&O>,
-    ) -> Result<SessionExecutionSnapshot<S, R, E>, SessionFlowError>
-    where
-        R: Clone,
-        E: Clone,
-        FR: Fn(&Plan) -> R,
-        FE: Fn(&Plan) -> E,
-        O: SessionStartupObserver,
-    {
-        let runtime = project_runtime(&plan);
-        let render = project_render(&plan);
-        let schedule = plan.session.schedule.clone();
-        let mut recreate_retry_count = 0u8;
-        let mut recreate_context: Option<SessionRecreateContext> = None;
-
-        self.prepare_remote_console(&plan, observer).await?;
-
-        loop {
-            let recreate_from_session_id = recreate_context
-                .as_ref()
-                .map(|context| context.previous_session_id.as_str());
-            let session = self
-                .create_session_with_observer(plan.clone(), observer, recreate_from_session_id)
-                .await?;
-            let session_id = session.session_id().to_string();
-            if let Some(context) = recreate_context.take() {
-                if should_fail_home_recreate_same_session(
-                    context.cleanup_settled,
-                    Some(context.previous_session_id.as_str()),
-                    &session_id,
-                ) {
-                    notify_startup_phase(
-                        observer,
-                        SessionStartupPhase::WaitingSessionReady,
-                        SessionStartupPhaseStatus::Failed,
-                        None,
-                    );
-                    return Err(SessionFlowError::message(format!(
-                        "homeRecreateReusedSession:sessionId={session_id};cleanupSettled={}",
-                        context.cleanup_settled
-                    )));
-                }
-            }
-            notify_startup_phase(
-                observer,
-                SessionStartupPhase::WaitingSessionReady,
-                SessionStartupPhaseStatus::Entered,
-                None,
-            );
-
-            match self
-                .wait_until_session_started_or_failed(&session_id, &schedule)
-                .await
-            {
-                Ok(_) => {
-                    notify_startup_phase(
-                        observer,
-                        SessionStartupPhase::WaitingSessionReady,
-                        SessionStartupPhaseStatus::Succeeded,
-                        None,
-                    );
-
-                    let started_session = self
-                        .get_session(&session_id)
-                        .await
-                        .ok_or_else(|| missing_session_error(&session_id))?;
-
-                    return Ok(SessionExecutionSnapshot {
-                        session: started_session,
-                        runtime,
-                        render,
-                    });
-                }
-                Err(wait_error) => {
-                    let retry_probe = self.get_session_ready_retry_probe(&session_id).await;
-                    let retry_decision = decide_home_session_ready_recreate_retry(
-                        plan.session.target.is_home(),
-                        recreate_retry_count,
-                        &wait_error.message,
-                        retry_probe.phase,
-                        retry_probe.stream_state.as_deref(),
-                        retry_probe.error_code.as_deref(),
-                        retry_probe.error_message.as_deref(),
-                    );
-
-                    if let Some(decision) = retry_decision {
-                        match decision {
-                            SessionReadyRetryDecision::Retry(reason) => {
-                                log::warn!(
-                                    "home startup retry will recreate session after session-ready failure: target_id={} session_id={} retry_count={} reason={:?} phase={:?} stream_state={:?} wait_error={} progress_error={:?}",
-                                    plan.session.target_id,
-                                    session_id,
-                                    recreate_retry_count + 1,
-                                    reason,
-                                    retry_probe.phase,
-                                    retry_probe.stream_state,
-                                    wait_error,
-                                    retry_probe.error_message,
-                                );
-                                notify_startup_bounded_retry(
-                                    observer,
-                                    SessionStartupPhase::WaitingSessionReady,
-                                    SessionStartupBoundedRetrySnapshot {
-                                        reason: map_session_ready_retry_reason(reason),
-                                        status: SessionStartupBoundedRetryStatus::Retrying,
-                                        retry_count: recreate_retry_count.saturating_add(1),
-                                        retry_limit: HOME_SESSION_READY_RETRY_LIMIT,
-                                    },
-                                );
-                                self.cleanup_session_for_recreate(&session_id).await;
-                                let cleanup_settled = self
-                                    .wait_until_session_cleanup_settled(&plan, &session_id)
-                                    .await;
-                                // home 场景下 recreate 前保留空钩子，统一由 play -> state 主链裁决主机唤醒/准备。
-                                self.prepare_remote_console(&plan, observer).await?;
-                                recreate_context = Some(SessionRecreateContext {
-                                    previous_session_id: session_id,
-                                    cleanup_settled,
-                                });
-                                recreate_retry_count = recreate_retry_count.saturating_add(1);
-                                continue;
-                            }
-                            SessionReadyRetryDecision::Exhausted(reason) => {
-                                notify_startup_bounded_retry(
-                                    observer,
-                                    SessionStartupPhase::WaitingSessionReady,
-                                    SessionStartupBoundedRetrySnapshot {
-                                        reason: map_session_ready_retry_reason(reason),
-                                        status: SessionStartupBoundedRetryStatus::Exhausted,
-                                        retry_count: recreate_retry_count,
-                                        retry_limit: HOME_SESSION_READY_RETRY_LIMIT,
-                                    },
-                                );
-                                notify_startup_phase(
-                                    observer,
-                                    SessionStartupPhase::WaitingSessionReady,
-                                    SessionStartupPhaseStatus::Failed,
-                                    None,
-                                );
-                                return Err(build_home_session_ready_retry_exhausted_error(
-                                    &plan.session.target_id,
-                                    reason,
-                                    recreate_retry_count,
-                                    HOME_SESSION_READY_RETRY_LIMIT,
-                                    wait_error,
-                                ));
-                            }
-                        }
-                    }
-
-                    notify_startup_phase(
-                        observer,
-                        SessionStartupPhase::WaitingSessionReady,
-                        SessionStartupPhaseStatus::Failed,
-                        None,
-                    );
-                    return Err(wait_error);
-                }
-            }
         }
     }
 
@@ -698,156 +460,16 @@ where
             .map(build_session_progress_snapshot)
     }
 
-    pub async fn close_session(&self, session_id: &str) -> Result<bool, SessionFlowError> {
-        let record = self.get_session_record(session_id).await;
-        let Some(record) = record else {
-            return Ok(false);
-        };
-
-        let api = self.create_session_api(&record.plan).await?;
-        let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
-            return Ok(false);
-        };
-        let mut mutation_guard = mutation.state.lock().await;
-        if mutation_guard.closed {
-            return Ok(false);
-        }
-        mutation_guard.closed = true;
-        let result = api.stop_stream(session_id).await;
-        self.clear_session(session_id, &record.cancelled).await;
-
-        match result {
-            Ok(()) => Ok(true),
-            Err(error) => {
-                let flow_error = map_webapi_error(error);
-                if is_remote_session_not_found(flow_error.status) {
-                    Ok(false)
-                } else {
-                    Err(flow_error)
-                }
-            }
-        }
-    }
-
-    pub async fn exchange_offer(
-        &self,
-        session_id: &str,
-        channel: Option<&str>,
-        sdp: &str,
-        restart: bool,
-    ) -> Result<AnswerPayload, SessionFlowError> {
-        let record = self.get_session_record(session_id).await;
-        let Some(record) = record else {
-            return Err(missing_session_error(session_id));
-        };
-        let plan = &record.plan;
-        let poll_interval_ms = plan.session.schedule.offer_poll_interval_ms.max(100);
-        let api = self.create_signaling_api(plan).await?;
-        let previous_answer = if restart {
-            api.get_sdp_exchange_response(session_id)
-                .await
-                .map_err(map_webapi_error)?
-        } else {
-            None
-        };
-
-        {
-            let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
-                return Err(missing_session_error(session_id));
-            };
-            let mutation_guard = mutation.state.lock().await;
-            if mutation_guard.closed {
-                return Err(missing_session_error(session_id));
-            }
-            if channel == Some("chat") {
-                api.send_chat_sdp(session_id, sdp)
-                    .await
-                    .map_err(map_webapi_error)?;
-            } else {
-                api.send_sdp(session_id, sdp)
-                    .await
-                    .map_err(map_webapi_error)?;
-            }
-        }
-
-        loop {
-            let answer = api
-                .get_sdp_exchange_response(session_id)
-                .await
-                .map_err(map_webapi_error)?;
-            let answer = filter_stale_offer_response(answer, previous_answer.as_ref(), restart);
-            let session_exists = self.get_session_record(session_id).await.is_some();
-            let decision = decide_offer_poll(answer.is_some(), session_exists);
-
-            match (decision, answer) {
-                (PollDecision::Completed, Some(answer)) => return Ok(answer),
-                (PollDecision::SessionMissing, _) => {
-                    return Err(missing_session_error(session_id));
-                }
-                (PollDecision::Continue, _) => {
-                    tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
-                }
-                (PollDecision::Completed, None) => {}
-            }
-        }
-    }
-
-    pub async fn submit_ice(
-        &self,
-        session_id: &str,
-        candidates: &[IceCandidate],
-        restart: bool,
-    ) -> Result<(), SessionFlowError> {
-        let record = self.get_session_record(session_id).await;
-        let Some(record) = record else {
-            return Err(missing_session_error(session_id));
-        };
-        let plan = &record.plan;
-        let api = self.create_signaling_api(plan).await?;
-        // restart=true 用于“重新开始候选交换”。
-        // 这里不再额外读取一次 /ice 作为 baseline：该读取可能与服务端候选队列语义耦合，
-        // 导致后续 poll 读取到的 candidates 被意外清空/错配。
-        let restart_baseline = None;
-
-        let Some(mutation) = self.session_mutation(session_id, &record.cancelled).await else {
-            return Err(missing_session_error(session_id));
-        };
-        let mutation_guard = mutation.state.lock().await;
-        if mutation_guard.closed {
-            return Err(missing_session_error(session_id));
-        }
-        api.send_ice(session_id, candidates)
+    pub async fn session_allows_recovery(&self, session_id: &str) -> bool {
+        self.get_session_record(session_id)
             .await
-            .map_err(map_webapi_error)?;
-        let mut signaling = self.inner.signaling.write().await;
-        let state = signaling.entry(session_id.to_string()).or_default();
-        if restart {
-            state.restart_baseline_ice = restart_baseline;
-            state.last_polled_ice = None;
-        }
-        Ok(())
-    }
-
-    pub async fn poll_ice(
-        &self,
-        session_id: &str,
-        restart: bool,
-    ) -> Result<Vec<IceCandidate>, SessionFlowError> {
-        let record = self.get_session_record(session_id).await;
-        let Some(record) = record else {
-            return Err(missing_session_error(session_id));
-        };
-        let plan = &record.plan;
-        let api = self.create_signaling_api(plan).await?;
-        let response = api
-            .get_ice_exchange_response(session_id)
-            .await
-            .map_err(map_webapi_error)?;
-        let response = self
-            .filter_polled_ice_response(session_id, response, restart)
-            .await;
-        let session_exists = self.get_session_record(session_id).await.is_some();
-        resolve_polled_ice_result(session_id, response, session_exists)
+            .is_some_and(|record| {
+                !record.cancelled.is_cancelled()
+                    && matches!(
+                        build_session_progress_snapshot(record).phase,
+                        SessionPhase::SessionReady | SessionPhase::Recovering
+                    )
+            })
     }
 
     pub async fn send_keepalive(&self, session_id: &str) -> Result<bool, SessionFlowError> {
@@ -871,311 +493,6 @@ where
         }
     }
 
-    /// 进程退出前 best-effort 关闭会话，避免服务端残留活跃会话。
-    pub async fn shutdown(&self) {
-        let session_ids = {
-            let sessions = self.inner.sessions.read().await;
-            sessions.keys()
-        };
-
-        for session_id in session_ids {
-            let _ = self.close_session(&session_id).await;
-        }
-    }
-
-    async fn prepare_remote_console<O>(
-        &self,
-        plan: &Plan,
-        observer: Option<&O>,
-    ) -> Result<(), SessionFlowError>
-    where
-        O: SessionStartupObserver,
-    {
-        let _ = observer;
-        if !plan.session.target.is_home() {
-            return Ok(());
-        }
-
-        let schedule = &plan.session.schedule;
-        if schedule.require_console_ready {
-            self.wait_until_console_ready(
-                plan.session.target.as_str(),
-                &plan.session.target_id,
-                schedule,
-                schedule.wake_console,
-            )
-            .await?;
-            return Ok(());
-        }
-
-        if schedule.wake_console {
-            self.inner
-                .provider
-                .power_on_console(&plan.session.target_id)
-                .await?;
-        }
-        Ok(())
-    }
-
-    async fn wait_until_console_ready(
-        &self,
-        target_type: &str,
-        target_id: &str,
-        schedule: &crate::policy::session::SessionSchedulePlan,
-        allow_wake: bool,
-    ) -> Result<&'static str, SessionFlowError> {
-        let interval_ms = schedule.monitor_interval_ms.max(200);
-        let started_at_ms = now_ms();
-        let mut last_wake_attempt_at_ms = (!allow_wake).then_some(started_at_ms);
-        let mut transient_wake_failure_count = 0u8;
-
-        loop {
-            let consoles = self.inner.provider.get_remote_consoles().await?;
-            let matched = consoles
-                .iter()
-                .find(|console| matches_remote_console_id(target_id, console));
-
-            if let Some(console) = matched {
-                let now_ms = now_ms();
-                if let Some(reason) = remote_console_ready_reason(console) {
-                    self.inner.provider.on_console_ready_wait_result(
-                        target_type,
-                        target_id,
-                        "succeeded",
-                        reason,
-                        Some(console),
-                    );
-                    return Ok(reason);
-                }
-
-                let power_state = console.power_state.as_deref();
-                if allow_wake
-                    && should_retry_wake_during_ready_wait(
-                        power_state,
-                        last_wake_attempt_at_ms,
-                        now_ms,
-                    )
-                {
-                    match self.inner.provider.power_on_console(target_id).await {
-                        Ok(accepted) => {
-                            log::info!(
-                                "home ready wait issued follow-up wake command: target_id={} power_state={:?} accepted={}",
-                                target_id,
-                                power_state,
-                                accepted,
-                            );
-                            last_wake_attempt_at_ms = Some(now_ms);
-                            if accepted {
-                                transient_wake_failure_count = 0;
-                            }
-                        }
-                        Err(error)
-                            if is_waiting_for_server_registration_message(&error.message) =>
-                        {
-                            log::warn!(
-                                "home ready wait wake command is still waiting for server registration: target_id={} power_state={:?} error={}",
-                                target_id,
-                                power_state,
-                                error,
-                            );
-                            last_wake_attempt_at_ms = Some(now_ms);
-                            transient_wake_failure_count =
-                                transient_wake_failure_count.saturating_add(1);
-                            let elapsed_ms = now_ms.saturating_sub(started_at_ms);
-                            if transient_wake_failure_count >= 3
-                                && elapsed_ms >= 15_000
-                                && matches!(
-                                    power_state,
-                                    Some("ConnectedStandby") | Some("Off") | None
-                                )
-                            {
-                                return Err(remote_console_wake_circuit_open_error(
-                                    target_id,
-                                    power_state,
-                                    transient_wake_failure_count,
-                                ));
-                            }
-                        }
-                        Err(error) => return Err(error),
-                    }
-                }
-            }
-
-            let elapsed_ms = now_ms().saturating_sub(started_at_ms);
-            if elapsed_ms >= schedule.ready_timeout_ms {
-                self.inner.provider.on_console_ready_wait_result(
-                    target_type,
-                    target_id,
-                    "failed",
-                    "timeout",
-                    matched,
-                );
-                return Err(remote_console_not_ready_error(target_id));
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
-        }
-    }
-
-    async fn start_stream_with_retry(
-        &self,
-        api: &WebApiSessionGateway,
-        plan: &Plan,
-    ) -> Result<String, SessionFlowError> {
-        let retry_backoff_ms = &plan.session.schedule.retry_backoff_ms;
-        let retry_timeout_ms = plan
-            .session
-            .schedule
-            .ready_timeout_ms
-            .max(plan.session.schedule.monitor_interval_ms.max(200));
-        let retry_started_at_ms = now_ms();
-        let mut attempt = 0usize;
-
-        loop {
-            match api.start_stream().await {
-                Ok(session_path) => return Ok(session_path),
-                Err(error) => {
-                    let elapsed_ms = now_ms().saturating_sub(retry_started_at_ms);
-                    let should_retry = should_retry_home_server_registration(
-                        plan,
-                        &error,
-                        elapsed_ms,
-                        retry_timeout_ms,
-                    );
-                    if !should_retry {
-                        return Err(map_webapi_error(error));
-                    }
-
-                    let backoff_ms = next_retry_backoff_ms(retry_backoff_ms, attempt);
-                    let error_message = error.to_string();
-                    log::warn!(
-                        "home start_stream waiting for server registration: target_id={} attempt={} elapsed_ms={} backoff_ms={} error={}",
-                        plan.session.target_id,
-                        attempt + 1,
-                        elapsed_ms,
-                        backoff_ms,
-                        error_message,
-                    );
-
-                    // xHome 主机可能已经开机，但串流服务尚未重新注册；
-                    // 在重试前补一次 ready 轮询，避免直接对 XCCS 打无效重试风暴。
-                    if let Err(wait_error) = self
-                        .wait_until_console_ready(
-                            plan.session.target.as_str(),
-                            &plan.session.target_id,
-                            &plan.session.schedule,
-                            plan.session.schedule.wake_console,
-                        )
-                        .await
-                    {
-                        log::warn!(
-                            "home console ready precheck did not pass before start_stream retry: target_id={} error={}",
-                            plan.session.target_id,
-                            wait_error,
-                        );
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
-                    attempt += 1;
-                }
-            }
-        }
-    }
-
-    async fn wait_until_session_started_or_failed(
-        &self,
-        session_id: &str,
-        schedule: &crate::policy::session::SessionSchedulePlan,
-    ) -> Result<SessionProgressSnapshot, SessionFlowError> {
-        let interval_ms = schedule.monitor_interval_ms.max(200);
-        let closed_recovery_grace_ms = startup_closed_recovery_grace_ms(interval_ms);
-        // 给 monitor 一次额外 tick，把精确踩线的“卡住”状态先收敛成 failed，
-        // 避免这里抢先抛出通用 timeout，丢掉更具体的上下文。
-        let timeout_with_grace_ms = schedule.startup_timeout_ms.saturating_add(interval_ms);
-        let session_id_owned = session_id.to_string();
-        let last_recovery_signal_at_ms = Arc::new(Mutex::new(now_ms()));
-        let home_registration_wait_started_at_ms = Arc::new(Mutex::new(None::<u64>));
-        let session_id_for_check = session_id_owned.clone();
-        let recovery_signal_for_check = Arc::clone(&last_recovery_signal_at_ms);
-        let home_registration_wait_for_check = Arc::clone(&home_registration_wait_started_at_ms);
-
-        wait_until(
-            interval_ms,
-            timeout_with_grace_ms,
-            move || {
-                let session_id_for_check = session_id_for_check.clone();
-                let recovery_signal_for_check = Arc::clone(&recovery_signal_for_check);
-                let home_registration_wait_for_check = Arc::clone(&home_registration_wait_for_check);
-                async move {
-                let record = self
-                    .get_session_record(&session_id_for_check)
-                    .await
-                    .ok_or_else(|| missing_session_error(&session_id_for_check))?;
-                let runtime = record.snapshot.runtime_snapshot();
-                let is_home = record.plan.session.target.is_home();
-                let target_id = record.plan.session.target_id.clone();
-                let progress = build_session_progress_snapshot(record);
-
-                let now_ms = now_ms();
-                let mut home_registration_wait_started_at_ms =
-                    home_registration_wait_for_check.lock().map_err(|_| {
-                        SessionFlowError::message(
-                            "startupWaitRegistrationStateLockFailed:sessionFlowClosedGuard",
-                        )
-                    })?;
-                if let Some(error) = evaluate_home_server_registration_wait_timeout(
-                    is_home,
-                    &target_id,
-                    &session_id_for_check,
-                    &runtime,
-                    now_ms,
-                    &mut home_registration_wait_started_at_ms,
-                ) {
-                    return Err(error);
-                }
-                let mut last_recovery_signal_at_ms =
-                    recovery_signal_for_check.lock().map_err(|_| {
-                        SessionFlowError::message(
-                            "startupWaitRecoveryStateLockFailed:sessionFlowClosedGuard",
-                        )
-                    })?;
-                match decide_startup_progress_action(
-                    &progress,
-                    now_ms,
-                    &mut last_recovery_signal_at_ms,
-                    closed_recovery_grace_ms,
-                ) {
-                    StartupProgressAction::Ready => return Ok(Some(progress)),
-                    StartupProgressAction::Continue { transient_closed } => {
-                        if transient_closed {
-                            log::warn!(
-                                "startup wait keeps polling after transient closed: session_id={} phase={:?} grace_ms={} since_recovery_ms={}",
-                                session_id_for_check,
-                                progress.phase,
-                                closed_recovery_grace_ms,
-                                now_ms.saturating_sub(*last_recovery_signal_at_ms),
-                            );
-                        }
-                    }
-                    StartupProgressAction::Fail(message) => {
-                        log::warn!(
-                            "startup wait failing: session_id={} phase={:?} message={}",
-                            session_id_for_check,
-                            progress.phase,
-                            message
-                        );
-                        return Err(SessionFlowError::message(message));
-                    }
-                }
-                Ok(None)
-            }
-            },
-            || {
-                startup_timeout_error(&session_id_owned)
-            },
-        )
-        .await
-    }
-
     async fn get_session_record(&self, session_id: &str) -> Option<SessionRuntimeRecord<S>> {
         let sessions = self.inner.sessions.read().await;
         sessions.get(session_id)
@@ -1193,129 +510,6 @@ where
             .get(session_id)
             .cloned()
             .filter(|mutation| mutation.cancelled.same_instance(cancelled))
-    }
-
-    async fn clear_session(&self, session_id: &str, cancelled: &SessionCancelToken) {
-        let removed = self
-            .inner
-            .sessions
-            .write()
-            .await
-            .remove_if_same(session_id, cancelled)
-            .is_some();
-        if removed {
-            let _ = self.inner.signaling.write().await.remove(session_id);
-            let mut mutations = self.inner.mutations.write().await;
-            if mutations
-                .get(session_id)
-                .is_some_and(|mutation| mutation.cancelled.same_instance(cancelled))
-            {
-                mutations.remove(session_id);
-            }
-        }
-    }
-
-    async fn cleanup_session_for_recreate(&self, session_id: &str) {
-        let record = self.get_session_record(session_id).await;
-        if let Err(error) = self.close_session(session_id).await {
-            log::warn!(
-                "best-effort startup retry cleanup failed, continuing with recreate: session_id={} error={}",
-                session_id,
-                error,
-            );
-        }
-        if let Some(record) = record {
-            self.clear_session(session_id, &record.cancelled).await;
-        }
-    }
-
-    async fn wait_until_session_cleanup_settled(&self, plan: &Plan, session_id: &str) -> bool {
-        let target_type = plan.session.target.as_str().to_string();
-        let target_id = plan.session.target_id.clone();
-        let api = match self.create_session_api(plan).await {
-            Ok(api) => api,
-            Err(error) => {
-                self.inner.provider.on_session_recreate_cleanup_result(
-                    session_id,
-                    &target_type,
-                    &target_id,
-                    "createApiFailed",
-                    None,
-                    Some(&error),
-                );
-                return false;
-            }
-        };
-
-        let started_at_ms = now_ms();
-        let mut last_state: Option<String> = None;
-        let mut last_error: Option<SessionFlowError> = None;
-
-        loop {
-            match api.get_stream_state(session_id).await {
-                Ok((state, _)) => {
-                    last_state = state.clone();
-                    if is_session_cleanup_terminal_state(state.as_deref()) {
-                        self.inner.provider.on_session_recreate_cleanup_result(
-                            session_id,
-                            &target_type,
-                            &target_id,
-                            "settled",
-                            last_state.as_deref(),
-                            None,
-                        );
-                        return true;
-                    }
-                }
-                Err(error) => {
-                    let flow_error = map_webapi_error(error);
-                    if flow_error.status == Some(404) {
-                        self.inner.provider.on_session_recreate_cleanup_result(
-                            session_id,
-                            &target_type,
-                            &target_id,
-                            "notFound",
-                            last_state.as_deref(),
-                            None,
-                        );
-                        return true;
-                    }
-                    last_error = Some(flow_error);
-                }
-            }
-
-            if now_ms().saturating_sub(started_at_ms) >= HOME_RECREATE_CLEANUP_SETTLE_MS {
-                self.inner.provider.on_session_recreate_cleanup_result(
-                    session_id,
-                    &target_type,
-                    &target_id,
-                    "timeout",
-                    last_state.as_deref(),
-                    last_error.as_ref(),
-                );
-                return false;
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(
-                HOME_RECREATE_CLEANUP_POLL_MS,
-            ))
-            .await;
-        }
-    }
-
-    async fn get_session_ready_retry_probe(&self, session_id: &str) -> SessionReadyRetryProbe {
-        let Some(record) = self.get_session_record(session_id).await else {
-            return SessionReadyRetryProbe::default();
-        };
-        let runtime = record.snapshot.runtime_snapshot();
-        let progress = build_session_progress_snapshot(record);
-
-        SessionReadyRetryProbe {
-            phase: Some(progress.phase),
-            stream_state: runtime.stream_state,
-            error_code: progress.error_code,
-            error_message: progress.error_message,
-        }
     }
 
     async fn create_session_api(
@@ -1340,25 +534,6 @@ where
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
         Ok(WebApiSignalingGateway::new(plan.clone(), token))
-    }
-
-    async fn filter_polled_ice_response(
-        &self,
-        session_id: &str,
-        response: Option<Vec<IceCandidate>>,
-        _restart: bool,
-    ) -> Option<Vec<IceCandidate>> {
-        let mut signaling = self.inner.signaling.write().await;
-        let state = signaling.entry(session_id.to_string()).or_default();
-        // restart=true 时不做 baseline 相等过滤，避免把服务端在重连阶段尚未变化的候选错误折叠为空。
-        let response = response;
-        if response.as_deref() == state.last_polled_ice.as_deref() {
-            return None;
-        }
-        if let Some(candidates) = response.as_ref() {
-            state.last_polled_ice = Some(candidates.clone());
-        }
-        response
     }
 }
 
@@ -1387,21 +562,6 @@ fn filter_stale_offer_response(
         return None;
     }
     answer
-}
-
-#[allow(dead_code)]
-fn filter_stale_ice_response(
-    candidates: Option<Vec<IceCandidate>>,
-    previous_candidates: Option<&[IceCandidate]>,
-    restart: bool,
-) -> Option<Vec<IceCandidate>> {
-    if !restart {
-        return candidates;
-    }
-    if candidates.as_deref() == previous_candidates {
-        return None;
-    }
-    candidates
 }
 
 pub(crate) fn missing_session_error(session_id: &str) -> SessionFlowError {
@@ -1457,6 +617,7 @@ fn resolve_session_phase(
     match runtime.player_state.as_str() {
         "started" => SessionPhase::SessionReady,
         "failed" => SessionPhase::Failed,
+        "closed" => SessionPhase::Closed,
         "queued" => SessionPhase::WaitingSessionReady,
         "pending" => match runtime.stream_state.as_deref() {
             Some("ReadyToConnect") => SessionPhase::RuntimeStarting,
@@ -1510,7 +671,11 @@ fn build_session_progress_error_hint(
     let primary_signal = error_message
         .filter(|value| !value.trim().is_empty())
         .or_else(|| error_code.filter(|value| !value.trim().is_empty()))?;
-    let kind = classify_session_progress_error_kind(phase, primary_signal);
+    let kind = if error_code == Some("401") {
+        SessionFlowStartupErrorKind::Auth
+    } else {
+        classify_session_progress_error_kind(phase, primary_signal)
+    };
 
     Some(SessionFlowStartupErrorHint {
         kind: kind.clone(),
@@ -2001,39 +1166,6 @@ fn is_waiting_for_server_registration_message(message: &str) -> bool {
     normalized.contains("waitingforservertoregister")
         || normalized.contains("errorcallingwns")
         || (normalized.contains("xccs") && normalized.contains("send command failed"))
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-async fn wait_until<F, Fut, T, E>(
-    interval_ms: u64,
-    timeout_ms: u64,
-    mut check: F,
-    timeout_error: E,
-) -> Result<T, SessionFlowError>
-where
-    F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<Option<T>, SessionFlowError>>,
-    E: Fn() -> SessionFlowError,
-{
-    let started_at_ms = now_ms();
-    loop {
-        if let Some(result) = check().await? {
-            return Ok(result);
-        }
-
-        let elapsed_ms = now_ms().saturating_sub(started_at_ms);
-        if elapsed_ms >= timeout_ms {
-            return Err(timeout_error());
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
-    }
 }
 
 #[cfg(test)]

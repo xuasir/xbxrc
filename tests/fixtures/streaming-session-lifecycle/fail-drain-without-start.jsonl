@@ -1,0 +1,3 @@
+{"schemaVersion": 3, "seq": 1, "tsMs": 1793150001000, "event": "operationStarted", "sessionId": "session", "payload": {"operationId": "connection-1", "stage": "connectionRecovery", "runtimeGeneration": 1}}
+{"schemaVersion": 3, "seq": 2, "tsMs": 1793150002000, "event": "operationTimedOut", "sessionId": "session", "payload": {"operationId": "connection-1", "stage": "connectionRecovery", "runtimeGeneration": 1, "result": "timedOut"}}
+{"schemaVersion": 3, "seq": 4, "tsMs": 1793150004000, "event": "recoveryDrainFinished", "sessionId": "session", "payload": {"admissionId": "connection-1", "runtimeGeneration": 1}}

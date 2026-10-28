@@ -10,6 +10,8 @@ import type {
   RuntimeTraceRecordEventParams,
 } from './runtimeTrace'
 import type {
+  StreamingCancelStartupParams,
+  StreamingCancelStartupResult,
   StreamingCloseSessionParams,
   StreamingCloseSessionResult,
   StreamingDecideRecoveryParams,
@@ -248,6 +250,7 @@ export interface XBoxRpcSchema {
   }
   streaming: {
     startSession: RpcMethod<StreamingStartSessionParams, StreamingStartSessionResult>
+    cancelStartup: RpcMethod<StreamingCancelStartupParams, StreamingCancelStartupResult>
     getSessionProgress: RpcMethod<
       StreamingGetSessionProgressParams,
       StreamingSessionProgressSnapshot | null

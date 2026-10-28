@@ -21,6 +21,8 @@ pub struct SessionRuntimeSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct SessionMonitorMetadata {
     pub created_at_ms: u64,
+    #[serde(default)]
+    pub last_observed_at_ms: u64,
     pub last_observed_state: Option<String>,
     pub state_observed_at_ms: Option<u64>,
     pub repeated_state_count: u32,
@@ -107,6 +109,7 @@ pub fn apply_monitor_tick(
     input: SessionMonitorInput,
 ) -> SessionMonitorResult {
     state.metadata.monitor_attempt_count += 1;
+    state.metadata.last_observed_at_ms = input.now_ms;
 
     if state.metadata.last_observed_state == input.stream_state {
         state.metadata.repeated_state_count += 1;
@@ -190,6 +193,18 @@ pub fn apply_monitor_tick(
                 metadata: state.metadata,
                 should_continue: true,
                 should_send_connect_token: true,
+            }
+        }
+        Some("WaitingForResources") if state.metadata.reached_provisioned => {
+            state.runtime.stream_state = input.stream_state;
+            state.runtime.queue = Some(QueueSnapshot {
+                details: input.waiting_queue.unwrap_or_default(),
+            });
+            SessionMonitorResult {
+                runtime: state.runtime,
+                metadata: state.metadata,
+                should_continue: true,
+                should_send_connect_token: false,
             }
         }
         Some("WaitingForResources") => {
@@ -312,6 +327,7 @@ mod tests {
             },
             metadata: SessionMonitorMetadata {
                 created_at_ms: 1000,
+                last_observed_at_ms: 1000,
                 last_observed_state: None,
                 state_observed_at_ms: None,
                 repeated_state_count: 0,

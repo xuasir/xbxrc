@@ -17,6 +17,10 @@ pub trait StreamingProvider: Send + Sync {
         &self,
         params: StreamingStartSessionParams,
     ) -> AppResult<StreamingStartSessionResult>;
+    async fn cancel_startup(
+        &self,
+        params: StreamingCancelStartupParams,
+    ) -> AppResult<StreamingCancelStartupResult>;
     async fn get_session_progress(
         &self,
         params: StreamingGetSessionProgressParams,

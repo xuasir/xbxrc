@@ -62,7 +62,13 @@ impl XbxEngineService {
 #[async_trait]
 impl XbxEngineProvider for XbxEngineService {
     async fn dispatch_control(&self, command_name: &str, params: Option<Value>) -> AppResult<()> {
+        let expected_session_id = params
+            .as_ref()
+            .and_then(|params| params.get("sessionId"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
         let command = parse_control_command(command_name, params)?;
+        let control_epoch = self.runtime_state.prepare_control(&command);
         record_dispatch_trace(
             &self.runtime_trace,
             command_name,
@@ -72,15 +78,23 @@ impl XbxEngineProvider for XbxEngineService {
             None,
         );
         let started_at = Instant::now();
+        let deadline = matches!(command, XbxEngineControlCommandDto::RequestReconnect { .. })
+            .then(|| started_at + Duration::from_secs(120));
         let runtime_state = self.runtime_state.clone();
         let command_for_trace = command.clone();
-        let result =
-            tauri::async_runtime::spawn_blocking(move || runtime_state.apply_control(command))
-                .await
-                .map_err(|error| {
-                    AppError::XbxEngine(format!("xbxengine control task join failed: {error}"))
-                })?
-                .map_err(|error| AppError::XbxEngine(error.to_string()));
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            runtime_state.apply_control(
+                command,
+                control_epoch,
+                expected_session_id.as_deref(),
+                deadline,
+            )
+        })
+        .await
+        .map_err(|error| {
+            AppError::XbxEngine(format!("xbxengine control task join failed: {error}"))
+        })?
+        .map_err(|error| AppError::XbxEngine(error.to_string()));
         record_dispatch_trace(
             &self.runtime_trace,
             command_name,

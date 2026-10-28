@@ -63,6 +63,13 @@ export function reduceViewState(
   state: StreamExecutionViewState,
   action: StreamExecutionViewAction,
 ): StreamExecutionViewState {
+  // 终止态只接受显式新启动和清理动作，异步观测继续归属旧执行。
+  const terminal = state.sessionUiPhase === 'closing'
+    || state.sessionUiPhase === 'closed'
+    || state.sessionUiPhase === 'failed'
+  if (terminal && !['startRequested', 'retryRequested', 'disconnecting', 'disconnected', 'targetMissing'].includes(action.type)) {
+    return state
+  }
   switch (action.type) {
     case 'targetMissing':
       return {
@@ -100,7 +107,9 @@ export function reduceViewState(
     case 'sessionProgress': {
       const nextState: StreamExecutionViewState = {
         ...state,
-        sessionUiPhase: mapProgressToSessionUiPhase(action.progress),
+        sessionUiPhase: state.isConnected && action.progress.phase !== 'failed' && action.progress.phase !== 'closed'
+          ? 'connected'
+          : mapProgressToSessionUiPhase(action.progress),
       }
       if (action.progress.phase === 'recovering') {
         nextState.lifecyclePhase = 'recovering'
@@ -146,7 +155,8 @@ export function reduceViewState(
         ...state,
         isConnected: false,
         isLoading: false,
-        sessionUiPhase: 'closed',
+        sessionUiPhase: state.errorText !== '' ? 'failed' : 'closed',
+        lifecyclePhase: state.errorText !== '' ? 'failed' : 'stopped',
       }
     case 'startRequested':
       return {
