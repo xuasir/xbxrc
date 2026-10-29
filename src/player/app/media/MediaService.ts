@@ -2,14 +2,12 @@ import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { AudioRuntimeConfig, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
 import type { InputService } from '../input/InputService'
 import { AudioEffectsService } from './AudioEffectsService'
-import { MediaSourceFactory } from './MediaSourceFactory'
 import { MicrophoneService } from './MicrophoneService'
 import { PlaybackService } from './PlaybackService'
 
 export class MediaService {
   private readonly playbackService: PlaybackService
   private readonly microphoneService: MicrophoneService
-  private readonly mediaSourceFactory = new MediaSourceFactory()
   private readonly audioEffectsService: AudioEffectsService
 
   constructor(
@@ -33,12 +31,12 @@ export class MediaService {
 
   updateAudioConfig(config: Partial<AudioRuntimeConfig>): void {
     this.audioConfig = { ...this.audioConfig, ...config }
-    this.audioEffectsService.updateVolume(this.audioConfig.volume || 1)
+    this.audioEffectsService.updateConfig(this.audioConfig)
   }
 
-  /** 浏览器侧重建 video 元素，强制换新解码器。 */
-  resetVideoDecoder(): boolean {
-    return this.playbackService.resetVideoDecoder()
+  /** 重建播放元素，恢复效果由解码与新帧事实确认。 */
+  rebuildVideoPlayback(): boolean {
+    return this.playbackService.rebuildVideoPlayback()
   }
 
   updateRendererConfig(config: Partial<RendererRuntimeConfig>): void {
@@ -70,37 +68,36 @@ export class MediaService {
   }
 
   setVolumeDirect(value: number): void {
+    this.audioConfig.volume = value
     this.audioEffectsService.updateVolume(value)
   }
 
-  startMicCapture(addTrack: (track: MediaStreamTrack, stream: MediaStream) => void): Promise<void> {
+  startMicCapture(addTrack: (track: MediaStreamTrack, stream: MediaStream) => (() => void) | void): Promise<void> {
     return this.microphoneService.start(addTrack)
   }
 
-  stopMicCapture(getPeer: () => RTCPeerConnection): void {
-    this.microphoneService.stop(() => {
-      for (const sender of getPeer().getSenders()) {
-        if (sender.track?.kind === 'audio') {
-          getPeer().removeTrack(sender)
-        }
-      }
-    })
+  stopMicCapture(): void {
+    this.microphoneService.destroy()
   }
 
   getMicState(): { capturing: boolean, paused: boolean } {
     return this.microphoneService.getState()
   }
 
-  createVideoMediaSource(): { url: string, mediaSource: MediaSource } {
-    return this.mediaSourceFactory.createVideoMediaSource()
+  captureRenderedFrame(signal?: AbortSignal): Promise<HTMLCanvasElement | null> {
+    return this.playbackService.captureRenderedFrame(signal)
   }
 
-  createAudioMediaSource(): { url: string, mediaSource: MediaSource } {
-    return this.mediaSourceFactory.createAudioMediaSource()
+  snapshotResources() {
+    return { ...this.playbackService.snapshotResources(), ...this.microphoneService.snapshotResources(), ...this.audioEffectsService.snapshotResources() }
   }
 
-  captureRenderedFrame(): Promise<HTMLCanvasElement | null> {
-    return this.playbackService.captureRenderedFrame()
+  snapshotRendererObservation() {
+    return this.playbackService.snapshotRendererObservation()
+  }
+
+  snapshotDiagnostics() {
+    return this.playbackService.snapshotDiagnostics()
   }
 
   destroy(): void {

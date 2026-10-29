@@ -19,8 +19,10 @@ import {
   formatBufferedTrend,
   formatExperienceResolution,
   formatOptionalPercent,
+  formatPanelDimensions,
   formatPanelFps,
   formatPanelKbps,
+  formatPanelMs,
   formatRenderPipelineType,
   formatRenderProcessing,
   formatRenderShaderPath,
@@ -82,6 +84,8 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
   const { snapshot, diagnostics, i18n } = input
   const { t } = i18n
   const s = snapshot
+  const short = s?.browserStatsWindows?.short
+  const unavailable = t('streamPage.diagnostics.values.unavailable')
 
   const openRatio = s?.controlChannelOpenRatio
   const openRatioText = openRatio === undefined || Number.isNaN(openRatio)
@@ -89,6 +93,29 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
     : `${(openRatio * 100).toFixed(0)}%`
 
   return {
+    receivedFps: formatPanelFps(short ? short.inboundFpsAvg : s?.inboundVideoFps),
+    decodedFps: formatPanelFps(short ? short.decodeFpsAvg : s?.decodeFps),
+    videoAdvancementFps: formatPanelFps(short ? short.videoPresentFpsAvg : s?.videoPresentFps),
+    callbackDeliveryFps: formatPanelFps(short ? short.callbackFpsAvg : s?.callbackFps),
+    rendererSubmitFps: formatPanelFps(short ? short.rendererSubmitFpsAvg : s?.rendererSubmitFps),
+    frameWindow: short ? `${short.durationMs.toFixed(0)}ms / ${short.sampleCount}` : '--',
+    observation: `${s?.statsObservationState ?? 'unavailable'} / ${s?.statsSampleId ?? '--'}`,
+    sourceSize: formatPanelDimensions(s?.renderSourceWidth, s?.renderSourceHeight),
+    outputSize: formatPanelDimensions(s?.renderActualOutputWidth, s?.renderActualOutputHeight),
+    submitAge: formatPanelMs(s?.rendererSubmitAgeMs),
+    submitCost: formatPanelMs(short ? short.renderDrawDurationMsAvg : s?.renderDrawDurationMsAvg),
+    gpuCost: unavailable,
+    scanout: unavailable,
+    renderCause: stringOrDash(s?.renderCause),
+    renderEffect: stringOrDash(s?.renderActionEffect),
+    frameCauses: [s?.rendererLatestOverwriteCount, s?.rendererPacingWaitCount, s?.rendererSubmitFailureCount, s?.rendererCaptureFramesTotal].map(v => v ?? '--').join(' / '),
+    rttBaseline: formatPanelMs(s?.networkRttBaselineMs),
+    rttDelta: formatPanelMs(s?.networkRttDeltaMs),
+    qualityRequested: formatPanelKbps(s?.qualityRequestedBitrateKbps),
+    qualityNegotiated: formatPanelKbps(s?.qualityNegotiatedBitrateKbps),
+    qualityObserved: formatPanelKbps(s?.inboundVideoBitrateKbps),
+    qualityEffect: stringOrDash(s?.qualityActionEffect),
+    recoveryEffect: stringOrDash(s?.lastRecoveryActionEffect),
     transportState: stringOrDash(diagnostics.transportState ?? s?.transportState),
     presentationMilestone: stringOrDash(diagnostics.presentationMilestone),
     renderPipelineType: formatRenderPipelineType(s?.renderPipelineType ?? diagnostics.renderPipelineType),
@@ -191,6 +218,29 @@ export interface StreamInternalDiagnosticsRow { key: string, value: string }
 
 export function browserDiagnosticsRows(vm: StreamBrowserDiagnosticsViewModel): StreamInternalDiagnosticsRow[] {
   return [
+    { key: 'receivedFps', value: vm.receivedFps },
+    { key: 'decodedFps', value: vm.decodedFps },
+    { key: 'videoAdvancementFps', value: vm.videoAdvancementFps },
+    { key: 'callbackDeliveryFps', value: vm.callbackDeliveryFps },
+    { key: 'rendererSubmitFps', value: vm.rendererSubmitFps },
+    { key: 'frameWindow', value: vm.frameWindow },
+    { key: 'observation', value: vm.observation },
+    { key: 'sourceSize', value: vm.sourceSize },
+    { key: 'outputSize', value: vm.outputSize },
+    { key: 'submitAge', value: vm.submitAge },
+    { key: 'submitCost', value: vm.submitCost },
+    { key: 'gpuCost', value: vm.gpuCost },
+    { key: 'scanout', value: vm.scanout },
+    { key: 'renderCause', value: vm.renderCause },
+    { key: 'renderEffect', value: vm.renderEffect },
+    { key: 'frameCauses', value: vm.frameCauses },
+    { key: 'rttBaseline', value: vm.rttBaseline },
+    { key: 'rttDelta', value: vm.rttDelta },
+    { key: 'qualityRequested', value: vm.qualityRequested },
+    { key: 'qualityNegotiated', value: vm.qualityNegotiated },
+    { key: 'qualityObserved', value: vm.qualityObserved },
+    { key: 'qualityEffect', value: vm.qualityEffect },
+    { key: 'recoveryEffect', value: vm.recoveryEffect },
     { key: 'transportState', value: vm.transportState },
     { key: 'presentationMilestone', value: vm.presentationMilestone },
     { key: 'renderPipelineType', value: vm.renderPipelineType },

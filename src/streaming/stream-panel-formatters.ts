@@ -30,6 +30,10 @@ export function formatPanelFps(value?: string | number): string {
   return numericValue.toFixed(1)
 }
 
+export function formatPanelDimensions(width?: number, height?: number): string {
+  return width && height ? `${Math.round(width)}×${Math.round(height)}` : '--'
+}
+
 export function formatRenderPipelineType(value?: 'video' | 'webgl2' | 'webgl2_sr'): string {
   if (value === 'video') {
     return 'Video'

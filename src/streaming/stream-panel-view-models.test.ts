@@ -124,6 +124,19 @@ describe('buildStreamBrowserDiagnosticsViewModel', () => {
     expect(vm.controlChannelOpenRatio).toBe('42%')
     expect(vm.keyframeSuccessRate).toBe('90%')
   })
+
+  it('shows the five stages, actual source/output and unavailable scanout independently', () => {
+    const vm = buildStreamBrowserDiagnosticsViewModel({
+      snapshot: { inboundVideoFps: 60, decodeFps: 55, videoPresentFps: 50, callbackFps: 30, rendererSubmitFps: 25, renderSourceWidth: 2560, renderSourceHeight: 1440, renderActualOutputWidth: 2560, renderActualOutputHeight: 1440, networkRttBaselineMs: 1500, networkRttDeltaMs: 0, renderDrawDurationMsAvg: 2, statsSampleId: '1:10', statsObservationState: 'fresh' },
+      diagnostics: baseDiagnostics(),
+      i18n: createI18n(),
+    })
+    expect([vm.receivedFps, vm.decodedFps, vm.videoAdvancementFps, vm.callbackDeliveryFps, vm.rendererSubmitFps]).toEqual(['60.0', '55.0', '50.0', '30.0', '25.0'])
+    expect(vm.outputSize).toBe(vm.sourceSize)
+    expect(vm.sourceSize).toBe('2560×1440')
+    expect(vm.gpuCost).toBe('streamPage.diagnostics.values.unavailable')
+    expect(vm.scanout).toBe(vm.gpuCost)
+  })
 })
 
 describe('buildStreamRustDiagnosticsViewModel', () => {

@@ -175,6 +175,11 @@ export interface BrowserWebRtcStatsDelta {
 }
 
 export interface BrowserWebRtcStatsSample {
+  sampleId?: string
+  peerGeneration?: number
+  collectionStartedAtMs?: number
+  collectionDurationMs?: number
+  deltaResetReason?: string
   sampledAtMs: number
   connectionState: RTCPeerConnectionState
   selectedCodec?: BrowserWebRtcCodecSample
@@ -182,6 +187,36 @@ export interface BrowserWebRtcStatsSample {
   selectedCandidatePair?: BrowserWebRtcCandidatePairSample
   transport?: BrowserWebRtcTransportSample
   delta?: BrowserWebRtcStatsDelta
+}
+
+export interface BrowserStatsWindowSummary {
+  sampleCount: number
+  durationMs: number
+  lossAvg?: number
+  jitterMsAvg?: number
+  rttMsAvg?: number
+  decodeFpsAvg?: number
+  presentAgeMsAvg?: number
+  lossCoverageMs?: number
+  rttCoverageMs?: number
+  jitterCoverageMs?: number
+  rendererCoverageMs?: number
+  receivedCoverageMs?: number
+  decodeCoverageMs?: number
+  videoCoverageMs?: number
+  callbackCoverageMs?: number
+  jitterBufferCoverageMs?: number
+  inboundFpsAvg?: number
+  videoPresentFpsAvg?: number
+  callbackFpsAvg?: number
+  rendererSubmitFpsAvg?: number
+  rendererSubmitAgeMsAvg?: number
+  renderDrawDurationMsAvg?: number
+  jitterBufferMsAvg?: number
+  jitterBufferMsFirst?: number
+  jitterBufferMsLast?: number
+  decodeDurationMsAvg?: number
+  repairPacketsPerSecondAvg?: number
 }
 
 export type BrowserWebRtcSdpStage

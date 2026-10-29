@@ -1,424 +1,138 @@
 import type { BrowserRendererPolicyInput } from './browser-render-policy'
-import type { SuperResolutionTierPlan } from './super-resolution-ladder'
 import { describe, expect, it } from 'vitest'
 import {
+  planToRendererAttachSpec,
   planToRendererRuntimeConfigPatch,
   planToRendererUpdatePatch,
   projectRenderProcessingFromPlan,
   projectRenderShaderPathFromPlan,
   resolveBrowserRendererPlan,
-  resolveDynamicSuperResolutionRcasStops,
   resolvePipelineOverrideFromRenderPreference,
   resolveRendererPresentTargetFps,
+  resolveSuperResolutionDisplayBudget,
   resolveSuperResolutionUserIntent,
   toRendererFormat,
 } from './browser-render-policy'
-
-const defaultSrContext = {
-  bandwidthState: 'stable' as const,
-  networkConfidence: 'high' as const,
-  qualityLadderLevel: 'L0' as const,
-  renderCause: 'renderStable' as const,
-  adaptiveCongestedBitrateRatio: 0.55,
-  adaptiveStableBitrateRatio: 0.92,
-}
+import { resolveSuperResolutionTierPlan } from './super-resolution-ladder'
 
 function baseInput(over: Partial<BrowserRendererPolicyInput> = {}): BrowserRendererPolicyInput {
-  const tier: SuperResolutionTierPlan = {
-    configuredTier: '1080p',
-    actualSourceTier: '1080p',
-    displayTier: '1080p',
-    baseTier: '1080p',
-    outputTier: '1080p',
-    outputWidth: 1920,
-    outputHeight: 1080,
-    sourceWidth: 1920,
-    sourceHeight: 1080,
-    mode: 'passthrough',
-    reason: 'source-at-or-above-target',
-  }
   return {
-    displayDegradeLevel: 'displayL0',
-    displayOptions: { sharpness: 4, brightness: 1, contrast: 1, saturation: 1 },
-    adaptive: {
-      sharpnessScale: 1,
-      preferredFormat: 'Contain',
-      processingMode: 'quality',
-      shaderPreset: 'clarityL2',
-      sharpenStrength: 100,
-      digest: 'test',
-    },
+    displayOptions: { sharpness: 4, brightness: 105, contrast: 110, saturation: 95 },
+    format: 'Contain',
+    processing: 'cas',
     pipelineOverride: 'auto',
     webgl2Supported: true,
     visibilityBudgetActive: false,
-    superResolutionExperimental: false,
+    targetFps: 60,
     superResolutionUserIntent: false,
     superResolutionAttachFailed: false,
     superResolutionRcasStopsBase: 0.88,
-    applyDynamicSrRcasForDisplayDegrade: true,
-    srRcasDynamicContext: defaultSrContext,
-    streamStats: { inboundVideoBitrateKbps: 12_000 },
-    baseVideoBitrateKbps: 10_000,
-    superResolutionTierPlan: tier,
+    superResolutionTierPlan: resolveSuperResolutionTierPlan(1920, 1080, 1920, 1080),
     ...over,
   }
 }
 
-describe('resolvePipelineOverrideFromRenderPreference', () => {
-  it('maps Rust projection values', () => {
+describe('browser display intent', () => {
+  it('maps pipeline and format preferences', () => {
     expect(resolvePipelineOverrideFromRenderPreference(undefined)).toBe('auto')
-    expect(resolvePipelineOverrideFromRenderPreference('auto')).toBe('auto')
-    expect(resolvePipelineOverrideFromRenderPreference('video')).toBe('video')
-    expect(resolvePipelineOverrideFromRenderPreference('webgl2')).toBe('webgl2')
-  })
-})
-
-describe('resolveSuperResolutionUserIntent', () => {
-  it('honors Rust preference when UI and client flags are off', () => {
-    expect(resolveSuperResolutionUserIntent({
-      superResolutionPreference: 'fsr1Experimental',
-      clientExperimentalSuperResolution: false,
-      displaySuperResolutionExperimental: false,
-    })).toBe(true)
-  })
-
-  it('requires explicit enablement when preference is off', () => {
-    expect(resolveSuperResolutionUserIntent({
-      superResolutionPreference: 'off',
-      clientExperimentalSuperResolution: false,
-      displaySuperResolutionExperimental: false,
-    })).toBe(false)
-  })
-})
-
-describe('toRendererFormat', () => {
-  it('maps projection strings', () => {
+    for (const preference of ['auto', 'video', 'webgl2'] as const)
+      expect(resolvePipelineOverrideFromRenderPreference(preference)).toBe(preference)
     expect(toRendererFormat(undefined)).toBe('Contain')
-    expect(toRendererFormat('Stretch')).toBe('Stretch')
     expect(toRendererFormat('Zoom')).toBe('Zoom')
+    expect(toRendererFormat('Stretch')).toBe('Stretch')
+  })
+
+  it('uses the current UI switch ahead of the launch flag and keeps the server preference', () => {
+    expect(resolveSuperResolutionUserIntent({ clientExperimentalSuperResolution: true })).toBe(true)
+    expect(resolveSuperResolutionUserIntent({ clientExperimentalSuperResolution: true, displaySuperResolutionExperimental: false })).toBe(false)
+    expect(resolveSuperResolutionUserIntent({ superResolutionPreference: 'off', displaySuperResolutionExperimental: true })).toBe(true)
+    expect(resolveSuperResolutionUserIntent({ superResolutionPreference: 'fsr1Experimental', displaySuperResolutionExperimental: false })).toBe(true)
+  })
+
+  it('keeps explicit frame limits and suspends hidden rendering', () => {
+    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: true, targetFps: 60 })).toBe(0)
+    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: false })).toBe(60)
+    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: false, targetFps: 30 })).toBe(30)
+    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: false, targetFps: 0 })).toBe(0)
+    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: false, targetFps: Number.NaN })).toBe(60)
   })
 })
 
-describe('resolveRendererPresentTargetFps', () => {
-  it('returns 0 under visibility budget', () => {
-    expect(resolveRendererPresentTargetFps({ visibilityBudgetActive: true })).toBe(0)
-  })
-
-  it('maps 30fps content to 30 present budget', () => {
-    expect(resolveRendererPresentTargetFps({
-      visibilityBudgetActive: false,
-      contentFpsClass: 'content30',
-    })).toBe(30)
-    expect(resolveRendererPresentTargetFps({
-      visibilityBudgetActive: false,
-      contentPresentFpsEstimate: 30,
-    })).toBe(30)
-  })
-
-  it('maps 60fps content to 60 present budget', () => {
-    expect(resolveRendererPresentTargetFps({
-      visibilityBudgetActive: false,
-      contentFpsClass: 'content60',
-    })).toBe(60)
-    expect(resolveRendererPresentTargetFps({
-      visibilityBudgetActive: false,
-      contentPresentFpsEstimate: 60,
-    })).toBe(60)
-  })
-
-  it('defaults unknown content to 60', () => {
-    expect(resolveRendererPresentTargetFps({
-      visibilityBudgetActive: false,
-      contentFpsClass: 'contentUnknown',
-    })).toBe(60)
-  })
-})
-
-describe('resolveDynamicSuperResolutionRcasStops', () => {
-  it('clamps stops into [0.6, 1.1]', () => {
-    const hi = resolveDynamicSuperResolutionRcasStops({
-      baseStops: 1.08,
-      level: 'displayL2',
-      stats: { inboundVideoBitrateKbps: 0 },
-      baseVideoBitrateKbps: 10_000,
-      context: {
-        bandwidthState: 'congested',
-        adaptiveCongestedBitrateRatio: 0.55,
-        adaptiveStableBitrateRatio: 0.92,
-      },
-    })
-    expect(hi).toBe(1.1)
-  })
-})
-
-describe('resolveBrowserRendererPlan', () => {
-  it('selects webgl2 + CAS on L0 with auto pipeline', () => {
-    const plan = resolveBrowserRendererPlan(baseInput())
-    expect(plan.kind).toBe('webgl2')
-    expect(plan.source).toBe('auto')
-    expect(plan.targetFps).toBe(60)
-    expect(plan.sharpening.mode).toBe('cas')
-    const patch = planToRendererRuntimeConfigPatch(plan)
-    expect(patch.pipelineType).toBe('webgl2')
-    expect(patch.processing).toBe('cas')
-    expect(patch.superResolutionRcasStops).toBeUndefined()
-  })
-
-  it('capabilityFallback when WebGL2 unavailable', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({ webgl2Supported: false }))
-    expect(plan.kind).toBe('video')
-    expect(plan.source).toBe('capabilityFallback')
-    expect(plan.sharpening.mode).toBe('none')
-    const patch = planToRendererRuntimeConfigPatch(plan)
-    expect(patch.pipelineType).toBe('video')
-    expect(patch.mode).toBe('native')
-  })
-
-  it('honors user pipeline override', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({ pipelineOverride: 'video' }))
-    expect(plan.kind).toBe('video')
-    expect(plan.source).toBe('userOverride')
-  })
-
-  it('selects webgl2_sr when SR experimental + intent + WebGL2 + not failed', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      superResolutionAttachFailed: false,
-    }))
-    expect(plan.kind).toBe('webgl2_sr')
-    expect(plan.sr?.outputTier).toBe('1080p')
-    expect(plan.superResolutionRcasStopsForPatch).toBeDefined()
-    const patch = planToRendererRuntimeConfigPatch(plan)
-    expect(patch.superResolutionRcasStops).toBe(plan.superResolutionRcasStopsForPatch)
-  })
-
-  it('marks srFallback when attach failed but user wanted SR on webgl2', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      superResolutionAttachFailed: true,
-    }))
-    expect(plan.kind).toBe('webgl2')
-    expect(plan.source).toBe('srFallback')
-    expect(plan.superResolutionRcasStopsForPatch).toBeUndefined()
-  })
-
-  it('sets targetFps to 0 under visibility budget', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({ visibilityBudgetActive: true }))
-    expect(plan.targetFps).toBe(0)
-    expect(planToRendererRuntimeConfigPatch(plan).targetFps).toBe(0)
-  })
-
-  it('sets targetFps to 30 for 30fps content class', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      contentFpsClass: 'content30',
-      contentPresentFpsEstimate: 30,
-    }))
-    expect(plan.targetFps).toBe(30)
-  })
-
-  it('sets targetFps to 60 for 60fps content class', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      contentFpsClass: 'content60',
-      contentPresentFpsEstimate: 60,
-    }))
-    expect(plan.targetFps).toBe(60)
-  })
-
-  it('uses USM on displayL1', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({ displayDegradeLevel: 'displayL1' }))
-    expect(plan.sharpening.mode).toBe('usm')
-    expect(planToRendererRuntimeConfigPatch(plan).processing).toBe('usm')
-  })
-
-  it('patches RCAS for experimental SR even when pipeline is video (historical parity)', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      webgl2Supported: false,
-      superResolutionExperimental: true,
-      superResolutionAttachFailed: false,
-    }))
-    expect(plan.kind).toBe('video')
-    expect(plan.superResolutionRcasStopsForPatch).toBeDefined()
-  })
-
-  it('uses fixed base RCAS when applyDynamicSrRcasForDisplayDegrade is false', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      applyDynamicSrRcasForDisplayDegrade: false,
-      superResolutionRcasStopsBase: 0.72,
-    }))
-    expect(plan.kind).toBe('webgl2_sr')
-    expect(plan.superResolutionRcasStopsForPatch).toBe(0.72)
-  })
-
-  it('projects webgl2_sr observability without standard USM/CAS shader path', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      applyDynamicSrRcasForDisplayDegrade: false,
-    }))
-    expect(plan.kind).toBe('webgl2_sr')
-    expect(projectRenderShaderPathFromPlan(plan)).toBe('none')
-    expect(projectRenderProcessingFromPlan(plan)).toBeUndefined()
-    const update = planToRendererUpdatePatch({ plan, srAttachFailed: false })
-    expect(update.superResolutionEnabled).toBe(true)
-    expect(update.processing).toBe('cas')
-  })
-
-  it('does not apply display-degrade RCAS bumps when applyDynamicSrRcasForDisplayDegrade is false', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      displayDegradeLevel: 'displayL2',
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      applyDynamicSrRcasForDisplayDegrade: false,
-      superResolutionRcasStopsBase: 0.88,
-      srRcasDynamicContext: {
-        bandwidthState: 'congested',
-        adaptiveCongestedBitrateRatio: 0.55,
-        adaptiveStableBitrateRatio: 0.92,
-      },
-      streamStats: { inboundVideoBitrateKbps: 1000 },
-    }))
-    expect(plan.kind).toBe('webgl2_sr')
-    expect(plan.superResolutionRcasStopsForPatch).toBe(0.88)
-  })
-
-  it('applies dynamic RCAS to webgl2_sr under congestion (sr contract + tier rcas)', () => {
-    const plan = resolveBrowserRendererPlan(baseInput({
-      displayDegradeLevel: 'displayL2',
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      applyDynamicSrRcasForDisplayDegrade: true,
-      superResolutionRcasStopsBase: 0.88,
-      srRcasDynamicContext: {
-        bandwidthState: 'congested',
-        networkConfidence: 'low',
-        qualityLadderLevel: 'L2',
-        renderCause: 'renderStable',
-        adaptiveCongestedBitrateRatio: 0.55,
-        adaptiveStableBitrateRatio: 0.92,
-      },
-      streamStats: { inboundVideoBitrateKbps: 1000 },
-    }))
-    expect(plan.kind).toBe('webgl2_sr')
-    expect(plan.superResolutionRcasStopsForPatch).toBe(1.1)
-    expect(plan.sr?.rcasStops).toBe(1.1)
-  })
-
-  it('projects fullscreen present target from display context', () => {
-    const plan = resolveBrowserRendererPlan({
-      ...baseInput(),
-      displayContext: {
-        containerWidthCss: 1920,
-        containerHeightCss: 1200,
-        devicePixelRatio: 1.5,
-        refreshRateHz: 120,
-        fullscreen: true,
-        configuredWidth: 1920,
-        configuredHeight: 1080,
-        sourceWidth: 1920,
-        sourceHeight: 1080,
-      },
-    } as BrowserRendererPolicyInput) as ReturnType<typeof resolveBrowserRendererPlan> & {
-      presentTarget?: {
-        outputWidth: number
-        outputHeight: number
-        viewportWidthCss: number
-        viewportHeightCss: number
-        refreshRateHz?: number
-        fullscreen: boolean
-        sourceWidth: number
-        sourceHeight: number
+describe('deterministic renderer plan', () => {
+  it('keeps user color, fit and sharpening across network and observation changes', () => {
+    const input = baseInput({ format: 'Zoom', processing: 'usm', superResolutionUserIntent: true })
+    const baseline = resolveBrowserRendererPlan(input)
+    for (const rtt of [5, 150, 1500]) {
+      for (const loss of [0, 0.05, 0.5]) {
+        const diagnostics = Object.assign({}, input, { networkRttMs: rtt, networkPacketLossRatio: loss, inboundVideoBitrateKbps: 100, renderCause: 'renderStarvation', traceEnabled: true })
+        expect(resolveBrowserRendererPlan(diagnostics)).toEqual(baseline)
       }
     }
-
-    expect(plan.presentTarget).toMatchObject({
-      outputWidth: 1920,
-      outputHeight: 1080,
-      viewportWidthCss: 1920,
-      viewportHeightCss: 1080,
-      refreshRateHz: 120,
-      fullscreen: true,
-      sourceWidth: 1920,
-      sourceHeight: 1080,
-    })
+    expect(baseline.display).toEqual({ format: 'Zoom', brightness: 105, contrast: 110, saturation: 95 })
+    expect(baseline.sr?.rcasStops).toBe(0.88)
   })
 
-  it('clamps webgl2_sr output to presentTarget display budget on fullscreen high-dpr paths', () => {
-    const tier: SuperResolutionTierPlan = {
-      configuredTier: '1440p',
-      actualSourceTier: '1080p',
-      displayTier: '2160p',
-      baseTier: '1080p',
-      outputTier: '1440p',
-      outputWidth: 2560,
-      outputHeight: 1440,
-      sourceWidth: 1920,
-      sourceHeight: 1080,
-      mode: 'upscale',
-      reason: 'upscale-one-tier',
-    }
-    const plan = resolveBrowserRendererPlan(baseInput({
-      superResolutionExperimental: true,
-      superResolutionUserIntent: true,
-      displayDegradeLevel: 'displayL1',
-      superResolutionTierPlan: tier,
-      displayContext: {
-        containerWidthCss: 1920,
-        containerHeightCss: 1200,
-        devicePixelRatio: 2,
-        refreshRateHz: 60,
-        fullscreen: true,
-        configuredWidth: 1920,
-        configuredHeight: 1080,
-        sourceWidth: 1920,
-        sourceHeight: 1080,
-      },
-    })) as ReturnType<typeof resolveBrowserRendererPlan> & {
-      presentTarget?: { outputWidth: number, outputHeight: number }
-      sr?: { outputWidth: number, outputHeight: number }
-    }
-
-    expect(plan.presentTarget).toBeDefined()
-    expect(plan.sr).toBeDefined()
-    // 只升不降：SR 输出被显示预算夹住，但不得低于真实源。
-    expect(plan.sr!.outputWidth).toBeLessThanOrEqual(plan.presentTarget!.outputWidth)
-    expect(plan.sr!.outputHeight).toBeLessThanOrEqual(plan.presentTarget!.outputHeight)
-    expect(plan.sr!.outputWidth).toBeGreaterThanOrEqual(1920)
-    expect(plan.sr!.outputHeight).toBeGreaterThanOrEqual(1080)
+  it('projects standard USM/CAS and preserves native fallback settings', () => {
+    const plan = resolveBrowserRendererPlan(baseInput({ processing: 'usm' }))
+    expect(plan.kind).toBe('webgl2')
+    expect(projectRenderProcessingFromPlan(plan)).toBe('usm')
+    expect(projectRenderShaderPathFromPlan(plan)).toBe('usm')
+    expect(planToRendererRuntimeConfigPatch(plan)).toMatchObject({ processing: 'usm', processingMode: 'quality', sharpness: 4, sharpenStrength: 80, targetFps: 60 })
+    const fallback = resolveBrowserRendererPlan(baseInput({ localFallback: true, superResolutionUserIntent: true }))
+    expect(fallback).toMatchObject({ kind: 'video', source: 'localFallback', sharpness: 4, display: plan.display })
+    expect(projectRenderProcessingFromPlan(fallback)).toBeUndefined()
+    expect(projectRenderShaderPathFromPlan(fallback)).toBe('none')
   })
 
-  it('caps present target output on high-dpr display-constrained paths', () => {
-    const plan = resolveBrowserRendererPlan({
-      ...baseInput({
-        displayDegradeLevel: 'displayL1',
-      }),
-      displayContext: {
-        containerWidthCss: 1920,
-        containerHeightCss: 1200,
-        devicePixelRatio: 2,
-        fullscreen: true,
-        configuredWidth: 1920,
-        configuredHeight: 1080,
-        sourceWidth: 1920,
-        sourceHeight: 1080,
-      },
-    } as BrowserRendererPolicyInput) as ReturnType<typeof resolveBrowserRendererPlan> & {
-      presentTarget?: {
-        outputWidth: number
-        outputHeight: number
-        viewportWidthCss: number
-        viewportHeightCss: number
+  it('handles user, capability and hard SR failure independently', () => {
+    expect(resolveBrowserRendererPlan(baseInput({ pipelineOverride: 'video', superResolutionUserIntent: true }))).toMatchObject({ kind: 'video', source: 'userOverride' })
+    expect(resolveBrowserRendererPlan(baseInput({ webgl2Supported: false, superResolutionUserIntent: true }))).toMatchObject({ kind: 'video', source: 'capabilityFallback' })
+    expect(resolveBrowserRendererPlan(baseInput({ superResolutionAttachFailed: true, superResolutionUserIntent: true }))).toMatchObject({ kind: 'webgl2', source: 'srFallback' })
+    const sr = resolveBrowserRendererPlan(baseInput({ superResolutionUserIntent: true }))
+    expect(sr.kind).toBe('webgl2_sr')
+    expect(planToRendererAttachSpec(sr).sr).toEqual({ outputWidth: sr.sr?.outputWidth, outputHeight: sr.sr?.outputHeight, rcasStops: 0.88 })
+    expect(planToRendererUpdatePatch({ plan: sr, srAttachFailed: false })).toMatchObject({ superResolutionEnabled: true, superResolutionInactiveAfterFailure: false })
+  })
+
+  it('preserves both source dimensions across viewport, DPR, fit, target and fallback combinations', () => {
+    for (const [sourceWidth, sourceHeight] of [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160], [2048, 1536]]) {
+      for (const [containerWidthCss, containerHeightCss] of [[480, 270], [2560, 1440], [3840, 2160]]) {
+        for (const devicePixelRatio of [1, 1.5, 2]) {
+          for (const format of ['Contain', 'Zoom', 'Stretch']) {
+            const context = { sourceWidth, sourceHeight, containerWidthCss, containerHeightCss, devicePixelRatio, configuredWidth: 1920, configuredHeight: 1080, fullscreen: false }
+            const budget = resolveSuperResolutionDisplayBudget({ ...context, format })
+            const tier = resolveSuperResolutionTierPlan(1920, 1080, sourceWidth, sourceHeight, budget.width, budget.height)
+            for (const localFallback of [false, true]) {
+              const plan = resolveBrowserRendererPlan(baseInput({ displayContext: context, superResolutionTierPlan: tier, superResolutionUserIntent: true, format, localFallback }))
+              expect(plan.presentTarget!.outputWidth).toBeGreaterThanOrEqual(sourceWidth)
+              expect(plan.presentTarget!.outputHeight).toBeGreaterThanOrEqual(sourceHeight)
+              if (plan.sr) {
+                expect(plan.sr.outputWidth).toBeGreaterThanOrEqual(sourceWidth)
+                expect(plan.sr.outputHeight).toBeGreaterThanOrEqual(sourceHeight)
+                expect(plan.sr.mode).toBe(plan.sr.outputWidth > sourceWidth || plan.sr.outputHeight > sourceHeight ? 'upscale' : 'passthrough')
+              }
+            }
+          }
+        }
       }
     }
+  })
 
-    expect(plan.presentTarget).toMatchObject({
-      outputWidth: 1920,
-      outputHeight: 1080,
-      viewportWidthCss: 1920,
-      viewportHeightCss: 1080,
-    })
+  it('keeps actual source information when a previously frozen tier is smaller', () => {
+    const plan = resolveBrowserRendererPlan(baseInput({
+      superResolutionUserIntent: true,
+      displayContext: { sourceWidth: 2560, sourceHeight: 1440, configuredWidth: 1920, configuredHeight: 1080, containerWidthCss: 640, containerHeightCss: 360, devicePixelRatio: 1, fullscreen: false },
+      superResolutionTierPlan: resolveSuperResolutionTierPlan(1920, 1080, 1280, 720),
+    }))
+    expect(plan.sr).toMatchObject({ outputWidth: 2560, outputHeight: 1440, outputTier: '1440p', mode: 'passthrough' })
+  })
+
+  it('preserves a changed source as a pair when only one dimension exceeds the frozen standard target', () => {
+    const plan = resolveBrowserRendererPlan(baseInput({
+      superResolutionUserIntent: true,
+      displayContext: { sourceWidth: 2800, sourceHeight: 1080, configuredWidth: 1920, configuredHeight: 1080, containerWidthCss: 2560, containerHeightCss: 1440, devicePixelRatio: 1, fullscreen: false },
+      superResolutionTierPlan: resolveSuperResolutionTierPlan(1920, 1080, 1920, 1080),
+    }))
+    expect(plan.sr).toMatchObject({ outputWidth: 2800, outputHeight: 1080, mode: 'passthrough' })
   })
 })

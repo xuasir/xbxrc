@@ -7,31 +7,17 @@ export interface ChatChannelDelegate {
 }
 
 export class ChatChannel extends BaseChannel {
-  isCapturing = false
-  isPaused = true
-
   constructor(context: ChannelContext, private readonly delegate: ChatChannelDelegate) {
     super(context)
   }
 
-  onMessage(event: MessageEvent): void {
-    try {
-      JSON.parse(event.data)
-    }
-    catch {
+  onMessage(): void {}
 
-    }
-  }
-
-  async startMic(): Promise<void> {
-    await this.delegate.startMicCapture()
-    this.isCapturing = true
-    this.isPaused = false
+  startMic(): Promise<void> {
+    return this.delegate.startMicCapture()
   }
 
   stopMic(): void {
     this.delegate.stopMicCapture()
-    this.isCapturing = false
-    this.isPaused = true
   }
 }

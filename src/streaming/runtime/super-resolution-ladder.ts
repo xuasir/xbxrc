@@ -1,31 +1,31 @@
 /**
  * 浏览器 SR 档位决策：在「协商档位 R」与「真实源档位 S」的较低者之上升一档，
- * 输出永不小于真实源（超分只升不降），并受显示预算 D 的上限约束。
+ * 输出保持真实源尺寸下限，显示需求只约束新增的放大工作。
  *
  * 语义见 RFC `docs/rfcs/2026-10-23-super-resolution-tier-redesign.md`：
  * - `base   = min(R, S)`：请求 1080 可能返回 1440，取较低者才不会白算或反向降档
  * - `target = nextTier(base)`：升档幅度恒为一档
- * - `output = min(D, max(S, target))`：只升不降，且不做无显示收益的过度渲染
+ * - `output = standardTier(min(tier(D), target))`：放大采用标准尺寸，源下限由 passthrough 保留
  */
 
 export type SuperResolutionOutputTierLabel = '720p' | '1080p' | '1440p' | '2160p'
 
 export type SuperResolutionConfiguredTierLabel = '720p' | '1080p' | '1440p' | '2160p'
 
-/** 本次档位决策到底在做什么：真放大 / 同档直通 / 显示预算导致的缩小。 */
-export type SuperResolutionMode = 'upscale' | 'passthrough' | 'present-downscale'
+/** 模式由实际处理尺寸与真实源尺寸决定。 */
+export type SuperResolutionMode = 'upscale' | 'passthrough'
 
 export type SuperResolutionPlanReason
   /** 源低于目标档位，真超分一档。 */
   = | 'upscale-one-tier'
   /** 显示预算/配置档高于「源 + 一档」，按目标档位一次补到位。 */
     | 'upscale-to-display-budget'
-  /** 显示预算低于理想档位，只补到显示预算。 */
+  /** 显示需求低于理想档位，采用对应标准档位。 */
     | 'display-budget-caps-upscale'
   /** 源已经达到或超过目标档位，EASU 无意义，走同档 RCAS。 */
     | 'source-at-or-above-target'
-  /** 显示预算本身小于源，缩小是正确的显示行为，不属于超分。 */
-    | 'display-budget-below-source'
+  /** 显示需求小于源，内部保留源尺寸并交给最终视口映射。 */
+    | 'source-preserved-for-display'
 
 export interface SuperResolutionTierPlan {
   configuredTier: SuperResolutionConfiguredTierLabel
@@ -121,13 +121,10 @@ function outputDimensions(label: SuperResolutionOutputTierLabel): { width: numbe
 
 /**
  * RCAS stops：新模型下 `upscale` 只会命中三对档位（升档幅度恒为一档），
- * 沿用既有逐对调优值；`passthrough` / `present-downscale` 用模式默认值。
+ * 沿用既有逐对调优值；同尺寸呈现沿用稳定默认值。
  * stops 越大越柔和，避免 EASU 重建后的过冲被二次锐化放大。
  */
 export function resolveSuperResolutionRcasStops(plan: SuperResolutionTierPlan): number {
-  if (plan.mode === 'present-downscale') {
-    return 0.72
-  }
   if (plan.mode === 'passthrough') {
     return 0.88
   }
@@ -150,26 +147,12 @@ export function resolveSuperResolutionRcasStops(plan: SuperResolutionTierPlan): 
 /** 显示预算未知时的档位上限（不设限）。 */
 const DISPLAY_TIER_UNBOUNDED: SuperResolutionConfiguredTierLabel = '2160p'
 
-/** 按「缩小到显示预算、保持宽高比」计算输出像素，用于 `present-downscale`。 */
-function fitIntoBudget(
-  sourceWidth: number,
-  sourceHeight: number,
-  budgetWidth: number,
-  budgetHeight: number,
-): { width: number, height: number } {
-  const scale = Math.min(budgetWidth / sourceWidth, budgetHeight / sourceHeight)
-  return {
-    width: Math.max(1, Math.round(sourceWidth * scale)),
-    height: Math.max(1, Math.round(sourceHeight * scale)),
-  }
-}
-
 /**
  * @param configuredTargetWidth 协商要求宽（`runtime.targetVideoWidth`）
  * @param configuredTargetHeight 协商要求高
  * @param actualSourceWidth 稳定后的 video 宽
  * @param actualSourceHeight 稳定后的 video 高
- * @param displayBudgetWidth 显示预算宽（容器 CSS × DPR，受 display degrade 上限约束）；缺省表示不设限
+ * @param displayBudgetWidth 真实显示需求宽（容器 CSS × DPR）；缺省表示不设限
  * @param displayBudgetHeight 显示预算高
  */
 export function resolveSuperResolutionTierPlan(
@@ -205,45 +188,23 @@ export function resolveSuperResolutionTierPlan(
   const targetTier = tierRank(desiredTier) > tierRank(baseTier) ? desiredTier : nextTier(baseTier)
   const cappedTier = minTier(targetTier, displayTier)
 
-  let outputTier: SuperResolutionOutputTierLabel
-  let mode: SuperResolutionMode
-  let reason: SuperResolutionPlanReason
-  let outputWidth: number
-  let outputHeight: number
-
-  if (tierRank(cappedTier) > tierRank(actualSourceTier)) {
-    // 真超分：源低于目标档位，且显示预算允许。
-    outputTier = cappedTier
-    mode = 'upscale'
-    reason = cappedTier !== targetTier
+  const sourceWidth = Math.max(1, Math.round(actualSourceWidth))
+  const sourceHeight = Math.max(1, Math.round(actualSourceHeight))
+  const desired = outputDimensions(cappedTier)
+  const displayScale = hasDisplayBudget
+    ? Math.min(displayBudgetWidth / sourceWidth, displayBudgetHeight / sourceHeight)
+    : Number.POSITIVE_INFINITY
+  // 视口只选择档位；处理输出采用标准尺寸，等档或更大源保留原生像素。
+  const targetFitsSource = desired.width >= sourceWidth && desired.height >= sourceHeight
+  const outputWidth = targetFitsSource ? desired.width : sourceWidth
+  const outputHeight = targetFitsSource ? desired.height : sourceHeight
+  const outputTier = resolveSuperResolutionOutputTierLabelFromDimensions(outputWidth, outputHeight)
+  const mode: SuperResolutionMode = outputWidth > sourceWidth || outputHeight > sourceHeight ? 'upscale' : 'passthrough'
+  const reason: SuperResolutionPlanReason = mode === 'passthrough'
+    ? (displayScale < 1 ? 'source-preserved-for-display' : 'source-at-or-above-target')
+    : cappedTier !== targetTier
       ? 'display-budget-caps-upscale'
-      : (targetTier === nextTier(baseTier) ? 'upscale-one-tier' : 'upscale-to-display-budget')
-    const dims = outputDimensions(outputTier)
-    outputWidth = dims.width
-    outputHeight = dims.height
-  }
-  else if (tierRank(displayTier) < tierRank(actualSourceTier)) {
-    // 显示预算小于源：缩小是显示需要，明确标记为 present-downscale。
-    outputTier = displayTier
-    mode = 'present-downscale'
-    reason = 'display-budget-below-source'
-    const fitted = fitIntoBudget(
-      Math.max(1, Math.round(actualSourceWidth)),
-      Math.max(1, Math.round(actualSourceHeight)),
-      displayBudgetWidth as number,
-      displayBudgetHeight as number,
-    )
-    outputWidth = fitted.width
-    outputHeight = fitted.height
-  }
-  else {
-    // 源已经够：同档直通，用真实源像素，避免任何重采样。
-    outputTier = actualSourceTier
-    mode = 'passthrough'
-    reason = 'source-at-or-above-target'
-    outputWidth = Math.max(1, Math.round(actualSourceWidth))
-    outputHeight = Math.max(1, Math.round(actualSourceHeight))
-  }
+      : targetTier === nextTier(baseTier) ? 'upscale-one-tier' : 'upscale-to-display-budget'
 
   return {
     configuredTier,
@@ -253,8 +214,8 @@ export function resolveSuperResolutionTierPlan(
     outputTier,
     outputWidth,
     outputHeight,
-    sourceWidth: Math.max(1, Math.round(actualSourceWidth)),
-    sourceHeight: Math.max(1, Math.round(actualSourceHeight)),
+    sourceWidth,
+    sourceHeight,
     mode,
     reason,
   }

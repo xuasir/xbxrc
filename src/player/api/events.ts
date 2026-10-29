@@ -19,6 +19,7 @@ export interface PlayerEvents {
   'stats.updated': StreamStats
   'stats.fps': FpsStats
   'stats.browserWebRtc': BrowserWebRtcStatsSample
+  'stats.observationUnavailable': { peerGeneration: number, error: unknown }
   'stats.browserWebRtcTimeline': BrowserWebRtcTimelineEvent
   'transport.sdpObserved': BrowserWebRtcSdpObservation
   'stats.inputPacket': InputPacketStats
@@ -28,6 +29,7 @@ export interface PlayerEvents {
   /** SR renderer 初始化失败并已回退到标准 webgl2。 */
   'media.superResolutionFallback': { reason: string }
   'media.audioReady': Record<string, never>
+  'media.resourcesObserved': { reason: string, resources: Record<string, unknown> }
   'chat.stateChanged': { capturing: boolean, paused: boolean }
   'error': { error: unknown }
 }

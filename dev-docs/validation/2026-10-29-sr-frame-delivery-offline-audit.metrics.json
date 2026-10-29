@@ -1,0 +1,5012 @@
+{
+  "kind": "offline-production-code-with-mocked-DOM-WebGL",
+  "sourceFiles": [
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+      "sha256": "2be1d1a2778958d4c4d22493922a5f67510e4856b76faf01f27606edb8556c08"
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/video-frame-source.ts",
+      "sha256": "2035d4dabab50984b6bbe00dbb72a166b8dbf6ef13483de950ec41df0c75593a"
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/render-observation.ts",
+      "sha256": "aba7b3622994b43d3ec609b1aabd947aecb819a8688120e6938ee67b184548e8"
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts",
+      "sha256": "0ab13e74d137bec5829c6db0b195890001e9bd889d30f44eddda3931cb7fb168"
+    }
+  ],
+  "cases": [
+    {
+      "name": "30fps native + per-frame counter, mediaTime=0",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 0,
+      "acceptedMarkers": 300,
+      "advancement": 300,
+      "realtimeDrawCount": 300,
+      "realtimeDrawFps": 30,
+      "gpuDrawCalls": 300,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        33,
+        67,
+        100,
+        133,
+        167,
+        200,
+        233,
+        267,
+        300,
+        333,
+        367
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 1,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 2,
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 3,
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 4,
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 5,
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 6,
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 7,
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 8,
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 9,
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 10,
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 10,
+            "counter": 10,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        }
+      ]
+    },
+    {
+      "name": "30fps native + 250ms batch counter, mediaTime=0",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 0,
+      "acceptedMarkers": 300,
+      "advancement": 300,
+      "realtimeDrawCount": 300,
+      "realtimeDrawFps": 30,
+      "gpuDrawCalls": 300,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        33,
+        67,
+        100,
+        133,
+        167,
+        200,
+        233,
+        267,
+        300,
+        333,
+        367
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 1,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 2,
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 3,
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 4,
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 5,
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 6,
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 7,
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 8,
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 7,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 9,
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 7,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 10,
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 10,
+            "counter": 7,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        }
+      ]
+    },
+    {
+      "name": "30fps native + 250ms batch counter, poll first",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 0,
+      "acceptedMarkers": 300,
+      "advancement": 300,
+      "realtimeDrawCount": 300,
+      "realtimeDrawFps": 30,
+      "gpuDrawCalls": 300,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        33,
+        67,
+        100,
+        133,
+        167,
+        200,
+        233,
+        267,
+        300,
+        333,
+        367
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 1,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 2,
+          "before": {
+            "nativeBaseline": 1,
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 3,
+          "before": {
+            "nativeBaseline": 2,
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 4,
+          "before": {
+            "nativeBaseline": 3,
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 5,
+          "before": {
+            "nativeBaseline": 4,
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 6,
+          "before": {
+            "nativeBaseline": 5,
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 7,
+          "before": {
+            "nativeBaseline": 6,
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 8,
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 7,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 7,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 7,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 9,
+          "before": {
+            "nativeBaseline": 8,
+            "counter": 7,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 300,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 9,
+            "counter": 7,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        }
+      ]
+    },
+    {
+      "name": "250ms batch native + batch counter, mediaTime=0",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 20,
+      "acceptedMarkers": 40,
+      "advancement": 292,
+      "realtimeDrawCount": 40,
+      "realtimeDrawFps": 4,
+      "gpuDrawCalls": 40,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        250,
+        500,
+        750,
+        1000,
+        1250,
+        1500,
+        1750,
+        2000,
+        2250,
+        2500,
+        2750
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 7,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 7,
+          "before": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 7,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        }
+      ]
+    },
+    {
+      "name": "275ms batch native + batch counter, mediaTime=0",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 18,
+      "acceptedMarkers": 37,
+      "advancement": 297,
+      "realtimeDrawCount": 37,
+      "realtimeDrawFps": 3.7,
+      "gpuDrawCalls": 37,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        283,
+        550,
+        833,
+        1100,
+        1383,
+        1650,
+        1933,
+        2200,
+        2483,
+        2750,
+        3033
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 8,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        }
+      ]
+    },
+    {
+      "name": "275ms batch native + counter refreshed during native callback",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 0,
+      "acceptedMarkers": 37,
+      "advancement": 297,
+      "realtimeDrawCount": 37,
+      "realtimeDrawFps": 3.7,
+      "gpuDrawCalls": 37,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        300,
+        567,
+        833,
+        1100,
+        1400,
+        1667,
+        1933,
+        2200,
+        2500,
+        2767,
+        3033
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 8,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 8,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        }
+      ]
+    },
+    {
+      "name": "fixed native + 250ms batch counter, advancing mediaTime",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 20,
+      "acceptedMarkers": 40,
+      "advancement": 292,
+      "realtimeDrawCount": 40,
+      "realtimeDrawFps": 4,
+      "gpuDrawCalls": 40,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        250,
+        500,
+        750,
+        1000,
+        1250,
+        1500,
+        1750,
+        2000,
+        2250,
+        2500,
+        2750
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": true,
+          "fresh": false
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": false,
+          "fresh": false
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": true,
+          "fresh": false
+        }
+      ]
+    },
+    {
+      "name": "fixed native + per-frame counter, mediaTime=0",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 0,
+      "acceptedMarkers": 300,
+      "advancement": 300,
+      "realtimeDrawCount": 300,
+      "realtimeDrawFps": 30,
+      "gpuDrawCalls": 300,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        33,
+        67,
+        100,
+        133,
+        167,
+        200,
+        233,
+        267,
+        300,
+        333,
+        367
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 1
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 1
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 1
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 1
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 1
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 1,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 1
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 2
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 2
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 2
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 2
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 2
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 2,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 2
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 3
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 3
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 3
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 3
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 3
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 3,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 3
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 4
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 4
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 4
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 4
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 4
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 4,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 4
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 5
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 5
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 5
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 5
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 5
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 5,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 5
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 6
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 6
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 6
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 6
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 6
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 6,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 6
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 7,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 7
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 8,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 8
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 9
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 9
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 9
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 9
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 9
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "presentedFrames": 0,
+          "before": {
+            "nativeBaseline": 0,
+            "counter": 9,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 9
+          },
+          "after": {
+            "nativeBaseline": 0,
+            "counter": 10,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 10
+          },
+          "delivered": true,
+          "fresh": true
+        }
+      ]
+    },
+    {
+      "name": "missing native counter + fixed quality counter, advancing mediaTime",
+      "durationMs": 10000,
+      "sourceFrames": 300,
+      "nativeCallbacks": 300,
+      "polledFrames": 0,
+      "acceptedMarkers": 300,
+      "advancement": 300,
+      "realtimeDrawCount": 300,
+      "realtimeDrawFps": 30,
+      "gpuDrawCalls": 300,
+      "pacingWaitCount": 0,
+      "latestOverwriteCount": 0,
+      "firstAcceptedAtMs": [
+        0,
+        33,
+        67,
+        100,
+        133,
+        167,
+        200,
+        233,
+        267,
+        300,
+        333,
+        367
+      ],
+      "steps": [
+        {
+          "at": 0,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 0,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 0,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 17,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 1,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 33,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 50,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 2,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 67,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 83,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 3,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 100,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 117,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 4,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 133,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 150,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 5,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 167,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 183,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 6,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 200,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 217,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 7,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 233,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 250,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 8,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 9,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        },
+        {
+          "at": 267,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 9,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 9,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 283,
+          "tracking": "animationFrame",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 9,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 9,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": false,
+          "fresh": true
+        },
+        {
+          "at": 300,
+          "tracking": "videoFrameCallback",
+          "before": {
+            "counter": 0,
+            "uncountedNativeFrames": 9,
+            "counterFramesAheadOfNative": 0
+          },
+          "after": {
+            "counter": 0,
+            "uncountedNativeFrames": 10,
+            "counterFramesAheadOfNative": 0
+          },
+          "delivered": true,
+          "fresh": true
+        }
+      ]
+    }
+  ],
+  "drawPaths": [
+    {
+      "name": "same-size RCAS",
+      "expectedPasses": 1,
+      "realtimeGpuCalls": 30,
+      "gpuCallsIncludingCapture": 31,
+      "resources": {
+        "drawCount": 31,
+        "realtimeDrawCount": 30,
+        "captureDrawCount": 1,
+        "duplicateDrawCount": 0,
+        "lastDrawSequence": 30,
+        "lastDrawAtMs": 966.6666666666666,
+        "drawDurationTotalMs": 0,
+        "drawDurationMaxMs": 0,
+        "latestOverwriteCount": 0,
+        "pacingWaitCount": 0,
+        "submitFailureCount": 0,
+        "outputWidth": 32,
+        "outputHeight": 18,
+        "gpuErrorChecks": 3,
+        "gpuObjects": 5,
+        "frameRequests": 0,
+        "animationCallbacks": 0,
+        "captureWaiters": 0,
+        "domNodes": 1
+      },
+      "canvasStyle": {
+        "position": "absolute",
+        "inset": "0",
+        "width": "100%",
+        "height": "100%",
+        "pointerEvents": "none",
+        "objectFit": "contain",
+        "opacity": "1"
+      },
+      "insertion": "afterend"
+    },
+    {
+      "name": "single-pass upscale",
+      "expectedPasses": 1,
+      "realtimeGpuCalls": 30,
+      "gpuCallsIncludingCapture": 31,
+      "resources": {
+        "drawCount": 31,
+        "realtimeDrawCount": 30,
+        "captureDrawCount": 1,
+        "duplicateDrawCount": 0,
+        "lastDrawSequence": 30,
+        "lastDrawAtMs": 966.6666666666666,
+        "drawDurationTotalMs": 0,
+        "drawDurationMaxMs": 0,
+        "latestOverwriteCount": 0,
+        "pacingWaitCount": 0,
+        "submitFailureCount": 0,
+        "outputWidth": 64,
+        "outputHeight": 36,
+        "gpuErrorChecks": 3,
+        "gpuObjects": 5,
+        "frameRequests": 0,
+        "animationCallbacks": 0,
+        "captureWaiters": 0,
+        "domNodes": 1
+      },
+      "canvasStyle": {
+        "position": "absolute",
+        "inset": "0",
+        "width": "100%",
+        "height": "100%",
+        "pointerEvents": "none",
+        "objectFit": "contain",
+        "opacity": "1"
+      },
+      "insertion": "afterend"
+    },
+    {
+      "name": "dual-pass EASU + RCAS",
+      "expectedPasses": 2,
+      "realtimeGpuCalls": 60,
+      "gpuCallsIncludingCapture": 62,
+      "resources": {
+        "drawCount": 31,
+        "realtimeDrawCount": 30,
+        "captureDrawCount": 1,
+        "duplicateDrawCount": 0,
+        "lastDrawSequence": 30,
+        "lastDrawAtMs": 966.6666666666666,
+        "drawDurationTotalMs": 0,
+        "drawDurationMaxMs": 0,
+        "latestOverwriteCount": 0,
+        "pacingWaitCount": 0,
+        "submitFailureCount": 0,
+        "outputWidth": 64,
+        "outputHeight": 36,
+        "gpuErrorChecks": 4,
+        "gpuObjects": 6,
+        "frameRequests": 0,
+        "animationCallbacks": 0,
+        "captureWaiters": 0,
+        "domNodes": 1
+      },
+      "canvasStyle": {
+        "position": "absolute",
+        "inset": "0",
+        "width": "100%",
+        "height": "100%",
+        "pointerEvents": "none",
+        "objectFit": "contain",
+        "opacity": "1"
+      },
+      "insertion": "afterend"
+    },
+    {
+      "name": "capture concurrent with a fresh realtime frame",
+      "gpuCalls": 1,
+      "resources": {
+        "drawCount": 1,
+        "realtimeDrawCount": 1,
+        "captureDrawCount": 0,
+        "duplicateDrawCount": 0,
+        "lastDrawSequence": 1,
+        "lastDrawAtMs": 0,
+        "drawDurationTotalMs": 0,
+        "drawDurationMaxMs": 0,
+        "latestOverwriteCount": 0,
+        "pacingWaitCount": 0,
+        "submitFailureCount": 0,
+        "outputWidth": 32,
+        "outputHeight": 18,
+        "gpuErrorChecks": 2,
+        "gpuObjects": 5,
+        "frameRequests": 1,
+        "animationCallbacks": 0,
+        "captureWaiters": 0,
+        "domNodes": 1
+      }
+    }
+  ],
+  "callSites": [
+    {
+      "line": 905,
+      "call": "gl.drawArrays",
+      "method": "drawRcasPass"
+    },
+    {
+      "line": 966,
+      "call": "this.drawRcasPass",
+      "method": "drawFrame"
+    },
+    {
+      "line": 972,
+      "call": "gl.drawArrays",
+      "method": "drawFrame"
+    },
+    {
+      "line": 981,
+      "call": "gl.drawArrays",
+      "method": "drawFrame"
+    },
+    {
+      "line": 982,
+      "call": "this.drawRcasPass",
+      "method": "drawFrame"
+    },
+    {
+      "line": 994,
+      "call": "this.drawObservation.record",
+      "method": "drawFrame"
+    }
+  ]
+}

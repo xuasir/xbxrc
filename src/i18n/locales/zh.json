@@ -181,6 +181,29 @@
       "browser": {
         "title": "浏览器内部诊断",
         "fields": {
+          "receivedFps": "接收帧 / 秒",
+          "decodedFps": "解码帧 / 秒",
+          "videoAdvancementFps": "视频推进 / 秒",
+          "callbackDeliveryFps": "回调交付 / 秒",
+          "rendererSubmitFps": "渲染提交 / 秒",
+          "frameWindow": "窗口 / 样本数",
+          "observation": "观测 / 样本",
+          "sourceSize": "实际源尺寸",
+          "outputSize": "实际输出尺寸",
+          "submitAge": "提交年龄",
+          "submitCost": "CPU 提交平均耗时",
+          "gpuCost": "GPU 耗时",
+          "scanout": "实际上屏",
+          "renderCause": "显示归因",
+          "renderEffect": "显示动作效果",
+          "frameCauses": "覆盖 / 限流 / 失败 / 截图绘制",
+          "rttBaseline": "路径 RTT 基线",
+          "rttDelta": "RTT 增量",
+          "qualityRequested": "请求码率上限",
+          "qualityNegotiated": "远端确认上限",
+          "qualityObserved": "实际视频码率",
+          "qualityEffect": "网络动作效果",
+          "recoveryEffect": "播放恢复效果",
           "transportState": "传输",
           "presentationMilestone": "呈现阶段",
           "renderPipelineType": "渲染管线",
@@ -390,6 +413,7 @@
       },
       "values": {
         "unknown": "--",
+        "unavailable": "缺少观测",
         "none": "未使用",
         "stable": "正常",
         "probing": "局部探测/自愈中",
@@ -1033,6 +1057,7 @@
       "xhome_resolution": {
         "label": "主机串流最高分辨率",
         "options": {
+          "1440": { "label": "1440p" },
           "1081": { "label": "自动 · 1080p 高画质" },
           "1080": {
             "label": "1080p"

@@ -1,6 +1,8 @@
+import type { BrowserStatsWindowSummary } from './stats'
+
 export type VideoFit = 'Contain' | 'Stretch' | 'Zoom' | string
 
-export type VideoFrameTrackingSource = 'videoFrameCallback' | 'timeupdate'
+export type VideoFrameTrackingSource = 'videoFrameCallback' | 'animationFrame' | 'timeupdate'
 
 export type VideoFrameSourceFpsUnavailableReason
   = | 'mediaTimeMissing'
@@ -10,6 +12,11 @@ export type VideoFrameSourceFpsUnavailableReason
     | 'sourceFpsOutOfRange'
 
 export interface PresentedVideoFrameMetadata {
+  videoGeneration?: number
+  localSequence?: number
+  observedAtMs?: number
+  newFrame?: boolean
+  presentedFrames?: number
   callbackIntervalMs?: number
   presentedFramesDelta?: number
   mediaTimeDeltaSec?: number
@@ -214,9 +221,61 @@ export interface RendererRuntimeConfig {
    * 由 PlaybackService 切回标准 webgl2。不向 Rust 序列化。
    */
   superResolutionRuntimeDegradeNotifier?: (reason: string) => void
+  /** 播放资源所有者注入的首帧与硬故障通知。 */
+  rendererFrameReadyNotifier?: () => void
+  rendererRuntimeFailureNotifier?: (reason: string) => void
 }
 
-export interface StreamStats {
+/** 浏览器共享快照与五段帧链；控制、面板与导出使用同一合同。 */
+export interface BrowserPlaybackStats {
+  inboundVideoFps?: number
+  decodeFps?: number
+  statsVideoGeneration?: number
+  statsSampleId?: string
+  statsPeerGeneration?: number
+  statsSampledAtMs?: number
+  statsSampleAgeMs?: number
+  statsObservationState?: 'fresh' | 'stale' | 'unavailable'
+  browserStatsWindows?: { short: BrowserStatsWindowSummary, long: BrowserStatsWindowSummary }
+  qualityControlMode?: 'assessment-only' | 'sender' | 'sdp'
+  qualityRequestedBitrateKbps?: number
+  qualityNegotiatedBitrateKbps?: number
+  qualityActionResult?: 'applied' | 'unsupported' | 'failed'
+  networkPacketLossRatio?: number
+  networkJitterMs?: number
+  networkRttMs?: number
+  jitterBufferMs?: number
+  statsCandidatePairId?: string
+  videoPresentFps?: number
+  videoPresentAgeMs?: number
+  callbackFps?: number
+  rendererSubmitFps?: number
+  rendererSubmitAgeMs?: number
+  rendererGeneration?: number
+  rendererKind?: 'video' | 'webgl2' | 'webgl2_sr'
+  rendererTargetFps?: number
+  rendererLatestVideoSequence?: number
+  rendererSubmittedVideoSequence?: number
+  rendererSubmittedFramesTotal?: number
+  rendererCaptureFramesTotal?: number
+  renderDrawDurationMsAvg?: number
+  renderActualOutputWidth?: number
+  renderActualOutputHeight?: number
+  renderActualMode?: 'upscale' | 'passthrough'
+  networkRttBaselineMs?: number
+  networkRttDeltaMs?: number
+  networkPolicyReason?: string
+  qualityActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
+  renderActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
+  statsCollectionDurationMs?: number
+  rendererLatestOverwriteCount?: number
+  rendererPacingWaitCount?: number
+  rendererSubmitFailureCount?: number
+  rendererDuplicateDrawCount?: number
+  rendererGpuErrorChecks?: number
+}
+
+export interface StreamStats extends BrowserPlaybackStats {
   resolution: string
   rtt: string
   fps: number
@@ -276,8 +335,8 @@ export interface StreamStats {
   videoBweReason?: string
   videoTargetRembKbps?: number
   videoObservedRembKbps?: number
-  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering'
-  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'decoderReset' | 'reconnect'
+  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering' | 'unknown'
+  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'playbackRebuild' | 'decoderReset' | 'reconnect'
   recoveryEpochId?: string
   lastRecoveryActionLevel?: 'L0' | 'L1' | 'L2' | 'L3'
   lastRecoveryActionResult?: 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
@@ -308,7 +367,7 @@ export interface StreamStats {
   renderFrameCallbackIntervalMs?: number
   renderCallbackCountLastSample?: number
   renderCallbackGapCountLastSample?: number
-  renderFrameTrackingSource?: 'videoFrameCallback' | 'timeupdate'
+  renderFrameTrackingSource?: VideoFrameTrackingSource
   renderPresentedFramesDelta?: number
   renderPresentedFramesJumpCount?: number
   renderPresentedFramesAdvancedLastSample?: number
@@ -320,7 +379,7 @@ export interface StreamStats {
   renderFrameSourceFrameIntervalMs?: number
   renderFrameSourceFpsUnavailableReason?: VideoFrameSourceFpsUnavailableReason
   renderDroppedLikeStreak?: number
-  renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
+  renderCause?: 'decodeBackpressure' | 'frameDeliveryLimited' | 'renderStarvation' | 'renderStable' | 'unknown'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
   senderPolicyCause?: 'networkCongestion' | 'decodeBackpressure' | 'controlChannelUnhealthy' | 'none'
@@ -415,7 +474,7 @@ export interface StreamStats {
   /** 策略层下发的锐化强度百分比（0..100），用于复盘颗粒感来源。 */
   renderSharpenStrength?: number
   renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
-  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback' | 'localFallback'
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
   renderShaderPath?: 'usm' | 'cas' | 'none'

@@ -206,7 +206,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         }
         "resolution" => normalize_number(key, value, fallback.as_i64().unwrap_or(720), 720, 1440),
         "xhome_resolution" => {
-            normalize_number(key, value, fallback.as_i64().unwrap_or(720), 720, 1081)
+            normalize_number(key, value, fallback.as_i64().unwrap_or(720), 720, 1440)
         }
         "xhome_bitrate" | "xcloud_bitrate" | "audio_bitrate" => {
             normalize_number(key, value, fallback.as_i64().unwrap_or(20), 0, 200)
@@ -366,5 +366,16 @@ mod tests {
             normalized["runtime_trace_dimensions"],
             "network,recovery,-input"
         );
+    }
+
+    #[test]
+    fn xhome_resolution_accepts_1440_and_clamps_upper_bound() {
+        let mut source = Map::new();
+        source.insert("xhome_resolution".to_owned(), json!(1440));
+        assert_eq!(normalize_config(source)["xhome_resolution"], 1440);
+
+        let mut source = Map::new();
+        source.insert("xhome_resolution".to_owned(), json!(2160));
+        assert_eq!(normalize_config(source)["xhome_resolution"], 1440);
     }
 }

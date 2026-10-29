@@ -69,6 +69,8 @@ export class PlayerClient {
   private readonly sessionService: SessionService
   private readonly statsService: StatsService
   private options: PlayerClientOptions
+  private readonly captures = new Set<AbortController>()
+  private readonly buttonReleases = new Map<LogicalButtonDto, number>()
 
   constructor(options: PlayerClientInit) {
     const defaults = DEFAULT_PLAYER_OPTIONS()
@@ -102,7 +104,7 @@ export class PlayerClient {
       this.mediaService,
       this.emitter,
     )
-    this.statsService = new StatsService(() => this.sessionService.getPeer(), this.emitter)
+    this.statsService = new StatsService(() => this.sessionService.getPeer(), this.emitter, () => this.mediaService.snapshotRendererObservation())
     this.statsService.start()
   }
 
@@ -116,6 +118,7 @@ export class PlayerClient {
 
   bind(params?: ConnectParams): void {
     this.sessionService.bind(params?.turnServer)
+    void this.statsService.sampleNow()
   }
 
   async createOffer(options?: CreateOfferOptions): Promise<RTCSessionDescriptionInit> {
@@ -215,6 +218,22 @@ export class PlayerClient {
     this.options.transport = { ...this.options.transport, ...config }
   }
 
+  getTransportConfig(): TransportRuntimeConfig {
+    return { ...this.options.transport }
+  }
+
+  hasLocalVideoSender(): boolean {
+    return this.sessionService.hasLocalVideoSender()
+  }
+
+  getRemoteVideoBitrateCapKbps(): number | undefined {
+    return this.sessionService.getRemoteVideoBitrateCapKbps()
+  }
+
+  rollbackMediaNegotiation(): Promise<void> {
+    return this.sessionService.rollbackMediaNegotiation()
+  }
+
   async applyVideoBitrateSoftCapKbps(maxBitrateKbps: number): Promise<VideoSenderPolicyResult> {
     return await this.sessionService.applyVideoBitrateSoftCapKbps(maxBitrateKbps)
   }
@@ -227,9 +246,9 @@ export class PlayerClient {
     return this.sessionService.requestVideoKeyframe()
   }
 
-  /** 重建 video 元素以强制换新解码器；返回是否真的执行了。 */
-  resetVideoDecoder(): boolean {
-    return this.mediaService.resetVideoDecoder()
+  /** 重建播放元素；恢复效果由当前代际的新帧事实确认。 */
+  rebuildVideoPlayback(): boolean {
+    return this.mediaService.rebuildVideoPlayback()
   }
 
   getControlChannelHealthSnapshot(): ControlChannelHealthSnapshot {
@@ -270,11 +289,22 @@ export class PlayerClient {
   }
 
   close(): void {
-    this.statsService.stop()
+    this.cancelPendingUserActions()
+    this.statsService.dispose()
     this.sessionService.close()
   }
 
+  snapshotMediaResources() {
+    return { ...this.mediaService.snapshotResources(), captureRequests: this.captures.size, buttonReleaseTimers: this.buttonReleases.size }
+  }
+
+  snapshotMediaDiagnostics() {
+    return this.mediaService.snapshotDiagnostics()
+  }
+
   reset(): void {
+    this.cancelPendingUserActions()
+    this.statsService.stop()
     this.sessionService.close()
     this.statsService.start()
   }
@@ -285,16 +315,20 @@ export class PlayerClient {
 
   pressButton(button: LogicalButtonDto, durationMs: number): void {
     this.pressButtonStart(button)
-    window.setTimeout(() => {
+    const id = window.setTimeout(() => {
+      this.buttonReleases.delete(button)
       this.pressButtonEnd(button)
     }, durationMs)
+    this.buttonReleases.set(button, id)
   }
 
   pressButtonStart(button: LogicalButtonDto): void {
+    this.cancelButtonRelease(button)
     this.inputService.pressButtonStart(button)
   }
 
   pressButtonEnd(button: LogicalButtonDto): void {
+    this.cancelButtonRelease(button)
     this.inputService.pressButtonEnd(button)
   }
 
@@ -310,13 +344,32 @@ export class PlayerClient {
     this.mediaService.setVolumeDirect(value)
   }
 
-  captureRenderedFrame(timeoutMs = 3500): Promise<HTMLCanvasElement | null> {
-    return Promise.race([
-      this.mediaService.captureRenderedFrame(),
-      new Promise<HTMLCanvasElement | null>((resolve) => {
-        window.setTimeout(() => resolve(null), timeoutMs)
-      }),
-    ])
+  async captureRenderedFrame(timeoutMs = 3500): Promise<HTMLCanvasElement | null> {
+    const controller = new AbortController()
+    this.captures.add(controller)
+    const timer = window.setTimeout(() => controller.abort(), Math.max(0, timeoutMs))
+    try {
+      return await this.mediaService.captureRenderedFrame(controller.signal)
+    }
+    finally {
+      window.clearTimeout(timer)
+      this.captures.delete(controller)
+    }
+  }
+
+  private cancelButtonRelease(button: LogicalButtonDto): void {
+    window.clearTimeout(this.buttonReleases.get(button))
+    this.buttonReleases.delete(button)
+  }
+
+  private cancelPendingUserActions(): void {
+    for (const controller of this.captures) controller.abort()
+    this.captures.clear()
+    for (const [button, timer] of this.buttonReleases) {
+      window.clearTimeout(timer)
+      this.inputService.pressButtonEnd(button)
+    }
+    this.buttonReleases.clear()
   }
 
   getMicState(): { capturing: boolean, paused: boolean } {

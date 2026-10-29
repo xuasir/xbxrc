@@ -13,7 +13,7 @@ export interface BrowserSuperResolutionState {
   latestVideoDimensions: { width: number, height: number } | null
   /** 冻结时刻，用于跨档重算的最小驻留判定。 */
   frozenAtMs: number | null
-  /** 已发生的跨档重算次数，会话内封顶，避免 canvas 反复 resize。 */
+  /** 已发生的跨档重算次数；最小驻留和单一待重算目标控制 resize 频率。 */
   refreezeCount: number
 }
 

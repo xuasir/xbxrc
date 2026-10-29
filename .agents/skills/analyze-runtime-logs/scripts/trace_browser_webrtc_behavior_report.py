@@ -10,6 +10,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+from browser_runtime_stability_report import build_stability_report
+
 
 DEFAULT_RUNTIME_LOG_DIR = Path("runtime-logs")
 
@@ -447,6 +450,7 @@ def build_report(
     *,
     max_age_seconds: float | None,
     require_presented: bool,
+    require_stability: bool = False,
 ) -> dict[str, Any]:
     rows = load_events(trace)
     sdp = browser_sdp_observations(rows)
@@ -455,12 +459,16 @@ def build_report(
     selected_answer = selected_remote_answer_from_timeline(rows) or selected_remote_answer_from_sdp(sdp)
     latencies = first_frame_latencies(timeline)
     failures = missing_browser_evidence(sdp, timeline, stats, require_presented)
+    stability = build_stability_report(rows)
+    if require_stability and stability["gate"] != "PASS":
+        failures.append("browser runtime stability evidence is " + stability["gate"])
     freshness = trace_freshness_report(trace, max_age_seconds)
     if freshness["freshnessGate"] != "PASS":
         failures.append("trace is stale")
     return {
         "trace": str(trace),
         "browserWebRtcBehaviorGate": "FAIL" if failures else "PASS",
+        "browserRuntimeStability": stability,
         "failures": failures,
         "freshness": freshness,
         "selectedRemoteAnswer": selected_answer,
@@ -498,6 +506,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="do not fail when firstPresented is absent",
     )
+    parser.add_argument("--require-stability", action="store_true", help="Require shared observation, five-stage frame supply, source-size outputs, qualified actions/effects, trace/GPU budgets and clean resource release.")
     return parser.parse_args()
 
 
@@ -526,6 +535,7 @@ def main() -> int:
         trace,
         max_age_seconds=args.max_age_seconds,
         require_presented=not args.allow_missing_presented,
+        require_stability=args.require_stability,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["browserWebRtcBehaviorGate"] == "PASS" else 2

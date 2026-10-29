@@ -1,3 +1,4 @@
+import type { PresentedVideoFrameMetadata } from '../../player/domain/media'
 import type { RuntimeLaunchSpec } from '../types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBrowserRuntime } from './browser-runtime'
@@ -41,7 +42,12 @@ const testState = vi.hoisted(() => {
       this.updateRendererAttach(attach)
     })
 
-    readonly updateTransportConfig = vi.fn()
+    private transportConfig = { maxVideoBitrateKbps: 24000, maxAudioBitrateKbps: 0, forceMonoAudio: false, targetVideoWidth: 1920, targetVideoHeight: 1080 }
+    readonly getTransportConfig = vi.fn(() => ({ ...this.transportConfig }))
+    readonly getRemoteVideoBitrateCapKbps = vi.fn((): number | undefined => this.transportConfig.maxVideoBitrateKbps)
+    readonly hasLocalVideoSender = vi.fn(() => true)
+    readonly rollbackMediaNegotiation = vi.fn(async () => {})
+    readonly updateTransportConfig = vi.fn((config: Record<string, unknown>) => { Object.assign(this.transportConfig, config) })
     readonly applyVideoSenderPolicy = vi.fn(async (
       _input?: Record<string, unknown>,
     ): Promise<{ status: string, detail?: string }> => ({
@@ -50,10 +56,12 @@ const testState = vi.hoisted(() => {
 
     readonly requestVideoKeyframe = vi.fn(() => ({
       accepted: true,
+      sent: true,
+      state: 'open',
       reason: 'mock',
     }))
 
-    readonly resetVideoDecoder = vi.fn(() => true)
+    readonly rebuildVideoPlayback = vi.fn(() => true)
 
     readonly bind = vi.fn()
     readonly createOffer = vi.fn(async () => ({ type: 'offer', sdp: 'v=0\r\n' }))
@@ -63,6 +71,8 @@ const testState = vi.hoisted(() => {
     readonly getPeer = vi.fn(() => undefined)
     readonly pressButton = vi.fn()
     readonly close = vi.fn()
+    readonly snapshotMediaResources = vi.fn(() => ({ actualPipeline: undefined, videoElements: 0, audioElements: 0, currentRenderers: 0, pendingRenderers: 0, nativeFrameCallbacks: 0, frameRequests: 0, renderers: [], captureRequests: 0, buttonReleaseTimers: 0 }))
+    readonly snapshotMediaDiagnostics = vi.fn(() => ({ rendererGeneration: 1, rendererKind: 'webgl2_sr', frameIdentity: { videoGeneration: 1, evidence: [] }, surface: { evidence: 'domLayout', screenPresentState: 'unavailable' } }))
     readonly audioController = {
       setVolumeDirect: vi.fn(),
       startMic: vi.fn(async () => {}),
@@ -99,14 +109,58 @@ const testState = vi.hoisted(() => {
       return this.audioController
     }
 
+    private readonly statsStartedAt = performance.now()
+
     stats() {
-      return this.statsController
+      return { ...this.statsController, snapshot: async () => {
+        const raw = await this.statsController.snapshot() as Record<string, any>
+        const at = Math.floor(performance.now() / 250) * 250
+        const durationMs = Math.max(0, performance.now() - this.statsStartedAt)
+        const measured = {
+          ...raw,
+          statsSampleId: raw.statsSampleId ?? `1:${at}`,
+          statsSampledAtMs: raw.statsSampledAtMs ?? at,
+          statsObservationState: raw.statsObservationState ?? (raw.inboundVideoFps === undefined ? 'unavailable' : 'fresh'),
+          statsPeerGeneration: raw.statsPeerGeneration ?? 1,
+          statsVideoGeneration: raw.statsVideoGeneration ?? 1,
+          networkRttMs: raw.networkRttMs ?? Number.parseFloat(raw.rtt ?? '0'),
+          videoPresentFps: raw.videoPresentFps ?? raw.presentFps,
+          videoPresentAgeMs: raw.videoPresentAgeMs ?? raw.presentAgeMs,
+          callbackFps: raw.callbackFps ?? raw.presentFps,
+          rendererSubmitFps: raw.rendererSubmitFps ?? raw.presentFps,
+          rendererKind: raw.rendererKind ?? (this.rendererState.superResolutionEnabled ? 'webgl2_sr' : this.rendererState.pipelineType === 'video' ? 'video' : 'webgl2'),
+          rendererGeneration: raw.rendererGeneration ?? 1,
+          rendererTargetFps: raw.rendererTargetFps ?? this.rendererState.targetFps ?? 60,
+          renderActualOutputWidth: raw.renderActualOutputWidth ?? this.rendererState.renderOutputWidth,
+          renderActualOutputHeight: raw.renderActualOutputHeight ?? this.rendererState.renderOutputHeight,
+        }
+        if (raw.browserStatsWindows)
+          return measured
+        const summary = {
+          sampleCount: Math.floor(durationMs / 250),
+          lossAvg: raw.networkPacketLossRatio ?? raw.videoTwccLossRatio ?? 0,
+          jitterMsAvg: Number.parseFloat(raw.jit ?? '0'),
+          rttMsAvg: Number.parseFloat(raw.rtt ?? '0'),
+          decodeFpsAvg: raw.decodeFps,
+          inboundFpsAvg: raw.inboundVideoFps,
+          presentAgeMsAvg: raw.presentAgeMs,
+          videoPresentFpsAvg: measured.videoPresentFps,
+          callbackFpsAvg: measured.callbackFps,
+          rendererSubmitFpsAvg: measured.rendererSubmitFps,
+          renderDrawDurationMsAvg: raw.renderDrawDurationMsAvg,
+        }
+        const window = (length: number) => ({ ...summary, durationMs: Math.min(length, durationMs), lossCoverageMs: Math.min(length, durationMs), rttCoverageMs: Math.min(length, durationMs), jitterCoverageMs: Math.min(length, durationMs), receivedCoverageMs: Math.min(length, durationMs), decodeCoverageMs: Math.min(length, durationMs), videoCoverageMs: Math.min(length, durationMs), callbackCoverageMs: Math.min(length, durationMs), rendererCoverageMs: Math.min(length, durationMs) })
+        return { ...measured, browserStatsWindows: { short: window(3000), long: window(15000) } }
+      } }
     }
   }
 
   return {
     MockPlayerClient,
     rpc: {
+      config: {
+        get: vi.fn(async () => ({ runtime_trace_mode: 'dev' })),
+      },
       streaming: {
         exchangeOffer: vi.fn(async () => ({ answer: { sdp: 'v=0\r\n' } })),
         submitIce: vi.fn(async () => ({})),
@@ -129,7 +183,7 @@ const testState = vi.hoisted(() => {
       sourceFpsEstimate?: number
       sourceFrameIntervalMs?: number
       sourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
-      trackingSource?: 'videoFrameCallback' | 'timeupdate'
+      trackingSource?: PresentedVideoFrameMetadata['trackingSource']
       droppedLike: boolean
     }) => void),
     bindBrowserVideoFrameTracking: vi.fn((input: {
@@ -142,7 +196,7 @@ const testState = vi.hoisted(() => {
         sourceFpsEstimate?: number
         sourceFrameIntervalMs?: number
         sourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
-        trackingSource?: 'videoFrameCallback' | 'timeupdate'
+        trackingSource?: PresentedVideoFrameMetadata['trackingSource']
         droppedLike: boolean
       }) => void
     }) => {
@@ -242,6 +296,53 @@ describe('browser-runtime super resolution state', () => {
       },
       getElementById: vi.fn(() => null),
     } as unknown as Document
+  })
+
+  it('keeps renderer updates at zero while the effective display configuration stays unchanged', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    const spec = createLaunchSpec()
+    await runtime.launch(spec)
+    const state = { displayOptions: spec.render.displayOptions, render: spec.render, superResolutionExperimental: false }
+    runtime.applyDisplayState(state)
+    await runtime.snapshotStats()
+    const client = getClient()
+    client.updateRendererState.mockClear()
+    for (let i = 0; i < 10; i++) {
+      runtime.applyDisplayState({ ...state })
+      await runtime.snapshotStats()
+    }
+    expect(client.updateRendererState).not.toHaveBeenCalled()
+    await runtime.stop()
+  })
+
+  it('applies the latest SR source dimensions after dwell and continues after four re-evaluations', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.window.setTimeout = setTimeout
+      globalThis.window.clearTimeout = clearTimeout
+      globalThis.window.setInterval = setInterval
+      globalThis.window.clearInterval = clearInterval
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ superResolutionExperimental: true }))
+      const client = getClient()
+      client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
+      await runtime.snapshotStats()
+      const before = client.updateRendererState.mock.calls.length
+      client.eventBus.emit('media.videoReady', { width: 1280, height: 720 })
+      client.eventBus.emit('media.videoReady', { width: 2560, height: 1440 })
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(client.updateRendererState.mock.calls.length).toBeGreaterThan(before)
+      for (const [width, height] of [[1280, 720], [2560, 1440], [1280, 720], [2560, 1440], [1280, 720], [2560, 1440]]) {
+        await vi.advanceTimersByTimeAsync(1100)
+        client.eventBus.emit('media.videoReady', { width, height })
+        await runtime.snapshotStats()
+      }
+      expect(client.rendererState.superResolutionOutputWidth).toBe(2560)
+      const events = testState.rpc.runtimeTrace.recordEvent.mock.calls.map(call => call[0])
+      expect(events.some(entry => entry.event === 'superResolutionTierFrozen' && (entry.payload as { refreezeCount?: number }).refreezeCount! > 4)).toBe(true)
+      await runtime.stop()
+    }
+    finally { vi.useRealTimers() }
   })
 
   afterEach(() => {
@@ -484,21 +585,68 @@ describe('browser-runtime super resolution state', () => {
       await runtime.launch(createLaunchSpec())
       const client = getClient()
 
-      // 收包正常（有码率）但没有任何可解码帧：L1 关键帧请求救不回来，必须能执行 L2。
+      // 同窗接收持续推进、解码停滞，局部动作依次结算效果与 15s 间隔。
       client.statsController.snapshot.mockResolvedValue({
         transportPath: 'direct/udp',
         inboundVideoBitrateKbps: 3_000,
         decodeFps: 0,
         presentFps: 0,
-        inboundVideoFps: 0,
+        inboundVideoFps: 60,
+        packetAgeMs: 0,
+        presentAgeMs: 10000,
       })
       client.eventBus.emit('transport.connectionState', { state: 'connected' })
-      await vi.advanceTimersByTimeAsync(20_000)
+      await vi.advanceTimersByTimeAsync(40_000)
 
-      expect(client.resetVideoDecoder).toHaveBeenCalled()
+      expect(client.rebuildVideoPlayback).toHaveBeenCalled()
       await runtime.stop()
     }
     finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('renews the local recovery budget after a healthy long window closes the previous episode', async () => {
+    vi.useFakeTimers()
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    try {
+      await runtime.launch(createLaunchSpec({ pipelinePreference: 'video' }))
+      const client = getClient()
+      const stalled = { inboundVideoFps: 60, decodeFps: 0, presentFps: 0, presentAgeMs: 10000, packetAgeMs: 0 }
+      client.statsController.snapshot.mockResolvedValue(stalled)
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+      await vi.advanceTimersByTimeAsync(43000)
+      expect(client.requestVideoKeyframe).toHaveBeenCalledTimes(2)
+      expect(client.rebuildVideoPlayback).toHaveBeenCalledTimes(1)
+      const exhausted = await runtime.snapshotStats()
+      expect(exhausted.recoveryEpochId).toBeDefined()
+
+      // 重建后的真实新帧与完整健康长窗共同关闭旧 episode。
+      client.statsController.snapshot.mockResolvedValue({ ...stalled, statsVideoGeneration: 2, decodeFps: 60, presentFps: 60, presentAgeMs: 0 })
+      for (let i = 0; i < 22; i++) {
+        client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+        await vi.advanceTimersByTimeAsync(1000)
+      }
+      expect((await runtime.snapshotStats()).recoveryEpochId).toBeUndefined()
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        event: 'recoveryEpochCompleted',
+        payload: expect.objectContaining({ epochId: exhausted.recoveryEpochId, reason: 'healthyLongWindow' }),
+      }))
+
+      client.statsController.snapshot.mockResolvedValue({ ...stalled, statsVideoGeneration: 2 })
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(client.requestVideoKeyframe).toHaveBeenCalledTimes(2)
+      // 持续入包保留现有宽限，随后新故障获得一份完整局部预算。
+      await vi.advanceTimersByTimeAsync(8000)
+      expect(client.requestVideoKeyframe).toHaveBeenCalledTimes(3)
+      expect(client.rebuildVideoPlayback).toHaveBeenCalledTimes(1)
+      expect((await runtime.snapshotStats()).recoveryEpochId).not.toBe(exhausted.recoveryEpochId)
+      expect(testState.MockPlayerClient.instances).toHaveLength(1)
+      expect(testState.rpc.streaming.decideRecovery).not.toHaveBeenCalled()
+    }
+    finally {
+      await runtime.stop()
       vi.useRealTimers()
     }
   })
@@ -535,6 +683,7 @@ describe('browser-runtime super resolution state', () => {
     })
 
     const plan = resolveSuperResolutionTierPlan(2560, 1440, 1920, 1080)
+    await runtime.snapshotStats()
     expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
       superResolutionOutputTier: plan.outputTier,
     }))
@@ -608,8 +757,8 @@ describe('browser-runtime super resolution state', () => {
 
       expect(client.updateRendererAttach).toHaveBeenLastCalledWith(expect.objectContaining({
         presentTarget: expect.objectContaining({
-          outputWidth: 1920,
-          outputHeight: 1080,
+          outputWidth: 2880,
+          outputHeight: 1620,
           viewportWidthCss: 1920,
           viewportHeightCss: 1080,
           fullscreen: true,
@@ -633,8 +782,8 @@ describe('browser-runtime super resolution state', () => {
       expect(snapshot.renderDisplayRefreshHz).toBe(120)
       expect(snapshot.renderDisplayWidth).toBe(1920)
       expect(snapshot.renderDisplayHeight).toBe(1200)
-      expect(snapshot.renderPresentTargetWidth).toBe(1920)
-      expect(snapshot.renderPresentTargetHeight).toBe(1080)
+      expect(snapshot.renderPresentTargetWidth).toBe(2880)
+      expect(snapshot.renderPresentTargetHeight).toBe(1620)
       expect(snapshot.renderViewportWidth).toBe(1920)
       expect(snapshot.renderViewportHeight).toBe(1080)
 
@@ -741,8 +890,8 @@ describe('browser-runtime super resolution state', () => {
 
       expect(client.updateRendererAttach).toHaveBeenLastCalledWith(expect.objectContaining({
         presentTarget: expect.objectContaining({
-          outputWidth: 1920,
-          outputHeight: 1080,
+          outputWidth: 2880,
+          outputHeight: 1620,
           viewportWidthCss: 1920,
           viewportHeightCss: 1080,
           fullscreen: true,
@@ -857,7 +1006,7 @@ describe('browser-runtime super resolution state', () => {
         callback(now)
       }
 
-      for (const now of [0, 7, 14, 21, 28, 35, 42, 49]) {
+      for (const now of Array.from({ length: 24 }, (_, index) => index * 7)) {
         driveRaf(now)
       }
       await vi.advanceTimersByTimeAsync(1)
@@ -969,6 +1118,7 @@ describe('browser-runtime super resolution state', () => {
     })
 
     const plan = resolveSuperResolutionTierPlan(2560, 1440, 1920, 1080)
+    await runtime.snapshotStats()
     expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
       superResolutionOutputTier: plan.outputTier,
       superResolutionConfiguredTargetTier: `${plan.configuredTier}`,
@@ -995,6 +1145,7 @@ describe('browser-runtime super resolution state', () => {
 
     client.eventBus.emit('media.videoReady', { width: 1280, height: 720 })
 
+    await runtime.snapshotStats()
     expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
       superResolutionOutputTier: '1080p',
       superResolutionRcasStops: 0.72,
@@ -1143,7 +1294,7 @@ describe('browser-runtime super resolution state', () => {
     await runtime.stop()
   })
 
-  it('promotes quality ladder after warmup when browser-direct has no local video sender', async () => {
+  it('starts from user quality and keeps healthy warmup free of transport actions', async () => {
     vi.useFakeTimers()
     try {
       globalThis.window.setInterval = setInterval
@@ -1179,17 +1330,10 @@ describe('browser-runtime super resolution state', () => {
 
       const snapshot = await runtime.snapshotStats()
       expect(snapshot.qualityLadderLevel).toBe('L0')
-      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: 'qualityLadderPolicyEvaluated',
-          payload: expect.objectContaining({
-            next: 'L0',
-            resultStatus: 'unsupported',
-            resultDetail: 'missingVideoSender',
-            acceptedWithoutSenderPolicy: true,
-          }),
-        }),
-      )
+      expect(client.applyVideoSenderPolicy).toHaveBeenCalledTimes(0)
+      expect(client.updateTransportConfig).toHaveBeenCalledTimes(0)
+      const warmup = testState.rpc.runtimeTrace.recordEvent.mock.calls.find(([entry]) => entry.event === 'warmupProfileApplied')?.[0]
+      expect(warmup?.payload).toMatchObject({ level: 'L0' })
 
       await runtime.stop()
     }
@@ -1284,6 +1428,7 @@ describe('browser-runtime super resolution state', () => {
       })
 
       client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      const baseline = client.updateRendererAttach.mock.calls.at(-1)?.[0]
       client.eventBus.emit('media.videoFramePresented', {
         callbackIntervalMs: 94,
         presentedFramesDelta: 3,
@@ -1291,17 +1436,9 @@ describe('browser-runtime super resolution state', () => {
       })
       await vi.advanceTimersByTimeAsync(2_100)
 
-      expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-        pipelineType: 'webgl2',
-        processing: 'usm',
-        shaderPreset: 'clarityL1',
-      }))
-      expect(client.updateRenderer).not.toHaveBeenCalledWith(expect.objectContaining({
-        pipelineType: 'video',
-      }))
-      for (const call of client.applyVideoSenderPolicy.mock.calls) {
-        expect(call[0]).toEqual(expect.objectContaining({ maxFramerate: 60 }))
-      }
+      expect(client.updateRendererAttach.mock.calls.at(-1)?.[0]).toEqual(baseline)
+      expect(client.applyVideoSenderPolicy).toHaveBeenCalledTimes(0)
+      expect(client.updateTransportConfig).toHaveBeenCalledTimes(0)
       const snapshot = await runtime.snapshotStats()
       expect(snapshot.senderPolicyCause).toBe('none')
 
@@ -1312,7 +1449,7 @@ describe('browser-runtime super resolution state', () => {
     }
   })
 
-  it('only reaches display L2 after sustained render pressure and still keeps 60 fps sender policy', async () => {
+  it('falls back to native video after sustained actual renderer stall while transport stays unchanged', async () => {
     vi.useFakeTimers()
     try {
       globalThis.window.setInterval = setInterval
@@ -1335,7 +1472,14 @@ describe('browser-runtime super resolution state', () => {
         fps: 60,
         inboundVideoFps: 60,
         decodeFps: 60,
-        presentFps: 53,
+        presentFps: 0,
+        videoPresentFps: 60,
+        callbackFps: 60,
+        rendererKind: 'webgl2',
+        rendererSubmitFps: 0,
+        rendererSubmitAgeMs: 1000,
+        rendererLatestVideoSequence: 10,
+        rendererSubmittedVideoSequence: 1,
         presentAgeMs: 0,
         packetAgeMs: 0,
         inboundVideoBitrateKbps: 18000,
@@ -1349,21 +1493,67 @@ describe('browser-runtime super resolution state', () => {
         presentedFramesDelta: 3,
         droppedLike: true,
       })
-      await vi.advanceTimersByTimeAsync(6_300)
+      await vi.advanceTimersByTimeAsync(8_300)
 
       expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-        pipelineType: 'webgl2',
-        processing: 'usm',
-        shaderPreset: 'clarityL0',
-      }))
-      expect(client.updateRenderer).not.toHaveBeenCalledWith(expect.objectContaining({
         pipelineType: 'video',
+        targetFps: 60,
       }))
-      for (const call of client.applyVideoSenderPolicy.mock.calls) {
-        expect(call[0]).toEqual(expect.objectContaining({ maxFramerate: 60 }))
-      }
+      expect(client.applyVideoSenderPolicy).toHaveBeenCalledTimes(0)
+      expect(client.updateTransportConfig).toHaveBeenCalledTimes(0)
+      expect(client.rebuildVideoPlayback).toHaveBeenCalledTimes(0)
 
       await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the same media decisions with tracing off and dev during healthy high RTT and renderer pressure', async () => {
+    vi.useFakeTimers()
+    try {
+      const run = async (profile: 'off' | 'production' | 'dev') => {
+        testState.rpc.config.get.mockResolvedValueOnce({ runtime_trace_mode: profile })
+        testState.rpc.runtimeTrace.recordEvent.mockClear()
+        const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+        try {
+          await runtime.launch(createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 }))
+          const client = getClient()
+          const healthy = { inboundVideoFps: 60, decodeFps: 60, presentFps: 60, presentAgeMs: 0, packetAgeMs: 0, rtt: '900ms', networkRttMs: 900, networkPacketLossRatio: 0, inboundVideoBitrateKbps: 500 }
+          client.statsController.snapshot.mockResolvedValue(healthy)
+          client.eventBus.emit('transport.connectionState', { state: 'connected' })
+          for (let i = 0; i < 20; i++) {
+            client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+            await vi.advanceTimersByTimeAsync(1000)
+          }
+          expect(client.updateTransportConfig).not.toHaveBeenCalled()
+          client.statsController.snapshot.mockResolvedValue({ ...healthy, videoPresentFps: 60, callbackFps: 60, rendererSubmitFps: 0, rendererSubmitAgeMs: 1000, rendererLatestVideoSequence: 10, rendererSubmittedVideoSequence: 1 })
+          await vi.advanceTimersByTimeAsync(8000)
+          expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({ pipelineType: 'video', targetFps: 60 }))
+          expect(client.updateTransportConfig).not.toHaveBeenCalled()
+          expect(client.requestVideoKeyframe).not.toHaveBeenCalled()
+          expect(client.rebuildVideoPlayback).not.toHaveBeenCalled()
+          return {
+            controls: { renderer: client.rendererState, rendererUpdates: client.updateRenderer.mock.calls, transportUpdates: client.updateTransportConfig.mock.calls },
+            traceCount: testState.rpc.runtimeTrace.recordEvent.mock.calls.length,
+            diagnosticsCount: client.snapshotMediaDiagnostics.mock.calls.length,
+          }
+        }
+        finally {
+          await runtime.stop()
+        }
+      }
+      const off = await run('off')
+      const production = await run('production')
+      const dev = await run('dev')
+      expect(off.controls).toEqual(dev.controls)
+      expect(production.controls).toEqual(dev.controls)
+      expect(off.traceCount).toBe(0)
+      expect(dev.traceCount).toBeGreaterThan(0)
+      expect(off.diagnosticsCount).toBe(0)
+      expect(production.diagnosticsCount).toBe(0)
+      expect(dev.diagnosticsCount).toBeGreaterThan(0)
     }
     finally {
       vi.useRealTimers()
@@ -1423,42 +1613,31 @@ describe('browser-runtime super resolution state', () => {
         trackingSource: 'videoFrameCallback',
         droppedLike: true,
       })
-      await vi.advanceTimersByTimeAsync(2_100)
+      await vi.advanceTimersByTimeAsync(1_100)
 
       expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'renderTelemetryObserved',
           payload: expect.objectContaining({
             trackingSource: 'videoFrameCallback',
-            callbackIntervalMs: 94,
-            presentedFramesDelta: 3,
             callbackCountSinceLastSample: 2,
             callbackGapCountSinceLastSample: 1,
             presentedFramesAdvancedSinceLastSample: 4,
             presentedFramesJumpCountSinceLastSample: 1,
-            mediaTimeDeltaSec: 3 / 60,
-            expectedDisplayLeadMs: -7,
             sourceFpsEstimate: 59.5,
-            sourceFrameIntervalMs: 16.8,
             droppedFrames: 1,
             droppedFramesSinceLastSample: 1,
-            droppedLikeStreak: 1,
-            frameEventsSinceLastSample: 2,
             maxCallbackIntervalMsSinceLastSample: 94,
-            maxPresentedFramesDeltaSinceLastSample: 3,
-            renderBackpressure: true,
+            receivedFps: 60,
+            decodeFps: 60,
+            videoPresentFps: 58,
+            callbackFps: 58,
+            rendererSubmitFps: 58,
+            renderCause: 'renderStable',
           }),
         }),
       )
-      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: 'renderFrameDropped',
-          payload: expect.objectContaining({
-            callbackGap: true,
-            presentedFramesJump: true,
-          }),
-        }),
-      )
+      expect(testState.rpc.runtimeTrace.recordEvent.mock.calls.filter(([entry]) => entry.event === 'renderFrameDropped')).toHaveLength(0)
 
       const snapshot = await runtime.snapshotStats() as Awaited<ReturnType<typeof runtime.snapshotStats>> & {
         renderCallbackGapCount?: number
@@ -1489,7 +1668,7 @@ describe('browser-runtime super resolution state', () => {
       expect(snapshot.renderFrameSourceFpsEstimate).toBe(59.5)
       expect(snapshot.renderFrameSourceFrameIntervalMs).toBe(16.8)
       expect(snapshot.renderDroppedLikeStreak).toBe(1)
-      expect(snapshot.renderCause).toBe('renderStarvation')
+      expect(snapshot.renderCause).toBe('renderStable')
 
       await runtime.stop()
     }
@@ -1564,15 +1743,17 @@ describe('browser-runtime super resolution state', () => {
         renderPresentedFramesJumpCountLastSample?: number
       }
       expect(snapshot.renderBackpressure).toBe(false)
-      expect(snapshot.renderPresentedFramesAdvancedLastSample).toBe(6)
-      expect(snapshot.renderPresentedFramesJumpCountLastSample).toBe(3)
+      expect(snapshot.renderPresentedFramesAdvancedLastSample).toBe(0)
+      expect(snapshot.renderPresentedFramesJumpCountLastSample).toBe(0)
       expect(snapshot.renderCause).toBe('renderStable')
 
       expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
         expect.objectContaining({
-          event: 'renderCauseClassified',
+          event: 'renderTelemetryObserved',
           payload: expect.objectContaining({
-            cause: 'renderStable',
+            renderCause: 'renderStable',
+            presentedFramesAdvancedSinceLastSample: 6,
+            presentedFramesJumpCountSinceLastSample: 3,
           }),
         }),
       )
@@ -1641,11 +1822,11 @@ describe('browser-runtime super resolution state', () => {
       expect(telemetryCall?.[0]).toEqual(expect.objectContaining({
         event: 'renderTelemetryObserved',
         payload: expect.objectContaining({
-          frameEventsSinceLastSample: 1,
-          callbackIntervalMs: 20,
-          presentedFramesDelta: 1,
+          callbackCountSinceLastSample: 1,
+          presentedFramesAdvancedSinceLastSample: 1,
           trackingSource: 'videoFrameCallback',
           droppedFramesSinceLastSample: 0,
+          mediaDiagnostics: expect.objectContaining({ rendererGeneration: 1, rendererKind: 'webgl2_sr', surface: { evidence: 'domLayout', screenPresentState: 'unavailable' } }),
         }),
       }))
 
@@ -1710,16 +1891,7 @@ describe('browser-runtime super resolution state', () => {
           }),
         }),
       )
-      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: 'renderFrameDropped',
-          payload: expect.objectContaining({
-            callbackGap: false,
-            presentedFramesJump: true,
-            sourceFpsUnavailableReason: 'mediaTimeMissing',
-          }),
-        }),
-      )
+      expect(testState.rpc.runtimeTrace.recordEvent.mock.calls.filter(([entry]) => entry.event === 'renderFrameDropped')).toHaveLength(0)
 
       await runtime.stop()
     }
@@ -1748,7 +1920,51 @@ describe('browser-runtime super resolution state', () => {
       expect(client.createOffer).toHaveBeenCalledTimes(3)
       await runtime.stop()
     }
-    finally { vi.useRealTimers() }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels a pending microphone permission wait and applies the latest queued toggle', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    await runtime.launch(createLaunchSpec())
+    const client = getClient()
+    let finishPermission!: () => void
+    client.audioController.startMic.mockImplementationOnce(() => new Promise((resolve) => {
+      finishPermission = resolve
+    }))
+    const first = runtime.setMicrophoneEnabled(true)
+    const cancelled = expect(first).rejects.toThrow('streamRuntimeSuperseded')
+    for (let i = 0; i < 8; i++) await Promise.resolve()
+    const off = runtime.setMicrophoneEnabled(false)
+    const on = runtime.setMicrophoneEnabled(true)
+    const latest = runtime.setMicrophoneEnabled(false)
+    await cancelled
+    expect(await off).toBe(false)
+    expect(await on).toBe(false)
+    expect(await latest).toBe(false)
+    expect(client.audioController.startMic).toHaveBeenCalledTimes(1)
+    expect(client.rollbackMediaNegotiation).toHaveBeenCalledTimes(1)
+    finishPermission()
+    await runtime.stop()
+  })
+
+  it('cancels a pending chat answer on close and absorbs its late response', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    await runtime.launch(createLaunchSpec())
+    const client = getClient()
+    let finishAnswer!: (value: { answer: { sdp: string } }) => void
+    testState.rpc.streaming.exchangeOffer.mockImplementationOnce(() => new Promise((resolve) => {
+      finishAnswer = resolve
+    }))
+    const microphone = runtime.setMicrophoneEnabled(true)
+    const cancelled = expect(microphone).rejects.toThrow('streamRuntimeSuperseded')
+    for (let i = 0; i < 12; i++) await Promise.resolve()
+    await runtime.stop()
+    await cancelled
+    finishAnswer({ answer: { sdp: 'late' } })
+    for (let i = 0; i < 8; i++) await Promise.resolve()
+    expect(client.setRemoteDescription).toHaveBeenCalledTimes(1)
   })
 
   it('cancels pending ICE gathering and removes peer listeners on stop', async () => {
@@ -1768,7 +1984,9 @@ describe('browser-runtime super resolution state', () => {
       expect(peer.removeEventListener).toHaveBeenCalledTimes(2)
       expect(testState.MockPlayerClient.instances).toHaveLength(1)
     }
-    finally { vi.useRealTimers() }
+    finally {
+      vi.useRealTimers()
+    }
   })
   it('revokes a hung restart at the parent deadline and absorbs a late SDP answer', async () => {
     vi.useFakeTimers()
@@ -1794,6 +2012,140 @@ describe('browser-runtime super resolution state', () => {
       await runtime.stop()
       coordinator.reset()
     }
-    finally { vi.useRealTimers() }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+  it('assesses quality with recvonly capability while retaining remote quality as an independent fact', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      const spec = createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 })
+      spec.targetType = 'home'
+      await runtime.launch(spec)
+      const client = getClient()
+      client.hasLocalVideoSender.mockReturnValue(false)
+      client.applyVideoSenderPolicy.mockClear()
+      client.getRemoteVideoBitrateCapKbps.mockReturnValue(undefined)
+      client.statsController.snapshot.mockResolvedValue({ transportPath: 'Direct', rtt: '16ms', jit: '5ms', fps: 60, decodeFps: 60, presentFps: 60, inboundVideoFps: 60, presentAgeMs: 0, packetAgeMs: 0, inboundVideoBitrateKbps: 18000, videoTwccLossRatio: 0, videoTwccFeedbackIntervalMs: 40 })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(4100)
+      const stats = await runtime.snapshotStats()
+      expect(client.applyVideoSenderPolicy).not.toHaveBeenCalled()
+      expect(stats.qualityControlMode).toBe('assessment-only')
+      expect(stats.qualityNegotiatedBitrateKbps).toBeUndefined()
+      expect(stats.inboundVideoBitrateKbps).toBe(18000)
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suspends an ignored remote quality request and retains source/codec intent', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 }))
+      const client = getClient()
+      const initial = client.getTransportConfig()
+      client.getRemoteVideoBitrateCapKbps.mockReturnValue(24000)
+      client.statsController.snapshot.mockResolvedValue({ inboundVideoFps: 60, decodeFps: 60, presentFps: 60, presentAgeMs: 0, packetAgeMs: 0, networkPacketLossRatio: 0.1, networkRttMs: 30 })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+      await vi.advanceTimersByTimeAsync(45000)
+      const stats = await runtime.snapshotStats()
+      expect(stats.qualityActionResult).toBe('unsupported')
+      expect(stats.qualityLadderLevel).toBe('L0')
+      expect(client.getTransportConfig()).toEqual(initial)
+      expect(client.createOffer).toHaveBeenCalledTimes(2)
+      expect(client.updateTransportConfig.mock.calls[0]?.[0]).toEqual({ maxVideoBitrateKbps: 18000 })
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('discards a late quality answer after stop', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec())
+      const client = getClient()
+      let finish!: (value: { answer: { sdp: string } }) => void
+      testState.rpc.streaming.exchangeOffer.mockImplementationOnce(() => new Promise((resolve) => {
+        finish = resolve
+      }))
+      client.statsController.snapshot.mockResolvedValue({ inboundVideoFps: 60, decodeFps: 60, presentFps: 60, presentAgeMs: 0, packetAgeMs: 0, networkPacketLossRatio: 0.1 })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(10000)
+      expect(finish).toBeTypeOf('function')
+      await runtime.stop()
+      const committed = client.setRemoteDescription.mock.calls.length
+      finish({ answer: { sdp: 'lateAnswer' } })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(client.setRemoteDescription).toHaveBeenCalledTimes(committed)
+      expect(client.close).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores committed transport settings when a congested receiver quality offer fails', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 }))
+      const client = getClient()
+      client.hasLocalVideoSender.mockReturnValue(false)
+      client.statsController.snapshot.mockResolvedValue({ transportPath: 'Direct', rtt: '240ms', jit: '50ms', fps: 30, decodeFps: 30, presentFps: 0, inboundVideoFps: 30, presentAgeMs: 10000, packetAgeMs: 0, networkPacketLossRatio: 0.1, inboundVideoBitrateKbps: 1000 })
+      testState.rpc.streaming.exchangeOffer.mockRejectedValue(new Error('serviceRejectedQuality'))
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(20000)
+      expect(client.createOffer).toHaveBeenCalledWith(expect.objectContaining({ preserveIceCandidates: true }))
+      expect(client.rollbackMediaNegotiation).toHaveBeenCalled()
+      expect(client.updateTransportConfig).toHaveBeenLastCalledWith(client.getTransportConfig())
+      const stats = await runtime.snapshotStats()
+      expect(stats.qualityActionResult).toBe('failed')
+      expect(stats.qualityNegotiatedBitrateKbps).toBe(24000)
+      expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'bandwidthDownshiftFailed', payload: expect.objectContaining({ retainedLevel: 0 }) }))
+      await runtime.stop()
+    }
+    finally {
+      testState.rpc.streaming.exchangeOffer.mockResolvedValue({ answer: { sdp: 'v=0\r\n' } })
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores remote SDP quality while fresh frames continue after congestion', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 }))
+      const client = getClient()
+      client.hasLocalVideoSender.mockReturnValue(false)
+      client.statsController.snapshot.mockResolvedValue({ rtt: '240ms', jit: '50ms', decodeFps: 30, inboundVideoFps: 30, presentFps: 0, presentAgeMs: 10000, packetAgeMs: 0, networkPacketLossRatio: 0.1, inboundVideoBitrateKbps: 1000 })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      await vi.advanceTimersByTimeAsync(20000)
+      expect((await runtime.snapshotStats()).qualityNegotiatedBitrateKbps).toBeLessThan(24000)
+      client.statsController.snapshot.mockResolvedValue({ rtt: '16ms', jit: '5ms', decodeFps: 60, inboundVideoFps: 60, presentFps: 60, presentAgeMs: 0, packetAgeMs: 0, networkPacketLossRatio: 0, inboundVideoBitrateKbps: 18000 })
+      for (let i = 0; i < 40; i++) {
+        client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+        await vi.advanceTimersByTimeAsync(1000)
+      }
+      expect((await runtime.snapshotStats()).qualityNegotiatedBitrateKbps).toBe(24000)
+      expect(client.rendererState.targetFps).toBe(60)
+      for (const [patch] of client.updateTransportConfig.mock.calls)
+        expect(Object.keys(patch)).toEqual(['maxVideoBitrateKbps'])
+      for (const [policy] of client.applyVideoSenderPolicy.mock.calls)
+        expect(policy?.maxFramerate).toBeUndefined()
+      expect(testState.MockPlayerClient.instances).toHaveLength(1)
+      await runtime.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

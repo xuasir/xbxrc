@@ -6,364 +6,60 @@ import {
   createFpsObservationState,
   defaultEffectiveFrontEndPolicy,
   estimatedCeilingFps,
-  evaluateProfileBandwidthState,
-  explainFrontEndQualityUpshiftBlock,
-  recordInboundFpsSample,
+  recordSourceFpsSample,
   remoteProfileSuggestsHighRtt,
   resolveEffectiveFrontEndPolicy,
   resolveExpectedContentFps,
-  resolveFrontEndPolicyInputReason,
-  shouldEndWarmupEarly,
 } from './browser-runtime-profile'
 
-function baseStats(over: Partial<StreamStats> = {}): StreamStats {
-  return {
-    resolution: '1920x1080',
-    rtt: '40ms',
-    fps: 60,
-    pl: '0',
-    fl: '0',
-    jit: '2ms',
-    br: '0',
-    decode: '3ms',
-    ...over,
-  }
-}
+const stats: StreamStats = { resolution: '1920x1080', rtt: '40ms', fps: 60, pl: '0', fl: '0', jit: '2ms', br: '0', decode: '3ms' }
 
-describe('classifyFrontEndBaseline', () => {
-  it('maps cloud target to cloud', () => {
+describe('diagnostic profiles', () => {
+  it('retains home, relay and cloud path labels', () => {
     expect(classifyFrontEndBaseline({ targetType: 'cloud' })).toBe('cloud')
-  })
-  it('maps home + relay path to homeRelay', () => {
     expect(classifyFrontEndBaseline({ targetType: 'home', transportPath: 'Relay (turn)' })).toBe('homeRelay')
+    expect(classifyFrontEndBaseline({ targetType: 'home', transportPath: 'Direct' })).toBe('homeLan')
+    expect(remoteProfileSuggestsHighRtt({ ...stats, remoteProfileDynamic: 'cloudHighRtt' })).toBe(true)
   })
-  it('maps home + direct path to homeLan', () => {
-    expect(classifyFrontEndBaseline({ targetType: 'home', transportPath: 'Direct (host->srflx)' })).toBe('homeLan')
+
+  it('keeps baseline warmup identical across RTT, decoder and display diagnostic labels', () => {
+    const baseline = defaultEffectiveFrontEndPolicy()
+    for (const dynamic of ['startup', 'steady', 'highRtt', 'decoderConstrained', 'displayConstrained'] as const)
+      expect(resolveEffectiveFrontEndPolicy({ baseline: 'cloud', dynamic, contentFpsClass: 'content30' })).toEqual(baseline)
+    expect(resolveEffectiveFrontEndPolicy({ baseline: 'homeLan', dynamic: 'steady', contentFpsClass: 'content60' }).warmupDurationMs).toBeLessThan(baseline.warmupDurationMs)
+  })
+
+  it('reports startup and local decoder causes with current path evidence', () => {
+    const input = { targetType: 'cloud' as const, transportPath: undefined, stats: { ...stats, networkRttMs: 1500 }, nowMs: 2000, connectedAtMs: 0, warmupUntilMs: 7000, renderCause: 'renderStable' as const, contentFpsClass: 'contentUnknown' as const }
+    expect(buildRuntimeProfileClassification(input).dynamic).toBe('startup')
+    expect(buildRuntimeProfileClassification({ ...input, nowMs: 9000 }).dynamic).toBe('highRtt')
+    expect(buildRuntimeProfileClassification({ ...input, nowMs: 9000, renderCause: 'decodeBackpressure' }).dynamic).toBe('decoderConstrained')
+    expect(buildRuntimeProfileClassification({ ...input, nowMs: 9000, renderCause: 'renderStarvation' }).dynamic).toBe('displayConstrained')
   })
 })
 
-describe('resolveExpectedContentFps', () => {
-  it('keeps explicit 60fps ahead of a low observed ceiling', () => {
-    const r = resolveExpectedContentFps({
-      stats: baseStats({ fps: 60 }),
-      estimatedCeiling: 29,
-    })
-    expect(r.expected).toBe(60)
-    expect(r.contentFpsClass).toBe('content60')
-  })
-  it('classifies 60fps ceiling', () => {
-    const r = resolveExpectedContentFps({
-      stats: baseStats({ fps: 60 }),
-      estimatedCeiling: 58,
-    })
-    expect(r.expected).toBe(60)
-    expect(r.contentFpsClass).toBe('content60')
-  })
-  it('falls back to explicit fps when no ceiling', () => {
-    const r = resolveExpectedContentFps({
-      stats: baseStats({ fps: 30 }),
-      estimatedCeiling: undefined,
-    })
-    expect(r.expected).toBe(30)
-    expect(r.contentFpsClass).toBe('content30')
-  })
-  it('uses observed ceiling when explicit fps is unavailable', () => {
-    const r = resolveExpectedContentFps({
-      stats: baseStats({ fps: undefined }),
-      estimatedCeiling: 29,
-    })
-    expect(r.expected).toBe(30)
-    expect(r.contentFpsClass).toBe('content30')
-  })
-  it('prefers video frame source fps over playback fps', () => {
-    const r = resolveExpectedContentFps({
-      stats: baseStats({ fps: 60 }),
-      estimatedCeiling: 60,
-      videoFrameSourceFps: 30,
-    })
-    expect(r.expected).toBe(30)
-    expect(r.contentFpsClass).toBe('content30')
-  })
-})
-
-describe('estimatedCeilingFps', () => {
-  it('returns undefined until enough samples', () => {
-    const s = createFpsObservationState()
-    for (let i = 0; i < 5; i++) {
-      recordInboundFpsSample(s, 30)
-    }
-    expect(estimatedCeilingFps(s)).toBeUndefined()
-  })
-  it('uses upper percentile after min samples', () => {
-    const s = createFpsObservationState()
-    for (let i = 0; i < 12; i++) {
-      recordInboundFpsSample(s, 28 + (i % 3))
-    }
-    const c = estimatedCeilingFps(s)
-    expect(c).toBeDefined()
-    expect(c!).toBeGreaterThanOrEqual(28)
-  })
-})
-
-describe('buildRuntimeProfileClassification', () => {
-  it('uses startup dynamic during warmup window', () => {
-    const c = buildRuntimeProfileClassification({
-      targetType: 'home',
-      transportPath: 'Direct',
-      stats: baseStats(),
-      nowMs: 1000,
-      connectedAtMs: 0,
-      warmupUntilMs: 5000,
-      renderCause: 'renderStable',
-      contentFpsClass: 'contentUnknown',
-    })
-    expect(c.dynamic).toBe('startup')
-    expect(c.baseline).toBe('homeLan')
-  })
-  it('prefers decoderConstrained over highRtt after warmup', () => {
-    const c = buildRuntimeProfileClassification({
-      targetType: 'cloud',
-      transportPath: undefined,
-      stats: baseStats({ rtt: '200ms' }),
-      nowMs: 20_000,
-      connectedAtMs: 0,
-      warmupUntilMs: 0,
-      renderCause: 'decodeBackpressure',
-      contentFpsClass: 'content60',
-    })
-    expect(c.dynamic).toBe('decoderConstrained')
-    expect(c.baseline).toBe('cloud')
-  })
-})
-
-describe('resolveEffectiveFrontEndPolicy', () => {
-  it('homeLan steady has shorter warmup than cloud', () => {
-    const home = resolveEffectiveFrontEndPolicy({
-      baseline: 'homeLan',
-      dynamic: 'steady',
-      contentFpsClass: 'content60',
-    })
-    const cloud = resolveEffectiveFrontEndPolicy({
-      baseline: 'cloud',
-      dynamic: 'steady',
-      contentFpsClass: 'content60',
-    })
-    expect(home.warmupDurationMs).toBeLessThan(cloud.warmupDurationMs)
-    expect(home.presetId).toBe('homeLan+steady')
-  })
-  it('startup overlay lengthens quality dwell', () => {
-    const steady = resolveEffectiveFrontEndPolicy({
-      baseline: 'cloud',
-      dynamic: 'steady',
-      contentFpsClass: 'contentUnknown',
-    })
-    const startup = resolveEffectiveFrontEndPolicy({
-      baseline: 'cloud',
-      dynamic: 'startup',
-      contentFpsClass: 'contentUnknown',
-    })
-    expect(startup.qualityLevelMinDwellMs).toBeGreaterThanOrEqual(steady.qualityLevelMinDwellMs)
-  })
-  it('cloud startup keeps longer warmup than homeLan startup', () => {
-    const home = resolveEffectiveFrontEndPolicy({
-      baseline: 'homeLan',
-      dynamic: 'startup',
-      contentFpsClass: 'contentUnknown',
-    })
-    const cloud = resolveEffectiveFrontEndPolicy({
-      baseline: 'cloud',
-      dynamic: 'startup',
-      contentFpsClass: 'contentUnknown',
-    })
-    expect(cloud.warmupDurationMs).toBeGreaterThan(home.warmupDurationMs)
-  })
-})
-
-describe('evaluateProfileBandwidthState', () => {
-  it('does not warn on 30fps-stable stream when network and age signals are healthy', () => {
-    const policy = resolveEffectiveFrontEndPolicy({
-      baseline: 'homeLan',
-      dynamic: 'steady',
-      contentFpsClass: 'content30',
-    })
-    const stats = baseStats({
-      decodeFps: 29,
-      presentFps: 29,
-      inboundVideoBitrateKbps: 12_000,
-      videoTwccLossRatio: 0,
-      videoTwccFeedbackIntervalMs: 50,
-      packetAgeMs: 40,
-      presentAgeMs: 40,
-    })
-    const next = evaluateProfileBandwidthState({
-      now: 10_000,
-      stats,
-      previous: 'stable',
-      previousChangedAtMs: 0,
-      expectedContentFps: 30,
-      policy,
-      baseVideoBitrateKbps: 15_000,
-    })
-    expect(next).toBe('stable')
-  })
-  it('warns when bitrate ratio drops even if fps is still acceptable', () => {
-    const policy = defaultEffectiveFrontEndPolicy()
-    const stats = baseStats({
-      decodeFps: 58,
-      presentFps: 58,
-      inboundVideoBitrateKbps: 8_000,
-      videoTwccLossRatio: 0,
-      videoTwccFeedbackIntervalMs: 50,
-      packetAgeMs: 40,
-      presentAgeMs: 40,
-    })
-    const next = evaluateProfileBandwidthState({
-      now: 10_000,
-      stats,
-      previous: 'stable',
-      previousChangedAtMs: 0,
-      expectedContentFps: 60,
-      policy,
-      baseVideoBitrateKbps: 15_000,
-    })
-    expect(next).toBe('warning')
-  })
-  it('does not warn only because fps is low when network and age remain healthy', () => {
-    const policy = defaultEffectiveFrontEndPolicy()
-    const stats = baseStats({
-      decodeFps: 24,
-      presentFps: 24,
-      inboundVideoBitrateKbps: 20_000,
-      videoTwccLossRatio: 0,
-      videoTwccFeedbackIntervalMs: 50,
-      packetAgeMs: 30,
-      presentAgeMs: 30,
-    })
-    const next = evaluateProfileBandwidthState({
-      now: 10_000,
-      stats,
-      previous: 'stable',
-      previousChangedAtMs: 0,
-      expectedContentFps: 60,
-      policy,
-      baseVideoBitrateKbps: 15_000,
-    })
-    expect(next).toBe('stable')
-  })
-})
-
-describe('resolveFrontEndPolicyInputReason', () => {
-  it('classifies network-limited input from bandwidth pressure', () => {
-    expect(resolveFrontEndPolicyInputReason({
-      bandwidthState: 'warning',
-      recoveryCause: 'unknown',
-      renderCause: 'renderStable',
-      renderBackpressure: false,
-    })).toBe('networkLimited')
+describe('source cadence diagnostics', () => {
+  it('classifies valid media cadence and preserves explicit limits when unknown', () => {
+    expect(resolveExpectedContentFps({ videoFrameSourceFps: 29.8, targetFps: 60 })).toEqual({ expected: 30, contentFpsClass: 'content30' })
+    expect(resolveExpectedContentFps({ videoFrameSourceFps: 59.9, targetFps: 30 })).toEqual({ expected: 60, contentFpsClass: 'content60' })
+    for (const source of [undefined, 0, 10, Number.NaN])
+      expect(resolveExpectedContentFps({ videoFrameSourceFps: source, targetFps: 60 })).toEqual({ expected: 60, contentFpsClass: 'contentUnknown' })
+    expect(resolveExpectedContentFps({ targetFps: 30 }).expected).toBe(30)
   })
 
-  it('classifies delivery-limited input from render pressure', () => {
-    expect(resolveFrontEndPolicyInputReason({
-      bandwidthState: 'stable',
-      recoveryCause: 'unknown',
-      renderCause: 'decodeBackpressure',
-      renderBackpressure: false,
-    })).toBe('deliveryLimited')
+  it('keeps receive throughput outside the source contract', () => {
+    const input = { targetFps: 60, inboundVideoFps: 15, fps: 30 }
+    expect(resolveExpectedContentFps(input)).toEqual({ expected: 60, contentFpsClass: 'contentUnknown' })
   })
 
-  it('classifies healthy input when network and delivery stay clear', () => {
-    expect(resolveFrontEndPolicyInputReason({
-      bandwidthState: 'stable',
-      recoveryCause: 'unknown',
-      renderCause: 'renderStable',
-      renderBackpressure: false,
-    })).toBe('healthy')
-  })
-})
-
-describe('shouldEndWarmupEarly', () => {
-  it('allows homeLan warmup early exit on strong healthy evidence', () => {
-    const classification = buildRuntimeProfileClassification({
-      targetType: 'home',
-      transportPath: 'Direct',
-      stats: baseStats(),
-      nowMs: 1000,
-      connectedAtMs: 0,
-      warmupUntilMs: 5000,
-      renderCause: 'renderStable',
-      contentFpsClass: 'content60',
-    })
-    const policy = resolveEffectiveFrontEndPolicy(classification)
-    expect(shouldEndWarmupEarly({
-      nowMs: 1000,
-      warmupUntilMs: 5000,
-      classification,
-      bandwidthState: 'stable',
-      recoveryCause: 'unknown',
-      renderCause: 'renderStable',
-      renderBackpressure: false,
-      stats: baseStats({
-        inboundVideoBitrateKbps: 20_000,
-        videoTwccLossRatio: 0,
-        videoTwccFeedbackIntervalMs: 40,
-        packetAgeMs: 30,
-        presentAgeMs: 30,
-      }),
-      policy,
-      baseVideoBitrateKbps: 24_000,
-    })).toBe(true)
-  })
-
-  it('keeps warmup when healthy evidence is still weak', () => {
-    const classification = buildRuntimeProfileClassification({
-      targetType: 'home',
-      transportPath: 'Direct',
-      stats: baseStats(),
-      nowMs: 1000,
-      connectedAtMs: 0,
-      warmupUntilMs: 5000,
-      renderCause: 'renderStable',
-      contentFpsClass: 'content60',
-    })
-    const policy = resolveEffectiveFrontEndPolicy(classification)
-    expect(shouldEndWarmupEarly({
-      nowMs: 1000,
-      warmupUntilMs: 5000,
-      classification,
-      bandwidthState: 'stable',
-      recoveryCause: 'unknown',
-      renderCause: 'renderStable',
-      renderBackpressure: false,
-      stats: baseStats({
-        inboundVideoBitrateKbps: 10_000,
-        videoTwccLossRatio: 0,
-        videoTwccFeedbackIntervalMs: 40,
-        packetAgeMs: 30,
-        presentAgeMs: 30,
-      }),
-      policy,
-      baseVideoBitrateKbps: 24_000,
-    })).toBe(false)
-  })
-})
-
-describe('explainFrontEndQualityUpshiftBlock', () => {
-  it('explains warmup', () => {
-    const r = explainFrontEndQualityUpshiftBlock({
-      nowMs: 1000,
-      warmupUntilMs: 5000,
-      bandwidthState: 'stable',
-      recoveryCause: undefined,
-      qualityLadderLevel: 'L1',
-    })
-    expect(r).toContain('warmupUntilMs')
-  })
-})
-
-describe('remoteProfileSuggestsHighRtt', () => {
-  it('detects high rtt hints', () => {
-    expect(remoteProfileSuggestsHighRtt(baseStats({
-      remoteProfileDynamic: 'cloudHighRtt',
-    }))).toBe(true)
+  it('bounds cadence history and ignores unavailable media time', () => {
+    const observation = createFpsObservationState()
+    for (const fps of [undefined, 0, Number.NaN, -1]) recordSourceFpsSample(observation, fps)
+    expect(estimatedCeilingFps(observation)).toBeUndefined()
+    for (let i = 0; i < 5; i++) recordSourceFpsSample(observation, 30)
+    expect(estimatedCeilingFps(observation)).toBeUndefined()
+    for (let i = 0; i < 100; i++) recordSourceFpsSample(observation, 28 + i % 3)
+    expect(observation.values).toHaveLength(observation.maxLen)
+    expect(estimatedCeilingFps(observation)).toBe(30)
   })
 })

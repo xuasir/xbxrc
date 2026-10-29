@@ -1,5 +1,6 @@
 import type { CreateOfferOptions, PlayerClient } from '../../player'
 import type { RuntimeLaunchSpec } from '../types'
+import type { BrowserTracePayload } from './browser-runtime-trace'
 import type { ConnectionRecoveryOperation } from './connection-recovery'
 import type { StreamRuntimePhase } from './runtime-contract'
 import type { createSerialOperationQueue } from './serial-operation'
@@ -13,6 +14,8 @@ interface NegotiationAttempt {
   operation?: ConnectionRecoveryOperation
   attempt: number
   client: PlayerClient
+  generation: number
+  signal: AbortSignal
 }
 
 interface NegotiatedOffer extends RTCSessionDescriptionInit {
@@ -84,38 +87,45 @@ export function createBrowserNegotiation(context: {
   getSignal: () => AbortSignal
   getOfferPolicy: () => { patchEnabled: boolean, downshiftLevel: number, baseVideoBitrateKbps: number }
   publishPhase: (phase: StreamRuntimePhase) => void
-  trace: (event: string, payload: Record<string, unknown>) => void
+  trace: (event: string, payload: BrowserTracePayload) => void
   updateIcePolicy: (mode: 'passthrough' | 'policy', digest: string) => void
   queue: ReturnType<typeof createSerialOperationQueue>
 }) {
   let connectAttempt = 0
-  function createNegotiationAttempt(operation?: ConnectionRecoveryOperation): NegotiationAttempt {
+  function createNegotiationAttempt(operation?: ConnectionRecoveryOperation, signal = context.getSignal()): NegotiationAttempt {
     return {
       attempt: ++connectAttempt,
       client: context.getClient(),
       operation,
+      generation: context.getGeneration(),
+      signal,
     }
   }
 
   function isNegotiationActive(negotiation: NegotiationAttempt): boolean {
-    return negotiation.attempt === connectAttempt && (negotiation.operation?.isCurrent() ?? true)
+    return negotiation.attempt === connectAttempt && negotiation.generation === context.getGeneration() && !negotiation.signal.aborted && !context.getSignal().aborted && (negotiation.operation?.isCurrent() ?? true)
   }
 
   function waitNegotiation<T>(negotiation: NegotiationAttempt, pending: Promise<T>, timeoutMs: number, reason: string): Promise<T> {
-    return negotiation.operation?.wait(pending, timeoutMs, reason) ?? withOperationTimeout(pending, timeoutMs, reason)
+    return withOperationTimeout(negotiation.operation?.wait(pending, timeoutMs, reason) ?? pending, timeoutMs, reason, negotiation.signal)
   }
 
   async function createChannelOffer(input: {
     negotiation: NegotiationAttempt
     restart?: boolean
+    reuseIce?: boolean
   }): Promise<NegotiatedOffer | null> {
-    const createOfferOptions: CreateOfferOptions | undefined = input.restart
-      ? { iceRestart: true }
-      : undefined
+    const createOfferOptions: CreateOfferOptions = { ...(input.reuseIce
+      ? { preserveIceCandidates: true }
+      : input.restart
+        ? { iceRestart: true }
+        : {}), signal: input.negotiation.signal }
 
     if (!isNegotiationActive(input.negotiation))
       throw new Error('streamRuntimeSuperseded')
     context.publishPhase('exchangingOffer')
+    const offerPolicy = context.getOfferPolicy()
+    const transportConfig = input.negotiation.client.getTransportConfig()
     const offer = await waitNegotiation(input.negotiation, input.negotiation.client.createOffer(createOfferOptions), 10_000, 'createOfferTimeout')
     if (!isNegotiationActive(input.negotiation)) {
       return null
@@ -123,14 +133,12 @@ export function createBrowserNegotiation(context: {
     if (typeof offer.sdp !== 'string') {
       throw new TypeError('invalidOffer')
     }
-    context.trace('offerPatchApplied', {
-      stage: input.restart ? 'restart' : 'initial',
-      sdpPatchEnabled: context.getOfferPolicy().patchEnabled,
-      sdpDownshiftLevel: context.getOfferPolicy().downshiftLevel,
-      maxVideoBitrateKbps: context.getOfferPolicy().baseVideoBitrateKbps > 0
-        ? Math.max(2_000, Math.round(context.getOfferPolicy().baseVideoBitrateKbps * ([1, 0.75, 0.55][context.getOfferPolicy().downshiftLevel] ?? 1)))
-        : null,
-    })
+    context.trace('offerPatchApplied', () => ({
+      stage: input.reuseIce ? 'quality' : input.restart ? 'restart' : 'initial',
+      sdpPatchEnabled: transportConfig.enableSdpPatch ?? offerPolicy.patchEnabled,
+      sdpDownshiftLevel: offerPolicy.downshiftLevel,
+      maxVideoBitrateKbps: transportConfig.maxVideoBitrateKbps,
+    }))
     return offer as NegotiatedOffer
   }
 
@@ -222,7 +230,7 @@ export function createBrowserNegotiation(context: {
         config: policyConfig,
       })
       context.updateIcePolicy(policyResult.trace.mode, policyResult.trace.digest)
-      context.trace('icePolicyEvaluated', {
+      context.trace('icePolicyEvaluated', () => ({
         mode: policyResult.trace.mode,
         source: policyConfig.source,
         inputCount: policyResult.trace.inputCount,
@@ -241,13 +249,13 @@ export function createBrowserNegotiation(context: {
         enableTeredoDerivation: policyConfig.enableTeredoDerivation,
         enableFamilyMismatchGate: policyConfig.enableFamilyMismatchGate,
         localAddressFamily: policyConfig.localAddressFamily,
-      })
+      }))
       await waitNegotiation(input.negotiation, input.negotiation.client.addIceCandidates(policyResult.candidates), 10_000, 'applyIceTimeout')
-      context.trace('icePolicyApplied', {
+      context.trace('icePolicyApplied', () => ({
         mode: policyResult.trace.mode,
         outputCount: policyResult.trace.outputCount,
         digest: policyResult.trace.digest,
-      })
+      }))
     }
 
     const finishIfIdle = (resolve: () => void): void => {
@@ -404,11 +412,12 @@ export function createBrowserNegotiation(context: {
     return context.queue.run(() => generation === context.getGeneration() && context.isCurrentSpec(spec) && (input.operation?.isCurrent() ?? true), () => connectMediaProtocolNow(spec, input))
   }
 
-  async function connectMediaProtocolNow(spec: RuntimeLaunchSpec, input: { restart: boolean, operation?: ConnectionRecoveryOperation }): Promise<void> {
+  async function connectMediaProtocolNow(spec: RuntimeLaunchSpec, input: { restart: boolean, operation?: ConnectionRecoveryOperation, reuseIce?: boolean }): Promise<void> {
     const negotiation = createNegotiationAttempt(input.operation)
     const offer = await createChannelOffer({
       negotiation,
       restart: input.restart,
+      reuseIce: input.reuseIce,
     })
     if (offer === null) {
       return
@@ -422,15 +431,17 @@ export function createBrowserNegotiation(context: {
     })
     if (!isNegotiationActive(negotiation))
       return
-    await exchangeIceCandidatesIncrementally({
-      spec,
-      negotiation,
-      restart: input.restart,
-    })
+    if (!input.reuseIce) {
+      await exchangeIceCandidatesIncrementally({
+        spec,
+        negotiation,
+        restart: input.restart,
+      })
+    }
   }
 
-  async function renegotiateChatProtocolNow(spec: RuntimeLaunchSpec, operation?: ConnectionRecoveryOperation): Promise<void> {
-    const negotiation = createNegotiationAttempt(operation)
+  async function renegotiateChatProtocolNow(spec: RuntimeLaunchSpec, operation?: ConnectionRecoveryOperation, signal?: AbortSignal): Promise<void> {
+    const negotiation = createNegotiationAttempt(operation, signal)
     const offer = await createChannelOffer({ negotiation })
     if (offer === null) {
       return
@@ -448,6 +459,8 @@ export function createBrowserNegotiation(context: {
     connectMediaProtocol,
     connectMediaProtocolNow,
     renegotiateChatProtocolNow,
-    invalidate: () => { connectAttempt += 1 },
+    invalidate: () => {
+      connectAttempt += 1
+    },
   }
 }

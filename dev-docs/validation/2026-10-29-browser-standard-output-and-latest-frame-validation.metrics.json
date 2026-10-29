@@ -1,0 +1,179 @@
+{
+  "date": "2026-10-29",
+  "revision": "bec3acfb",
+  "workspaceDirty": true,
+  "sourceFiles": 726,
+  "sourceFingerprint": "4f1e7668766be3f1e6329f0b732dfa0d07a0de78f2fd4a5cdff13626bca38800",
+  "baselineTrace": {
+    "file": "runtime-trace-1793255066737-1.jsonl",
+    "sourceFingerprint": "fac1d02f956893c249f1833739e7a009222075d7337d070a2b517be0366202f8",
+    "scope": "pre-fix Mac/cloud baseline",
+    "deviceRetest": "pending"
+  },
+  "standardOutputCases": [
+    {
+      "input": [
+        2560,
+        1440,
+        1280,
+        720,
+        1600,
+        900
+      ],
+      "plan": {
+        "configuredTier": "1440p",
+        "actualSourceTier": "720p",
+        "displayTier": "1080p",
+        "baseTier": "720p",
+        "outputTier": "1080p",
+        "outputWidth": 1920,
+        "outputHeight": 1080,
+        "sourceWidth": 1280,
+        "sourceHeight": 720,
+        "mode": "upscale",
+        "reason": "upscale-one-tier"
+      }
+    },
+    {
+      "input": [
+        2560,
+        1440,
+        1280,
+        720,
+        1707,
+        960
+      ],
+      "plan": {
+        "configuredTier": "1440p",
+        "actualSourceTier": "720p",
+        "displayTier": "1080p",
+        "baseTier": "720p",
+        "outputTier": "1080p",
+        "outputWidth": 1920,
+        "outputHeight": 1080,
+        "sourceWidth": 1280,
+        "sourceHeight": 720,
+        "mode": "upscale",
+        "reason": "upscale-one-tier"
+      }
+    },
+    {
+      "input": [
+        2560,
+        1440,
+        1920,
+        1080,
+        2000,
+        1125
+      ],
+      "plan": {
+        "configuredTier": "1440p",
+        "actualSourceTier": "1080p",
+        "displayTier": "1440p",
+        "baseTier": "1080p",
+        "outputTier": "1440p",
+        "outputWidth": 2560,
+        "outputHeight": 1440,
+        "sourceWidth": 1920,
+        "sourceHeight": 1080,
+        "mode": "upscale",
+        "reason": "upscale-one-tier"
+      }
+    },
+    {
+      "input": [
+        3840,
+        2160,
+        2560,
+        1440,
+        3200,
+        1800
+      ],
+      "plan": {
+        "configuredTier": "2160p",
+        "actualSourceTier": "1440p",
+        "displayTier": "2160p",
+        "baseTier": "1440p",
+        "outputTier": "2160p",
+        "outputWidth": 3840,
+        "outputHeight": 2160,
+        "sourceWidth": 2560,
+        "sourceHeight": 1440,
+        "mode": "upscale",
+        "reason": "upscale-one-tier"
+      }
+    },
+    {
+      "input": [
+        1920,
+        1080,
+        2560,
+        1440,
+        1600,
+        900
+      ],
+      "plan": {
+        "configuredTier": "1080p",
+        "actualSourceTier": "1440p",
+        "displayTier": "1080p",
+        "baseTier": "1080p",
+        "outputTier": "1440p",
+        "outputWidth": 2560,
+        "outputHeight": 1440,
+        "sourceWidth": 2560,
+        "sourceHeight": 1440,
+        "mode": "passthrough",
+        "reason": "source-preserved-for-display"
+      }
+    }
+  ],
+  "automatedValidation": {
+    "vitest": {
+      "files": 44,
+      "tests": 326,
+      "status": "PASS"
+    },
+    "pythonFixtures": {
+      "tests": 18,
+      "status": "PASS"
+    },
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "productionBuild": {
+      "modules": 266,
+      "status": "PASS"
+    }
+  },
+  "schedulingEvidence": {
+    "kind": "controlled clock and real renderer implementation with GPU mock",
+    "rvfcFps": 15,
+    "sourceFps": [
+      30,
+      60
+    ],
+    "refreshHz": [
+      60,
+      144
+    ],
+    "mediaTime": 0,
+    "durationMs": 10000,
+    "allowedBoundaryDifferenceFrames": 2,
+    "duplicateRealtimeDraws": 0,
+    "receiveFpsIntent": "preserved"
+  },
+  "measurements": {
+    "baseline": {
+      "files": 52,
+      "lines": 15674,
+      "statements": 7039,
+      "branches": 1137
+    },
+    "current": {
+      "files": 62,
+      "lines": 15222,
+      "statements": 6898,
+      "branches": 1297
+    },
+    "runtimeDirectMutableBindings": 74
+  }
+}

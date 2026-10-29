@@ -302,6 +302,7 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'Console streaming max resolution',
     control: 'singleSelect',
     options: [
+      { value: 1440, label: '1440p' },
       { value: 1081, label: 'Auto (1080p HQ)' },
       { value: 1080, label: '1080p' },
       { value: 720, label: '720p' },

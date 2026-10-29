@@ -1,19 +1,29 @@
 /** 调用方负责资源取消；此处统一约束等待，并吸收底层 Promise 的晚到结果。 */
 import { monotonicNowMs } from '../clock'
 
-export function withOperationTimeout<T>(operation: Promise<T>, timeoutMs: number, reason: string): Promise<T> {
+export function withOperationTimeout<T>(operation: Promise<T>, timeoutMs: number, reason: string, signal?: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(reason)), timeoutMs)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let settled = false
+    const finish = (action: () => void) => {
+      if (settled)
+        return
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+      action()
+    }
+    function abort(): void {
+      finish(() => reject(new Error('streamRuntimeSuperseded')))
+    }
     void operation.then(
-      (result) => {
-        clearTimeout(timer)
-        resolve(result)
-      },
-      (error) => {
-        clearTimeout(timer)
-        reject(error)
-      },
+      result => finish(() => resolve(result)),
+      error => finish(() => reject(error)),
     )
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted)
+      abort()
+    else timer = setTimeout(() => finish(() => reject(new Error(reason))), timeoutMs)
   })
 }
 

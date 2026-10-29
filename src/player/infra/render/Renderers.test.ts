@@ -40,7 +40,7 @@ describe('renderers', () => {
     const matrixNode = { setAttribute: vi.fn() }
     const filterNode = { setAttribute: vi.fn(), appendChild: vi.fn() }
     const defsNode = { appendChild: vi.fn() }
-    const svgNode = { id: '', style: { display: '' }, appendChild: vi.fn() }
+    const svgNode = { id: '', style: { display: '' }, appendChild: vi.fn(), remove: vi.fn() }
     const appended: unknown[] = []
     globalThis.document = {
       createElement: (tag: string) => {
@@ -84,10 +84,16 @@ describe('renderers', () => {
     expect(styleNode.textContent).toContain('saturate(120%)')
     renderer.destroy()
     expect(styleNode.remove).toHaveBeenCalled()
+    expect(svgNode.remove).toHaveBeenCalled()
   })
 
   it('initializes webgl2 pipeline and supports update/destroy lifecycle', async () => {
     const gl = {
+      getError: vi.fn(() => 0),
+      NO_ERROR: 0,
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       drawingBufferWidth: 1920,
       drawingBufferHeight: 1080,
       viewport: vi.fn(),
@@ -198,6 +204,11 @@ describe('renderers', () => {
 
   it('uses present target backing size while keeping source upload size', async () => {
     const gl = {
+      getError: vi.fn(() => 0),
+      NO_ERROR: 0,
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       drawingBufferWidth: 2880,
       drawingBufferHeight: 1620,
       viewport: vi.fn(),
@@ -317,6 +328,11 @@ describe('renderers', () => {
 
   it('sharpens at source resolution before upscaling when present target differs', async () => {
     const gl = {
+      getError: vi.fn(() => 0),
+      NO_ERROR: 0,
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       drawingBufferWidth: 2880,
       drawingBufferHeight: 1620,
       viewport: vi.fn(),
@@ -433,6 +449,11 @@ describe('renderers', () => {
 
   it('does not re-viewport webgl2 when present target geometry is unchanged', async () => {
     const gl = {
+      getError: vi.fn(() => 0),
+      NO_ERROR: 0,
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       drawingBufferWidth: 2880,
       drawingBufferHeight: 1620,
       viewport: vi.fn(),
@@ -534,6 +555,11 @@ describe('renderers', () => {
 
   it('throws when webgl2 shader compilation fails', async () => {
     const gl = {
+      getError: vi.fn(() => 0),
+      NO_ERROR: 0,
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       drawingBufferWidth: 1280,
       drawingBufferHeight: 720,
       viewport: vi.fn(),
@@ -624,6 +650,11 @@ describe('renderers', () => {
 
   it('maps shader preset and sharpen strength to shader params', async () => {
     const gl = {
+      getError: vi.fn(() => 0),
+      NO_ERROR: 0,
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       drawingBufferWidth: 1920,
       drawingBufferHeight: 1080,
       viewport: vi.fn(),
@@ -717,8 +748,11 @@ describe('renderers', () => {
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.anything(), 0.8)
   })
 
-  it('throws when sr intermediate framebuffer is incomplete', async () => {
+  it('uses a single pass with zero intermediate allocation', async () => {
     const gl = {
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       viewport: vi.fn(),
       createShader: vi.fn(() => ({})),
       shaderSource: vi.fn(),
@@ -819,11 +853,16 @@ describe('renderers', () => {
       superResolutionOutputWidth: 2560,
       superResolutionOutputHeight: 1440,
     }))
-    await expect(renderer.attach(video)).rejects.toThrow(/srFramebufferIncomplete/)
+    await renderer.attach(video)
+    expect(gl.createFramebuffer).not.toHaveBeenCalled()
+    renderer.destroy()
   })
 
   it('does not re-viewport sr renderer when output size is unchanged', async () => {
     const gl = {
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       viewport: vi.fn(),
       createShader: vi.fn(() => ({})),
       shaderSource: vi.fn(),
@@ -937,6 +976,9 @@ describe('renderers', () => {
 
   it('does not draw SR frames when targetFps is zero even if a video frame marker fired', async () => {
     const gl = {
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       viewport: vi.fn(),
       createShader: vi.fn(() => ({})),
       shaderSource: vi.fn(),
@@ -1064,155 +1106,12 @@ describe('renderers', () => {
     expect(gl.drawArrays.mock.calls.length).toBe(drawCallsBefore)
   })
 
-  it('throttles 60fps SR draws on high-refresh rAF without duplicate FSR per tick', async () => {
+  // 用户请求 1080p、实际源 1440p 时，实际 backing 保留源尺寸并执行等尺寸 RCAS。
+  it('preserves an oversized source at native dimensions and applies RCAS once', async () => {
     const gl = {
-      viewport: vi.fn(),
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      getShaderParameter: vi.fn(() => true),
-      getShaderInfoLog: vi.fn(() => ''),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      deleteShader: vi.fn(),
-      deleteProgram: vi.fn(),
-      getProgramParameter: vi.fn(() => true),
-      getProgramInfoLog: vi.fn(() => ''),
-      useProgram: vi.fn(),
-      createBuffer: vi.fn(() => ({})),
-      bindBuffer: vi.fn(),
-      deleteBuffer: vi.fn(),
-      bufferData: vi.fn(),
-      enableVertexAttribArray: vi.fn(),
-      vertexAttribPointer: vi.fn(),
-      createTexture: vi.fn(() => ({})),
-      deleteTexture: vi.fn(),
-      bindTexture: vi.fn(),
-      pixelStorei: vi.fn(),
-      texParameteri: vi.fn(),
-      texImage2D: vi.fn(),
-      texSubImage2D: vi.fn(),
-      createFramebuffer: vi.fn(() => ({})),
-      deleteFramebuffer: vi.fn(),
-      bindFramebuffer: vi.fn(),
-      framebufferTexture2D: vi.fn(),
-      checkFramebufferStatus: vi.fn(() => 18),
-      getUniformLocation: vi.fn(() => ({})),
-      drawArrays: vi.fn(),
-      getError: vi.fn(() => 0),
-      activeTexture: vi.fn(),
-      uniform1i: vi.fn(),
-      uniform1f: vi.fn(),
-      uniform2f: vi.fn(),
-      uniform4fv: vi.fn(),
-      VERTEX_SHADER: 1,
-      FRAGMENT_SHADER: 2,
-      ARRAY_BUFFER: 3,
-      STATIC_DRAW: 4,
-      FLOAT: 5,
-      TEXTURE_2D: 6,
-      UNPACK_FLIP_Y_WEBGL: 7,
-      TEXTURE_WRAP_S: 8,
-      TEXTURE_WRAP_T: 9,
-      CLAMP_TO_EDGE: 10,
-      TEXTURE_MIN_FILTER: 11,
-      TEXTURE_MAG_FILTER: 12,
-      LINEAR: 13,
-      RGBA: 14,
-      RGB: 6407,
-      UNSIGNED_BYTE: 15,
-      FRAMEBUFFER: 16,
-      COLOR_ATTACHMENT0: 17,
-      FRAMEBUFFER_COMPLETE: 18,
-      COMPILE_STATUS: 19,
-      LINK_STATUS: 20,
-      TRIANGLES: 21,
-      NO_ERROR: 0,
-      TEXTURE0: 22,
-    }
-    const canvasNode = {
-      width: 1920,
-      height: 1080,
-      style: { position: '', inset: '', width: '', height: '', pointerEvents: '', opacity: '', objectFit: '', margin: '' },
-      isConnected: true,
-      remove: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      getContext: vi.fn(() => gl),
-    }
-    globalThis.document = {
-      createElement: (tag: string) => {
-        if (tag === 'canvas') {
-          return canvasNode
-        }
-        return { style: {} }
-      },
-    } as unknown as Document
-
-    class LocalVideoElement {
-      dataset: Record<string, string> = {}
-      videoWidth = 1920
-      videoHeight = 1080
-      insertAdjacentElement = vi.fn()
-      requestVideoFrameCallback(_callback: () => void): number {
-        return 1
-      }
-
-      cancelVideoFrameCallback(_id: number): void {}
-    }
-    globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
-    const rafCallbacks = new Map<number, FrameRequestCallback>()
-    let nextRafId = 1
-    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-      const id = nextRafId++
-      rafCallbacks.set(id, callback)
-      return id
-    })
-    globalThis.cancelAnimationFrame = vi.fn((id: number) => {
-      rafCallbacks.delete(id)
-    })
-    const video = new LocalVideoElement() as unknown as HTMLVideoElement
-
-    const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
-      superResolutionEnabled: true,
-      superResolutionOutputWidth: 1920,
-      superResolutionOutputHeight: 1080,
-      targetFps: 60,
-    }))
-    await renderer.attach(video)
-    gl.drawArrays.mockClear()
-
-    let mockedNow = 0
-    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => mockedNow)
-
-    const driveRaf = (now: number): void => {
-      mockedNow = now
-      const next = [...rafCallbacks.entries()].sort((a, b) => a[0] - b[0])[0]
-      if (next === undefined) {
-        return
-      }
-      const [id, callback] = next
-      rafCallbacks.delete(id)
-      callback(now)
-    }
-
-    try {
-      for (const now of [0, 8, 16, 24, 32, 40, 48, 56]) {
-        driveRaf(now)
-      }
-    }
-    finally {
-      nowSpy.mockRestore()
-    }
-
-    expect(gl.drawArrays.mock.calls.length).toBeLessThanOrEqual(5)
-  })
-
-  // 回归：1440p 源 → 1080p 输出档位属于「不放大」场景，旧实现直接走双线性呈现，
-  // 整个 RCAS 被跳过，观感比 CAS 更糊。现在必须先降采样到中间目标再跑 RCAS。
-  it('downsamples an oversized source through RCAS instead of a plain bilinear present', async () => {
-    const gl = {
+      getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
+      MAX_TEXTURE_SIZE: 0x0D33,
+      MAX_VIEWPORT_DIMS: 0x0D3A,
       viewport: vi.fn(),
       createShader: vi.fn(() => ({})),
       shaderSource: vi.fn(),
@@ -1344,13 +1243,15 @@ describe('renderers', () => {
       callback(0)
     }
 
-    // 两次 drawArrays：① 降采样到中间目标 ② RCAS 输出到画布。
-    expect(gl.drawArrays).toHaveBeenCalledTimes(2)
-    // 降采样那一趟必须是色彩恒等（100/100/100），避免和 RCAS 叠加两次色彩变换。
+    // 等尺寸 RCAS 直接提交至源尺寸画布。
+    expect(canvasNode.width).toBe(2560)
+    expect(canvasNode.height).toBe(1440)
+    expect(gl.drawArrays).toHaveBeenCalledTimes(1)
+    // 源尺寸保真呈现必须是色彩恒等（100/100/100），避免和 RCAS 叠加两次色彩变换。
     // 配置里 brightness/contrast/saturation = 105/110/95，只有 RCAS 那趟才会用它们。
     const colorValues = gl.uniform1f.mock.calls
       .map(call => call[1])
       .filter(value => value === 100 || value === 105 || value === 110 || value === 95)
-    expect(colorValues).toEqual([100, 100, 100, 105, 110, 95])
+    expect(colorValues.filter(value => value !== 100)).toEqual([105, 110, 95, 105, 110, 95])
   })
 })

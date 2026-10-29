@@ -57,6 +57,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   let directExhaustionProbeTimer: BrowserTimeout | null = null
   const audioVolume = ref(1)
   const microphoneState = ref<StreamMicrophoneSnapshot>(createIdleMicrophoneState('browser'))
+  let microphoneIntentVersion = 0
   const experienceMetricsEnabled = ref(false)
   const browserDiagnosticsEnabled = ref(false)
   const rustDiagnosticsEnabled = ref(false)
@@ -456,13 +457,14 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     nextRuntime.setAudioVolume(audioVolume.value)
     if (input.runtime.microphoneStartWithSession) {
       applyMicrophoneIntent(true, 'policy')
+      const intentVersion = microphoneIntentVersion
       // 自动开麦失败不应阻断串流启动，保持会话主链优先可用。
       void nextRuntime.setMicrophoneEnabled(true).then((enabled) => {
-        if (isRuntimeTokenActive(token)) {
+        if (isRuntimeTokenActive(token) && intentVersion === microphoneIntentVersion) {
           applyMicrophoneResult(enabled)
         }
       }, () => {
-        if (isRuntimeTokenActive(token)) {
+        if (isRuntimeTokenActive(token) && intentVersion === microphoneIntentVersion) {
           applyMicrophoneResult(false)
         }
       })
@@ -650,15 +652,16 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       const previousState = { ...microphoneState.value }
       const enabled = !microphoneState.value.desiredEnabled
       applyMicrophoneIntent(enabled, 'user')
+      const intentVersion = microphoneIntentVersion
       try {
         const result = await currentRuntime.setMicrophoneEnabled(enabled)
-        if (!isRuntimeTokenActive(token) || runtime.value !== currentRuntime)
+        if (!isRuntimeTokenActive(token) || runtime.value !== currentRuntime || intentVersion !== microphoneIntentVersion)
           return false
         applyMicrophoneResult(result)
         return result
       }
       catch (error) {
-        if (!isRuntimeTokenActive(token) || runtime.value !== currentRuntime)
+        if (!isRuntimeTokenActive(token) || runtime.value !== currentRuntime || intentVersion !== microphoneIntentVersion)
           return false
         microphoneState.value = previousState
         throw error
@@ -680,6 +683,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     enabled: boolean,
     source: StreamMicrophoneActivationSource,
   ): void {
+    microphoneIntentVersion++
     microphoneState.value = {
       ...microphoneState.value,
       desiredEnabled: enabled,

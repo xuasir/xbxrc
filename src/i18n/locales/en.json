@@ -181,6 +181,29 @@
       "browser": {
         "title": "Browser diagnostics",
         "fields": {
+          "receivedFps": "Received frames/s",
+          "decodedFps": "Decoded frames/s",
+          "videoAdvancementFps": "Video advancement/s",
+          "callbackDeliveryFps": "Callback delivery/s",
+          "rendererSubmitFps": "Renderer submissions/s",
+          "frameWindow": "Window / samples",
+          "observation": "Observation / sample",
+          "sourceSize": "Actual source size",
+          "outputSize": "Actual output size",
+          "submitAge": "Submission age",
+          "submitCost": "CPU submission mean",
+          "gpuCost": "GPU time",
+          "scanout": "Actual scanout",
+          "renderCause": "Display cause",
+          "renderEffect": "Display action effect",
+          "frameCauses": "Overwrite / pace / failure / capture draws",
+          "rttBaseline": "Path RTT baseline",
+          "rttDelta": "RTT growth",
+          "qualityRequested": "Requested bitrate cap",
+          "qualityNegotiated": "Remote confirmed cap",
+          "qualityObserved": "Observed video bitrate",
+          "qualityEffect": "Network action effect",
+          "recoveryEffect": "Playback recovery effect",
           "transportState": "Transport",
           "presentationMilestone": "Presentation",
           "renderPipelineType": "Render pipeline",
@@ -390,6 +413,7 @@
       },
       "values": {
         "unknown": "--",
+        "unavailable": "Unavailable",
         "none": "None",
         "stable": "Stable",
         "probing": "Local probe/self-healing",
@@ -1033,6 +1057,7 @@
       "xhome_resolution": {
         "label": "Console streaming max resolution",
         "options": {
+          "1440": { "label": "1440p" },
           "1081": { "label": "Auto · 1080p HQ" },
           "1080": {
             "label": "1080p"

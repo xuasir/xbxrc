@@ -51,6 +51,25 @@ afterEach(() => {
 })
 
 describe('runtime host lifecycle', () => {
+  it('retains the latest microphone intent when an older toggle fails late', async () => {
+    const older = deferred<boolean>()
+    const latest = deferred<boolean>()
+    const runtime = { ...port(), setMicrophoneEnabled: vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(latest.promise) }
+    harness.factory.mockReturnValue(runtime)
+    const vm = host()
+    const started = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(1_000)
+    await started
+    const enabling = vm.toggleMicrophone()
+    const disabling = vm.toggleMicrophone()
+    expect(vm.microphoneState.value.desiredEnabled).toBe(false)
+    older.resolve(true)
+    expect(await enabling).toBe(false)
+    expect(vm.microphoneState.value.desiredEnabled).toBe(false)
+    latest.resolve(false)
+    expect(await disabling).toBe(false)
+    await vm.closeRuntime()
+  })
   it('submits native transport failure to the engine admission without a second host RPC', async () => {
     const runtime = port()
     harness.factory.mockReturnValue(runtime)

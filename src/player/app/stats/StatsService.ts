@@ -1,5 +1,5 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { StreamStats } from '../../domain/media'
+import type { PresentedVideoFrameMetadata, StreamStats } from '../../domain/media'
 import type {
   BrowserWebRtcCandidatePairSample,
   BrowserWebRtcCodecSample,
@@ -8,11 +8,11 @@ import type {
   BrowserWebRtcStatsSample,
   BrowserWebRtcTimelineEvent,
   BrowserWebRtcTransportSample,
-  DecodeStats,
   FpsStats,
   InputPacketStats,
-  NetworkStats,
 } from '../../domain/stats'
+import type { RendererObservationSnapshot } from '../../infra/render/render-observation'
+import { BrowserStatsProjection } from './browser-stats'
 
 interface InboundVideoRtpStat extends RTCStats {
   type: 'inbound-rtp'
@@ -127,12 +127,6 @@ interface TransportStat extends RTCStats {
   packetsReceived?: number
 }
 
-type TransportAddressFamily = 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
-
-type ResolutionGlobal = typeof globalThis & {
-  resolution?: string
-}
-
 function isInboundVideoRtpStat(stat: RTCStats): stat is InboundVideoRtpStat {
   if (stat.type !== 'inbound-rtp') {
     return false
@@ -157,260 +151,296 @@ function isTransportStat(stat: RTCStats): stat is TransportStat {
   return stat.type === 'transport'
 }
 
+// 全客户端唯一的观测代际，使完整 client 重建后的 peer 也能独立取证。
+let browserPeerGeneration = 0
+
+/** 当前 peer 的单一采集时钟；快照读取只投影已提交样本。 */
 export class StatsService {
-  private lastStat: InboundVideoRtpStat | null = null
-  private pollInterval?: number
-  private browserWebRtcPollInterval?: number
-  private browserWebRtcPollInFlight = false
-  private lastBrowserWebRtcSample: BrowserWebRtcStatsSample | null = null
-  private browserWebRtcConnectedAtMs: number | undefined
-  private firstInboundPacketEmitted = false
-  private firstDecodedEmitted = false
-  private firstKeyframeDecodedEmitted = false
-  private videoFpsCounter = 0
-  private inputFpsCounter = 0
-  private metadataFpsCounter = 0
-  private unsubscribeFns: Array<() => void> = []
+  private pollInterval?: ReturnType<typeof setInterval>
+  private peer?: RTCPeerConnection
+  private generation = 0
+  private sampleSequence = 0
+  private disposed = false
+  private flight?: { peer: RTCPeerConnection, promise: Promise<StreamStats> }
+  private lastSample: BrowserWebRtcStatsSample | null = null
+  private latest = emptyStats()
+  private projection = new BrowserStatsProjection()
+  private connectedAtMs?: number
+  private milestones = new Set<BrowserWebRtcTimelineEvent['kind']>()
+  private fpsCounts: FpsStats = { video: 0, input: 0, metadata: 0 }
+  private fpsStartedAt = 0
+  private readonly unsubscribeFns: Array<() => void>
+  private presentation = { videoGeneration: undefined as number | undefined, localSequence: undefined as number | undefined, frames: 0, callbacks: 0, sampledFrames: 0, sampledCallbacks: 0, sampledAtMs: undefined as number | undefined, lastFrameAtMs: undefined as number | undefined }
+  private lastRendererObservation?: RendererObservationSnapshot
+  private videoDimensions?: { width: number, height: number }
 
   constructor(
     private readonly getPeer: () => RTCPeerConnection | undefined,
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
+    private readonly getRendererObservation?: () => RendererObservationSnapshot | undefined,
   ) {
-    this.unsubscribeFns.push(
-      this.emitter.on('stats.videoFrameProcessed', () => {
-        this.videoFpsCounter++
+    this.unsubscribeFns = [
+      emitter.on('media.videoFramePresented', frame => this.observePresentation(frame)),
+      emitter.on('media.videoReady', (dimensions) => {
+        this.videoDimensions = dimensions
       }),
-      this.emitter.on('stats.inputPacket', (payload: InputPacketStats) => {
-        if (
-          payload.gamepadFrames > 0
-          || payload.pointerFrames > 0
-          || payload.mouseFrames > 0
-          || payload.keyboardFrames > 0
-        ) {
-          this.inputFpsCounter++
-        }
-        if (payload.metadataFrames > 0) {
-          this.metadataFpsCounter++
-        }
+      emitter.on('stats.videoFrameProcessed', () => {
+        this.fpsCounts.video++
       }),
-    )
+      emitter.on('stats.inputPacket', (p: InputPacketStats) => {
+        if (p.gamepadFrames + p.pointerFrames + p.mouseFrames + p.keyboardFrames > 0)
+          this.fpsCounts.input++
+        if (p.metadataFrames > 0)
+          this.fpsCounts.metadata++
+      }),
+    ]
   }
 
   start(): void {
-    if (this.pollInterval) {
+    if (this.disposed || this.pollInterval !== undefined)
       return
-    }
-    this.pollInterval = window.setInterval(async () => {
-      const fpsStats: FpsStats = {
-        video: this.videoFpsCounter,
-        input: this.inputFpsCounter,
-        metadata: this.metadataFpsCounter,
+    this.fpsStartedAt = performance.now()
+    void this.sampleNow()
+    this.pollInterval = setInterval(() => {
+      void this.sampleNow()
+      const elapsed = performance.now() - this.fpsStartedAt
+      if (elapsed >= 1000) {
+        const fps = Object.fromEntries(Object.entries(this.fpsCounts).map(([k, v]) => [k, v * 1000 / elapsed])) as unknown as FpsStats
+        this.emitter.emit('stats.fps', fps)
+        this.fpsCounts = { video: 0, input: 0, metadata: 0 }
+        this.fpsStartedAt = performance.now()
+        const generation = this.generation
+        void this.snapshot().then((stats) => {
+          if (!this.disposed && generation === this.generation && this.pollInterval !== undefined)
+            this.emitter.emit('stats.updated', stats)
+        })
       }
-      this.emitter.emit('stats.fps', fpsStats)
-      this.videoFpsCounter = 0
-      this.inputFpsCounter = 0
-      this.metadataFpsCounter = 0
-      try {
-        await this.snapshot()
-      }
-      catch (error) {
-        this.emitter.emit('error', { error })
-      }
-    }, 1000)
-    this.browserWebRtcPollInterval = window.setInterval(() => {
-      void this.pollBrowserWebRtcStats()
     }, 250)
   }
 
   stop(): void {
-    if (this.pollInterval) {
-      window.clearInterval(this.pollInterval)
-      this.pollInterval = undefined
+    clearInterval(this.pollInterval)
+    this.pollInterval = undefined
+    this.resetObservation()
+    this.fpsCounts = { video: 0, input: 0, metadata: 0 }
+  }
+
+  dispose(): void {
+    this.stop()
+    this.disposed = true
+    this.unsubscribeFns.splice(0).forEach(unsubscribe => unsubscribe())
+  }
+
+  private resetObservation(): void {
+    this.generation = ++browserPeerGeneration
+    this.lastSample = null
+    this.latest = emptyStats()
+    this.projection = new BrowserStatsProjection()
+    this.connectedAtMs = undefined
+    this.milestones.clear()
+    this.presentation = { videoGeneration: undefined, localSequence: undefined, frames: 0, callbacks: 0, sampledFrames: 0, sampledCallbacks: 0, sampledAtMs: undefined, lastFrameAtMs: undefined }
+    this.lastRendererObservation = undefined
+    this.videoDimensions = undefined
+  }
+
+  private observePresentation(frame: PresentedVideoFrameMetadata): void {
+    if (this.disposed)
+      return
+    const p = this.presentation
+    if (p.videoGeneration !== undefined && frame.videoGeneration !== undefined && frame.videoGeneration < p.videoGeneration)
+      return
+    if (p.videoGeneration !== frame.videoGeneration) {
+      p.frames = p.sampledFrames = 0
+      p.callbacks = p.sampledCallbacks = 0
+      p.sampledAtMs = undefined
+      p.lastFrameAtMs = undefined
+      p.videoGeneration = frame.videoGeneration
+      p.localSequence = undefined
     }
-    if (this.browserWebRtcPollInterval) {
-      window.clearInterval(this.browserWebRtcPollInterval)
-      this.browserWebRtcPollInterval = undefined
+    if (frame.localSequence !== undefined && p.localSequence !== undefined && frame.localSequence <= p.localSequence)
+      return
+    p.localSequence = frame.localSequence
+    if (frame.newFrame === false)
+      return
+    p.callbacks++
+    p.frames += frame.presentedFramesDelta !== undefined ? Math.max(0, frame.presentedFramesDelta) : 1
+    p.lastFrameAtMs = frame.observedAtMs ?? performance.now()
+  }
+
+  private currentPeer(): RTCPeerConnection | undefined {
+    const peer = this.disposed ? undefined : this.getPeer()
+    if (peer !== this.peer) {
+      this.resetObservation()
+      this.peer = peer
     }
-    this.lastBrowserWebRtcSample = null
-    this.browserWebRtcConnectedAtMs = undefined
-    this.firstInboundPacketEmitted = false
-    this.firstDecodedEmitted = false
-    this.firstKeyframeDecodedEmitted = false
+    return peer
   }
 
   async snapshot(): Promise<StreamStats> {
-    const peer = this.getPeer()
-    const performanceState: StreamStats = {
-      resolution: (globalThis as ResolutionGlobal).resolution ?? '',
-      rtt: '-1 (-1%)',
-      fps: 0,
-      pl: '-1 (-1%)',
-      fl: '-1 (-1%)',
-      jit: '-1',
-      br: '',
-      decode: '',
-      transportPath: '',
-      transportState: 'new',
+    this.currentPeer()
+    const age = this.lastSample ? Math.max(0, performance.now() - this.lastSample.sampledAtMs) : undefined
+    const videoPresentAgeMs = this.presentation.lastFrameAtMs === undefined ? undefined : Math.max(0, performance.now() - this.presentation.lastFrameAtMs)
+    const rendererSubmitAgeMs = this.latest.rendererKind === 'video' ? videoPresentAgeMs : this.latest.rendererSubmitAgeMs === undefined ? undefined : this.latest.rendererSubmitAgeMs + (age ?? 0)
+    const width = this.latest.renderSourceWidth ?? this.videoDimensions?.width
+    const height = this.latest.renderSourceHeight ?? this.videoDimensions?.height
+    return {
+      ...this.latest,
+      ...(width && height ? { resolution: `${width}x${height}` } : {}),
+      videoPresentAgeMs,
+      rendererSubmitAgeMs,
+      presentAgeMs: this.latest.rendererKind && this.latest.rendererKind !== 'video' ? rendererSubmitAgeMs : videoPresentAgeMs,
+      statsSampleAgeMs: age,
+      statsObservationState: this.latest.statsObservationState === 'unavailable' || age === undefined ? 'unavailable' : age > 1000 || this.latest.statsObservationState === 'stale' ? 'stale' : 'fresh',
     }
-    if (!peer) {
-      return performanceState
-    }
-    const stats = await peer.getStats()
-    const networkStats: NetworkStats = {
-      roundTripTime: performanceState.rtt,
-      packetLoss: performanceState.pl,
-      frameLoss: performanceState.fl,
-      jitter: performanceState.jit,
-      bitrate: performanceState.br,
-    }
-    const decodeStats: DecodeStats = {
-      fps: performanceState.fps,
-      decode: performanceState.decode,
-      resolution: performanceState.resolution,
-    }
-    stats.forEach((stat) => {
-      if (isInboundVideoRtpStat(stat)) {
-        performanceState.fps = stat.framesPerSecond || 0
-        const framesDropped = stat.framesDropped
-        if (framesDropped !== undefined) {
-          const framesReceived = stat.framesReceived ?? 0
-          const framesDroppedPercentage = (
-            (framesDropped * 100)
-            / (framesDropped + framesReceived || 1)
-          ).toFixed(2)
-          performanceState.fl = `${framesDropped} (${framesDroppedPercentage}%)`
-        }
-        const packetsLost = stat.packetsLost
-        if (packetsLost !== undefined) {
-          const packetsReceived = stat.packetsReceived ?? 0
-          const packetsLostPercentage = (
-            (packetsLost * 100)
-            / (packetsLost + packetsReceived || 1)
-          ).toFixed(2)
-          performanceState.pl = `${packetsLost} (${packetsLostPercentage}%)`
-        }
-        if (this.lastStat) {
-          const timeDiff = stat.timestamp - this.lastStat.timestamp
-          if (timeDiff !== 0) {
-            const bitrate
-              = (8 * ((stat.bytesReceived ?? 0) - (this.lastStat.bytesReceived ?? 0))) / timeDiff / 1000
-            performanceState.br = `${bitrate.toFixed(2)} Mbps`
-            networkStats.bitrate = performanceState.br
-          }
-          const bufferDelayDiff = (stat.jitterBufferDelay ?? 0) - (this.lastStat.jitterBufferDelay ?? 0)
-          const emittedCountDiff
-            = (stat.jitterBufferEmittedCount ?? 0) - (this.lastStat.jitterBufferEmittedCount ?? 0)
-          if (emittedCountDiff > 0) {
-            performanceState.jit = `${Math.round((bufferDelayDiff / emittedCountDiff) * 1000)}ms`
-            networkStats.jitter = performanceState.jit
-          }
-          const totalDecodeTimeDiff = (stat.totalDecodeTime ?? 0) - (this.lastStat.totalDecodeTime ?? 0)
-          const framesDecodedDiff = (stat.framesDecoded ?? 0) - (this.lastStat.framesDecoded ?? 0)
-          if (framesDecodedDiff !== 0) {
-            const decodeTime = (totalDecodeTimeDiff / framesDecodedDiff) * 1000
-            performanceState.decode = `${decodeTime.toFixed(2)}ms`
-            decodeStats.decode = performanceState.decode
-          }
-        }
-        this.lastStat = stat
-        decodeStats.fps = performanceState.fps
-        decodeStats.resolution = performanceState.resolution
-      }
-      else if (isSucceededCandidatePairStat(stat)) {
-        const roundTripTime
-          = typeof stat.currentRoundTripTime !== 'undefined'
-            ? stat.currentRoundTripTime * 1000
-            : '???'
-        performanceState.rtt = `${roundTripTime}ms`
-        networkStats.roundTripTime = performanceState.rtt
-      }
-    })
-    const transportDetails = resolveTransportDetails(stats)
-    const browserWebRtcSample = buildBrowserWebRtcStatsSample(stats, peer.connectionState)
-    performanceState.transportPath = transportDetails.transportPath ?? ''
-    performanceState.transportCandidatePair = transportDetails.transportCandidatePair
-    performanceState.transportProtocol = transportDetails.transportProtocol
-    performanceState.transportAddressFamily = transportDetails.transportAddressFamily
-    performanceState.transportState = peer.connectionState
-    networkStats.packetLoss = performanceState.pl
-    networkStats.frameLoss = performanceState.fl
-    void networkStats
-    void decodeStats
-    this.emitter.emit('stats.updated', performanceState)
-    this.emitBrowserWebRtcStats(browserWebRtcSample)
-    return performanceState
   }
 
-  private async pollBrowserWebRtcStats(): Promise<void> {
-    if (this.browserWebRtcPollInFlight) {
-      return
-    }
-    const peer = this.getPeer()
-    if (!peer) {
-      return
-    }
-    this.browserWebRtcPollInFlight = true
+  /** 显式刷新与周期采集共享在途屏障；旧 peer 可以独立完成自己的调用。 */
+  sampleNow(): Promise<StreamStats> {
+    const peer = this.currentPeer()
+    if (!peer)
+      return this.snapshot()
+    if (this.flight?.peer === peer)
+      return this.flight.promise
+    const generation = this.generation
+    const startedAtMs = performance.now()
+    const current = () => !this.disposed && generation === this.generation && peer === this.getPeer()
+    let raw: Promise<RTCStatsReport>
     try {
-      const stats = await peer.getStats()
-      this.emitBrowserWebRtcStats(buildBrowserWebRtcStatsSample(stats, peer.connectionState))
+      raw = peer.getStats()
     }
     catch (error) {
-      this.emitter.emit('error', { error })
+      raw = Promise.reject(error)
     }
-    finally {
-      this.browserWebRtcPollInFlight = false
-    }
-  }
-
-  private emitBrowserWebRtcStats(sample: BrowserWebRtcStatsSample): void {
-    const enrichedSample = {
-      ...sample,
-      delta: buildBrowserWebRtcStatsDelta(this.lastBrowserWebRtcSample, sample),
-    }
-    this.recordBrowserWebRtcMilestones(enrichedSample)
-    this.lastBrowserWebRtcSample = enrichedSample
-    if (enrichedSample.inboundVideo || enrichedSample.selectedCodec) {
-      this.emitter.emit('stats.browserWebRtc', enrichedSample)
-    }
-  }
-
-  private recordBrowserWebRtcMilestones(sample: BrowserWebRtcStatsSample): void {
-    if (sample.connectionState === 'connected' && this.browserWebRtcConnectedAtMs === undefined) {
-      this.browserWebRtcConnectedAtMs = sample.sampledAtMs
-    }
-    const inboundVideo = sample.inboundVideo
-    if (!inboundVideo) {
-      return
-    }
-    if (!this.firstInboundPacketEmitted && (inboundVideo.packetsReceived ?? 0) > 0) {
-      this.firstInboundPacketEmitted = true
-      this.emitBrowserWebRtcTimeline('firstInboundPacket', sample)
-    }
-    if (!this.firstDecodedEmitted && (inboundVideo.framesDecoded ?? 0) > 0) {
-      this.firstDecodedEmitted = true
-      this.emitBrowserWebRtcTimeline('firstDecoded', sample)
-    }
-    if (!this.firstKeyframeDecodedEmitted && (inboundVideo.keyFramesDecoded ?? 0) > 0) {
-      this.firstKeyframeDecodedEmitted = true
-      this.emitBrowserWebRtcTimeline('firstKeyframeDecoded', sample)
-    }
-  }
-
-  private emitBrowserWebRtcTimeline(
-    kind: BrowserWebRtcTimelineEvent['kind'],
-    sample: BrowserWebRtcStatsSample,
-  ): void {
-    this.emitter.emit('stats.browserWebRtcTimeline', {
-      kind,
-      observedAtMs: sample.sampledAtMs,
-      elapsedSinceConnectedMs: this.browserWebRtcConnectedAtMs === undefined
-        ? undefined
-        : Math.max(0, sample.sampledAtMs - this.browserWebRtcConnectedAtMs),
-      connectionState: sample.connectionState,
-      inboundVideo: sample.inboundVideo,
-      selectedCodec: sample.selectedCodec,
+    const promise = raw.then((report) => {
+      if (!current())
+        return this.snapshot()
+      const preferredTrackId = peer.getReceivers?.().find(receiver => receiver.track?.kind === 'video')?.track.id
+      const sample = buildBrowserWebRtcStatsSample(report, peer.connectionState, preferredTrackId)
+      sample.sampleId = `${generation}:${++this.sampleSequence}`
+      sample.peerGeneration = generation
+      sample.collectionStartedAtMs = startedAtMs
+      sample.collectionDurationMs = Math.max(0, sample.sampledAtMs - startedAtMs)
+      sample.deltaResetReason = resolveDeltaResetReason(this.lastSample, sample)
+      if (!sample.deltaResetReason)
+        sample.delta = buildBrowserWebRtcStatsDelta(this.lastSample, sample)
+      const p = this.presentation
+      const elapsed = p.sampledAtMs === undefined ? 0 : sample.sampledAtMs - p.sampledAtMs
+      const renderer = this.getRendererObservation?.()
+      const previousRenderer = this.lastRendererObservation
+      const rendererComparable = renderer !== undefined && renderer.generation === previousRenderer?.generation
+        && renderer.targetFps === previousRenderer.targetFps && renderer.sourceWidth === previousRenderer.sourceWidth && renderer.sourceHeight === previousRenderer.sourceHeight
+      const videoPresentFps = elapsed > 0 && p.lastFrameAtMs !== undefined ? (p.frames - p.sampledFrames) * 1000 / elapsed : undefined
+      const videoPresentAgeMs = p.lastFrameAtMs === undefined ? undefined : Math.max(0, sample.sampledAtMs - p.lastFrameAtMs)
+      const draws = rendererComparable && renderer?.resources.realtimeDrawCount !== undefined && previousRenderer?.resources.realtimeDrawCount !== undefined
+        ? Math.max(0, renderer.resources.realtimeDrawCount - previousRenderer.resources.realtimeDrawCount)
+        : undefined
+      const drawTime = rendererComparable && renderer?.resources.drawDurationTotalMs !== undefined && previousRenderer?.resources.drawDurationTotalMs !== undefined
+        ? Math.max(0, renderer.resources.drawDurationTotalMs - previousRenderer.resources.drawDurationTotalMs)
+        : undefined
+      const rendererSubmitFps = renderer?.kind === 'video' ? videoPresentFps : draws !== undefined && elapsed > 0 ? draws * 1000 / elapsed : undefined
+      const rendererSubmitAgeMs = renderer?.kind === 'video' ? videoPresentAgeMs : renderer?.resources.lastDrawAtMs === undefined ? undefined : Math.max(0, sample.sampledAtMs - renderer.resources.lastDrawAtMs)
+      const presentation = {
+        videoGeneration: p.videoGeneration,
+        rendererGeneration: renderer?.generation,
+        rendererTargetFps: renderer?.targetFps,
+        renderSourceWidth: renderer?.sourceWidth,
+        renderSourceHeight: renderer?.sourceHeight,
+        renderActualOutputWidth: renderer?.resources.outputWidth,
+        renderActualOutputHeight: renderer?.resources.outputHeight,
+        videoPresentFps,
+        videoPresentAgeMs,
+        callbackFps: elapsed > 0 && p.callbacks > 0 ? (p.callbacks - p.sampledCallbacks) * 1000 / elapsed : undefined,
+        rendererSubmitFps,
+        rendererSubmitAgeMs,
+        renderDrawDurationMsAvg: draws && drawTime !== undefined ? drawTime / draws : undefined,
+        presentFps: renderer ? rendererSubmitFps : videoPresentFps,
+        presentAgeMs: renderer ? rendererSubmitAgeMs : videoPresentAgeMs,
+      }
+      p.sampledFrames = p.frames
+      p.sampledCallbacks = p.callbacks
+      p.sampledAtMs = sample.sampledAtMs
+      this.lastRendererObservation = renderer ? { ...renderer, resources: { ...renderer.resources } } : undefined
+      this.latest = {
+        ...emptyStats(),
+        ...this.projection.observe(sample, presentation),
+        ...presentation,
+        rendererKind: renderer?.kind,
+        rendererTargetFps: renderer?.targetFps,
+        rendererLatestVideoSequence: renderer?.latestVideoSequence,
+        rendererSubmittedVideoSequence: renderer?.resources.lastDrawSequence,
+        rendererSubmittedFramesTotal: renderer?.resources.realtimeDrawCount,
+        rendererCaptureFramesTotal: renderer?.resources.captureDrawCount,
+        rendererLatestOverwriteCount: renderer?.resources.latestOverwriteCount,
+        rendererPacingWaitCount: renderer?.resources.pacingWaitCount,
+        rendererSubmitFailureCount: renderer?.resources.submitFailureCount,
+        rendererDuplicateDrawCount: renderer?.resources.duplicateDrawCount,
+        rendererGpuErrorChecks: renderer?.resources.gpuErrorChecks,
+        renderActualOutputWidth: renderer?.resources.outputWidth,
+        renderActualOutputHeight: renderer?.resources.outputHeight,
+        renderSourceWidth: renderer?.sourceWidth,
+        renderSourceHeight: renderer?.sourceHeight,
+        renderActualMode: renderer?.kind === 'webgl2_sr' && renderer.sourceWidth && renderer.sourceHeight && renderer.resources.outputWidth && renderer.resources.outputHeight
+          ? (renderer.resources.outputWidth > renderer.sourceWidth || renderer.resources.outputHeight > renderer.sourceHeight ? 'upscale' : 'passthrough')
+          : undefined,
+        statsVideoGeneration: p.videoGeneration,
+        statsSampleId: sample.sampleId,
+        statsPeerGeneration: generation,
+        statsSampledAtMs: sample.sampledAtMs,
+        statsCollectionDurationMs: sample.collectionDurationMs,
+        statsObservationState: sample.inboundVideo === undefined ? 'unavailable' : sample.collectionDurationMs > 1000 ? 'stale' : 'fresh',
+      }
+      this.lastSample = sample
+      this.recordMilestones(sample)
+      if (sample.inboundVideo || sample.selectedCodec)
+        this.emitter.emit('stats.browserWebRtc', sample)
+      return this.snapshot()
+    }).catch((error: unknown) => {
+      if (current()) {
+        this.latest.statsObservationState = 'stale'
+        this.emitter.emit('stats.observationUnavailable', { peerGeneration: generation, error })
+      }
+      return this.snapshot()
+    }).finally(() => {
+      if (this.flight?.promise === promise)
+        this.flight = undefined
     })
+    this.flight = { peer, promise }
+    return promise
   }
+
+  private recordMilestones(sample: BrowserWebRtcStatsSample): void {
+    if (sample.connectionState === 'connected')
+      this.connectedAtMs ??= sample.sampledAtMs
+    const events: Array<[BrowserWebRtcTimelineEvent['kind'], number | undefined]> = [
+      ['firstInboundPacket', sample.inboundVideo?.packetsReceived],
+      ['firstDecoded', sample.inboundVideo?.framesDecoded],
+      ['firstKeyframeDecoded', sample.inboundVideo?.keyFramesDecoded],
+    ]
+    for (const [kind, count] of events) {
+      if ((count ?? 0) > 0 && !this.milestones.has(kind)) {
+        this.milestones.add(kind)
+        this.emitter.emit('stats.browserWebRtcTimeline', { kind, observedAtMs: sample.sampledAtMs, elapsedSinceConnectedMs: this.connectedAtMs === undefined ? undefined : sample.sampledAtMs - this.connectedAtMs, connectionState: sample.connectionState, inboundVideo: sample.inboundVideo, selectedCodec: sample.selectedCodec })
+      }
+    }
+  }
+}
+
+function emptyStats(): StreamStats {
+  return { resolution: '', rtt: '-1 (-1%)', fps: 0, pl: '-1 (-1%)', fl: '-1 (-1%)', jit: '-1', br: '', decode: '', transportPath: '', transportState: 'new', statsObservationState: 'unavailable' }
+}
+
+function resolveDeltaResetReason(previous: BrowserWebRtcStatsSample | null, current: BrowserWebRtcStatsSample): string | undefined {
+  if (!previous?.inboundVideo || !current.inboundVideo)
+    return 'firstSample'
+  const a = previous.inboundVideo
+  const b = current.inboundVideo
+  if (a.id !== b.id || a.ssrc !== b.ssrc || a.trackIdentifier !== b.trackIdentifier)
+    return 'videoIdentityChanged'
+  if (current.sampledAtMs <= previous.sampledAtMs)
+    return 'sampleTimeUnchanged'
+  if (['bytesReceived', 'packetsReceived', 'framesReceived', 'framesDecoded'].some(key => (b[key as keyof typeof b] as number ?? 0) < (a[key as keyof typeof a] as number ?? 0)))
+    return 'counterReset'
+  return undefined
 }
 
 function buildBrowserWebRtcStatsDelta(
@@ -488,15 +518,17 @@ function delta(current: number | undefined, previous: number | undefined): numbe
 function buildBrowserWebRtcStatsSample(
   stats: RTCStatsReport,
   connectionState: RTCPeerConnectionState,
+  preferredTrackId?: string,
 ): BrowserWebRtcStatsSample {
   const inboundVideo = Array.from(stats.values())
     .filter(isInboundVideoRtpStat)
     .sort((left, right) =>
-      (right.framesDecoded ?? 0) - (left.framesDecoded ?? 0)
+      Number(right.trackIdentifier === preferredTrackId && preferredTrackId !== undefined) - Number(left.trackIdentifier === preferredTrackId && preferredTrackId !== undefined)
+      || (right.framesDecoded ?? 0) - (left.framesDecoded ?? 0)
       || (right.packetsReceived ?? 0) - (left.packetsReceived ?? 0),
     )[0]
-  const selectedCandidatePair = resolveSelectedCandidatePairSample(stats)
   const transport = resolveTransportSample(stats)
+  const selectedCandidatePair = resolveSelectedCandidatePairSample(stats, transport?.selectedCandidatePairId)
   const selectedCodec = inboundVideo?.codecId !== undefined
     ? toCodecSample(stats.get(inboundVideo.codecId))
     : undefined
@@ -512,80 +544,83 @@ function buildBrowserWebRtcStatsSample(
 }
 
 function toInboundVideoSample(stat: InboundVideoRtpStat): BrowserWebRtcInboundVideoSample {
-  return {
-    id: stat.id,
-    mid: stat.mid,
-    ssrc: stat.ssrc,
-    trackIdentifier: stat.trackIdentifier,
-    remoteId: stat.remoteId,
-    playoutId: stat.playoutId,
-    rtxSsrc: stat.rtxSsrc,
-    packetsReceived: stat.packetsReceived,
-    packetsLost: stat.packetsLost,
-    packetsDiscarded: stat.packetsDiscarded,
-    bytesReceived: stat.bytesReceived,
-    headerBytesReceived: stat.headerBytesReceived,
-    retransmittedPacketsReceived: stat.retransmittedPacketsReceived,
-    retransmittedBytesReceived: stat.retransmittedBytesReceived,
-    fecPacketsReceived: stat.fecPacketsReceived,
-    fecPacketsDiscarded: stat.fecPacketsDiscarded,
-    fecBytesReceived: stat.fecBytesReceived,
-    framesReceived: stat.framesReceived,
-    framesDecoded: stat.framesDecoded,
-    keyFramesDecoded: stat.keyFramesDecoded,
-    framesDropped: stat.framesDropped,
-    framesRendered: stat.framesRendered,
-    framesAssembledFromMultiplePackets: stat.framesAssembledFromMultiplePackets,
-    framesPerSecond: stat.framesPerSecond,
-    pliCount: stat.pliCount,
-    firCount: stat.firCount,
-    nackCount: stat.nackCount,
-    jitter: stat.jitter,
-    jitterBufferDelay: stat.jitterBufferDelay,
-    jitterBufferTargetDelay: stat.jitterBufferTargetDelay,
-    jitterBufferMinimumDelay: stat.jitterBufferMinimumDelay,
-    jitterBufferEmittedCount: stat.jitterBufferEmittedCount,
-    totalDecodeTime: stat.totalDecodeTime,
-    totalProcessingDelay: stat.totalProcessingDelay,
-    totalInterFrameDelay: stat.totalInterFrameDelay,
-    totalSquaredInterFrameDelay: stat.totalSquaredInterFrameDelay,
-    totalAssemblyTime: stat.totalAssemblyTime,
-    freezeCount: stat.freezeCount,
-    totalFreezesDuration: stat.totalFreezesDuration,
-    pauseCount: stat.pauseCount,
-    totalPausesDuration: stat.totalPausesDuration,
-    qpSum: stat.qpSum,
-    estimatedPlayoutTimestamp: stat.estimatedPlayoutTimestamp,
-    lastPacketReceivedTimestamp: stat.lastPacketReceivedTimestamp,
-    decoderImplementation: stat.decoderImplementation,
-    powerEfficientDecoder: stat.powerEfficientDecoder,
-    frameWidth: stat.frameWidth,
-    frameHeight: stat.frameHeight,
-    codecId: stat.codecId,
-  }
+  return pickStatsFields(stat, [
+    'id',
+    'mid',
+    'ssrc',
+    'trackIdentifier',
+    'remoteId',
+    'playoutId',
+    'rtxSsrc',
+    'packetsReceived',
+    'packetsLost',
+    'packetsDiscarded',
+    'bytesReceived',
+    'headerBytesReceived',
+    'retransmittedPacketsReceived',
+    'retransmittedBytesReceived',
+    'fecPacketsReceived',
+    'fecPacketsDiscarded',
+    'fecBytesReceived',
+    'framesReceived',
+    'framesDecoded',
+    'keyFramesDecoded',
+    'framesDropped',
+    'framesRendered',
+    'framesAssembledFromMultiplePackets',
+    'framesPerSecond',
+    'pliCount',
+    'firCount',
+    'nackCount',
+    'jitter',
+    'jitterBufferDelay',
+    'jitterBufferTargetDelay',
+    'jitterBufferMinimumDelay',
+    'jitterBufferEmittedCount',
+    'totalDecodeTime',
+    'totalProcessingDelay',
+    'totalInterFrameDelay',
+    'totalSquaredInterFrameDelay',
+    'totalAssemblyTime',
+    'freezeCount',
+    'totalFreezesDuration',
+    'pauseCount',
+    'totalPausesDuration',
+    'qpSum',
+    'estimatedPlayoutTimestamp',
+    'lastPacketReceivedTimestamp',
+    'decoderImplementation',
+    'powerEfficientDecoder',
+    'frameWidth',
+    'frameHeight',
+    'codecId',
+  ])
 }
 
 function toCodecSample(stat: RTCStats | undefined): BrowserWebRtcCodecSample | undefined {
   if (!isCodecStat(stat)) {
     return undefined
   }
-  return {
-    id: stat.id,
-    payloadType: stat.payloadType,
-    mimeType: stat.mimeType,
-    clockRate: stat.clockRate,
-    sdpFmtpLine: stat.sdpFmtpLine,
-  }
+  return pickStatsFields(stat, [
+    'id',
+    'payloadType',
+    'mimeType',
+    'clockRate',
+    'sdpFmtpLine',
+  ])
 }
 
-function resolveSelectedCandidatePairSample(stats: RTCStatsReport): BrowserWebRtcCandidatePairSample | undefined {
-  const selected = Array.from(stats.values())
-    .filter(isSucceededCandidatePairStat)
-    .sort((left, right) => {
-      const leftScore = Number(left.selected === true) + Number(left.nominated === true)
-      const rightScore = Number(right.selected === true) + Number(right.nominated === true)
-      return rightScore - leftScore
-    })[0]
+function resolveSelectedCandidatePairSample(stats: RTCStatsReport, selectedId?: string): BrowserWebRtcCandidatePairSample | undefined {
+  const identified = selectedId ? stats.get(selectedId) : undefined
+  const selected = identified && isSucceededCandidatePairStat(identified)
+    ? identified
+    : Array.from(stats.values())
+      .filter(isSucceededCandidatePairStat)
+      .sort((left, right) => {
+        const leftScore = Number(left.selected === true) + Number(left.nominated === true)
+        const rightScore = Number(right.selected === true) + Number(right.nominated === true)
+        return rightScore - leftScore
+      })[0]
   if (!selected) {
     return undefined
   }
@@ -636,112 +671,22 @@ function resolveTransportSample(stats: RTCStatsReport): BrowserWebRtcTransportSa
   if (!transport) {
     return undefined
   }
-  return {
-    id: transport.id,
-    selectedCandidatePairId: transport.selectedCandidatePairId,
-    selectedCandidatePairChanges: transport.selectedCandidatePairChanges,
-    iceState: transport.iceState,
-    iceRole: transport.iceRole,
-    dtlsState: transport.dtlsState,
-    dtlsRole: transport.dtlsRole,
-    dtlsCipher: transport.dtlsCipher,
-    srtpCipher: transport.srtpCipher,
-    tlsVersion: transport.tlsVersion,
-    bytesSent: transport.bytesSent,
-    bytesReceived: transport.bytesReceived,
-    packetsSent: transport.packetsSent,
-    packetsReceived: transport.packetsReceived,
-  }
-}
-
-interface ResolvedTransportDetails {
-  transportPath?: string
-  transportCandidatePair?: string
-  transportProtocol?: string
-  transportAddressFamily: TransportAddressFamily
-}
-
-function resolveTransportDetails(stats: RTCStatsReport): ResolvedTransportDetails {
-  const candidatePairs = Array.from(stats.values())
-    .filter(isSucceededCandidatePairStat)
-    .sort((left, right) => {
-      const leftScore = Number(left.selected === true) + Number(left.nominated === true)
-      const rightScore = Number(right.selected === true) + Number(right.nominated === true)
-      return rightScore - leftScore
-    })
-
-  const selectedPair = candidatePairs[0]
-  if (!selectedPair) {
-    return { transportAddressFamily: 'unknown' }
-  }
-
-  const localCandidate = selectedPair.localCandidateId
-    ? stats.get(selectedPair.localCandidateId)
-    : undefined
-  const remoteCandidate = selectedPair.remoteCandidateId
-    ? stats.get(selectedPair.remoteCandidateId)
-    : undefined
-  if (!localCandidate || !remoteCandidate) {
-    return { transportAddressFamily: 'unknown' }
-  }
-  if (!isIceCandidateStat(localCandidate) || !isIceCandidateStat(remoteCandidate)) {
-    return { transportAddressFamily: 'unknown' }
-  }
-
-  const localType = normalizeCandidateType(localCandidate.candidateType)
-  const remoteType = normalizeCandidateType(remoteCandidate.candidateType)
-  const transportKind = localType === 'relay' || remoteType === 'relay' ? 'Relay' : 'Direct'
-  const transportCandidatePair = `${localType || 'unknown'}->${remoteType || 'unknown'}`
-  const pairText = [localType, remoteType].filter(Boolean).join(' -> ')
-  const protocol = (localCandidate.relayProtocol
-    ?? remoteCandidate.relayProtocol
-    ?? localCandidate.protocol
-    ?? remoteCandidate.protocol
-    ?? '')
-    .trim()
-    .toUpperCase()
-  const transportAddressFamily = resolveAddressFamily(localCandidate, remoteCandidate)
-
-  return {
-    transportPath: buildTransportPathText(transportKind, pairText, protocol),
-    transportCandidatePair,
-    transportProtocol: protocol || undefined,
-    transportAddressFamily,
-  }
-}
-
-function buildTransportPathText(transportKind: string, pairText: string, protocol: string): string {
-  if (pairText !== '' && protocol !== '') {
-    return `${transportKind} (${pairText}, ${protocol})`
-  }
-  if (pairText !== '') {
-    return `${transportKind} (${pairText})`
-  }
-  if (protocol !== '') {
-    return `${transportKind} (${protocol})`
-  }
-  return transportKind
-}
-
-function resolveAddressFamily(
-  localCandidate: IceCandidateStat,
-  remoteCandidate: IceCandidateStat,
-): TransportAddressFamily {
-  const localFamily = resolveCandidateAddressFamily(localCandidate)
-  const remoteFamily = resolveCandidateAddressFamily(remoteCandidate)
-  if (localFamily === 'unknown' && remoteFamily === 'unknown') {
-    return 'unknown'
-  }
-  if (localFamily === 'unknown') {
-    return remoteFamily
-  }
-  if (remoteFamily === 'unknown') {
-    return localFamily
-  }
-  if (localFamily !== remoteFamily) {
-    return 'mixed'
-  }
-  return localFamily
+  return pickStatsFields(transport, [
+    'id',
+    'selectedCandidatePairId',
+    'selectedCandidatePairChanges',
+    'iceState',
+    'iceRole',
+    'dtlsState',
+    'dtlsRole',
+    'dtlsCipher',
+    'srtpCipher',
+    'tlsVersion',
+    'bytesSent',
+    'bytesReceived',
+    'packetsSent',
+    'packetsReceived',
+  ])
 }
 
 function resolveCandidateAddressFamily(candidate: IceCandidateStat): 'ipv4' | 'ipv6' | 'unknown' {
@@ -759,10 +704,7 @@ function resolveCandidateAddressFamily(candidate: IceCandidateStat): 'ipv4' | 'i
   return 'unknown'
 }
 
-function normalizeCandidateType(value: string | undefined): string {
-  const normalized = value?.trim().toLowerCase() ?? ''
-  if (normalized === 'host' || normalized === 'srflx' || normalized === 'prflx' || normalized === 'relay') {
-    return normalized
-  }
-  return normalized
+/** 显式字段白名单保留公开统计合同，过滤平台附加字段。 */
+function pickStatsFields<T extends object, K extends keyof T>(source: T, keys: readonly K[]): Pick<T, K> {
+  return Object.fromEntries(keys.map(key => [key, source[key]])) as Pick<T, K>
 }

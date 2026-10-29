@@ -15,6 +15,22 @@ const TIER_DIMS: Record<SuperResolutionConfiguredTierLabel, { width: number, hei
 }
 
 describe('super-resolution-ladder', () => {
+  it.each([
+    [2560, 1440, 1280, 720, 1600, 900, 1920, 1080, '1080p'],
+    [2560, 1440, 1280, 720, 1707, 960, 1920, 1080, '1080p'],
+    [1920, 1080, 1600, 1080, 1920, 1080, 1920, 1080, '1080p'],
+    [2560, 1440, 1920, 1080, 2000, 1125, 2560, 1440, '1440p'],
+    [3840, 2160, 2560, 1440, 3200, 1800, 3840, 2160, '2160p'],
+  ])('maps viewport %i/%i source %i/%i display %i/%i to standard %i/%i (%s)', (cw, ch, sw, sh, dw, dh, ow, oh, tier) => {
+    const plan = resolveSuperResolutionTierPlan(cw, ch, sw, sh, dw, dh)
+    expect(plan).toMatchObject({ outputWidth: ow, outputHeight: oh, outputTier: tier, mode: 'upscale' })
+  })
+
+  it('preserves a nonstandard source when a standard target cannot hold both native dimensions', () => {
+    const plan = resolveSuperResolutionTierPlan(1920, 1080, 2560, 1600, 1920, 1080)
+    expect(plan).toMatchObject({ sourceWidth: 2560, sourceHeight: 1600, outputWidth: 2560, outputHeight: 1600, mode: 'passthrough' })
+  })
+
   it('upscales one tier above the negotiated target when source matches it', () => {
     // 协商 1080、源 1080、显示 1440 → 真超分到 1440（旧语义在这里完全不升档）。
     const p = resolveSuperResolutionTierPlan(1920, 1080, 1920, 1080, 2560, 1440)
@@ -65,12 +81,12 @@ describe('super-resolution-ladder', () => {
     expect(p.mode).toBe('passthrough')
   })
 
-  it('marks display-budget downscale separately from super resolution', () => {
+  it('preserves native source pixels for a smaller display', () => {
     const p = resolveSuperResolutionTierPlan(1920, 1080, 2560, 1440, 1920, 1080)
-    expect(p.mode).toBe('present-downscale')
-    expect(p.reason).toBe('display-budget-below-source')
-    expect(p.outputWidth).toBe(1920)
-    expect(p.outputHeight).toBe(1080)
+    expect(p.mode).toBe('passthrough')
+    expect(p.reason).toBe('source-preserved-for-display')
+    expect(p.outputWidth).toBe(2560)
+    expect(p.outputHeight).toBe(1440)
   })
 
   it('treats a missing display budget as unbounded', () => {
@@ -92,7 +108,7 @@ describe('super-resolution-ladder', () => {
     expect(resolveSuperResolutionRcasStops(passthrough)).toBe(0.88)
 
     const downscale = resolveSuperResolutionTierPlan(1920, 1080, 2560, 1440, 1920, 1080)
-    expect(resolveSuperResolutionRcasStops(downscale)).toBe(0.72)
+    expect(resolveSuperResolutionRcasStops(downscale)).toBe(0.88)
   })
 
   it('honours the upscale-only invariants across the whole configured/source matrix', () => {
@@ -138,5 +154,17 @@ describe('super-resolution-ladder', () => {
   it('maps output dimensions back to tier label', () => {
     expect(resolveSuperResolutionOutputTierLabelFromDimensions(1920, 1080)).toBe('1080p')
     expect(resolveSuperResolutionOutputTierLabelFromDimensions(2560, 1440)).toBe('1440p')
+  })
+
+  it('preserves both native dimensions across all source and viewport combinations', () => {
+    for (const source of Object.values(TIER_DIMS)) {
+      for (const display of [{ width: 1280, height: 720 }, { width: 1707, height: 960 }, { width: 1920, height: 1200 }, { width: 3840, height: 2160 }]) {
+        const plan = resolveSuperResolutionTierPlan(1920, 1080, source.width, source.height, display.width, display.height)
+        expect(plan.outputWidth).toBeGreaterThanOrEqual(source.width)
+        expect(plan.outputHeight).toBeGreaterThanOrEqual(source.height)
+        expect(plan.outputWidth / plan.outputHeight).toBeCloseTo(source.width / source.height, 2)
+        expect(plan.outputTier).toBe(resolveSuperResolutionOutputTierLabelFromDimensions(plan.outputWidth, plan.outputHeight))
+      }
+    }
   })
 })

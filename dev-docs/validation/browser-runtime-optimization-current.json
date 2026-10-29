@@ -1,0 +1,514 @@
+{
+  "baselineRevision": "bec3acfb",
+  "measurement": "TypeScript AST statements; branches = if/conditional/case/classic loops; scope includes all added production files",
+  "baseline": {
+    "files": 52,
+    "lines": 15674,
+    "statements": 7039,
+    "branches": 1137
+  },
+  "current": {
+    "files": 62,
+    "lines": 15222,
+    "statements": 6898,
+    "branches": 1297
+  },
+  "files": [
+    {
+      "path": "src/player/api/PlayerClient.ts",
+      "lines": 441,
+      "statements": 171,
+      "branches": 13,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "8422884c6a7d89ceb6b93a31a4a440f0fd020b94eb286e9eca178cee39c90fbb"
+    },
+    {
+      "path": "src/player/api/events.ts",
+      "lines": 66,
+      "statements": 23,
+      "branches": 2,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "921fa3dfadee2b66390d9fd1753d51723dc86aa6c620b2577e0e67b876e9ed42"
+    },
+    {
+      "path": "src/player/app/input/InputService.ts",
+      "lines": 184,
+      "statements": 82,
+      "branches": 7,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "a2c8b9de4905c827389272d6e9fc65509bf3a47c1f06b7580d743e3cf4049d15"
+    },
+    {
+      "path": "src/player/app/input/RumbleService.ts",
+      "lines": 153,
+      "statements": 90,
+      "branches": 18,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "eb07e2d7f3ca8751f59b1e2368c2f2d4aa57efa26ce00c52beb6fd915cbfd82e"
+    },
+    {
+      "path": "src/player/app/media/AudioEffectsService.ts",
+      "lines": 80,
+      "statements": 50,
+      "branches": 10,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "0cb7afa6cfb940c9998684cc3704efcf6dba27a1c9ff2f90a30cedada47bc598"
+    },
+    {
+      "path": "src/player/app/media/MediaService.ts",
+      "lines": 104,
+      "statements": 34,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "745a18adb55ba940d88fc0e9441dfc32a6743e4e3506ed03360387b66218d57b"
+    },
+    {
+      "path": "src/player/app/media/MicrophoneService.ts",
+      "lines": 79,
+      "statements": 46,
+      "branches": 8,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "9845bc776d4ebf81b2ca1cd1b2e1622638bfb40f7e5904e23ac91098a33f526f"
+    },
+    {
+      "path": "src/player/app/media/PlaybackService.ts",
+      "lines": 436,
+      "statements": 247,
+      "branches": 61,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "a756eed66bc23397ac105ea54984554ab0307e7866d6f06d2be71dfbb6d2e73c"
+    },
+    {
+      "path": "src/player/app/session/SessionService.ts",
+      "lines": 650,
+      "statements": 278,
+      "branches": 48,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "6970d6e3121db8b45fc05c21b54a8ff2a3a6fa1be47d1dc693f490c0074fb921"
+    },
+    {
+      "path": "src/player/app/stats/StatsService.ts",
+      "lines": 710,
+      "statements": 239,
+      "branches": 67,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "9bcb8e772de492a7c3508ed0961aa5bba77e419e8083f045d743d3d4b13949e7"
+    },
+    {
+      "path": "src/player/app/stats/browser-stats.ts",
+      "lines": 261,
+      "statements": 117,
+      "branches": 44,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "b854da0e5ef13ad6438225af2b961d51aed0b10e1d095e09707d692c68473a35"
+    },
+    {
+      "path": "src/player/domain/config.ts",
+      "lines": 59,
+      "statements": 6,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "8c259da12f8c1d9c792dc77fcf5aa0e16cc8a294b74115c7ccbec3c1603e039d"
+    },
+    {
+      "path": "src/player/domain/input.ts",
+      "lines": 89,
+      "statements": 14,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "8c4d1a6c4e4018cfd055fefd489d1f2190540953ce88604f58a43bcd6590e189"
+    },
+    {
+      "path": "src/player/domain/media.ts",
+      "lines": 501,
+      "statements": 31,
+      "branches": 9,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f1b567f216389d168ed8a0c65ceb886786b95fbc07008c4fbba6194379103725"
+    },
+    {
+      "path": "src/player/domain/messages.ts",
+      "lines": 36,
+      "statements": 5,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "216bb92fab182ae0388f08ae39949e965de3c73ad968385a17847507e3fcef88"
+    },
+    {
+      "path": "src/player/domain/session.ts",
+      "lines": 76,
+      "statements": 11,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "19449c00664618e945afcccf80f3fe52e6983ae3c14ba727d76d6d329b716e7c"
+    },
+    {
+      "path": "src/player/domain/stats.ts",
+      "lines": 306,
+      "statements": 20,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "7029000f7fa14ef7712240cc220586d1df5e08b772535ffb4f57f49ce117208b"
+    },
+    {
+      "path": "src/player/index.ts",
+      "lines": 13,
+      "statements": 3,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "d04cf7029244d3155d404558fa4bb53be7dad770213194b9d8b84d0191d4f5e8"
+    },
+    {
+      "path": "src/player/infra/input/GamepadDriver.ts",
+      "lines": 81,
+      "statements": 45,
+      "branches": 6,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "cc80dbe53e45cf7a0916eb6886251eca37c3db0d06e8f0ba054cebc3a4f93a2c"
+    },
+    {
+      "path": "src/player/infra/render/Renderers.ts",
+      "lines": 1019,
+      "statements": 550,
+      "branches": 94,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f0e299f95a47fca51d92dc941fcc79bfb0b1a27f2ccac27f09eec1dd6a4e5b34"
+    },
+    {
+      "path": "src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+      "lines": 1076,
+      "statements": 523,
+      "branches": 88,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "2be1d1a2778958d4c4d22493922a5f67510e4856b76faf01f27606edb8556c08"
+    },
+    {
+      "path": "src/player/infra/render/frame-capture-queue.ts",
+      "lines": 37,
+      "statements": 20,
+      "branches": 2,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "9e94d5fa7b0165acade860e6b7a4608005c8c616403e5f95b70dc37528caf710"
+    },
+    {
+      "path": "src/player/infra/render/frame-pacer.ts",
+      "lines": 27,
+      "statements": 17,
+      "branches": 5,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "d13320536738840c6ab6d6dd732ea2d5d0f06388410def0bd730b2d87fcefd98"
+    },
+    {
+      "path": "src/player/infra/render/fsr1-cpu.ts",
+      "lines": 83,
+      "statements": 25,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f3d19e5560632dc24153070a1eaef443a7982d482765a8d8870b64797eacf0a7"
+    },
+    {
+      "path": "src/player/infra/render/fsr1-mobile-opt-fragment.ts",
+      "lines": 287,
+      "statements": 1,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "85377c6294aaf5028c523660c6e95329e01cab40a965e40e861cf6f6189e6797"
+    },
+    {
+      "path": "src/player/infra/render/render-observation.ts",
+      "lines": 84,
+      "statements": 23,
+      "branches": 3,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "aba7b3622994b43d3ec609b1aabd947aecb819a8688120e6938ee67b184548e8"
+    },
+    {
+      "path": "src/player/infra/render/sharpening-math.ts",
+      "lines": 139,
+      "statements": 36,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "2b16b0bcf8dfe4199f5d5435d1d78675633a95279e48f9d366f9d849859194b8"
+    },
+    {
+      "path": "src/player/infra/render/sharpening-tuning.ts",
+      "lines": 34,
+      "statements": 8,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "8461ec702c64f1310149e3830cc66ecdaf96a4c4440b39fe908fa6df330a47ae"
+    },
+    {
+      "path": "src/player/infra/render/video-frame-source.ts",
+      "lines": 211,
+      "statements": 131,
+      "branches": 37,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "2035d4dabab50984b6bbe00dbb72a166b8dbf6ef13483de950ec41df0c75593a"
+    },
+    {
+      "path": "src/player/infra/render/webgl-frame-capture.ts",
+      "lines": 47,
+      "statements": 32,
+      "branches": 4,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "1a49a61378b77948f0bfe78b18e88c0ce395913982471dcb8b3ce4026ce3e651"
+    },
+    {
+      "path": "src/player/infra/render/webgl-runtime-guard.ts",
+      "lines": 34,
+      "statements": 15,
+      "branches": 4,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "183a06b1a5e2538a5f68338eb5bf3ab353cd150fc87cb5ae6b6e1d79bb83927a"
+    },
+    {
+      "path": "src/player/infra/webrtc/DataChannelHub.ts",
+      "lines": 54,
+      "statements": 25,
+      "branches": 2,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "0f42652b146c3c7ab947cc696c2115faacae73301000187fd20e570bbd5c6cc1"
+    },
+    {
+      "path": "src/player/infra/webrtc/SdpManipulator.ts",
+      "lines": 249,
+      "statements": 177,
+      "branches": 39,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "ac620260f893243e6c612c7f06cecafd8dd7e393ab4f5d0b76a553ffdddfbe9f"
+    },
+    {
+      "path": "src/player/infra/webrtc/WebRtcTransport.ts",
+      "lines": 264,
+      "statements": 108,
+      "branches": 15,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "e7bad265dcb4558ac6a87ac6e3da781c33ceac2804d8b951f24b5aa7f2729d92"
+    },
+    {
+      "path": "src/player/protocol/channels/BaseChannel.ts",
+      "lines": 33,
+      "statements": 10,
+      "branches": 1,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "017dc6cdc2897f02e1ad464f3132bf6b77ae8912f6fbc39da508a3ea8e21293b"
+    },
+    {
+      "path": "src/player/protocol/channels/ChatChannel.ts",
+      "lines": 23,
+      "statements": 7,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "3db2fcb6e502010a241b7655f54d2ccb7c87adc953203cc9832655d2c43783b9"
+    },
+    {
+      "path": "src/player/protocol/channels/ControlChannel.ts",
+      "lines": 122,
+      "statements": 49,
+      "branches": 5,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "24cf6ba30983e659c821e9979a1a6275c251fb7f29ea582fde97419fceb178ae"
+    },
+    {
+      "path": "src/player/protocol/channels/InputChannel.ts",
+      "lines": 78,
+      "statements": 33,
+      "branches": 4,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f46d397f3b192c4b1a5660490546da00ca134ab055ceed26bd02c9999a726cc0"
+    },
+    {
+      "path": "src/player/protocol/channels/MessageChannel.ts",
+      "lines": 144,
+      "statements": 40,
+      "branches": 4,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "ef0ac39a562872434d174df13014049298add87035b31adc9fde0f6f1266c5d0"
+    },
+    {
+      "path": "src/player/protocol/input/InputPacketEncoder.ts",
+      "lines": 314,
+      "statements": 216,
+      "branches": 36,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "bc91748afd01d604496767c778cefe13f50cac04b37e75a795a7bca451e5a3d3"
+    },
+    {
+      "path": "src/player/protocol/networkProfile.ts",
+      "lines": 35,
+      "statements": 6,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f5d4d74af5cc6a8f878300e862c2681a5d1e4d92f04ef0f6dfee4f4ae977ed36"
+    },
+    {
+      "path": "src/streaming/runtime/browser-negotiation.ts",
+      "lines": 466,
+      "statements": 252,
+      "branches": 43,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "ac62a3e74a87c775b8e4cc1365d3dcdcc301be86834d84cf3826a96e1982c2a7"
+    },
+    {
+      "path": "src/streaming/runtime/browser-network-policy.ts",
+      "lines": 206,
+      "statements": 145,
+      "branches": 42,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "af7409827c78c2b895d71ef0047d41b06673e462ac0f7f5e6fbb2061da1184ca"
+    },
+    {
+      "path": "src/streaming/runtime/browser-policy-evidence.ts",
+      "lines": 41,
+      "statements": 17,
+      "branches": 2,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "c014e57be44145b935edb5f16fefb109b2058f5b76d28dd74ab15b6426f0abae"
+    },
+    {
+      "path": "src/streaming/runtime/browser-recovery-policy.ts",
+      "lines": 135,
+      "statements": 65,
+      "branches": 14,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "e0020c84017710efe2c7158a47bcd138c16fcfb37692c744599d7430c5b8513a"
+    },
+    {
+      "path": "src/streaming/runtime/browser-render-health.ts",
+      "lines": 157,
+      "statements": 116,
+      "branches": 28,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "634a856abfc474fc980ea6330a82eb2cc78c43f40c779859ae9ceff308e8407c"
+    },
+    {
+      "path": "src/streaming/runtime/browser-render-policy.ts",
+      "lines": 292,
+      "statements": 72,
+      "branches": 24,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f515b6a426fbcd9474e26c85abb097a0c1be6e61a078da5706c9391add740a51"
+    },
+    {
+      "path": "src/streaming/runtime/browser-runtime-profile.ts",
+      "lines": 177,
+      "statements": 91,
+      "branches": 19,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "8559bb50ab69bf51871db8a68b5f6609e9ceba14eb99e9511fbad78bafd23807"
+    },
+    {
+      "path": "src/streaming/runtime/browser-runtime-trace.ts",
+      "lines": 79,
+      "statements": 42,
+      "branches": 13,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "1a5d2808032f2dd39fffe6522f3fdd45625d14a07fb976168d131c0c5023dbe2"
+    },
+    {
+      "path": "src/streaming/runtime/browser-runtime.ts",
+      "lines": 2375,
+      "statements": 1346,
+      "branches": 247,
+      "runtimeDirectMutableBindings": 74,
+      "sha256": "67271b6219a9d573b32ae1264b9f447cac0ee90cf25b77a75b2adc446a6fb2b0"
+    },
+    {
+      "path": "src/streaming/runtime/browser-super-resolution-state.ts",
+      "lines": 56,
+      "statements": 9,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "3c4ce5c87ca4a2223de0dc7ea95e2024920144c2c6c3df3026e098b86411dbbe"
+    },
+    {
+      "path": "src/streaming/runtime/browser-supervision.ts",
+      "lines": 114,
+      "statements": 58,
+      "branches": 7,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f83f9dc3c59ef87e759537134dd82cace7f5ccfc98d286b182893aa003ef35d2"
+    },
+    {
+      "path": "src/streaming/runtime/browser-video-display.ts",
+      "lines": 81,
+      "statements": 44,
+      "branches": 9,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "0725f6e894ff1087208808b0f1e60084ad938780240af9f61530d07f161578b6"
+    },
+    {
+      "path": "src/streaming/runtime/connection-recovery.ts",
+      "lines": 195,
+      "statements": 136,
+      "branches": 28,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "f5eece2283fe4161c7c9474eb3166231ee45028910a730a235e83fd4e16e7819"
+    },
+    {
+      "path": "src/streaming/runtime/display-viewport.ts",
+      "lines": 110,
+      "statements": 55,
+      "branches": 10,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "4073178db5c6d00e11abb8e27aca7d745768e10dfd9222e0ab79332f0c167f1d"
+    },
+    {
+      "path": "src/streaming/runtime/ice-candidate-policy.ts",
+      "lines": 354,
+      "statements": 194,
+      "branches": 43,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "c03c0735b6f41712aaa4b7af647bc4fe4111a0d90eb03589194ae74bb5b3e552"
+    },
+    {
+      "path": "src/streaming/runtime/runtime-contract.ts",
+      "lines": 64,
+      "statements": 9,
+      "branches": 0,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "e15d3a17e2176e446543f8ddfe01580aeabac6e178ac937830f2b1d955eb539a"
+    },
+    {
+      "path": "src/streaming/runtime/runtime-host-policy.ts",
+      "lines": 172,
+      "statements": 58,
+      "branches": 8,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "ed8686dbbac2d00457270f4f96a9c6390083705d9b5fae73af0600fe539a6447"
+    },
+    {
+      "path": "src/streaming/runtime/runtime-host.ts",
+      "lines": 736,
+      "statements": 370,
+      "branches": 66,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "7918fafa47804e15cef300acee64ffe761a061fdf74cceb0bac9b860128ce2c8"
+    },
+    {
+      "path": "src/streaming/runtime/serial-operation.ts",
+      "lines": 47,
+      "statements": 32,
+      "branches": 4,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "c0447eec7e0f3ce88a314ab6829b242b4f0740a8286a9fa483cd3c678c112637"
+    },
+    {
+      "path": "src/streaming/runtime/super-resolution-ladder.ts",
+      "lines": 222,
+      "statements": 77,
+      "branches": 29,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "29a12f3de9963131846c7c969cb6a266f8aad03dc9088e4526ebdfc293824fa2"
+    },
+    {
+      "path": "src/streaming/runtime/xbxengine-runtime.ts",
+      "lines": 424,
+      "statements": 146,
+      "branches": 25,
+      "runtimeDirectMutableBindings": 0,
+      "sha256": "1e77f10c43ec00f8e2a1b023f35c3273fed5f17cf5a188097fc9360a4d466c5e"
+    }
+  ]
+}

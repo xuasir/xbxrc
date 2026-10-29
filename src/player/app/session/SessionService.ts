@@ -121,11 +121,13 @@ export class SessionService {
       context =>
         new ChatChannel(context, {
           startMicCapture: async () => {
-            await this.mediaService.startMicCapture((track, stream) =>
-              this.transport.addTrack(track, stream),
-            )
+            const peer = this.transport.getPeer()
+            await this.mediaService.startMicCapture((track, stream) => {
+              const sender = peer.addTrack(track, stream)
+              return () => peer.removeTrack(sender)
+            })
           },
-          stopMicCapture: () => this.mediaService.stopMicCapture(() => this.transport.getPeer()),
+          stopMicCapture: () => this.mediaService.stopMicCapture(),
         }),
     )
     this.channelHub.register(
@@ -153,6 +155,12 @@ export class SessionService {
   }
 
   async createOffer(options?: CreateOfferOptions): Promise<RTCSessionDescriptionInit> {
+    const peer = this.transport.getPeer()
+    const assertCurrent = () => {
+      if (options?.signal?.aborted || this.transport.getPeer() !== peer)
+        throw new Error('streamRuntimeSuperseded')
+    }
+    assertCurrent()
     const restarting = options?.iceRestart === true
     this.assertState(
       'createOffer',
@@ -161,8 +169,10 @@ export class SessionService {
         : ['binding', 'negotiating', 'connecting', 'connected'],
     )
     this.transition(restarting ? 'reconnecting' : 'negotiating')
-    this.transport.resetIceCandidates()
+    if (options?.preserveIceCandidates !== true)
+      this.transport.resetIceCandidates()
     let offer = await this.transport.createOffer(options)
+    assertCurrent()
     const initialSdp = offer.sdp
     if (initialSdp) {
       debugLog('[player][session] local offer before sdp manipulation', summarizeSdp(initialSdp))
@@ -208,6 +218,7 @@ export class SessionService {
       this.emitter.emit('transport.sdpObserved', summarizeSdpForTrace('localOfferAfterPatch', nextSdp))
     }
     await this.transport.setLocalDescription(offer)
+    assertCurrent()
     this.emitWebRtcTimeline({
       kind: 'localDescriptionSet',
       sdpStage: 'localOfferAfterPatch',
@@ -247,6 +258,10 @@ export class SessionService {
     catch {
       return undefined
     }
+  }
+
+  getRemoteVideoBitrateCapKbps(): number | undefined {
+    return this.sdpManipulator.getVideoBitrateCapKbps(this.getPeer()?.remoteDescription?.sdp)
   }
 
   getChatChannel(): ChatChannel | undefined {
@@ -291,6 +306,16 @@ export class SessionService {
 
   async applyVideoSenderPolicy(input: VideoSenderPolicyInput): Promise<VideoSenderPolicyResult> {
     return await this.transport.applyVideoSenderPolicy(input)
+  }
+
+  hasLocalVideoSender(): boolean {
+    return this.transport.hasLocalVideoSender()
+  }
+
+  async rollbackMediaNegotiation(): Promise<void> {
+    await this.transport.rollbackMediaNegotiation()
+    if (this.getPeer()?.connectionState === 'connected')
+      this.transition('connected')
   }
 
   async applyVideoBitrateSoftCapKbps(maxBitrateKbps: number): Promise<VideoSenderPolicyResult> {

@@ -6,6 +6,8 @@
 
 2026-10-28 串流公共主线细化：可靠性与代码精简计划见[串流公共主线 RFC](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-10-28-streaming-common-reliability-simplification.md)。计划基于当前 `02f6db40` 重新核对播放期超时、启动取消、恢复去重与清理路径，按故障回归、生命周期闭环、恢复收敛、结构精简、实机验收推进，并完整保留现有功能。
 
+2026-10-28 浏览器方案细化：用户要求精简逻辑并完整保留功能，执行计划见[浏览器功能保留与精简 RFC](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-10-28-browser-runtime-simplification-and-stability.md)。计划承接当前协商/监督/连接事务改造，按功能基线、单点统计、动作能力、播放显示资源、策略状态、整机验收六阶段推进；USM/CAS、FSR1、麦克风、截图和动态适应均纳入保留与回归清单。当前交付为优化计划，实施与实机验收分别记录。
+
 ## 问题界定
 
 当前复杂度主要来自三个方面：Rust 自建媒体接收与恢复闭环；浏览器运行时集中维护大量相互影响的策略状态；公共控制层与具体 runtime 之间存在重复决策和契约错位。手柄底层已经完成一轮实质性收敛，输入消费端仍有遗留的不一致。

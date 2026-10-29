@@ -2,6 +2,8 @@
 
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后单独产出 Report。
 
+> 2026-10-29 当前方向：用户明确源画质在各情况下作为输出下限，SR 放大目标采用 1080p/1440p/2160p 标准尺寸。[整体策略重设计](../isu/2026-10-29-browser-policy-stability-and-native-quality.md)与[完整功能优化 RFC §5](2026-10-28-browser-runtime-simplification-and-stability.md#5-2026-10-29-策略方向修订)采用 SR 内部保留源尺寸、最终视口映射、增强成本超限保真回退。本文的显示预算小于源时内部降采样例外、display degrade 压低 SR 尺寸与网络驱动 RCAS 保留为历史设计；生产修正与自动验证已完成，设备配对与长测继续验收。
+
 ## Status
 
 - Completion: 未完成

@@ -2,36 +2,31 @@ import type { CodecPreferenceOptions } from '../../domain/session'
 
 export class SdpManipulator {
   setBitrate(sdp: string, media: string, bitrate: number): string {
-    const lines = sdp.split('\r\n')
-    for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
-      let currentMedia = ''
-      let line = lines[lineNumber]
-      if (!line.startsWith('m=')) {
-        continue
-      }
-      if (line.startsWith(`m=${media}`)) {
-        currentMedia = media
-      }
-      if (!currentMedia) {
-        continue
-      }
-      const bLine = `b=AS:${bitrate}`
-      while (++lineNumber < lines.length) {
-        line = lines[lineNumber]
-        if (line.startsWith('i=') || line.startsWith('c=')) {
-          continue
-        }
-        if (line.startsWith('b=AS:')) {
-          lines[lineNumber] = bLine
-          break
-        }
-        if (line.startsWith('m=')) {
-          lines.splice(lineNumber, 0, bLine)
-          break
-        }
-      }
-    }
-    return lines.join('\r\n')
+    const separator = sdp.includes('\r\n') ? '\r\n' : '\n'
+    const lines = sdp.split(/\r?\n/)
+    const start = lines.findIndex(line => line.startsWith(`m=${media} `))
+    if (start < 0 || !Number.isFinite(bitrate) || bitrate <= 0)
+      return sdp
+    let end = start + 1
+    while (end < lines.length && !lines[end].startsWith('m=')) end++
+    const section = lines.slice(start, end).filter(line => !/^b=(?:AS|TIAS):/.test(line))
+    let insert = 1
+    while (insert < section.length && /^[ic]=/.test(section[insert])) insert++
+    section.splice(insert, 0, `b=AS:${Math.round(bitrate)}`)
+    lines.splice(start, end - start, ...section)
+    return lines.join(separator)
+  }
+
+  /** 远端当前发送视频段的码率声明；缺失保持 unknown。 */
+  getVideoBitrateCapKbps(sdp: string | undefined): number | undefined {
+    const section = sdp?.split(/(?=^m=)/m).find(part => /^m=video [1-9]/.test(part))
+    if (!section || /^a=(?:inactive|recvonly)\s*$/m.test(section))
+      return undefined
+    const tias = /^b=TIAS:(\d+)\s*$/m.exec(section)
+    const as = /^b=AS:(\d+)\s*$/m.exec(section)
+    const google = /(?:^|[;\s])x-google-max-bitrate=(\d+)/.exec(section)
+    const value = tias ? Number(tias[1]) / 1000 : Number(as?.[1] ?? google?.[1])
+    return Number.isFinite(value) && value > 0 ? value : undefined
   }
 
   setCodec(sdp: string, preference: CodecPreferenceOptions): string {

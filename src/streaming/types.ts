@@ -10,6 +10,7 @@ import type {
   StreamingTargetType,
   StreamingTurnServerConfig,
 } from '@shared/rpc/streaming'
+import type { BrowserPlaybackStats, VideoFrameTrackingSource } from '../player/domain/media'
 
 export type StreamingSession = StreamingSessionSnapshot
 export type StreamingSessionExecution = StreamingSessionExecutionSnapshot
@@ -65,7 +66,7 @@ export interface IceCandidatePolicySpec {
   source: 'settings' | 'debugOverride'
 }
 
-export interface StreamPerformanceSnapshot {
+export interface StreamPerformanceSnapshot extends BrowserPlaybackStats {
   resolution?: string
   rtt?: string | number
   jit?: string | number
@@ -174,8 +175,8 @@ export interface StreamPerformanceSnapshot {
   lastRecoveryAction?: string
   lastRecoveryActionAtMs?: number
   lastRecoveryReason?: string
-  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering'
-  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'decoderReset' | 'reconnect'
+  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering' | 'unknown'
+  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'playbackRebuild' | 'decoderReset' | 'reconnect'
   recoveryEpochId?: string
   lastRecoveryActionLevel?: 'L0' | 'L1' | 'L2' | 'L3'
   lastRecoveryActionResult?: 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
@@ -207,7 +208,7 @@ export interface StreamPerformanceSnapshot {
   renderFrameCallbackIntervalMs?: number
   renderCallbackCountLastSample?: number
   renderCallbackGapCountLastSample?: number
-  renderFrameTrackingSource?: 'videoFrameCallback' | 'timeupdate'
+  renderFrameTrackingSource?: VideoFrameTrackingSource
   renderPresentedFramesDelta?: number
   renderPresentedFramesJumpCount?: number
   renderPresentedFramesAdvancedLastSample?: number
@@ -219,14 +220,14 @@ export interface StreamPerformanceSnapshot {
   renderFrameSourceFrameIntervalMs?: number
   renderFrameSourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
   renderDroppedLikeStreak?: number
-  renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
+  renderCause?: 'decodeBackpressure' | 'frameDeliveryLimited' | 'renderStarvation' | 'renderStable' | 'unknown'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
   renderAdaptiveProfileDigest?: string
   renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
   renderUpshiftBlockedReason?: string
   renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
-  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback' | 'localFallback'
   /** 浏览器端锐化后处理类型；当前口径统一为 USM/CAS，不表示 FSR 超分。 */
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
@@ -283,7 +284,7 @@ export interface StreamPerformanceSnapshot {
   lastDisplayedAtMs?: number
 }
 
-export interface StreamSessionDiagnosticsSnapshot {
+export interface StreamSessionDiagnosticsSnapshot extends BrowserPlaybackStats {
   isActive: boolean
   streamLifecyclePhase?: string
   presentationMilestone?: string
@@ -324,8 +325,8 @@ export interface StreamSessionDiagnosticsSnapshot {
   latestDecisionSummary?: string
   stallKind?: string
   lastRecoveryReason?: string
-  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering'
-  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'decoderReset' | 'reconnect'
+  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering' | 'unknown'
+  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'playbackRebuild' | 'decoderReset' | 'reconnect'
   recoveryEpochId?: string
   lastRecoveryActionLevel?: 'L0' | 'L1' | 'L2' | 'L3'
   lastRecoveryActionResult?: 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
@@ -357,7 +358,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderFrameCallbackIntervalMs?: number
   renderCallbackCountLastSample?: number
   renderCallbackGapCountLastSample?: number
-  renderFrameTrackingSource?: 'videoFrameCallback' | 'timeupdate'
+  renderFrameTrackingSource?: VideoFrameTrackingSource
   renderPresentedFramesDelta?: number
   renderPresentedFramesJumpCount?: number
   renderPresentedFramesAdvancedLastSample?: number
@@ -369,14 +370,14 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderFrameSourceFrameIntervalMs?: number
   renderFrameSourceFpsUnavailableReason?: 'mediaTimeMissing' | 'noPriorMediaTime' | 'mediaTimeDeltaTooSmall' | 'mediaTimeDeltaTooLarge' | 'sourceFpsOutOfRange'
   renderDroppedLikeStreak?: number
-  renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
+  renderCause?: 'decodeBackpressure' | 'frameDeliveryLimited' | 'renderStarvation' | 'renderStable' | 'unknown'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
   renderAdaptiveProfileDigest?: string
   renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
   renderUpshiftBlockedReason?: string
   renderPipelineType?: 'video' | 'webgl2' | 'webgl2_sr'
-  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback' | 'localFallback'
   /** 浏览器端锐化后处理类型；当前口径统一为 USM/CAS，不表示 FSR 超分。 */
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
@@ -459,6 +460,29 @@ export interface StreamExperienceMetricsViewModel {
 
 /** webrtc-direct 内部诊断面板 */
 export interface StreamBrowserDiagnosticsViewModel {
+  receivedFps: string
+  decodedFps: string
+  videoAdvancementFps: string
+  callbackDeliveryFps: string
+  rendererSubmitFps: string
+  frameWindow: string
+  observation: string
+  sourceSize: string
+  outputSize: string
+  submitAge: string
+  submitCost: string
+  gpuCost: string
+  scanout: string
+  renderCause: string
+  renderEffect: string
+  frameCauses: string
+  rttBaseline: string
+  rttDelta: string
+  qualityRequested: string
+  qualityNegotiated: string
+  qualityObserved: string
+  qualityEffect: string
+  recoveryEffect: string
   transportState: string
   presentationMilestone: string
   renderPipelineType: string

@@ -2,6 +2,8 @@
 
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
+> 2026-10-29 当前方向：[整体策略重设计](../isu/2026-10-29-browser-policy-stability-and-native-quality.md)继续复用本文的单一 plan/attach 执行链；渲染输入收敛为用户意图、实际源、显示几何、能力与 renderer 故障事实，网络驱动 RCAS/fit 与混合 display ladder 的规则保留为历史迁移行为。实施进度与验收由[完整功能优化 RFC](2026-10-28-browser-runtime-simplification-and-stability.md)跟踪。
+
 ## Status
 
 - Completion: 已完成（手工 trace 四条路径待补）

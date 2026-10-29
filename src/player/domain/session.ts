@@ -26,6 +26,10 @@ export interface ConnectParams {
 
 export interface CreateOfferOptions {
   iceRestart?: boolean
+  /** 撤销旧协商的本地描述和状态提交资格。 */
+  signal?: AbortSignal
+  /** 同一连接上的媒体参数协商复用已交换的候选。 */
+  preserveIceCandidates?: boolean
 }
 
 export interface CodecPreferenceOptions {

@@ -201,6 +201,16 @@ export class WebRtcTransport {
     }
   }
 
+  hasLocalVideoSender(): boolean {
+    return this.peer?.getSenders().some(sender => sender.track?.kind === 'video') ?? false
+  }
+
+  async rollbackMediaNegotiation(): Promise<void> {
+    const peer = this.ensurePeer()
+    if (peer.signalingState === 'have-local-offer')
+      await peer.setLocalDescription({ type: 'rollback' })
+  }
+
   getPeer(): RTCPeerConnection {
     return this.ensurePeer()
   }

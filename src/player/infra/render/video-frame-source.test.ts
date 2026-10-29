@@ -1,0 +1,350 @@
+import type { ObservedVideoFrameMetadata } from './video-frame-source'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getVideoFrameSource } from './video-frame-source'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+function counterHarness(initialFrames = 0) {
+  let nextId = 0
+  let frames = initialFrames
+  let dropped = 0
+  const rafs = new Map<number, FrameRequestCallback>()
+  const natives = new Map<number, VideoFrameRequestCallback>()
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    const id = ++nextId
+    rafs.set(id, callback)
+    return id
+  })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => rafs.delete(id))
+  const video = {
+    currentTime: 0,
+    getVideoPlaybackQuality: vi.fn(() => ({ totalVideoFrames: frames + dropped, droppedVideoFrames: dropped })),
+    requestVideoFrameCallback: vi.fn((callback: VideoFrameRequestCallback) => {
+      const id = ++nextId
+      natives.set(id, callback)
+      return id
+    }),
+    cancelVideoFrameCallback: vi.fn((id: number) => natives.delete(id)),
+  } as unknown as HTMLVideoElement
+  const source = getVideoFrameSource(video)
+  const observed: ObservedVideoFrameMetadata[] = []
+  let requestId = 0
+  const subscribe = () => source.request((_at, metadata) => {
+    if (metadata)
+      observed.push(metadata)
+    requestId = subscribe()
+  })
+  requestId = subscribe()
+  const poll = (atMs: number) => {
+    for (const [id, callback] of [...rafs]) {
+      rafs.delete(id)
+      callback(atMs)
+    }
+  }
+  const native = (atMs: number, presentedFrames: number, extra: Partial<VideoFrameCallbackMetadata> = {}) => {
+    for (const [id, callback] of [...natives]) {
+      natives.delete(id)
+      callback(atMs, { mediaTime: 0, presentedFrames, ...extra } as VideoFrameCallbackMetadata)
+    }
+  }
+  return {
+    source,
+    video,
+    observed,
+    rafs,
+    natives,
+    poll,
+    native,
+    supply: (presented: number, discarded = 0) => {
+      frames = presented
+      dropped = discarded
+    },
+    cancel: () => source.cancel(requestId),
+  }
+}
+
+describe('shared video frame callback', () => {
+  it('arms diagnostic collection only through an explicit snapshot and keeps media delivery unchanged', () => {
+    const h = counterHarness()
+    h.native(0, 0)
+    h.supply(1)
+    h.native(34, 1)
+    expect(h.source.snapshotResources().nativeCallbackCount).toBe(2)
+    const first = h.source.snapshotDiagnostics()
+    expect(first.observed.videoFrameCallback).toBe(0)
+    expect(first.evidence).toHaveLength(0)
+    h.supply(2)
+    h.native(68, 2)
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(3)
+    expect(h.source.snapshotDiagnostics()).toMatchObject({ observed: { videoFrameCallback: 1 }, accepted: { videoFrameCallback: 1 }, reasons: { counterAdvanced: 1 } })
+    h.cancel()
+  })
+
+  it('pairs polling advancement with the exact debt consumed by a late native callback', () => {
+    const h = counterHarness()
+    h.source.snapshotDiagnostics()
+    h.native(0, 0)
+    h.supply(8)
+    h.poll(500)
+    h.native(501, 8)
+    const snapshot = h.source.snapshotDiagnostics()
+    expect(snapshot).toMatchObject({
+      observed: { videoFrameCallback: 2, animationFrame: 1 },
+      accepted: { videoFrameCallback: 1, animationFrame: 1 },
+      rejected: { videoFrameCallback: 1 },
+      reasons: { initialNativeFrame: 1, counterAdvanced: 1, pollAlreadyDelivered: 1 },
+    })
+    expect(snapshot.evidence.at(-1)).toMatchObject({ newFrame: false, reason: 'pollAlreadyDelivered', nativePresentedFrames: 8, nativeDelta: 8, previousNativePresentedFrames: 0, nativeAdvance: 0, counterAheadBefore: 8, counterAheadAfter: 0 })
+    h.cancel()
+  })
+
+  it('records native advancement being credited by a subsequent playback counter batch', () => {
+    const h = counterHarness()
+    h.source.snapshotDiagnostics()
+    h.native(0, 0)
+    h.native(500, 8)
+    h.supply(8)
+    h.poll(501)
+    const snapshot = h.source.snapshotDiagnostics()
+    expect(snapshot.reasons.nativeAlreadyDelivered).toBe(1)
+    expect(snapshot.evidence.at(-1)).toMatchObject({ newFrame: false, counterFrames: 8, previousCounterFrames: 0, counterDelta: 8, counterAdvance: 0, creditedNativeFrames: 8, uncountedNativeBefore: 8, uncountedNativeAfter: 0 })
+    h.cancel()
+  })
+
+  it('surfaces fixed native identity with advancing mediaTime, resets and invalid numeric fields', () => {
+    const h = counterHarness()
+    h.source.snapshotDiagnostics()
+    h.native(0, 1, { rtpTimestamp: 90000 })
+    h.native(500, 1, { mediaTime: 0.1, rtpTimestamp: 93000 })
+    let snapshot = h.source.snapshotDiagnostics()
+    expect(snapshot.nativeUnchangedWithMediaAdvanceCount).toBe(1)
+    expect(snapshot.evidence.at(-1)).toMatchObject({ newFrame: false, reason: 'nativeCounterUnchanged', nativeState: 'unchanged', mediaTimeState: 'advanced', mediaTime: 0.1 })
+    expect(snapshot.evidence.at(-1)).toMatchObject({ rtpTimestamp: 93000, previousRtpTimestamp: 90000, rtpTimestampState: 'advanced' })
+    h.native(1000, 0, { mediaTime: 0.2 })
+    expect(h.source.snapshotDiagnostics().evidence.at(-1)).toMatchObject({ nativeState: 'regressed', rawNativeDelta: -1, nativeDelta: 1 })
+    h.native(1500, Number.NaN, { mediaTime: Number.POSITIVE_INFINITY })
+    snapshot = h.source.snapshotDiagnostics()
+    expect(snapshot.evidence.at(-1)).toMatchObject({ nativeState: 'invalid', mediaTimeState: 'invalid', nativePresentedFrames: null, mediaTime: null })
+    expect(JSON.stringify(snapshot)).not.toContain('Infinity')
+    h.cancel()
+  })
+
+  it('bounds diagnostic evidence and snapshots independently from high frequency raw callbacks', () => {
+    const h = counterHarness()
+    h.source.snapshotDiagnostics()
+    for (let i = 0; i < 6000; i++) {
+      h.supply(Math.floor(i / 2))
+      h.native(i * 1000 / 600, Math.floor(i / 2))
+    }
+    const snapshot = h.source.snapshotDiagnostics()
+    expect(snapshot.observed.videoFrameCallback).toBe(6000)
+    expect(snapshot.evidence).toHaveLength(8)
+    expect(snapshot.sampledCount).toBeLessThanOrEqual(40)
+    snapshot.evidence[0]!.counterFrames = -1
+    snapshot.observed.videoFrameCallback = -1
+    snapshot.reasons.counterAdvanced = -1
+    expect(h.source.snapshotDiagnostics().observed.videoFrameCallback).toBe(6000)
+    expect(h.source.snapshotDiagnostics().evidence[0]!.counterFrames).toBeGreaterThanOrEqual(0)
+    expect(h.source.snapshotDiagnostics().reasons.counterAdvanced).toBeGreaterThan(0)
+    h.cancel()
+  })
+
+  it('keeps a zero first native counter from crediting later positive frame advancement', () => {
+    const h = counterHarness()
+    h.native(0, 0)
+    h.supply(1)
+    h.poll(16)
+    h.supply(2)
+    h.poll(34)
+    h.native(66, 2)
+    h.supply(3)
+    h.poll(70)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, true, true, false, true])
+    expect(h.observed.map(frame => frame.presentedFramesDelta)).toEqual([0, 1, 1, 0, 1])
+    h.cancel()
+  })
+
+  it('delivers the current counted frame and preserves the next frame after attach', () => {
+    const h = counterHarness(5)
+    h.native(0, 1)
+    h.supply(6)
+    h.poll(16)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, true])
+    h.cancel()
+  })
+
+  it('delivers fresh frames while RVFC is pending, then retains raw metadata without redelivering the frame', () => {
+    const h = counterHarness()
+    h.supply(1)
+    h.poll(16)
+    h.native(17, 1, { rtpTimestamp: 90000, receiveTime: 10, expectedDisplayTime: 16 })
+    h.supply(2)
+    h.poll(34)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, false, true])
+    expect(h.observed[1]).toMatchObject({ trackingSource: 'videoFrameCallback', rtpTimestamp: 90000, newFrame: false, presentedFramesDelta: 0 })
+    expect(h.observed[2]).toMatchObject({ trackingSource: 'animationFrame', presentedFramesDelta: 1 })
+    expect(h.observed[2]?.mediaTime).toBeUndefined()
+    expect(h.source.snapshotResources()).toMatchObject({ nativeFrameCallbacks: 1, animationCallbacks: 1, frameCounterSource: 'playbackQuality', polledFrameCount: 2, nativeCallbackCount: 1 })
+    h.cancel()
+    expect(h.rafs.size + h.natives.size).toBe(0)
+  })
+
+  it('uses fresh RVFC facts when the browser counter lags, then credits its eventual advancement', () => {
+    const h = counterHarness()
+    h.supply(1)
+    h.native(16, 1)
+    h.native(34, 2)
+    h.supply(2)
+    h.poll(35)
+    h.supply(3)
+    h.poll(50)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, true, true])
+    expect(h.observed.filter(frame => frame.newFrame).map(frame => frame.presentedFramesDelta)).toEqual([1, 1, 1])
+    h.cancel()
+  })
+
+  it('keeps counter delivery ahead of batched native observations with different absolute origins', () => {
+    const h = counterHarness()
+    h.native(0, 40)
+    h.supply(1)
+    h.poll(1)
+    h.supply(3)
+    h.native(30, 41)
+    h.native(31, 42)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, true, false])
+    expect(h.observed[1]?.presentedFramesDelta).toBe(2)
+    h.cancel()
+  })
+
+  it('keeps dropped-only frames and repeated display ticks out of fresh delivery', () => {
+    const h = counterHarness()
+    h.supply(1)
+    h.poll(16)
+    h.supply(1, 10)
+    for (let at = 20; at < 100; at += 5)
+      h.poll(at)
+    expect(h.observed).toHaveLength(1)
+    expect(h.source.snapshotResources().polledFrameCount).toBe(1)
+    h.cancel()
+  })
+
+  it('absorbs both late native and animation callbacks after the last consumer cancels', () => {
+    const h = counterHarness()
+    const oldRaf = [...h.rafs.values()][0]!
+    const oldNative = [...h.natives.values()][0]!
+    h.cancel()
+    h.supply(10)
+    oldRaf(100)
+    oldNative(100, { mediaTime: 0, presentedFrames: 10 } as VideoFrameCallbackMetadata)
+    expect(h.observed).toHaveLength(0)
+    expect(h.source.snapshotResources()).toMatchObject({ frameRequests: 0, nativeFrameCallbacks: 0, animationCallbacks: 0, polledFrameCount: 0, nativeCallbackCount: 0 })
+  })
+
+  it('keeps zero browser counters compatible with zero mediaTime and advancing native counters', () => {
+    const h = counterHarness()
+    h.native(0, 1)
+    h.native(16, 2)
+    h.supply(2)
+    h.poll(17)
+    h.native(34, 3)
+    h.supply(3)
+    h.poll(35)
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(3)
+    h.cancel()
+  })
+
+  it('continues the native path when playback-quality inspection throws', () => {
+    const h = counterHarness()
+    vi.mocked(h.video.getVideoPlaybackQuality).mockImplementation(() => {
+      throw new Error('counterUnavailable')
+    })
+    h.native(0, 1)
+    h.native(34, 2)
+    h.poll(35)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, true])
+    expect(h.source.snapshotResources().frameCounterSource).toBeUndefined()
+    h.cancel()
+  })
+
+  it('preserves delivery credits while a working counter temporarily fails and then recovers', () => {
+    const h = counterHarness()
+    h.supply(1)
+    h.poll(16)
+    const readCounter = h.video.getVideoPlaybackQuality
+    vi.mocked(readCounter).mockImplementation(() => {
+      throw new Error('temporarilyUnavailable')
+    })
+    h.native(17, 1)
+    h.native(34, 2)
+    h.supply(2)
+    vi.mocked(readCounter).mockImplementation(() => ({ totalVideoFrames: 2, droppedVideoFrames: 0 } as VideoPlaybackQuality))
+    h.poll(35)
+    expect(h.observed.map(frame => frame.newFrame)).toEqual([true, false, true])
+    expect(h.observed.map(frame => frame.presentedFramesDelta)).toEqual([1, 0, 1])
+    h.cancel()
+  })
+
+  it('keeps other consumers and subsequent frames running when one consumer throws', () => {
+    let callback!: VideoFrameRequestCallback
+    const video = { requestVideoFrameCallback: vi.fn((next) => {
+      callback = next
+      return 1
+    }), cancelVideoFrameCallback: vi.fn() } as unknown as HTMLVideoElement
+    const report = vi.fn()
+    vi.stubGlobal('reportError', report)
+    const source = getVideoFrameSource(video)
+    source.request(() => {
+      throw new Error('consumerFailed')
+    })
+    const other = vi.fn(() => source.request(() => {}))
+    source.request(other)
+    callback(10, {} as VideoFrameCallbackMetadata)
+    expect(other).toHaveBeenCalledTimes(1)
+    expect(video.requestVideoFrameCallback).toHaveBeenCalledTimes(2)
+    expect(report).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+  it('fans one observation to metadata and renderer requests and cancels the final callback', () => {
+    const callbacks: VideoFrameRequestCallback[] = []
+    const video = { requestVideoFrameCallback: vi.fn((callback) => {
+      callbacks.push(callback)
+      return callbacks.length
+    }), cancelVideoFrameCallback: vi.fn() } as unknown as HTMLVideoElement
+    const source = getVideoFrameSource(video)
+    const metadata = vi.fn()
+    const renderer = vi.fn()
+    source.request(metadata)
+    source.request(renderer)
+    expect(video.requestVideoFrameCallback).toHaveBeenCalledTimes(1)
+    callbacks[0]!(100, { presentedFrames: 1, mediaTime: 0.1 } as VideoFrameCallbackMetadata)
+    expect(metadata.mock.calls[0]?.[1]).toBe(renderer.mock.calls[0]?.[1])
+    expect(metadata.mock.calls[0]?.[1].localSequence).toBe(1)
+    const nextMetadata = source.request(metadata)
+    const nextRenderer = source.request(renderer)
+    source.cancel(nextMetadata)
+    expect(video.cancelVideoFrameCallback).not.toHaveBeenCalled()
+    source.cancel(nextRenderer)
+    expect(video.cancelVideoFrameCallback).toHaveBeenCalledTimes(1)
+    callbacks[1]!(200, {} as VideoFrameCallbackMetadata)
+    expect(metadata).toHaveBeenCalledTimes(1)
+    expect(renderer).toHaveBeenCalledTimes(1)
+  })
+
+  it('absorbs a request cancelled by another consumer during the same observation', () => {
+    let callback!: VideoFrameRequestCallback
+    const video = { requestVideoFrameCallback: vi.fn((next) => {
+      callback = next
+      return 1
+    }), cancelVideoFrameCallback: vi.fn() } as unknown as HTMLVideoElement
+    const source = getVideoFrameSource(video)
+    let second = 0
+    source.request(() => source.cancel(second))
+    const consumer = vi.fn()
+    second = source.request(consumer)
+    callback(10, {} as VideoFrameCallbackMetadata)
+    expect(consumer).not.toHaveBeenCalled()
+  })
+})

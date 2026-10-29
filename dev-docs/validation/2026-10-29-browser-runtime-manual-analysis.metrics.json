@@ -1,0 +1,296 @@
+{
+  "traceFile": "runtime-trace-1793241116241-1.jsonl",
+  "traceRows": 5769,
+  "traceDurationSeconds": 476.985,
+  "clockOffsetMs": 1793241116563.0,
+  "visibilityIntervals": [
+    {
+      "startSeq": 3833,
+      "endSeq": 3837,
+      "startMs": 371696.0,
+      "endMs": 371788.0,
+      "seconds": 0.092
+    },
+    {
+      "startSeq": 3844,
+      "endSeq": 4829,
+      "startMs": 371853.0,
+      "endMs": 433254.0,
+      "seconds": 61.401
+    },
+    {
+      "startSeq": 4871,
+      "endSeq": 4882,
+      "startMs": 434483.0,
+      "endMs": 435047.0,
+      "seconds": 0.564
+    }
+  ],
+  "windows": {
+    "whole": {
+      "startSeq": 836,
+      "endSeq": 5716,
+      "durationSeconds": 167.203,
+      "sampleCount": 480,
+      "counterDelta": {
+        "bytesReceived": 21751971,
+        "packetsReceived": 22375,
+        "packetsLost": 1178,
+        "framesReceived": 4871,
+        "framesDecoded": 4381,
+        "framesDropped": 481,
+        "keyFramesDecoded": 10,
+        "nackCount": 3265,
+        "pliCount": 3,
+        "freezeCount": 214,
+        "totalFreezesDuration": 91.518,
+        "totalDecodeTime": 17.139015,
+        "jitterBufferDelay": 2234.234347,
+        "jitterBufferEmittedCount": 4862,
+        "jitterBufferTargetDelay": 417.187544
+      },
+      "lossPercent": 5.001,
+      "receiveFps": 29.132,
+      "decodeFps": 26.202,
+      "videoMbps": 1.041,
+      "decodeMsPerFrame": 3.912,
+      "jitterBufferMsPerEmittedFrame": 459.53,
+      "jitterBufferTargetMsPerEmittedFrame": 85.806,
+      "rttMs": {
+        "count": 382,
+        "median": 233.0,
+        "p95": 1260.0,
+        "max": 3357.0
+      },
+      "jitterMs": {
+        "count": 480,
+        "median": 17.0,
+        "p95": 33.0,
+        "max": 37.0
+      },
+      "noDecodedProgressSamples": 110,
+      "decodedProgressSamples": 369
+    },
+    "first30Seconds": {
+      "startSeq": 836,
+      "endSeq": 1956,
+      "durationSeconds": 29.865,
+      "sampleCount": 118,
+      "counterDelta": {
+        "bytesReceived": 6914286,
+        "packetsReceived": 6779,
+        "packetsLost": 356,
+        "framesReceived": 884,
+        "framesDecoded": 850,
+        "framesDropped": 25,
+        "keyFramesDecoded": 5,
+        "nackCount": 676,
+        "pliCount": 2,
+        "freezeCount": 40,
+        "totalFreezesDuration": 13.969,
+        "totalDecodeTime": 3.488091,
+        "jitterBufferDelay": 176.94141299999998,
+        "jitterBufferEmittedCount": 875,
+        "jitterBufferTargetDelay": 49.044976
+      },
+      "lossPercent": 4.989,
+      "receiveFps": 29.6,
+      "decodeFps": 28.461,
+      "videoMbps": 1.852,
+      "decodeMsPerFrame": 4.104,
+      "jitterBufferMsPerEmittedFrame": 202.219,
+      "jitterBufferTargetMsPerEmittedFrame": 56.051,
+      "rttMs": {
+        "count": 108,
+        "median": 228.0,
+        "p95": 253.0,
+        "max": 253.0
+      },
+      "jitterMs": {
+        "count": 118,
+        "median": 5.0,
+        "p95": 31.0,
+        "max": 33.0
+      },
+      "noDecodedProgressSamples": 16,
+      "decodedProgressSamples": 101
+    },
+    "second30Seconds": {
+      "startSeq": 1967,
+      "endSeq": 3135,
+      "durationSeconds": 29.816,
+      "sampleCount": 119,
+      "counterDelta": {
+        "bytesReceived": 6143694,
+        "packetsReceived": 5998,
+        "packetsLost": 296,
+        "framesReceived": 882,
+        "framesDecoded": 826,
+        "framesDropped": 56,
+        "keyFramesDecoded": 1,
+        "nackCount": 795,
+        "pliCount": 0,
+        "freezeCount": 43,
+        "totalFreezesDuration": 15.479000000000001,
+        "totalDecodeTime": 2.5833129999999995,
+        "jitterBufferDelay": 317.32847000000004,
+        "jitterBufferEmittedCount": 882,
+        "jitterBufferTargetDelay": 59.945981
+      },
+      "lossPercent": 4.703,
+      "receiveFps": 29.581,
+      "decodeFps": 27.703,
+      "videoMbps": 1.648,
+      "decodeMsPerFrame": 3.127,
+      "jitterBufferMsPerEmittedFrame": 359.783,
+      "jitterBufferTargetMsPerEmittedFrame": 67.966,
+      "rttMs": {
+        "count": 104,
+        "median": 231.0,
+        "p95": 777.0,
+        "max": 777.0
+      },
+      "jitterMs": {
+        "count": 119,
+        "median": 8.0,
+        "p95": 27.0,
+        "max": 33.0
+      },
+      "noDecodedProgressSamples": 18,
+      "decodedProgressSamples": 100
+    },
+    "foregroundBeforeLongHide": {
+      "startSeq": 836,
+      "endSeq": 3828,
+      "durationSeconds": 78.904,
+      "sampleCount": 312,
+      "counterDelta": {
+        "bytesReceived": 15689631,
+        "packetsReceived": 15469,
+        "packetsLost": 771,
+        "framesReceived": 2342,
+        "framesDecoded": 2220,
+        "framesDropped": 113,
+        "keyFramesDecoded": 7,
+        "nackCount": 1746,
+        "pliCount": 2,
+        "freezeCount": 104,
+        "totalFreezesDuration": 38.126,
+        "totalDecodeTime": 7.871220999999999,
+        "jitterBufferDelay": 621.8718349999999,
+        "jitterBufferEmittedCount": 2333,
+        "jitterBufferTargetDelay": 149.75221
+      },
+      "lossPercent": 4.748,
+      "receiveFps": 29.682,
+      "decodeFps": 28.135,
+      "videoMbps": 1.591,
+      "decodeMsPerFrame": 3.546,
+      "jitterBufferMsPerEmittedFrame": 266.555,
+      "jitterBufferTargetMsPerEmittedFrame": 64.189,
+      "rttMs": {
+        "count": 278,
+        "median": 228.0,
+        "p95": 582.0,
+        "max": 777.0
+      },
+      "jitterMs": {
+        "count": 312,
+        "median": 8.0,
+        "p95": 31.0,
+        "max": 33.0
+      },
+      "noDecodedProgressSamples": 47,
+      "decodedProgressSamples": 264
+    },
+    "longHidden": {
+      "startSeq": 3847,
+      "endSeq": 4809,
+      "durationSeconds": 61.073,
+      "sampleCount": 62,
+      "counterDelta": {
+        "bytesReceived": 4287944,
+        "packetsReceived": 4834,
+        "packetsLost": 265,
+        "framesReceived": 1779,
+        "framesDecoded": 1707,
+        "framesDropped": 72,
+        "keyFramesDecoded": 2,
+        "nackCount": 762,
+        "pliCount": 0,
+        "freezeCount": 81,
+        "totalFreezesDuration": 31.614000000000004,
+        "totalDecodeTime": 6.003542,
+        "jitterBufferDelay": 476.16725900000006,
+        "jitterBufferEmittedCount": 1779,
+        "jitterBufferTargetDelay": 181.128007
+      },
+      "lossPercent": 5.197,
+      "receiveFps": 29.129,
+      "decodeFps": 27.95,
+      "videoMbps": 0.562,
+      "decodeMsPerFrame": 3.517,
+      "jitterBufferMsPerEmittedFrame": 267.66,
+      "jitterBufferTargetMsPerEmittedFrame": 101.815,
+      "rttMs": {
+        "count": 49,
+        "median": 235.0,
+        "p95": 492.0,
+        "max": 979.0
+      },
+      "jitterMs": {
+        "count": 62,
+        "median": 30.0,
+        "p95": 32.0,
+        "max": 37.0
+      },
+      "noDecodedProgressSamples": 2,
+      "decodedProgressSamples": 59
+    },
+    "foregroundAfterLastResume": {
+      "startSeq": 4888,
+      "endSeq": 5716,
+      "durationSeconds": 24.724,
+      "sampleCount": 99,
+      "counterDelta": {
+        "bytesReceived": 1576680,
+        "packetsReceived": 1845,
+        "packetsLost": 127,
+        "framesReceived": 701,
+        "framesDecoded": 406,
+        "framesDropped": 295,
+        "keyFramesDecoded": 1,
+        "nackCount": 702,
+        "pliCount": 1,
+        "freezeCount": 25,
+        "totalFreezesDuration": 19.275000000000006,
+        "totalDecodeTime": 3.105149000000001,
+        "jitterBufferDelay": 1115.9815660000002,
+        "jitterBufferEmittedCount": 701,
+        "jitterBufferTargetDelay": 80.349489
+      },
+      "lossPercent": 6.44,
+      "receiveFps": 28.353,
+      "decodeFps": 16.421,
+      "videoMbps": 0.51,
+      "decodeMsPerFrame": 7.648,
+      "jitterBufferMsPerEmittedFrame": 1591.985,
+      "jitterBufferTargetMsPerEmittedFrame": 114.621,
+      "rttMs": {
+        "count": 50,
+        "median": 1259.0,
+        "p95": 2494.0,
+        "max": 3357.0
+      },
+      "jitterMs": {
+        "count": 99,
+        "median": 30.0,
+        "p95": 34.0,
+        "max": 35.0
+      },
+      "noDecodedProgressSamples": 57,
+      "decodedProgressSamples": 41
+    }
+  },
+  "note": "窗口指标使用窗口内首末累计计数差，样本按sampledAtMs排序；RTT为有效样本分位数；后台区间由前端visibility事件投影，RPC时延带来边界误差。"
+}

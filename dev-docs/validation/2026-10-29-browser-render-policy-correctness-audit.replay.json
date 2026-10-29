@@ -1,0 +1,234 @@
+{
+  "srBudget": [
+    {
+      "screen": "2560x1440",
+      "widthCss": 2560,
+      "heightCss": 1440,
+      "dpr": 1,
+      "hz": 144,
+      "level": "displayL0",
+      "budget": {
+        "width": 2560,
+        "height": 1440
+      },
+      "tier": "1440p",
+      "mode": "passthrough",
+      "actualOutput": [
+        2560,
+        1440
+      ],
+      "cssViewport": [
+        2560,
+        1440
+      ],
+      "rcasStops": 1,
+      "rcasBaseStops": 0.88
+    },
+    {
+      "screen": "2560x1440",
+      "widthCss": 2560,
+      "heightCss": 1440,
+      "dpr": 1,
+      "hz": 144,
+      "level": "displayL1",
+      "budget": {
+        "width": 2560,
+        "height": 1440
+      },
+      "tier": "1440p",
+      "mode": "passthrough",
+      "actualOutput": [
+        2560,
+        1440
+      ],
+      "cssViewport": [
+        2560,
+        1440
+      ],
+      "rcasStops": 1.06,
+      "rcasBaseStops": 0.88
+    },
+    {
+      "screen": "2560x1440",
+      "widthCss": 2560,
+      "heightCss": 1440,
+      "dpr": 1,
+      "hz": 144,
+      "level": "displayL2",
+      "budget": {
+        "width": 1920,
+        "height": 1080
+      },
+      "tier": "1080p",
+      "mode": "present-downscale",
+      "actualOutput": [
+        1920,
+        1080
+      ],
+      "cssViewport": [
+        2560,
+        1440
+      ],
+      "rcasStops": 0.96,
+      "rcasBaseStops": 0.72
+    },
+    {
+      "screen": "2560x1440",
+      "widthCss": 1707,
+      "heightCss": 960,
+      "dpr": 1.5,
+      "hz": 144,
+      "level": "displayL0",
+      "budget": {
+        "width": 2561,
+        "height": 1440
+      },
+      "tier": "1440p",
+      "mode": "passthrough",
+      "actualOutput": [
+        2560,
+        1440
+      ],
+      "cssViewport": [
+        1707,
+        960
+      ],
+      "rcasStops": 1,
+      "rcasBaseStops": 0.88
+    },
+    {
+      "screen": "2560x1440",
+      "widthCss": 1707,
+      "heightCss": 960,
+      "dpr": 1.5,
+      "hz": 144,
+      "level": "displayL1",
+      "budget": {
+        "width": 2134,
+        "height": 1200
+      },
+      "tier": "1440p",
+      "mode": "passthrough",
+      "actualOutput": [
+        2133,
+        1200
+      ],
+      "cssViewport": [
+        1707,
+        960
+      ],
+      "rcasStops": 1.06,
+      "rcasBaseStops": 0.88
+    },
+    {
+      "screen": "2560x1440",
+      "widthCss": 1707,
+      "heightCss": 960,
+      "dpr": 1.5,
+      "hz": 144,
+      "level": "displayL2",
+      "budget": {
+        "width": 1707,
+        "height": 960
+      },
+      "tier": "1080p",
+      "mode": "present-downscale",
+      "actualOutput": [
+        1707,
+        960
+      ],
+      "cssViewport": [
+        1707,
+        960
+      ],
+      "rcasStops": 0.96,
+      "rcasBaseStops": 0.72
+    }
+  ],
+  "fpsClassification": [
+    {
+      "fps": 24,
+      "ceiling": 60,
+      "expected": 30,
+      "contentFpsClass": "content30"
+    },
+    {
+      "fps": 30,
+      "ceiling": 60,
+      "expected": 30,
+      "contentFpsClass": "content30"
+    },
+    {
+      "fps": 36,
+      "ceiling": 60,
+      "expected": 30,
+      "contentFpsClass": "content30"
+    },
+    {
+      "fps": 40,
+      "ceiling": 60,
+      "expected": 60,
+      "contentFpsClass": "content60"
+    },
+    {
+      "fps": 56,
+      "ceiling": 60,
+      "expected": 60,
+      "contentFpsClass": "content60"
+    },
+    {
+      "fps": 72,
+      "ceiling": 60,
+      "expected": 60,
+      "contentFpsClass": "content60"
+    },
+    {
+      "fps": 0,
+      "ceiling": 60,
+      "expected": 60,
+      "contentFpsClass": "content60"
+    }
+  ],
+  "srPacing": [
+    {
+      "refreshHz": 60,
+      "targetFps": 60,
+      "steadyMaximumDrawFps": 60
+    },
+    {
+      "refreshHz": 90,
+      "targetFps": 60,
+      "steadyMaximumDrawFps": 45
+    },
+    {
+      "refreshHz": 120,
+      "targetFps": 60,
+      "steadyMaximumDrawFps": 60
+    },
+    {
+      "refreshHz": 144,
+      "targetFps": 60,
+      "steadyMaximumDrawFps": 48
+    },
+    {
+      "refreshHz": 165,
+      "targetFps": 60,
+      "steadyMaximumDrawFps": 55
+    },
+    {
+      "refreshHz": 240,
+      "targetFps": 60,
+      "steadyMaximumDrawFps": 60
+    }
+  ],
+  "webglThirtyFpsJitter": {
+    "callbackIntervalsMs": [
+      32,
+      34
+    ],
+    "sourceFps": 30.303030303030305,
+    "callbackCount": 300,
+    "draws": 150,
+    "spanMs": 9900
+  }
+}
