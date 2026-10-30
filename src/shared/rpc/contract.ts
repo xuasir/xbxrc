@@ -122,7 +122,6 @@ export interface XBoxRpcSchema {
     startBackend: RpcMethod<void, GamepadRuntimeSnapshotDto>
     stopBackend: RpcMethod<void, void>
     submitStreamState: RpcMethod<{ sessionId: string, sequence: number, state: LogicalPadStateDto }, boolean>
-    getRuntimeSnapshot: RpcMethod<void, GamepadRuntimeSnapshotDto>
     playRumble: RpcMethod<{ request: GamepadRumbleRequestDto }, GamepadRumbleResultDto>
     stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
 

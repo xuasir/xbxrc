@@ -9,8 +9,8 @@ use ohmygamepad_protocol::{
 
 use crate::{
     default_logical_pad_state, map_sample_with_profile, map_standard_sample, merge_states,
-    BackendPollResult, DeviceLifecycleEvent, InputBackend, InputCoreConfig, RawDeviceSample,
-    StreamSink, UiSink,
+    BackendPollResult, DeviceLifecycleEvent, InputBackend, InputCoreConfig, InputProcessingMode,
+    RawDeviceSample, StreamSink, UiSink,
 };
 
 pub struct InputCore<TBackend, TUiSink, TStreamSink> {
@@ -39,11 +39,15 @@ where
     TStreamSink: StreamSink,
 {
     pub fn new(
-        config: InputCoreConfig,
+        mut config: InputCoreConfig,
         backend: TBackend,
         ui_sink: TUiSink,
         stream_sink: TStreamSink,
     ) -> Self {
+        if config.processing_mode == InputProcessingMode::StandardDevices {
+            config.bindings.clear();
+            config.device_profiles.clear();
+        }
         Self {
             config,
             backend,
@@ -115,11 +119,15 @@ where
     }
 
     pub fn replace_bindings(&mut self, bindings: Vec<LogicalPadBindingDto>) {
-        self.config.bindings = bindings;
+        if self.config.processing_mode == InputProcessingMode::LogicalPads {
+            self.config.bindings = bindings;
+        }
     }
 
     pub fn replace_device_profiles(&mut self, device_profiles: Vec<crate::DeviceProfile>) {
-        self.config.device_profiles = device_profiles;
+        if self.config.processing_mode == InputProcessingMode::LogicalPads {
+            self.config.device_profiles = device_profiles;
+        }
     }
 
     pub fn tick(&mut self) {
@@ -137,7 +145,9 @@ where
     }
 
     pub fn sample_once(&mut self) {
-        self.refresh_pad_snapshots();
+        if self.config.processing_mode == InputProcessingMode::LogicalPads {
+            self.refresh_pad_snapshots();
+        }
     }
 
     pub fn push_pad_snapshot(&mut self, snapshot: LogicalPadSnapshotDto) {
@@ -175,7 +185,9 @@ where
             let observed = sample.observed_at_ms;
             self.last_backend_sample_activity_at_ms =
                 self.last_backend_sample_activity_at_ms.max(observed);
-            self.track_activity(&sample);
+            if self.config.processing_mode == InputProcessingMode::LogicalPads {
+                self.track_activity(&sample);
+            }
             self.raw_samples.insert(sample.device_id.clone(), sample);
         }
 

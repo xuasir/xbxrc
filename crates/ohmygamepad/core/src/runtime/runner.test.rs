@@ -115,6 +115,47 @@ where
 }
 
 #[test]
+fn standard_device_runtime_publishes_raw_changes_without_pad_state_updates() {
+    let mut config = InputCoreConfig::default();
+    config.processing_mode = crate::InputProcessingMode::StandardDevices;
+    let runtime = spawn_input_runtime(
+        config,
+        ScriptedBackend::default(),
+        ThreadSafeUiSink::default(),
+        ThreadSafeStreamSink,
+    );
+    let receiver = runtime.subscribe_runtime_snapshot();
+    let initial = receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+    assert!(initial.slots.is_empty());
+    runtime.refresh_snapshot().unwrap();
+    assert_eq!(runtime.latest_pad_seq(), 0);
+    assert!(runtime.latest_pad_states().load().is_empty());
+    runtime.shutdown().unwrap();
+
+    // 只变化标准态时，广播仍然推进；这也是小于游戏死区的输入。
+    let broadcaster = super::RuntimeSnapshotBroadcaster::default();
+    let receiver = broadcaster.subscribe();
+    let mut snapshot = ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto::default();
+    snapshot
+        .device_samples
+        .push(ohmygamepad_protocol::GamepadDeviceSampleDto {
+            device_id: "pad-a".into(),
+            state: Default::default(),
+        });
+    broadcaster.publish(snapshot.clone());
+    receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+    snapshot.device_samples[0].state.left_stick.x = 0.02;
+    broadcaster.publish(snapshot.clone());
+    assert_eq!(
+        receiver
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .device_samples,
+        snapshot.device_samples
+    );
+}
+
+#[test]
 fn sampling_schedule_tracks_backend_and_pad_rates_independently() {
     let mut schedule = SamplingSchedule::new(&ohmygamepad_protocol::OhMyGamepadSamplingConfigDto {
         backend_poll_rate_hz: 250,

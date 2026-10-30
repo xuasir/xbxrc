@@ -192,6 +192,8 @@
           "outputSize": "实际输出尺寸",
           "submitAge": "提交年龄",
           "submitCost": "CPU 提交平均耗时",
+          "uploadCost": "CPU 纹理上传平均耗时",
+          "glSubmitCost": "CPU GL 提交平均耗时",
           "gpuCost": "GPU 耗时",
           "scanout": "实际上屏",
           "renderCause": "显示归因",

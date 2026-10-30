@@ -16,6 +16,7 @@ const harness = vi.hoisted(() => ({
   closeRuntime: vi.fn(),
   startRuntime: vi.fn(),
   resetInput: vi.fn(),
+  trace: vi.fn(async () => {}),
 }))
 
 vi.mock('vue', async (original) => {
@@ -36,7 +37,7 @@ vi.mock('../services/rpc', () => ({
       closeSession: harness.closeSession,
       getSessionProgress: vi.fn(async () => null),
     },
-    runtimeTrace: { recordEvent: vi.fn(async () => {}) },
+    runtimeTrace: { recordEvent: harness.trace },
   },
 }))
 vi.mock('../pages/stream/stream-input-route-controller', () => ({
@@ -121,6 +122,21 @@ afterEach(() => {
 })
 
 describe('stream execution resource lifecycle', () => {
+  it('records the original runtime failure before teardown clears the session', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    harness.runtimeOptions?.onRuntimeError('iceExchangeTimeout')
+    expect(harness.trace).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'executionFailed',
+      sessionId: 'session-1',
+      payload: expect.objectContaining({ error: 'iceExchangeTimeout' }),
+    }))
+    await flush()
+    expect(harness.closeSession).toHaveBeenCalledWith({ sessionId: 'session-1' })
+    expect(vm.execution.errorText.value).not.toBe('')
+  })
+
   it('cancels during configuration loading before remote create', async () => {
     const config = deferred<Record<string, unknown>>()
     harness.config.mockReturnValue(config.promise)

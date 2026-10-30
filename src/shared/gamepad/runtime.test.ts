@@ -22,6 +22,26 @@ beforeEach(() => {
 })
 
 describe('gamepad runtime configuration', () => {
+  it('notifies configuration listeners only on initialization and successful persistence', async () => {
+    const runtime = await import('./runtime')
+    const listener = vi.fn()
+    const dispose = runtime.subscribeGamepadConfig(listener)
+    expect(listener).toHaveBeenCalledOnce()
+    await runtime.initializeGamepadInput()
+    expect(listener).toHaveBeenCalledTimes(2)
+    runtime.inputController.setStreamReady(true)
+    runtime.inputController.setBackground(true)
+    expect(listener).toHaveBeenCalledTimes(2)
+    mocks.set.mockRejectedValueOnce(new Error('write failed'))
+    await expect(runtime.saveGamepadConfig({ gamepad_control_source: 'keyboard' })).rejects.toThrow()
+    expect(listener).toHaveBeenCalledTimes(2)
+    mocks.set.mockResolvedValue({ gamepad_control_source: 'keyboard' })
+    await runtime.saveGamepadConfig({ gamepad_control_source: 'keyboard' })
+    expect(listener.mock.lastCall?.[0]).toEqual({ gamepad_control_source: 'keyboard' })
+    dispose()
+    await runtime.saveGamepadConfig({ gamepad_control_source: 'keyboard' })
+    expect(listener).toHaveBeenCalledTimes(3)
+  })
   it('starts browser defaults with a visible diagnostic when config loading fails', async () => {
     mocks.get.mockRejectedValueOnce(new Error('disk unavailable'))
     const runtime = await import('./runtime')

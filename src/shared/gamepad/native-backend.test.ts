@@ -1,4 +1,4 @@
-import type { GamepadDeviceDto, GamepadRumbleResultDto, GamepadRuntimeSnapshotDto } from './contract'
+import type { GamepadRumbleResultDto, GamepadRuntimeSnapshotDto } from './contract'
 import type { NativeInputTransport } from './native-backend'
 import { describe, expect, it, vi } from 'vitest'
 import { NativeGamepadBackend } from './native-backend'
@@ -6,8 +6,7 @@ import { neutralState } from './state'
 
 function snapshot(id = 'sdl:1'): GamepadRuntimeSnapshotDto {
   return {
-    devices: id ? [{ deviceId: id, name: 'Xbox', connected: true, sdl3Capabilities: { supportsRumble: true } } as GamepadDeviceDto] : [],
-    deviceSamples: id ? [{ deviceId: id, state: neutralState() }] : [],
+    devices: id ? [{ deviceId: id, name: 'Xbox', supportsRumble: true, state: neutralState() }] : [],
   }
 }
 function fixture() {
@@ -70,7 +69,7 @@ describe('native backend contract', () => {
     const f = fixture()
     const next = vi.fn()
     const initial = snapshot()
-    initial.deviceSamples[0].state.leftStick.x = 0.02
+    initial.devices[0].state.leftStick.x = 0.02
     f.transport.start = vi.fn(async () => initial)
     await f.backend.start(next)
     expect(next.mock.lastCall?.[0].samples[0].state.leftStick.x).toBe(0.02)

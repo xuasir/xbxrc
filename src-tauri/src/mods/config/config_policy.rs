@@ -242,13 +242,6 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             normalize_string_enum(key, value, "gamepad", &["gamepad", "keyboard"])
         }
         "gamepad_game_controls" => normalize_game_controls(value),
-        "gamepad_device_profiles" => {
-            if value.is_array() {
-                value.clone()
-            } else {
-                fallback.clone()
-            }
-        }
         "gamepad_keyboard_mapping" => normalize_keyboard_mapping(value, fallback),
         _ => fallback.clone(),
     }
@@ -310,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn gamepad_migration_preserves_all_legacy_profiles_and_valid_preferences() {
+    fn gamepad_config_projects_active_keys_and_valid_preferences() {
         let profiles =
             json!([{"id": "one", "buttons": {"south": 1}}, {"id": "two", "unknown": 42}]);
         let mut source = Map::new();
@@ -318,7 +311,13 @@ mod tests {
         source.insert("gamepad_background_policy".into(), json!("follow-app"));
         source.insert("ui_haptics".into(), json!(true));
         let normalized = normalize_config(source);
-        assert_eq!(normalized["gamepad_device_profiles"], profiles);
+        assert!(!normalized.contains_key("gamepad_device_profiles"));
+        assert!(!filter_patch(
+            &json!({"gamepad_device_profiles": profiles})
+                .as_object()
+                .unwrap()
+        )
+        .contains_key("gamepad_device_profiles"));
         assert_eq!(normalized["gamepad_background_policy"], "follow-app");
         assert_eq!(normalized["ui_haptics"], true);
         assert_eq!(normalized["gamepad_backend"], "browser");

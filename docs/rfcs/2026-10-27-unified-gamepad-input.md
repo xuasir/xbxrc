@@ -5,7 +5,7 @@
 - Completion: 已完成（改造与本机验证；Windows/ROG实机单列待验）
 - Current State: completed
 - Owner: Codex（按用户要求单代理执行）
-- Last Updated: 2026-10-27
+- Last Updated: 2026-10-30
 - Execution authorization: 用户已确认设计，并通过目标“按方案推进手柄输入部分的改造”授权执行。
 
 ## Background
@@ -65,3 +65,20 @@
 - 删除 InputService/RumbleService 无效配置参数、重复 ControlTransport 透传、空生命周期适配；震动报文解析直接返回效果列表，保留当前服务使用的两种报文格式与 Pad0 过滤。
 - 从 SettingSectionList 提取现有 SettingRow 与分组样式供手柄页复用；开关沿用 SettingToggleRow，编辑器操作置于 SettingModalShell 固定底栏，颜色统一使用主题变量。
 - 公共输入路由、keep-active 默认、设备/会话释放、capture 与几何导航继续沿用现有实现。旧存储数据及通用 Rust 库 API 保留。
+
+## 三项复杂度收口（2026-10-29）
+
+用户通过关联聊天明确的三项方案及“继续解决剩余的三个问题”授权执行。沿用现有统一输入边界，三项修复及本机验收于 2026-10-30 完成：
+
+- [x] Native：现有 InputCore/SDL3 service 增加设备标准态处理模式，桌面退出槽位选择、profile 映射、activity 选择与绑定同步；桌面 RPC/事件只输出连接设备的 ID、名称、触觉能力与标准状态。通用库默认逻辑槽位模式继续服务库级调用。
+- [x] 设置：提取面板会话生命周期，草稿在打开时初始化；录入与实时测试各持有独立期限和计时器；关闭、切换、断连与卸载复用统一释放入口，隔离迟到焦点恢复与触觉结果。
+- [x] 遗留：移除无消费者的快照查询 RPC、旧 profile DTO、默认键与配置分组；历史存储按现有 patch 存储方式保留。键盘桥复用公共中性状态，配置在偏好变更时应用，提供完整监听清理。
+
+验收：标准态模式原始值与热插拔发布、逻辑槽位模式回归；面板超时、切换、断连、卸载与重开隔离；键盘持键、配置变更与监听退出；前端 lint/typecheck/test/build，Rust fmt/test/check，diff 检查。Windows/ROG 实机范围沿用 Platform validation。
+
+
+2026-10-30 收口证据：桌面启动启用 `StandardDevices`，核心跳过活动设备选择、游戏 profile/槽位采样和 ArcSwap 槽位发布，SDL3 service 跳过 sampling binding 同步。启动返回与事件共用紧凑投影，`devices` 中每个连接设备只包含 `deviceId/name/supportsRumble/state`，标准值及热插拔持续发布。通用库默认 `LogicalPads` 模式回归通过。
+
+设置会话统一拥有面板与录入状态，10 秒录入和 20 秒测试各使用独立截止时间；关闭、切换、设备变化及卸载统一清理，保存、触觉和延迟焦点恢复校验当前会话身份。键盘配置只在初始化与成功保存后通知，持键时变更映射/来源先释放，真实松开后下一次按下使用新配置；安装与卸载覆盖全部 DOM 和配置监听。
+
+验证记录详见[改造报告的 2026-10-30 补充验收](../reports/2026-10-27-unified-gamepad-input.md)。Windows/ROG 范围继续沿用 Platform validation。

@@ -192,6 +192,8 @@
           "outputSize": "Actual output size",
           "submitAge": "Submission age",
           "submitCost": "CPU submission mean",
+          "uploadCost": "CPU texture upload mean",
+          "glSubmitCost": "CPU GL submission mean",
           "gpuCost": "GPU time",
           "scanout": "Actual scanout",
           "renderCause": "Display cause",

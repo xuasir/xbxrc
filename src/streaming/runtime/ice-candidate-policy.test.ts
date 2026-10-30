@@ -11,6 +11,20 @@ function buildCandidate(raw: string): IceCandidateLike {
 }
 
 describe('applyIceCandidatePolicy', () => {
+  it.each(['a=end-of-candidates', 'end-of-candidates', ''])('recognizes and preserves the remote end marker %j', (raw) => {
+    const end = buildCandidate(raw)
+    const host = buildCandidate('candidate:1 1 udp 2113937151 10.0.0.10 5000 typ host')
+    for (const enabled of [true, false]) {
+      const result = applyIceCandidatePolicy({
+        candidates: [end, host],
+        config: { enabled, preferIpv6: false, preferUdp: true, allowTcpFallback: true, relayBias: 'neutral' },
+      })
+      expect(result.trace.endOfCandidatesSeen).toBe(true)
+      expect(result.candidates).toEqual(enabled ? [host, end] : [end, host])
+      expect(result.trace.orderPreview).toEqual(['host/udp/ipv4'])
+    }
+  })
+
   it('keeps passthrough order when disabled', () => {
     const input = [
       buildCandidate('candidate:1 1 udp 2113937151 10.0.0.10 5000 typ host'),

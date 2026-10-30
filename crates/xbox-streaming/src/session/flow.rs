@@ -19,6 +19,7 @@ use crate::session::operation::{
 use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
 use crate::session::signaling::logic::{decide_ice_poll, PollDecision};
+use crate::session::signaling::state::SessionSignalingState;
 use crate::session::store::{SessionCancelToken, SessionRuntimeRecord, SessionRuntimeStore};
 
 #[path = "cleanup.rs"]
@@ -386,12 +387,6 @@ struct SessionCleanupEntry {
     completion: std::sync::atomic::AtomicU64,
     retry_scheduled: std::sync::atomic::AtomicBool,
     started_at: std::time::Instant,
-}
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct SessionSignalingState {
-    pub last_polled_ice: Option<Vec<IceCandidate>>,
-    pub restart_baseline_ice: Option<Vec<IceCandidate>>,
 }
 
 #[derive(Debug, Default)]

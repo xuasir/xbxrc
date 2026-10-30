@@ -16,6 +16,7 @@ uniform float sharpness;
 uniform float brightness;
 uniform float contrast;
 uniform float saturation;
+uniform bool applyColor;
 
 const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
 out vec4 fragColor;
@@ -269,18 +270,24 @@ void main() {
   );
   if (con0.x > 1.0 || con0.y > 1.0) {
     vec3 raw = applyHdrToneMap(texture(inputTexture, uvPassthrough).rgb);
-    vec3 color = mix(vec3(dot(raw, LUMINOSITY_FACTOR)), raw, saturation / 100.0);
-    color = (contrast / 100.0) * (color - 0.5) + 0.5;
-    color = (brightness / 100.0) * color;
+    vec3 color = raw;
+    if (applyColor) {
+      color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+      color = (contrast / 100.0) * (color - 0.5) + 0.5;
+      color = (brightness / 100.0) * color;
+    }
     fragColor = vec4(color, 1.0);
   }
   else {
     vec3 pix;
     vec2 ip = vec2(ivec2(gl_FragCoord.xy));
     FsrMobile(pix, ip, con0, con1);
-    vec3 color = mix(vec3(dot(pix, LUMINOSITY_FACTOR)), pix, saturation / 100.0);
-    color = (contrast / 100.0) * (color - 0.5) + 0.5;
-    color = (brightness / 100.0) * color;
+    vec3 color = pix;
+    if (applyColor) {
+      color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+      color = (contrast / 100.0) * (color - 0.5) + 0.5;
+      color = (brightness / 100.0) * color;
+    }
     fragColor = vec4(color, 1.0);
   }
 }

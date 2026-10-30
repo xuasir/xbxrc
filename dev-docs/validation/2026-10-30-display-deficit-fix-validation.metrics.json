@@ -1,0 +1,397 @@
+{
+  "date": "2026-10-30",
+  "kind": "display-deficit-fix-validation",
+  "policyReplay": {
+    "trace": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1793329037119-1.jsonl",
+    "traceSha256": "5506151d0a26ea2b391ee1715f1c47580e1f611486e4d78204264ff0bc6cf6e2",
+    "consumedSamples": 35,
+    "source": {
+      "path": "src/streaming/runtime/browser-render-health.ts",
+      "baselineScope": "index version before this fix",
+      "baselineSha256": "634a856abfc474fc980ea6330a82eb2cc78c43f40c779859ae9ceff308e8407c",
+      "currentSha256": "f9f37728ca5c1fd2c4cc85ea9ecf135b4c3f96124e8e17a5a113eba127bb2414"
+    },
+    "traceReplay": {
+      "baseline": {
+        "causes": {
+          "renderStable": 29,
+          "frameDeliveryLimited": 3
+        },
+        "firstAction": null
+      },
+      "current": {
+        "causes": {
+          "frameDeliveryLimited": 32
+        },
+        "firstAction": {
+          "seq": 1638,
+          "sampledAtMs": 112428,
+          "fallback": true,
+          "reason": "sustainedFrameDeliveryDeficit",
+          "evidence": {
+            "domain": "renderer",
+            "sampleId": "1:308",
+            "observedAtMs": 112643,
+            "coverageMs": 3000,
+            "sustainedMs": 3058
+          }
+        }
+      }
+    },
+    "syntheticFallbackTrial": {
+      "actions": [
+        {
+          "atMs": 6000,
+          "fallback": true,
+          "reason": "sustainedFrameDeliveryDeficit",
+          "evidence": {
+            "domain": "renderer",
+            "sampleId": "1:6000",
+            "observedAtMs": 6000,
+            "coverageMs": 3000,
+            "sustainedMs": 3000
+          }
+        },
+        {
+          "atMs": 24000,
+          "fallback": false,
+          "reason": "healthyEnhancementTrial",
+          "evidence": {
+            "domain": "renderer",
+            "sampleId": "1:24000",
+            "observedAtMs": 24000,
+            "coverageMs": 15000,
+            "sustainedMs": 15000,
+            "previousActionAtMs": 6000
+          }
+        },
+        {
+          "atMs": 27000,
+          "fallback": true,
+          "reason": "enhancementTrialFailed",
+          "evidence": {
+            "domain": "renderer",
+            "sampleId": "1:27000",
+            "observedAtMs": 27000,
+            "coverageMs": 3000,
+            "sustainedMs": 0,
+            "previousActionAtMs": 24000
+          }
+        }
+      ],
+      "effects": [
+        {
+          "atMs": 9000,
+          "effect": "improved"
+        },
+        {
+          "atMs": 27000,
+          "effect": "neutral"
+        },
+        {
+          "atMs": 30000,
+          "effect": "improved"
+        }
+      ],
+      "servingFallback": true
+    },
+    "protectedCases": [
+      {
+        "name": "30fps source",
+        "gate": "PASS"
+      },
+      {
+        "name": "user 30fps budget",
+        "gate": "PASS"
+      }
+    ],
+    "gate": "PASS",
+    "limitations": [
+      "Trace replay verifies classification and first action only.",
+      "Post-action supply is synthetic; device throughput, GPU execution and physical scanout require new device evidence."
+    ]
+  },
+  "offlineSupply": {
+    "gate": "PASS",
+    "cases": [
+      {
+        "name": "30fps native + per-frame counter, mediaTime=0",
+        "sourceFrames": 300,
+        "acceptedMarkers": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30
+      },
+      {
+        "name": "30fps native + 250ms batch counter, mediaTime=0",
+        "sourceFrames": 300,
+        "acceptedMarkers": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30
+      },
+      {
+        "name": "30fps native + 250ms batch counter, poll first",
+        "sourceFrames": 300,
+        "acceptedMarkers": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30
+      },
+      {
+        "name": "250ms batch native + batch counter, mediaTime=0",
+        "sourceFrames": 300,
+        "acceptedMarkers": 40,
+        "realtimeDrawCount": 40,
+        "realtimeDrawFps": 4
+      },
+      {
+        "name": "275ms batch native + batch counter, mediaTime=0",
+        "sourceFrames": 300,
+        "acceptedMarkers": 37,
+        "realtimeDrawCount": 37,
+        "realtimeDrawFps": 3.7
+      },
+      {
+        "name": "275ms batch native + counter refreshed during native callback",
+        "sourceFrames": 300,
+        "acceptedMarkers": 37,
+        "realtimeDrawCount": 37,
+        "realtimeDrawFps": 3.7
+      },
+      {
+        "name": "fixed native + 250ms batch counter, advancing mediaTime",
+        "sourceFrames": 300,
+        "acceptedMarkers": 40,
+        "realtimeDrawCount": 40,
+        "realtimeDrawFps": 4
+      },
+      {
+        "name": "fixed native + per-frame counter, mediaTime=0",
+        "sourceFrames": 300,
+        "acceptedMarkers": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30
+      },
+      {
+        "name": "missing native counter + fixed quality counter, advancing mediaTime",
+        "sourceFrames": 300,
+        "acceptedMarkers": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30
+      }
+    ],
+    "drawPaths": [
+      {
+        "name": "same-size RCAS",
+        "realtimeDrawCount": 30,
+        "captureDrawCount": 1,
+        "drawCostSampleCount": 30
+      },
+      {
+        "name": "single-pass upscale",
+        "realtimeDrawCount": 30,
+        "captureDrawCount": 1,
+        "drawCostSampleCount": 30
+      },
+      {
+        "name": "dual-pass EASU + RCAS",
+        "realtimeDrawCount": 30,
+        "captureDrawCount": 1,
+        "drawCostSampleCount": 30
+      },
+      {
+        "name": "capture concurrent with a fresh realtime frame",
+        "realtimeDrawCount": 1,
+        "captureDrawCount": 0,
+        "drawCostSampleCount": 1
+      }
+    ]
+  },
+  "counterOffset": {
+    "gate": "PASS",
+    "counterLead": 48,
+    "cases": [
+      {
+        "name": "native30fps, batch counter aligned",
+        "steadyFps": 30
+      },
+      {
+        "name": "native30fps, batch counter gains a 48-frame offset after2s",
+        "steadyFps": 30
+      },
+      {
+        "name": "native30fps, 48-frame offset, polling first",
+        "steadyFps": 30
+      }
+    ]
+  },
+  "renderWork": {
+    "gate": "PASS",
+    "current": [
+      {
+        "name": "webgl equal1440p",
+        "offered": 60,
+        "programsAtAttach": 1,
+        "totalProgramAttempts": 1,
+        "realtimeDrawCount": 61,
+        "gpuDrawCalls": 61,
+        "framebufferAllocations": 0,
+        "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+        "opacityWrites": 1,
+        "textureBindings": 62,
+        "viewportCalls": 1,
+        "activeTextureCalls": 0,
+        "duplicateDrawCount": 0
+      },
+      {
+        "name": "webgl zero sharpening with larger output",
+        "offered": 60,
+        "programsAtAttach": 1,
+        "totalProgramAttempts": 1,
+        "realtimeDrawCount": 61,
+        "gpuDrawCalls": 61,
+        "framebufferAllocations": 0,
+        "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+        "opacityWrites": 1,
+        "textureBindings": 62,
+        "viewportCalls": 1,
+        "activeTextureCalls": 0,
+        "duplicateDrawCount": 0
+      },
+      {
+        "name": "SR equal1440p",
+        "offered": 60,
+        "programsAtAttach": 1,
+        "totalProgramAttempts": 1,
+        "realtimeDrawCount": 61,
+        "gpuDrawCalls": 61,
+        "framebufferAllocations": 0,
+        "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+        "opacityWrites": 1,
+        "textureBindings": 62,
+        "viewportCalls": 1,
+        "activeTextureCalls": 1,
+        "duplicateDrawCount": 0
+      },
+      {
+        "name": "SR fused upscale",
+        "offered": 60,
+        "programsAtAttach": 1,
+        "totalProgramAttempts": 1,
+        "realtimeDrawCount": 61,
+        "gpuDrawCalls": 61,
+        "framebufferAllocations": 0,
+        "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+        "opacityWrites": 1,
+        "textureBindings": 62,
+        "viewportCalls": 1,
+        "activeTextureCalls": 1,
+        "duplicateDrawCount": 0
+      }
+    ]
+  },
+  "checks": {
+    "vitest": {
+      "gate": "PASS",
+      "files": 47,
+      "tests": 399
+    },
+    "lint": "PASS",
+    "vueTsc": "PASS",
+    "viteBuild": "PASS",
+    "diffCheck": "PASS"
+  },
+  "deviceAcceptance": "pending user manual run; automatic device operation remains paused",
+  "codeSourceFiles": [
+    {
+      "path": "src/i18n/locales/en.json",
+      "sha256": "5950990c67655e038321b8191f7f45c105f10e394f1ab334002c754d82eb27ce"
+    },
+    {
+      "path": "src/i18n/locales/zh.json",
+      "sha256": "a4d6515e57dd441a9d0aff6674c424fd3799be676f3ad58c04212119fc508767"
+    },
+    {
+      "path": "src/player/app/media/PlaybackService.test.ts",
+      "sha256": "f51a2a8ae2fcc379bcf014457f335249457374a2cd6580673ce9790b52329504"
+    },
+    {
+      "path": "src/player/app/media/PlaybackService.ts",
+      "sha256": "accb204d8ed881f154281503b6427614c0c1e8f11ced16daf82213a1b48e2cec"
+    },
+    {
+      "path": "src/player/app/stats/StatsService.test.ts",
+      "sha256": "9c79b43f52b669304ad8c68f86ae66cfaaf6a0d59e5c1cacf015a73725eb4323"
+    },
+    {
+      "path": "src/player/app/stats/StatsService.ts",
+      "sha256": "2b8e82d90542566458fc72cc82ce2fd3e3bc2a12bb2b0f6d1a34d89596ef18f5"
+    },
+    {
+      "path": "src/player/app/stats/browser-stats.ts",
+      "sha256": "7038e9b876fa8c39811bcfe0dba1b3fa4b94ecac7ba8f326852cf7b2853df8b2"
+    },
+    {
+      "path": "src/player/domain/media.ts",
+      "sha256": "424c4abaea2013a7dedad0b1aa5c029d9ef6bd311abcf703283ae66422fa30aa"
+    },
+    {
+      "path": "src/player/domain/stats.ts",
+      "sha256": "8724452ec9fa89f34928fd431c883d671e5e10f54011bdc55f85883307cf1bc5"
+    },
+    {
+      "path": "src/player/infra/render/Renderers.ts",
+      "sha256": "12c9651def3909c0f409106e97c7e8649ae75c4a0cec9567ae137608c28db9a4"
+    },
+    {
+      "path": "src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+      "sha256": "918f627da7f9516dfeb54358b0c9b9e201d2bb974faddb0b680455e80d5e4e2b"
+    },
+    {
+      "path": "src/player/infra/render/render-observation.ts",
+      "sha256": "7c8eecb6c1bbc6ba2d305bbd2ab4c02f92e133f89fcdd474a7fed02d9534858a"
+    },
+    {
+      "path": "src/player/infra/render/renderer-scheduling.test.ts",
+      "sha256": "ecaacb9b81ead40afb9fea9811bba6a1b2be459c4db6fb0ea5a629b2550d5466"
+    },
+    {
+      "path": "src/streaming/diagnostics.ts",
+      "sha256": "a39456f1a055dd76e86056936874bd3befe187fb15c928b72c36cbc307114f1d"
+    },
+    {
+      "path": "src/streaming/runtime/browser-policy.test.ts",
+      "sha256": "622e5404f53acf310b3cce06166c2bc5f52f44fabf4cdf6c4e03443f3a30e4be"
+    },
+    {
+      "path": "src/streaming/runtime/browser-render-health.ts",
+      "sha256": "f9f37728ca5c1fd2c4cc85ea9ecf135b4c3f96124e8e17a5a113eba127bb2414"
+    },
+    {
+      "path": "src/streaming/runtime/browser-render-policy.test.ts",
+      "sha256": "0e8336f4c43bac672c4ba51a99226f9c87c6bd5f694f35fde06a8ee671a79c2a"
+    },
+    {
+      "path": "src/streaming/runtime/browser-render-policy.ts",
+      "sha256": "5ae6f4e9fc0bf303c85e8f4498830d46e9d099069b271fc97ccc88066caa6a74"
+    },
+    {
+      "path": "src/streaming/runtime/browser-runtime.test.ts",
+      "sha256": "1c38246350994b36c4df7f8881d5d848512d45d516f11bbec62b21cc0c2277a0"
+    },
+    {
+      "path": "src/streaming/runtime/browser-runtime.ts",
+      "sha256": "8ad9e6e9532b641af22cc3ec270674861a347a6f018210d4d5d03d0d9100889d"
+    },
+    {
+      "path": "src/streaming/stream-panel-view-models.test.ts",
+      "sha256": "d1f18002b61dcab1466f300e63bcd87a25aa3d4823e4f2a01d737f91ec774b5b"
+    },
+    {
+      "path": "src/streaming/stream-panel-view-models.ts",
+      "sha256": "39209a8cc31cba3df9d45843292ca5a89196ff74384ffecc37e79e8c84779aeb"
+    },
+    {
+      "path": "src/streaming/types.ts",
+      "sha256": "bf0ca8ef5319ffcc3e38365c875889e7ec20bbe7aa2ba73a7a66a2a81b5077a4"
+    }
+  ]
+}

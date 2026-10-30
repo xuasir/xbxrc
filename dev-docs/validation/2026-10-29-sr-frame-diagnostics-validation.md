@@ -2,6 +2,8 @@
 
 2026-10-29：承接[离线核验](2026-10-29-sr-frame-delivery-offline-audit.md)，已补齐共享帧源判定、双向抵扣与当前 renderer 的 DOM 显示状态。字段随现有 dev `renderTelemetryObserved` 进入日志，帧率预算、SR算法和新帧判定继续沿既有行为执行。
 
+2026-10-30：帧身份快照升级为 `schemaVersion=2`，配合[跨计数抵扣修正](2026-10-30-sr-counter-credit-fix-validation.md)。v1 的 `counterAheadBefore/After` 同时累计 RVFC 入口读取计数与轮询推进；v2 使用 `polledAdvanceBefore/After`，只记录实际轮询交付对应的计数推进额度。`creditedPollFrames` 是当前有效 native 身份消费的额度，`expiredPollFrames` 是同次结算释放的剩余额度；`nativeReset` 记录 native 计数回退后的重建。额度表示计数推进量，交付次数读取 `accepted`；同帧对应按相邻有效 native 身份窗口推断。下文 v1 字段及336项结果保留为10月29日历史合同，当前行为与347项验证见修正记录。
+
 ## 日志位置与读法
 
 新增路径为 `renderTelemetryObserved.payload.mediaDiagnostics`，包含实际读取时刻 `observedAtMs`、当前 `rendererGeneration/rendererKind/submittedFramesTotal`、帧源 `frameIdentity`、当前显示资源 `surface` 和首帧交接中的 `pendingRenderer`。

@@ -4,7 +4,8 @@ import type {
   GamepadKeyboardMappingDto,
   LogicalPadStateDto,
 } from './contract'
-import { gamepadConfig, inputController } from './runtime'
+import { inputController, subscribeGamepadConfig } from './runtime'
+import { neutralState } from './state'
 
 export const DEFAULT_KEYBOARD_MAPPING: GamepadKeyboardMappingDto = {
   bindings: [
@@ -85,31 +86,48 @@ export const KEY_CODE_TO_DTO: Record<string, GamepadKeyboardKeyDto | undefined> 
   ArrowRight: 'arrowRight',
 }
 
-let installed = false
+let uninstall: (() => void) | undefined
 let mapping = DEFAULT_KEYBOARD_MAPPING
+let controlSource: unknown
 const pressedKeys = new Set<GamepadKeyboardKeyDto>()
 
-export function installKeyboardFallbackBridge(): void {
-  if (installed) {
-    return
-  }
-  installed = true
-  inputController.subscribe((snapshot) => {
-    const stored = gamepadConfig().gamepad_keyboard_mapping as GamepadKeyboardMappingDto | undefined
-    mapping = stored?.bindings?.length ? stored : DEFAULT_KEYBOARD_MAPPING
-    if (snapshot.preferences.controlSource !== 'keyboard')
+export function installKeyboardFallbackBridge(): () => void {
+  if (uninstall)
+    return uninstall
+  const disposeConfig = subscribeGamepadConfig((config) => {
+    const stored = config.gamepad_keyboard_mapping as GamepadKeyboardMappingDto | undefined
+    const next = stored?.bindings?.length ? stored : DEFAULT_KEYBOARD_MAPPING
+    if (JSON.stringify(mapping) !== JSON.stringify(next) || controlSource !== config.gamepad_control_source)
       clearPressedKeys()
+    mapping = structuredClone(next)
+    controlSource = config.gamepad_control_source
   })
-
-  window.addEventListener('keydown', handleKeyDown, true)
-  window.addEventListener('keyup', handleKeyUp, true)
+  window.addEventListener('keydown', handleKeyDown, { capture: true })
+  window.addEventListener('keyup', handleKeyUp, { capture: true })
   window.addEventListener('blur', clearPressedKeys)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') {
-      clearPressedKeys()
-    }
-  })
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  const cleanup = () => {
+    if (uninstall !== cleanup)
+      return
+    disposeConfig()
+    window.removeEventListener('keydown', handleKeyDown, { capture: true })
+    window.removeEventListener('keyup', handleKeyUp, { capture: true })
+    window.removeEventListener('blur', clearPressedKeys)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    clearPressedKeys()
+    uninstall = undefined
+  }
+  uninstall = cleanup
+  return cleanup
 }
+
+function handleVisibilityChange(): void {
+  if (document.visibilityState !== 'visible')
+    clearPressedKeys()
+}
+
+if (import.meta.hot)
+  import.meta.hot.dispose(() => uninstall?.())
 
 function handleKeyDown(event: KeyboardEvent): void {
   const snapshot = inputController.getSnapshot()
@@ -121,9 +139,12 @@ function handleKeyDown(event: KeyboardEvent): void {
   }
   if (snapshot.owner === 'stream')
     event.preventDefault()
+  // 保持浏览器默认动作抑制；持键重复等待真实松开与下一次按下。
+  if (event.repeat)
+    return
   if (!pressedKeys.has(key)) {
     pressedKeys.add(key)
-    submitCurrentState('keydown')
+    submitCurrentState()
   }
 }
 
@@ -131,7 +152,7 @@ function handleKeyUp(event: KeyboardEvent): void {
   const key = KEY_CODE_TO_DTO[event.code]
   if (key && pressedKeys.delete(key)) {
     event.preventDefault()
-    submitCurrentState('keyup')
+    submitCurrentState()
   }
 }
 
@@ -140,16 +161,16 @@ function clearPressedKeys(): void {
     return
   }
   pressedKeys.clear()
-  submitCurrentState('clear')
+  submitCurrentState()
 }
 
-function submitCurrentState(_reason: string): void {
+function submitCurrentState(): void {
   inputController.setKeyboardState(buildState())
 }
 
 function buildState(): LogicalPadStateDto {
-  const state = defaultLogicalPadState()
-  for (const binding of mapping.bindings.length ? mapping.bindings : DEFAULT_KEYBOARD_MAPPING.bindings) {
+  const state = neutralState()
+  for (const binding of mapping.bindings) {
     if (!pressedKeys.has(binding.key)) {
       continue
     }
@@ -211,34 +232,6 @@ function applyControl(state: LogicalPadStateDto, control: GamepadKeyboardControl
     default:
       state.buttons[control] = 1
       break
-  }
-}
-
-function defaultLogicalPadState(): LogicalPadStateDto {
-  return {
-    buttons: {
-      south: 0,
-      east: 0,
-      west: 0,
-      north: 0,
-      l1: 0,
-      r1: 0,
-      l2: 0,
-      r2: 0,
-      l3: 0,
-      r3: 0,
-      view: 0,
-      menu: 0,
-      home: 0,
-      dpadUp: 0,
-      dpadDown: 0,
-      dpadLeft: 0,
-      dpadRight: 0,
-    },
-    leftStick: { x: 0, y: 0 },
-    rightStick: { x: 0, y: 0 },
-    leftTrigger: 0,
-    rightTrigger: 0,
   }
 }
 

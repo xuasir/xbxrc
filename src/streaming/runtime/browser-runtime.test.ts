@@ -1633,7 +1633,7 @@ describe('browser-runtime super resolution state', () => {
             videoPresentFps: 58,
             callbackFps: 58,
             rendererSubmitFps: 58,
-            renderCause: 'renderStable',
+            renderCause: 'frameDeliveryLimited',
           }),
         }),
       )
@@ -1668,7 +1668,7 @@ describe('browser-runtime super resolution state', () => {
       expect(snapshot.renderFrameSourceFpsEstimate).toBe(59.5)
       expect(snapshot.renderFrameSourceFrameIntervalMs).toBe(16.8)
       expect(snapshot.renderDroppedLikeStreak).toBe(1)
-      expect(snapshot.renderCause).toBe('renderStable')
+      expect(snapshot.renderCause).toBe('frameDeliveryLimited')
 
       await runtime.stop()
     }
@@ -1745,13 +1745,13 @@ describe('browser-runtime super resolution state', () => {
       expect(snapshot.renderBackpressure).toBe(false)
       expect(snapshot.renderPresentedFramesAdvancedLastSample).toBe(0)
       expect(snapshot.renderPresentedFramesJumpCountLastSample).toBe(0)
-      expect(snapshot.renderCause).toBe('renderStable')
+      expect(snapshot.renderCause).toBe('frameDeliveryLimited')
 
       expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'renderTelemetryObserved',
           payload: expect.objectContaining({
-            renderCause: 'renderStable',
+            renderCause: 'frameDeliveryLimited',
             presentedFramesAdvancedSinceLastSample: 6,
             presentedFramesJumpCountSinceLastSample: 3,
           }),
@@ -1967,6 +1967,21 @@ describe('browser-runtime super resolution state', () => {
     expect(client.setRemoteDescription).toHaveBeenCalledTimes(1)
   })
 
+  it('records the original player error and negotiation phase before forwarding it', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    await runtime.launch(createLaunchSpec())
+    const error = new DOMException('Playback permission denied', 'NotAllowedError')
+    const listener = vi.fn()
+    runtime.subscribe(listener)
+    getClient().eventBus.emit('error', { error })
+    expect(testState.rpc.runtimeTrace.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'browserRuntimeError',
+      payload: expect.objectContaining({ phase: 'connecting', error: expect.objectContaining({ name: 'NotAllowedError', message: 'Playback permission denied' }) }),
+    }))
+    expect(listener).toHaveBeenCalledWith({ type: 'error', error })
+    await runtime.stop()
+  })
+
   it('cancels pending ICE gathering and removes peer listeners on stop', async () => {
     vi.useFakeTimers()
     try {
@@ -1978,10 +1993,10 @@ describe('browser-runtime super resolution state', () => {
       const reconnect = runtime.requestReconnect('ice-failed')
       const rejected = expect(reconnect).rejects.toThrow('streamRuntimeSuperseded')
       for (let i = 0; i < 20; i++) await Promise.resolve()
-      expect(peer.addEventListener).toHaveBeenCalledTimes(2)
+      expect(peer.addEventListener).toHaveBeenCalledTimes(3)
       await runtime.stop()
       await rejected
-      expect(peer.removeEventListener).toHaveBeenCalledTimes(2)
+      expect(peer.removeEventListener).toHaveBeenCalledTimes(3)
       expect(testState.MockPlayerClient.instances).toHaveLength(1)
     }
     finally {

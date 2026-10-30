@@ -19,7 +19,9 @@ export class FramePacer {
       this.deadlineMs = atMs + intervalMs
       return true
     }
-    if (atMs + 0.01 < this.deadlineMs)
+    // WebView 毫秒时钟会把同一60Hz槽位取整；容差保持在累计deadline内。
+    const deadlineToleranceMs = Math.min(1, intervalMs * 0.06)
+    if (atMs + deadlineToleranceMs < this.deadlineMs)
       return false
     this.deadlineMs += (Math.floor(Math.max(0, atMs - this.deadlineMs) / intervalMs) + 1) * intervalMs
     return true

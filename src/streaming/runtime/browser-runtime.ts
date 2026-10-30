@@ -568,6 +568,17 @@ export function createBrowserRuntime(options: {
   }
 
   function emit(event: RuntimeEvent): void {
+    if (event.type === 'error') {
+      recordRuntimeTraceEvent('browserRuntimeError', () => ({
+        phase: runtimePhase,
+        transportState,
+        iceConnectionState: client?.getPeer()?.iceConnectionState,
+        iceGatheringState: client?.getPeer()?.iceGatheringState,
+        error: event.error instanceof Error
+          ? { name: event.error.name, message: event.error.message, stack: event.error.stack }
+          : String(event.error),
+      }))
+    }
     if (event.type === 'frameReady' && event.fresh !== false)
       connectionRecovery.observeFrame()
     for (const listener of listeners) {
@@ -1772,7 +1783,10 @@ export function createBrowserRuntime(options: {
       callbackFps: stats.callbackFps,
       rendererSubmitFps: stats.rendererSubmitFps,
       rendererSubmitAgeMs: stats.rendererSubmitAgeMs,
+      rendererSubmitAgeObservedAtMs: stats.rendererSubmitAgeObservedAtMs,
       renderDrawDurationMsAvg: stats.renderDrawDurationMsAvg,
+      renderUploadDurationMsAvg: stats.renderUploadDurationMsAvg,
+      renderSubmitDurationMsAvg: stats.renderSubmitDurationMsAvg,
       rendererLatestOverwriteCount: stats.rendererLatestOverwriteCount,
       rendererPacingWaitCount: stats.rendererPacingWaitCount,
       rendererSubmitFailureCount: stats.rendererSubmitFailureCount,
@@ -2318,7 +2332,7 @@ export function createBrowserRuntime(options: {
         renderSuperResolutionRcasBaseStops: resolveSuperResolutionIntent()
           ? srState.rcasStopsBase
           : undefined,
-        renderSuperResolutionFallbackReason: renderHealth.fallback ? 'sustainedRendererPressure' : srState.fallbackReason,
+        renderSuperResolutionFallbackReason: renderHealth.fallback ? renderHealth.fallbackReason : srState.fallbackReason,
         renderSharpenMode: observedPipelineType === 'webgl2_sr'
           ? 'fsr1_rcas'
           : (observedShaderPath ?? 'none'),

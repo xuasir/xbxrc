@@ -278,9 +278,15 @@ export class StatsService {
 
   async snapshot(): Promise<StreamStats> {
     this.currentPeer()
-    const age = this.lastSample ? Math.max(0, performance.now() - this.lastSample.sampledAtMs) : undefined
-    const videoPresentAgeMs = this.presentation.lastFrameAtMs === undefined ? undefined : Math.max(0, performance.now() - this.presentation.lastFrameAtMs)
-    const rendererSubmitAgeMs = this.latest.rendererKind === 'video' ? videoPresentAgeMs : this.latest.rendererSubmitAgeMs === undefined ? undefined : this.latest.rendererSubmitAgeMs + (age ?? 0)
+    const now = performance.now()
+    const age = this.lastSample ? Math.max(0, now - this.lastSample.sampledAtMs) : undefined
+    const videoPresentAgeMs = this.presentation.lastFrameAtMs === undefined ? undefined : Math.max(0, now - this.presentation.lastFrameAtMs)
+    const renderer = this.latest.rendererKind && this.latest.rendererKind !== 'video' ? this.getRendererObservation?.() : undefined
+    const sameRenderer = renderer?.generation === this.latest.rendererGeneration && renderer?.kind === this.latest.rendererKind
+    // FPS沿共享采样窗口读取；年龄使用当前同代际提交，避免采样间的新draw被缓存年龄覆盖。
+    const rendererSubmitAgeMs = this.latest.rendererKind === 'video'
+      ? videoPresentAgeMs
+      : sameRenderer && renderer?.resources.lastDrawAtMs !== undefined ? Math.max(0, now - renderer.resources.lastDrawAtMs) : undefined
     const width = this.latest.renderSourceWidth ?? this.videoDimensions?.width
     const height = this.latest.renderSourceHeight ?? this.videoDimensions?.height
     return {
@@ -288,6 +294,7 @@ export class StatsService {
       ...(width && height ? { resolution: `${width}x${height}` } : {}),
       videoPresentAgeMs,
       rendererSubmitAgeMs,
+      rendererSubmitAgeObservedAtMs: rendererSubmitAgeMs === undefined ? undefined : now,
       presentAgeMs: this.latest.rendererKind && this.latest.rendererKind !== 'video' ? rendererSubmitAgeMs : videoPresentAgeMs,
       statsSampleAgeMs: age,
       statsObservationState: this.latest.statsObservationState === 'unavailable' || age === undefined ? 'unavailable' : age > 1000 || this.latest.statsObservationState === 'stale' ? 'stale' : 'fresh',
@@ -337,6 +344,14 @@ export class StatsService {
       const drawTime = rendererComparable && renderer?.resources.drawDurationTotalMs !== undefined && previousRenderer?.resources.drawDurationTotalMs !== undefined
         ? Math.max(0, renderer.resources.drawDurationTotalMs - previousRenderer.resources.drawDurationTotalMs)
         : undefined
+      const costSamples = rendererComparable && renderer?.resources.drawCostSampleCount !== undefined && previousRenderer?.resources.drawCostSampleCount !== undefined
+        ? renderer.resources.drawCostSampleCount - previousRenderer.resources.drawCostSampleCount
+        : undefined
+      const measuredCost = (field: 'uploadDurationTotalMs' | 'submitDurationTotalMs'): number | undefined => {
+        const current = renderer?.resources[field]
+        const previous = previousRenderer?.resources[field]
+        return draws && costSamples === draws && current !== undefined && previous !== undefined && current >= previous ? (current - previous) / draws : undefined
+      }
       const rendererSubmitFps = renderer?.kind === 'video' ? videoPresentFps : draws !== undefined && elapsed > 0 ? draws * 1000 / elapsed : undefined
       const rendererSubmitAgeMs = renderer?.kind === 'video' ? videoPresentAgeMs : renderer?.resources.lastDrawAtMs === undefined ? undefined : Math.max(0, sample.sampledAtMs - renderer.resources.lastDrawAtMs)
       const presentation = {
@@ -353,6 +368,8 @@ export class StatsService {
         rendererSubmitFps,
         rendererSubmitAgeMs,
         renderDrawDurationMsAvg: draws && drawTime !== undefined ? drawTime / draws : undefined,
+        renderUploadDurationMsAvg: measuredCost('uploadDurationTotalMs'),
+        renderSubmitDurationMsAvg: measuredCost('submitDurationTotalMs'),
         presentFps: renderer ? rendererSubmitFps : videoPresentFps,
         presentAgeMs: renderer ? rendererSubmitAgeMs : videoPresentAgeMs,
       }

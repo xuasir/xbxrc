@@ -212,6 +212,8 @@ export interface BrowserStatsWindowSummary {
   rendererSubmitFpsAvg?: number
   rendererSubmitAgeMsAvg?: number
   renderDrawDurationMsAvg?: number
+  renderUploadDurationMsAvg?: number
+  renderSubmitDurationMsAvg?: number
   jitterBufferMsAvg?: number
   jitterBufferMsFirst?: number
   jitterBufferMsLast?: number

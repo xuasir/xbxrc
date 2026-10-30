@@ -3,6 +3,9 @@ use crate::session::monitor::{SessionRuntimeBinding, SessionRuntimeSnapshot};
 use crate::session::store::SessionRuntimeRecord;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[path = "signaling/flow.test.rs"]
+mod signaling_regression;
+
 #[derive(Clone)]
 struct Snapshot {
     session_id: String,

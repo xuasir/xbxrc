@@ -147,6 +147,7 @@ export class WebRtcTransport {
 
   async addIceCandidate(candidate: IceCandidateLike): Promise<void> {
     if (candidate.candidate === 'a=end-of-candidates') {
+      await this.ensurePeer().addIceCandidate({ ...candidate, candidate: '' })
       return
     }
     const hasInvalidTcpType = candidate.candidate.includes('UDP') && candidate.candidate.includes('tcptype')

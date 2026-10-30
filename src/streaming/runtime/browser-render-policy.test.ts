@@ -59,6 +59,15 @@ describe('browser display intent', () => {
 })
 
 describe('deterministic renderer plan', () => {
+  it('uses native presentation for neutral auto display while retaining explicit WebGL and SR intent', () => {
+    const neutral = { sharpness: 0, brightness: 100, contrast: 100, saturation: 100 }
+    expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral }))).toMatchObject({ kind: 'video', source: 'auto' })
+    expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral, pipelineOverride: 'webgl2' }))).toMatchObject({ kind: 'webgl2', source: 'userOverride' })
+    expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral, superResolutionUserIntent: true }))).toMatchObject({ kind: 'webgl2_sr' })
+    for (const displayOptions of [{ ...neutral, sharpness: 1 }, { ...neutral, brightness: 101 }, { ...neutral, contrast: 99 }, { ...neutral, saturation: 101 }])
+      expect(resolveBrowserRendererPlan(baseInput({ displayOptions }))).toMatchObject({ kind: 'webgl2' })
+  })
+
   it('keeps user color, fit and sharpening across network and observation changes', () => {
     const input = baseInput({ format: 'Zoom', processing: 'usm', superResolutionUserIntent: true })
     const baseline = resolveBrowserRendererPlan(input)

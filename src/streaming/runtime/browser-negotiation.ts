@@ -185,14 +185,16 @@ export function createBrowserNegotiation(context: {
       return
     }
     const activePeer = peer
-    const signal = context.getSignal()
+    const signal = input.negotiation.signal
 
     context.publishPhase('gatheringIce')
     let flushTimer: number | null = null
     let settled = false
     let flushInFlight = false
     let gatheringComplete = activePeer.iceGatheringState === 'complete'
-    let finalPollSent = false
+    let remoteGatheringComplete = false
+    // 完整 SDP 也可携带本轮候选；与增量 ICE 使用同一可用性判据。
+    let hasUsableRemoteCandidates = /(?:^|\n)a=candidate:/i.test(activePeer.remoteDescription?.sdp ?? '')
     let resolvePromise: () => void = () => {}
     let rejectPromise: (error: unknown) => void = () => {}
     const pendingLocalCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]> = []
@@ -250,7 +252,14 @@ export function createBrowserNegotiation(context: {
         enableFamilyMismatchGate: policyConfig.enableFamilyMismatchGate,
         localAddressFamily: policyConfig.localAddressFamily,
       }))
+      const hasUsableCandidates = policyResult.candidates.some(candidate => /^(?:a=)?candidate:/i.test(candidate.candidate.trim()))
+      if (policyResult.trace.endOfCandidatesSeen && !hasUsableRemoteCandidates && !hasUsableCandidates)
+        throw new Error('remoteIceCandidatesMissing')
       await waitNegotiation(input.negotiation, input.negotiation.client.addIceCandidates(policyResult.candidates), 10_000, 'applyIceTimeout')
+      if (settled || !isNegotiationActive(input.negotiation))
+        return
+      remoteGatheringComplete ||= policyResult.trace.endOfCandidatesSeen
+      hasUsableRemoteCandidates ||= hasUsableCandidates
       context.trace('icePolicyApplied', () => ({
         mode: policyResult.trace.mode,
         outputCount: policyResult.trace.outputCount,
@@ -258,15 +267,18 @@ export function createBrowserNegotiation(context: {
       }))
     }
 
-    const finishIfIdle = (resolve: () => void): void => {
-      if (settled || flushInFlight || pendingLocalCandidates.length > 0 || !gatheringComplete) {
-        return
+    // restart 期间 peer 可能仍呈现旧连接的 connected；先接住本轮远端候选。
+    const remoteExchangeComplete = (): boolean => remoteGatheringComplete
+      || (hasUsableRemoteCandidates && (activePeer.iceConnectionState === 'connected' || activePeer.iceConnectionState === 'completed'))
+
+    const finishIfIdle = (resolve: () => void): boolean => {
+      if (settled || flushInFlight || pendingLocalCandidates.length > 0 || !gatheringComplete || !remoteExchangeComplete()) {
+        return false
       }
       settled = true
       clearFlushTimer()
-      activePeer.removeEventListener('icecandidate', handleIceCandidate)
-      activePeer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
       resolve()
+      return true
     }
 
     const flushPendingCandidates = async (resolve: () => void): Promise<void> => {
@@ -274,33 +286,32 @@ export function createBrowserNegotiation(context: {
         return
       }
       const localCandidates = pendingLocalCandidates.splice(0)
-      if (localCandidates.length === 0) {
-        if (gatheringComplete && !finalPollSent) {
-          finalPollSent = true
-        }
-        else {
-          finishIfIdle(resolve)
-          return
-        }
+      if (localCandidates.length === 0 && remoteExchangeComplete()) {
+        finishIfIdle(resolve)
+        return
       }
 
       flushInFlight = true
       let shouldFlushAgain = false
       context.publishPhase('exchangingIce')
       try {
-        await waitNegotiation(input.negotiation, rpc.streaming.submitIce({
-          sessionId: input.spec.sessionId,
-          candidate: localCandidates,
-          restart: input.restart,
-        }), 16_000, 'submitIceTimeout')
+        if (localCandidates.length > 0) {
+          await waitNegotiation(input.negotiation, rpc.streaming.submitIce({
+            sessionId: input.spec.sessionId,
+            candidate: localCandidates,
+            restart: input.restart,
+          }), 16_000, 'submitIceTimeout')
+        }
         if (settled || !isNegotiationActive(input.negotiation))
           return
-        const remoteCandidates = await waitNegotiation(input.negotiation, rpc.streaming.pollIce({
-          sessionId: input.spec.sessionId,
-          restart: input.restart,
-        }), 46_000, 'pollIceTimeout')
-        await applyRemoteCandidates(remoteCandidates.candidates)
-        if (isNegotiationActive(input.negotiation)) {
+        if (!remoteExchangeComplete()) {
+          const remoteCandidates = await waitNegotiation(input.negotiation, rpc.streaming.pollIce({
+            sessionId: input.spec.sessionId,
+            restart: input.restart,
+          }), 46_000, 'pollIceTimeout')
+          await applyRemoteCandidates(remoteCandidates.candidates)
+        }
+        if (!settled && isNegotiationActive(input.negotiation) && (appliedRemoteCandidates.size > 0 || remoteExchangeComplete())) {
           context.publishPhase('connecting')
         }
       }
@@ -314,18 +325,20 @@ export function createBrowserNegotiation(context: {
         void flushPendingCandidates(resolve).catch(rejectPromise)
         return
       }
-      finishIfIdle(resolve)
+      // 服务层返回单次快照；本地收集完成后仍需等待远端的后续候选。
+      if (!finishIfIdle(resolve) && !remoteExchangeComplete())
+        scheduleFlush(resolve, 1_000)
     }
 
-    function scheduleFlush(resolve: () => void): void {
-      if (settled || flushInFlight) {
+    function scheduleFlush(resolve: () => void, delayMs = 60): void {
+      if (settled || flushInFlight || !isNegotiationActive(input.negotiation)) {
         return
       }
       clearFlushTimer()
       flushTimer = window.setTimeout(() => {
         flushTimer = null
         void flushPendingCandidates(resolve).catch(rejectPromise)
-      }, 60)
+      }, delayMs)
     }
 
     function handleIceCandidate(event: RTCPeerConnectionIceEvent): void {
@@ -358,6 +371,11 @@ export function createBrowserNegotiation(context: {
       }
     }
 
+    function handleConnectionStateChange(): void {
+      if (isNegotiationActive(input.negotiation))
+        finishIfIdle(resolvePromise)
+    }
+
     const aborted = () => rejectPromise(new Error('streamRuntimeSuperseded'))
     try {
       await waitNegotiation(input.negotiation, new Promise<void>((resolve, reject) => {
@@ -370,6 +388,7 @@ export function createBrowserNegotiation(context: {
         resolvePromise = resolve
         activePeer.addEventListener('icecandidate', handleIceCandidate)
         activePeer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
+        activePeer.addEventListener('iceconnectionstatechange', handleConnectionStateChange)
 
         for (const candidate of input.negotiation.client.getIceCandidates()) {
           if (isHostCandidate(candidate.candidate)) {
@@ -391,6 +410,7 @@ export function createBrowserNegotiation(context: {
       signal.removeEventListener('abort', aborted)
       activePeer.removeEventListener('icecandidate', handleIceCandidate)
       activePeer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
+      activePeer.removeEventListener('iceconnectionstatechange', handleConnectionStateChange)
     }
   }
 

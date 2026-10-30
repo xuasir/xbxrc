@@ -121,7 +121,7 @@ dispose2()
 
 ## 统一输入接入（2026-10-27）
 
-`src/shared/gamepad/runtime.ts` 在应用启动时装配一个 `GamepadBackend`，默认 Browser。Browser 使用 Gamepad API 和一个 rAF 采样循环；Native 按需启动现有 SDL3 service，订阅每台设备的未过滤标准状态。媒体运行方式与输入后端独立。
+`src/shared/gamepad/runtime.ts` 在应用启动时装配一个 `GamepadBackend`，默认 Browser。Browser 使用 Gamepad API 和一个 rAF 采样循环；Native 按需以 `StandardDevices` 模式启动现有 SDL3 service，跳过库级槽位映射和活动设备选择。原生桥启动结果与事件共用 `devices` 投影，每台连接设备仅携带 `deviceId/name/supportsRumble/state`；设备标准态变化持续发布。媒体运行方式与输入后端独立。
 
 ```mermaid
 flowchart LR
@@ -145,7 +145,7 @@ flowchart LR
 - 浏览器串流先发送 metadata，再订阅输入；变化时发送并保留 100ms 空闲心跳。Rust 串流按会话与递增序号接收公共状态，有界队列保留释放帧，传输成功后确认出队。
 - Menu+View 在公共层识别；软 Home 通过公共状态传递。触觉同样按 owner、开关和当前设备处理，游戏/测试强度使用同一预设。
 
-设置入口为“设置 → 手柄”：设备与行为、操控、震动、测试与高级四组。后台策略和触觉保存成功后即时生效；布局、摇杆和键盘使用草稿；后端下次启动装配。旧 profiles 保留在历史存储，桌面使用公共游戏布局配置。输入测试最长 20 秒，录入最长 10 秒，退出释放独占 capture。
+设置入口为“设置 → 手柄”：设备与行为、操控、震动、测试与高级四组。后台策略和触觉保存成功后即时生效；布局、摇杆和键盘使用草稿；后端下次启动装配。旧 profiles 保留在历史存储，桌面使用公共游戏布局配置。输入测试最长 20 秒，录入最长 10 秒，两者独立持有计时器与截止时间。面板关闭、切换、测试设备变化和卸载通过同一会话入口释放 capture、计时器与触觉，异步保存/触觉/焦点恢复按会话身份校验。键盘桥订阅初始化及保存后的配置变化，映射或输入来源变化时释放持键状态，下一次真实按下采用新绑定；DOM 与配置监听随安装会话完整释放。
 
 桌面已移除原生业务路由 RPC、焦点恢复扫描、全槽归零等待、重复 overlay gate 和 `ohmygamepad-host` 依赖。通用 ohmygamepad crate 的槽位/profile API继续服务库级调用；桌面只消费设备标准状态，SDL3触觉使用同一设备句柄。Windows 专用 haptics crate 保留为库，当前桌面 Native 采用 SDL3 实际能力。
 

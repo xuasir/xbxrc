@@ -195,6 +195,60 @@ describe('transport-owned quality policy', () => {
 })
 
 describe('local render ownership', () => {
+  it.each(['webgl2', 'webgl2_sr'] as const)('detects persistent 50.4/60 and 40/60 output loss in %s independently of mean CPU cost', (rendererKind) => {
+    for (const rendererSubmitFps of [50.4, 40]) {
+      expect(resolveBrowserRenderCause(facts(4000, { rendererKind, rendererSubmitFps, renderDrawDurationMsAvg: 4 }))).toBe('renderStarvation')
+      const health = new BrowserRenderHealth()
+      let action
+      for (let at = 3000; at <= 6000; at += 1000)
+        action = health.observe(facts(at, { rendererKind, rendererSubmitFps, renderDrawDurationMsAvg: 4 }), at)
+      expect(action).toMatchObject({ fallback: true, reason: 'sustainedRendererPressure' })
+    }
+  })
+
+  it('detects 60 to 44 candidate loss and proves the native fallback against the full source rate', () => {
+    expect(resolveBrowserRenderCause(facts(4000, { callbackFps: 44, rendererSubmitFps: 44, renderDrawDurationMsAvg: 15 }))).toBe('frameDeliveryLimited')
+    const health = new BrowserRenderHealth()
+    let action
+    for (let at = 3000; at <= 6000; at += 1000)
+      action = health.observe(facts(at, { callbackFps: 44, rendererSubmitFps: 44, renderDrawDurationMsAvg: 15 }), at)
+    expect(action).toMatchObject({ fallback: true, reason: 'sustainedFrameDeliveryDeficit' })
+    expect(health.fallbackReason).toBe('sustainedFrameDeliveryDeficit')
+    for (let at = 7000; at <= 9000; at += 1000)
+      health.observe(facts(at, { rendererGeneration: 2, rendererKind: 'video', callbackFps: 44, rendererSubmitFps: 44, videoPresentFps: 44 }), at)
+    expect(health.effect).toBe('neutral')
+    expect(health.fallback).toBe(true)
+  })
+
+  it('keeps a complete 30fps source and a user 30fps limit healthy, and holds incomplete source evidence', () => {
+    expect(resolveBrowserRenderCause(facts(4000, { inboundVideoFps: 30, decodeFps: 30, videoPresentFps: 30, callbackFps: 30, rendererSubmitFps: 30 }))).toBe('renderStable')
+    expect(resolveBrowserRenderCause(facts(4000, { rendererTargetFps: 30, callbackFps: 30, rendererSubmitFps: 30 }))).toBe('renderStable')
+    const health = new BrowserRenderHealth()
+    for (let at = 3000; at <= 30000; at += 1000) {
+      const s = facts(at, { rendererSubmitFps: 40 })
+      s.browserStatsWindows!.short.videoCoverageMs = 0
+      expect(health.observe(s, at)).toBeUndefined()
+    }
+  })
+
+  it('accepts native full-rate serving with sparse callbacks and rolls back a trial that restores only 55/60fps', () => {
+    const health = new BrowserRenderHealth()
+    for (let at = 3000; at <= 6000; at += 1000)
+      health.observe(facts(at, { callbackFps: 44, rendererSubmitFps: 44 }), at)
+    let trial
+    for (let at = 7000; at <= 24000; at += 1000)
+      trial = health.observe(facts(at, { rendererGeneration: 2, rendererKind: 'video', callbackFps: 52 }), at) ?? trial
+    expect(health.effect).toBe('improved')
+    expect(trial).toMatchObject({ fallback: false, reason: 'healthyEnhancementTrial' })
+    let rollback
+    for (let at = 25000; at <= 28000; at += 1000)
+      rollback = health.observe(facts(at, { rendererGeneration: 3, callbackFps: 55, rendererSubmitFps: 55 }), at) ?? rollback
+    expect(rollback).toMatchObject({ fallback: true, reason: 'enhancementTrialFailed' })
+    expect(health.fallbackReason).toBe('enhancementTrialFailed')
+    for (let at = 29000; at <= 60000; at += 1000)
+      expect(health.observe(facts(at, { rendererGeneration: 4, rendererKind: 'video', callbackFps: 52 }), at)).toBeUndefined()
+  })
+
   it('finds a canvas stall while video and decode continue, with network unchanged', () => {
     const s = facts(4000, { rendererSubmitFps: 0, rendererSubmitAgeMs: 1000, rendererSubmittedVideoSequence: 1 })
     expect(resolveBrowserRenderCause(s)).toBe('renderStarvation')
@@ -204,7 +258,7 @@ describe('local render ownership', () => {
 
   it('separates decode and batched callback supply while retaining source cadence limits', () => {
     expect(resolveBrowserRenderCause(facts(4000, { decodeFps: 20 }))).toBe('decodeBackpressure')
-    const s = facts(4000, { callbackFps: 20, rendererSubmitFps: 20, rendererTargetFps: 60 })
+    const s = facts(4000, { callbackFps: 20, rendererSubmitFps: 20, videoPresentFps: 20, rendererTargetFps: 60 })
     expect(resolveBrowserRenderCause(s)).toBe('frameDeliveryLimited')
     const health = new BrowserRenderHealth()
     for (let at = 3000; at <= 30000; at += 1000)

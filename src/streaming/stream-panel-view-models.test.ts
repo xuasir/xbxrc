@@ -127,13 +127,14 @@ describe('buildStreamBrowserDiagnosticsViewModel', () => {
 
   it('shows the five stages, actual source/output and unavailable scanout independently', () => {
     const vm = buildStreamBrowserDiagnosticsViewModel({
-      snapshot: { inboundVideoFps: 60, decodeFps: 55, videoPresentFps: 50, callbackFps: 30, rendererSubmitFps: 25, renderSourceWidth: 2560, renderSourceHeight: 1440, renderActualOutputWidth: 2560, renderActualOutputHeight: 1440, networkRttBaselineMs: 1500, networkRttDeltaMs: 0, renderDrawDurationMsAvg: 2, statsSampleId: '1:10', statsObservationState: 'fresh' },
+      snapshot: { inboundVideoFps: 60, decodeFps: 55, videoPresentFps: 50, callbackFps: 30, rendererSubmitFps: 25, renderSourceWidth: 2560, renderSourceHeight: 1440, renderActualOutputWidth: 2560, renderActualOutputHeight: 1440, networkRttBaselineMs: 1500, networkRttDeltaMs: 0, renderDrawDurationMsAvg: 2, renderUploadDurationMsAvg: 1.5, renderSubmitDurationMsAvg: 0.5, statsSampleId: '1:10', statsObservationState: 'fresh' },
       diagnostics: baseDiagnostics(),
       i18n: createI18n(),
     })
     expect([vm.receivedFps, vm.decodedFps, vm.videoAdvancementFps, vm.callbackDeliveryFps, vm.rendererSubmitFps]).toEqual(['60.0', '55.0', '50.0', '30.0', '25.0'])
     expect(vm.outputSize).toBe(vm.sourceSize)
     expect(vm.sourceSize).toBe('2560×1440')
+    expect([vm.submitCost, vm.uploadCost, vm.glSubmitCost]).toEqual(['2.0ms', '1.5ms', '0.5ms'])
     expect(vm.gpuCost).toBe('streamPage.diagnostics.values.unavailable')
     expect(vm.scanout).toBe(vm.gpuCost)
   })

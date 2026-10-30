@@ -154,6 +154,10 @@ export class PlaybackService {
       frameCounterSource: frameSource?.frameCounterSource,
       nativeCallbackCount: frameSource?.nativeCallbackCount ?? 0,
       polledFrameCount: frameSource?.polledFrameCount ?? 0,
+      uncountedNativeFrames: frameSource?.uncountedNativeFrames ?? 0,
+      expiredNativeFramesTotal: frameSource?.expiredNativeFramesTotal ?? 0,
+      nativeCreditWindowExpirationCount: frameSource?.nativeCreditWindowExpirationCount ?? 0,
+      nativeCounterCreditWindowMs: frameSource?.nativeCounterCreditWindowMs,
       frameRequests: frameSource?.frameRequests ?? 0,
       videoGeneration: frameSource?.videoGeneration,
       actualPipeline: this.current?.renderer.kind,
@@ -299,7 +303,7 @@ export class PlaybackService {
     if (this.current === resource)
       this.current = undefined
     this.releaseRenderer(resource)
-    this.reportResources('rendererFailed')
+    this.emitter.emit('media.resourcesObserved', { reason: 'rendererFailed', resources: { ...this.snapshotResources(), failedRenderer: { generation: resource.generation, kind: resource.renderer.kind, reason } } })
     // 新配置的候选继续完成首帧交接，故障仅释放原管线。
     if (this.pending)
       return
@@ -317,7 +321,8 @@ export class PlaybackService {
   }
 
   private armReadyDeadline(resource: RendererResource): void {
-    if (resource.ready || resource.config.targetFps <= 0) {
+    const sourceReady = getVideoFrameSource(resource.video).lastFrame !== undefined
+    if (resource.ready || resource.config.targetFps <= 0 || !sourceReady) {
       this.clearReadyDeadline(resource)
       return
     }
@@ -345,6 +350,8 @@ export class PlaybackService {
       if (this.videoElement !== video) {
         return
       }
+      if (metadata.newFrame && this.pending)
+        this.armReadyDeadline(this.pending)
       frameCallbackHandle = source.request((at, meta) => {
         if (meta)
           loop(at, meta)

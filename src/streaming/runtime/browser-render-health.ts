@@ -6,6 +6,23 @@ import { BROWSER_SOFT_WINDOW_MS, BROWSER_STABLE_WINDOW_MS } from './browser-runt
 export type BrowserRenderCause = 'decodeBackpressure' | 'frameDeliveryLimited' | 'renderStarvation' | 'renderStable' | 'unknown'
 interface BrowserRenderAction { fallback: boolean, reason: string, evidence?: BrowserActionEvidence }
 
+const FRAME_RATE_COVERAGE = 0.98
+
+function expectedSourceFps(stats: StreamStats, window = stats.browserStatsWindows?.short): number | undefined {
+  const received = window?.inboundFpsAvg ?? stats.inboundVideoFps
+  const decoded = window?.decodeFpsAvg ?? stats.decodeFps
+  const budget = stats.rendererTargetFps ?? 60
+  if (received === undefined || decoded === undefined || !Number.isFinite(received) || !Number.isFinite(decoded)
+    || received <= 0 || decoded <= 0 || budget <= 0) {
+    return
+  }
+  return Math.min(received, decoded, budget)
+}
+
+function sufficientFps(actual: number | undefined, expected: number | undefined): boolean {
+  return actual !== undefined && Number.isFinite(actual) && expected !== undefined && expected > 0 && actual >= expected * FRAME_RATE_COVERAGE
+}
+
 /** 同窗接收、解码、回调与当前管线提交分别归因。 */
 export function resolveBrowserRenderCause(stats: StreamStats): BrowserRenderCause {
   if (stats.statsObservationState !== 'fresh')
@@ -21,13 +38,13 @@ export function resolveBrowserRenderCause(stats: StreamStats): BrowserRenderCaus
   const expected = callbacks === undefined ? undefined : Math.min(callbacks, budget)
   const outstanding = stats.rendererLatestVideoSequence !== undefined && (stats.rendererSubmittedVideoSequence ?? -1) < stats.rendererLatestVideoSequence
   const submitStalled = outstanding && (stats.rendererSubmitAgeMs ?? 0) > Math.max(180, 3000 / Math.max(1, budget))
-  const overCost = (short?.renderDrawDurationMsAvg ?? stats.renderDrawDurationMsAvg ?? 0) > 1000 / Math.max(1, budget)
   if (stats.rendererKind !== undefined && stats.rendererKind !== 'video' && budget > 0 && (
-    submitStalled || (expected !== undefined && expected > 0 && submitted !== undefined && submitted < expected * 0.8 && overCost)
+    submitStalled || (expected !== undefined && expected > 0 && submitted !== undefined && !sufficientFps(submitted, expected))
   )) {
     return 'renderStarvation'
   }
-  if (decoded !== undefined && callbacks !== undefined && decoded > 0 && callbacks < decoded * 0.66)
+  const sourceFps = expectedSourceFps(stats)
+  if (callbacks !== undefined && sourceFps !== undefined && !sufficientFps(callbacks, sourceFps))
     return 'frameDeliveryLimited'
   return received === undefined || decoded === undefined ? 'unknown' : 'renderStable'
 }
@@ -43,6 +60,7 @@ export class BrowserRenderHealth {
   private trialUsed = false
   private eligibleSinceMs = 0
   fallback = false
+  fallbackReason?: string
   effect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
   effectEvidence?: { observedAtMs: number, startedAtMs: number, sampleId?: string, rendererGeneration?: number, baselineRendererGeneration?: number, postActionCoverageMs: number }
 
@@ -55,6 +73,7 @@ export class BrowserRenderHealth {
     this.trialUsed = false
     this.eligibleSinceMs = 0
     this.fallback = false
+    this.fallbackReason = undefined
     this.effect = undefined
     this.effectEvidence = undefined
   }
@@ -65,8 +84,10 @@ export class BrowserRenderHealth {
     this.eligibleSinceMs = nowMs
     if (this.probe) {
       this.effect = 'unknown'
-      if (!this.probe.fallback)
+      if (!this.probe.fallback) {
         this.fallback = true
+        this.fallbackReason = 'enhancementTrialEvidenceIncomplete'
+      }
       this.probe = undefined
       this.trialUsed = true
     }
@@ -87,6 +108,8 @@ export class BrowserRenderHealth {
     const short = stats.browserStatsWindows?.short
     const complete = accepted === 'new' && nowMs >= warmupUntilMs && (stats.statsSampledAtMs ?? 0) - BROWSER_SOFT_WINDOW_MS >= this.eligibleSinceMs
       && (short?.rendererCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1 && (short?.callbackCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
+      && (short?.receivedCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1 && (short?.decodeCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
+      && (short?.videoCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
     if (!complete) {
       this.pressureSinceMs = this.healthySinceMs = undefined
       if (this.probe && nowMs - this.probe.startedAtMs >= BROWSER_STABLE_WINDOW_MS) {
@@ -100,20 +123,27 @@ export class BrowserRenderHealth {
       return
     }
     const cause = resolveBrowserRenderCause(stats)
-    const healthy = cause === 'renderStable' && (short?.rendererSubmitFpsAvg ?? 0) > 0
+    const sourceFps = expectedSourceFps(stats)
+    const outputFps = short?.rendererSubmitFpsAvg ?? stats.rendererSubmitFps
+    // 原生video以自身输出推进验收；canvas同时约束源→候选→实际提交。
+    const healthy = (stats.rendererKind === 'video' || cause === 'renderStable') && sufficientFps(outputFps, sourceFps)
+    const localPressure = stats.rendererKind !== undefined && stats.rendererKind !== 'video'
+      && (cause === 'renderStarvation' || cause === 'frameDeliveryLimited')
+      && sufficientFps(short?.videoPresentFpsAvg ?? stats.videoPresentFps, sourceFps)
+      && !sufficientFps(outputFps, sourceFps)
     if (healthy) {
       this.healthySinceMs ??= nowMs
       this.pressureSinceMs = undefined
     }
     else {
       this.healthySinceMs = undefined
-      this.pressureSinceMs = cause === 'renderStarvation' ? this.pressureSinceMs ?? nowMs : undefined
+      this.pressureSinceMs = localPressure ? this.pressureSinceMs ?? nowMs : undefined
     }
     const probe = this.probe
     if (probe && (stats.statsSampledAtMs ?? 0) - BROWSER_SOFT_WINDOW_MS >= probe.startedAtMs && stats.rendererGeneration !== undefined && stats.rendererGeneration !== probe.generation) {
       this.effectEvidence = { observedAtMs: nowMs, startedAtMs: probe.startedAtMs, sampleId: stats.statsSampleId, rendererGeneration: stats.rendererGeneration, baselineRendererGeneration: probe.generation, postActionCoverageMs: Math.min(short?.rendererCoverageMs ?? 0, short?.callbackCoverageMs ?? 0) }
       const costFits = (short?.renderDrawDurationMsAvg ?? 0) <= 1000 / Math.max(1, stats.rendererTargetFps ?? 60)
-      this.effect = healthy && costFits && (short?.rendererSubmitFpsAvg ?? 0) >= probe.expectedFps * 0.95 ? 'improved' : 'neutral'
+      this.effect = healthy && costFits && sufficientFps(outputFps, probe.expectedFps) ? 'improved' : 'neutral'
       this.probe = undefined
       if (this.effect !== 'improved') {
         this.trialUsed = true
@@ -134,7 +164,7 @@ export class BrowserRenderHealth {
     }
     if (!this.fallback && this.pressureSinceMs !== undefined && nowMs - this.pressureSinceMs >= BROWSER_SOFT_WINDOW_MS
       && nowMs - this.lastActionAtMs >= BROWSER_STABLE_WINDOW_MS) {
-      return this.startAction(stats, nowMs, true, 'sustainedRendererPressure')
+      return this.startAction(stats, nowMs, true, cause === 'frameDeliveryLimited' ? 'sustainedFrameDeliveryDeficit' : 'sustainedRendererPressure')
     }
     if (this.fallback && !this.trialUsed && this.healthySinceMs !== undefined && nowMs - this.healthySinceMs >= BROWSER_STABLE_WINDOW_MS
       && (stats.browserStatsWindows?.long.rendererCoverageMs ?? 0) >= BROWSER_STABLE_WINDOW_MS - 1
@@ -149,8 +179,9 @@ export class BrowserRenderHealth {
     const window = fallback ? stats.browserStatsWindows?.short : stats.browserStatsWindows?.long
     const evidence: BrowserActionEvidence = { domain: 'renderer', sampleId: stats.statsSampleId, observedAtMs: nowMs, coverageMs: Math.min(window?.rendererCoverageMs ?? 0, window?.callbackCoverageMs ?? 0), sustainedMs: Math.max(0, nowMs - (fallback ? this.pressureSinceMs ?? nowMs : this.healthySinceMs ?? nowMs)), previousActionAtMs: Number.isFinite(this.lastActionAtMs) ? this.lastActionAtMs : undefined }
     this.fallback = fallback
+    this.fallbackReason = fallback ? reason : undefined
     this.lastActionAtMs = nowMs
-    this.probe = { generation: stats.rendererGeneration, startedAtMs: nowMs, expectedFps: Math.min(stats.browserStatsWindows?.short.callbackFpsAvg ?? 0, stats.rendererTargetFps ?? 60), fallback }
+    this.probe = { generation: stats.rendererGeneration, startedAtMs: nowMs, expectedFps: expectedSourceFps(stats, window) ?? 0, fallback }
     this.pressureSinceMs = this.healthySinceMs = undefined
     return { fallback, reason, evidence }
   }

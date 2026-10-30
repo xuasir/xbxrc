@@ -82,6 +82,28 @@ afterEach(() => {
 })
 
 describe('playback resource ownership', () => {
+  it('starts the canvas first-frame deadline after usable media and preserves hard failure handling before media', async () => {
+    vi.useFakeTimers()
+    const { service, stream, elements, emitter } = fixture()
+    const resources = vi.fn()
+    emitter.on('media.resourcesObserved', resources)
+    const next = { ...config, pipelineType: 'webgl2' as const, mode: 'webgl2' as const }
+    service.updateRendererState(next, deriveRendererAttachSpec(next))
+    service.attachVideoStream(stream)
+    await flush()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(mocks.resources).toHaveLength(1)
+    expect(service.snapshotResources().readyTimers).toBe(0)
+    elements[0]!.frame(10000, { presentedFrames: 1, mediaTime: 0 })
+    expect(service.snapshotResources().readyTimers).toBe(1)
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(mocks.resources).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mocks.resources.at(-1)?.kind).toBe('video')
+    expect(resources).toHaveBeenCalledWith(expect.objectContaining({ reason: 'rendererFailed', resources: expect.objectContaining({ failedRenderer: { generation: 1, kind: 'webgl2', reason: 'rendererFirstFrameTimeout' } }) }))
+    service.destroy()
+  })
+
   it('attributes diagnostic surfaces to committed and pending renderer generations through handoff and stop', async () => {
     const { service, stream } = fixture()
     service.attachVideoStream(stream)
@@ -194,7 +216,7 @@ describe('playback resource ownership', () => {
 
   it('bounds first-frame handoff and pauses its deadline while the display is hidden', async () => {
     vi.useFakeTimers()
-    const { service, stream } = fixture()
+    const { service, stream, elements } = fixture()
     service.attachVideoStream(stream)
     await flush()
     const old = mocks.resources[0]!
@@ -206,6 +228,7 @@ describe('playback resource ownership', () => {
     expect(old.update).toHaveBeenCalledWith({ targetFps: 0 })
     await vi.advanceTimersByTimeAsync(10000)
     expect(mocks.resources).toHaveLength(2)
+    elements[0]!.frame(10000, { presentedFrames: 1, mediaTime: 0 })
     service.updateRendererConfig({ targetFps: 60 })
     await vi.advanceTimersByTimeAsync(5000)
     expect(mocks.resources.at(-1)?.kind).toBe('video')

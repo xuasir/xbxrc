@@ -1,0 +1,303 @@
+{
+  "gate": "PASS",
+  "kind": "production-api-contract-replay-with-mocked-DOM-WebGL",
+  "baselineScope": "index version before video import optimization",
+  "before": [
+    {
+      "name": "ordinary equal1440p",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 0,
+      "texSubImageVideoImports": 61,
+      "webkitFastPathEligibleImports": 0,
+      "textureObjects": 1,
+      "nullStorageAllocations": 1,
+      "gpuDrawCalls": 61,
+      "gpuObjects": 5,
+      "format": "RGBA"
+    },
+    {
+      "name": "ordinary sharpen then upscale",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 0,
+      "texSubImageVideoImports": 61,
+      "webkitFastPathEligibleImports": 0,
+      "textureObjects": 2,
+      "nullStorageAllocations": 2,
+      "gpuDrawCalls": 122,
+      "gpuObjects": 9,
+      "format": "RGBA"
+    },
+    {
+      "name": "SR equal1440p",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 1,
+      "texSubImageVideoImports": 60,
+      "webkitFastPathEligibleImports": 1,
+      "textureObjects": 1,
+      "nullStorageAllocations": 0,
+      "gpuDrawCalls": 61,
+      "gpuObjects": 3,
+      "format": "RGB"
+    },
+    {
+      "name": "SR fused upscale",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 1,
+      "texSubImageVideoImports": 60,
+      "webkitFastPathEligibleImports": 1,
+      "textureObjects": 1,
+      "nullStorageAllocations": 0,
+      "gpuDrawCalls": 61,
+      "gpuObjects": 3,
+      "format": "RGB"
+    },
+    {
+      "name": "SR EASU then RCAS",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 1,
+      "texSubImageVideoImports": 60,
+      "webkitFastPathEligibleImports": 1,
+      "textureObjects": 2,
+      "nullStorageAllocations": 1,
+      "gpuDrawCalls": 122,
+      "gpuObjects": 6,
+      "format": "RGB"
+    }
+  ],
+  "current": [
+    {
+      "name": "ordinary equal1440p",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 61,
+      "texSubImageVideoImports": 0,
+      "webkitFastPathEligibleImports": 61,
+      "textureObjects": 1,
+      "nullStorageAllocations": 0,
+      "gpuDrawCalls": 61,
+      "gpuObjects": 5,
+      "format": "RGBA"
+    },
+    {
+      "name": "ordinary sharpen then upscale",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 61,
+      "texSubImageVideoImports": 0,
+      "webkitFastPathEligibleImports": 61,
+      "textureObjects": 2,
+      "nullStorageAllocations": 1,
+      "gpuDrawCalls": 122,
+      "gpuObjects": 9,
+      "format": "RGBA"
+    },
+    {
+      "name": "SR equal1440p",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 61,
+      "texSubImageVideoImports": 0,
+      "webkitFastPathEligibleImports": 61,
+      "textureObjects": 1,
+      "nullStorageAllocations": 0,
+      "gpuDrawCalls": 61,
+      "gpuObjects": 3,
+      "format": "RGB"
+    },
+    {
+      "name": "SR fused upscale",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 61,
+      "texSubImageVideoImports": 0,
+      "webkitFastPathEligibleImports": 61,
+      "textureObjects": 1,
+      "nullStorageAllocations": 0,
+      "gpuDrawCalls": 61,
+      "gpuObjects": 3,
+      "format": "RGB"
+    },
+    {
+      "name": "SR EASU then RCAS",
+      "offered": 60,
+      "realtimeDrawCount": 60,
+      "captureDrawCount": 1,
+      "texImageVideoImports": 61,
+      "texSubImageVideoImports": 0,
+      "webkitFastPathEligibleImports": 61,
+      "textureObjects": 2,
+      "nullStorageAllocations": 1,
+      "gpuDrawCalls": 122,
+      "gpuObjects": 6,
+      "format": "RGB"
+    }
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/player/infra/render/Renderers.ts",
+      "beforeSha256": "12c9651def3909c0f409106e97c7e8649ae75c4a0cec9567ae137608c28db9a4",
+      "currentSha256": "21276dff07110f1bd2dcf0211b67c05faea6d70c5ad0f788c9ee8f32d11bedf8"
+    },
+    {
+      "path": "src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+      "beforeSha256": "918f627da7f9516dfeb54358b0c9b9e201d2bb974faddb0b680455e80d5e4e2b",
+      "currentSha256": "9328f440e51996933b63ee2fe05ddd87a0ad135aa1749493a4e8db43f8a002a4"
+    }
+  ],
+  "webkitEvidence": {
+    "url": "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/canvas/WebGLRenderingContextBase.cpp#L3584",
+    "function": "texImageSource(HTMLVideoElement&)",
+    "retrievedDate": "2026-10-30",
+    "fastPath": "TexImage2D + full source + level0 + RGB/RGBA + UNSIGNED_BYTE",
+    "actualGpuCopySuccess": "unavailable",
+    "sources": [
+      {
+        "path": "xbxrc-webkit-WebGLRenderingContextBase.cpp",
+        "sha256": "5c2ee9a41425e6a09a50d94e6dc4331183eec96eed8b1130ef086dad2b0a397a"
+      },
+      {
+        "path": "xbxrc-webkit-GraphicsContextGLCocoa.mm",
+        "sha256": "3083b307da58e586ca0f3ca3bebc73db9c053a7301ab72e21f8b0ee416727fd9"
+      }
+    ]
+  },
+  "limitations": [
+    "API eligibility and object reuse are verified; backend allocation, GPU-copy success, pixel output and device speed require device evidence.",
+    "Performance values from the old trace remain a pre-change baseline."
+  ],
+  "checks": {
+    "vitest": {
+      "gate": "PASS",
+      "files": 48,
+      "tests": 413
+    },
+    "rendererTests": {
+      "files": 2,
+      "tests": 62
+    },
+    "redRegression": {
+      "failed": 2,
+      "passed": 49
+    },
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "diffCheck": "PASS"
+  },
+  "previousReplays": {
+    "supply": {
+      "gate": "PASS",
+      "cases": 9,
+      "drawPaths": 4
+    },
+    "offset": {
+      "gate": "PASS",
+      "steadyFps": [
+        30,
+        30,
+        30
+      ]
+    },
+    "redundant": {
+      "gate": "PASS",
+      "current": [
+        {
+          "name": "webgl equal1440p",
+          "offered": 60,
+          "programsAtAttach": 1,
+          "totalProgramAttempts": 1,
+          "realtimeDrawCount": 61,
+          "gpuDrawCalls": 61,
+          "framebufferAllocations": 0,
+          "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+          "opacityWrites": 1,
+          "textureBindings": 62,
+          "viewportCalls": 1,
+          "activeTextureCalls": 0,
+          "duplicateDrawCount": 0
+        },
+        {
+          "name": "webgl zero sharpening with larger output",
+          "offered": 60,
+          "programsAtAttach": 1,
+          "totalProgramAttempts": 1,
+          "realtimeDrawCount": 61,
+          "gpuDrawCalls": 61,
+          "framebufferAllocations": 0,
+          "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+          "opacityWrites": 1,
+          "textureBindings": 62,
+          "viewportCalls": 1,
+          "activeTextureCalls": 0,
+          "duplicateDrawCount": 0
+        },
+        {
+          "name": "SR equal1440p",
+          "offered": 60,
+          "programsAtAttach": 1,
+          "totalProgramAttempts": 1,
+          "realtimeDrawCount": 61,
+          "gpuDrawCalls": 61,
+          "framebufferAllocations": 0,
+          "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+          "opacityWrites": 1,
+          "textureBindings": 62,
+          "viewportCalls": 1,
+          "activeTextureCalls": 1,
+          "duplicateDrawCount": 0
+        },
+        {
+          "name": "SR fused upscale",
+          "offered": 60,
+          "programsAtAttach": 1,
+          "totalProgramAttempts": 1,
+          "realtimeDrawCount": 61,
+          "gpuDrawCalls": 61,
+          "framebufferAllocations": 0,
+          "uniformWritesAfterRepeatedOptionsAndFpsChange": 0,
+          "opacityWrites": 1,
+          "textureBindings": 62,
+          "viewportCalls": 1,
+          "activeTextureCalls": 1,
+          "duplicateDrawCount": 0
+        }
+      ]
+    }
+  },
+  "currentCodeFiles": [
+    {
+      "path": "src/player/infra/render/Renderers.test.ts",
+      "sha256": "c7df8248c15adfca03177b272b11fc1184048352cd2634f9d262a8adfe62dc5a"
+    },
+    {
+      "path": "src/player/infra/render/Renderers.ts",
+      "sha256": "21276dff07110f1bd2dcf0211b67c05faea6d70c5ad0f788c9ee8f32d11bedf8"
+    },
+    {
+      "path": "src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+      "sha256": "9328f440e51996933b63ee2fe05ddd87a0ad135aa1749493a4e8db43f8a002a4"
+    },
+    {
+      "path": "src/player/infra/render/render-observation.ts",
+      "sha256": "cbbfd22c3b3e595682ae76976e0f317448c84d85ced149c82fdbc960be1f8fa6"
+    },
+    {
+      "path": "src/player/infra/render/renderer-scheduling.test.ts",
+      "sha256": "744c53c54f152207d0a96cb5fabbfb7ec6fab0e2cfc98258d2cd8920ef69d014"
+    }
+  ]
+}

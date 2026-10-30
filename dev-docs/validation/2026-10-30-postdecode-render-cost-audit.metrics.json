@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-30",
+  "kind": "read-only-code-cost-audit-and-pure-policy-replay",
+  "cases": [
+    {
+      "name": "60fps候选，84%提交，CPU均值4ms",
+      "callbackFps": 60,
+      "rendererSubmitFps": 50.4,
+      "renderDrawDurationMsAvg": 4,
+      "cause": "renderStable"
+    },
+    {
+      "name": "60fps候选，40fps提交，CPU均值4ms",
+      "callbackFps": 60,
+      "rendererSubmitFps": 40,
+      "renderDrawDurationMsAvg": 4,
+      "cause": "renderStable"
+    },
+    {
+      "name": "40fps候选，40fps提交，CPU均值4ms",
+      "callbackFps": 40,
+      "rendererSubmitFps": 40,
+      "renderDrawDurationMsAvg": 4,
+      "cause": "renderStable"
+    },
+    {
+      "name": "60fps候选，84%提交，CPU均值20ms",
+      "callbackFps": 60,
+      "rendererSubmitFps": 50.4,
+      "renderDrawDurationMsAvg": 20,
+      "cause": "renderStable"
+    },
+    {
+      "name": "60fps候选，40fps提交，CPU均值20ms",
+      "callbackFps": 60,
+      "rendererSubmitFps": 40,
+      "renderDrawDurationMsAvg": 20,
+      "cause": "renderStarvation"
+    }
+  ],
+  "rgba1440p": {
+    "bytesPerFrame": 14745600,
+    "bytesPerSecondAt60": 884736000,
+    "assumption": "像素容量，仅作工作量估算；驱动实际复制路径和缓存需设备测量"
+  },
+  "sourceFiles": [
+    {
+      "path": "src/player/infra/render/Renderers.ts",
+      "sha256": "7b7bab4c5301a902511a0e6d9ba27111ebc6aeda6dd936c4be75a20c2dd1aa56"
+    },
+    {
+      "path": "src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+      "sha256": "b9b9a8a452534f630a244b4b2d50bfb2dc23712808bb42201926f8236c31c5bb"
+    },
+    {
+      "path": "src/player/infra/render/fsr1-mobile-opt-fragment.ts",
+      "sha256": "85377c6294aaf5028c523660c6e95329e01cab40a965e40e861cf6f6189e6797"
+    },
+    {
+      "path": "src/player/infra/render/webgl-frame-capture.ts",
+      "sha256": "1a49a61378b77948f0bfe78b18e88c0ce395913982471dcb8b3ce4026ce3e651"
+    },
+    {
+      "path": "src/player/infra/render/webgl-runtime-guard.ts",
+      "sha256": "183a06b1a5e2538a5f68338eb5bf3ab353cd150fc87cb5ae6b6e1d79bb83927a"
+    },
+    {
+      "path": "src/streaming/runtime/browser-render-health.ts",
+      "sha256": "634a856abfc474fc980ea6330a82eb2cc78c43f40c779859ae9ceff308e8407c"
+    }
+  ]
+}

@@ -14,7 +14,10 @@ use ohmygamepad_protocol::{
     OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
-use crate::{DeviceProfile, InputBackend, InputCore, InputCoreConfig, StreamSink, UiSink};
+use crate::{
+    DeviceProfile, InputBackend, InputCore, InputCoreConfig, InputProcessingMode, StreamSink,
+    UiSink,
+};
 
 use super::monotonic_origin;
 
@@ -242,6 +245,7 @@ where
             &runtime_latest_pad_states,
             &runtime_latest_pad_seq,
             &initial_snapshot,
+            core.config().processing_mode,
         );
         run_runtime_loop(
             &mut core,
@@ -270,7 +274,11 @@ fn replace_latest_pad_states(
     cell: &Arc<ArcSwap<Vec<LogicalPadSnapshotDto>>>,
     seq: &Arc<AtomicU64>,
     snapshot: &OhMyGamepadRuntimeSnapshotDto,
+    mode: InputProcessingMode,
 ) {
+    if mode == InputProcessingMode::StandardDevices {
+        return;
+    }
     let states = snapshot.slots.clone();
     cell.store(Arc::new(states));
     seq.fetch_add(1, Ordering::Release);
@@ -367,7 +375,7 @@ where
         core.poll_backend();
         applied = true;
     }
-    if actions.sample_pads {
+    if actions.sample_pads && core.config().processing_mode == InputProcessingMode::LogicalPads {
         core.sync_clock_ms(now.as_millis() as u64);
         core.sample_once();
         applied = true;
@@ -378,7 +386,12 @@ where
         if did_sample {
             // 高频读方独立于 UI 节流：每次真正 sample 都 replace 一次 ArcSwap，
             // 避免 input loop 读到的 pad 状态比 snapshot_broadcaster 推送还旧。
-            replace_latest_pad_states(latest_pad_states, latest_pad_seq, &snapshot);
+            replace_latest_pad_states(
+                latest_pad_states,
+                latest_pad_seq,
+                &snapshot,
+                core.config().processing_mode,
+            );
         }
         publish_runtime_snapshot(snapshot_broadcaster, publish_state, snapshot, now);
     }
@@ -410,7 +423,12 @@ where
             core.poll_backend();
             core.sample_once();
             let snapshot = decorate_runtime_snapshot(core);
-            replace_latest_pad_states(latest_pad_states, latest_pad_seq, &snapshot);
+            replace_latest_pad_states(
+                latest_pad_states,
+                latest_pad_seq,
+                &snapshot,
+                core.config().processing_mode,
+            );
             force_publish_runtime_snapshot(snapshot_broadcaster, publish_state, snapshot, now);
             false
         }
@@ -436,7 +454,12 @@ where
             core.replace_bindings(bindings);
             core.sample_once();
             let snapshot = decorate_runtime_snapshot(core);
-            replace_latest_pad_states(latest_pad_states, latest_pad_seq, &snapshot);
+            replace_latest_pad_states(
+                latest_pad_states,
+                latest_pad_seq,
+                &snapshot,
+                core.config().processing_mode,
+            );
             force_publish_runtime_snapshot(snapshot_broadcaster, publish_state, snapshot, now);
             false
         }
@@ -445,7 +468,12 @@ where
             core.replace_device_profiles(profiles);
             core.sample_once();
             let snapshot = decorate_runtime_snapshot(core);
-            replace_latest_pad_states(latest_pad_states, latest_pad_seq, &snapshot);
+            replace_latest_pad_states(
+                latest_pad_states,
+                latest_pad_seq,
+                &snapshot,
+                core.config().processing_mode,
+            );
             force_publish_runtime_snapshot(snapshot_broadcaster, publish_state, snapshot, now);
             false
         }
@@ -534,6 +562,7 @@ fn runtime_snapshot_broadcast_semantic_eq(
     b: &OhMyGamepadRuntimeSnapshotDto,
 ) -> bool {
     a.devices == b.devices
+        && a.device_samples == b.device_samples
         && a.slot_bindings == b.slot_bindings
         && a.sampling == b.sampling
         && a.slots == b.slots

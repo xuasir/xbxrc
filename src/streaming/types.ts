@@ -471,6 +471,8 @@ export interface StreamBrowserDiagnosticsViewModel {
   outputSize: string
   submitAge: string
   submitCost: string
+  uploadCost: string
+  glSubmitCost: string
   gpuCost: string
   scanout: string
   renderCause: string

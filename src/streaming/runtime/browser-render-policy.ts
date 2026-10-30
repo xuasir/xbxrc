@@ -121,7 +121,12 @@ export function resolveRendererPresentTargetFps(input: {
 }
 
 export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): BrowserRendererPlan {
+  const sharpness = Math.max(0, input.displayOptions.sharpness)
+  const neutralDisplay = sharpness === 0 && input.displayOptions.brightness === 100
+    && input.displayOptions.contrast === 100 && input.displayOptions.saturation === 100
+  // 中性auto直接复用浏览器呈现，显式增强和管线选择继续按用户意图装配。
   const wantsWebgl = input.pipelineOverride !== 'video'
+    && !(input.pipelineOverride === 'auto' && neutralDisplay && !input.superResolutionUserIntent)
   const webgl = wantsWebgl && input.webgl2Supported && !input.localFallback
   const srActive = webgl && input.superResolutionUserIntent && !input.superResolutionAttachFailed
   const kind: BrowserRendererKind = srActive ? 'webgl2_sr' : webgl ? 'webgl2' : 'video'
@@ -132,7 +137,6 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
       : webgl && input.superResolutionUserIntent && input.superResolutionAttachFailed
         ? 'srFallback'
         : input.pipelineOverride === 'auto' ? 'auto' : 'userOverride'
-  const sharpness = Math.max(0, input.displayOptions.sharpness)
   const rcasStops = Math.max(0.6, Math.min(1.1, input.superResolutionRcasStopsBase))
   const plan: BrowserRendererPlan = {
     kind,

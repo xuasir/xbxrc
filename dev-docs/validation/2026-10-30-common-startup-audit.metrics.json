@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-30",
+  "purpose": "确认当前缺陷行为，修复后应转换为安全结果回归",
+  "frontend": [
+    {
+      "audit": "during-stop",
+      "fallbackLaunches": 0,
+      "fallbackStops": [],
+      "outcome": "streamRuntimeSuperseded",
+      "traceEvents": [
+        "launchRuntimeAttempt",
+        "runtimeLaunchReadyToInvoke",
+        "runtimeLaunchPortBound",
+        "operationStarted",
+        "recoveryProposed",
+        "recoveryGranted",
+        "recoveryCommitted",
+        "fallbackTurnRetry",
+        "runtimeStopRequested",
+        "runtimeStopCompleted",
+        "startRuntimeLaunchFailed",
+        "operationCancelled",
+        "recoveryDrainPending",
+        "runtimeStopRequested",
+        "runtimeStopCompleted",
+        "recoveryDrainFinished"
+      ]
+    },
+    {
+      "audit": "after-fallback-launch",
+      "fallbackLaunches": 1,
+      "fallbackStops": [
+        [
+          "launch-failed"
+        ]
+      ],
+      "outcome": "streamRuntimeSuperseded",
+      "traceEvents": [
+        "launchRuntimeAttempt",
+        "runtimeLaunchReadyToInvoke",
+        "runtimeLaunchPortBound",
+        "operationStarted",
+        "recoveryProposed",
+        "recoveryGranted",
+        "recoveryCommitted",
+        "fallbackTurnRetry",
+        "runtimeStopRequested",
+        "runtimeStopCompleted",
+        "launchRuntimeAttempt",
+        "runtimeLaunchReadyToInvoke",
+        "runtimeLaunchPortBound",
+        "fallbackTurnRetryResult",
+        "reconnectResult",
+        "startRuntimeLaunchFailed",
+        "operationCancelled",
+        "runtimeStopRequested",
+        "runtimeStopCompleted"
+      ]
+    },
+    {
+      "audit": "native-reconnect-rejection",
+      "unhandled": 1,
+      "uiStateUpdates": 0,
+      "uiErrors": 0,
+      "stopCalls": 0
+    },
+    {
+      "audit": "end-marker-only",
+      "elapsedMs": 120100,
+      "polls": 1,
+      "recoveries": 0,
+      "errors": 0,
+      "iceState": "new"
+    }
+  ],
+  "rust": [
+    {
+      "audit": "restart-submit",
+      "oldSnapshotCandidateCount": 2,
+      "returnedUfrag": "old-generation",
+      "returnedEndMarker": true
+    },
+    {
+      "audit": "peer-rebuild",
+      "offers": 2,
+      "answerGets": 2,
+      "acceptedPreviousSdp": true
+    }
+  ],
+  "sourceSha256": {
+    "src/streaming/runtime/runtime-host.ts": "7918fafa47804e15cef300acee64ffe761a061fdf74cceb0bac9b860128ce2c8",
+    "src/streaming/runtime/browser-negotiation.ts": "9a5e34ece9f3bfdf4363b51e0ce6e70ac41c11e7ee50571d8ca9e1e3a1ada202",
+    "src/streaming/runtime/browser-runtime.ts": "8ad9e6e9532b641af22cc3ec270674861a347a6f018210d4d5d03d0d9100889d",
+    "src/streaming/runtime/xbxengine-runtime.ts": "1e77f10c43ec00f8e2a1b023f35c3273fed5f17cf5a188097fc9360a4d466c5e",
+    "crates/xbox-streaming/src/session/signaling/flow.rs": "6d15496cee74b7acd2bd9812f81f4ddf186c15554b859297a11c1cf280d7e074",
+    "crates/xbox-streaming/src/session/flow.rs": "b289f7b70c0ab6330fc0da149564dcb2690de9cab3511438a915234019566619"
+  }
+}

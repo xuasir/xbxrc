@@ -1,0 +1,3482 @@
+{
+  "trace": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1793329037119-1.jsonl",
+  "traceSha256": "5506151d0a26ea2b391ee1715f1c47580e1f611486e4d78204264ff0bc6cf6e2",
+  "rows": 2398,
+  "traceBounds": {
+    "firstSeq": 1,
+    "lastSeq": 2398,
+    "durationSeconds": 220.78
+  },
+  "build": {
+    "buildTimestampUnixMs": "1793329013202",
+    "cargoProfile": "debug",
+    "controlledTwccRegistry": true,
+    "defaultFeedbackIntervalMs": 1000,
+    "effectiveFeedbackIntervalMs": 1000,
+    "gitCommitShort": "eeaa5bb7",
+    "sourceFingerprintSha256": "b5abf1b3723a4adbfaa3180e9ddbaf97282c30d995c00395ced1b1ee80537c87",
+    "workspaceDirty": true
+  },
+  "currentSourceFingerprint": "b5abf1b3723a4adbfaa3180e9ddbaf97282c30d995c00395ced1b1ee80537c87",
+  "sourceInputCount": 732,
+  "sourceMatchesCurrent": true,
+  "events": {
+    "fileOpened": 1,
+    "runtimeBuildInfo": 2,
+    "initServicesBuilt": 1,
+    "recoveryDecisionLedger": 1,
+    "recoveryState": 1,
+    "hostMailboxState": 1,
+    "transportObservation": 1,
+    "actualVideoBitrateSource": 1,
+    "twccObservationState": 1,
+    "videoRendererStallTransition": 1,
+    "statsSnapshot": 220,
+    "observabilitySnapshot": 220,
+    "gamepadInputChanged": 16,
+    "operationStarted": 1,
+    "startupPhase": 8,
+    "configSnapshot": 1,
+    "remoteConsoleCapabilitySnapshot": 1,
+    "contextSnapshot": 1,
+    "compiledPlan": 1,
+    "sessionCreated": 1,
+    "sessionResourceCreated": 1,
+    "sessionStatePolled": 51,
+    "sessionMonitorSnapshot": 51,
+    "sessionExecutionStarted": 1,
+    "sessionProgress": 1,
+    "operationFinished": 1,
+    "launchRuntimeAttempt": 1,
+    "runtimeLaunchReadyToInvoke": 1,
+    "runtimeLaunchPortBound": 1,
+    "rendererCapabilityDetected": 1,
+    "browserWebRtcTimelineObserved": 20,
+    "browserWebRtcSdpObserved": 3,
+    "renderPipelineSwitched": 2,
+    "renderFpsBudgetChanged": 1,
+    "renderPolicyApplied": 3,
+    "exchangeOfferRequested": 1,
+    "offerPatchApplied": 1,
+    "exchangeOfferResult": 1,
+    "browserMediaResourcesObserved": 9,
+    "submitIceRequested": 1,
+    "submitIceResult": 1,
+    "pollIceRequested": 3,
+    "pollIceResult": 3,
+    "icePolicyEvaluated": 1,
+    "icePolicyApplied": 1,
+    "warmupProfileApplied": 1,
+    "firstFrameStageChanged": 3,
+    "browserObservationConsumed": 144,
+    "mediaObservationUnavailable": 1,
+    "gamepadFrameSent": 908,
+    "browserWebRtcStatsObserved": 382,
+    "recoveryCauseClassified": 97,
+    "renderTelemetryObserved": 97,
+    "bandwidthStateChanged": 14,
+    "browserMediaResourcesSnapshot": 46,
+    "panelStatsObserved": 46,
+    "superResolutionTierFrozen": 1,
+    "closeExecutionRequested": 1,
+    "cleanupStarted": 5,
+    "cleanupFinished": 5,
+    "runtimeStopRequested": 1,
+    "runtimeStopCompleted": 1,
+    "closeSessionRequested": 1,
+    "startupCancellationRequested": 1,
+    "closeSessionResult": 1
+  },
+  "network": {
+    "bounds": {
+      "seq": [
+        206,
+        2220
+      ],
+      "monotonicMs": [
+        43075,
+        141249
+      ],
+      "wallClock": [
+        "2026-10-30T10:58:00.668000+08:00",
+        "2026-10-30T10:59:38.842000+08:00"
+      ]
+    },
+    "durationSeconds": 98.174,
+    "counterChanges": {
+      "packetsReceived": 247718,
+      "packetsLost": 642,
+      "bytesReceived": 271703799,
+      "framesReceived": 5773,
+      "framesDecoded": 5773,
+      "framesDropped": 0,
+      "freezeCount": 5,
+      "totalFreezesDuration": 2.415,
+      "pauseCount": 0,
+      "pliCount": 2,
+      "firCount": 0,
+      "nackCount": 70,
+      "keyFramesDecoded": 11,
+      "retransmittedPacketsReceived": 846,
+      "retransmittedBytesReceived": 911000,
+      "jitterBufferDelay": 34.625475,
+      "jitterBufferEmittedCount": 5773,
+      "totalDecodeTime": 24.802502999999998,
+      "totalProcessingDelay": 59.545622,
+      "totalAssemblyTime": 22.689742000000003
+    },
+    "receivedFps": 58.803756595432596,
+    "decodedFps": 58.803756595432596,
+    "bitrateMbps": 22.140591113736836,
+    "positivePacketsLost": 642,
+    "positiveLossRatio": 0.0025849573200193267,
+    "netLossRatio": 0.0025849573200193267,
+    "rttMs": {
+      "n": 376,
+      "mean": 25.73404255319149,
+      "p50": 17.0,
+      "p95": 38.0,
+      "p99": 230.0,
+      "min": 10.0,
+      "max": 230.0
+    },
+    "jitterMs": {
+      "n": 382,
+      "mean": 5.5,
+      "p50": 5.0,
+      "p95": 12.0,
+      "p99": 21.379999999999995,
+      "min": 1.0,
+      "max": 40.0
+    },
+    "sampleDelayMs": {
+      "jitterBufferMs": {
+        "n": 376,
+        "mean": 7.788614604190096,
+        "p50": 3.856366666666607,
+        "p95": 14.34213421052633,
+        "p99": 42.11647624434386,
+        "min": 0.4373333333333562,
+        "max": 746.035
+      },
+      "decodeMs": {
+        "n": 376,
+        "mean": 4.315355973389935,
+        "p50": 4.381519047619134,
+        "p95": 5.0633461538461555,
+        "p99": 5.475950000000207,
+        "min": 2.0860000000000007,
+        "max": 7.693769230769271
+      },
+      "processingMs": {
+        "n": 376,
+        "mean": 12.148477021864325,
+        "p50": 8.339766666666765,
+        "p95": 18.92698640350868,
+        "p99": 48.23809203296699,
+        "min": 3.008357142857219,
+        "max": 751.7150000000008
+      },
+      "assemblyMs": {
+        "n": 376,
+        "mean": 5.890900371181641,
+        "p50": 2.8052666666666353,
+        "p95": 8.751015625000054,
+        "p99": 19.865683333333283,
+        "min": 0.11626086956521058,
+        "max": 745.9430000000004
+      }
+    },
+    "weightedDelayMs": {
+      "jitterBuffer": 5.997830417460592,
+      "decode": 4.296293608175991,
+      "processing": 10.314502338472199,
+      "assembly": 3.930320803741556
+    },
+    "connectionStates": {
+      "connected": 382
+    },
+    "pairIds": [
+      "CP6NTJj1dg_VIeUIFjz",
+      null
+    ],
+    "candidateTypes": [
+      [
+        "srflx",
+        "srflx"
+      ],
+      [
+        null,
+        null
+      ]
+    ],
+    "worstDelaySamples": [
+      {
+        "seq": 576,
+        "sampledAtMs": 61263,
+        "jitterBufferMs": 746.035,
+        "decodeMs": 5.6480000000007635,
+        "processingMs": 751.7150000000008,
+        "assemblyMs": 745.9430000000004
+      },
+      {
+        "seq": 595,
+        "sampledAtMs": 62272,
+        "jitterBufferMs": 53.74050000000012,
+        "decodeMs": 7.142166666666523,
+        "processingMs": 60.91600000000005,
+        "assemblyMs": 48.013666666666694
+      },
+      {
+        "seq": 1290,
+        "sampledAtMs": 95552,
+        "jitterBufferMs": 48.77926666666663,
+        "decodeMs": 5.181714285714329,
+        "processingMs": 51.842928571428615,
+        "assemblyMs": 16.743499999999962
+      },
+      {
+        "seq": 870,
+        "sampledAtMs": 75379,
+        "jitterBufferMs": 43.97984615384614,
+        "decodeMs": 7.693769230769271,
+        "processingMs": 51.70015384615375,
+        "assemblyMs": 13.875307692307716
+      }
+    ]
+  },
+  "segments": [
+    {
+      "key": [
+        "video",
+        2,
+        2560,
+        1440
+      ],
+      "bounds": {
+        "seq": [
+          220,
+          588
+        ],
+        "monotonicMs": [
+          43832,
+          61767
+        ],
+        "wallClock": [
+          "2026-10-30T10:58:01.491000+08:00",
+          "2026-10-30T10:58:19.563000+08:00"
+        ]
+      },
+      "telemetryCount": 19,
+      "network": {
+        "bounds": {
+          "seq": [
+            216,
+            583
+          ],
+          "monotonicMs": [
+            43832,
+            61767
+          ],
+          "wallClock": [
+            "2026-10-30T10:58:01.426000+08:00",
+            "2026-10-30T10:58:19.362000+08:00"
+          ]
+        },
+        "durationSeconds": 17.935,
+        "counterChanges": {
+          "packetsReceived": 53861,
+          "packetsLost": 596,
+          "bytesReceived": 59221142,
+          "framesReceived": 986,
+          "framesDecoded": 986,
+          "framesDropped": 0,
+          "freezeCount": 1,
+          "totalFreezesDuration": 0.717,
+          "pauseCount": 0,
+          "pliCount": 2,
+          "firCount": 0,
+          "nackCount": 26,
+          "keyFramesDecoded": 0,
+          "retransmittedPacketsReceived": 612,
+          "retransmittedBytesReceived": 666563,
+          "jitterBufferDelay": 7.296006,
+          "jitterBufferEmittedCount": 986,
+          "totalDecodeTime": 4.764564,
+          "totalProcessingDelay": 12.082407,
+          "totalAssemblyTime": 5.216057
+        },
+        "receivedFps": 54.976303317535546,
+        "decodedFps": 54.976303317535546,
+        "bitrateMbps": 26.415898299414554,
+        "positivePacketsLost": 596,
+        "positiveLossRatio": 0.010944414859430377,
+        "netLossRatio": 0.010944414859430377,
+        "rttMs": {
+          "n": 70,
+          "mean": 27.65714285714286,
+          "p50": 17.0,
+          "p95": 113.0,
+          "p99": 113.0,
+          "min": 10.0,
+          "max": 113.0
+        },
+        "jitterMs": {
+          "n": 72,
+          "mean": 7.722222222222222,
+          "p50": 5.0,
+          "p95": 19.900000000000006,
+          "p99": 27.930000000000106,
+          "min": 2.0,
+          "max": 40.0
+        },
+        "sampleDelayMs": {
+          "jitterBufferMs": {
+            "n": 67,
+            "mean": 17.819510419447152,
+            "p50": 4.75826666666667,
+            "p95": 22.14459777777779,
+            "p99": 281.03883294117884,
+            "min": 1.6692307692307733,
+            "max": 746.035
+          },
+          "decodeMs": {
+            "n": 67,
+            "mean": 4.845696398981967,
+            "p50": 4.853599999999976,
+            "p95": 5.149317777777756,
+            "p99": 5.496596000000275,
+            "min": 4.227750000000002,
+            "max": 5.6480000000007635
+          },
+          "processingMs": {
+            "n": 67,
+            "mean": 22.715861277840304,
+            "p50": 9.67760000000002,
+            "p95": 27.237551111111035,
+            "p99": 286.1349270588263,
+            "min": 6.38999999999997,
+            "max": 751.7150000000008
+          },
+          "assemblyMs": {
+            "n": 67,
+            "mean": 15.7429097291037,
+            "p50": 3.8624666666666605,
+            "p95": 10.862886974789902,
+            "p99": 268.1818040000026,
+            "min": 1.5738571428571189,
+            "max": 745.9430000000004
+          }
+        },
+        "weightedDelayMs": {
+          "jitterBuffer": 7.3996004056795135,
+          "decode": 4.832215010141988,
+          "processing": 12.25396247464503,
+          "assembly": 5.2901186612576065
+        },
+        "connectionStates": {
+          "connected": 72
+        },
+        "pairIds": [
+          "CP6NTJj1dg_VIeUIFjz",
+          null
+        ],
+        "candidateTypes": [
+          [
+            "srflx",
+            "srflx"
+          ],
+          [
+            null,
+            null
+          ]
+        ],
+        "worstDelaySamples": [
+          {
+            "seq": 576,
+            "sampledAtMs": 61263,
+            "jitterBufferMs": 746.035,
+            "decodeMs": 5.6480000000007635,
+            "processingMs": 751.7150000000008,
+            "assemblyMs": 745.9430000000004
+          },
+          {
+            "seq": 546,
+            "sampledAtMs": 60004,
+            "jitterBufferMs": 41.495352941176435,
+            "decodeMs": 4.767588235294126,
+            "processingMs": 46.290647058823566,
+            "assemblyMs": 11.497705882352935
+          },
+          {
+            "seq": 555,
+            "sampledAtMs": 60507,
+            "jitterBufferMs": 37.17869999999994,
+            "decodeMs": 4.537299999999966,
+            "processingMs": 41.73449999999992,
+            "assemblyMs": 22.062399999999993
+          },
+          {
+            "seq": 552,
+            "sampledAtMs": 60256,
+            "jitterBufferMs": 24.949111111111165,
+            "decodeMs": 5.155111111111073,
+            "processingMs": 30.133444444444397,
+            "assemblyMs": 19.13344444444438
+          }
+        ]
+      },
+      "windows": {
+        "short": {
+          "n": 16,
+          "bounds": {
+            "seq": [
+              276,
+              586
+            ],
+            "monotonicMs": [
+              46856,
+              61767
+            ],
+            "wallClock": [
+              "2026-10-30T10:58:04.500000+08:00",
+              "2026-10-30T10:58:19.560000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 16,
+              "mean": 57.454997910464094,
+              "p50": 59.90387655726302,
+              "p95": 60.60581483589452,
+              "p99": 60.73068677670272,
+              "min": 30.49206349206349,
+              "max": 60.761904761904766
+            },
+            "decodeFpsAvg": {
+              "n": 16,
+              "mean": 57.45698955308073,
+              "p50": 59.900793650793645,
+              "p95": 60.52480985150307,
+              "p99": 60.54798985874683,
+              "min": 30.52380952380953,
+              "max": 60.55378486055777
+            },
+            "videoPresentFpsAvg": {
+              "n": 16,
+              "mean": 57.441574212279434,
+              "p50": 59.87395696091349,
+              "p95": 60.442640692640694,
+              "p99": 60.47640692640693,
+              "min": 30.52380952380953,
+              "max": 60.48484848484849
+            },
+            "callbackFpsAvg": {
+              "n": 16,
+              "mean": 48.621042725911295,
+              "p50": 52.9143008762574,
+              "p95": 54.95743145743146,
+              "p99": 55.72799422799423,
+              "min": 19.380952380952383,
+              "max": 55.920634920634924
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 16,
+              "mean": 57.441574212279434,
+              "p50": 59.87395696091349,
+              "p95": 60.442640692640694,
+              "p99": 60.47640692640693,
+              "min": 30.52380952380953,
+              "max": 60.48484848484849
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 16,
+              "mean": 23.8263125,
+              "p50": 9.6005,
+              "p95": 80.08025,
+              "p99": 157.10004999999995,
+              "min": 7.577666666666667,
+              "max": 176.355
+            },
+            "rttMsAvg": {
+              "n": 16,
+              "mean": 23.802361841669974,
+              "p50": 18.234303030303032,
+              "p95": 47.77228893740903,
+              "p99": 70.41879548762736,
+              "min": 11.117666666666668,
+              "max": 76.08042212518195
+            },
+            "jitterMsAvg": {
+              "n": 16,
+              "mean": 6.624445125380442,
+              "p50": 4.628,
+              "p95": 13.086062590975255,
+              "p99": 17.72318049490538,
+              "min": 2.636363636363636,
+              "max": 18.88245997088792
+            },
+            "lossAvg": {
+              "n": 16,
+              "mean": 0.00771779453466015,
+              "p50": 0.00021757177957652557,
+              "p95": 0.04791469417370177,
+              "p99": 0.07786852848138859,
+              "min": 0,
+              "max": 0.08535698705831031
+            },
+            "jitterBufferMsAvg": {
+              "n": 16,
+              "mean": 12.89234230812877,
+              "p50": 4.3022673876508275,
+              "p95": 40.3224541961817,
+              "p99": 106.01234020632492,
+              "min": 2.7756220255273836,
+              "max": 122.43481170886078
+            }
+          }
+        },
+        "long": {
+          "n": 3,
+          "bounds": {
+            "seq": [
+              543,
+              586
+            ],
+            "monotonicMs": [
+              59752,
+              61767
+            ],
+            "wallClock": [
+              "2026-10-30T10:58:17.552000+08:00",
+              "2026-10-30T10:58:19.560000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 3,
+              "mean": 57.24397157173011,
+              "p50": 58.03478260869566,
+              "p95": 59.51304001385761,
+              "p99": 59.64444067209423,
+              "min": 54.01984126984127,
+              "max": 59.677290836653384
+            },
+            "decodeFpsAvg": {
+              "n": 3,
+              "mean": 57.28174464170769,
+              "p50": 58.03478260869566,
+              "p95": 59.53383682660662,
+              "p99": 59.66708609042092,
+              "min": 54.11005291005291,
+              "max": 59.700398406374504
+            },
+            "videoPresentFpsAvg": {
+              "n": 3,
+              "mean": 57.32724718028431,
+              "p50": 58.05797101449276,
+              "p95": 59.55695247993533,
+              "p99": 59.69019527686356,
+              "min": 54.20026455026455,
+              "max": 59.723505976095616
+            },
+            "callbackFpsAvg": {
+              "n": 3,
+              "mean": 48.70828433830051,
+              "p50": 48.96811594202899,
+              "p95": 50.76477972169294,
+              "p99": 50.92448316877418,
+              "min": 46.19232804232805,
+              "max": 50.96440903054449
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 3,
+              "mean": 57.32724718028431,
+              "p50": 58.05797101449276,
+              "p95": 59.55695247993533,
+              "p99": 59.69019527686356,
+              "min": 54.20026455026455,
+              "max": 59.723505976095616
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 3,
+              "mean": 24.222933333333334,
+              "p50": 18.1874,
+              "p95": 40.33033999999999,
+              "p99": 42.29860133333334,
+              "min": 11.690733333333334,
+              "max": 42.79066666666667
+            },
+            "rttMsAvg": {
+              "n": 3,
+              "mean": 23.64261268860641,
+              "p50": 23.13445088300221,
+              "p95": 28.448709988962474,
+              "p99": 28.92108857615894,
+              "min": 18.75420395985896,
+              "max": 29.03918322295806
+            },
+            "jitterMsAvg": {
+              "n": 3,
+              "mean": 6.460412823589355,
+              "p50": 6.258761037527594,
+              "p95": 7.212651766004415,
+              "p99": 7.2974420529801325,
+              "min": 5.803837808516409,
+              "max": 7.318639624724062
+            },
+            "lossAvg": {
+              "n": 3,
+              "mean": 0.006816336592131995,
+              "p50": 0.006614087214469546,
+              "p95": 0.012956868588032305,
+              "p99": 0.01352067137679344,
+              "min": 0.0001733004879427135,
+              "max": 0.013661622073983724
+            },
+            "jitterBufferMsAvg": {
+              "n": 3,
+              "mean": 10.360973634490936,
+              "p50": 6.164885240490483,
+              "p95": 18.150459063716173,
+              "p99": 19.21584340355846,
+              "min": 5.435846174463295,
+              "max": 19.48218948851903
+            }
+          }
+        }
+      },
+      "telemetryFields": {
+        "rendererSubmitAgeMs": {
+          "n": 19,
+          "mean": 75.89473684210526,
+          "p50": 10.0,
+          "p95": 532.6999999999994,
+          "p99": 739.3400000000001,
+          "min": 1,
+          "max": 791
+        },
+        "renderDrawDurationMsAvg": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        },
+        "maxCallbackIntervalMsSinceLastSample": {
+          "n": 19,
+          "mean": 97.57894736842105,
+          "p50": 67.0,
+          "p95": 222.89999999999884,
+          "p99": 618.1800000000002,
+          "min": 33,
+          "max": 717
+        },
+        "callbackCountSinceLastSample": {
+          "n": 19,
+          "mean": 45.1578947368421,
+          "p50": 49.0,
+          "p95": 58.0,
+          "p99": 58.0,
+          "min": 1,
+          "max": 58
+        },
+        "presentedFramesAdvancedSinceLastSample": {
+          "n": 19,
+          "mean": 54.36842105263158,
+          "p50": 60.0,
+          "p95": 61.0,
+          "p99": 61.0,
+          "min": 1,
+          "max": 61
+        },
+        "droppedFramesSinceLastSample": {
+          "n": 19,
+          "mean": 9.052631578947368,
+          "p50": 8.0,
+          "p95": 18.299999999999994,
+          "p99": 20.46,
+          "min": 1,
+          "max": 21
+        },
+        "sourceFpsEstimate": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        }
+      },
+      "sampleTotals": {
+        "callbackCountSinceLastSample": 858,
+        "callbackGapCountSinceLastSample": 3,
+        "presentedFramesAdvancedSinceLastSample": 1033,
+        "presentedFramesJumpCountSinceLastSample": 171,
+        "droppedFramesSinceLastSample": 172
+      },
+      "renderCauseCounts": {
+        "frameDeliveryLimited": 2,
+        "renderStable": 17
+      },
+      "trackingSourceCounts": {
+        "videoFrameCallback": 19
+      },
+      "mixedGenerationTelemetrySeqs": [],
+      "liveDiagnosticsDelta": {
+        "durationSeconds": 18.071,
+        "marker": 823,
+        "markerFps": 45.54258203751867,
+        "nativeObserved": 823,
+        "nativeAccepted": 823,
+        "pollAccepted": 0,
+        "submitted": null,
+        "submitFps": null
+      }
+    },
+    {
+      "key": [
+        "video",
+        2,
+        1280,
+        720
+      ],
+      "bounds": {
+        "seq": [
+          606,
+          776
+        ],
+        "monotonicMs": [
+          62777,
+          70839
+        ],
+        "wallClock": [
+          "2026-10-30T10:58:20.567000+08:00",
+          "2026-10-30T10:58:28.615000+08:00"
+        ]
+      },
+      "telemetryCount": 9,
+      "network": {
+        "bounds": {
+          "seq": [
+            602,
+            771
+          ],
+          "monotonicMs": [
+            62777,
+            70839
+          ],
+          "wallClock": [
+            "2026-10-30T10:58:20.371000+08:00",
+            "2026-10-30T10:58:28.433000+08:00"
+          ]
+        },
+        "durationSeconds": 8.062,
+        "counterChanges": {
+          "packetsReceived": 6700,
+          "packetsLost": 1,
+          "bytesReceived": 7235663,
+          "framesReceived": 483,
+          "framesDecoded": 483,
+          "framesDropped": 0,
+          "freezeCount": 0,
+          "totalFreezesDuration": 0.0,
+          "pauseCount": 0,
+          "pliCount": 0,
+          "firCount": 0,
+          "nackCount": 1,
+          "keyFramesDecoded": 0,
+          "retransmittedPacketsReceived": 1,
+          "retransmittedBytesReceived": 1089,
+          "jitterBufferDelay": 2.0528890000000004,
+          "jitterBufferEmittedCount": 483,
+          "totalDecodeTime": 1.1757530000000003,
+          "totalProcessingDelay": 3.240779999999999,
+          "totalAssemblyTime": 0.6684260000000002
+        },
+        "receivedFps": 59.91069213594642,
+        "decodedFps": 59.91069213594642,
+        "bitrateMbps": 7.180017861572812,
+        "positivePacketsLost": 1,
+        "positiveLossRatio": 0.00014923145799134458,
+        "netLossRatio": 0.00014923145799134458,
+        "rttMs": {
+          "n": 33,
+          "mean": 20.181818181818183,
+          "p50": 24.0,
+          "p95": 27.0,
+          "p99": 27.0,
+          "min": 12.0,
+          "max": 27.0
+        },
+        "jitterMs": {
+          "n": 33,
+          "mean": 5.242424242424242,
+          "p50": 4.0,
+          "p95": 11.399999999999999,
+          "p99": 12.68,
+          "min": 2.0,
+          "max": 13.0
+        },
+        "sampleDelayMs": {
+          "jitterBufferMs": {
+            "n": 32,
+            "mean": 4.036036768633731,
+            "p50": 1.595433333333259,
+            "p95": 8.891520138888922,
+            "p99": 29.76488933823539,
+            "min": 0.4373333333333562,
+            "max": 39.01805882352949
+          },
+          "decodeMs": {
+            "n": 32,
+            "mean": 2.436439673601603,
+            "p50": 2.454875000000005,
+            "p95": 2.7319942857143107,
+            "p99": 2.8413725714285856,
+            "min": 2.0860000000000007,
+            "max": 2.883142857142878
+          },
+          "processingMs": {
+            "n": 32,
+            "mean": 6.572086733344539,
+            "p50": 4.044245833333353,
+            "p95": 11.238393421052718,
+            "p99": 33.755285625000056,
+            "min": 3.008357142857219,
+            "max": 43.66081249999998
+          },
+          "assemblyMs": {
+            "n": 32,
+            "mean": 1.3573581025938402,
+            "p50": 1.0515666666666885,
+            "p95": 2.87269687499999,
+            "p99": 7.301311250000035,
+            "min": 0.38564285714289986,
+            "max": 8.74168750000004
+          }
+        },
+        "weightedDelayMs": {
+          "jitterBuffer": 4.25028778467909,
+          "decode": 2.4342712215320916,
+          "processing": 6.709689440993787,
+          "assembly": 1.3839047619047622
+        },
+        "connectionStates": {
+          "connected": 33
+        },
+        "pairIds": [
+          "CP6NTJj1dg_VIeUIFjz"
+        ],
+        "candidateTypes": [
+          [
+            "srflx",
+            "srflx"
+          ]
+        ],
+        "worstDelaySamples": [
+          {
+            "seq": 644,
+            "sampledAtMs": 64791,
+            "jitterBufferMs": 39.01805882352949,
+            "decodeMs": 2.419624999999981,
+            "processingMs": 43.66081249999998,
+            "assemblyMs": 8.74168750000004
+          },
+          {
+            "seq": 641,
+            "sampledAtMs": 64540,
+            "jitterBufferMs": 9.169125000000001,
+            "decodeMs": 2.5069999999999815,
+            "processingMs": 11.707500000000092,
+            "assemblyMs": 0.9005624999999795
+          },
+          {
+            "seq": 753,
+            "sampledAtMs": 69831,
+            "jitterBufferMs": 8.664388888888949,
+            "decodeMs": 2.5774736842105272,
+            "processingMs": 10.854578947368504,
+            "assemblyMs": 1.3276842105263142
+          },
+          {
+            "seq": 667,
+            "sampledAtMs": 65799,
+            "jitterBufferMs": 7.870235294117646,
+            "decodeMs": 2.31923529411764,
+            "processingMs": 10.212529411764786,
+            "assemblyMs": 1.1456470588235323
+          }
+        ]
+      },
+      "windows": {
+        "short": {
+          "n": 6,
+          "bounds": {
+            "seq": [
+              669,
+              774
+            ],
+            "monotonicMs": [
+              65799,
+              70839
+            ],
+            "wallClock": [
+              "2026-10-30T10:58:23.576000+08:00",
+              "2026-10-30T10:58:28.613000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 6,
+              "mean": 60.07523180521044,
+              "p50": 59.86709551779707,
+              "p95": 60.72669238973586,
+              "p99": 60.78872472133341,
+              "min": 59.56175298804781,
+              "max": 60.8042328042328
+            },
+            "decodeFpsAvg": {
+              "n": 6,
+              "mean": 60.05957995957419,
+              "p50": 60.16073781291173,
+              "p95": 60.39766331499399,
+              "p99": 60.456252239718374,
+              "min": 59.56175298804781,
+              "max": 60.47089947089947
+            },
+            "videoPresentFpsAvg": {
+              "n": 6,
+              "mean": 59.99364265060899,
+              "p50": 60.016326229473634,
+              "p95": 60.15740594932523,
+              "p99": 60.16007144019443,
+              "min": 59.79365079365079,
+              "max": 60.16073781291173
+            },
+            "callbackFpsAvg": {
+              "n": 6,
+              "mean": 45.321218000060604,
+              "p50": 45.779254762950416,
+              "p95": 47.6239328400683,
+              "p99": 47.81050085372795,
+              "min": 42.300132802124836,
+              "max": 47.85714285714286
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 6,
+              "mean": 59.99364265060899,
+              "p50": 60.016326229473634,
+              "p95": 60.15740594932523,
+              "p99": 60.16007144019443,
+              "min": 59.79365079365079,
+              "max": 60.16073781291173
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 6,
+              "mean": 16.00788888888889,
+              "p50": 15.127333333333333,
+              "p95": 18.830916666666667,
+              "p99": 19.103783333333332,
+              "min": 14.202,
+              "max": 19.172
+            },
+            "rttMsAvg": {
+              "n": 6,
+              "mean": 19.591333333333335,
+              "p50": 19.764,
+              "p95": 24.192,
+              "p99": 24.518400000000003,
+              "min": 14.52,
+              "max": 24.6
+            },
+            "jitterMsAvg": {
+              "n": 6,
+              "mean": 5.108111111111111,
+              "p50": 5.041666666666666,
+              "p95": 6.277833333333334,
+              "p99": 6.338233333333333,
+              "min": 4.000666666666667,
+              "max": 6.3533333333333335
+            },
+            "lossAvg": {
+              "n": 6,
+              "mean": 0.00012359543996039196,
+              "p50": 0.0,
+              "p95": 0.0003708832864404552,
+              "p99": 0.0003709608596878787,
+              "min": 0,
+              "max": 0.0003709802529997346
+            },
+            "jitterBufferMsAvg": {
+              "n": 6,
+              "mean": 3.9997272978147635,
+              "p50": 3.1530914734126916,
+              "p95": 6.559285945210712,
+              "p99": 6.577183272347466,
+              "min": 2.112135891666664,
+              "max": 6.581657604131654
+            }
+          }
+        },
+        "long": {
+          "n": 0,
+          "bounds": null,
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "decodeFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "videoPresentFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "callbackFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rttMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "jitterMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "lossAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "jitterBufferMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            }
+          }
+        }
+      },
+      "telemetryFields": {
+        "rendererSubmitAgeMs": {
+          "n": 9,
+          "mean": 24.88888888888889,
+          "p50": 15.0,
+          "p95": 58.599999999999994,
+          "p99": 60.519999999999996,
+          "min": 3,
+          "max": 61
+        },
+        "renderDrawDurationMsAvg": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        },
+        "maxCallbackIntervalMsSinceLastSample": {
+          "n": 9,
+          "mean": 168.22222222222223,
+          "p50": 66.0,
+          "p95": 653.1999999999997,
+          "p99": 930.64,
+          "min": 34,
+          "max": 1000
+        },
+        "callbackCountSinceLastSample": {
+          "n": 9,
+          "mean": 45,
+          "p50": 45.0,
+          "p95": 49.0,
+          "p99": 49.0,
+          "min": 41,
+          "max": 49
+        },
+        "presentedFramesAdvancedSinceLastSample": {
+          "n": 9,
+          "mean": 60.333333333333336,
+          "p50": 60.0,
+          "p95": 63.0,
+          "p99": 63.0,
+          "min": 57,
+          "max": 63
+        },
+        "droppedFramesSinceLastSample": {
+          "n": 9,
+          "mean": 14.666666666666666,
+          "p50": 15.0,
+          "p95": 19.6,
+          "p99": 19.92,
+          "min": 10,
+          "max": 20
+        },
+        "sourceFpsEstimate": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        }
+      },
+      "sampleTotals": {
+        "callbackCountSinceLastSample": 405,
+        "callbackGapCountSinceLastSample": 3,
+        "presentedFramesAdvancedSinceLastSample": 543,
+        "presentedFramesJumpCountSinceLastSample": 131,
+        "droppedFramesSinceLastSample": 132
+      },
+      "renderCauseCounts": {
+        "frameDeliveryLimited": 1,
+        "renderStable": 8
+      },
+      "trackingSourceCounts": {
+        "videoFrameCallback": 9
+      },
+      "mixedGenerationTelemetrySeqs": [],
+      "liveDiagnosticsDelta": {
+        "durationSeconds": 8.048,
+        "marker": 364,
+        "markerFps": 45.2286282306163,
+        "nativeObserved": 364,
+        "nativeAccepted": 364,
+        "pollAccepted": 0,
+        "submitted": null,
+        "submitFps": null
+      }
+    },
+    {
+      "key": [
+        "video",
+        2,
+        1920,
+        1080
+      ],
+      "bounds": {
+        "seq": [
+          800,
+          859
+        ],
+        "monotonicMs": [
+          71847,
+          74876
+        ],
+        "wallClock": [
+          "2026-10-30T10:58:29.618000+08:00",
+          "2026-10-30T10:58:32.632000+08:00"
+        ]
+      },
+      "telemetryCount": 4,
+      "network": {
+        "bounds": {
+          "seq": [
+            795,
+            855
+          ],
+          "monotonicMs": [
+            71847,
+            74876
+          ],
+          "wallClock": [
+            "2026-10-30T10:58:29.441000+08:00",
+            "2026-10-30T10:58:32.469000+08:00"
+          ]
+        },
+        "durationSeconds": 3.029,
+        "counterChanges": {
+          "packetsReceived": 3498,
+          "packetsLost": 2,
+          "bytesReceived": 3769031,
+          "framesReceived": 182,
+          "framesDecoded": 182,
+          "framesDropped": 0,
+          "freezeCount": 0,
+          "totalFreezesDuration": 0.0,
+          "pauseCount": 0,
+          "pliCount": 0,
+          "firCount": 0,
+          "nackCount": 2,
+          "keyFramesDecoded": 0,
+          "retransmittedPacketsReceived": 18,
+          "retransmittedBytesReceived": 17685,
+          "jitterBufferDelay": 0.642494000000001,
+          "jitterBufferEmittedCount": 182,
+          "totalDecodeTime": 0.5931569999999997,
+          "totalProcessingDelay": 1.2401820000000008,
+          "totalAssemblyTime": 0.4037980000000001
+        },
+        "receivedFps": 60.08583690987125,
+        "decodedFps": 60.08583690987125,
+        "bitrateMbps": 9.95452228458237,
+        "positivePacketsLost": 2,
+        "positiveLossRatio": 0.0005714285714285715,
+        "netLossRatio": 0.0005714285714285715,
+        "rttMs": {
+          "n": 13,
+          "mean": 25.76923076923077,
+          "p50": 29.0,
+          "p95": 29.0,
+          "p99": 29.0,
+          "min": 15.0,
+          "max": 29.0
+        },
+        "jitterMs": {
+          "n": 13,
+          "mean": 5.0,
+          "p50": 5.0,
+          "p95": 7.399999999999999,
+          "p99": 7.879999999999999,
+          "min": 3.0,
+          "max": 8.0
+        },
+        "sampleDelayMs": {
+          "jitterBufferMs": {
+            "n": 12,
+            "mean": 3.5406899368401277,
+            "p50": 2.9056000000000046,
+            "p95": 7.6181895927601975,
+            "p99": 7.758714841629037,
+            "min": 0.8792666666667039,
+            "max": 7.793846153846246
+          },
+          "decodeMs": {
+            "n": 12,
+            "mean": 3.2594799039808215,
+            "p50": 3.2194333333333285,
+            "p95": 3.4665477083333136,
+            "p99": 3.471059541666664,
+            "min": 3.03366666666669,
+            "max": 3.4721875000000013
+          },
+          "processingMs": {
+            "n": 12,
+            "mean": 6.857707913165273,
+            "p50": 6.259633333333406,
+            "p95": 10.998052941176532,
+            "p99": 11.159610588235413,
+            "min": 3.931533333333448,
+            "max": 11.200000000000133
+          },
+          "assemblyMs": {
+            "n": 12,
+            "mean": 2.2728478019733545,
+            "p50": 1.7064333333333495,
+            "p95": 5.080263461538463,
+            "p99": 6.317898846153833,
+            "min": 0.5621249999999689,
+            "max": 6.6273076923076735
+          }
+        },
+        "weightedDelayMs": {
+          "jitterBuffer": 3.530186813186819,
+          "decode": 3.259104395604394,
+          "processing": 6.814186813186817,
+          "assembly": 2.2186703296703305
+        },
+        "connectionStates": {
+          "connected": 13
+        },
+        "pairIds": [
+          "CP6NTJj1dg_VIeUIFjz"
+        ],
+        "candidateTypes": [
+          [
+            "srflx",
+            "srflx"
+          ]
+        ],
+        "worstDelaySamples": [
+          {
+            "seq": 828,
+            "sampledAtMs": 73362,
+            "jitterBufferMs": 7.793846153846246,
+            "decodeMs": 3.380307692307674,
+            "processingMs": 11.200000000000133,
+            "assemblyMs": 6.6273076923076735
+          },
+          {
+            "seq": 831,
+            "sampledAtMs": 73615,
+            "jitterBufferMs": 7.474470588235249,
+            "decodeMs": 3.332352941176489,
+            "processingMs": 10.832823529411767,
+            "assemblyMs": 3.4144117647058767
+          },
+          {
+            "seq": 807,
+            "sampledAtMs": 72351,
+            "jitterBufferMs": 6.4508,
+            "decodeMs": 3.1492857142857593,
+            "processingMs": 10.051571428571446,
+            "assemblyMs": 3.8145000000000224
+          },
+          {
+            "seq": 848,
+            "sampledAtMs": 74372,
+            "jitterBufferMs": 4.614437500000013,
+            "decodeMs": 3.4721875000000013,
+            "processingMs": 8.111250000000014,
+            "assemblyMs": 3.385249999999951
+          }
+        ]
+      },
+      "windows": {
+        "short": {
+          "n": 1,
+          "bounds": {
+            "seq": [
+              857,
+              857
+            ],
+            "monotonicMs": [
+              74876,
+              74876
+            ],
+            "wallClock": [
+              "2026-10-30T10:58:32.629000+08:00",
+              "2026-10-30T10:58:32.629000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 1,
+              "mean": 60.05291005291006,
+              "p50": 60.05291005291006,
+              "p95": 60.05291005291006,
+              "p99": 60.05291005291006,
+              "min": 60.05291005291006,
+              "max": 60.05291005291006
+            },
+            "decodeFpsAvg": {
+              "n": 1,
+              "mean": 60.05291005291006,
+              "p50": 60.05291005291006,
+              "p95": 60.05291005291006,
+              "p99": 60.05291005291006,
+              "min": 60.05291005291006,
+              "max": 60.05291005291006
+            },
+            "videoPresentFpsAvg": {
+              "n": 1,
+              "mean": 60.09126984126984,
+              "p50": 60.09126984126984,
+              "p95": 60.09126984126984,
+              "p99": 60.09126984126984,
+              "min": 60.09126984126984,
+              "max": 60.09126984126984
+            },
+            "callbackFpsAvg": {
+              "n": 1,
+              "mean": 53.09126984126984,
+              "p50": 53.09126984126984,
+              "p95": 53.09126984126984,
+              "p99": 53.09126984126984,
+              "min": 53.09126984126984,
+              "max": 53.09126984126984
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 1,
+              "mean": 60.09126984126984,
+              "p50": 60.09126984126984,
+              "p95": 60.09126984126984,
+              "p99": 60.09126984126984,
+              "min": 60.09126984126984,
+              "max": 60.09126984126984
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 1,
+              "mean": 9.174666666666669,
+              "p50": 9.174666666666669,
+              "p95": 9.174666666666669,
+              "p99": 9.174666666666669,
+              "min": 9.174666666666669,
+              "max": 9.174666666666669
+            },
+            "rttMsAvg": {
+              "n": 1,
+              "mean": 26.783333333333335,
+              "p50": 26.783333333333335,
+              "p95": 26.783333333333335,
+              "p99": 26.783333333333335,
+              "min": 26.783333333333335,
+              "max": 26.783333333333335
+            },
+            "jitterMsAvg": {
+              "n": 1,
+              "mean": 5.085,
+              "p50": 5.085,
+              "p95": 5.085,
+              "p99": 5.085,
+              "min": 5.085,
+              "max": 5.085
+            },
+            "lossAvg": {
+              "n": 1,
+              "mean": 0.0005746215649544692,
+              "p50": 0.0005746215649544692,
+              "p95": 0.0005746215649544692,
+              "p99": 0.0005746215649544692,
+              "min": 0.0005746215649544692,
+              "max": 0.0005746215649544692
+            },
+            "jitterBufferMsAvg": {
+              "n": 1,
+              "mean": 3.552743584885627,
+              "p50": 3.552743584885627,
+              "p95": 3.552743584885627,
+              "p99": 3.552743584885627,
+              "min": 3.552743584885627,
+              "max": 3.552743584885627
+            }
+          }
+        },
+        "long": {
+          "n": 0,
+          "bounds": null,
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "decodeFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "videoPresentFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "callbackFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rttMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "jitterMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "lossAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "jitterBufferMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            }
+          }
+        }
+      },
+      "telemetryFields": {
+        "rendererSubmitAgeMs": {
+          "n": 4,
+          "mean": 16.75,
+          "p50": 10.0,
+          "p95": 40.34999999999999,
+          "p99": 44.06999999999999,
+          "min": 2,
+          "max": 45
+        },
+        "renderDrawDurationMsAvg": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        },
+        "maxCallbackIntervalMsSinceLastSample": {
+          "n": 4,
+          "mean": 100,
+          "p50": 58.5,
+          "p95": 208.09999999999994,
+          "p99": 228.01999999999995,
+          "min": 50,
+          "max": 233
+        },
+        "callbackCountSinceLastSample": {
+          "n": 4,
+          "mean": 50.75,
+          "p50": 51.0,
+          "p95": 55.4,
+          "p99": 55.879999999999995,
+          "min": 45,
+          "max": 56
+        },
+        "presentedFramesAdvancedSinceLastSample": {
+          "n": 4,
+          "mean": 58.75,
+          "p50": 59.0,
+          "p95": 60.85,
+          "p99": 60.97,
+          "min": 56,
+          "max": 61
+        },
+        "droppedFramesSinceLastSample": {
+          "n": 4,
+          "mean": 7.75,
+          "p50": 8.0,
+          "p95": 10.0,
+          "p99": 10.0,
+          "min": 5,
+          "max": 10
+        },
+        "sourceFpsEstimate": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        }
+      },
+      "sampleTotals": {
+        "callbackCountSinceLastSample": 203,
+        "callbackGapCountSinceLastSample": 1,
+        "presentedFramesAdvancedSinceLastSample": 235,
+        "presentedFramesJumpCountSinceLastSample": 31,
+        "droppedFramesSinceLastSample": 31
+      },
+      "renderCauseCounts": {
+        "renderStable": 4
+      },
+      "trackingSourceCounts": {
+        "videoFrameCallback": 4
+      },
+      "mixedGenerationTelemetrySeqs": [],
+      "liveDiagnosticsDelta": {
+        "durationSeconds": 3.013,
+        "marker": 158,
+        "markerFps": 52.43942914039164,
+        "nativeObserved": 158,
+        "nativeAccepted": 158,
+        "pollAccepted": 0,
+        "submitted": null,
+        "submitFps": null
+      }
+    },
+    {
+      "key": [
+        "video",
+        2,
+        2560,
+        1440
+      ],
+      "bounds": {
+        "seq": [
+          881,
+          1499
+        ],
+        "monotonicMs": [
+          75885,
+          104876
+        ],
+        "wallClock": [
+          "2026-10-30T10:58:33.634000+08:00",
+          "2026-10-30T10:59:03.203000+08:00"
+        ]
+      },
+      "telemetryCount": 30,
+      "network": {
+        "bounds": {
+          "seq": [
+            876,
+            1486
+          ],
+          "monotonicMs": [
+            75885,
+            104876
+          ],
+          "wallClock": [
+            "2026-10-30T10:58:33.479000+08:00",
+            "2026-10-30T10:59:02.470000+08:00"
+          ]
+        },
+        "durationSeconds": 28.991,
+        "counterChanges": {
+          "packetsReceived": 70795,
+          "packetsLost": 15,
+          "bytesReceived": 77633198,
+          "framesReceived": 1737,
+          "framesDecoded": 1738,
+          "framesDropped": 0,
+          "freezeCount": 1,
+          "totalFreezesDuration": 0.21499999999999986,
+          "pauseCount": 0,
+          "pliCount": 0,
+          "firCount": 0,
+          "nackCount": 13,
+          "keyFramesDecoded": 0,
+          "retransmittedPacketsReceived": 55,
+          "retransmittedBytesReceived": 56958,
+          "jitterBufferDelay": 7.875490000000001,
+          "jitterBufferEmittedCount": 1737,
+          "totalDecodeTime": 8.113669000000002,
+          "totalProcessingDelay": 16.032984999999996,
+          "totalAssemblyTime": 4.94432
+        },
+        "receivedFps": 59.91514607981787,
+        "decodedFps": 59.949639543306546,
+        "bitrateMbps": 21.422703045772828,
+        "positivePacketsLost": 15,
+        "positiveLossRatio": 0.00021183448665442733,
+        "netLossRatio": 0.00021183448665442733,
+        "rttMs": {
+          "n": 114,
+          "mean": 36.31578947368421,
+          "p50": 20.0,
+          "p95": 230.0,
+          "p99": 230.0,
+          "min": 14.0,
+          "max": 230.0
+        },
+        "jitterMs": {
+          "n": 116,
+          "mean": 4.422413793103448,
+          "p50": 4.0,
+          "p95": 9.0,
+          "p99": 10.0,
+          "min": 2.0,
+          "max": 11.0
+        },
+        "sampleDelayMs": {
+          "jitterBufferMs": {
+            "n": 115,
+            "mean": 4.47806832086711,
+            "p50": 2.9245333333333194,
+            "p95": 10.859038392857165,
+            "p99": 22.278715999999967,
+            "min": 0.9387333333333933,
+            "max": 48.77926666666663
+          },
+          "decodeMs": {
+            "n": 115,
+            "mean": 4.670831498216901,
+            "p50": 4.688071428571432,
+            "p95": 5.077370000000059,
+            "p99": 5.176602285714322,
+            "min": 3.9233750000000067,
+            "max": 5.198200000000004
+          },
+          "processingMs": {
+            "n": 115,
+            "mean": 9.198582167651898,
+            "p50": 7.704866666666514,
+            "p95": 15.364541250000118,
+            "p99": 30.29407299999995,
+            "min": 5.293533333333518,
+            "max": 51.842928571428615
+          },
+          "assemblyMs": {
+            "n": 115,
+            "mean": 2.8552915509213705,
+            "p50": 2.3741999999999783,
+            "p95": 5.396167619047638,
+            "p99": 7.423145904761957,
+            "min": 0.839133333333327,
+            "max": 16.743499999999962
+          }
+        },
+        "weightedDelayMs": {
+          "jitterBuffer": 4.533960852043754,
+          "decode": 4.668394131185272,
+          "processing": 9.224962600690446,
+          "assembly": 2.8448331415420025
+        },
+        "connectionStates": {
+          "connected": 116
+        },
+        "pairIds": [
+          "CP6NTJj1dg_VIeUIFjz",
+          null
+        ],
+        "candidateTypes": [
+          [
+            "srflx",
+            "srflx"
+          ],
+          [
+            null,
+            null
+          ]
+        ],
+        "worstDelaySamples": [
+          {
+            "seq": 1290,
+            "sampledAtMs": 95552,
+            "jitterBufferMs": 48.77926666666663,
+            "decodeMs": 5.181714285714329,
+            "processingMs": 51.842928571428615,
+            "assemblyMs": 16.743499999999962
+          },
+          {
+            "seq": 1293,
+            "sampledAtMs": 95803,
+            "jitterBufferMs": 22.430349999999954,
+            "decodeMs": 4.469999999999974,
+            "processingMs": 30.833149999999954,
+            "assemblyMs": 6.1156999999999675
+          },
+          {
+            "seq": 1389,
+            "sampledAtMs": 100340,
+            "jitterBufferMs": 21.347250000000038,
+            "decodeMs": 4.2973999999999775,
+            "processingMs": 26.98259999999995,
+            "assemblyMs": 2.288733333333326
+          },
+          {
+            "seq": 1394,
+            "sampledAtMs": 100593,
+            "jitterBufferMs": 14.246266666666685,
+            "decodeMs": 4.810933333333385,
+            "processingMs": 19.040866666666528,
+            "assemblyMs": 7.2002666666666215
+          }
+        ]
+      },
+      "windows": {
+        "short": {
+          "n": 27,
+          "bounds": {
+            "seq": [
+              942,
+              1495
+            ],
+            "monotonicMs": [
+              78911,
+              104876
+            ],
+            "wallClock": [
+              "2026-10-30T10:58:36.644000+08:00",
+              "2026-10-30T10:59:03.201000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 27,
+              "mean": 59.93050577703784,
+              "p50": 59.844621513944226,
+              "p95": 60.45313982166572,
+              "p99": 60.73687672590063,
+              "min": 59.09803921568628,
+              "max": 60.81613756613756
+            },
+            "decodeFpsAvg": {
+              "n": 27,
+              "mean": 59.934877781812226,
+              "p50": 59.85902503293808,
+              "p95": 60.65032938076416,
+              "p99": 60.79645826798001,
+              "min": 59.0764163372859,
+              "max": 60.81613756613756
+            },
+            "videoPresentFpsAvg": {
+              "n": 27,
+              "mean": 59.956807222717664,
+              "p50": 59.88888888888889,
+              "p95": 60.49127506953594,
+              "p99": 60.56804232804233,
+              "min": 59.409749670619235,
+              "max": 60.58730158730159
+            },
+            "callbackFpsAvg": {
+              "n": 27,
+              "mean": 51.383272691339506,
+              "p50": 51.92226613965745,
+              "p95": 57.950878837590814,
+              "p99": 58.37258026716663,
+              "min": 41.714285714285715,
+              "max": 58.462151394422314
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 27,
+              "mean": 59.956807222717664,
+              "p50": 59.88888888888889,
+              "p95": 60.49127506953594,
+              "p99": 60.56804232804233,
+              "min": 59.409749670619235,
+              "max": 60.58730158730159
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 27,
+              "mean": 10.895876543209877,
+              "p50": 10.457333333333333,
+              "p95": 15.023733333333334,
+              "p99": 15.55154,
+              "min": 7.359333333333334,
+              "max": 15.721666666666666
+            },
+            "rttMsAvg": {
+              "n": 26,
+              "mean": 39.11936183288701,
+              "p50": 20.815333333333335,
+              "p95": 157.478,
+              "p99": 175.8690760276464,
+              "min": 15.798333333333334,
+              "max": 175.94543470352855
+            },
+            "jitterMsAvg": {
+              "n": 27,
+              "mean": 4.585523193878794,
+              "p50": 4.627666666666666,
+              "p95": 6.597099999999999,
+              "p99": 7.122773333333333,
+              "min": 2.5816666666666666,
+              "max": 7.245666666666667
+            },
+            "lossAvg": {
+              "n": 27,
+              "mean": 0.00020710038460545067,
+              "p50": 0.00013693720038167835,
+              "p95": 0.0005417956873012967,
+              "p99": 0.000555958809701179,
+              "min": 0,
+              "max": 0.0005608930664046198
+            },
+            "jitterBufferMsAvg": {
+              "n": 27,
+              "mean": 4.698740641886138,
+              "p50": 3.701954264728322,
+              "p95": 10.577897784121571,
+              "p99": 11.091295250078636,
+              "min": 2.2066900222222205,
+              "max": 11.248463144209948
+            }
+          }
+        },
+        "long": {
+          "n": 15,
+          "bounds": {
+            "seq": [
+              1195,
+              1495
+            ],
+            "monotonicMs": [
+              91015,
+              104876
+            ],
+            "wallClock": [
+              "2026-10-30T10:58:48.692000+08:00",
+              "2026-10-30T10:59:03.201000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 15,
+              "mean": 59.94703797120935,
+              "p50": 59.959466666666664,
+              "p95": 59.98919670156583,
+              "p99": 59.99507705611662,
+              "min": 59.89019607843137,
+              "max": 59.99654714475432
+            },
+            "decodeFpsAvg": {
+              "n": 15,
+              "mean": 59.94487659691784,
+              "p50": 59.92988047808765,
+              "p95": 60.00067033506419,
+              "p99": 60.00582576661757,
+              "min": 59.909881422924904,
+              "max": 60.00711462450592
+            },
+            "videoPresentFpsAvg": {
+              "n": 15,
+              "mean": 59.95596587080508,
+              "p50": 59.96444444444445,
+              "p95": 60.017848888888885,
+              "p99": 60.02746311111111,
+              "min": 59.843214756258234,
+              "max": 60.02986666666666
+            },
+            "callbackFpsAvg": {
+              "n": 15,
+              "mean": 51.75499411505632,
+              "p50": 51.85012919896641,
+              "p95": 53.08414570254979,
+              "p99": 53.11970134077346,
+              "min": 50.28695652173913,
+              "max": 53.12859025032938
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 15,
+              "mean": 59.95596587080508,
+              "p50": 59.96444444444445,
+              "p95": 60.017848888888885,
+              "p99": 60.02746311111111,
+              "min": 59.843214756258234,
+              "max": 60.02986666666666
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 0,
+              "mean": null,
+              "p50": null,
+              "p95": null,
+              "p99": null,
+              "min": null,
+              "max": null
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 15,
+              "mean": 11.116017777777778,
+              "p50": 11.025133333333333,
+              "p95": 11.713646666666667,
+              "p99": 11.907369333333333,
+              "min": 10.282466666666666,
+              "max": 11.9558
+            },
+            "rttMsAvg": {
+              "n": 14,
+              "mean": 29.369893149500093,
+              "p50": 19.33505788082164,
+              "p95": 52.649251724137926,
+              "p99": 52.68543655172414,
+              "min": 18.2749644091926,
+              "max": 52.69448275862069
+            },
+            "jitterMsAvg": {
+              "n": 15,
+              "mean": 4.384994015819695,
+              "p50": 4.2398481458884145,
+              "p95": 4.843048275862069,
+              "p99": 4.971809655172414,
+              "min": 3.991932750322012,
+              "max": 5.004
+            },
+            "lossAvg": {
+              "n": 15,
+              "mean": 0.00025054606175788633,
+              "p50": 0.0002656025487766483,
+              "p95": 0.0003101538462854954,
+              "p99": 0.00032240801349700944,
+              "min": 0,
+              "max": 0.00032547155529988797
+            },
+            "jitterBufferMsAvg": {
+              "n": 15,
+              "mean": 4.628437677146469,
+              "p50": 4.857008155461879,
+              "p95": 5.523900969749103,
+              "p99": 5.538776889841057,
+              "min": 3.4050987690571346,
+              "max": 5.542495869864045
+            }
+          }
+        }
+      },
+      "telemetryFields": {
+        "rendererSubmitAgeMs": {
+          "n": 30,
+          "mean": 27.2,
+          "p50": 9.5,
+          "p95": 32.099999999999994,
+          "p99": 363.1500000000004,
+          "min": 2,
+          "max": 498
+        },
+        "renderDrawDurationMsAvg": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        },
+        "maxCallbackIntervalMsSinceLastSample": {
+          "n": 30,
+          "mean": 56.46666666666667,
+          "p50": 35.5,
+          "p95": 170.99999999999972,
+          "p99": 229.49,
+          "min": 20,
+          "max": 235
+        },
+        "callbackCountSinceLastSample": {
+          "n": 30,
+          "mean": 51.3,
+          "p50": 52.0,
+          "p95": 58.55,
+          "p99": 59.71,
+          "min": 39,
+          "max": 60
+        },
+        "presentedFramesAdvancedSinceLastSample": {
+          "n": 30,
+          "mean": 59.733333333333334,
+          "p50": 60.0,
+          "p95": 61.55,
+          "p99": 62.0,
+          "min": 52,
+          "max": 62
+        },
+        "droppedFramesSinceLastSample": {
+          "n": 30,
+          "mean": 8.266666666666667,
+          "p50": 7.5,
+          "p95": 18.099999999999994,
+          "p99": 19.71,
+          "min": 0,
+          "max": 20
+        },
+        "sourceFpsEstimate": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        }
+      },
+      "sampleTotals": {
+        "callbackCountSinceLastSample": 1539,
+        "callbackGapCountSinceLastSample": 3,
+        "presentedFramesAdvancedSinceLastSample": 1792,
+        "presentedFramesJumpCountSinceLastSample": 247,
+        "droppedFramesSinceLastSample": 248
+      },
+      "renderCauseCounts": {
+        "renderStable": 30
+      },
+      "trackingSourceCounts": {
+        "videoFrameCallback": 30
+      },
+      "mixedGenerationTelemetrySeqs": [],
+      "liveDiagnosticsDelta": {
+        "durationSeconds": 29.466,
+        "marker": 1498,
+        "markerFps": 50.83825425914613,
+        "nativeObserved": 1498,
+        "nativeAccepted": 1498,
+        "pollAccepted": 0,
+        "submitted": null,
+        "submitFps": null
+      }
+    },
+    {
+      "key": [
+        "webgl2_sr",
+        3,
+        2560,
+        1440
+      ],
+      "bounds": {
+        "seq": [
+          1517,
+          2215
+        ],
+        "monotonicMs": [
+          106327,
+          140981
+        ],
+        "wallClock": [
+          "2026-10-30T10:59:04.122000+08:00",
+          "2026-10-30T10:59:38.597000+08:00"
+        ]
+      },
+      "telemetryCount": 35,
+      "network": {
+        "bounds": {
+          "seq": [
+            1509,
+            2212
+          ],
+          "monotonicMs": [
+            106327,
+            140981
+          ],
+          "wallClock": [
+            "2026-10-30T10:59:03.920000+08:00",
+            "2026-10-30T10:59:38.574000+08:00"
+          ]
+        },
+        "durationSeconds": 34.654,
+        "counterChanges": {
+          "packetsReceived": 103175,
+          "packetsLost": 25,
+          "bytesReceived": 113282877,
+          "framesReceived": 2077,
+          "framesDecoded": 2077,
+          "framesDropped": 0,
+          "freezeCount": 0,
+          "totalFreezesDuration": 0.0,
+          "pauseCount": 0,
+          "pliCount": 0,
+          "firCount": 0,
+          "nackCount": 25,
+          "keyFramesDecoded": 1,
+          "retransmittedPacketsReceived": 98,
+          "retransmittedBytesReceived": 101999,
+          "jitterBufferDelay": 12.303737999999996,
+          "jitterBufferEmittedCount": 2077,
+          "totalDecodeTime": 8.877988000000002,
+          "totalProcessingDelay": 21.212607000000006,
+          "totalAssemblyTime": 9.939627000000002
+        },
+        "receivedFps": 59.93536099728747,
+        "decodedFps": 59.93536099728747,
+        "bitrateMbps": 26.151757834593408,
+        "positivePacketsLost": 25,
+        "positiveLossRatio": 0.00024224806201550387,
+        "netLossRatio": 0.00024224806201550387,
+        "rttMs": {
+          "n": 130,
+          "mean": 16.407692307692308,
+          "p50": 13.0,
+          "p95": 38.0,
+          "p99": 38.0,
+          "min": 11.0,
+          "max": 38.0
+        },
+        "jitterMs": {
+          "n": 132,
+          "mean": 5.121212121212121,
+          "p50": 5.0,
+          "p95": 9.0,
+          "p99": 12.0,
+          "min": 2.0,
+          "max": 12.0
+        },
+        "sampleDelayMs": {
+          "jitterBufferMs": {
+            "n": 131,
+            "mean": 5.923297802444524,
+            "p50": 5.268374999999992,
+            "p95": 11.409086805555585,
+            "p99": 33.61207624999983,
+            "min": 1.5538124999998626,
+            "max": 41.0527333333332
+          },
+          "decodeMs": {
+            "n": 131,
+            "mean": 4.275884140048504,
+            "p50": 4.28493750000003,
+            "p95": 4.439123949579851,
+            "p99": 4.5963737499999295,
+            "min": 3.9693124999999885,
+            "max": 4.813071428571395
+          },
+          "processingMs": {
+            "n": 131,
+            "mean": 10.23298218638415,
+            "p50": 9.665235294117402,
+            "p95": 15.937213815789491,
+            "p99": 37.95884374999965,
+            "min": 5.733062500000052,
+            "max": 47.084071428571406
+          },
+          "assemblyMs": {
+            "n": 131,
+            "mean": 4.791214679493527,
+            "p50": 4.7762352941175585,
+            "p95": 9.118968749999972,
+            "p99": 11.484651249999983,
+            "min": 1.493874999999978,
+            "max": 12.430642857142919
+          }
+        },
+        "weightedDelayMs": {
+          "jitterBuffer": 5.923802599903706,
+          "decode": 4.274428502648051,
+          "processing": 10.213099181511799,
+          "assembly": 4.785569090033704
+        },
+        "connectionStates": {
+          "connected": 132
+        },
+        "pairIds": [
+          "CP6NTJj1dg_VIeUIFjz",
+          null
+        ],
+        "candidateTypes": [
+          [
+            "srflx",
+            "srflx"
+          ],
+          [
+            null,
+            null
+          ]
+        ],
+        "worstDelaySamples": [
+          {
+            "seq": 2100,
+            "sampledAtMs": 135442,
+            "jitterBufferMs": 41.0527333333332,
+            "decodeMs": 4.813071428571395,
+            "processingMs": 47.084071428571406,
+            "assemblyMs": 12.430642857142919
+          },
+          {
+            "seq": 1742,
+            "sampledAtMs": 117669,
+            "jitterBufferMs": 39.99593750000008,
+            "decodeMs": 4.316937500000062,
+            "processingMs": 44.3330624999998,
+            "assemblyMs": 11.642187499999899
+          },
+          {
+            "seq": 2097,
+            "sampledAtMs": 135154,
+            "jitterBufferMs": 18.71640000000004,
+            "decodeMs": 4.354799999999888,
+            "processingMs": 23.085666666666782,
+            "assemblyMs": 6.827533333333235
+          },
+          {
+            "seq": 1749,
+            "sampledAtMs": 117936,
+            "jitterBufferMs": 12.739529411764666,
+            "decodeMs": 4.0334705882353,
+            "processingMs": 16.78764705882392,
+            "assemblyMs": 8.529352941176489
+          }
+        ]
+      },
+      "windows": {
+        "short": {
+          "n": 32,
+          "bounds": {
+            "seq": [
+              1579,
+              2213
+            ],
+            "monotonicMs": [
+              109540,
+              140981
+            ],
+            "wallClock": [
+              "2026-10-30T10:59:07.178000+08:00",
+              "2026-10-30T10:59:38.595000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 32,
+              "mean": 59.94720353523086,
+              "p50": 59.97639525033382,
+              "p95": 60.272002478669144,
+              "p99": 60.457553437553436,
+              "min": 59.19011406844106,
+              "max": 60.5081585081585
+            },
+            "decodeFpsAvg": {
+              "n": 32,
+              "mean": 59.94999748014024,
+              "p50": 59.98280746852413,
+              "p95": 60.26660594494564,
+              "p99": 60.442220279720274,
+              "min": 59.38656527249683,
+              "max": 60.5081585081585
+            },
+            "videoPresentFpsAvg": {
+              "n": 32,
+              "mean": 59.93028201207198,
+              "p50": 59.7374261420954,
+              "p95": 61.11754490904257,
+              "p99": 61.224366802351874,
+              "min": 58.297435897435896,
+              "max": 61.252525252525245
+            },
+            "callbackFpsAvg": {
+              "n": 32,
+              "mean": 43.47628005832427,
+              "p50": 44.182098064809026,
+              "p95": 45.226258081316445,
+              "p99": 45.54505440505441,
+              "min": 38.426814268142685,
+              "max": 45.60606060606061
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 32,
+              "mean": 43.47628005832427,
+              "p50": 44.182098064809026,
+              "p95": 45.226258081316445,
+              "p99": 45.54505440505441,
+              "min": 38.426814268142685,
+              "max": 45.60606060606061
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 32,
+              "mean": 14.832508877262784,
+              "p50": 14.875064393939393,
+              "p95": 15.05401476911977,
+              "p99": 15.135378589355089,
+              "min": 14.505270202020204,
+              "max": 15.160927065527064
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 32,
+              "mean": 7.651833333333333,
+              "p50": 7.499333333333333,
+              "p95": 8.994266666666666,
+              "p99": 9.544186666666667,
+              "min": 6.7316666666666665,
+              "max": 9.784333333333333
+            },
+            "rttMsAvg": {
+              "n": 32,
+              "mean": 16.40633721357333,
+              "p50": 13.8275,
+              "p95": 26.92576773010634,
+              "p99": 32.00912157894737,
+              "min": 11,
+              "max": 32.73026315789474
+            },
+            "jitterMsAvg": {
+              "n": 32,
+              "mean": 5.267721336223534,
+              "p50": 5.278847953216374,
+              "p95": 7.87895,
+              "p99": 8.646533333333334,
+              "min": 2.175,
+              "max": 8.847
+            },
+            "lossAvg": {
+              "n": 32,
+              "mean": 0.0002489160946241838,
+              "p50": 0.00023908230710141737,
+              "p95": 0.0004627750495424578,
+              "p99": 0.0004771303379637902,
+              "min": 0,
+              "max": 0.000480327486200704
+            },
+            "jitterBufferMsAvg": {
+              "n": 32,
+              "mean": 6.177725004143994,
+              "p50": 5.941612456570964,
+              "p95": 11.341068776047695,
+              "p99": 12.586125374062165,
+              "min": 2.448138829166664,
+              "max": 12.94349314916744
+            }
+          }
+        },
+        "long": {
+          "n": 20,
+          "bounds": {
+            "seq": [
+              1826,
+              2213
+            ],
+            "monotonicMs": [
+              121692,
+              140981
+            ],
+            "wallClock": [
+              "2026-10-30T10:59:19.351000+08:00",
+              "2026-10-30T10:59:38.595000+08:00"
+            ]
+          },
+          "fields": {
+            "inboundFpsAvg": {
+              "n": 20,
+              "mean": 59.93556599037232,
+              "p50": 59.93473155095797,
+              "p95": 59.98011772974872,
+              "p99": 60.01314531716746,
+              "min": 59.855842558425586,
+              "max": 60.02140221402214
+            },
+            "decodeFpsAvg": {
+              "n": 20,
+              "mean": 59.93737491269661,
+              "p50": 59.93554790432906,
+              "p95": 59.98409177478871,
+              "p99": 59.989076419473875,
+              "min": 59.88054607508533,
+              "max": 59.99032258064516
+            },
+            "videoPresentFpsAvg": {
+              "n": 20,
+              "mean": 59.95567657511012,
+              "p50": 59.896284470246734,
+              "p95": 60.16343173431734,
+              "p99": 60.179697416974165,
+              "min": 59.78015267175573,
+              "max": 60.183763837638374
+            },
+            "callbackFpsAvg": {
+              "n": 20,
+              "mean": 43.70219529474239,
+              "p50": 43.89620706337687,
+              "p95": 44.2536372501219,
+              "p99": 44.25368535673655,
+              "min": 42.635114503816794,
+              "max": 44.25369738339021
+            },
+            "rendererSubmitFpsAvg": {
+              "n": 20,
+              "mean": 43.70219529474239,
+              "p50": 43.89620706337687,
+              "p95": 44.2536372501219,
+              "p99": 44.25368535673655,
+              "min": 42.635114503816794,
+              "max": 44.25369738339021
+            },
+            "renderDrawDurationMsAvg": {
+              "n": 20,
+              "mean": 14.851385022681024,
+              "p50": 14.877695633255637,
+              "p95": 14.947920293336292,
+              "p99": 14.983470790305992,
+              "min": 14.698148764568767,
+              "max": 14.992358414548416
+            },
+            "rendererSubmitAgeMsAvg": {
+              "n": 20,
+              "mean": 7.5459233333333335,
+              "p50": 7.5155666666666665,
+              "p95": 7.853559999999999,
+              "p99": 7.8570053333333325,
+              "min": 7.110133333333334,
+              "max": 7.857866666666666
+            },
+            "rttMsAvg": {
+              "n": 20,
+              "mean": 15.686796611003537,
+              "p50": 15.715594462540718,
+              "p95": 18.66888958030837,
+              "p99": 18.946500034570974,
+              "min": 11.976346114967315,
+              "max": 19.015902648136624
+            },
+            "jitterMsAvg": {
+              "n": 20,
+              "mean": 5.385786780695468,
+              "p50": 5.408319761129207,
+              "p95": 6.395126666666666,
+              "p99": 6.462918666666667,
+              "min": 4.077508124178939,
+              "max": 6.479866666666667
+            },
+            "lossAvg": {
+              "n": 20,
+              "mean": 0.00023268507514771495,
+              "p50": 0.0002321622851854477,
+              "p95": 0.0002854025709886686,
+              "p99": 0.0002950056891614611,
+              "min": 0.0001795347356533246,
+              "max": 0.0002974064687046593
+            },
+            "jitterBufferMsAvg": {
+              "n": 20,
+              "mean": 6.201620030831012,
+              "p50": 6.230145987403969,
+              "p95": 7.392457015516609,
+              "p99": 7.443998311778702,
+              "min": 4.88501221382357,
+              "max": 7.456883635844226
+            }
+          }
+        }
+      },
+      "telemetryFields": {
+        "rendererSubmitAgeMs": {
+          "n": 35,
+          "mean": 137.34285714285716,
+          "p50": 161.0,
+          "p95": 253.6,
+          "p99": 255.0,
+          "min": 8,
+          "max": 255
+        },
+        "renderDrawDurationMsAvg": {
+          "n": 35,
+          "mean": 14.890512265512266,
+          "p50": 14.727272727272728,
+          "p95": 15.835227272727273,
+          "p99": 16.257499999999997,
+          "min": 14.083333333333334,
+          "max": 16.454545454545453
+        },
+        "maxCallbackIntervalMsSinceLastSample": {
+          "n": 35,
+          "mean": 52.6,
+          "p50": 35.0,
+          "p95": 105.09999999999995,
+          "p99": 369.1199999999987,
+          "min": 24,
+          "max": 499
+        },
+        "callbackCountSinceLastSample": {
+          "n": 35,
+          "mean": 43.94285714285714,
+          "p50": 45.0,
+          "p95": 46.0,
+          "p99": 46.66,
+          "min": 32,
+          "max": 47
+        },
+        "presentedFramesAdvancedSinceLastSample": {
+          "n": 35,
+          "mean": 61.51428571428571,
+          "p50": 61.0,
+          "p95": 62.599999999999994,
+          "p99": 80.49999999999991,
+          "min": 57,
+          "max": 89
+        },
+        "droppedFramesSinceLastSample": {
+          "n": 35,
+          "mean": 5,
+          "p50": 5.0,
+          "p95": 7.0,
+          "p99": 7.659999999999997,
+          "min": 4,
+          "max": 8
+        },
+        "sourceFpsEstimate": {
+          "n": 0,
+          "mean": null,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "min": null,
+          "max": null
+        }
+      },
+      "sampleTotals": {
+        "callbackCountSinceLastSample": 1538,
+        "callbackGapCountSinceLastSample": 4,
+        "presentedFramesAdvancedSinceLastSample": 2153,
+        "presentedFramesJumpCountSinceLastSample": 173,
+        "droppedFramesSinceLastSample": 175
+      },
+      "renderCauseCounts": {
+        "renderStable": 31,
+        "frameDeliveryLimited": 4
+      },
+      "trackingSourceCounts": {
+        "videoFrameCallback": 35
+      },
+      "mixedGenerationTelemetrySeqs": [],
+      "liveDiagnosticsDelta": {
+        "durationSeconds": 34.475,
+        "marker": 1498,
+        "markerFps": 43.45177664974619,
+        "nativeObserved": 1498,
+        "nativeAccepted": 1498,
+        "pollAccepted": 0,
+        "submitted": 1498,
+        "submitFps": 43.45177664974619
+      },
+      "resourceDrawDelta": {
+        "seq": [
+          1522,
+          2209
+        ],
+        "durationSeconds": 34.2,
+        "realtimeDrawCount": 1486,
+        "drawFps": 43.45029239766082,
+        "drawDurationMsAvg": 14.839838492597577,
+        "cumulativeDrawDurationMaxMs": 28,
+        "last": {
+          "animationCallbacks": 0,
+          "captureDrawCount": 0,
+          "captureWaiters": 0,
+          "domNodes": 1,
+          "drawCount": 1533,
+          "drawDurationMaxMs": 28,
+          "drawDurationTotalMs": 22772,
+          "duplicateDrawCount": 0,
+          "frameRequests": 1,
+          "gpuErrorChecks": 36,
+          "gpuObjects": 3,
+          "lastDrawAtMs": 140881,
+          "lastDrawSequence": 4538,
+          "latestOverwriteCount": 1,
+          "outputHeight": 1440,
+          "outputWidth": 2560,
+          "pacingWaitCount": 0,
+          "realtimeDrawCount": 1533,
+          "submitFailureCount": 0
+        }
+      }
+    }
+  ],
+  "frameIdentity": {
+    "latest": {
+      "accepted": {
+        "animationFrame": 0,
+        "timeupdate": 0,
+        "videoFrameCallback": 4508
+      },
+      "collectionStartedAtMs": 43897,
+      "evidence": [
+        {
+          "atMs": 139214,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5640,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": null,
+          "expiredPollFrames": 0,
+          "localSequence": 4466,
+          "mediaTime": null,
+          "mediaTimeDelta": null,
+          "mediaTimeState": "missing",
+          "nativeAdvance": 0,
+          "nativeDelta": null,
+          "nativePresentedFrames": null,
+          "nativeReset": false,
+          "nativeState": "missing",
+          "newFrame": false,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": null,
+          "presentedFramesDelta": 0,
+          "previousCounterFrames": 5640,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5105,
+          "previousRtpTimestamp": 2203707135,
+          "rawNativeDelta": null,
+          "reason": "counterUnchanged",
+          "rtpTimestamp": null,
+          "rtpTimestampState": "missing",
+          "trackingSource": "animationFrame",
+          "uncountedNativeAfter": 9,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 139236,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5640,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": 139228,
+          "expiredPollFrames": 0,
+          "localSequence": 4467,
+          "mediaTime": 0,
+          "mediaTimeDelta": 0,
+          "mediaTimeState": "unchanged",
+          "nativeAdvance": 1,
+          "nativeDelta": 1,
+          "nativePresentedFrames": 5106,
+          "nativeReset": false,
+          "nativeState": "advanced",
+          "newFrame": true,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": 139228,
+          "presentedFramesDelta": 1,
+          "previousCounterFrames": 5640,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5105,
+          "previousRtpTimestamp": 2203707135,
+          "rawNativeDelta": 1,
+          "reason": "nativeAdvanced",
+          "rtpTimestamp": 2203711635,
+          "rtpTimestampState": "advanced",
+          "trackingSource": "videoFrameCallback",
+          "uncountedNativeAfter": 10,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 139719,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5671,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": null,
+          "expiredPollFrames": 0,
+          "localSequence": 4488,
+          "mediaTime": null,
+          "mediaTimeDelta": null,
+          "mediaTimeState": "missing",
+          "nativeAdvance": 0,
+          "nativeDelta": null,
+          "nativePresentedFrames": null,
+          "nativeReset": false,
+          "nativeState": "missing",
+          "newFrame": false,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": null,
+          "presentedFramesDelta": 0,
+          "previousCounterFrames": 5671,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5127,
+          "previousRtpTimestamp": 2203755105,
+          "rawNativeDelta": null,
+          "reason": "counterUnchanged",
+          "rtpTimestamp": null,
+          "rtpTimestampState": "missing",
+          "trackingSource": "animationFrame",
+          "uncountedNativeAfter": 9,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 139741,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5671,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": 139732,
+          "expiredPollFrames": 0,
+          "localSequence": 4489,
+          "mediaTime": 0,
+          "mediaTimeDelta": 0,
+          "mediaTimeState": "unchanged",
+          "nativeAdvance": 1,
+          "nativeDelta": 1,
+          "nativePresentedFrames": 5128,
+          "nativeReset": false,
+          "nativeState": "advanced",
+          "newFrame": true,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": 139732,
+          "presentedFramesDelta": 1,
+          "previousCounterFrames": 5671,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5127,
+          "previousRtpTimestamp": 2203755105,
+          "rawNativeDelta": 1,
+          "reason": "nativeAdvanced",
+          "rtpTimestamp": 2203758165,
+          "rtpTimestampState": "advanced",
+          "trackingSource": "videoFrameCallback",
+          "uncountedNativeAfter": 10,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 140222,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5701,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": null,
+          "expiredPollFrames": 0,
+          "localSequence": 4510,
+          "mediaTime": null,
+          "mediaTimeDelta": null,
+          "mediaTimeState": "missing",
+          "nativeAdvance": 0,
+          "nativeDelta": null,
+          "nativePresentedFrames": null,
+          "nativeReset": false,
+          "nativeState": "missing",
+          "newFrame": false,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": null,
+          "presentedFramesDelta": 0,
+          "previousCounterFrames": 5701,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5149,
+          "previousRtpTimestamp": 2203800195,
+          "rawNativeDelta": null,
+          "reason": "counterUnchanged",
+          "rtpTimestamp": null,
+          "rtpTimestampState": "missing",
+          "trackingSource": "animationFrame",
+          "uncountedNativeAfter": 9,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 140248,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5701,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": 140232,
+          "expiredPollFrames": 0,
+          "localSequence": 4511,
+          "mediaTime": 0,
+          "mediaTimeDelta": 0,
+          "mediaTimeState": "unchanged",
+          "nativeAdvance": 1,
+          "nativeDelta": 1,
+          "nativePresentedFrames": 5150,
+          "nativeReset": false,
+          "nativeState": "advanced",
+          "newFrame": true,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": 140232,
+          "presentedFramesDelta": 1,
+          "previousCounterFrames": 5701,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5149,
+          "previousRtpTimestamp": 2203800195,
+          "rawNativeDelta": 1,
+          "reason": "nativeAdvanced",
+          "rtpTimestamp": 2203803165,
+          "rtpTimestampState": "advanced",
+          "trackingSource": "videoFrameCallback",
+          "uncountedNativeAfter": 10,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 140732,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5732,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": null,
+          "expiredPollFrames": 0,
+          "localSequence": 4532,
+          "mediaTime": null,
+          "mediaTimeDelta": null,
+          "mediaTimeState": "missing",
+          "nativeAdvance": 0,
+          "nativeDelta": null,
+          "nativePresentedFrames": null,
+          "nativeReset": false,
+          "nativeState": "missing",
+          "newFrame": false,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": null,
+          "presentedFramesDelta": 0,
+          "previousCounterFrames": 5732,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5171,
+          "previousRtpTimestamp": 2203846725,
+          "rawNativeDelta": null,
+          "reason": "counterUnchanged",
+          "rtpTimestamp": null,
+          "rtpTimestampState": "missing",
+          "trackingSource": "animationFrame",
+          "uncountedNativeAfter": 9,
+          "uncountedNativeBefore": 9
+        },
+        {
+          "atMs": 140756,
+          "counterAdvance": 0,
+          "counterDelta": 0,
+          "counterFrames": 5732,
+          "counterReset": false,
+          "counterSource": "playbackQuality",
+          "creditedNativeFrames": 0,
+          "creditedPollFrames": 0,
+          "expectedDisplayTime": 140732,
+          "expiredPollFrames": 0,
+          "localSequence": 4533,
+          "mediaTime": 0,
+          "mediaTimeDelta": 0,
+          "mediaTimeState": "unchanged",
+          "nativeAdvance": 1,
+          "nativeDelta": 1,
+          "nativePresentedFrames": 5172,
+          "nativeReset": false,
+          "nativeState": "advanced",
+          "newFrame": true,
+          "polledAdvanceAfter": 0,
+          "polledAdvanceBefore": 0,
+          "presentationTime": 140732,
+          "presentedFramesDelta": 1,
+          "previousCounterFrames": 5732,
+          "previousCounterSource": "playbackQuality",
+          "previousMediaTime": 0,
+          "previousNativePresentedFrames": 5171,
+          "previousRtpTimestamp": 2203846725,
+          "rawNativeDelta": 1,
+          "reason": "nativeAdvanced",
+          "rtpTimestamp": 2203848255,
+          "rtpTimestampState": "advanced",
+          "trackingSource": "videoFrameCallback",
+          "uncountedNativeAfter": 10,
+          "uncountedNativeBefore": 9
+        }
+      ],
+      "evidenceLimit": 8,
+      "localSequence": 4543,
+      "nativeUnchangedWithMediaAdvanceCount": 0,
+      "observed": {
+        "animationFrame": 5326,
+        "timeupdate": 0,
+        "videoFrameCallback": 4508
+      },
+      "reasons": {
+        "counterAdvanced": 362,
+        "counterUnchanged": 5325,
+        "nativeAdvanced": 4146,
+        "nativeAlreadyDelivered": 1
+      },
+      "rejected": {
+        "animationFrame": 5326,
+        "timeupdate": 0,
+        "videoFrameCallback": 0
+      },
+      "sampledCount": 381,
+      "schemaVersion": 2,
+      "videoGeneration": 1
+    },
+    "uniqueEvidence": 381,
+    "nativeEvidence": 189,
+    "nativeStateCounts": {
+      "advanced": 189
+    },
+    "rtpStateCounts": {
+      "initial": 1,
+      "advanced": 188
+    },
+    "mediaTimeStateCounts": {
+      "unchanged": 189
+    }
+  },
+  "collectionDurationMs": {
+    "n": 382,
+    "mean": 8.06806282722513,
+    "p50": 1.0,
+    "p95": 23.0,
+    "p99": 25.189999999999998,
+    "min": 0,
+    "max": 104
+  },
+  "traceQueue": {
+    "inFlight": {
+      "n": 97,
+      "mean": 2.185567010309278,
+      "p50": 2.0,
+      "p95": 3.0,
+      "p99": 4.0,
+      "min": 2,
+      "max": 4
+    },
+    "pending": {
+      "n": 97,
+      "mean": 0.020618556701030927,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.07999999999998408,
+      "min": 0,
+      "max": 2
+    },
+    "dropped": {
+      "n": 97,
+      "mean": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "droppedEssential": {
+      "n": 97,
+      "mean": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "min": 0,
+      "max": 0
+    }
+  },
+  "limitations": [
+    "GPU execution time and compositor/screen presentation unavailable",
+    "Browser-internal ReferenceChain and per-request NACK/keyframe recovery outcomes unavailable",
+    "Per-sample delay percentiles describe window means, not individual frames",
+    "Telemetry sample totals can span segment transitions; same-generation monotonic live deltas and fully covered policy windows are primary rate evidence"
+  ],
+  "srLiveSubmitAgeMs": {
+    "n": 18,
+    "mean": 8.222222222222221,
+    "p50": 8.0,
+    "p95": 15.149999999999999,
+    "p99": 15.829999999999998,
+    "min": 2,
+    "max": 16
+  },
+  "collectionDurationBySegmentMs": [
+    {
+      "key": [
+        "video",
+        2,
+        2560,
+        1440
+      ],
+      "values": {
+        "n": 72,
+        "mean": 0.9166666666666666,
+        "p50": 1.0,
+        "p95": 1.4500000000000028,
+        "p99": 2.8700000000000188,
+        "min": 0,
+        "max": 5
+      }
+    },
+    {
+      "key": [
+        "video",
+        2,
+        1280,
+        720
+      ],
+      "values": {
+        "n": 33,
+        "mean": 0.7878787878787878,
+        "p50": 1.0,
+        "p95": 1.3999999999999986,
+        "p99": 2.0,
+        "min": 0,
+        "max": 2
+      }
+    },
+    {
+      "key": [
+        "video",
+        2,
+        1920,
+        1080
+      ],
+      "values": {
+        "n": 13,
+        "mean": 1,
+        "p50": 1.0,
+        "p95": 2.799999999999997,
+        "p99": 3.759999999999998,
+        "min": 0,
+        "max": 4
+      }
+    },
+    {
+      "key": [
+        "video",
+        2,
+        2560,
+        1440
+      ],
+      "values": {
+        "n": 116,
+        "mean": 0.9482758620689655,
+        "p50": 1.0,
+        "p95": 2.0,
+        "p99": 5.699999999999989,
+        "min": 0,
+        "max": 7
+      }
+    },
+    {
+      "key": [
+        "webgl2_sr",
+        3,
+        2560,
+        1440
+      ],
+      "values": {
+        "n": 132,
+        "mean": 20.34090909090909,
+        "p50": 22.0,
+        "p95": 24.0,
+        "p99": 26.0,
+        "min": 0,
+        "max": 26
+      }
+    }
+  ],
+  "startupRenderer": {
+    "initialPendingSeq": 146,
+    "initialPendingAtMs": 34089,
+    "failedSeq": 170,
+    "failedAtMs": 39090,
+    "fallbackCommittedSeq": 171,
+    "connectedSeq": 189,
+    "connectedAtMs": 42723,
+    "pendingToFailureMs": 5001,
+    "rawFailureReason": "unavailable"
+  },
+  "srAgeSnapshotAnchor": {
+    "seq": 1763,
+    "sampledAtMs": 118467,
+    "observedAtMs": 118715,
+    "cachedSubmitAgeMs": 255,
+    "cachedSubmittedFrames": 566,
+    "liveSubmittedFrames": 577
+  },
+  "networkBurstAnchors": [
+    {
+      "seq": 555,
+      "sampledAtMs": 60507,
+      "delta": {
+        "elapsedMs": 251,
+        "framesDecodedDelta": 10,
+        "framesReceivedDelta": 10,
+        "freezeCountDelta": 0,
+        "keyFramesDecodedDelta": 0,
+        "nackCountDelta": 1,
+        "packetsLostDelta": 290,
+        "packetsReceivedDelta": 963,
+        "pliCountDelta": 0,
+        "totalFreezesDurationDelta": 0
+      }
+    },
+    {
+      "seq": 566,
+      "sampledAtMs": 61013,
+      "delta": {
+        "elapsedMs": 253,
+        "framesDecodedDelta": 0,
+        "framesReceivedDelta": 0,
+        "freezeCountDelta": 0,
+        "keyFramesDecodedDelta": 0,
+        "nackCountDelta": 3,
+        "packetsLostDelta": 34,
+        "packetsReceivedDelta": 250,
+        "pliCountDelta": 0,
+        "totalFreezesDurationDelta": 0
+      }
+    },
+    {
+      "seq": 576,
+      "sampledAtMs": 61263,
+      "delta": {
+        "elapsedMs": 250,
+        "framesDecodedDelta": 1,
+        "framesReceivedDelta": 1,
+        "freezeCountDelta": 1,
+        "keyFramesDecodedDelta": 0,
+        "nackCountDelta": 4,
+        "packetsLostDelta": 263,
+        "packetsReceivedDelta": 709,
+        "pliCountDelta": 1,
+        "totalFreezesDurationDelta": 0.717
+      }
+    },
+    {
+      "seq": 595,
+      "sampledAtMs": 62272,
+      "delta": {
+        "elapsedMs": 251,
+        "framesDecodedDelta": 6,
+        "framesReceivedDelta": 6,
+        "freezeCountDelta": 1,
+        "keyFramesDecodedDelta": 2,
+        "nackCountDelta": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 255,
+        "pliCountDelta": 0,
+        "totalFreezesDurationDelta": 1.0100000000000002
+      }
+    },
+    {
+      "seq": 788,
+      "sampledAtMs": 71344,
+      "delta": {
+        "elapsedMs": 253,
+        "framesDecodedDelta": 8,
+        "framesReceivedDelta": 17,
+        "freezeCountDelta": 1,
+        "keyFramesDecodedDelta": 2,
+        "nackCountDelta": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 263,
+        "pliCountDelta": 0,
+        "totalFreezesDurationDelta": 0.24099999999999988
+      }
+    },
+    {
+      "seq": 870,
+      "sampledAtMs": 75379,
+      "delta": {
+        "elapsedMs": 252,
+        "framesDecodedDelta": 13,
+        "framesReceivedDelta": 16,
+        "freezeCountDelta": 1,
+        "keyFramesDecodedDelta": 2,
+        "nackCountDelta": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 387,
+        "pliCountDelta": 0,
+        "totalFreezesDurationDelta": 0.2320000000000002
+      }
+    },
+    {
+      "seq": 1290,
+      "sampledAtMs": 95552,
+      "delta": {
+        "elapsedMs": 253,
+        "framesDecodedDelta": 14,
+        "framesReceivedDelta": 19,
+        "freezeCountDelta": 1,
+        "keyFramesDecodedDelta": 0,
+        "nackCountDelta": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 876,
+        "pliCountDelta": 0,
+        "totalFreezesDurationDelta": 0.21499999999999983
+      }
+    }
+  ],
+  "recoveryObservability": {
+    "keyframeRequestsSuppressed": "unavailable",
+    "requestResponsePairing": "unavailable",
+    "decodedKeyframeDelta": 11,
+    "cleanAnchorCommitted": "unavailable",
+    "DisplayStable": "unavailable",
+    "nackEffectiveRate": "unavailable",
+    "chainBuildSuccessRate": "unavailable",
+    "repairabilityPersistence": "unavailable",
+    "recoveryEffectiveness": "unavailable"
+  },
+  "gates": {
+    "browserBehavior": "PASS",
+    "browserRuntimeStability": {
+      "gate": "PASS",
+      "failures": [],
+      "missingEvidence": [],
+      "evidence": {
+        "resourceEvents": 55,
+        "nativeRendererEvents": 31,
+        "observationEvents": 144,
+        "collectionEvents": 382,
+        "frameChainSamples": 122,
+        "actualDimensionSamples": 143,
+        "freshObservationEvents": 143,
+        "telemetryEvents": 97,
+        "traceBudgetSamples": 97,
+        "shaderDrawEvents": 19,
+        "gpuBudgetSamples": 35,
+        "closedClients": 1,
+        "sharedSamples": 21
+      }
+    },
+    "receiveFeedback": {
+      "gate": "PASS",
+      "summary": {
+        "receiveFeedbackDecisionEvents": 0,
+        "keyframeSent": 0,
+        "keyframeCoalesced": 0,
+        "keyframeThrottled": 0,
+        "referenceChainTransitions": 0
+      },
+      "rates": {
+        "responseObservedRate": null,
+        "decodedRate": null,
+        "cleanAnchorRate": null,
+        "displayStableRate": null,
+        "usableIdrRate": null,
+        "chainBuildSuccessRate": null,
+        "nackEffectiveRate": null
+      },
+      "keyframeChain": {
+        "sent": 0,
+        "responseObserved": 0,
+        "decoded": 0,
+        "cleanAnchorCommitted": 0,
+        "displayStable": 0
+      }
+    }
+  },
+  "analysisScriptSha256": "287b62fbacea737576a0d358d82c2d8e91563f171720d13ffe8e5cb4ca75fc86"
+}

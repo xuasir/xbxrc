@@ -486,7 +486,7 @@ describe('statsService observation ownership', () => {
   it('aligns independent received, decoded, video advancement, callback and actual draw facts', async () => {
     vi.useFakeTimers({ toFake: ['performance'] })
     let count = 0
-    let renderer: RendererObservationSnapshot = { generation: 1, kind: 'webgl2_sr', targetFps: 60, sourceWidth: 2560, sourceHeight: 1440, resources: { gpuObjects: 5, frameRequests: 1, animationCallbacks: 0, captureWaiters: 0, domNodes: 1, realtimeDrawCount: 0, drawDurationTotalMs: 0, outputWidth: 2560, outputHeight: 1440 } }
+    let renderer: RendererObservationSnapshot = { generation: 1, kind: 'webgl2_sr', targetFps: 60, sourceWidth: 2560, sourceHeight: 1440, resources: { gpuObjects: 5, frameRequests: 1, animationCallbacks: 0, captureWaiters: 0, domNodes: 1, realtimeDrawCount: 0, drawDurationTotalMs: 0, drawCostSampleCount: 0, uploadDurationTotalMs: 0, submitDurationTotalMs: 0, outputWidth: 2560, outputHeight: 1440 } }
     const peer = { connectionState: 'connected', getStats: vi.fn(async () => report({ framesReceived: count * 15, framesDecoded: count * 14, packetsReceived: count * 100 })) } as unknown as RTCPeerConnection
     const emitter = new TypedEventEmitter<PlayerEvents>()
     const service = new StatsService(() => peer, emitter, () => renderer)
@@ -496,19 +496,41 @@ describe('statsService observation ownership', () => {
       vi.advanceTimersByTime(250)
       emitter.emit('media.videoFramePresented', { videoGeneration: 1, localSequence: count * 2, observedAtMs: performance.now(), newFrame: true, presentedFramesDelta: 10, trackingSource: 'animationFrame', droppedLike: false })
       emitter.emit('media.videoFramePresented', { videoGeneration: 1, localSequence: count * 2 + 1, observedAtMs: performance.now(), newFrame: false, presentedFramesDelta: 0, trackingSource: 'videoFrameCallback', droppedLike: false })
-      renderer.resources = { ...renderer.resources, realtimeDrawCount: count, drawDurationTotalMs: count * 2, lastDrawAtMs: performance.now() }
+      renderer.resources = { ...renderer.resources, realtimeDrawCount: count, drawDurationTotalMs: count * 2, drawCostSampleCount: count, uploadDurationTotalMs: count * 1.5, submitDurationTotalMs: count * 0.5, lastDrawAtMs: performance.now() }
       await service.sampleNow()
     }
     const [panel, supervisor] = await Promise.all([service.snapshot(), service.snapshot()])
     expect(panel).toEqual(supervisor)
     expect(panel).toMatchObject({ inboundVideoFps: 60, decodeFps: 56, videoPresentFps: 40, callbackFps: 4, rendererSubmitFps: 4, presentFps: 4, renderActualMode: 'passthrough', renderSourceWidth: 2560, renderSourceHeight: 1440, renderDrawDurationMsAvg: 2 })
     expect(panel.browserStatsWindows?.short).toMatchObject({ receivedCoverageMs: 3000, decodeCoverageMs: 3000, videoCoverageMs: 3000, callbackCoverageMs: 3000, rendererCoverageMs: 3000 })
+    expect(panel).toMatchObject({ renderUploadDurationMsAvg: 1.5, renderSubmitDurationMsAvg: 0.5 })
+    expect(panel.browserStatsWindows?.short).toMatchObject({ renderUploadDurationMsAvg: 1.5, renderSubmitDurationMsAvg: 0.5 })
     // 新管线和新的帧率预算从自己的可比较样本建立窗口。
     renderer = { ...renderer, generation: 2, targetFps: 30, resources: { ...renderer.resources, realtimeDrawCount: 1 } }
     vi.advanceTimersByTime(250)
     await service.sampleNow()
     expect((await service.snapshot()).rendererSubmitFps).toBeUndefined()
     expect((await service.snapshot()).browserStatsWindows?.short.rendererCoverageMs).toBe(0)
+    service.dispose()
+  })
+
+  it('reads live same-generation submission age while preserving the shared sampled rates and identity', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    const renderer: RendererObservationSnapshot = { generation: 1, kind: 'webgl2_sr', targetFps: 60, sourceWidth: 2560, sourceHeight: 1440, resources: { gpuObjects: 3, frameRequests: 1, animationCallbacks: 0, captureWaiters: 0, domNodes: 1, realtimeDrawCount: 0, drawDurationTotalMs: 0, lastDrawAtMs: 0 } }
+    const peer = { connectionState: 'connected', getStats: vi.fn(async () => report({ framesReceived: 15, framesDecoded: 15 })) } as unknown as RTCPeerConnection
+    const emitter = new TypedEventEmitter<PlayerEvents>()
+    const service = new StatsService(() => peer, emitter, () => renderer)
+    await service.sampleNow()
+    vi.advanceTimersByTime(250)
+    renderer.resources = { ...renderer.resources, realtimeDrawCount: 15, lastDrawAtMs: 250 }
+    await service.sampleNow()
+    const sampled = await service.snapshot()
+    vi.advanceTimersByTime(200)
+    renderer.resources = { ...renderer.resources, realtimeDrawCount: 26, lastDrawAtMs: 440 }
+    expect(await service.snapshot()).toMatchObject({ statsSampleId: sampled.statsSampleId, statsSampleAgeMs: 200, rendererSubmitFps: 60, rendererSubmitAgeMs: 10, presentAgeMs: 10 })
+    expect(peer.getStats).toHaveBeenCalledTimes(2)
+    renderer.generation = 2
+    expect((await service.snapshot()).rendererSubmitAgeMs).toBeUndefined()
     service.dispose()
   })
 })

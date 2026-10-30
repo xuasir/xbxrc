@@ -1,0 +1,451 @@
+{
+  "trace": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1793342364772-1.jsonl",
+  "traceSha256": "69a0aa5195c3c5338139a81598d5e5464fc4a50d8fe33c35632e88f287c9b7b7",
+  "rows": 2269,
+  "rangeMs": [
+    1793342364772,
+    1793342528693
+  ],
+  "buildFingerprintSha256": "68f18dd5d500af8fb25601b90fca337679c808b10136287896fa96c94e30b1ab",
+  "currentSourceMatchesBuild": true,
+  "traceProfile": "dev",
+  "traceBudgetNotices": 0,
+  "browserBehaviorGate": "PASS",
+  "browserRuntimeStabilityGate": "PASS",
+  "startup": {
+    "requestSeq": 66,
+    "readySeq": 146,
+    "remoteIceResultSeqs": [
+      199,
+      209,
+      219
+    ],
+    "remoteIceCounts": [
+      0,
+      0,
+      18
+    ],
+    "connectedSeq": 227,
+    "firstPresentedSeq": 239,
+    "startupToFirstFrameMs": 40062,
+    "readyWaitMs": 19033,
+    "runtimeToFirstFrameMs": 13141,
+    "connectionToFirstFrameMs": 526,
+    "playingUntilExitMs": 90788
+  },
+  "errorEventCounts": {
+    "executionFailed": 0,
+    "browserRuntimeError": 0,
+    "fallbackTurnRetry": 0,
+    "recoveryCommitted": 0,
+    "initialConnectionTimedOut": 0
+  },
+  "network": {
+    "rttMs": {
+      "samples": 357,
+      "mean": 11.523809523809524,
+      "median": 11.0,
+      "p95": 15.0,
+      "max": 17.0
+    },
+    "jitterMs": {
+      "samples": 359,
+      "mean": 2.2395543175487465,
+      "median": 2.0,
+      "p95": 5.0,
+      "max": 11.0
+    },
+    "packetsReceived": 111177,
+    "packetsLost": 43,
+    "lossRatio": 0.0003866211113109153,
+    "nackCount": 37,
+    "pliCount": 1,
+    "firCount": 0,
+    "retransmittedPacketsReceived": 202
+  },
+  "media": {
+    "frameWidth": 2560,
+    "frameHeight": 1440,
+    "framesReceived": 5439,
+    "framesDecoded": 5439,
+    "framesDropped": 0,
+    "freezeCount": 1,
+    "totalFreezesDuration": 0.212,
+    "keyFramesDecoded": 6
+  },
+  "rendererGenerations": {
+    "1": {
+      "kind": "webgl2_sr",
+      "matureSamples": 4,
+      "windowMs": 3000,
+      "metrics": {
+        "inboundFpsAvg": {
+          "samples": 4,
+          "mean": 59.868368715897944,
+          "median": 59.89708653701191,
+          "p95": 60.01520912547528,
+          "max": 60.01520912547528
+        },
+        "decodeFpsAvg": {
+          "samples": 4,
+          "mean": 60.015335305684886,
+          "median": 59.976094431318316,
+          "p95": 60.292929292929294,
+          "max": 60.292929292929294
+        },
+        "videoPresentFpsAvg": {
+          "samples": 4,
+          "mean": 59.669057524705615,
+          "median": 59.64517764517764,
+          "p95": 59.90298507462686,
+          "max": 59.90298507462686
+        },
+        "callbackFpsAvg": {
+          "samples": 4,
+          "mean": 44.659908815171,
+          "median": 44.669267729792104,
+          "p95": 44.803030303030305,
+          "max": 44.803030303030305
+        },
+        "rendererSubmitFpsAvg": {
+          "samples": 4,
+          "mean": 44.659908815171,
+          "median": 44.669267729792104,
+          "p95": 44.803030303030305,
+          "max": 44.803030303030305
+        },
+        "presentAgeMsAvg": {
+          "samples": 4,
+          "mean": 7.44675,
+          "median": 7.406833333333333,
+          "p95": 7.595333333333333,
+          "max": 7.595333333333333
+        },
+        "rendererSubmitAgeMsAvg": {
+          "samples": 4,
+          "mean": 7.44675,
+          "median": 7.406833333333333,
+          "p95": 7.595333333333333,
+          "max": 7.595333333333333
+        }
+      },
+      "deltas": {
+        "receiveDecode": {
+          "samples": 4,
+          "mean": -0.146966589786949,
+          "median": -0.22675954205805127,
+          "p95": 0.1989860583016423,
+          "max": 0.1989860583016423
+        },
+        "decodeVideo": {
+          "samples": 4,
+          "mean": 0.34627778097927653,
+          "median": 0.2709137709137721,
+          "p95": 0.6666666666666714,
+          "max": 0.6666666666666714
+        },
+        "videoSubmit": {
+          "samples": 4,
+          "mean": 15.00914870953461,
+          "median": 15.018372799741623,
+          "p95": 15.176616915422876,
+          "max": 15.176616915422876
+        }
+      }
+    },
+    "2": {
+      "kind": "video",
+      "matureSamples": 17,
+      "windowMs": 3000,
+      "metrics": {
+        "inboundFpsAvg": {
+          "samples": 17,
+          "mean": 59.978271016497324,
+          "median": 59.89328063241107,
+          "p95": 61.61904761904761,
+          "max": 61.61904761904761
+        },
+        "decodeFpsAvg": {
+          "samples": 17,
+          "mean": 59.95873093930805,
+          "median": 59.87516600265605,
+          "p95": 61.761904761904766,
+          "max": 61.761904761904766
+        },
+        "videoPresentFpsAvg": {
+          "samples": 17,
+          "mean": 59.92455168716811,
+          "median": 59.89328063241107,
+          "p95": 61.5,
+          "max": 61.5
+        },
+        "callbackFpsAvg": {
+          "samples": 17,
+          "mean": 56.64615145297229,
+          "median": 57.09126984126984,
+          "p95": 58.85714285714286,
+          "max": 58.85714285714286
+        },
+        "rendererSubmitFpsAvg": {
+          "samples": 17,
+          "mean": 59.92455168716811,
+          "median": 59.89328063241107,
+          "p95": 61.5,
+          "max": 61.5
+        },
+        "presentAgeMsAvg": {
+          "samples": 17,
+          "mean": 10.037921568627452,
+          "median": 9.186666666666667,
+          "p95": 16.345,
+          "max": 16.345
+        },
+        "rendererSubmitAgeMsAvg": {
+          "samples": 17,
+          "mean": 10.037921568627452,
+          "median": 9.186666666666667,
+          "p95": 16.345,
+          "max": 16.345
+        }
+      },
+      "deltas": {
+        "receiveDecode": {
+          "samples": 17,
+          "mean": 0.019540077189273492,
+          "median": 0.0,
+          "p95": 0.3333333333333357,
+          "max": 0.3333333333333357
+        },
+        "decodeVideo": {
+          "samples": 17,
+          "mean": 0.034179252139931796,
+          "median": 0.0,
+          "p95": 1.6666666666666714,
+          "max": 1.6666666666666714
+        },
+        "videoSubmit": {
+          "samples": 17,
+          "mean": 0.0,
+          "median": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "3": {
+      "kind": "webgl2_sr",
+      "matureSamples": 1,
+      "windowMs": 3000,
+      "metrics": {
+        "inboundFpsAvg": {
+          "samples": 1,
+          "mean": 59.94871794871795,
+          "median": 59.94871794871795,
+          "p95": 59.94871794871795,
+          "max": 59.94871794871795
+        },
+        "decodeFpsAvg": {
+          "samples": 1,
+          "mean": 60.05641025641025,
+          "median": 60.05641025641025,
+          "p95": 60.05641025641025,
+          "max": 60.05641025641025
+        },
+        "videoPresentFpsAvg": {
+          "samples": 1,
+          "mean": 59.38974358974358,
+          "median": 59.38974358974358,
+          "p95": 59.38974358974358,
+          "max": 59.38974358974358
+        },
+        "callbackFpsAvg": {
+          "samples": 1,
+          "mean": 45.29230769230769,
+          "median": 45.29230769230769,
+          "p95": 45.29230769230769,
+          "max": 45.29230769230769
+        },
+        "rendererSubmitFpsAvg": {
+          "samples": 1,
+          "mean": 45.29230769230769,
+          "median": 45.29230769230769,
+          "p95": 45.29230769230769,
+          "max": 45.29230769230769
+        },
+        "presentAgeMsAvg": {
+          "samples": 1,
+          "mean": 7.551666666666667,
+          "median": 7.551666666666667,
+          "p95": 7.551666666666667,
+          "max": 7.551666666666667
+        },
+        "rendererSubmitAgeMsAvg": {
+          "samples": 1,
+          "mean": 7.551666666666667,
+          "median": 7.551666666666667,
+          "p95": 7.551666666666667,
+          "max": 7.551666666666667
+        }
+      },
+      "deltas": {
+        "receiveDecode": {
+          "samples": 1,
+          "mean": -0.10769230769230376,
+          "median": -0.10769230769230376,
+          "p95": -0.10769230769230376,
+          "max": -0.10769230769230376
+        },
+        "decodeVideo": {
+          "samples": 1,
+          "mean": 0.6666666666666714,
+          "median": 0.6666666666666714,
+          "p95": 0.6666666666666714,
+          "max": 0.6666666666666714
+        },
+        "videoSubmit": {
+          "samples": 1,
+          "mean": 14.097435897435894,
+          "median": 14.097435897435894,
+          "p95": 14.097435897435894,
+          "max": 14.097435897435894
+        }
+      }
+    },
+    "4": {
+      "kind": "video",
+      "matureSamples": 86,
+      "windowMs": 3000,
+      "metrics": {
+        "inboundFpsAvg": {
+          "samples": 86,
+          "mean": 59.92935979486488,
+          "median": 59.85902503293808,
+          "p95": 60.20370370370371,
+          "max": 60.460317460317455
+        },
+        "decodeFpsAvg": {
+          "samples": 86,
+          "mean": 59.92282383945346,
+          "median": 59.85902503293808,
+          "p95": 60.20849933598937,
+          "max": 60.37285902503294
+        },
+        "videoPresentFpsAvg": {
+          "samples": 86,
+          "mean": 59.924942954611964,
+          "median": 59.85902503293808,
+          "p95": 60.20849933598937,
+          "max": 60.837681159420285
+        },
+        "callbackFpsAvg": {
+          "samples": 86,
+          "mean": 55.16876213068615,
+          "median": 56.15930300379119,
+          "p95": 59.757936507936506,
+          "max": 60.1133069828722
+        },
+        "rendererSubmitFpsAvg": {
+          "samples": 86,
+          "mean": 59.924942954611964,
+          "median": 59.85902503293808,
+          "p95": 60.20849933598937,
+          "max": 60.837681159420285
+        },
+        "presentAgeMsAvg": {
+          "samples": 86,
+          "mean": 10.177887596899225,
+          "median": 10.193333333333332,
+          "p95": 12.930666666666667,
+          "max": 14.878333333333334
+        },
+        "rendererSubmitAgeMsAvg": {
+          "samples": 86,
+          "mean": 10.177887596899225,
+          "median": 10.193333333333332,
+          "p95": 12.930666666666667,
+          "max": 14.878333333333334
+        }
+      },
+      "deltas": {
+        "receiveDecode": {
+          "samples": 86,
+          "mean": 0.006535955411426427,
+          "median": 0.0,
+          "p95": 0.3333333333333357,
+          "max": 0.3333333333333357
+        },
+        "decodeVideo": {
+          "samples": 86,
+          "mean": -0.0021191151585108745,
+          "median": 0.0,
+          "p95": 0.3333333333333357,
+          "max": 0.3333333333333357
+        },
+        "videoSubmit": {
+          "samples": 86,
+          "mean": 0.0,
+          "median": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        }
+      }
+    }
+  },
+  "telemetry": {
+    "trackingSources": {
+      "videoFrameCallback": 91
+    },
+    "callbackGapCount": 2,
+    "presentedFramesJumpCount": 395,
+    "maxCallbackIntervalPerWindowMs": {
+      "samples": 91,
+      "mean": 36.0989010989011,
+      "median": 34,
+      "p95": 51,
+      "max": 216
+    },
+    "rendererSubmitAgeMs": {
+      "samples": 90,
+      "mean": 11.933333333333334,
+      "median": 8.5,
+      "p95": 27,
+      "max": 207
+    },
+    "sourceFpsUnavailableReasons": {
+      "mediaTimeDeltaTooSmall": 91
+    }
+  },
+  "cleanup": {
+    "reason": "menuActionExit",
+    "inputMs": 3,
+    "runtimeMs": 13,
+    "remoteCleanupMs": 1659,
+    "allExecutionCleanupSuccess": true,
+    "clientResourceCountsAfterClose": {
+      "animationCallbacks": 0,
+      "audioContexts": 0,
+      "audioElements": 0,
+      "audioNodes": 0,
+      "buttonReleaseTimers": 0,
+      "captureRequests": 0,
+      "currentRenderers": 0,
+      "frameRequests": 0,
+      "microphonePermissionRequests": 0,
+      "microphoneTracks": 0,
+      "nativeCallbackCount": 0,
+      "nativeFrameCallbacks": 0,
+      "pendingRenderers": 0,
+      "polledFrameCount": 0,
+      "quarantinedPermissionRequests": 0,
+      "readyTimers": 0,
+      "renderers": [],
+      "videoElements": 0
+    }
+  },
+  "unexercised": [
+    "TURN fallback",
+    "ICE restart",
+    "old SDP after peer rebuild",
+    "native recovery failure"
+  ]
+}

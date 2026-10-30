@@ -9,7 +9,6 @@ use tauri::{AppHandle, Manager};
 pub enum GamepadCommand {
     StartBackend,
     StopBackend,
-    GetRuntimeSnapshot,
     PlayRumble {
         request: OhMyGamepadRumbleRequestDto,
     },
@@ -42,9 +41,6 @@ pub async fn handle_rpc(
             GamepadCommand::StopBackend => {
                 service.stop_backend()?;
                 Ok(Value::Null)
-            }
-            GamepadCommand::GetRuntimeSnapshot => {
-                Ok(serde_json::to_value(service.get_runtime_snapshot()?)?)
             }
             GamepadCommand::PlayRumble { request } => {
                 Ok(serde_json::to_value(service.play_rumble(request)?)?)

@@ -109,6 +109,50 @@ fn sample(
 }
 
 #[test]
+fn standard_devices_preserve_raw_values_and_skip_logical_mapping_and_sinks() {
+    let ui = SharedUiSink::default();
+    let stream = SharedStreamSink::default();
+    let mut config = InputCoreConfig::default();
+    config.processing_mode = crate::InputProcessingMode::StandardDevices;
+    let mut core = InputCore::new(
+        config,
+        ScriptedBackend::new(vec![
+            BackendPollResult {
+                device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
+                samples: vec![sample("pad-a", 10, vec![0.03], vec![0.02, -0.01])],
+                ..Default::default()
+            },
+            BackendPollResult {
+                device_events: vec![DeviceLifecycleEvent::Removed {
+                    device_id: "pad-a".into(),
+                    observed_at_ms: 20,
+                }],
+                ..Default::default()
+            },
+        ]),
+        ui.clone(),
+        stream.clone(),
+    );
+    core.replace_bindings(vec![ohmygamepad_protocol::LogicalPadBindingDto {
+        slot: ohmygamepad_protocol::LogicalPadId::Pad0,
+        mode: OhMyGamepadBindingModeDto::Merged,
+        device_ids: vec!["pad-a".into()],
+    }]);
+    core.tick();
+    let snapshot = core.runtime_snapshot();
+    assert_eq!(snapshot.device_samples[0].state.buttons.south, 0.03);
+    assert_eq!(snapshot.device_samples[0].state.left_stick.x, 0.02);
+    assert!(snapshot.slots.is_empty());
+    assert!(snapshot.slot_bindings.is_empty());
+    assert!(core.last_active_at.is_empty());
+    assert!(ui.pads.borrow().is_empty());
+    assert!(stream.pads.borrow().is_empty());
+    core.tick();
+    assert!(core.runtime_snapshot().device_samples.is_empty());
+    assert!(core.runtime_snapshot().devices.is_empty());
+}
+
+#[test]
 fn default_single_active_binding_selects_latest_active_device() {
     let ui_sink = SharedUiSink::default();
     let ui_pads = ui_sink.pads.clone();

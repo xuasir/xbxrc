@@ -1,7 +1,7 @@
 use ohmygamepad_protocol::OhMyGamepadKeyboardMappingDto;
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 42] = [
+pub const APP_CONFIG_KEYS: [&str; 41] = [
     "locale",
     "theme",
     "fullscreen",
@@ -42,7 +42,6 @@ pub const APP_CONFIG_KEYS: [&str; 42] = [
     "gamepad_background_policy",
     "gamepad_control_source",
     "gamepad_game_controls",
-    "gamepad_device_profiles",
     "gamepad_keyboard_mapping",
 ];
 
@@ -99,7 +98,6 @@ pub fn default_config_map() -> Map<String, Value> {
         "gamepad_background_policy": "keep-active",
         "gamepad_control_source": "gamepad",
         "gamepad_game_controls": { "buttons": {}, "leftDeadzone": 0.1, "rightDeadzone": 0.1, "invertRightY": false },
-        "gamepad_device_profiles": [],
         "gamepad_keyboard_mapping": default_keyboard_mapping_value()
     });
 

@@ -258,6 +258,17 @@ fresh trace 必须绑定实际构建 revision、平台/WebView、target/runtime�
 - Implementation Entry: 按 `task-run` 的 complex 路径，在本计划完成后取得实施确认；建议首批范围为 P0 与 P1-a（启动取消、重试和 teardown）。
 
 
+### 2026-10-30 公共启动审查修复（用户已授权实施）
+
+- 本批代码修复及自动验证完成，见[实施报告](../reports/2026-10-30-common-startup-fixes.md)；前端216项、Rust140项及调用方编译检查通过，实机矩阵延续本RFC验证要求。
+- 范围：[5 项审查发现](../../dev-docs/validation/2026-10-30-common-startup-audit.md)。保持现有 runtime/bridge/Rust signaling 主线，复用 runtime token、session token 与协商锁。
+- TURN：每个 launch Promise 的拒绝先核验所属 runtime token；被替换的 attempt 只结束自身，当前 attempt 的真实错误进入既有终止路径。
+- SDP/ICE：同 session 后续 offer（含新 Peer 的 restart=false）读取旧 answer 基线；新媒体 ICE 轮次保留旧候选基线，增量 POST 保持基线。按新 answer 的 ufrag 过滤旧候选，保留缺少 ufrag 时的基线去重，结束标志跟随当前候选；排队 ICE 操作检查入队时的协商代际。chat/画质协商复用既有 ICE 时保留媒体候选状态。
+- 连接等待：远端结束且可用候选为零时返回明确错误；browser 完成信令后仍未 connected 的等待上界为 15 秒，按当前 token 尝试一次符合条件的 TURN，随后仍失败则终止。connected、stop、替换均清理计时器。
+- 错误收尾：fallback/recovery 整条 Promise 链统一 catch，错误上报资格在撤销 token 前确定；cleanup 错误单独记录并保留既有重试资源。
+- 验证：将 6 组缺陷回放转为正式安全结果断言，补新连接成功/取消、旧响应晚到、多个 ICE batch、EOC-only、同地址新 ufrag、chat/quality 不重置 ICE 等边界；运行前端串流及相关 transport 测试、Rust 公共库与调用方检查、fmt/lint/typecheck/build。
+- 风险：服务端候选缺少 ufrag 且跨代完全相同的快照需要保守等待；保持现有阶段期限并输出失败。实机网络、首帧、恢复链、media/steady supply、submit/present 长尾与帧 delta 需新 trace 验证。
+
 ### 2026-10-28 实施进展
 
 - 生命周期：上下文解析前建立 startup scope；按 attempt 取消，晚到 create 由原 scope 回收。UI execution generation 与 runtime launch generation 吸收退出、重试后的旧结果。

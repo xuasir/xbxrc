@@ -1,29 +1,5 @@
 // 这一层定义 Rust <-> TypeScript 的稳定 DTO，避免输入语义再次散落到业务代码里。
 
-export const GAMEPAD_BACKEND_KINDS = ['sdl3', 'mock'] as const
-export type GamepadBackendKindDto = (typeof GAMEPAD_BACKEND_KINDS)[number]
-
-export const GAMEPAD_CONNECTION_KINDS = ['usb', 'bluetooth', 'wireless-dongle', 'unknown'] as const
-export type GamepadConnectionKindDto = (typeof GAMEPAD_CONNECTION_KINDS)[number]
-
-export const GAMEPAD_POWER_STATES = ['unknown', 'wired', 'on-battery', 'charging', 'charged'] as const
-export type GamepadPowerStateDto = (typeof GAMEPAD_POWER_STATES)[number]
-
-export const GAMEPAD_DEVICE_TYPES = [
-  'unknown',
-  'standard',
-  'xbox360',
-  'xbox-one',
-  'ps3',
-  'ps4',
-  'ps5',
-  'nintendo-switch-pro',
-  'nintendo-switch-joycon-left',
-  'nintendo-switch-joycon-right',
-  'nintendo-switch-joycon-pair',
-] as const
-export type GamepadDeviceTypeDto = (typeof GAMEPAD_DEVICE_TYPES)[number]
-
 export const GAMEPAD_SLOT_IDS = ['pad-0', 'pad-1', 'pad-2', 'pad-3'] as const
 export type GamepadSlotDto = (typeof GAMEPAD_SLOT_IDS)[number]
 
@@ -55,53 +31,12 @@ export const GAMEPAD_RUMBLE_REJECTION_REASONS = [
 ] as const
 export type GamepadRumbleRejectionReasonDto = (typeof GAMEPAD_RUMBLE_REJECTION_REASONS)[number]
 
-export interface GamepadCapabilityFlagsDto {
-  supportsRumble: boolean
-  supportsTriggerRumble: boolean
-  reportsBattery: boolean
-  supportsPlayerIndex: boolean
-  reportsMapping: boolean
-  supportsTouchpad: boolean
-  supportsAccel: boolean
-  supportsGyro: boolean
-  supportsLed: boolean
-  reportsSerial: boolean
-}
-
-export const GAMEPAD_IDENTITY_CONFIDENCE = ['low', 'medium', 'high'] as const
-export type GamepadIdentityConfidenceDto = (typeof GAMEPAD_IDENTITY_CONFIDENCE)[number]
-
-export interface GamepadDeviceClassificationDto {
-  isHandheldBuiltin: boolean
-  isVirtualController: boolean
-  isSteamVirtual: boolean
-  isMotionNativeCandidate: boolean
-  confidence: GamepadIdentityConfidenceDto
-  reasons: string[]
-}
-
+/** 原生桥只传输连接设备的标准输入与触觉能力。 */
 export interface GamepadDeviceDto {
   deviceId: string
   name: string
-  backend: GamepadBackendKindDto | null
-  connection: GamepadConnectionKindDto | null
-  vendorId: number | null
-  productId: number | null
-  productVersion: number | null
-  firmwareVersion: number | null
-  serialNumber: string | null
-  path: string | null
-  mapping: string | null
-  playerIndex: number | null
-  gamepadType: GamepadDeviceTypeDto | null
-  powerState: GamepadPowerStateDto | null
-  batteryPercent: number | null
-  touchpadCount: number | null
-  touchpadFingerCount: number | null
-  connected: boolean
-  lastSeenAtMs: number
-  classification: GamepadDeviceClassificationDto
-  sdl3Capabilities: GamepadCapabilityFlagsDto
+  supportsRumble: boolean
+  state: LogicalPadStateDto
 }
 
 export interface LogicalStickDto {
@@ -165,7 +100,6 @@ export interface GamepadRumbleResultDto {
 
 /** 桌面只投影原生设备和未过滤标准样本，消费策略在公共控制器中派生。 */
 export interface GamepadRuntimeSnapshotDto {
-  deviceSamples: Array<{ deviceId: string, state: LogicalPadStateDto }>
   devices: GamepadDeviceDto[]
 }
 

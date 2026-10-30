@@ -43,7 +43,7 @@ interface ParsedCandidate {
 }
 
 const CANDIDATE_PREFIX = /^candidate:/i
-const END_OF_CANDIDATES_RE = /end-of-candidates/i
+const END_OF_CANDIDATES_RE = /^(?:a=)?end-of-candidates$/i
 
 function tokenizeCandidate(raw: string): string[] {
   const normalized = raw.replace(CANDIDATE_PREFIX, '').trim()
@@ -91,7 +91,7 @@ function parseCandidate(candidate: IceCandidateLike, idx: number): ParsedCandida
     transport: detectTransport(tokens),
     family: detectFamily(tokens),
     type: detectType(tokens),
-    isEndOfCandidates: END_OF_CANDIDATES_RE.test(raw) && tokens.length === 0,
+    isEndOfCandidates: raw.trim() === '' || END_OF_CANDIDATES_RE.test(raw.trim()),
     derivedFromTeredo: false,
   }
 }

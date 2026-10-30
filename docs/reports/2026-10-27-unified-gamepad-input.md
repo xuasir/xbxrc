@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-- 日期：2026-10-27
+- 日期：2026-10-27；三项复杂度收口：2026-10-30
 - 实施依据：[RFC](../rfcs/2026-10-27-unified-gamepad-input.md)、[手柄与设置设计](../isu/2026-10-27-browser-gamepad-rog-fse-design.md)
 - 状态：改造与本机验证完成。
 - 交付范围：桌面公共手柄接入、两种后端、输入路由、串流接线、触觉、四组设置、迁移、合同测试与架构文档。
@@ -78,7 +78,7 @@ SettingSectionList 和手柄页共用提取出的 SettingRow、setting-layout.cs
 
 ![复用现有设置样式的摇杆编辑器](assets/2026-10-27-gamepad/sticks-refined.png)
 
-## 本机检查
+## 首次交付的本机检查
 
 | 检查 | 最终结果 |
 | --- | --- |
@@ -96,6 +96,32 @@ SettingSectionList 和手柄页共用提取出的 SettingRow、setting-layout.cs
 补充回归确认键盘模拟的已按状态跨菜单保留，公共barrier等待真实keyup，DOM输入源blur时释放。
 
 已知基线告警：xbxengine中两处未使用metadata helper；lib test另外存在既有fixture未使用告警。
+
+## 2026-10-30 三项复杂度收口与验收
+
+| 修复 | 完成结果 |
+| --- | --- |
+| Native 桌面路径 | 启动配置使用 `StandardDevices`；跳过活动设备选择、槽位/profile映射、绑定同步和槽位状态发布。RPC初态和事件只投影连接设备的 `deviceId/name/supportsRumble/state`，保留未过滤小幅模拟值和原设备触觉 |
+| 设置生命周期 | `useGamepadPanelSession` 持有面板、录入与测试期限；关闭、切换、设备变化、卸载共用清理。草稿按编辑器打开时初始化；保存、触觉与延迟焦点恢复仅提交给当前会话 |
+| 遗留与重复逻辑 | 删除快照查询RPC及provider方法、Rust旧profile DTO、旧配置默认键/分组/归一化。键盘桥复用公共中性态，配置按变更应用，来源/映射改变先释放持键，完整回收DOM及配置监听 |
+
+通用 ohmygamepad 默认 `LogicalPads` 模式继续保留库级槽位与profile能力。旧存储通过既有patch写入方式保留，桌面活动配置集合已退出旧profile键。
+
+| 本轮检查 | 结果 |
+| --- | --- |
+| `pnpm lint:fix`、`pnpm exec vue-tsc --noEmit`、`pnpm build` | 通过 |
+| `pnpm test` | 全量46文件、373项通过 |
+| `cargo fmt` | 完成 |
+| `cargo test -p ohmygamepad-core -p ohmygamepad-sdl3 -p ohmygamepad-host --lib` | 41项通过，含标准态模式、热插拔、状态变化广播、槽位发布隔离与默认库模式回归 |
+| FFmpeg wrapper 下 `cargo test -p xbxrc --lib mods::gamepad` / `mods::config` | 1项桥接投影 + 6项配置测试通过 |
+| FFmpeg wrapper 下 `cargo check -p xbxrc` | 通过；保留2条既有metadata helper未使用告警 |
+| `git diff --check` | 通过 |
+
+新增自动回归覆盖：10秒录入与20秒测试独立期限、切换与卸载清理、物理设备更换/断连、键盘录入独立于物理设备、同类面板重开后的焦点/异步身份隔离，以及键盘持键变更配置、页面隐藏、重复安装和卸载后的监听释放。串流持键repeat继续抑制浏览器默认动作。
+
+真实设置组件使用既有 `.codex-tmp/gamepad-preview.html` 的内存RPC与模拟设备验证：取消反转草稿后重开保持关闭；应用后重开显示开启；A录入模拟B后草稿完成交换并聚焦A；测试中断连自动退出并更新控件可用性。保存均留在验证页面内存，真实设备与Windows/ROG范围继续按平台待验项执行。
+
+![本轮设置生命周期验证](assets/2026-10-27-gamepad/lifecycle-2026-10-30.png)
 
 ## 平台待验与交付边界
 

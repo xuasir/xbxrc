@@ -7,13 +7,14 @@ import { applyGameControls, defaultGameControls } from '@shared/gamepad/preferen
 import { gamepadConfig, inputController, saveGamepadConfig } from '@shared/gamepad/runtime'
 import { assignGameButton, BUTTON_LABELS } from '@shared/gamepad/settings-model'
 import { BUTTON_KEYS, clonePadState } from '@shared/gamepad/state'
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, toRaw } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
 import SettingModalShell from '../../components/settings/SettingModalShell.vue'
 import SettingRow from '../../components/settings/SettingRow.vue'
 import SettingSingleSelectPopupSheet from '../../components/settings/SettingSingleSelectPopupSheet.vue'
 import SettingToggleRow from '../../components/settings/SettingToggleRow.vue'
+import { useGamepadPanelSession } from './useGamepadPanelSession'
 
 const props = defineProps<{ scopeId: string, navNodeBaseId: string }>()
 const { t } = useI18n()
@@ -21,7 +22,6 @@ const tr = (key: string) => t(`gamepadSettings.${key}`)
 const snapshot = shallowRef(inputController.getSnapshot())
 const prefs = computed(() => snapshot.value.preferences)
 const activeDevice = computed(() => snapshot.value.devices.find(device => device.id === snapshot.value.activeDeviceId))
-const pane = ref<'layout' | 'sticks' | 'keyboard' | 'test' | 'advanced' | 'reset' | null>(null)
 const paneScope = 'setting.gamepad.editor'
 const draft = ref(defaultGameControls())
 const keyboardDraft = ref<GamepadKeyboardMappingDto>(structuredClone(DEFAULT_KEYBOARD_MAPPING))
@@ -29,16 +29,13 @@ const keyboardEnabled = ref(false)
 const saving = ref(false)
 const rumbleTesting = ref(false)
 const message = ref('')
-const capturing = ref<ButtonKey | GamepadKeyboardControlDto | null>(null)
-const captureDevice = ref<string | null>(null)
-const countdown = ref(0)
+const panel = useGamepadPanelSession(inputController, target => document.getElementById(`${paneScope}.${target}`)?.focus({ preventScroll: true }))
+const { pane, capturing, captureCountdown, testCountdown } = panel
 const frequency = ref(0)
 let sampleCount = 0
 let lastSequence = -1
 let measurementStart = performance.now()
-let timer: ReturnType<typeof setInterval> | undefined
 let previousPhysical = clonePadState(snapshot.value.physicalState)
-let captureDeadline = 0
 
 const choice = ref<{
   title: string
@@ -84,76 +81,50 @@ async function persist(patch: Record<string, unknown>): Promise<boolean> {
     return false
   saving.value = true
   message.value = ''
+  const token = panel.getRevision()
   try {
     await saveGamepadConfig(patch)
+    if (!panel.isCurrent(token))
+      return false
     message.value = tr('saved')
     return true
   }
   catch (error) {
-    message.value = `${tr('saveFailed')} ${error instanceof Error ? error.message : String(error)}`
+    if (panel.isCurrent(token))
+      message.value = `${tr('saveFailed')} ${error instanceof Error ? error.message : String(error)}`
     return false
   }
   finally { saving.value = false }
 }
 
 function stopCapture(): void {
-  const target = capturing.value
-  const currentPane = pane.value
-  capturing.value = null
-  captureDevice.value = null
-  clearInterval(timer)
-  timer = undefined
-  inputController.setUiCapture('settings:capture', false)
-  if (target) {
-    void nextTick(() => {
-      if (pane.value === currentPane && !capturing.value)
-        document.getElementById(`${paneScope}.${target}`)?.focus({ preventScroll: true })
-    })
-  }
+  panel.stopCapture()
 }
 function closePane(): void {
-  if (saving.value)
-    return
-  stopCapture()
-  inputController.setUiCapture('settings:test', false)
-  inputController.setUiCapture('settings:panel', false)
-  void inputController.stopRumble()
-  pane.value = null
+  choice.value = null
+  rumbleTesting.value = false
+  panel.close()
 }
 function openPane(next: NonNullable<typeof pane.value>): void {
-  stopCapture()
+  choice.value = null
+  rumbleTesting.value = false
   message.value = ''
-  draft.value = structuredClone(prefs.value.gameControls)
-  const stored = gamepadConfig().gamepad_keyboard_mapping as GamepadKeyboardMappingDto | undefined
-  keyboardDraft.value = structuredClone(stored?.bindings?.length ? stored : DEFAULT_KEYBOARD_MAPPING)
-  keyboardEnabled.value = prefs.value.controlSource === 'keyboard'
-  pane.value = next
-  inputController.setUiCapture('settings:panel', true)
-  if (next === 'test') {
-    inputController.setUiCapture('settings:test', true, true)
-    countdown.value = 20
-    timer = setInterval(() => {
-      if (--countdown.value <= 0)
-        closePane()
-    }, 1000)
+  if (next === 'layout' || next === 'sticks' || next === 'test')
+    draft.value = structuredClone(prefs.value.gameControls)
+  if (next === 'keyboard') {
+    const stored = gamepadConfig().gamepad_keyboard_mapping as GamepadKeyboardMappingDto | undefined
+    keyboardDraft.value = structuredClone(stored?.bindings?.length ? stored : DEFAULT_KEYBOARD_MAPPING)
+    keyboardEnabled.value = prefs.value.controlSource === 'keyboard'
   }
+  panel.open(next, snapshot.value.activeDeviceId)
 }
 function startCapture(target: ButtonKey | GamepadKeyboardControlDto): void {
-  stopCapture()
-  capturing.value = target
-  captureDevice.value = snapshot.value.activeDeviceId
   previousPhysical = clonePadState(snapshot.value.physicalState)
-  captureDeadline = performance.now() + 10_000
-  countdown.value = 10
-  inputController.setUiCapture('settings:capture', true, true)
-  timer = setInterval(() => {
-    countdown.value = Math.max(0, Math.ceil((captureDeadline - performance.now()) / 1000))
-    if (!countdown.value)
-      stopCapture()
-  }, 250)
+  panel.startCapture(target, snapshot.value.activeDeviceId)
 }
 const dispose = inputController.subscribe((next) => {
   snapshot.value = next
+  panel.updateDevice(next.activeDeviceId)
   if (next.sequence !== lastSequence) {
     ++sampleCount
     lastSequence = next.sequence
@@ -165,17 +136,11 @@ const dispose = inputController.subscribe((next) => {
     measurementStart = now
   }
   if (capturing.value && pane.value === 'layout') {
-    if (next.activeDeviceId !== captureDevice.value) {
-      stopCapture()
-      return
-    }
     const source = BUTTON_KEYS.find(key => previousPhysical.buttons[key] <= 0.5 && next.physicalState.buttons[key] > 0.5)
     if (source && assignGameButton(draft.value, capturing.value as ButtonKey, source))
       stopCapture()
     previousPhysical = clonePadState(next.physicalState)
   }
-  if (pane.value === 'test' && !next.activeDeviceId)
-    closePane()
 })
 function onKey(event: KeyboardEvent): void {
   if (choice.value) {
@@ -211,10 +176,7 @@ function onKey(event: KeyboardEvent): void {
 window.addEventListener('keydown', onKey, true)
 onBeforeUnmount(() => {
   dispose()
-  stopCapture()
-  inputController.setUiCapture('settings:test', false)
-  inputController.setUiCapture('settings:panel', false)
-  void inputController.stopRumble()
+  panel.dispose()
   window.removeEventListener('keydown', onKey, true)
 })
 
@@ -269,12 +231,20 @@ async function testRumble(): Promise<void> {
   if (rumbleTesting.value)
     return
   rumbleTesting.value = true
+  const token = panel.getRevision()
   try {
     const result = await inputController.rumble({ durationMs: 200, startDelayMs: 0, strongMagnitude: 0.3, weakMagnitude: 0.3, leftTrigger: 0, rightTrigger: 0, repeat: 0 }, 'test')
-    message.value = tr(result === 'applied' ? 'rumbleSent' : result === 'unsupported' ? 'unsupported' : 'rumbleFailed')
-    await new Promise(resolve => setTimeout(resolve, 200))
+    if (panel.isCurrent(token))
+      message.value = tr(result === 'applied' ? 'rumbleSent' : result === 'unsupported' ? 'unsupported' : 'rumbleFailed')
   }
-  finally { rumbleTesting.value = false }
+  catch {
+    if (panel.isCurrent(token))
+      message.value = tr('rumbleFailed')
+  }
+  finally {
+    if (panel.isCurrent(token))
+      rumbleTesting.value = false
+  }
 }
 async function resetPreferences(): Promise<void> {
   if (await persist({ gamepad_background_policy: 'keep-active', gamepad_control_source: 'gamepad', gamepad_game_controls: defaultGameControls(), gamepad_keyboard_mapping: structuredClone(DEFAULT_KEYBOARD_MAPPING), vibration: true, vibration_strength: 'realistic', ui_haptics: false }))
@@ -364,7 +334,7 @@ function exportDiagnostic(): void {
       </p>
       <template v-if="capturing">
         <p role="status">
-          {{ tr('captureHint') }} · {{ countdown }}s
+          {{ tr('captureHint') }} · {{ captureCountdown }}s
         </p>
         <button class="setting-panel__action" @click="stopCapture">
           {{ tr('cancelCapture') }}
@@ -396,7 +366,7 @@ function exportDiagnostic(): void {
         </SettingRow>
       </template>
       <template v-if="pane === 'test'">
-        <p>{{ tr('testRemaining') }} {{ countdown }}s</p>
+        <p>{{ tr('testRemaining') }} {{ testCountdown }}s</p>
         <section v-for="view in inputViews" :key="view.label" class="pad-test-section">
           <h3 class="pad-test-title">
             {{ view.label }}
@@ -429,7 +399,7 @@ function exportDiagnostic(): void {
         <Focusable :id="`${paneScope}.export`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="exportDiagnostic">
           {{ tr('export') }}
         </Focusable>
-        <Focusable :id="`${paneScope}.reset`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="pane = 'reset'">
+        <Focusable :id="`${paneScope}.reset`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="openPane('reset')">
           {{ tr('reset') }}
         </Focusable>
       </template>

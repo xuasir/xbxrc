@@ -5,8 +5,29 @@ export type FrameIdentityReason
     | 'pollAlreadyDelivered' | 'nativeAlreadyDelivered' | 'nativeCounterUnchanged'
     | 'counterUnchanged' | 'mediaTimeUnchanged' | 'identityUnavailable'
 
+interface PairedCounterValues {
+  playbackQualityTotalFrames: number | null
+  playbackQualityDroppedFrames: number | null
+  playbackQualityFrames: number | null
+  webkitTotalFrames: number | null
+  webkitDroppedFrames: number | null
+  webkitFrames: number | null
+}
+
+interface PairedCounterEvidence extends PairedCounterValues {
+  observedAtMs: number
+  previousObservedAtMs: number | null
+  playbackQualityDeltaSincePreviousSample: number | null
+  webkitDeltaSincePreviousSample: number | null
+}
+
 export interface FrameIdentityEvidence {
   atMs: number
+  callbackEnteredAtMs?: number
+  callbackIntervalMs?: number | null
+  callbackTimestampIntervalMs?: number | null
+  callbackClockLagMs?: number | null
+  pairedCounters?: PairedCounterEvidence
   trackingSource: VideoFrameTrackingSource
   newFrame: boolean
   reason: FrameIdentityReason
@@ -31,14 +52,20 @@ export interface FrameIdentityEvidence {
   previousCounterSource?: 'playbackQuality' | 'webkit'
   counterDelta: number | null
   counterReset: boolean
+  nativeReset: boolean
   counterAdvance: number | null
   nativeAdvance: number | null
   creditedNativeFrames: number | null
+  expiredNativeFrames?: number
+  nativeCreditWindowExpired?: boolean
+  counterProgressAgeMs?: number | null
   presentedFramesDelta: number | null
   uncountedNativeBefore: number | null
   uncountedNativeAfter: number | null
-  counterAheadBefore: number | null
-  counterAheadAfter: number | null
+  polledAdvanceBefore: number | null
+  polledAdvanceAfter: number | null
+  creditedPollFrames: number
+  expiredPollFrames: number
 }
 
 export function finiteIdentityValue(value: number | undefined): number | null {
@@ -55,6 +82,10 @@ export function identityValueState(value: number | undefined, previous: number |
   return value > previous ? 'advanced' : value === previous ? 'unchanged' : 'regressed'
 }
 
+function callbackTiming() {
+  return { count: 0, intervalCount: 0, intervalTotalMs: 0, intervalMaxMs: 0, clockLagCount: 0, clockLagTotalMs: 0, clockLagMaxMs: 0 }
+}
+
 /** dev trace 首次读取后采集；接受/拒绝各至多2Hz，合计最多8条证据。 */
 export class VideoFrameIdentityObservation {
   enabled = false
@@ -67,6 +98,56 @@ export class VideoFrameIdentityObservation {
   private nextRejectedAtMs = 0
   private sampledCount = 0
   private nativeUnchangedWithMediaAdvanceCount = 0
+  private readonly lastCallback = new Map<VideoFrameTrackingSource, { atMs: number, enteredAtMs: number }>()
+  private readonly timing = { videoFrameCallback: callbackTiming(), animationFrame: callbackTiming(), timeupdate: callbackTiming() }
+  private readonly counterCadence = { updateCount: 0, advanceTotal: 0, deltaMax: 0, intervalCount: 0, intervalTotalMs: 0, intervalMaxMs: 0, resetCount: 0, updatesBySource: { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0 } }
+  private previousCounterPair?: PairedCounterEvidence
+
+  resetTimingBaseline(): void {
+    this.lastCallback.clear()
+    this.previousCounterPair = undefined
+  }
+
+  recordTiming(source: VideoFrameTrackingSource, atMs: number, enteredAtMs: number, counterDelta: number | undefined, progressAgeMs: number, counterReset: boolean) {
+    const previous = this.lastCallback.get(source)
+    const interval = previous ? enteredAtMs - previous.enteredAtMs : undefined
+    const timestampInterval = previous ? atMs - previous.atMs : undefined
+    const clockLag = enteredAtMs - atMs
+    this.lastCallback.set(source, { atMs, enteredAtMs })
+    const timing = this.timing[source]
+    timing.count++
+    if (interval !== undefined && Number.isFinite(interval) && interval >= 0) {
+      timing.intervalCount++
+      timing.intervalTotalMs += interval
+      timing.intervalMaxMs = Math.max(timing.intervalMaxMs, interval)
+    }
+    if (Number.isFinite(clockLag)) {
+      timing.clockLagCount++
+      timing.clockLagTotalMs += clockLag
+      timing.clockLagMaxMs = Math.max(timing.clockLagMaxMs, clockLag)
+    }
+    this.counterCadence.resetCount += Number(counterReset)
+    if (counterDelta !== undefined && Number.isFinite(counterDelta) && counterDelta > 0) {
+      this.counterCadence.updateCount++
+      this.counterCadence.advanceTotal += counterDelta
+      this.counterCadence.deltaMax = Math.max(this.counterCadence.deltaMax, counterDelta)
+      this.counterCadence.updatesBySource[source]++
+      if (Number.isFinite(progressAgeMs) && progressAgeMs > 0) {
+        this.counterCadence.intervalCount++
+        this.counterCadence.intervalTotalMs += progressAgeMs
+        this.counterCadence.intervalMaxMs = Math.max(this.counterCadence.intervalMaxMs, progressAgeMs)
+      }
+    }
+    return { callbackEnteredAtMs: enteredAtMs, callbackIntervalMs: finiteIdentityValue(interval), callbackTimestampIntervalMs: finiteIdentityValue(timestampInterval), callbackClockLagMs: finiteIdentityValue(clockLag) }
+  }
+
+  pairCounters(observedAtMs: number, values: PairedCounterValues): PairedCounterEvidence {
+    const previous = this.previousCounterPair
+    const delta = (value: number | null, before: number | null | undefined) => value === null || before == null ? null : value - before
+    const pair = { ...values, observedAtMs, previousObservedAtMs: previous?.observedAtMs ?? null, playbackQualityDeltaSincePreviousSample: delta(values.playbackQualityFrames, previous?.playbackQualityFrames), webkitDeltaSincePreviousSample: delta(values.webkitFrames, previous?.webkitFrames) }
+    this.previousCounterPair = pair
+    return pair
+  }
 
   count(source: VideoFrameTrackingSource, accepted: boolean, reason: FrameIdentityReason, identityConflict: boolean): void {
     this.observed[source]++
@@ -98,7 +179,7 @@ export class VideoFrameIdentityObservation {
       this.startedAtMs = performance.now()
     }
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       collectionStartedAtMs: this.startedAtMs,
       observed: { ...this.observed },
       accepted: { ...this.accepted },
@@ -109,9 +190,11 @@ export class VideoFrameIdentityObservation {
       },
       reasons: { ...this.reasons },
       nativeUnchangedWithMediaAdvanceCount: this.nativeUnchangedWithMediaAdvanceCount,
+      callbackTiming: { videoFrameCallback: { ...this.timing.videoFrameCallback }, animationFrame: { ...this.timing.animationFrame }, timeupdate: { ...this.timing.timeupdate } },
+      counterCadence: { ...this.counterCadence, updatesBySource: { ...this.counterCadence.updatesBySource } },
       sampledCount: this.sampledCount,
       evidenceLimit: 8,
-      evidence: this.samples.map(sample => ({ ...sample })),
+      evidence: this.samples.map(sample => ({ ...sample, pairedCounters: sample.pairedCounters ? { ...sample.pairedCounters } : undefined })),
     }
   }
 }

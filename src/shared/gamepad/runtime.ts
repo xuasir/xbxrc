@@ -14,9 +14,28 @@ let saved: Record<string, unknown> = {}
 let saveQueue: Promise<void> = Promise.resolve()
 let disposeFocus: (() => void) | undefined
 let disposeMenu: (() => void) | undefined
+const configListeners = new Set<(config: Record<string, unknown>) => void>()
 
 export function gamepadConfig(): Record<string, unknown> {
   return { ...saved }
+}
+
+export function subscribeGamepadConfig(listener: (config: Record<string, unknown>) => void): () => void {
+  configListeners.add(listener)
+  listener(gamepadConfig())
+  return () => configListeners.delete(listener)
+}
+
+function applySavedConfig(): void {
+  inputController.configure(parseGamepadPreferences(saved))
+  for (const listener of configListeners) {
+    try {
+      listener(gamepadConfig())
+    }
+    catch (error) {
+      console.warn('[gamepad] configuration listener failed', error)
+    }
+  }
 }
 
 export function saveGamepadConfig(patch: Record<string, unknown>): Promise<void> {
@@ -24,7 +43,7 @@ export function saveGamepadConfig(patch: Record<string, unknown>): Promise<void>
   const save = saveQueue.then(async () => {
     const result = await rpc.config.set({ patch: values })
     saved = result as Record<string, unknown>
-    inputController.configure(parseGamepadPreferences(saved))
+    applySavedConfig()
   })
   saveQueue = save.catch(() => {})
   return save
@@ -41,7 +60,7 @@ export function initializeGamepadInput(): Promise<void> {
       inputController.setInitializationError(`configReadFailed: ${String(error)}`)
     }
     const preferences = parseGamepadPreferences(saved)
-    inputController.configure(preferences)
+    applySavedConfig()
     disposeMenu = inputController.onMenuRequested(() => {
       window.dispatchEvent(new CustomEvent('stream-menu-toggle-requested', { detail: { source: 'gamepad', combo: 'menu+view' } }))
     })

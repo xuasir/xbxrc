@@ -193,10 +193,10 @@ describe('renderers', () => {
 
     expect(video.dataset.renderPipeline).toBe('webgl2')
     expect((video as unknown as LocalVideoElement).insertAdjacentElement).toHaveBeenCalled()
-    // 主 pass 9 个 uniform + 呈现 pass 5 个（outputResolution/brightness/contrast/saturation/data）。
-    expect(gl.getUniformLocation).toHaveBeenCalledTimes(14)
+    // 等尺寸只准备当前主pass；映射shader按实际需要准备。
+    expect(gl.getUniformLocation).toHaveBeenCalledTimes(9)
     expect(gl.uniform1f).toHaveBeenCalled()
-    expect(gl.texSubImage2D).toHaveBeenCalled()
+    expect(gl.texImage2D).toHaveBeenCalledWith(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video)
     expect(canvasNode.remove).toHaveBeenCalled()
     expect(canvasNode.addEventListener).toHaveBeenCalled()
     expect(canvasNode.removeEventListener).toHaveBeenCalled()
@@ -317,13 +317,12 @@ describe('renderers', () => {
       gl.TEXTURE_2D,
       0,
       gl.RGBA,
-      1920,
-      1080,
-      0,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
-      null,
+      video,
     )
+    expect(video.videoWidth).toBe(1920)
+    expect(video.videoHeight).toBe(1080)
   })
 
   it('sharpens at source resolution before upscaling when present target differs', async () => {
@@ -1252,6 +1251,6 @@ describe('renderers', () => {
     const colorValues = gl.uniform1f.mock.calls
       .map(call => call[1])
       .filter(value => value === 100 || value === 105 || value === 110 || value === 95)
-    expect(colorValues.filter(value => value !== 100)).toEqual([105, 110, 95, 105, 110, 95])
+    expect(colorValues.filter(value => value !== 100)).toEqual([105, 110, 95])
   })
 })

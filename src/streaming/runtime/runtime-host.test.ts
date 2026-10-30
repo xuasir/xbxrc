@@ -1,7 +1,7 @@
 import type { RuntimeLaunchSpec } from '../types'
 import type { RuntimeEvent } from './runtime-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useStreamRuntimeHost } from './runtime-host'
+import { INITIAL_CONNECTION_TIMEOUT_MS, useStreamRuntimeHost } from './runtime-host'
 
 const harness = vi.hoisted(() => ({ factory: vi.fn(), trace: vi.fn(), recovery: vi.fn() }))
 vi.mock('../../services/rpc', () => ({ rpc: { runtimeTrace: { recordEvent: harness.trace }, streaming: { decideRecovery: harness.recovery } } }))
@@ -10,10 +10,12 @@ vi.mock('./xbxengine-runtime', () => ({ createXbxEngineRuntime: harness.factory 
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((yes) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((yes, no) => {
     resolve = yes
+    reject = no
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 function port() {
   return {
@@ -34,8 +36,8 @@ function spec(id = 'session'): RuntimeLaunchSpec {
     render: { displayOptions: {}, enableAudioControl: false, videoFormat: 'Contain' },
   } as RuntimeLaunchSpec
 }
-function host() {
-  return useStreamRuntimeHost({ playerElementId: 'player', getSuperResolutionExperimental: () => false, onConnectionStateChange: vi.fn(), onPresentationMilestoneChange: vi.fn(), onRuntimeError: vi.fn(), onRuntimePhaseChange: vi.fn(), onFrameReady: vi.fn() })
+function host(overrides: Partial<Parameters<typeof useStreamRuntimeHost>[0]> = {}) {
+  return useStreamRuntimeHost({ playerElementId: 'player', getSuperResolutionExperimental: () => false, onConnectionStateChange: vi.fn(), onPresentationMilestoneChange: vi.fn(), onRuntimeError: vi.fn(), onRuntimePhaseChange: vi.fn(), onFrameReady: vi.fn(), ...overrides })
 }
 beforeEach(() => {
   vi.useFakeTimers()
@@ -51,6 +53,130 @@ afterEach(() => {
 })
 
 describe('runtime host lifecycle', () => {
+  it.each(['during-stop', 'after-fallback-launch'])('preserves TURN handoff when the previous launch rejects %s', async (timing) => {
+    const old = port()
+    const next = port()
+    const launching = deferred<void>()
+    old.launch.mockReturnValue(launching.promise)
+    if (timing === 'during-stop')
+      old.stop.mockImplementation(async () => launching.reject(new Error('streamRuntimeSuperseded')))
+    harness.factory.mockReturnValueOnce(old).mockReturnValueOnce(next)
+    const onRuntimeError = vi.fn()
+    const vm = host({ onRuntimeError })
+    const launchSpec = spec()
+    launchSpec.turnSource = 'fallback'
+    launchSpec.runtime.turnServer = { url: 'turn:192.0.2.10:3478', username: 'test-user', credential: 'test-credential' }
+    const launch = vm.startRuntime(launchSpec)
+    await vi.advanceTimersByTimeAsync(500)
+    old.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state: 'failed' })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(next.launch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ runtime: expect.objectContaining({ turnServer: launchSpec.runtime.turnServer }) }), expect.anything())
+    if (timing === 'after-fallback-launch')
+      launching.reject(new Error('streamRuntimeSuperseded'))
+    await launch
+    expect(next.stop).not.toHaveBeenCalled()
+    expect(onRuntimeError).not.toHaveBeenCalled()
+    await vm.closeRuntime()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([false, true])('reports native recovery rejection and consumes cleanup failure=%s', async (stopFails) => {
+    const runtime = port()
+    runtime.requestReconnect.mockRejectedValueOnce(new Error('nativeReconnectFailed'))
+    if (stopFails)
+      runtime.stop.mockRejectedValueOnce(new Error('nativeStopFailed'))
+    harness.factory.mockReturnValue(runtime)
+    const onRuntimeError = vi.fn()
+    const vm = host({ onRuntimeError })
+    const launchSpec = spec()
+    launchSpec.runtime.mode = 'rust-owned'
+    const launch = vm.startRuntime(launchSpec)
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    runtime.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state: 'failed' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onRuntimeError).toHaveBeenCalledExactlyOnceWith('nativeReconnectFailed')
+    expect(runtime.stop).toHaveBeenCalledTimes(1)
+    await vm.closeRuntime()
+  })
+
+  it('absorbs an old native recovery rejection after a new runtime starts', async () => {
+    const old = port()
+    const next = port()
+    const recovery = deferred<void>()
+    old.requestReconnect.mockReturnValue(recovery.promise)
+    harness.factory.mockReturnValueOnce(old).mockReturnValueOnce(next)
+    const onRuntimeError = vi.fn()
+    const vm = host({ onRuntimeError })
+    const launchSpec = spec('old')
+    launchSpec.runtime.mode = 'rust-owned'
+    const launch = vm.startRuntime(launchSpec)
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    old.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state: 'failed' })
+    await vi.advanceTimersByTimeAsync(0)
+    const replacement = vm.startRuntime(spec('new'))
+    await vi.advanceTimersByTimeAsync(500)
+    await replacement
+    recovery.reject(new Error('lateNativeFailure'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onRuntimeError).not.toHaveBeenCalled()
+    expect(next.stop).not.toHaveBeenCalled()
+    await vm.closeRuntime()
+  })
+
+  it('terminates a browser connection that stays new after signaling', async () => {
+    const runtime = port()
+    harness.factory.mockReturnValue(runtime)
+    const onRuntimeError = vi.fn()
+    const vm = host({ onRuntimeError })
+    const launch = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    await vi.advanceTimersByTimeAsync(INITIAL_CONNECTION_TIMEOUT_MS)
+    expect(onRuntimeError).toHaveBeenCalledExactlyOnceWith('iceConnectionTimeout')
+    expect(runtime.stop).toHaveBeenCalledExactlyOnceWith('initial-connection-timeout')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['connected', 'closed'] as const)('clears the initial connection deadline on %s', async (state) => {
+    const runtime = port()
+    harness.factory.mockReturnValue(runtime)
+    const onRuntimeError = vi.fn()
+    const vm = host({ onRuntimeError })
+    const launch = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    if (state === 'connected')
+      runtime.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state })
+    else await vm.closeRuntime()
+    await vi.advanceTimersByTimeAsync(INITIAL_CONNECTION_TIMEOUT_MS)
+    expect(onRuntimeError).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    await vm.closeRuntime()
+  })
+
+  it('tries TURN once after a direct connection timeout and bounds the TURN wait', async () => {
+    const old = port()
+    const next = port()
+    harness.factory.mockReturnValueOnce(old).mockReturnValueOnce(next)
+    const onRuntimeError = vi.fn()
+    const vm = host({ onRuntimeError })
+    const launchSpec = spec()
+    launchSpec.turnSource = 'fallback'
+    launchSpec.runtime.turnServer = { url: 'turn:192.0.2.10:3478', username: 'test-user', credential: 'test-credential' }
+    const launch = vm.startRuntime(launchSpec)
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    await vi.advanceTimersByTimeAsync(INITIAL_CONNECTION_TIMEOUT_MS + 120)
+    expect(next.launch).toHaveBeenCalledTimes(1)
+    expect(onRuntimeError).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(INITIAL_CONNECTION_TIMEOUT_MS)
+    expect(next.stop).toHaveBeenCalledExactlyOnceWith('initial-connection-timeout')
+    expect(onRuntimeError).toHaveBeenCalledExactlyOnceWith('iceConnectionTimeout')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('retains the latest microphone intent when an older toggle fails late', async () => {
     const older = deferred<boolean>()
     const latest = deferred<boolean>()

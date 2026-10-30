@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-30",
+  "regressionsAdded": {
+    "runtimeHost": 9,
+    "browserNegotiation": 2,
+    "webRtcTransport": 1,
+    "rustSignalingState": 6,
+    "rustHttpSignaling": 4
+  },
+  "validation": {
+    "streamingAndTransportTests": 216,
+    "testFiles": 23,
+    "rustLibraryTests": 140,
+    "hostTestsAfterFixtureTypeFix": 20,
+    "lint": "passed",
+    "vueTsc": "passed",
+    "viteBuild": "passed",
+    "cargoCheck": [
+      "xbxrc",
+      "xbox-ios-bridge"
+    ],
+    "cargoFmt": "passed",
+    "diffCheck": "passed"
+  },
+  "connectionWaitAfterBrowserSignalingMs": 15000,
+  "sourceSha256": {
+    "src/streaming/runtime/runtime-host.ts": "db67e882e6ed77bab2779a2105a574fd3fad18fd992bf5b13d1384c0f9705915",
+    "src/streaming/runtime/browser-negotiation.ts": "cdc153673c40b91a9c0f3556d78721f4b3f4046941e587a5f51cb151a0d40a64",
+    "src/player/infra/webrtc/WebRtcTransport.ts": "aa72401b736b3b9448c48f032e7b2e7d68fd9c237460ee65fd85959b4ee31a2b",
+    "crates/xbox-streaming/src/session/signaling/flow.rs": "643c18cd7d2f4fe15ca94534990f4310030809471b663576324ec4b870ae3840",
+    "crates/xbox-streaming/src/session/signaling/state.rs": "77e9133b3606e35c230124e7575fb06fc4d22e015ea538e653b5e582d4ec66a5"
+  },
+  "liveStreamingValidation": "pending"
+}

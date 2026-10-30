@@ -9,8 +9,8 @@ use std::{
 };
 
 use ohmygamepad_core::{
-    ArcSwap, DeviceProfile, HapticsProvider, InputCoreConfig, InputRuntimeError,
-    InputRuntimeHandle, NoopStreamSink, NoopUiSink,
+    ArcSwap, DeviceProfile, HapticsProvider, InputCoreConfig, InputProcessingMode,
+    InputRuntimeError, InputRuntimeHandle, NoopStreamSink, NoopUiSink,
 };
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadId, LogicalPadSnapshotDto, LogicalPadStateDto,
@@ -120,6 +120,7 @@ pub fn derive_input_route(
 }
 
 pub struct OhMyGamepadService {
+    processing_mode: InputProcessingMode,
     runtime: InputRuntimeHandle,
     state: Mutex<OhMyGamepadServiceState>,
     /// When true, RTC input loop may forward logical pad samples to the stream transport.
@@ -182,6 +183,7 @@ impl OhMyGamepadService {
             now_ms,
         );
 
+        let processing_mode = config.core.processing_mode;
         let runtime = spawn_sdl3_input_runtime_with_source(
             normalize_core_config(config.core, &config.sampling_strategy),
             config.backend,
@@ -199,6 +201,7 @@ impl OhMyGamepadService {
         };
 
         Self {
+            processing_mode,
             runtime,
             state: Mutex::new(OhMyGamepadServiceState {
                 sampling_strategy: config.sampling_strategy,
@@ -659,6 +662,9 @@ impl OhMyGamepadService {
         &self,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
         let snapshot = self.runtime.get_runtime_snapshot()?;
+        if self.processing_mode == InputProcessingMode::StandardDevices {
+            return Ok(snapshot);
+        }
         if self.reconcile_sampling_binding(&snapshot)? {
             self.runtime.get_runtime_snapshot()
         } else {
@@ -750,6 +756,9 @@ fn normalize_core_config(
     mut core: InputCoreConfig,
     strategy: &MultiControllerSamplingStrategy,
 ) -> InputCoreConfig {
+    if core.processing_mode == InputProcessingMode::StandardDevices {
+        return core;
+    }
     if core.bindings.is_empty() {
         core.bindings = vec![match strategy.mode {
             MultiControllerSamplingMode::Merge => LogicalPadBindingDto {
@@ -934,6 +943,25 @@ fn now_ms() -> u64 {
 mod tests {
     use super::*;
     use crate::NoopSdl3Source;
+
+    #[test]
+    fn standard_device_service_keeps_sampling_strategy_out_of_the_desktop_path() {
+        let mut config = OhMyGamepadServiceConfig::default();
+        config.core.processing_mode = InputProcessingMode::StandardDevices;
+        config.desktop_keyboard = None;
+        config.sampling_strategy.enable_keyboard_fallback = false;
+        config.sampling_strategy.primary_device_id = Some("old-primary".into());
+        let service = OhMyGamepadService::spawn_with_source(config, NoopSdl3Source);
+        let initial = service.snapshot().unwrap();
+        assert!(initial.slots.is_empty());
+        assert!(initial.slot_bindings.is_empty());
+        assert!(initial.devices.is_empty());
+        service
+            .set_primary_sampling_device(Some("new-primary".into()))
+            .unwrap();
+        assert!(service.snapshot().unwrap().slot_bindings.is_empty());
+        service.shutdown().unwrap();
+    }
 
     #[test]
     fn empty_keyboard_mapping_resets_to_default_mapping() {

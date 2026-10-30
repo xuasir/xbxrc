@@ -275,6 +275,12 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private currentViewportHeightCss: number | null = null
   private explicitPresentTarget = false
   private textureAllocated = false
+  private uniformOptions?: StreamPlayerOptions
+  private uniformSourceWidth = 0
+  private uniformSourceHeight = 0
+  private uniformOutputWidth = 0
+  private uniformOutputHeight = 0
+  private uniformUsesSharpenTarget = false
   private hasDrawnFrame = false
   private contextListenersBound = false
   private outputResolutionUniform: WebGLUniformLocation | null = null
@@ -289,6 +295,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private presentBrightnessUniform: WebGLUniformLocation | null = null
   private presentContrastUniform: WebGLUniformLocation | null = null
   private presentSaturationUniform: WebGLUniformLocation | null = null
+  private presentApplyColorUniform: WebGLUniformLocation | null = null
   private readonly frameCaptures = new FrameCaptureQueue()
   private captureRafId?: number
   private onFrameReady?: () => void
@@ -297,7 +304,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private vertexBuffer: WebGLBuffer | null = null
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined) + Number(this.renderRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined) + Number(this.renderRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -364,9 +371,6 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
     if (this.gl !== null && outputChanged) {
       this.gl.viewport(0, 0, nextOutputWidth, nextOutputHeight)
     }
-    if (this.gl !== null) {
-      this.refresh()
-    }
   }
 
   protected setup(): void {
@@ -383,6 +387,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
       throw new Error('webgl2ContextUnavailable')
     }
     this.gl = gl
+    this.uniformOptions = undefined
     this.guard = new WebglRuntimeGuard(gl)
     this.guard.assertSize(this.video.videoWidth, this.video.videoHeight, this.currentOutputWidth, this.currentOutputHeight)
     this.guard.assertBacking(this.currentOutputWidth, this.currentOutputHeight)
@@ -510,45 +515,6 @@ void main() {
     this.contrastUniform = gl.getUniformLocation(program, 'contrast')
     this.saturationUniform = gl.getUniformLocation(program, 'saturation')
 
-    // 呈现 pass：只做升采样 + 色彩，锐化已经在源尺寸 FBO 上按 1:1 完成。
-    const presentShader = gl.createShader(gl.FRAGMENT_SHADER)!
-    this.shaders.push(presentShader)
-    gl.shaderSource(presentShader, `#version 300 es
-precision highp float;
-uniform sampler2D data;
-uniform vec2 outputResolution;
-uniform float brightness;
-uniform float contrast;
-uniform float saturation;
-const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
-out vec4 fragColor;
-void main() {
-  vec2 uv = gl_FragCoord.xy / outputResolution.xy;
-  vec3 color = texture(data, uv).rgb;
-  color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
-  color = (contrast / 100.0) * (color - 0.5) + 0.5;
-  color = (brightness / 100.0) * color;
-  fragColor = vec4(color, 1.0);
-}`)
-    gl.compileShader(presentShader)
-    if (!gl.getShaderParameter(presentShader, gl.COMPILE_STATUS)) {
-      throw new Error(`webgl2PresentShaderCompileFailed:${gl.getShaderInfoLog(presentShader) ?? 'unknown'}`)
-    }
-    const presentProgram = gl.createProgram()!
-    this.presentProgram = presentProgram
-    gl.attachShader(presentProgram, vShader)
-    gl.attachShader(presentProgram, presentShader)
-    gl.linkProgram(presentProgram)
-    if (!gl.getProgramParameter(presentProgram, gl.LINK_STATUS)) {
-      throw new Error(`webgl2PresentProgramLinkFailed:${gl.getProgramInfoLog(presentProgram) ?? 'unknown'}`)
-    }
-    gl.useProgram(presentProgram)
-    this.presentOutputResolutionUniform = gl.getUniformLocation(presentProgram, 'outputResolution')
-    this.presentBrightnessUniform = gl.getUniformLocation(presentProgram, 'brightness')
-    this.presentContrastUniform = gl.getUniformLocation(presentProgram, 'contrast')
-    this.presentSaturationUniform = gl.getUniformLocation(presentProgram, 'saturation')
-    gl.uniform1i(gl.getUniformLocation(presentProgram, 'data'), 0)
-
     gl.useProgram(program)
     const buffer = gl.createBuffer()!
     this.vertexBuffer = buffer
@@ -570,27 +536,92 @@ void main() {
     this.guard?.check(performance.now(), true)
   }
 
+  private ensurePresentProgram(gl: WebGL2RenderingContext): void {
+    if (this.presentProgram !== null)
+      return
+    // 呈现 pass：只做升采样 + 色彩，锐化已经在源尺寸 FBO 上按 1:1 完成。
+    const presentShader = gl.createShader(gl.FRAGMENT_SHADER)!
+    this.shaders.push(presentShader)
+    gl.shaderSource(presentShader, `#version 300 es
+precision highp float;
+uniform sampler2D data;
+uniform vec2 outputResolution;
+uniform float brightness;
+uniform float contrast;
+uniform float saturation;
+uniform bool applyColor;
+const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
+out vec4 fragColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / outputResolution.xy;
+  vec3 color = texture(data, uv).rgb;
+  if (applyColor) {
+    color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+    color = (contrast / 100.0) * (color - 0.5) + 0.5;
+    color = (brightness / 100.0) * color;
+  }
+  fragColor = vec4(color, 1.0);
+}`)
+    gl.compileShader(presentShader)
+    if (!gl.getShaderParameter(presentShader, gl.COMPILE_STATUS)) {
+      throw new Error(`webgl2PresentShaderCompileFailed:${gl.getShaderInfoLog(presentShader) ?? 'unknown'}`)
+    }
+    const presentProgram = gl.createProgram()!
+    this.presentProgram = presentProgram
+    gl.attachShader(presentProgram, this.shaders[0]!)
+    gl.attachShader(presentProgram, presentShader)
+    gl.linkProgram(presentProgram)
+    if (!gl.getProgramParameter(presentProgram, gl.LINK_STATUS)) {
+      throw new Error(`webgl2PresentProgramLinkFailed:${gl.getProgramInfoLog(presentProgram) ?? 'unknown'}`)
+    }
+    gl.useProgram(presentProgram)
+    this.presentOutputResolutionUniform = gl.getUniformLocation(presentProgram, 'outputResolution')
+    this.presentBrightnessUniform = gl.getUniformLocation(presentProgram, 'brightness')
+    this.presentContrastUniform = gl.getUniformLocation(presentProgram, 'contrast')
+    this.presentSaturationUniform = gl.getUniformLocation(presentProgram, 'saturation')
+    this.presentApplyColorUniform = gl.getUniformLocation(presentProgram, 'applyColor')
+    gl.uniform1i(gl.getUniformLocation(presentProgram, 'data'), 0)
+  }
+
   protected refresh(): void {
     const gl = this.gl!
+    const previous = this.uniformOptions
+    const sourcePass = this.usesSharpenTarget()
+    if (previous && this.uniformSourceWidth === this.currentSourceWidth && this.uniformSourceHeight === this.currentSourceHeight
+      && this.uniformOutputWidth === this.currentOutputWidth && this.uniformOutputHeight === this.currentOutputHeight
+      && previous.processing === this.options.processing && previous.sharpness === this.options.sharpness
+      && previous.brightness === this.options.brightness && previous.contrast === this.options.contrast && previous.saturation === this.options.saturation
+      && sourcePass === this.uniformUsesSharpenTarget) {
+      return
+    }
+    if (sourcePass)
+      this.ensurePresentProgram(gl)
+    const applyColor = this.options.brightness !== 100 || this.options.contrast !== 100 || this.options.saturation !== 100
     if (this.program !== null) {
       gl.useProgram(this.program)
     }
-    const sourcePass = this.explicitPresentTarget && (this.currentOutputWidth !== this.currentSourceWidth || this.currentOutputHeight !== this.currentSourceHeight)
     gl.uniform2f(this.outputResolutionUniform, sourcePass ? this.currentSourceWidth : this.currentOutputWidth, sourcePass ? this.currentSourceHeight : this.currentOutputHeight)
     gl.uniform2f(this.sourceResolutionUniform, this.currentSourceWidth, this.currentSourceHeight)
     gl.uniform1i(this.filterIdUniform, this.toFilterId(this.options.processing))
-    gl.uniform1i(this.applyColorUniform, sourcePass ? 0 : 1)
+    gl.uniform1i(this.applyColorUniform, !sourcePass && applyColor ? 1 : 0)
     gl.uniform1f(this.sharpenFactorUniform, this.options.sharpness)
     gl.uniform1f(this.brightnessUniform, this.options.brightness)
     gl.uniform1f(this.contrastUniform, this.options.contrast)
     gl.uniform1f(this.saturationUniform, this.options.saturation)
-    if (this.presentProgram) {
+    if (sourcePass && this.presentProgram) {
       gl.useProgram(this.presentProgram)
       gl.uniform2f(this.presentOutputResolutionUniform, this.currentOutputWidth, this.currentOutputHeight)
       gl.uniform1f(this.presentBrightnessUniform, this.options.brightness)
       gl.uniform1f(this.presentContrastUniform, this.options.contrast)
       gl.uniform1f(this.presentSaturationUniform, this.options.saturation)
+      gl.uniform1i(this.presentApplyColorUniform, applyColor ? 1 : 0)
     }
+    this.uniformOptions = { ...this.options }
+    this.uniformSourceWidth = this.currentSourceWidth
+    this.uniformSourceHeight = this.currentSourceHeight
+    this.uniformOutputWidth = this.currentOutputWidth
+    this.uniformOutputHeight = this.currentOutputHeight
+    this.uniformUsesSharpenTarget = sourcePass
   }
 
   captureRenderedFrame(signal?: AbortSignal): Promise<HTMLCanvasElement | null> {
@@ -624,6 +655,8 @@ void main() {
   }
 
   protected override onRenderFramePresented(): void {
+    if (this.frameCaptures.size === 0)
+      return
     this.frameCaptures.complete(() => {
       const gl = this.gl
       return this.drewToScreenThisFrame && gl !== null && this.currentOutputWidth >= 2 && this.currentOutputHeight >= 2
@@ -658,36 +691,25 @@ void main() {
       this.textureAllocated = false
       this.refresh()
     }
+    const uploadStartedAtMs = performance.now()
     if (this.videoTexture !== null)
       gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
+    // video重用同一纹理对象；TexImage2D让WebKit尝试GPU帧拷贝。
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
     if (!this.textureAllocated) {
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        this.currentSourceWidth,
-        this.currentSourceHeight,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null,
-      )
       this.guard?.check(performance.now(), true)
       this.textureAllocated = true
     }
-    if (this.videoTexture !== null) {
-      gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
-    }
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
+    const uploadFinishedAtMs = performance.now()
     if (!this.drawThroughSharpenTarget(gl)) {
       gl.bindFramebuffer?.(gl.FRAMEBUFFER, null)
-      gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
       gl.useProgram(this.program)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
     this.guard?.check(startedAtMs)
     this.drewToScreenThisFrame = true
-    this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, capture, performance.now() - startedAtMs)
+    const submittedAtMs = performance.now()
+    this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs)
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true
       this.canvas.style.opacity = '1'
@@ -701,12 +723,13 @@ void main() {
    * 单 pass 在非 1:1 采样下会让 5-tap 核落在非整数源像素上：`min/max` 窗口被双线性抹平、
    * 核也不对称，观感会随窗口尺寸漂移（同一档锐度在窗口/全屏下颗粒感不同）。
    */
+  private usesSharpenTarget(): boolean {
+    return this.options.sharpness > 0 && this.explicitPresentTarget
+      && (this.currentOutputWidth !== this.currentSourceWidth || this.currentOutputHeight !== this.currentSourceHeight)
+  }
+
   private drawThroughSharpenTarget(gl: WebGL2RenderingContext): boolean {
-    if (!this.explicitPresentTarget || this.presentProgram === null) {
-      return false
-    }
-    if (this.currentOutputWidth === this.currentSourceWidth
-      && this.currentOutputHeight === this.currentSourceHeight) {
+    if (!this.usesSharpenTarget() || this.presentProgram === null) {
       return false
     }
     if (!this.ensureSharpenTarget(gl)) {
@@ -724,9 +747,6 @@ void main() {
     gl.bindTexture(gl.TEXTURE_2D, this.sharpenTexture)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
 
-    if (this.videoTexture !== null) {
-      gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
-    }
     return true
   }
 

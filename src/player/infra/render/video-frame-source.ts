@@ -13,29 +13,52 @@ export interface ObservedVideoFrameMetadata extends Partial<VideoFrameCallbackMe
 type FrameRequest = (atMs: number, metadata?: ObservedVideoFrameMetadata) => void
 const sources = new WeakMap<HTMLVideoElement, VideoFrameSource>()
 let videoGeneration = 0
+const NATIVE_COUNTER_CREDIT_WINDOW_MS = 1000
 
 interface VideoFrameCounter {
   source: 'playbackQuality' | 'webkit'
   frames: number
+  playbackQualityTotalFrames?: number
+  playbackQualityDroppedFrames?: number
+  webkitTotalFrames?: number
+  webkitDroppedFrames?: number
+}
+
+function readWebkitFrameCounter(video: HTMLVideoElement): VideoFrameCounter | undefined {
+  try {
+    const webkit = video as HTMLVideoElement & { webkitDecodedFrameCount?: number, webkitDroppedFrameCount?: number }
+    const total = webkit.webkitDecodedFrameCount
+    const dropped = webkit.webkitDroppedFrameCount ?? 0
+    if (total !== undefined && Number.isFinite(total) && Number.isFinite(dropped))
+      return { source: 'webkit', frames: Math.max(0, total - dropped), webkitTotalFrames: total, webkitDroppedFrames: dropped }
+  }
+  catch {
+    // 计数读取失败仍由有效 native 身份供帧。
+  }
 }
 
 /** 浏览器已呈现计数可在 RVFC 合批期间继续推进。 */
 function readVideoFrameCounter(video: HTMLVideoElement): VideoFrameCounter | undefined {
   let qualityFrames: number | undefined
+  let playbackQualityTotalFrames: number | undefined
+  let playbackQualityDroppedFrames: number | undefined
   try {
     const quality = video.getVideoPlaybackQuality?.()
-    if (quality && Number.isFinite(quality.totalVideoFrames) && Number.isFinite(quality.droppedVideoFrames))
+    if (quality && Number.isFinite(quality.totalVideoFrames) && Number.isFinite(quality.droppedVideoFrames)) {
       qualityFrames = Math.max(0, quality.totalVideoFrames - quality.droppedVideoFrames)
+      playbackQualityTotalFrames = quality.totalVideoFrames
+      playbackQualityDroppedFrames = quality.droppedVideoFrames
+    }
   }
   catch {
     // 部分 WebView 只有 WebKit 计数可用，继续沿同一帧源读取。
   }
-  const webkit = video as HTMLVideoElement & { webkitDecodedFrameCount?: number, webkitDroppedFrameCount?: number }
   if (qualityFrames !== undefined && qualityFrames > 0)
-    return { source: 'playbackQuality', frames: qualityFrames }
-  if (webkit.webkitDecodedFrameCount !== undefined && Number.isFinite(webkit.webkitDecodedFrameCount) && Number.isFinite(webkit.webkitDroppedFrameCount ?? 0))
-    return { source: 'webkit', frames: Math.max(0, webkit.webkitDecodedFrameCount - (webkit.webkitDroppedFrameCount ?? 0)) }
-  return qualityFrames === undefined ? undefined : { source: 'playbackQuality', frames: qualityFrames }
+    return { source: 'playbackQuality', frames: qualityFrames, playbackQualityTotalFrames, playbackQualityDroppedFrames }
+  const webkit = readWebkitFrameCounter(video)
+  if (webkit)
+    return { ...webkit, playbackQualityTotalFrames, playbackQualityDroppedFrames }
+  return qualityFrames === undefined ? undefined : { source: 'playbackQuality', frames: qualityFrames, playbackQualityTotalFrames, playbackQualityDroppedFrames }
 }
 
 /** 同一 video 的原始 metadata 和最新帧轮询共用帧身份、消费者与取消代际。 */
@@ -48,7 +71,11 @@ class VideoFrameSource {
   private counter?: VideoFrameCounter
   private counterSource?: VideoFrameCounter['source']
   private uncountedNativeFrames = 0
-  private counterFramesAheadOfNative = 0
+  private nativeCreditStartedAtMs?: number
+  private counterProgressAtMs?: number
+  private expiredNativeFramesTotal = 0
+  private nativeCreditWindowExpirationCount = 0
+  private polledFramesSinceNative = 0
   private epoch = 0
   private nativeHandle?: number
   private animationHandle?: number
@@ -65,7 +92,7 @@ class VideoFrameSource {
   }
 
   snapshotResources() {
-    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount }
+    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS }
   }
 
   snapshotDiagnostics() {
@@ -102,6 +129,10 @@ class VideoFrameSource {
       this.timeUpdateBound = false
     }
     this.nativeHandle = this.animationHandle = undefined
+    // 消费者中断后从当前帧恢复，抵扣资格只覆盖连续观察期间。
+    this.uncountedNativeFrames = this.polledFramesSinceNative = 0
+    this.nativeCreditStartedAtMs = this.counterProgressAtMs = undefined
+    this.identityObservation.resetTimingBaseline()
     this.epoch++
   }
 
@@ -141,49 +172,80 @@ class VideoFrameSource {
   private observe(atMs: number, trackingSource: VideoFrameTrackingSource, metadata?: VideoFrameCallbackMetadata): void {
     if (this.pending.size === 0)
       return
+    const callbackEnteredAtMs = this.identityObservation.enabled ? performance.now() : undefined
     const counter = readVideoFrameCounter(this.video)
     this.counterSource = counter?.source
     const sameCounter = counter?.source === this.counter?.source
     const uncountedNativeBefore = this.uncountedNativeFrames
-    const counterAheadBefore = this.counterFramesAheadOfNative
+    const polledAdvanceBefore = this.polledFramesSinceNative
     const previousMediaTime = this.lastMediaTime
     const counterDelta = counter && sameCounter && this.counter && counter.frames >= this.counter.frames
       ? counter.frames - this.counter.frames
       : undefined
     const counterReset = Boolean(counter && (!sameCounter || (this.counter && counter.frames < this.counter.frames)))
-    if (counterReset) {
+    const nativeReset = metadata?.presentedFrames !== undefined && this.lastPresentedFrames !== undefined && metadata.presentedFrames < this.lastPresentedFrames
+    if (counterReset || nativeReset) {
       this.uncountedNativeFrames = 0
-      this.counterFramesAheadOfNative = 0
+      this.polledFramesSinceNative = 0
+      this.nativeCreditStartedAtMs = undefined
+      this.counterProgressAtMs = atMs
     }
     const nativeDelta = metadata?.presentedFrames !== undefined && this.lastPresentedFrames !== undefined
       ? metadata.presentedFrames >= this.lastPresentedFrames ? metadata.presentedFrames - this.lastPresentedFrames : 1
       : undefined
     const mediaTime = metadata?.mediaTime ?? (typeof this.video.requestVideoFrameCallback === 'function' ? undefined : this.video.currentTime)
     const advance = counter && counter.frames > 0 ? counterDelta ?? 1 : 0
+    this.counterProgressAtMs ??= atMs
+    const counterProgressAgeMs = atMs - this.counterProgressAtMs
+    const counterWindowExpired = counterProgressAgeMs > NATIVE_COUNTER_CREDIT_WINDOW_MS
+    const nativeCreditWindowExpired = counterWindowExpired
+      || (this.nativeCreditStartedAtMs !== undefined && atMs - this.nativeCreditStartedAtMs > NATIVE_COUNTER_CREDIT_WINDOW_MS)
+    const expiredNativeFrames = nativeCreditWindowExpired ? this.uncountedNativeFrames : 0
+    if (nativeCreditWindowExpired) {
+      this.uncountedNativeFrames = 0
+      this.nativeCreditStartedAtMs = undefined
+      this.expiredNativeFramesTotal += expiredNativeFrames
+      this.nativeCreditWindowExpirationCount += Number(expiredNativeFrames > 0)
+    }
+    if (advance > 0)
+      this.counterProgressAtMs = atMs
     const credited = Math.min(advance, this.uncountedNativeFrames)
     this.uncountedNativeFrames -= credited
+    if (this.uncountedNativeFrames === 0)
+      this.nativeCreditStartedAtMs = undefined
     const counterAdvance = advance - credited
     let presentedFramesDelta = counter ? counterAdvance : undefined
     let newFrame = counterAdvance > 0
     let nativeNewFrame = false
     let nativeFrames = 0
     let nativeAdvance = 0
+    let creditedPollFrames = 0
+    let expiredPollFrames = 0
     if (trackingSource === 'videoFrameCallback') {
       nativeNewFrame = metadata?.presentedFrames !== undefined
         ? this.lastPresentedFrames === undefined || (nativeDelta ?? 0) > 0
         : mediaTime === undefined || this.lastMediaTime === undefined || mediaTime !== this.lastMediaTime
-      // 已轮询交付的帧抵扣晚到 RVFC；RVFC 先到时抵扣随后推进的浏览器计数。
-      // 首次零计数只建立当前帧身份，其后正增量分别交付。
+      // 轮询交付额度只覆盖相邻有效 native 身份之间的窗口。
+      // 每次新身份结算后释放剩余额度；首次计数只代表当前一帧。
       nativeFrames = nativeNewFrame ? nativeDelta ?? (metadata?.presentedFrames === 0 ? 0 : 1) : 0
-      nativeAdvance = Math.max(0, nativeFrames - this.counterFramesAheadOfNative)
-      if (this.counter && (this.lastFrame !== undefined || this.counter.frames === 0))
+      creditedPollFrames = Math.min(nativeFrames, this.polledFramesSinceNative)
+      nativeAdvance = nativeFrames - creditedPollFrames
+      if (nativeNewFrame) {
+        expiredPollFrames = this.polledFramesSinceNative - creditedPollFrames
+        this.polledFramesSinceNative = 0
+      }
+      // 播放计数长期停滞或余额跨窗时重新对齐，资格只承接短时晚到批次。
+      if (this.counter && (!counterWindowExpired || advance > 0) && (this.lastFrame !== undefined || this.counter.frames === 0)) {
         this.uncountedNativeFrames += Math.max(0, nativeAdvance - counterAdvance)
+        if (this.uncountedNativeFrames > 0)
+          this.nativeCreditStartedAtMs ??= atMs
+      }
       presentedFramesDelta = Math.max(counterAdvance, nativeAdvance)
       newFrame ||= nativeAdvance > 0 || (nativeNewFrame && this.lastFrame === undefined)
-      this.counterFramesAheadOfNative = Math.max(0, this.counterFramesAheadOfNative + counterAdvance - nativeFrames)
     }
     else if (counter) {
-      this.counterFramesAheadOfNative += counterAdvance
+      // 只有实际轮询交付建立额度，RVFC 入口读取计数只更新基线。
+      this.polledFramesSinceNative += counterAdvance
     }
     else {
       newFrame = counter === undefined && mediaTime !== undefined && Number.isFinite(mediaTime) && mediaTime !== this.lastMediaTime
@@ -197,9 +259,24 @@ class VideoFrameSource {
           ? nativeNewFrame && nativeFrames > 0 && nativeAdvance === 0 ? 'pollAlreadyDelivered' : metadata?.presentedFrames !== undefined ? 'nativeCounterUnchanged' : mediaTime === undefined ? 'identityUnavailable' : 'mediaTimeUnchanged'
           : advance > 0 && credited >= advance ? 'nativeAlreadyDelivered' : counter ? 'counterUnchanged' : mediaTime === undefined ? 'identityUnavailable' : 'mediaTimeUnchanged'
       this.identityObservation.count(trackingSource, newFrame, reason, nativeState === 'unchanged' && mediaTimeState === 'advanced')
+      const timing = this.identityObservation.recordTiming(trackingSource, atMs, callbackEnteredAtMs!, counterDelta, counterProgressAgeMs, counterReset)
       if (this.identityObservation.shouldSample(atMs, newFrame)) {
+        // 主计数复用本次读取；备用 WebKit 计数只在既有有界 dev 采样读取。
+        const webkit = counter?.source === 'webkit' ? counter : counter?.source === 'playbackQuality' && counter.frames > 0 ? readWebkitFrameCounter(this.video) : undefined
+        const pairedCounters = this.identityObservation.pairCounters(performance.now(), {
+          playbackQualityTotalFrames: finiteIdentityValue(counter?.playbackQualityTotalFrames),
+          playbackQualityDroppedFrames: finiteIdentityValue(counter?.playbackQualityDroppedFrames),
+          playbackQualityFrames: finiteIdentityValue(counter?.playbackQualityTotalFrames !== undefined && counter?.playbackQualityDroppedFrames !== undefined
+            ? Math.max(0, counter.playbackQualityTotalFrames - counter.playbackQualityDroppedFrames)
+            : undefined),
+          webkitTotalFrames: finiteIdentityValue(webkit?.webkitTotalFrames),
+          webkitDroppedFrames: finiteIdentityValue(webkit?.webkitDroppedFrames),
+          webkitFrames: finiteIdentityValue(webkit?.frames),
+        })
         this.identityObservation.capture({
           atMs,
+          ...timing,
+          pairedCounters,
           trackingSource,
           newFrame,
           reason,
@@ -224,14 +301,20 @@ class VideoFrameSource {
           previousCounterSource: this.counter?.source,
           counterDelta: finiteIdentityValue(counterDelta),
           counterReset,
+          nativeReset,
           counterAdvance: finiteIdentityValue(counterAdvance),
           nativeAdvance: finiteIdentityValue(nativeAdvance),
           creditedNativeFrames: finiteIdentityValue(credited),
+          expiredNativeFrames,
+          nativeCreditWindowExpired,
+          counterProgressAgeMs: finiteIdentityValue(counterProgressAgeMs),
           presentedFramesDelta: finiteIdentityValue(presentedFramesDelta),
           uncountedNativeBefore: finiteIdentityValue(uncountedNativeBefore),
           uncountedNativeAfter: finiteIdentityValue(this.uncountedNativeFrames),
-          counterAheadBefore: finiteIdentityValue(counterAheadBefore),
-          counterAheadAfter: finiteIdentityValue(this.counterFramesAheadOfNative),
+          polledAdvanceBefore: finiteIdentityValue(polledAdvanceBefore),
+          polledAdvanceAfter: finiteIdentityValue(this.polledFramesSinceNative),
+          creditedPollFrames,
+          expiredPollFrames,
         })
       }
       if (trackingSource === 'videoFrameCallback')

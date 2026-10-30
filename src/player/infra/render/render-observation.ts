@@ -13,6 +13,12 @@ export interface RendererResources {
   drawDurationMaxMs?: number
   realtimeDrawCount?: number
   drawDurationTotalMs?: number
+  drawCostSampleCount?: number
+  uploadDurationTotalMs?: number
+  submitDurationTotalMs?: number
+  uploadDurationMaxMs?: number
+  submitDurationMaxMs?: number
+  videoUploadMethod?: 'texImage2D'
   lastDrawAtMs?: number
   outputWidth?: number
   outputHeight?: number
@@ -41,6 +47,11 @@ export class RenderObservation {
   private drawDurationMaxMs = 0
   private realtimeDrawCount = 0
   private drawDurationTotalMs = 0
+  private drawCostSampleCount = 0
+  private uploadDurationTotalMs = 0
+  private submitDurationTotalMs = 0
+  private uploadDurationMaxMs = 0
+  private submitDurationMaxMs = 0
   private lastDrawAtMs?: number
   private latestOverwriteCount = 0
   private pacingWaitCount = 0
@@ -62,7 +73,7 @@ export class RenderObservation {
     this.submitFailureCount++
   }
 
-  record(frame: ObservedVideoFrameMetadata | undefined, capture: boolean, durationMs: number): void {
+  record(frame: ObservedVideoFrameMetadata | undefined, capture: boolean, durationMs: number, uploadMs?: number, submitMs?: number): void {
     this.drawCount++
     if (capture) {
       this.captureDrawCount++
@@ -71,6 +82,14 @@ export class RenderObservation {
       this.realtimeDrawCount++
       this.drawDurationMaxMs = Math.max(this.drawDurationMaxMs, durationMs)
       this.drawDurationTotalMs += durationMs
+      // 热路径只累计数字，采样窗口计算分段均值；截图保留独立记账。
+      if (uploadMs !== undefined && submitMs !== undefined && Number.isFinite(uploadMs) && Number.isFinite(submitMs)) {
+        this.drawCostSampleCount++
+        this.uploadDurationTotalMs += uploadMs
+        this.submitDurationTotalMs += submitMs
+        this.uploadDurationMaxMs = Math.max(this.uploadDurationMaxMs, uploadMs)
+        this.submitDurationMaxMs = Math.max(this.submitDurationMaxMs, submitMs)
+      }
       this.lastDrawAtMs = performance.now()
       if (frame?.localSequence !== undefined && frame.localSequence === this.lastDrawSequence)
         this.duplicateDrawCount++
@@ -79,6 +98,6 @@ export class RenderObservation {
   }
 
   snapshot() {
-    return { drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, latestOverwriteCount: this.latestOverwriteCount, pacingWaitCount: this.pacingWaitCount, submitFailureCount: this.submitFailureCount }
+    return { drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: this.latestOverwriteCount, pacingWaitCount: this.pacingWaitCount, submitFailureCount: this.submitFailureCount }
   }
 }

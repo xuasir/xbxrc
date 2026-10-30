@@ -1,7 +1,7 @@
-use super::GamepadProvider;
+use super::{GamepadProvider, GamepadRuntimeSnapshotDto};
+use ohmygamepad_core::InputProcessingMode;
 use ohmygamepad_protocol::{
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto,
 };
 use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 use std::sync::{
@@ -34,16 +34,24 @@ impl GamepadService {
 }
 
 impl GamepadProvider for GamepadService {
-    fn start_backend(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
+    fn start_backend(&self) -> Result<GamepadRuntimeSnapshotDto, String> {
         let mut native = self.native.lock().map_err(|e| e.to_string())?;
         if let Some(session) = native.as_ref() {
-            return session.runtime.snapshot().map_err(|e| format!("{e:?}"));
+            return session
+                .runtime
+                .snapshot()
+                .map(GamepadRuntimeSnapshotDto::from)
+                .map_err(|e| format!("{e:?}"));
         }
         let mut config = OhMyGamepadServiceConfig::default();
+        config.core.processing_mode = InputProcessingMode::StandardDevices;
         config.desktop_keyboard = None;
         config.sampling_strategy.enable_keyboard_fallback = false;
         let runtime = OhMyGamepadService::spawn(config).map_err(|e| e.to_string())?;
-        let initial = runtime.snapshot().map_err(|e| format!("{e:?}"));
+        let initial = runtime
+            .snapshot()
+            .map(GamepadRuntimeSnapshotDto::from)
+            .map_err(|e| format!("{e:?}"));
         if initial.is_err() {
             let _ = runtime.shutdown();
             return initial;
@@ -59,7 +67,9 @@ impl GamepadProvider for GamepadService {
                         if publisher_stop.load(Ordering::Acquire) {
                             break;
                         }
-                        if let Ok(value) = serde_json::to_value(snapshot) {
+                        if let Ok(value) =
+                            serde_json::to_value(GamepadRuntimeSnapshotDto::from(snapshot))
+                        {
                             let _ = super::events::emit_runtime_snapshot(&app, &value);
                         }
                     }
@@ -89,14 +99,6 @@ impl GamepadProvider for GamepadService {
             result?;
         }
         Ok(())
-    }
-
-    fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        let native = self.native.lock().map_err(|e| e.to_string())?;
-        match native.as_ref() {
-            Some(session) => session.runtime.snapshot().map_err(|e| format!("{e:?}")),
-            None => Ok(OhMyGamepadRuntimeSnapshotDto::default()),
-        }
     }
 
     fn play_rumble(

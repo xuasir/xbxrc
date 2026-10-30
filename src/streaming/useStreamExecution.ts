@@ -363,6 +363,14 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   function applyResolvedError(error: unknown): void {
     if (closing.value || disposed)
       return
+    void recordExecutionTraceEvent('executionFailed', {
+      generation: executionGeneration,
+      stage: viewState.value.lifecyclePhase,
+      sessionUiPhase: viewState.value.sessionUiPhase,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message, stack: error.stack }
+        : String(error),
+    })
     const resolved = resolveStreamError({
       error,
       t: options.t,

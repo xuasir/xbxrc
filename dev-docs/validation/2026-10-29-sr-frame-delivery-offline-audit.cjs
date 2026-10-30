@@ -66,7 +66,7 @@ async function runCase(name, { nativeMode = 'perFrame', counterMode = 'perFrame'
   const source = getVideoFrameSource(h.video)
   const observations = []
   const steps = []
-  const state = () => ({ nativeBaseline: source.lastPresentedFrames, counter: source.counter?.frames, uncountedNativeFrames: source.uncountedNativeFrames, counterFramesAheadOfNative: source.counterFramesAheadOfNative })
+  const state = () => ({ nativeBaseline: source.lastPresentedFrames, counter: source.counter?.frames, uncountedNativeFrames: source.uncountedNativeFrames, polledFramesSinceNative: source.polledFramesSinceNative })
   const observe = source.observe
   source.observe = function (at, tracking, metadata) {
     const before = state()

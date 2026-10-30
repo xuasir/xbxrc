@@ -1,0 +1,639 @@
+{
+  "date": "2026-10-30",
+  "kind": "offline-production-code-mocked-DOM-WebGL",
+  "buildSourceFingerprint": {
+    "sha256": "02ea02b17279b3b2a961b4aa460fbd41c45a5c15c44abf673d25edecbaba9291",
+    "inputCount": 728,
+    "algorithm": "src-tauri/build.rs source_fingerprint"
+  },
+  "sourceFiles": [
+    {
+      "path": "src/player/infra/render/video-frame-source.ts",
+      "sha256": "3b0b78e38da2a47bf1142feed4f0e0a98f2f3efa130b28ab48a08086eab55c3e"
+    },
+    {
+      "path": "src/player/infra/render/video-frame-identity-observation.ts",
+      "sha256": "6a11816b7feb29411d220bbd648e79b3e39aefb50be666e62202dd7d78748039"
+    },
+    {
+      "path": "src/player/infra/render/video-frame-source.test.ts",
+      "sha256": "107eedba42ac4fd46dc0172997c92c33b5511674915a8ddfce83d1343ea828c4"
+    },
+    {
+      "path": "src/player/infra/render/renderer-scheduling.test.ts",
+      "sha256": "e56e1c318fdee9cfc7bb4e35635d6559ba96b04d22909126fe0471f13c803412"
+    },
+    {
+      "path": "dev-docs/validation/2026-10-29-sr-counter-offset-replay.cjs",
+      "sha256": "099e639450e0325bfb535a97fa3916c355a7bd27a5672e8829e087190d34a7b9"
+    },
+    {
+      "path": "dev-docs/validation/2026-10-29-sr-frame-delivery-offline-audit.cjs",
+      "sha256": "5ca80174d18b15afac299266b6368e3ceb8deb3983511ba78fb345862f5edd02"
+    }
+  ],
+  "checks": {
+    "redRegression": {
+      "files": 2,
+      "failedTests": 6
+    },
+    "targeted": {
+      "files": 2,
+      "passedTests": 59
+    },
+    "full": {
+      "files": 45,
+      "passedTests": 347
+    },
+    "lint": "PASS",
+    "types": "PASS",
+    "productionBuild": "PASS",
+    "offlineAudit": "PASS",
+    "diffCheck": "PASS"
+  },
+  "counterOffsetReplay": {
+    "kind": "offline-production-code-mocked-DOM-WebGL",
+    "counterLead": 48,
+    "leadAfterMs": 2000,
+    "historicalBefore": {
+      "steadyFps": 4,
+      "realtimeDrawCount": 92,
+      "rejectedNativeCallbacks": 224,
+      "finalCounterAhead": 40
+    },
+    "sourceFiles": [
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/video-frame-source.ts",
+        "sha256": "3b0b78e38da2a47bf1142feed4f0e0a98f2f3efa130b28ab48a08086eab55c3e"
+      },
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/video-frame-identity-observation.ts",
+        "sha256": "6a11816b7feb29411d220bbd648e79b3e39aefb50be666e62202dd7d78748039"
+      },
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts",
+        "sha256": "e56e1c318fdee9cfc7bb4e35635d6559ba96b04d22909126fe0471f13c803412"
+      }
+    ],
+    "cases": [
+      {
+        "name": "native30fps, batch counter aligned",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "steadyAcceptedMarkers": 240,
+        "steadyFps": 30,
+        "rejectedNativeCallbacks": 0,
+        "finalIdentityState": {
+          "nativeBaseline": 300,
+          "counter": 292,
+          "uncountedNativeFrames": 8,
+          "polledFramesSinceNative": 0
+        },
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      },
+      {
+        "name": "native30fps, batch counter gains a 48-frame offset after2s",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "steadyAcceptedMarkers": 240,
+        "steadyFps": 30,
+        "rejectedNativeCallbacks": 0,
+        "finalIdentityState": {
+          "nativeBaseline": 300,
+          "counter": 340,
+          "uncountedNativeFrames": 7,
+          "polledFramesSinceNative": 0
+        },
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 347,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      },
+      {
+        "name": "native30fps, 48-frame offset, polling first",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "steadyAcceptedMarkers": 240,
+        "steadyFps": 30,
+        "rejectedNativeCallbacks": 16,
+        "finalIdentityState": {
+          "nativeBaseline": 300,
+          "counter": 340,
+          "uncountedNativeFrames": 7,
+          "polledFramesSinceNative": 0
+        },
+        "nativeCallbacks": 300,
+        "polledFrames": 16,
+        "acceptedMarkers": 300,
+        "advancement": 347,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      }
+    ]
+  },
+  "drawPathAndSupplyAudit": {
+    "kind": "offline-production-code-with-mocked-DOM-WebGL",
+    "sourceFiles": [
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+        "sha256": "b9b9a8a452534f630a244b4b2d50bfb2dc23712808bb42201926f8236c31c5bb"
+      },
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/video-frame-source.ts",
+        "sha256": "3b0b78e38da2a47bf1142feed4f0e0a98f2f3efa130b28ab48a08086eab55c3e"
+      },
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/render-observation.ts",
+        "sha256": "aba7b3622994b43d3ec609b1aabd947aecb819a8688120e6938ee67b184548e8"
+      },
+      {
+        "path": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts",
+        "sha256": "e56e1c318fdee9cfc7bb4e35635d6559ba96b04d22909126fe0471f13c803412"
+      }
+    ],
+    "cases": [
+      {
+        "name": "30fps native + per-frame counter, mediaTime=0",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      },
+      {
+        "name": "30fps native + 250ms batch counter, mediaTime=0",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      },
+      {
+        "name": "30fps native + 250ms batch counter, poll first",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      },
+      {
+        "name": "250ms batch native + batch counter, mediaTime=0",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 20,
+        "acceptedMarkers": 40,
+        "advancement": 292,
+        "realtimeDrawCount": 40,
+        "realtimeDrawFps": 4,
+        "gpuDrawCalls": 40,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          250,
+          500,
+          750,
+          1000,
+          1250,
+          1500,
+          1750,
+          2000,
+          2250,
+          2500,
+          2750
+        ]
+      },
+      {
+        "name": "275ms batch native + batch counter, mediaTime=0",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 18,
+        "acceptedMarkers": 37,
+        "advancement": 297,
+        "realtimeDrawCount": 37,
+        "realtimeDrawFps": 3.7,
+        "gpuDrawCalls": 37,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          283,
+          550,
+          833,
+          1100,
+          1383,
+          1650,
+          1933,
+          2200,
+          2483,
+          2750,
+          3033
+        ]
+      },
+      {
+        "name": "275ms batch native + counter refreshed during native callback",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 37,
+        "advancement": 297,
+        "realtimeDrawCount": 37,
+        "realtimeDrawFps": 3.7,
+        "gpuDrawCalls": 37,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          300,
+          567,
+          833,
+          1100,
+          1400,
+          1667,
+          1933,
+          2200,
+          2500,
+          2767,
+          3033
+        ]
+      },
+      {
+        "name": "fixed native + 250ms batch counter, advancing mediaTime",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 20,
+        "acceptedMarkers": 40,
+        "advancement": 292,
+        "realtimeDrawCount": 40,
+        "realtimeDrawFps": 4,
+        "gpuDrawCalls": 40,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          250,
+          500,
+          750,
+          1000,
+          1250,
+          1500,
+          1750,
+          2000,
+          2250,
+          2500,
+          2750
+        ]
+      },
+      {
+        "name": "fixed native + per-frame counter, mediaTime=0",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      },
+      {
+        "name": "missing native counter + fixed quality counter, advancing mediaTime",
+        "durationMs": 10000,
+        "sourceFrames": 300,
+        "nativeCallbacks": 300,
+        "polledFrames": 0,
+        "acceptedMarkers": 300,
+        "advancement": 300,
+        "realtimeDrawCount": 300,
+        "realtimeDrawFps": 30,
+        "gpuDrawCalls": 300,
+        "pacingWaitCount": 0,
+        "latestOverwriteCount": 0,
+        "firstAcceptedAtMs": [
+          0,
+          33,
+          67,
+          100,
+          133,
+          167,
+          200,
+          233,
+          267,
+          300,
+          333,
+          367
+        ]
+      }
+    ],
+    "drawPaths": [
+      {
+        "name": "same-size RCAS",
+        "expectedPasses": 1,
+        "realtimeGpuCalls": 30,
+        "gpuCallsIncludingCapture": 31,
+        "resources": {
+          "drawCount": 31,
+          "realtimeDrawCount": 30,
+          "captureDrawCount": 1,
+          "duplicateDrawCount": 0,
+          "lastDrawSequence": 30,
+          "lastDrawAtMs": 966.6666666666666,
+          "drawDurationTotalMs": 0,
+          "drawDurationMaxMs": 0,
+          "latestOverwriteCount": 0,
+          "pacingWaitCount": 0,
+          "submitFailureCount": 0,
+          "outputWidth": 32,
+          "outputHeight": 18,
+          "gpuErrorChecks": 3,
+          "gpuObjects": 5,
+          "frameRequests": 0,
+          "animationCallbacks": 0,
+          "captureWaiters": 0,
+          "domNodes": 1
+        },
+        "canvasStyle": {
+          "position": "absolute",
+          "inset": "0",
+          "width": "100%",
+          "height": "100%",
+          "pointerEvents": "none",
+          "objectFit": "contain",
+          "opacity": "1"
+        },
+        "insertion": "afterend"
+      },
+      {
+        "name": "single-pass upscale",
+        "expectedPasses": 1,
+        "realtimeGpuCalls": 30,
+        "gpuCallsIncludingCapture": 31,
+        "resources": {
+          "drawCount": 31,
+          "realtimeDrawCount": 30,
+          "captureDrawCount": 1,
+          "duplicateDrawCount": 0,
+          "lastDrawSequence": 30,
+          "lastDrawAtMs": 966.6666666666666,
+          "drawDurationTotalMs": 0,
+          "drawDurationMaxMs": 0,
+          "latestOverwriteCount": 0,
+          "pacingWaitCount": 0,
+          "submitFailureCount": 0,
+          "outputWidth": 64,
+          "outputHeight": 36,
+          "gpuErrorChecks": 3,
+          "gpuObjects": 5,
+          "frameRequests": 0,
+          "animationCallbacks": 0,
+          "captureWaiters": 0,
+          "domNodes": 1
+        },
+        "canvasStyle": {
+          "position": "absolute",
+          "inset": "0",
+          "width": "100%",
+          "height": "100%",
+          "pointerEvents": "none",
+          "objectFit": "contain",
+          "opacity": "1"
+        },
+        "insertion": "afterend"
+      },
+      {
+        "name": "dual-pass EASU + RCAS",
+        "expectedPasses": 2,
+        "realtimeGpuCalls": 60,
+        "gpuCallsIncludingCapture": 62,
+        "resources": {
+          "drawCount": 31,
+          "realtimeDrawCount": 30,
+          "captureDrawCount": 1,
+          "duplicateDrawCount": 0,
+          "lastDrawSequence": 30,
+          "lastDrawAtMs": 966.6666666666666,
+          "drawDurationTotalMs": 0,
+          "drawDurationMaxMs": 0,
+          "latestOverwriteCount": 0,
+          "pacingWaitCount": 0,
+          "submitFailureCount": 0,
+          "outputWidth": 64,
+          "outputHeight": 36,
+          "gpuErrorChecks": 4,
+          "gpuObjects": 6,
+          "frameRequests": 0,
+          "animationCallbacks": 0,
+          "captureWaiters": 0,
+          "domNodes": 1
+        },
+        "canvasStyle": {
+          "position": "absolute",
+          "inset": "0",
+          "width": "100%",
+          "height": "100%",
+          "pointerEvents": "none",
+          "objectFit": "contain",
+          "opacity": "1"
+        },
+        "insertion": "afterend"
+      },
+      {
+        "name": "capture concurrent with a fresh realtime frame",
+        "gpuCalls": 1,
+        "resources": {
+          "drawCount": 1,
+          "realtimeDrawCount": 1,
+          "captureDrawCount": 0,
+          "duplicateDrawCount": 0,
+          "lastDrawSequence": 1,
+          "lastDrawAtMs": 0,
+          "drawDurationTotalMs": 0,
+          "drawDurationMaxMs": 0,
+          "latestOverwriteCount": 0,
+          "pacingWaitCount": 0,
+          "submitFailureCount": 0,
+          "outputWidth": 32,
+          "outputHeight": 18,
+          "gpuErrorChecks": 2,
+          "gpuObjects": 5,
+          "frameRequests": 1,
+          "animationCallbacks": 0,
+          "captureWaiters": 0,
+          "domNodes": 1
+        }
+      }
+    ],
+    "callSites": [
+      {
+        "line": 911,
+        "call": "gl.drawArrays",
+        "method": "drawRcasPass"
+      },
+      {
+        "line": 972,
+        "call": "this.drawRcasPass",
+        "method": "drawFrame"
+      },
+      {
+        "line": 978,
+        "call": "gl.drawArrays",
+        "method": "drawFrame"
+      },
+      {
+        "line": 987,
+        "call": "gl.drawArrays",
+        "method": "drawFrame"
+      },
+      {
+        "line": 988,
+        "call": "this.drawRcasPass",
+        "method": "drawFrame"
+      },
+      {
+        "line": 1000,
+        "call": "this.drawObservation.record",
+        "method": "drawFrame"
+      }
+    ]
+  },
+  "deviceValidation": "pending-user-fresh-build-trace",
+  "screenPresentState": "unavailable"
+}

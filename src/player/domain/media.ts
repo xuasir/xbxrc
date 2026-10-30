@@ -251,6 +251,7 @@ export interface BrowserPlaybackStats {
   callbackFps?: number
   rendererSubmitFps?: number
   rendererSubmitAgeMs?: number
+  rendererSubmitAgeObservedAtMs?: number
   rendererGeneration?: number
   rendererKind?: 'video' | 'webgl2' | 'webgl2_sr'
   rendererTargetFps?: number
@@ -259,6 +260,8 @@ export interface BrowserPlaybackStats {
   rendererSubmittedFramesTotal?: number
   rendererCaptureFramesTotal?: number
   renderDrawDurationMsAvg?: number
+  renderUploadDurationMsAvg?: number
+  renderSubmitDurationMsAvg?: number
   renderActualOutputWidth?: number
   renderActualOutputHeight?: number
   renderActualMode?: 'upscale' | 'passthrough'

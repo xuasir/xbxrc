@@ -99,7 +99,7 @@ export function resolveBrowserStatsFallback(
   return fallback
 }
 
-type PresentationFacts = Pick<StreamStats, 'renderSourceWidth' | 'renderSourceHeight' | 'renderActualOutputWidth' | 'renderActualOutputHeight' | 'rendererTargetFps' | 'rendererGeneration' | 'presentAgeMs' | 'videoPresentFps' | 'callbackFps' | 'rendererSubmitFps' | 'rendererSubmitAgeMs' | 'renderDrawDurationMsAvg'> & { videoGeneration?: number }
+type PresentationFacts = Pick<StreamStats, 'renderSourceWidth' | 'renderSourceHeight' | 'renderActualOutputWidth' | 'renderActualOutputHeight' | 'rendererTargetFps' | 'rendererGeneration' | 'presentAgeMs' | 'videoPresentFps' | 'callbackFps' | 'rendererSubmitFps' | 'rendererSubmitAgeMs' | 'renderDrawDurationMsAvg' | 'renderUploadDurationMsAvg' | 'renderSubmitDurationMsAvg'> & { videoGeneration?: number }
 interface WindowSample extends BrowserLossWindow, PresentationFacts {
   atMs: number
   elapsedMs: number
@@ -210,12 +210,12 @@ export class BrowserStatsProjection {
     const currentBudget = samples.at(-1)?.sample.rendererTargetFps
     const currentOutput = samples.at(-1)?.sample
     const currentPair = samples.at(-1)?.sample.candidatePairId
-    type NumericKey = 'jitterMs' | 'rttMs' | 'decodeFps' | 'inboundFps' | 'presentAgeMs' | 'videoPresentFps' | 'callbackFps' | 'rendererSubmitFps' | 'rendererSubmitAgeMs' | 'renderDrawDurationMsAvg' | 'jitterBufferMs' | 'decodeDurationMs' | 'repairPacketsPerSecond'
+    type NumericKey = 'jitterMs' | 'rttMs' | 'decodeFps' | 'inboundFps' | 'presentAgeMs' | 'videoPresentFps' | 'callbackFps' | 'rendererSubmitFps' | 'rendererSubmitAgeMs' | 'renderDrawDurationMsAvg' | 'renderUploadDurationMsAvg' | 'renderSubmitDurationMsAvg' | 'jitterBufferMs' | 'decodeDurationMs' | 'repairPacketsPerSecond'
     const valid = (key: NumericKey) => samples.filter(({ sample }) =>
       sample[key] !== undefined && Number.isFinite(sample[key])
       && (!['rttMs', 'jitterMs', 'jitterBufferMs', 'repairPacketsPerSecond'].includes(key) || sample.candidatePairId === currentPair)
       && (!['presentAgeMs', 'videoPresentFps', 'callbackFps'].includes(key) || sample.videoGeneration === currentVideo)
-      && (!['rendererSubmitFps', 'rendererSubmitAgeMs', 'renderDrawDurationMsAvg'].includes(key)
+      && (!['rendererSubmitFps', 'rendererSubmitAgeMs', 'renderDrawDurationMsAvg', 'renderUploadDurationMsAvg', 'renderSubmitDurationMsAvg'].includes(key)
         || (sample.rendererGeneration === currentRenderer && sample.videoGeneration === currentVideo && sample.rendererTargetFps === currentBudget
           && sample.renderSourceWidth === currentOutput?.renderSourceWidth && sample.renderSourceHeight === currentOutput?.renderSourceHeight
           && sample.renderActualOutputWidth === currentOutput?.renderActualOutputWidth && sample.renderActualOutputHeight === currentOutput?.renderActualOutputHeight)))
@@ -251,6 +251,8 @@ export class BrowserStatsProjection {
       rendererSubmitFpsAvg: mean('rendererSubmitFps'),
       rendererSubmitAgeMsAvg: mean('rendererSubmitAgeMs'),
       renderDrawDurationMsAvg: mean('renderDrawDurationMsAvg'),
+      renderUploadDurationMsAvg: mean('renderUploadDurationMsAvg'),
+      renderSubmitDurationMsAvg: mean('renderSubmitDurationMsAvg'),
       jitterBufferMsAvg: mean('jitterBufferMs'),
       jitterBufferMsFirst: valid('jitterBufferMs')[0]?.sample.jitterBufferMs,
       jitterBufferMsLast: valid('jitterBufferMs').at(-1)?.sample.jitterBufferMs,

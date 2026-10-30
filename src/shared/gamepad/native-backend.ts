@@ -1,6 +1,5 @@
 import type { GamepadBackend, GamepadSnapshot, RumbleResult } from './backend'
 import type { GamepadRumbleEffectDto, GamepadRumbleResultDto, GamepadRuntimeSnapshotDto } from './contract'
-import { neutralState } from './state'
 
 export interface NativeInputTransport {
   subscribe: (listener: (snapshot: GamepadRuntimeSnapshotDto) => void) => Promise<() => void>
@@ -115,7 +114,7 @@ export class NativeGamepadBackend implements GamepadBackend {
   }
 
   private mapSnapshot(snapshot: GamepadRuntimeSnapshotDto): GamepadSnapshot {
-    const connected = snapshot.devices.filter(device => device.connected)
+    const connected = snapshot.devices
     for (const [source, id] of this.identities) {
       if (!connected.some(device => device.deviceId === source)) {
         void this.stopRumble(id)
@@ -132,14 +131,14 @@ export class NativeGamepadBackend implements GamepadBackend {
         id,
         name: device.name,
         standard: true,
-        rumble: device.sdl3Capabilities.supportsRumble,
+        rumble: device.supportsRumble,
       }
     })
     return {
       devices,
       samples: connected.map((device, i) => ({
         deviceId: devices[i].id,
-        state: snapshot.deviceSamples.find(sample => sample.deviceId === device.deviceId)?.state ?? neutralState(),
+        state: device.state,
       })),
       sequence: ++this.sequence,
       observedAt: performance.now(),

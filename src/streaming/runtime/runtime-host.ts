@@ -29,6 +29,8 @@ import { createXbxEngineRuntime } from './xbxengine-runtime'
 type BrowserInterval = number
 type BrowserTimeout = number
 
+export const INITIAL_CONNECTION_TIMEOUT_MS = 15_000
+
 function debugLog(..._args: Array<unknown>): void {}
 
 interface UseStreamRuntimeHostOptions {
@@ -55,6 +57,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const runtimeStarted = ref(false)
   const performanceTimer = ref<BrowserInterval | null>(null)
   let directExhaustionProbeTimer: BrowserTimeout | null = null
+  let initialConnectionTimer: BrowserTimeout | null = null
   const audioVolume = ref(1)
   const microphoneState = ref<StreamMicrophoneSnapshot>(createIdleMicrophoneState('browser'))
   let microphoneIntentVersion = 0
@@ -144,10 +147,12 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       if (event.type === 'connectionStateChanged') {
         if (event.state === 'connected') {
           activeConnected = true
+          clearInitialConnectionTimer()
           clearDirectExhaustionProbe()
           refreshStatsPolling()
         }
         if (event.state === 'closed' || event.state === 'failed') {
+          clearInitialConnectionTimer()
           clearDirectExhaustionProbe()
           clearPerformancePolling()
           lastFrameAt.value = null
@@ -160,13 +165,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
                 options.onConnectionStateChange(event.state)
               }
             })
-          }, () => {
-            void closeRuntime(`runtime-event:${event.state}:recovery-handler-threw`).finally(() => {
-              if (isRuntimeTokenActive(token)) {
-                options.onConnectionStateChange(event.state)
-              }
-            })
-          })
+          }).catch(error => failCurrentRuntime(error, token, `runtime-event:${event.state}:recovery-handler-threw`))
           return
         }
         options.onConnectionStateChange(event.state)
@@ -205,6 +204,39 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
       options.onRuntimeError(event.error instanceof Error ? event.error.message : String(event.error))
     })
+  }
+
+  function failCurrentRuntime(error: unknown, token: number, reason: string): void {
+    if (!isRuntimeTokenActive(token))
+      return
+    // 先确认本轮上报资格；close 会即时撤销 token，随后仍须把原始错误交给 execution。
+    void closeRuntime(reason).catch((cleanupError: unknown) => {
+      void recordRuntimeTraceEvent('runtimeCleanupFailed', { reason, error: String(cleanupError) })
+    })
+    options.onRuntimeError(error instanceof Error ? error.message : String(error))
+  }
+
+  function clearInitialConnectionTimer(): void {
+    if (initialConnectionTimer !== null) {
+      window.clearTimeout(initialConnectionTimer)
+      initialConnectionTimer = null
+    }
+  }
+
+  function watchInitialConnection(token: number): void {
+    clearInitialConnectionTimer()
+    if (activeConnected || activeMode !== 'webrtc-direct')
+      return
+    initialConnectionTimer = window.setTimeout(() => {
+      initialConnectionTimer = null
+      if (!isRuntimeTokenActive(token) || activeConnected)
+        return
+      void recordRuntimeTraceEvent('initialConnectionTimedOut', { timeoutMs: INITIAL_CONNECTION_TIMEOUT_MS })
+      void tryFallbackTurnRetry(token, { directPathExhausted: true }).then((retried) => {
+        if (!retried)
+          failCurrentRuntime(new Error('iceConnectionTimeout'), token, 'initial-connection-timeout')
+      }).catch(error => failCurrentRuntime(error, token, 'initial-connection-timeout'))
+    }, INITIAL_CONNECTION_TIMEOUT_MS)
   }
 
   function refreshStatsPolling(): void {
@@ -262,7 +294,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       isCurrent: () => isRuntimeTokenActive(token) && runtime.value === currentRuntime && activeSessionId === sessionId,
       decide: () => rpc.streaming.decideRecovery({ sessionId, fact: { type: 'transportConnectionState', connectionState: state }, isClosing: false }),
       execute: (reason, operation) => currentRuntime.requestReconnect(reason, operation),
-      onFailure: error => options.onRuntimeError(error.message),
+      onFailure: error => failCurrentRuntime(error, token, 'transport-recovery-failed'),
     })
   }
 
@@ -320,7 +352,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
           throw error
         }
       },
-      onFailure: error => options.onRuntimeError(error.message),
+      onFailure: error => failCurrentRuntime(error, runtimeToken, 'fallback-turn-failed'),
     })
   }
 
@@ -336,6 +368,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
   function stopRuntimeState(input?: { preserveLaunchContext?: boolean, reason?: string }): Promise<void> {
     runtimeToken += 1
+    clearInitialConnectionTimer()
     clearDirectExhaustionProbe()
     clearPerformancePolling()
     runtimeCleanup?.()
@@ -443,12 +476,21 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       if (operation?.signal.aborted)
         void nextRuntime.stop('superseded-recovery-launch').catch(() => {})
     }, () => {})
-    await (operation?.wait(launching) ?? launching)
+    try {
+      await (operation?.wait(launching) ?? launching)
+    }
+    catch (error) {
+      // TURN 交接会停止旧 attempt；旧 Promise 的拒绝只结束自己的启动。
+      if (!isRuntimeTokenActive(token) || generation !== launchGeneration)
+        return false
+      throw error
+    }
     if (!isRuntimeTokenActive(token) || generation !== launchGeneration || operation?.signal.aborted) {
       await nextRuntime.stop('superseded-launch')
       return false
     }
     scheduleRustDirectFirstExhaustionProbe(token, input, launchSpec)
+    watchInitialConnection(token)
     nextRuntime.applyDisplayState({
       displayOptions: displayOptions.value,
       render: input.render,
