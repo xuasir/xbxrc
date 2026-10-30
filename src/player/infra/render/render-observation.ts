@@ -26,6 +26,30 @@ export interface RendererResources {
   latestOverwriteCount?: number
   pacingWaitCount?: number
   submitFailureCount?: number
+  preparation?: RendererPreparationObservation
+}
+
+interface RendererPreparationObservation {
+  startedAtMs?: number
+  finishedAtMs?: number
+  firstCandidateAtMs?: number
+  firstCandidateSequence?: number
+  firstDrawStartedAtMs?: number
+  firstDrawSubmittedAtMs?: number
+}
+
+export interface RendererLifecycleObservation {
+  requestedAtMs: number
+  sourceWidth: number
+  sourceHeight: number
+  sourceSequenceAtRequest?: number
+  attachStartedAtMs?: number
+  attachCallReturnedAtMs?: number
+  attachCompletedAtMs?: number
+  frameReadyAtMs?: number
+  commitStartedAtMs?: number
+  previousReleasedAtMs?: number
+  committedAtMs?: number
 }
 
 export interface RendererObservationSnapshot {
@@ -35,6 +59,7 @@ export interface RendererObservationSnapshot {
   latestVideoSequence?: number
   sourceWidth?: number
   sourceHeight?: number
+  lifecycle?: RendererLifecycleObservation
   resources: RendererResources
 }
 
@@ -57,6 +82,22 @@ export class RenderObservation {
   private pacingWaitCount = 0
   private submitFailureCount = 0
   private lastWaitingSequence?: number
+  private readonly preparation: RendererPreparationObservation = {}
+
+  beginPreparation(): void {
+    this.preparation.startedAtMs ??= performance.now()
+  }
+
+  endPreparation(): void {
+    this.preparation.finishedAtMs ??= performance.now()
+  }
+
+  candidate(frame: ObservedVideoFrameMetadata | undefined): void {
+    if (frame && this.preparation.firstCandidateAtMs === undefined) {
+      this.preparation.firstCandidateAtMs = performance.now()
+      this.preparation.firstCandidateSequence = frame.localSequence
+    }
+  }
 
   replaceLatest(): void {
     this.latestOverwriteCount++
@@ -73,7 +114,7 @@ export class RenderObservation {
     this.submitFailureCount++
   }
 
-  record(frame: ObservedVideoFrameMetadata | undefined, capture: boolean, durationMs: number, uploadMs?: number, submitMs?: number): void {
+  record(frame: ObservedVideoFrameMetadata | undefined, capture: boolean, durationMs: number, uploadMs?: number, submitMs?: number, startedAtMs?: number): void {
     this.drawCount++
     if (capture) {
       this.captureDrawCount++
@@ -91,6 +132,10 @@ export class RenderObservation {
         this.submitDurationMaxMs = Math.max(this.submitDurationMaxMs, submitMs)
       }
       this.lastDrawAtMs = performance.now()
+      if (this.preparation.firstDrawSubmittedAtMs === undefined) {
+        this.preparation.firstDrawStartedAtMs = startedAtMs
+        this.preparation.firstDrawSubmittedAtMs = this.lastDrawAtMs
+      }
       if (frame?.localSequence !== undefined && frame.localSequence === this.lastDrawSequence)
         this.duplicateDrawCount++
       this.lastDrawSequence = frame?.localSequence
@@ -98,6 +143,6 @@ export class RenderObservation {
   }
 
   snapshot() {
-    return { drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: this.latestOverwriteCount, pacingWaitCount: this.pacingWaitCount, submitFailureCount: this.submitFailureCount }
+    return { drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: this.latestOverwriteCount, pacingWaitCount: this.pacingWaitCount, submitFailureCount: this.submitFailureCount, preparation: { ...this.preparation } }
   }
 }

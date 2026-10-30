@@ -82,6 +82,41 @@ afterEach(() => {
 })
 
 describe('playback resource ownership', () => {
+  it('separates attach call, asynchronous readiness and previous release using owned generation clocks', async () => {
+    const { service, stream } = fixture()
+    let now = 100
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    service.attachVideoStream(stream)
+    await flush()
+    const next = { ...config, pipelineType: 'webgl2' as const, mode: 'webgl2' as const }
+    now = 200
+    service.updateRendererState(next, deriveRendererAttachSpec(next))
+    let done!: () => void
+    const pending = mocks.resources[1]!
+    pending.attach.mockImplementation(() => {
+      now += 40
+      return new Promise<void>((resolve) => {
+        done = resolve
+      })
+    })
+    await flush()
+    expect(service.snapshotResources().renderers[1]?.lifecycle).toMatchObject({ requestedAtMs: 200, attachStartedAtMs: 200, attachCallReturnedAtMs: 240 })
+    now = 300
+    done()
+    await flush()
+    expect(service.snapshotResources().renderers[1]?.lifecycle.attachCompletedAtMs).toBe(300)
+    mocks.resources[0]!.destroy.mockImplementation(() => {
+      now += 7
+    })
+    now = 400
+    pending.config.rendererFrameReadyNotifier?.()
+    const snapshot = service.snapshotRendererObservation()!
+    expect(snapshot.lifecycle).toMatchObject({ frameReadyAtMs: 400, commitStartedAtMs: 400, previousReleasedAtMs: 407, committedAtMs: 407 })
+    snapshot.lifecycle!.requestedAtMs = -1
+    expect(service.snapshotRendererObservation()!.lifecycle!.requestedAtMs).toBe(200)
+    service.destroy()
+  })
+
   it('starts the canvas first-frame deadline after usable media and preserves hard failure handling before media', async () => {
     vi.useFakeTimers()
     const { service, stream, elements, emitter } = fixture()

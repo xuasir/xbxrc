@@ -67,6 +67,146 @@ function counterHarness(initialFrames = 0) {
 }
 
 describe('shared video frame callback', () => {
+  function pixelCanvas(video: HTMLVideoElement) {
+    let pixel = 20
+    const drawImage = vi.fn()
+    const getImageData = vi.fn(() => ({ data: new Uint8ClampedArray(16 * 9 * 4).fill(pixel) }))
+    const canvas = { width: 0, height: 0, getContext: vi.fn(() => ({ drawImage, getImageData })) }
+    const ownerDocument = { visibilityState: 'visible', createElement: vi.fn(() => canvas) }
+    Object.assign(video, { ownerDocument, readyState: 4, paused: false, videoWidth: 2560, videoHeight: 1440 })
+    return { canvas, ownerDocument, drawImage, getImageData, image: (value: number) => {
+      pixel = value
+    } }
+  }
+
+  it('detects drawable pixel changes between native and rejected rAF with unchanged counters and preserves delivery', () => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    p.image(30)
+    clock.mockReturnValue(16)
+    h.poll(16)
+    const snapshot = h.source.snapshotDiagnostics()
+    expect(snapshot.videoPixels).toMatchObject({ baselineCount: 1, pairCount: 1, changedPairCount: 1, readCount: 2, pairs: [{ localSequence: 1, nativeCallbackCount: 1, counterFrames: 1, gapMs: 16, changedPixelCount: 144, maxChannelDelta: 10, absoluteRgbDeltaTotal: 4320 }] })
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(1)
+    expect(h.source.snapshotResources()).toMatchObject({ polledFrameCount: 0, pixelProbeCanvases: 1, pixelProbePendingPairs: 0 })
+    expect(p.canvas.getContext).toHaveBeenCalledWith('2d', { willReadFrequently: true })
+    expect(p.drawImage).toHaveBeenCalledWith(h.video, 0, 0, 16, 9)
+    expect(p.getImageData).toHaveBeenCalledWith(0, 0, 16, 9)
+    snapshot.videoPixels.pairs[0]!.changedPixelCount = -1
+    expect(h.source.snapshotDiagnostics().videoPixels.pairs[0]!.changedPixelCount).toBe(144)
+    expect(JSON.stringify(snapshot.videoPixels)).not.toContain('pixels')
+    h.cancel()
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbePendingPairs: 0 })
+    expect([p.canvas.width, p.canvas.height]).toEqual([1, 1])
+  })
+
+  it('keeps pixel reads absent before dev collection and within four reads per second with bounded evidence', () => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    h.native(0, 1)
+    h.poll(16)
+    expect(p.ownerDocument.createElement).not.toHaveBeenCalled()
+    h.source.snapshotDiagnostics()
+    for (let i = 0; i < 20; i++) {
+      const at = 1000 + i * 700
+      clock.mockReturnValue(at)
+      h.native(at, i + 2)
+      p.image(i)
+      clock.mockReturnValue(at + 1)
+      h.poll(at + 1)
+      clock.mockReturnValue(at + 16)
+      h.poll(at + 16)
+    }
+    expect(p.getImageData).toHaveBeenCalledTimes(40)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ pairCount: 20, readbackBytes: 576, evidenceLimit: 8 })
+    expect(h.source.snapshotDiagnostics().videoPixels.pairs).toHaveLength(8)
+    expect(h.source.snapshotResources().polledFrameCount).toBe(0)
+    h.cancel()
+  })
+
+  it('reports equal static samples and cancels pixel pairs on native, counter, dimension and age changes', () => {
+    const h = counterHarness(1)
+    pixelCanvas(h.video)
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    clock.mockReturnValue(16)
+    h.poll(16)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ pairCount: 1, changedPairCount: 0 })
+    clock.mockReturnValue(1000)
+    h.native(1000, 2)
+    clock.mockReturnValue(1010)
+    h.native(1010, 3)
+    clock.mockReturnValue(2000)
+    h.native(2000, 4)
+    h.supply(0)
+    clock.mockReturnValue(2016)
+    h.poll(2016)
+    clock.mockReturnValue(3000)
+    h.native(3000, 5)
+    Object.assign(h.video, { videoWidth: 1280 })
+    clock.mockReturnValue(3016)
+    h.poll(3016)
+    clock.mockReturnValue(4000)
+    h.native(4000, 6)
+    clock.mockReturnValue(4051)
+    h.poll(4051)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ pairCount: 1, discarded: { nativeIntervened: 1, identityChanged: 1, dimensionsChanged: 1, expired: 1 } })
+    h.cancel()
+  })
+
+  it('releases pixel backing during hidden observation and rebases on visible consumer resume', () => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    p.ownerDocument.visibilityState = 'hidden'
+    clock.mockReturnValue(16)
+    h.poll(16)
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbePendingPairs: 0 })
+    p.ownerDocument.visibilityState = 'visible'
+    clock.mockReturnValue(1000)
+    h.native(1000, 2)
+    clock.mockReturnValue(1016)
+    h.poll(1016)
+    expect(h.source.snapshotDiagnostics().videoPixels.pairCount).toBe(1)
+    h.cancel()
+  })
+
+  it.each(['context', 'exception', 'budget'] as const)('stops %s pixel probes and keeps native delivery and cleanup healthy', (failure) => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    if (failure === 'context') {
+      p.canvas.getContext.mockReturnValue(null as never)
+    }
+    else if (failure === 'exception') {
+      p.getImageData.mockImplementation(() => {
+        throw new Error('private-image-data')
+      })
+    }
+    else {
+      p.drawImage.mockImplementation(() => {
+        now += 9
+      })
+    }
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    now = 1000
+    h.native(1000, 2)
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(2)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ readCount: 1, pairCount: 0, disabledReason: failure === 'context' ? 'contextUnavailable' : failure === 'exception' ? 'readFailed' : 'readbackBudgetExceeded' })
+    expect(JSON.stringify(h.source.snapshotDiagnostics())).not.toContain('private-image-data')
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbePendingPairs: 0 })
+    h.cancel()
+  })
+
   it('pairs batch playback counters with faster WebKit facts while preserving the selected frame identity', () => {
     const h = counterHarness(1)
     let webkitFrames = 1

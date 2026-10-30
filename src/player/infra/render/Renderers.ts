@@ -77,9 +77,11 @@ abstract class BaseCanvasVideoProcessor {
   }
 
   async init(): Promise<void> {
+    this.drawObservation.beginPreparation()
     await this.setup()
     if (this.isStopped)
       return
+    this.drawObservation.endPreparation()
     if (this.options.targetFps > 0)
       this.animFrameId = this.frameCallback(this.boundDrawFrame)
   }
@@ -130,6 +132,8 @@ abstract class BaseCanvasVideoProcessor {
       return
     }
     this.animFrameId = this.frameCallback(this.boundDrawFrame)
+    if (metadata?.newFrame !== false)
+      this.drawObservation.candidate(metadata)
     if (this.hasFreshFrame && metadata?.newFrame !== false)
       this.drawObservation.replaceLatest()
     this.hasFreshFrame ||= metadata?.newFrame !== false
@@ -709,7 +713,7 @@ void main() {
     this.guard?.check(startedAtMs)
     this.drewToScreenThisFrame = true
     const submittedAtMs = performance.now()
-    this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs)
+    this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs, startedAtMs)
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true
       this.canvas.style.opacity = '1'

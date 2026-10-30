@@ -1,6 +1,7 @@
 import type { VideoFrameTrackingSource } from '../../domain/media'
 import type { FrameIdentityReason } from './video-frame-identity-observation'
 import { finiteIdentityValue, identityValueState, VideoFrameIdentityObservation } from './video-frame-identity-observation'
+import { VideoFramePixelObservation } from './video-frame-pixel-observation'
 
 export interface ObservedVideoFrameMetadata extends Partial<VideoFrameCallbackMetadata> {
   newFrame: boolean
@@ -83,6 +84,7 @@ class VideoFrameSource {
   private nativeCallbackCount = 0
   private polledFrameCount = 0
   private readonly identityObservation = new VideoFrameIdentityObservation()
+  private readonly pixelObservation: VideoFramePixelObservation
   private diagnosticRtpTimestamp?: number
   readonly videoGeneration = ++videoGeneration
   lastFrame?: ObservedVideoFrameMetadata
@@ -92,14 +94,15 @@ class VideoFrameSource {
   }
 
   snapshotResources() {
-    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS }
+    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
   }
 
   snapshotDiagnostics() {
-    return { videoGeneration: this.videoGeneration, localSequence: this.frameSequence, ...this.identityObservation.snapshot() }
+    return { videoGeneration: this.videoGeneration, localSequence: this.frameSequence, ...this.identityObservation.snapshot(), videoPixels: this.pixelObservation.snapshot() }
   }
 
   constructor(private readonly video: HTMLVideoElement) {
+    this.pixelObservation = new VideoFramePixelObservation(video)
     this.counter = readVideoFrameCounter(video)
     this.counterSource = this.counter?.source
     if (typeof video.requestVideoFrameCallback !== 'function')
@@ -133,6 +136,7 @@ class VideoFrameSource {
     this.uncountedNativeFrames = this.polledFramesSinceNative = 0
     this.nativeCreditStartedAtMs = this.counterProgressAtMs = undefined
     this.identityObservation.resetTimingBaseline()
+    this.pixelObservation.reset()
     this.epoch++
   }
 
@@ -251,6 +255,7 @@ class VideoFrameSource {
       newFrame = counter === undefined && mediaTime !== undefined && Number.isFinite(mediaTime) && mediaTime !== this.lastMediaTime
     }
     if (this.identityObservation.enabled) {
+      this.pixelObservation.observe({ enteredAtMs: callbackEnteredAtMs!, trackingSource, newFrame, localSequence: this.frameSequence + Number(newFrame || trackingSource === 'videoFrameCallback'), nativeCallbackCount: this.nativeCallbackCount, counterSource: counter?.source, counterFrames: counter?.frames, counterReset: counterReset || nativeReset })
       const nativeState = identityValueState(metadata?.presentedFrames, this.lastPresentedFrames)
       const mediaTimeState = identityValueState(mediaTime, previousMediaTime)
       const reason: FrameIdentityReason = newFrame

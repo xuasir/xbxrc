@@ -197,6 +197,23 @@ afterEach(() => {
 })
 
 describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind) => {
+  it('separates completed preparation, first usable candidate and successful draw clocks', async () => {
+    const h = await harness(kind)
+    expect(h.renderer.snapshotResources()?.preparation).toMatchObject({ startedAtMs: 0, finishedAtMs: 0 })
+    expect(h.renderer.snapshotResources()?.preparation?.firstCandidateAtMs).toBeUndefined()
+    h.gl.texImage2D.mockImplementation(() => {
+      h.gl.spend(2)
+    })
+    h.frame(100, 1)
+    expect(h.renderer.snapshotResources()?.preparation).toMatchObject({ firstCandidateAtMs: 100, firstCandidateSequence: 1, firstDrawStartedAtMs: 100, firstDrawSubmittedAtMs: 102 })
+    h.frame(200, 2)
+    const snapshot = h.renderer.snapshotResources()!
+    expect(snapshot.preparation?.firstDrawSubmittedAtMs).toBe(102)
+    snapshot.preparation!.firstCandidateAtMs = -1
+    expect(h.renderer.snapshotResources()?.preparation?.firstCandidateAtMs).toBe(100)
+    h.renderer.destroy()
+  })
+
   it('preserves 60fps candidates with a millisecond callback clock', async () => {
     const h = await harness(kind)
     for (let frame = 0; frame < 600; frame++) {

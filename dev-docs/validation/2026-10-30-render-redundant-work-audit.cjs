@@ -7,7 +7,15 @@ const assert = require('node:assert/strict')
 // 复用真实模块加载器和既有DOM/WebGL替身；before仅替换本批三个renderer源码。
 const root = process.cwd()
 const changed = ['Renderers.ts', 'SuperResolutionWebGL2Renderer.ts', 'fsr1-mobile-opt-fragment.ts'].map(name => `src/player/infra/render/${name}`)
-const before = new Map(changed.map(file => [path.join(root, file), execFileSync('git', ['show', `HEAD:${file}`], { encoding: 'utf8' })]))
+const savedPath = process.argv[3] ?? path.join(root, 'dev-docs/validation/2026-10-30-render-redundant-work-validation.metrics.json')
+const saved = fs.existsSync(savedPath) ? JSON.parse(fs.readFileSync(savedPath, 'utf8')) : undefined
+const baselineCommit = saved?.baselineGitCommit ?? 'HEAD'
+const before = new Map(changed.map(file => {
+  const source = execFileSync('git', ['show', `${baselineCommit}:${file}`], { cwd: root, encoding: 'utf8' })
+  const expected = saved?.operationCountAudit?.sourceFiles.find(item => item.path === file)?.beforeSha256
+  if (expected) assert.equal(crypto.createHash('sha256').update(source).digest('hex'), expected, `historical baseline mismatch: ${file}`)
+  return [path.join(root, file), source]
+}))
 const template = fs.readFileSync('dev-docs/validation/2026-10-29-sr-frame-delivery-offline-audit.cjs', 'utf8')
 const loader = template.slice(0, template.indexOf('\n;(async () => {'))
   .replace("fs.readFileSync(file, 'utf8'), {", "(baselineSources.get(file) ?? fs.readFileSync(file, 'utf8')), {")
@@ -74,7 +82,7 @@ async function audit(sourceOverrides) {
   assert.equal(current[3].opacityWrites, 1)
   const report = {
     kind: 'offline-production-code-with-mocked-DOM-WebGL-operation-counts', date: '2026-10-30',
-    baselineScope: 'HEAD versions of three render modules; remaining source and harness are current',
+    baselineScope: 'Recorded commit versions of three render modules; remaining source and harness are current', baselineCommit,
     baseline, current,
     sourceFiles: changed.map(file => ({ path: file, beforeSha256: crypto.createHash('sha256').update(before.get(path.join(root, file))).digest('hex'), currentSha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') })),
     gpuTiming: 'unavailable', screenPresentState: 'unavailable',

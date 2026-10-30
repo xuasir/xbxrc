@@ -528,7 +528,9 @@ class SuperResolutionProcessor {
   }
 
   init(): void {
+    this.drawObservation.beginPreparation()
     this.setupGl()
+    this.drawObservation.endPreparation()
     this.startPresentationLoop()
   }
 
@@ -546,6 +548,8 @@ class SuperResolutionProcessor {
     }
     if (this.targetFps > 0) {
       this.hasFreshVideoFrame = getVideoFrameSource(this.video).lastFrame !== undefined
+      if (this.hasFreshVideoFrame)
+        this.drawObservation.candidate(getVideoFrameSource(this.video).lastFrame)
       this.scheduleVideoFrameMarker()
     }
     else {
@@ -566,6 +570,8 @@ class SuperResolutionProcessor {
     }
     this.videoFrameCbId = getVideoFrameSource(this.video).request((_atMs, metadata) => {
       this.videoFrameCbId = null
+      if (metadata?.newFrame !== false)
+        this.drawObservation.candidate(metadata)
       if (this.hasFreshVideoFrame && metadata?.newFrame !== false)
         this.drawObservation.replaceLatest()
       this.hasFreshVideoFrame ||= metadata?.newFrame !== false
@@ -1017,7 +1023,7 @@ class SuperResolutionProcessor {
     }
     finally {
       if (presentedToDefault && !this.stopped) {
-        this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, !realtime, performance.now() - startedAtMs, uploadDurationMs, submitDurationMs)
+        this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, !realtime, performance.now() - startedAtMs, uploadDurationMs, submitDurationMs, startedAtMs)
         if (realtime)
           this.hasFreshVideoFrame = false
         if (!this.frameReadyEmitted) {
