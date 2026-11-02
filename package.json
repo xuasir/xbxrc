@@ -24,7 +24,8 @@
     "release:check-bundle": "node scripts/release-check-bundle.mjs",
     "release:check-macos-runtime": "node scripts/check-macos-runtime.mjs",
     "release:check-collected": "node scripts/release-check-collected.mjs",
-    "release:verify-pipeline": "node scripts/release-verify-pipeline.mjs"
+    "release:verify-pipeline": "node --test tests/build/release-edition.test.mjs && node scripts/release-verify-pipeline.mjs",
+    "release:check-edition": "node scripts/check-release-edition.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

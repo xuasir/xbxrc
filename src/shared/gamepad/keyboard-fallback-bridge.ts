@@ -4,40 +4,11 @@ import type {
   GamepadKeyboardMappingDto,
   LogicalPadStateDto,
 } from './contract'
+import defaultKeyboardMapping from './keyboard-defaults.json'
 import { inputController, subscribeGamepadConfig } from './runtime'
 import { neutralState } from './state'
 
-export const DEFAULT_KEYBOARD_MAPPING: GamepadKeyboardMappingDto = {
-  bindings: [
-    { key: 'keyW', control: 'leftStickUp' },
-    { key: 'keyS', control: 'leftStickDown' },
-    { key: 'keyA', control: 'leftStickLeft' },
-    { key: 'keyD', control: 'leftStickRight' },
-    { key: 'keyT', control: 'rightStickUp' },
-    { key: 'keyG', control: 'rightStickDown' },
-    { key: 'keyF', control: 'rightStickLeft' },
-    { key: 'keyH', control: 'rightStickRight' },
-    { key: 'keyJ', control: 'south' },
-    { key: 'keyK', control: 'east' },
-    { key: 'keyU', control: 'west' },
-    { key: 'keyI', control: 'north' },
-    { key: 'digit1', control: 'l1' },
-    { key: 'digit2', control: 'r1' },
-    { key: 'digit3', control: 'l2' },
-    { key: 'digit4', control: 'r2' },
-    { key: 'keyZ', control: 'l3' },
-    { key: 'keyX', control: 'r3' },
-    { key: 'tab', control: 'view' },
-    { key: 'digit7', control: 'view' },
-    { key: 'enter', control: 'menu' },
-    { key: 'digit8', control: 'menu' },
-    { key: 'digit9', control: 'home' },
-    { key: 'arrowUp', control: 'dpadUp' },
-    { key: 'arrowDown', control: 'dpadDown' },
-    { key: 'arrowLeft', control: 'dpadLeft' },
-    { key: 'arrowRight', control: 'dpadRight' },
-  ],
-}
+export const DEFAULT_KEYBOARD_MAPPING = defaultKeyboardMapping as GamepadKeyboardMappingDto
 
 export const KEY_CODE_TO_DTO: Record<string, GamepadKeyboardKeyDto | undefined> = {
   KeyA: 'keyA',

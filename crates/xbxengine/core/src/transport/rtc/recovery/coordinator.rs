@@ -1597,7 +1597,7 @@ mod tests {
 
     #[test]
     fn check_idr_completed_when_clean_anchor_and_decoder_synced() {
-        let stats = XbxEngineMediaRuntimeStats {
+        let mut stats = XbxEngineMediaRuntimeStats {
             transport_recovery_epoch: 2,
             transport_recovery_episode_opened_at_ms: Some(400.0),
             receive_keyframe_required: Some(false),
@@ -1609,6 +1609,9 @@ mod tests {
             latest_video_decode_ok_rtp_timestamp: Some(90_001),
             ..Default::default()
         };
+        // 合成时间线包含当前clean-anchor来源，供同步新鲜度谓词绑定评价时钟。
+        assert!(!RecoveryCoordinator::check_idr_completed(&stats));
+        stats.video_anchor_clean_source_event = Some("decoded-usable-idr".to_string());
         assert!(RecoveryCoordinator::check_idr_completed(&stats));
     }
 

@@ -2,9 +2,12 @@ pub mod app_state;
 pub mod auth;
 pub mod config;
 pub mod data;
+#[cfg(feature = "native-gamepad")]
 pub mod gamepad;
+#[cfg(feature = "native-media")]
 pub mod native_video;
 pub mod runtime_trace;
 pub mod streaming;
 pub mod updater;
+#[cfg(feature = "native-media")]
 pub mod xbxengine;

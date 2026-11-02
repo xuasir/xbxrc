@@ -77,6 +77,15 @@ function run() {
     const separator = args.indexOf("--");
     args.splice(separator < 0 ? args.length : separator, 0, "--config", JSON.stringify(overlay));
   }
+  if (process.platform === "win32" && command === "tauri" && ["build", "bundle"].includes(args[0]) && !args.includes("--help") && !args.includes("-h")) {
+    const ffmpegRoot = resolve(sdkRoot, "..");
+    const resources = Object.fromEntries([
+      ...readdirSync(binDir).filter(name => name.toLowerCase().endsWith(".dll")).map(name => [resolve(binDir, name), name]),
+      ...["LICENSE-NOTICE.md", "COPYING.LGPLv2.1", "COPYING.LGPLv3"].map(name => [resolve(ffmpegRoot, name), `licenses/ffmpeg/${name}`]),
+    ]);
+    const separator = args.indexOf("--");
+    args.splice(separator < 0 ? args.length : separator, 0, "--config", JSON.stringify({ bundle: { resources } }));
+  }
   ensureRuntimeAssets({ workspaceRoot, libDir, binDir });
   const pkgConfigDir = resolve(libDir, "pkgconfig");
   const localPkgConfigDir = prepareLocalPkgConfig({
@@ -94,6 +103,7 @@ function run() {
     : `${currentCmakeArgs} ${cmakePolicyArg}`.trim();
   const childEnv = {
     ...process.env,
+    CARGO_TARGET_DIR: resolve(workspaceRoot, process.env.CARGO_TARGET_DIR ?? "target/native-wip"),
     FFMPEG_DIR: sdkRoot,
     FFMPEG_INCLUDE_DIR: includeDir,
     FFMPEG_LIB_DIR: libDir,
@@ -149,10 +159,8 @@ function ensureRuntimeAssets({ workspaceRoot, libDir, binDir }) {
     return;
   }
 
-  const targetDirs = [
-    resolve(workspaceRoot, "target", "debug"),
-    resolve(workspaceRoot, "target", "release"),
-  ];
+  const targetRoot = resolve(workspaceRoot, process.env.CARGO_TARGET_DIR ?? "target/native-wip");
+  const targetDirs = [resolve(targetRoot, "debug"), resolve(targetRoot, "release")];
 
   for (const targetDir of targetDirs) {
     mkdirSync(targetDir, { recursive: true });

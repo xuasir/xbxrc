@@ -123,7 +123,6 @@ export interface XBoxRpcSchema {
   gamepad: {
     startBackend: RpcMethod<void, GamepadRuntimeSnapshotDto>
     stopBackend: RpcMethod<void, void>
-    submitStreamState: RpcMethod<{ sessionId: string, sequence: number, state: LogicalPadStateDto }, boolean>
     playRumble: RpcMethod<{ request: GamepadRumbleRequestDto }, GamepadRumbleResultDto>
     stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
 
@@ -270,6 +269,7 @@ export interface XBoxRpcSchema {
     recordEvent: RpcMethod<RuntimeTraceRecordEventParams, RuntimeTraceAckResult>
   }
   xbxEngine: {
+    submitStreamState: RpcMethod<{ sessionId: string, sequence: number, state: LogicalPadStateDto }, boolean>
     startRuntime: RpcMethod<XbxEngineStartRuntimeParams, XbxEngineAckResult>
     requestReconnect: RpcMethod<XbxEngineRequestReconnectParams, XbxEngineAckResult>
     stopRuntime: RpcMethod<XbxEngineStopRuntimeParams | void, XbxEngineAckResult>
@@ -291,8 +291,8 @@ export interface XBoxRpcSchema {
     openExternal: RpcMethod<{ url: string }, void>
   }
   updater: {
-    getChannel: RpcMethod<void, { channel: 'stable' | 'beta' }>
-    setChannel: RpcMethod<{ channel: 'stable' | 'beta' }, { channel: 'stable' | 'beta' }>
+    getChannel: RpcMethod<void, { channel: 'native-wip' }>
+    setChannel: RpcMethod<{ channel: 'native-wip' }, { channel: 'native-wip' }>
     check: RpcMethod<
       void,
       {

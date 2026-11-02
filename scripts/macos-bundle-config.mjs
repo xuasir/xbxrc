@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { inspectMachO } from './macos-runtime-lib.mjs'
 
@@ -14,8 +14,15 @@ export function createMacosBundleConfig(sdkRoot, { signingIdentity = '-', harden
       throw new Error(`SDK install name缺少对应文件: ${identity}`)
     return path
   })
+  const ffmpegRoot = resolve(sdkRoot, '..')
+  const resources = Object.fromEntries([
+    ...['LICENSE-NOTICE.md', 'COPYING.LGPLv2.1', 'COPYING.LGPLv3'].map(name => [join(ffmpegRoot, name), `licenses/ffmpeg/${name}`]),
+    ...readdirSync(join(sdkRoot, 'lib')).filter(name => name.startsWith('COPYING.')).map(name => [join(sdkRoot, 'lib', name), `licenses/ffmpeg/${name}`]),
+    [join(sdkRoot, 'lib/runtime-manifest.json'), 'licenses/ffmpeg/runtime-manifest.json'],
+  ])
   return {
     bundle: {
+      resources,
       macOS: {
         frameworks,
         // ad-hoc没有Team ID；证书签名的Frameworks由Tauri统一签名后启用校验。

@@ -2,10 +2,11 @@ pub mod policy;
 pub mod rpc;
 pub mod service;
 
+#[cfg(feature = "native-media")]
+pub use policy::apply_xbxengine_trace_logging;
 pub use policy::{
-    apply_xbxengine_trace_logging, should_record_trace_event, stats_snapshot_interval,
-    trace_observation_tick_interval, RuntimeTraceProfile, TraceDimension, TraceDimensionSet,
-    TraceImportance, TraceMetadata,
+    should_record_trace_event, stats_snapshot_interval, trace_observation_tick_interval,
+    RuntimeTraceProfile, TraceDimension, TraceDimensionSet, TraceImportance, TraceMetadata,
 };
 pub use service::{
     set_trace_root_dir, RuntimeTraceCategory, RuntimeTraceRecorder, RuntimeTraceRecorderRef,

@@ -123,7 +123,7 @@ fn report_startup_failure(message: &str) {
         .unwrap_or_else(|| "(启动日志不可用)".to_string());
     let _ = rfd::MessageDialog::new()
         .set_level(rfd::MessageLevel::Error)
-        .set_title("xbxrc 启动失败")
+        .set_title("xbxrc Native WIP 启动失败")
         .set_description(format!("{message}\n\n启动日志：{log_hint}"))
         .show();
 }

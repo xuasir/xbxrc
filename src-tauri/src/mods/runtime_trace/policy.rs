@@ -5,6 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::Value;
+#[cfg(feature = "native-media")]
 use xbxengine::XbxLogLevel;
 
 static TRACE_EVENT_SAMPLE_TS_MS: OnceLock<Mutex<HashMap<String, f64>>> = OnceLock::new();
@@ -312,6 +313,7 @@ impl TraceMetadata {
 }
 
 /// 按 profile 和维度调整引擎日志是否进入 runtime trace sink。
+#[cfg(feature = "native-media")]
 pub fn apply_xbxengine_trace_logging(profile: RuntimeTraceProfile, dimensions: TraceDimensionSet) {
     xbxengine::set_stderr_enabled(false);
     match profile {

@@ -24,10 +24,10 @@
 
 ## Verification
 
-- [ ] main 源码/workspace/Cargo 依赖树只含稳定能力，构建独立于 FFmpeg/SDL SDK
-- [ ] 前端 lint:fix、类型、测试、生产构建；Rust fmt、公共与 Tauri 单元测试
-- [ ] rust 原生编译/测试与运行库门禁，能力/开关/组合合同
-- [ ] 两种 app 身份、资源、更新 endpoint 和 manifest 对应，跨 edition 发布被门禁拒绝
+- [x] main 源码/workspace/Cargo 依赖树只含稳定能力，构建独立于 FFmpeg/SDL SDK
+- [x] 前端 lint:fix、类型、测试、生产构建；Rust fmt、公共与 Tauri 单元测试
+- [x] rust 原生编译/测试与运行库门禁，能力/开关/组合合同
+- [x] 两种配置身份、资源、更新 endpoint 和 manifest 对应，跨 edition 发布被门禁拒绝；Native实际包待追加
 - [ ] 两条开发及 release 分支对应到验证提交，流水线语法/门禁/产物验证
 - [ ] 实际本地安装包与可迁移依赖检查，记录尺寸和构建身份
 - [ ] 实机与长测继续按用户手动验收，独立记录平台/CI 证据范围
@@ -40,4 +40,9 @@
 
 ## Progress
 
-- 已核对当前工作树、已确定方案和现有 CI/Cargo/配置装配；进入基线与源码拆分。
+- 已保存 P0 基线 `37f632a`，rust 从此建立。公共协议与构建身份已拆分 `9abf17d`；公共发行/更新身份门禁 `10b771d` 已验证。
+- main 原生源码、依赖、SDK、前端入口及设置完成裁剪。直接 Tauri 构建和 main/release/test/stable 的来源门禁已接入独立 CI/cache；共同 manifest、SHA/架构/版本/跨 edition 检查及 updater 运行时检查已落地。
+- 当前证据：公共 Rust 147 项、main Tauri 44 项、前端 455 项、lint/typecheck/生产构建、生命周期测试及 8 项发行门禁/两 edition 模拟通过；Browser Cargo 依赖树门禁通过。实际包与 rust 原生 feature/身份装配继续实施。
+
+- rust 已合并 main 初次裁剪边界并保留原生源码，接上轻量 streaming/配置/键盘默认值。native-media/native-gamepad/none/组合四种编译与依赖门禁通过；媒体输入提交迁到媒体 RPC，支持 Browser 输入搭配原生媒体。
+- Native WIP 名称/identifier/固定更新渠道及当前平台SDK运行闭包已装配。前端473项、引擎1277项（24 ignored）、Tauri212项、手柄core36项、关闭原生的Tauri48项、Mac运行库8项和发行8项/双edition模拟通过；5个旧测试数据与断言按现行恢复合同校正，生产恢复逻辑保留。

@@ -1,0 +1,133 @@
+name: Desktop Build
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        required: true
+        type: string
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+
+jobs:
+  build:
+    name: browser-${{ matrix.label }}-${{ matrix.arch }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            label: macos
+            arch: aarch64
+            bundle: app,dmg
+          - os: windows-latest
+            label: windows
+            arch: x86_64
+            bundle: nsis
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/browser
+      NO_PROXY: localhost,127.0.0.1,::1
+      no_proxy: localhost,127.0.0.1,::1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Verify Browser edition and source branch
+        run: node scripts/check-release-edition.mjs browser --source-only
+      - name: Set beta version
+        id: preview
+        if: inputs.channel == 'beta'
+        run: node scripts/release-set-preview-version.mjs "${{ github.run_number }}"
+      - name: pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - name: Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
+          components: rustfmt
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target/browser
+          shared-key: xbxrc-browser-${{ matrix.label }}-${{ matrix.arch }}
+          cache-all-crates: true
+          cache-workspace-crates: true
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+      - name: Validate frontend and release contracts
+        shell: bash
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm release:verify-pipeline
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate lifecycle and Rust contracts
+        shell: bash
+        run: |
+          pnpm test:lifecycle
+          cargo fmt --all -- --check
+          cargo test -p xbox-streaming-protocol -p xbox-streaming -p xbxrc --lib --locked
+          node scripts/check-release-edition.mjs browser --dependencies-only
+      - name: Build development installer
+        if: inputs.channel == 'development'
+        shell: bash
+        run: pnpm tauri build --bundles "${{ matrix.bundle }}" --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        env:
+          CI: true
+      - name: Build signed release artifacts
+        if: inputs.channel != 'development'
+        run: pnpm tauri build --bundles ${{ matrix.bundle }}
+        env:
+          CI: true
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Verify package identity and dependency closure
+        run: node scripts/check-desktop-package.mjs "${{ matrix.arch }}"
+      - name: Collect verified release assets
+        if: inputs.channel != 'development'
+        shell: bash
+        run: |
+          node scripts/release-check-bundle.mjs "${{ matrix.label }}"
+          version="$(node -p "require('./package.json').version")"
+          node scripts/release-collect-assets.mjs "release-assets-${{ matrix.label }}" "$version" "${{ matrix.label }}" "${{ matrix.arch }}"
+          node scripts/release-check-collected.mjs "release-assets-${{ matrix.label }}" "${{ matrix.label }}"
+      - name: Upload release assets
+        if: inputs.channel != 'development'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets-${{ matrix.label }}
+          path: release-assets-${{ matrix.label }}/
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload development installers
+        if: inputs.channel == 'development'
+        uses: actions/upload-artifact@v7
+        with:
+          name: xbxrc-browser-${{ matrix.label }}-${{ matrix.arch }}
+          path: |
+            target/browser/release/bundle/dmg/*.dmg
+            target/browser/release/bundle/nsis/*.exe
+          compression-level: 0
+          if-no-files-found: error

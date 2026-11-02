@@ -1,15 +1,15 @@
 # Supervisor Role
 
-主窗口负责协调、分解、委派、验证、收口。
+主窗口负责澄清、分解、执行、验证、收口；当前仓库按用户要求使用单窗口，保持协调模式。
 主窗口默认保持决策导向，避免承载大段实现细节。
-轻量任务可以直接执行；较重实现优先交给合适的 subagent。
+任务按影响范围分阶段直接执行，保持清晰边界与验证证据。
 
 ## Main-Window Responsibilities
 
 1. 判断任务类型与影响范围
-2. 选择直接执行或委派
+2. 划分直接执行的步骤与依赖
 3. 保持任务边界稳定
-4. 审核 subagent 输出
+4. 审核代码与验证输出
 5. 合并可接受结果
 6. 统一最终总结与下一步
 
@@ -17,7 +17,7 @@
 
 - 总是使用中文回复
 - 保持直接、简洁、信息充分
-- 主窗口负责协调，subagent 负责执行细节
+- 当前任务由主窗口直接执行；遵循用户的单窗口要求
 - 复杂任务遵循 `澄清 -> 分解 -> 执行 -> 验证 -> 收口`
 - 不让任务范围、目标、结论在执行中漂移
 
@@ -38,10 +38,12 @@
 
 - 前端 UI 保持在 Vue 3 + TypeScript。
 - 桌面壳层、原生桥接、生命周期与系统集成保持在 Tauri + Rust。
-- 核心领域逻辑、协议、传输、性能敏感路径与系统侧集成继续放在 Rust。
-- WebRTC / streaming / transport 继续沿当前 Rust 主线演进。
+- `main` 负责 Browser Gamepad API、浏览器 WebRTC 与 WebView 音视频的稳定交付；公共认证、Xbox API、会话/信令、配置、更新、日志及系统集成保持 Rust。
+- `rust` 负责 Rust WebRTC/媒体及 Rust Gamepad WIP；原生源码、依赖、SDK与装配在该开发线演进。两条线复用公共协议与领域合同。
+- `release/test` 从 main 发行 Browser beta，正式 `vX.Y.Z` tag 来源 main；`release/native-wip` 从 rust 发行独立 Native WIP。分支、包身份与更新源依照[发行隔离 RFC](docs/rfcs/2026-11-02-main-rust-release-isolation.md)核验。
+- 应用及 FFmpeg 的 macOS 最低要求保持 26.0；实机启动、串流与长测由用户手动验收。
 - Gamepad navigation / focus routing / controller UX 继续使用 geometric pathfinding engine。参考 [`dev-docs/gamepad-navigation.md`](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/gamepad-navigation.md)。
-- 手柄接入遵循统一 GamepadBackend：Browser API 与 Rust 为两个实现，稳定版默认 Browser；公共层决定 UI/串流归属，Windows 默认后台保持输入。依据用户已确认的 [`统一手柄输入 RFC`](docs/rfcs/2026-10-27-unified-gamepad-input.md) 执行，输入后端与媒体运行时分别装配。
+- main 直接装配 Browser GamepadBackend；rust 的 Native WIP 提供 Browser/Rust 两个输入后端与独立媒体开关。公共层决定 UI/串流归属，几何导航与输入路由共用；输入后端与媒体运行时分别装配。
 
 # Streaming / WebRTC Behavior Standard
 

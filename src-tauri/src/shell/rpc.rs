@@ -97,6 +97,7 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
                 .await
                 .map_err(Into::into)
         }
+        #[cfg(feature = "native-gamepad")]
         "gamepad" => mods::gamepad::rpc::handle_rpc(
             payload.method.as_str(),
             payload.params,
@@ -129,6 +130,7 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
             .await
             .map_err(Into::into)
         }
+        #[cfg(feature = "native-media")]
         "xbxEngine" => mods::xbxengine::rpc::handle_rpc(
             payload.method.as_str(),
             payload.params,

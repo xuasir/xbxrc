@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_keepawake::TauriPluginKeepawakeExt;
 use tokio::sync::RwLock;
@@ -8,12 +8,14 @@ use crate::error::{AppError, AppResult};
 use crate::mods;
 use crate::mods::auth::events as auth_events;
 
+#[cfg(feature = "native-media")]
 pub mod bridge;
 pub mod cli;
 pub mod rpc;
 pub mod state;
 pub mod window;
 
+#[cfg(feature = "native-media")]
 pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
 pub use state::{AppState, StartupFlagsState};
@@ -76,7 +78,6 @@ async fn build_services(
 ) -> AppResult<AppState> {
     let app_handle = app.handle();
     let is_quitting = Arc::new(AtomicBool::new(false));
-    let last_runtime_event = Arc::new(StdMutex::new(None));
 
     let config_service = Arc::new(mods::config::ConfigService::new(app_handle.clone()));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();
@@ -119,7 +120,11 @@ async fn build_services(
         .path()
         .app_log_dir()
         .map(|dir| dir.join("runtime-logs"))
-        .unwrap_or_else(|_| std::env::temp_dir().join("xbxrc").join("runtime-logs"));
+        .unwrap_or_else(|_| {
+            std::env::temp_dir()
+                .join(env!("XBX_APP_IDENTIFIER"))
+                .join("runtime-logs")
+        });
     mods::runtime_trace::set_trace_root_dir(trace_root);
 
     let runtime_trace = {
@@ -138,37 +143,6 @@ async fn build_services(
             }
         }
     };
-    let native_video = Arc::new(StdMutex::new(mods::native_video::NativeVideoRegistry::new(
-        app_handle.clone(),
-        Some(runtime_trace.clone()),
-    )));
-    mods::native_video::set_runtime_trace_recorder(runtime_trace.clone());
-    xbxengine::set_log_sink({
-        let runtime_trace = runtime_trace.clone();
-        Arc::new(move |record| {
-            runtime_trace.record_log(
-                "xbxengine",
-                "runtimeLog",
-                None,
-                serde_json::json!({
-                    "level": record.level.as_str(),
-                    "message": record.message,
-                    "tsMs": record.ts_ms,
-                }),
-            );
-        })
-    });
-    ohmygamepad_sdl3::set_runtime_trace_sink(Some({
-        let runtime_trace = runtime_trace.clone();
-        Arc::new(move |event, payload| {
-            runtime_trace.record_event("gamepad-source", event, None, payload);
-        })
-    }));
-    mods::runtime_trace::apply_xbxengine_trace_logging(
-        runtime_trace.trace_profile(),
-        runtime_trace.trace_dimensions(),
-    );
-
     if let Some(path) = runtime_trace.path() {
         log::info!(
             "Runtime trace recorder initialized at {} (mode={})",
@@ -184,17 +158,14 @@ async fn build_services(
 
     if runtime_trace.disk_enabled() {
         runtime_trace.record_state(
-            "xbxengine",
+            "app",
             "runtimeBuildInfo",
             None,
             serde_json::json!({
-                "buildFingerprint": crate::mods::xbxengine::build_info::current_build_fingerprint(),
+                "buildFingerprint": crate::build_info::current_build_fingerprint(),
             }),
         );
     }
-
-    let stats_snapshot_interval =
-        mods::runtime_trace::stats_snapshot_interval(runtime_trace.trace_profile());
 
     let auth_service = Arc::new(mods::auth::AuthService::new(
         app_handle.clone(),
@@ -208,27 +179,58 @@ async fn build_services(
         config_provider.clone(),
         runtime_trace.clone(),
     ));
-    let xbxengine_service = Arc::new(mods::xbxengine::XbxEngineService::new(
-        app_handle.clone(),
-        last_runtime_event.clone(),
-        native_video.clone(),
-        runtime_trace.clone(),
-        stats_snapshot_interval,
-        config_provider.clone(),
-        is_quitting.clone(),
-    ));
+    #[cfg(feature = "native-media")]
+    let (native_video, xbxengine_service) = {
+        let native_video = Arc::new(std::sync::Mutex::new(
+            mods::native_video::NativeVideoRegistry::new(
+                app_handle.clone(),
+                Some(runtime_trace.clone()),
+            ),
+        ));
+        mods::native_video::set_runtime_trace_recorder(runtime_trace.clone());
+        xbxengine::set_log_sink({
+            let runtime_trace = runtime_trace.clone();
+            Arc::new(move |record| {
+                runtime_trace.record_log("xbxengine", "runtimeLog", None, serde_json::json!({
+                    "level": record.level.as_str(), "message": record.message, "tsMs": record.ts_ms,
+                }));
+            })
+        });
+        mods::runtime_trace::apply_xbxengine_trace_logging(
+            runtime_trace.trace_profile(),
+            runtime_trace.trace_dimensions(),
+        );
+        let service = Arc::new(mods::xbxengine::XbxEngineService::new(
+            app_handle.clone(),
+            Arc::new(std::sync::Mutex::new(None)),
+            native_video.clone(),
+            runtime_trace.clone(),
+            mods::runtime_trace::stats_snapshot_interval(runtime_trace.trace_profile()),
+            config_provider.clone(),
+            is_quitting.clone(),
+        ));
+        (native_video, service)
+    };
+    #[cfg(feature = "native-gamepad")]
+    let gamepad_service = {
+        ohmygamepad_sdl3::set_runtime_trace_sink(Some({
+            let runtime_trace = runtime_trace.clone();
+            Arc::new(move |event, payload| {
+                runtime_trace.record_event("gamepad-source", event, None, payload)
+            })
+        }));
+        Arc::new(mods::gamepad::GamepadService::new(
+            app_handle.clone(),
+            config_provider.clone(),
+        ))
+    };
+
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
         app_handle.clone(),
         auth_provider.clone(),
         config_provider.clone(),
         data_service.clone(),
-        xbxengine_service.clone(),
         runtime_trace.clone(),
-    ));
-
-    let gamepad_service = Arc::new(mods::gamepad::GamepadService::new(
-        app_handle.clone(),
-        config_provider.clone(),
     ));
 
     let app_state_service: mods::app_state::AppStateProviderRef =
@@ -246,10 +248,13 @@ async fn build_services(
         data: data_service,
         streaming: streaming_service,
         runtime_trace,
-        xbxengine: xbxengine_service,
-        gamepad: gamepad_service,
         updater: updater_service,
+        #[cfg(feature = "native-media")]
+        xbxengine: xbxengine_service,
+        #[cfg(feature = "native-media")]
         native_video,
+        #[cfg(feature = "native-gamepad")]
+        gamepad: gamepad_service,
         startup_flags,
         is_quitting,
     };
@@ -321,7 +326,9 @@ pub async fn terminate(app_handle: &AppHandle) {
         }),
     );
 
+    #[cfg(feature = "native-gamepad")]
     state.gamepad.shutdown();
+    #[cfg(feature = "native-media")]
     state.xbxengine.shutdown().await;
     state.streaming.shutdown().await;
 

@@ -11,8 +11,8 @@ pub struct RuntimeFeatureCapabilities {
 pub fn runtime_feature_capabilities() -> RuntimeFeatureCapabilities {
     let desktop = cfg!(any(target_os = "windows", target_os = "macos"));
     RuntimeFeatureCapabilities {
-        native_media: desktop,
-        native_gamepad: desktop,
+        native_media: desktop && cfg!(feature = "native-media"),
+        native_gamepad: desktop && cfg!(feature = "native-gamepad"),
     }
 }
 

@@ -58,12 +58,15 @@ fn apply_runtime_trace_config_live(app_handle: &tauri::AppHandle, config: &Value
         .map_err(|error| {
             crate::error::AppError::Internal(format!("runtime trace mode apply failed: {error}"))
         })?;
+    #[cfg(feature = "native-media")]
     crate::mods::runtime_trace::apply_xbxengine_trace_logging(
         state.runtime_trace.trace_profile(),
         state.runtime_trace.trace_dimensions(),
     );
+    #[cfg(feature = "native-media")]
     let interval =
         crate::mods::runtime_trace::stats_snapshot_interval(state.runtime_trace.trace_profile());
+    #[cfg(feature = "native-media")]
     state.xbxengine.set_stats_snapshot_interval(interval);
     log::debug!(
         "Runtime trace mode applied live (mode={}, dimensions={})",

@@ -12,11 +12,11 @@ export type AppUpdaterState
     | 'installed'
     | 'error'
 
-export type UpdateChannel = 'stable' | 'beta'
+export type UpdateChannel = 'native-wip'
 
 export function useAppUpdater() {
   const state = ref<AppUpdaterState>('idle')
-  const channel = ref<UpdateChannel>('stable')
+  const channel = ref<UpdateChannel>('native-wip')
   const currentVersion = ref('')
   const targetVersion = ref<string | null>(null)
   const releaseNotes = ref<string | null>(null)

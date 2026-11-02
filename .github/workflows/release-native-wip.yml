@@ -1,0 +1,67 @@
+name: Release Native WIP
+
+on:
+  push:
+    branches: [release/native-wip]
+
+concurrency:
+  group: release-native-wip-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/desktop-native-build.yml
+    with:
+      channel: native-wip
+    secrets: inherit
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Verify Native WIP publication source
+        run: node scripts/check-release-edition.mjs native-wip --source-only
+      - uses: actions/download-artifact@v6
+        with:
+          path: release-assets
+          pattern: release-assets-*
+          merge-multiple: false
+      - name: Resolve artifact version
+        id: version
+        shell: bash
+        run: |
+          echo "value=$(node -p "require('./release-assets/release-assets-macos/manifest.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Verify artifacts and generate updater manifest
+        shell: bash
+        run: |
+          node scripts/release-check-collected.mjs release-assets
+          node scripts/release-write-latest-json.mjs release-assets "${{ steps.version.outputs.value }}" "https://github.com/xuasir/xbxrc/releases/download/native-wip"
+      - name: Publish Native WIP release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.value }}"
+          mkdir -p upload
+          for label in macos windows; do
+            dir="release-assets/release-assets-${label}"
+            cp "$dir/manifest.json" "upload/manifest-${label}.json"
+            for file in "$dir"/*; do
+              [[ "$file" == */manifest.json ]] || cp "$file" upload/
+            done
+          done
+          cp release-assets/latest.json upload/latest.json
+          notes="Native WIP ${version}. Source ${GITHUB_SHA}."
+          if ! gh release view native-wip >/dev/null 2>&1; then
+            gh release create native-wip --prerelease --latest=false --title "xbxrc Native WIP" --notes "$notes"
+          fi
+          gh release upload native-wip upload/* --clobber
+          gh release edit native-wip --prerelease --latest=false --title "xbxrc Native WIP" --notes "$notes"

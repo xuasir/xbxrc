@@ -1,195 +1,72 @@
-name: Build Tauri
+name: Build Native WIP
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      # 构建验收（artifact only）：推 release/quick 做快速验证，不触发 Release 发布
-      - release/quick
+    branches: [rust]
+  pull_request:
+    branches: [rust]
 
 concurrency:
-  group: build-tauri-${{ github.workflow }}-${{ github.ref }}
+  group: build-native-wip-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    name: build-${{ matrix.label }}
-    permissions:
-      contents: read
-
+    uses: ./.github/workflows/desktop-native-build.yml
+    with:
+      channel: development
+  feature-contracts:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-26
-            label: macos
-            bundle: dmg
-          - os: windows-latest
-            label: windows
-            bundle: nsis
-
+        os: [macos-26, windows-latest]
+        feature: [none, native-media, native-gamepad, native-wip]
     runs-on: ${{ matrix.os }}
     env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/native-wip
+      CARGO_INCREMENTAL: "0"
       CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-      # CI 下关闭增量编译，便于 rust-cache 稳定命中 target/
-      CARGO_INCREMENTAL: "0"
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Read app version
-        id: version
-        shell: bash
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Verify native build prerequisites (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # macOS 26 镜像提供 pkgconf / cmake，SDK与应用使用同一系统要求。
-          command -v cmake >/dev/null
-          command -v pkg-config >/dev/null
-
-      - name: Verify vendored FFmpeg SDK
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            test -d "src-tauri/resources/ffmpeg/windows-x64/include"
-            test -d "src-tauri/resources/ffmpeg/windows-x64/lib"
-            test -d "src-tauri/resources/ffmpeg/windows-x64/bin"
-            test -f "src-tauri/resources/ffmpeg/windows-x64/bin/ffmpeg.exe"
-          else
-            if [[ "$(uname -m)" == "arm64" ]]; then
-              test -d "src-tauri/resources/ffmpeg/macos-arm64/include"
-              test -d "src-tauri/resources/ffmpeg/macos-arm64/lib"
-            else
-              test -d "src-tauri/resources/ffmpeg/macos-x64/include"
-              test -d "src-tauri/resources/ffmpeg/macos-x64/lib"
-            fi
-          fi
-
-      - name: Configure LIBCLANG_PATH (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          # windows-latest 已预装 LLVM，无需 choco 重装（可节省数分钟）
-          $libclang = Join-Path $env:ProgramFiles 'LLVM\bin'
-          if (-not (Test-Path (Join-Path $libclang 'libclang.dll'))) {
-            throw "libclang.dll not found under $libclang"
-          }
-          "LIBCLANG_PATH=$libclang" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: pnpm
-        uses: pnpm/action-setup@v6
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
-
-      - name: Node
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
-
-      - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.93.1
-          components: rustfmt
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: .
-          shared-key: xbxrc-${{ matrix.label }}
-          cache-all-crates: true
-          cache-workspace-crates: true
-
-      - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup MSVC environment (Windows)
+          workspaces: . -> target/native-wip
+          shared-key: xbxrc-native-wip-${{ matrix.os }}-${{ matrix.feature }}
+      - run: pnpm install --frozen-lockfile
+      - uses: TheMrMilchmann/setup-msvc-dev@v4
         if: runner.os == 'Windows'
-        uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
-
-      - name: Validate frontend
+      - name: Configure libclang
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "LIBCLANG_PATH=$env:ProgramFiles\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Validate feature compilation
         shell: bash
         run: |
-          pnpm lint
-          pnpm typecheck
-          pnpm test
-
-      - name: Python for lifecycle gates
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Validate lifecycle trace gates
-        shell: bash
-        run: pnpm test:lifecycle
-
-      - name: Validate Rust preview and shared contracts
-        shell: bash
-        run: |
-          cargo fmt --all -- --check
-          node scripts/with-ffmpeg-sdk.mjs -- cargo test -p xbxrc --lib
-
-      - name: Build Tauri bundle (${{ matrix.bundle }})
-        run: pnpm tauri build --bundles ${{ matrix.bundle }}
-        env:
-          CI: true
-
-      - name: Verify macOS runtime dependency closure
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          pnpm test:macos-runtime
-          pnpm release:check-macos-runtime src-tauri/resources/ffmpeg/macos-arm64
-          pnpm release:check-macos-runtime src-tauri/resources/ffmpeg/macos-x64
-          pnpm release:check-macos-runtime target/release/bundle/macos/xbxrc.app
-
-      - name: Stage installer
-        id: installer
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          version="${{ steps.version.outputs.value }}"
-          label="${{ matrix.label }}"
-
-          if [[ "$label" == "macos" ]]; then
-            shopt -s nullglob
-            bundles=(target/release/bundle/dmg/*.dmg)
-            if [[ ${#bundles[@]} -eq 0 ]]; then
-              echo "No DMG found under target/release/bundle/dmg/"
-              exit 1
-            fi
-            file="dist/xbxrc-${version}-macos.dmg"
-            cp "${bundles[0]}" "$file"
+          feature="${{ matrix.feature }}"
+          if [[ "$feature" == "none" ]]; then
+            cargo check -p xbxrc --no-default-features --locked
+          elif [[ "$feature" == "native-gamepad" ]]; then
+            cargo check -p xbxrc --no-default-features --features "$feature" --locked
           else
-            shopt -s nullglob
-            bundles=(target/release/bundle/nsis/*.exe)
-            if [[ ${#bundles[@]} -eq 0 ]]; then
-              echo "No NSIS installer found under target/release/bundle/nsis/"
-              exit 1
-            fi
-            file="dist/xbxrc-${version}-windows-setup.exe"
-            cp "${bundles[0]}" "$file"
+            node scripts/with-ffmpeg-sdk.mjs -- cargo check -p xbxrc --no-default-features --features "$feature" --locked
           fi
-
-          echo "file=$file" >> "$GITHUB_OUTPUT"
-          ls -lh "$file"
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v7
-        with:
-          name: xbxrc-${{ matrix.label }}-${{ steps.version.outputs.value }}
-          path: ${{ steps.installer.outputs.file }}
-          compression-level: 0
-          if-no-files-found: error

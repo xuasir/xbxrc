@@ -19,7 +19,7 @@ export async function startRustStreamInput(sessionId: string, isCurrent: () => b
       while (pending.length) {
         const next = pending.shift()!
         try {
-          const accepted = await rpc.gamepad.submitStreamState({ sessionId, sequence: ++sequence, state: next })
+          const accepted = await rpc.xbxEngine.submitStreamState({ sessionId, sequence: ++sequence, state: next })
           if (!accepted) {
             lastQueued = undefined
             needsRelease = true

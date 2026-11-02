@@ -1,6 +1,6 @@
 # 浏览器稳定发行与原生 WIP 分支、构建裁剪方案
 
-日期：2026-11-02。状态：方案建议，等待用户确定；本轮仅分析代码和记录方案。
+日期：2026-11-02。状态：用户已确定并授权实施；执行进度见 main/rust 发行隔离 RFC。
 
 ## Problem Framing
 
@@ -98,4 +98,4 @@ Browser stable/beta 继续使用当前 stable/beta endpoints。Native WIP 使用
 | P1-3 | 独立构建资源、wrapper、应用身份与更新渠道 | complex |
 | P1-4 | 两条开发 CI、两条 release 来源校验与包内容/安装更新门禁 | complex |
 
-实施按依赖隔离、界面装配、发行隔离、真实产物验收推进。用户确定方案后交由 `task-run` 建立实施 RFC；当前生产代码和发布分支保持本轮分析起点。
+实施按依赖隔离、界面装配、发行隔离、产物验收推进，执行记录见[实施 RFC](../rfcs/2026-11-02-main-rust-release-isolation.md)。

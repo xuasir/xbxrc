@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import type { SettingSelectOptionDefinition } from '@shared/config/domain-definition'
-import type { UpdateChannel } from '../../composables/useAppUpdater'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
-import SettingSingleSelectPopupSheet from '../../components/settings/SettingSingleSelectPopupSheet.vue'
 import { useAppUpdater } from '../../composables/useAppUpdater'
 
 const props = defineProps<{
@@ -12,28 +9,10 @@ const props = defineProps<{
   navNodeBaseId: string
 }>()
 
-const CHANNEL_SHEET_SCOPE_ID = 'setting.app-update.channel'
-
 const { t } = useI18n()
 const updater = useAppUpdater()
-const isChannelSheetOpen = ref(false)
 
-const channelOptions = computed<readonly SettingSelectOptionDefinition[]>(() => [
-  {
-    value: 'stable',
-    label: t('setting.pages.general.appUpdate.channelStable'),
-  },
-  {
-    value: 'beta',
-    label: t('setting.pages.general.appUpdate.channelBeta'),
-  },
-])
-
-const channelLabel = computed(() =>
-  updater.channel.value === 'beta'
-    ? t('setting.pages.general.appUpdate.channelBeta')
-    : t('setting.pages.general.appUpdate.channelStable'),
-)
+const channelLabel = computed(() => t('setting.pages.general.appUpdate.channelNativeWip'))
 
 const statusMessage = computed(() => {
   switch (updater.state.value) {
@@ -80,28 +59,7 @@ const primaryDisabled = computed(() =>
   || updater.state.value === 'installing',
 )
 
-const channelNodeId = `${props.navNodeBaseId}.channel`
 const primaryNodeId = `${props.navNodeBaseId}.primary`
-
-function openChannelSheet() {
-  if (primaryDisabled.value) {
-    return
-  }
-  isChannelSheetOpen.value = true
-}
-
-async function handleChannelSelect(value: string | number) {
-  const next = value as UpdateChannel
-  if (next !== updater.channel.value) {
-    try {
-      await updater.setChannel(next)
-    }
-    catch {
-      return
-    }
-  }
-  isChannelSheetOpen.value = false
-}
 
 async function handlePrimaryConfirm() {
   if (updater.state.value === 'available') {
@@ -136,21 +94,10 @@ async function handlePrimaryConfirm() {
         {{ t('setting.pages.general.appUpdate.channelHint') }}
       </p>
 
-      <Focusable
-        :id="channelNodeId"
-        as="button"
-        type="button"
-        class="setting-row setting-row--select"
-        :scope-id="props.scopeId"
-        :aria-label="t('setting.pages.general.appUpdate.channelLabel')"
-        :disabled="primaryDisabled"
-        @click="openChannelSheet"
-      >
-        <span class="setting-row__copy setting-row__copy--singleline">
-          <span class="setting-row__label">{{ t('setting.pages.general.appUpdate.channelLabel') }}</span>
-        </span>
+      <div class="setting-row">
+        <span class="setting-row__label">{{ t('setting.pages.general.appUpdate.channelLabel') }}</span>
         <span class="setting-row__value">{{ channelLabel }}</span>
-      </Focusable>
+      </div>
 
       <p
         v-if="statusMessage"
@@ -174,17 +121,6 @@ async function handlePrimaryConfirm() {
         {{ primaryActionLabel }}
       </Focusable>
     </div>
-
-    <SettingSingleSelectPopupSheet
-      :open="isChannelSheetOpen"
-      :scope-id="CHANNEL_SHEET_SCOPE_ID"
-      :title="t('setting.pages.general.appUpdate.channelLabel')"
-      :hint="t('setting.pages.general.appUpdate.channelHint')"
-      :options="channelOptions"
-      :current-value="updater.channel.value"
-      @close="isChannelSheetOpen = false"
-      @select="(value) => void handleChannelSelect(value)"
-    />
   </section>
 </template>
 

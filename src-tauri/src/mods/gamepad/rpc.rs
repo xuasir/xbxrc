@@ -15,12 +15,6 @@ pub enum GamepadCommand {
     StopRumble {
         target: OhMyGamepadRumbleTargetDto,
     },
-    #[serde(rename_all = "camelCase")]
-    SubmitStreamState {
-        session_id: String,
-        sequence: u64,
-        state: ohmygamepad_protocol::LogicalPadStateDto,
-    },
 }
 
 pub async fn handle_rpc(
@@ -48,15 +42,6 @@ pub async fn handle_rpc(
             GamepadCommand::StopRumble { target } => {
                 Ok(serde_json::to_value(service.stop_rumble(target)?)?)
             }
-            GamepadCommand::SubmitStreamState {
-                session_id,
-                sequence,
-                state,
-            } => Ok(json!(xbxengine::submit_application_gamepad_state(
-                &session_id,
-                sequence,
-                state
-            ))),
         }
     })
     .await

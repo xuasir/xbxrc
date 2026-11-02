@@ -1,5 +1,4 @@
 use crate::mods;
-use crate::mods::native_video::NativeVideoRegistryRef;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -17,11 +16,14 @@ pub struct AppState {
     pub config: mods::config::ConfigProviderRef,
     pub data: mods::data::DataProviderRef,
     pub streaming: mods::streaming::StreamingServiceRef,
-    pub runtime_trace: mods::runtime_trace::RuntimeTraceRecorderRef,
+    #[cfg(feature = "native-media")]
     pub xbxengine: mods::xbxengine::XbxEngineProviderRef,
+    pub runtime_trace: mods::runtime_trace::RuntimeTraceRecorderRef,
+    #[cfg(feature = "native-gamepad")]
     pub gamepad: mods::gamepad::GamepadProviderRef,
     pub updater: mods::updater::UpdaterServiceRef,
-    pub native_video: NativeVideoRegistryRef,
+    #[cfg(feature = "native-media")]
+    pub native_video: crate::mods::native_video::NativeVideoRegistryRef,
     pub startup_flags: Arc<RwLock<StartupFlagsState>>,
     pub is_quitting: Arc<AtomicBool>,
 }

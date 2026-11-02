@@ -485,6 +485,8 @@ mod tests {
 
     #[test]
     fn host_present_of_matching_submission_preserves_decoded_clean_anchor() {
+        let origin_ms = crate::transport::rtc::stats::now_ms_f64() - 210.0;
+        let at = |relative_ms: f64| origin_ms + relative_ms;
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -504,16 +506,16 @@ mod tests {
 
         {
             let sink = crate::runtime_stats_sink::RuntimeStatsSink::new(runtime_stats.clone());
-            sink.begin_transport_recovery_episode(10.0);
+            sink.begin_transport_recovery_episode(at(10.0));
             sink.record_picture_recovery_episode_requested(
                 88,
                 Some("receiverWaitingKeyframe".to_string()),
-                100.0,
+                at(100.0),
                 None,
             );
-            sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+            sink.record_picture_recovery_episode_sent("pli", at(120.0), Some(at(300.0)));
             sink.record_picture_recovery_episode_response_observed(
-                150.0,
+                at(150.0),
                 Some(77_001),
                 true,
                 "firstAcceptedIdr",
@@ -522,36 +524,45 @@ mod tests {
                 false,
                 false,
             );
-            sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
+            sink.record_picture_recovery_episode_decoded(at(180.0), 77_001, 55);
             sink.record_pending_displayed_idr_rtp(77_001);
         }
-        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, 180.0);
+        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, at(180.0));
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
-            latest_host_present_time_ms: Some(210.0),
+            latest_host_present_time_ms: Some(at(210.0)),
             host_frame_present_epoch: 1,
             present_fps: 30.0,
             last_displayed_frame_seq: Some(55),
             last_displayed_frame_rtp_timestamp: Some(77_001),
-            last_displayed_at_ms: Some(210.0),
+            last_displayed_at_ms: Some(at(210.0)),
             ..Default::default()
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(180.0));
+        assert_eq!(snapshot.video_anchor_clean_observed_at_ms, Some(at(180.0)));
         assert_eq!(
             snapshot.video_anchor_clean_source_event.as_deref(),
             Some("decoded-usable-idr")
         );
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
-        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
-        assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(
+            snapshot.receive_display_state.as_deref(),
+            Some("display-stable")
+        );
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, None);
+        assert_eq!(
+            snapshot.recovery_fresh_anchor_recovered_at_ms,
+            Some(at(180.0))
+        );
+        assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(at(210.0)));
     }
 
     #[test]
     fn host_present_with_pending_idr_establishes_anchor_when_displayed_delta_is_latest_only() {
+        let origin_ms = crate::transport::rtc::stats::now_ms_f64() - 210.0;
+        let at = |relative_ms: f64| origin_ms + relative_ms;
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let media = Arc::new(Mutex::new(RtcMediaService::default()));
@@ -571,16 +582,16 @@ mod tests {
 
         {
             let sink = crate::runtime_stats_sink::RuntimeStatsSink::new(runtime_stats.clone());
-            sink.begin_transport_recovery_episode(10.0);
+            sink.begin_transport_recovery_episode(at(10.0));
             sink.record_picture_recovery_episode_requested(
                 88,
                 Some("receiverWaitingKeyframe".to_string()),
-                100.0,
+                at(100.0),
                 None,
             );
-            sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+            sink.record_picture_recovery_episode_sent("pli", at(120.0), Some(at(300.0)));
             sink.record_picture_recovery_episode_response_observed(
-                150.0,
+                at(150.0),
                 Some(77_001),
                 true,
                 "firstAcceptedIdr",
@@ -589,28 +600,35 @@ mod tests {
                 false,
                 false,
             );
-            sink.record_picture_recovery_episode_decoded(180.0, 77_001, 55);
+            sink.record_picture_recovery_episode_decoded(at(180.0), 77_001, 55);
             sink.record_pending_displayed_idr_rtp(77_001);
         }
-        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, 180.0);
+        seed_decoder_reference_sync_for_pending_idr(&runtime_stats, 77_001, at(180.0));
 
         runtime_port.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
-            latest_host_present_time_ms: Some(210.0),
+            latest_host_present_time_ms: Some(at(210.0)),
             host_frame_present_epoch: 1,
             present_fps: 30.0,
             last_displayed_frame_seq: Some(56),
             last_displayed_frame_rtp_timestamp: Some(77_002),
-            last_displayed_at_ms: Some(210.0),
+            last_displayed_at_ms: Some(at(210.0)),
             ..Default::default()
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
-        assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
-        assert_eq!(snapshot.recovery_displayed_idr_at_ms, None);
-        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
-        assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(210.0));
+        assert_eq!(
+            snapshot.recovery_fresh_anchor_recovered_at_ms,
+            Some(at(180.0))
+        );
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(
+            snapshot.receive_display_state.as_deref(),
+            Some("display-stable")
+        );
+        assert_eq!(snapshot.recovery_displayed_idr_at_ms, Some(at(210.0)));
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, None);
+        assert_eq!(snapshot.recovery_playback_recovered_at_ms, Some(at(210.0)));
     }
 
     #[test]
@@ -692,9 +710,13 @@ mod tests {
         let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
         assert_eq!(snapshot.video_anchor_clean_epoch, Some(1));
         assert_eq!(snapshot.recovery_fresh_anchor_recovered_at_ms, Some(180.0));
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
-        assert_eq!(snapshot.recovery_displayed_idr_at_ms, None);
-        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(
+            snapshot.receive_display_state.as_deref(),
+            Some("display-stable")
+        );
+        assert_eq!(snapshot.recovery_displayed_idr_at_ms, Some(210.0));
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]
@@ -769,8 +791,12 @@ mod tests {
             snapshot.video_anchor_clean_source_event.as_deref(),
             Some("decoded-usable-idr")
         );
-        assert_eq!(snapshot.recovery_displayed_idr_rtp, None);
-        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, Some(77_001));
+        assert_eq!(snapshot.recovery_displayed_idr_rtp, Some(77_001));
+        assert_eq!(
+            snapshot.receive_display_state.as_deref(),
+            Some("display-stable")
+        );
+        assert_eq!(snapshot.recovery_pending_displayed_idr_rtp, None);
     }
 
     #[test]

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { neutralState } from './state'
 
 const mocks = vi.hoisted(() => ({ submit: vi.fn(async (_request: unknown) => true), dispose: vi.fn(), listener: undefined as undefined | ((snapshot: { gameState: LogicalPadStateDto }) => void) }))
-vi.mock('../../services/rpc', () => ({ rpc: { gamepad: { submitStreamState: mocks.submit } } }))
+vi.mock('../../services/rpc', () => ({ rpc: { xbxEngine: { submitStreamState: mocks.submit } } }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: async () => mocks.dispose }))
 vi.mock('./runtime', () => ({ inputController: {
   subscribe: (listener: typeof mocks.listener) => {

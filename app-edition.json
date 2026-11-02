@@ -1,6 +1,6 @@
 {
-  "edition": "browser",
-  "developmentBranch": "main",
-  "releaseBranch": "release/test",
-  "rollingTag": "beta"
+  "edition": "native-wip",
+  "developmentBranch": "rust",
+  "releaseBranch": "release/native-wip",
+  "rollingTag": "native-wip"
 }

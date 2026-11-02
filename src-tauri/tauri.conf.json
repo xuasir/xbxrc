@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "xbxrc",
+  "productName": "xbxrc Native WIP",
   "version": "0.1.0",
-  "identifier": "com.xuasir.xbxrc",
+  "identifier": "com.xuasir.xbxrc.native-wip",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -10,10 +10,10 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "macOSPrivateApi": true,
+    "macOSPrivateApi": false,
     "windows": [
       {
-        "title": "xbxrc",
+        "title": "xbxrc Native WIP",
         "width": 800,
         "height": 600,
         "backgroundColor": "#000000"
@@ -27,7 +27,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2MkNBNDE3NjA2NkMzOEMKUldTTXcyWmdGNlFzRmk3TDNKVXk5YitZMjNnOHRTeC9VSUZ1cDdFLzJrSzRXVmxYbnNBVU5KK00K",
       "endpoints": [
-        "https://github.com/xuasir/xbxrc/releases/latest/download/latest.json"
+        "https://github.com/xuasir/xbxrc/releases/download/native-wip/latest.json"
       ],
       "windows": {
         "installMode": "passive"
@@ -41,17 +41,7 @@
     "macOS": {
       "minimumSystemVersion": "26.0"
     },
-    "resources": {
-      "resources/ffmpeg/windows-x64/bin/*.dll": "",
-      "resources/ffmpeg/windows-x64/bin/ffmpeg.exe": "resources/ffmpeg/windows-x64/bin/ffmpeg.exe",
-      "resources/ffmpeg/windows-x64/bin/ffplay.exe": "resources/ffmpeg/windows-x64/bin/ffplay.exe",
-      "resources/ffmpeg/windows-x64/bin/ffprobe.exe": "resources/ffmpeg/windows-x64/bin/ffprobe.exe",
-      "resources/ffmpeg/macos-arm64/lib/*": "resources/ffmpeg/macos-arm64/lib/",
-      "resources/ffmpeg/macos-x64/lib/*": "resources/ffmpeg/macos-x64/lib/",
-      "resources/ffmpeg/LICENSE-NOTICE.md": "resources/ffmpeg/LICENSE-NOTICE.md",
-      "resources/ffmpeg/COPYING.LGPLv2.1": "resources/ffmpeg/COPYING.LGPLv2.1",
-      "resources/ffmpeg/COPYING.LGPLv3": "resources/ffmpeg/COPYING.LGPLv3"
-    },
+    "resources": {},
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

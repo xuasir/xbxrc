@@ -1,252 +1,66 @@
-name: Release Stable
+name: Release stable
 
 on:
   push:
-    tags:
-      - v*
+    tags: [v*]
 
 concurrency:
-  group: release-stable-${{ github.workflow }}-${{ github.ref }}
+  group: release-stable-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    name: build-${{ matrix.label }}
-    permissions:
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-26
-            label: macos
-            bundle: app,dmg
-          - os: windows-latest
-            label: windows
-            bundle: nsis
-
-    runs-on: ${{ matrix.os }}
-    env:
-      CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-      CARGO_INCREMENTAL: "0"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Verify tag matches package version
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${GITHUB_REF#refs/tags/}"
-          expected="${tag#v}"
-          actual="$(node -p "require('./package.json').version")"
-          tauri="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-          if [[ "$actual" != "$expected" ]]; then
-            echo "package.json version ($actual) does not match tag ($tag)"
-            exit 1
-          fi
-          if [[ "$tauri" != "$expected" ]]; then
-            echo "tauri.conf.json version ($tauri) does not match tag ($tag)"
-            exit 1
-          fi
-
-      - name: Read app version
-        id: version
-        shell: bash
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Verify native build prerequisites (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v cmake >/dev/null
-          command -v pkg-config >/dev/null
-
-      - name: Verify vendored FFmpeg SDK
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            test -d "src-tauri/resources/ffmpeg/windows-x64/include"
-            test -d "src-tauri/resources/ffmpeg/windows-x64/lib"
-            test -d "src-tauri/resources/ffmpeg/windows-x64/bin"
-            test -f "src-tauri/resources/ffmpeg/windows-x64/bin/ffmpeg.exe"
-          else
-            if [[ "$(uname -m)" == "arm64" ]]; then
-              test -d "src-tauri/resources/ffmpeg/macos-arm64/include"
-              test -d "src-tauri/resources/ffmpeg/macos-arm64/lib"
-            else
-              test -d "src-tauri/resources/ffmpeg/macos-x64/include"
-              test -d "src-tauri/resources/ffmpeg/macos-x64/lib"
-            fi
-          fi
-
-      - name: Configure LIBCLANG_PATH (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $libclang = Join-Path $env:ProgramFiles 'LLVM\bin'
-          if (-not (Test-Path (Join-Path $libclang 'libclang.dll'))) {
-            throw "libclang.dll not found under $libclang"
-          }
-          "LIBCLANG_PATH=$libclang" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 9
-
-      - name: Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.93.1
-          components: rustfmt
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-          shared-key: xbxrc-${{ matrix.label }}
-          cache-all-crates: true
-          cache-workspace-crates: true
-
-      - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup MSVC environment (Windows)
-        if: runner.os == 'Windows'
-        uses: TheMrMilchmann/setup-msvc-dev@v4
-        with:
-          arch: x64
-
-      - name: Validate frontend
-        shell: bash
-        run: |
-          pnpm lint
-          pnpm typecheck
-          pnpm test
-
-      - name: Python for lifecycle gates
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Validate lifecycle trace gates
-        shell: bash
-        run: pnpm test:lifecycle
-
-      - name: Validate Rust preview and shared contracts
-        shell: bash
-        run: |
-          cargo fmt --all -- --check
-          node scripts/with-ffmpeg-sdk.mjs -- cargo test -p xbxrc --lib
-
-      - name: Build Tauri bundle (${{ matrix.bundle }})
-        run: pnpm tauri build --bundles ${{ matrix.bundle }}
-        env:
-          CI: true
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      - name: Verify macOS runtime dependency closure
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          pnpm test:macos-runtime
-          pnpm release:check-macos-runtime src-tauri/resources/ffmpeg/macos-arm64
-          pnpm release:check-macos-runtime src-tauri/resources/ffmpeg/macos-x64
-          pnpm release:check-macos-runtime target/release/bundle/macos/xbxrc.app
-
-      - name: Verify release bundle layout
-        shell: bash
-        run: node scripts/release-check-bundle.mjs "${{ matrix.label }}"
-
-      - name: Collect release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/release-collect-assets.mjs "release-assets-${{ matrix.label }}" "${{ steps.version.outputs.value }}" "${{ matrix.label }}"
-
-      - name: Verify collected release assets
-        shell: bash
-        run: node scripts/release-check-collected.mjs "release-assets-${{ matrix.label }}" "${{ matrix.label }}"
-
-      - name: Upload release assets
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-assets-${{ matrix.label }}
-          path: release-assets-${{ matrix.label }}/
-          compression-level: 0
-          if-no-files-found: error
-
+    uses: ./.github/workflows/desktop-build.yml
+    with:
+      channel: stable
+    secrets: inherit
   publish:
-    name: publish-github-release
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v6
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Verify Browser publication source
+        run: node scripts/check-release-edition.mjs browser --source-only
+      - uses: actions/download-artifact@v6
         with:
           path: release-assets
           pattern: release-assets-*
           merge-multiple: false
-
-      - name: Resolve release version
+      - name: Resolve artifact version
         id: version
         shell: bash
         run: |
-          set -euo pipefail
-          tag="${GITHUB_REF#refs/tags/}"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          version="$(node -p "require('./release-assets/release-assets-macos/manifest.json').version")"
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Verify all collected assets
-        run: node scripts/release-check-collected.mjs release-assets
-
-      - name: Build latest.json
+          echo "value=$(node -p "require('./release-assets/release-assets-macos/manifest.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Verify artifacts and generate updater manifest
+        shell: bash
         run: |
-          node scripts/release-write-latest-json.mjs release-assets "${{ steps.version.outputs.value }}" \
-            "https://github.com/xuasir/xbxrc/releases/download/${{ steps.version.outputs.tag }}"
-
+          node scripts/release-check-collected.mjs release-assets
+          node scripts/release-write-latest-json.mjs release-assets "${{ steps.version.outputs.value }}" "https://github.com/xuasir/xbxrc/releases/download/${{ github.ref_name }}"
       - name: Publish stable release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="${{ steps.version.outputs.tag }}"
           version="${{ steps.version.outputs.value }}"
-          upload_dir="upload"
-          mkdir -p "$upload_dir"
-          shopt -s nullglob
-          for dir in release-assets/release-assets-*; do
-            cp -a "$dir"/* "$upload_dir"/
+          mkdir -p upload
+          for label in macos windows; do
+            dir="release-assets/release-assets-${label}"
+            cp "$dir/manifest.json" "upload/manifest-${label}.json"
+            for file in "$dir"/*; do
+              [[ "$file" == */manifest.json ]] || cp "$file" upload/
+            done
           done
-          cp release-assets/latest.json "$upload_dir/latest.json"
-
+          cp release-assets/latest.json upload/latest.json
+          tag="${GITHUB_REF#refs/tags/}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" \
-              --title "xbxrc ${tag}" \
-              --notes "Stable release ${version}."
+            gh release create "$tag" --latest --title "xbxrc ${tag}" --notes "Browser stable ${version}. Source ${GITHUB_SHA}."
           fi
-
-          gh release upload "$tag" "$upload_dir"/* --clobber
-          echo "Published ${tag} (${version}) to https://github.com/xuasir/xbxrc/releases/tag/${tag}"
+          gh release upload "$tag" upload/* --clobber
