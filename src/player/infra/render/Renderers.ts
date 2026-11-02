@@ -72,7 +72,7 @@ abstract class BaseCanvasVideoProcessor {
     this.canvas.style.height = '100%'
     this.canvas.style.pointerEvents = 'none'
     video.insertAdjacentElement('afterend', this.canvas)
-    this.frameCallback = callback => getVideoFrameSource(video).request(callback)
+    this.frameCallback = callback => getVideoFrameSource(video).request(callback, { drawableTargetFps: () => this.options.targetFps })
     this.boundDrawFrame = this.drawFrame.bind(this)
   }
 

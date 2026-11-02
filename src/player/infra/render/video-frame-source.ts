@@ -1,5 +1,6 @@
 import type { VideoFrameTrackingSource } from '../../domain/media'
 import type { FrameIdentityReason } from './video-frame-identity-observation'
+import type { PixelObservationInput } from './video-frame-pixel-observation'
 import { finiteIdentityValue, identityValueState, VideoFrameIdentityObservation } from './video-frame-identity-observation'
 import { VideoFramePixelObservation } from './video-frame-pixel-observation'
 
@@ -12,6 +13,9 @@ export interface ObservedVideoFrameMetadata extends Partial<VideoFrameCallbackMe
 }
 
 type FrameRequest = (atMs: number, metadata?: ObservedVideoFrameMetadata) => void
+interface FrameRequestOptions {
+  drawableTargetFps?: () => number
+}
 const sources = new WeakMap<HTMLVideoElement, VideoFrameSource>()
 let videoGeneration = 0
 const NATIVE_COUNTER_CREDIT_WINDOW_MS = 1000
@@ -64,7 +68,7 @@ function readVideoFrameCounter(video: HTMLVideoElement): VideoFrameCounter | und
 
 /** 同一 video 的原始 metadata 和最新帧轮询共用帧身份、消费者与取消代际。 */
 class VideoFrameSource {
-  private readonly pending = new Map<number, FrameRequest>()
+  private readonly pending = new Map<number, { callback: FrameRequest, options?: FrameRequestOptions }>()
   private nextRequest = 0
   private frameSequence = 0
   private lastPresentedFrames?: number
@@ -83,6 +87,7 @@ class VideoFrameSource {
   private timeUpdateBound = false
   private nativeCallbackCount = 0
   private polledFrameCount = 0
+  private lastDeliveredAtMs = Number.NEGATIVE_INFINITY
   private readonly identityObservation = new VideoFrameIdentityObservation()
   private readonly pixelObservation: VideoFramePixelObservation
   private diagnosticRtpTimestamp?: number
@@ -102,16 +107,16 @@ class VideoFrameSource {
   }
 
   constructor(private readonly video: HTMLVideoElement) {
-    this.pixelObservation = new VideoFramePixelObservation(video)
+    this.pixelObservation = new VideoFramePixelObservation(video, input => this.pixelIdentityCurrent(input), input => this.deliverPixelFrame(input))
     this.counter = readVideoFrameCounter(video)
     this.counterSource = this.counter?.source
     if (typeof video.requestVideoFrameCallback !== 'function')
       this.lastMediaTime = video.currentTime
   }
 
-  request(callback: FrameRequest): number {
+  request(callback: FrameRequest, options?: FrameRequestOptions): number {
     const id = ++this.nextRequest
-    this.pending.set(id, callback)
+    this.pending.set(id, { callback, options })
     this.schedule()
     return id
   }
@@ -120,6 +125,40 @@ class VideoFrameSource {
     this.pending.delete(id)
     if (this.pending.size === 0)
       this.cancelScheduled()
+    else if (this.drawableTargetFps() === 0)
+      this.pixelObservation.reset()
+  }
+
+  private drawableTargetFps(): number {
+    let target = 0
+    for (const request of this.pending.values()) {
+      const fps = request.options?.drawableTargetFps?.() ?? 0
+      if (Number.isFinite(fps))
+        target = Math.max(target, Math.min(120, fps))
+    }
+    return target
+  }
+
+  private pixelIdentityCurrent(input: PixelObservationInput): boolean {
+    const counter = readVideoFrameCounter(this.video)
+    return this.pending.size > 0 && input.epoch === this.epoch
+      && input.localSequence === this.frameSequence && input.nativeCallbackCount === this.nativeCallbackCount
+      && counter?.source === input.counterSource && counter?.frames === input.counterFrames
+  }
+
+  private deliverPixelFrame(input: PixelObservationInput): PixelObservationInput | undefined {
+    if (this.drawableTargetFps() <= 0 || !this.pixelIdentityCurrent(input))
+      return
+    const atMs = performance.now()
+    // 像素确认与轮询共用身份；两份额度分别吸收晚到native和播放计数。
+    this.polledFramesSinceNative++
+    if (this.counter && this.counterProgressAtMs !== undefined && atMs - this.counterProgressAtMs <= NATIVE_COUNTER_CREDIT_WINDOW_MS) {
+      this.uncountedNativeFrames++
+      this.nativeCreditStartedAtMs ??= atMs
+    }
+    this.polledFrameCount++
+    this.notify(atMs, { newFrame: true, presentedFramesDelta: 1, trackingSource: 'animationFrame', localSequence: ++this.frameSequence, videoGeneration: this.videoGeneration })
+    return { ...input, localSequence: this.frameSequence, enteredAtMs: atMs }
   }
 
   private cancelScheduled(): void {
@@ -255,7 +294,6 @@ class VideoFrameSource {
       newFrame = counter === undefined && mediaTime !== undefined && Number.isFinite(mediaTime) && mediaTime !== this.lastMediaTime
     }
     if (this.identityObservation.enabled) {
-      this.pixelObservation.observe({ enteredAtMs: callbackEnteredAtMs!, trackingSource, newFrame, localSequence: this.frameSequence + Number(newFrame || trackingSource === 'videoFrameCallback'), nativeCallbackCount: this.nativeCallbackCount, counterSource: counter?.source, counterFrames: counter?.frames, counterReset: counterReset || nativeReset })
       const nativeState = identityValueState(metadata?.presentedFrames, this.lastPresentedFrames)
       const mediaTimeState = identityValueState(mediaTime, previousMediaTime)
       const reason: FrameIdentityReason = newFrame
@@ -285,7 +323,7 @@ class VideoFrameSource {
           trackingSource,
           newFrame,
           reason,
-          localSequence: this.frameSequence + Number(newFrame || trackingSource === 'videoFrameCallback'),
+          localSequence: this.frameSequence + Number(newFrame),
           nativePresentedFrames: finiteIdentityValue(metadata?.presentedFrames),
           previousNativePresentedFrames: finiteIdentityValue(this.lastPresentedFrames),
           nativeDelta: finiteIdentityValue(nativeDelta),
@@ -331,16 +369,27 @@ class VideoFrameSource {
       this.lastPresentedFrames = metadata.presentedFrames
     if (mediaTime !== undefined)
       this.lastMediaTime = mediaTime
+    const drawableTargetFps = this.drawableTargetFps()
+    if (drawableTargetFps > 0 || this.identityObservation.enabled)
+      this.pixelObservation.observe({ enteredAtMs: callbackEnteredAtMs ?? performance.now(), trackingSource, newFrame, localSequence: this.frameSequence + Number(newFrame), nativeCallbackCount: this.nativeCallbackCount, counterSource: counter?.source, counterFrames: counter?.frames, counterReset: counterReset || nativeReset, counterPaired: advance > 0 && credited === advance, epoch: this.epoch }, { drawableTargetFps, diagnostic: this.identityObservation.enabled, lastDeliveredAtMs: newFrame ? atMs : this.lastDeliveredAtMs })
+    else
+      this.pixelObservation.reset()
     // 重复轮询保持等待；原始 RVFC metadata 继续交给协议与诊断消费者。
     if (!newFrame && trackingSource !== 'videoFrameCallback')
       return
     if (newFrame && trackingSource === 'animationFrame')
       this.polledFrameCount++
-    const observed: ObservedVideoFrameMetadata = { ...metadata, mediaTime, presentedFramesDelta, trackingSource, newFrame, localSequence: ++this.frameSequence, videoGeneration: this.videoGeneration }
-    if (newFrame)
+    const observed: ObservedVideoFrameMetadata = { ...metadata, mediaTime, presentedFramesDelta, trackingSource, newFrame, localSequence: this.frameSequence += Number(newFrame), videoGeneration: this.videoGeneration }
+    this.notify(atMs, observed)
+  }
+
+  private notify(atMs: number, observed: ObservedVideoFrameMetadata): void {
+    if (observed.newFrame) {
       this.lastFrame = observed
+      this.lastDeliveredAtMs = atMs
+    }
     for (const id of [...this.pending.keys()]) {
-      const callback = this.pending.get(id)
+      const callback = this.pending.get(id)?.callback
       this.pending.delete(id)
       try {
         callback?.(atMs, observed)

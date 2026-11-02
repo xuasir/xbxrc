@@ -1,6 +1,7 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SuperResolutionWebGL2Renderer, WebGL2VideoRenderer } from './Renderers'
+import { gpuProbe } from './video-frame-gpu.test-support'
 import { getVideoFrameSource } from './video-frame-source'
 
 const config: RendererRuntimeConfig = {
@@ -194,9 +195,46 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind) => {
+  it.each([
+    { sourceFps: 60, targetFps: 60, skipEvery: 6, static: false, expected: 600 },
+    { sourceFps: 60, targetFps: 60, skipEvery: 4, static: false, expected: 600 },
+    { sourceFps: 60, targetFps: 30, skipEvery: 6, static: false, expected: 300 },
+    { sourceFps: 30, targetFps: 60, skipEvery: 4, static: false, expected: 300 },
+    { sourceFps: 60, targetFps: 60, skipEvery: 6, static: true, expected: 500 },
+  ])('imports unique drawable frames for $sourceFps fps source / $targetFps fps target / skip $skipEvery / static $static', async (settings) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const h = await harness(kind, { targetFps: settings.targetFps }, false, 'playbackQuality')
+    const p = gpuProbe(h.video as unknown as HTMLVideoElement)
+    const imported: number[] = []
+    let image = 0
+    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+      if (args.at(-1) === h.video)
+        imported.push(image)
+    })
+    for (let slot = 0; slot < 600; slot++) {
+      const at = slot * 1000 / 60
+      image = Math.floor(slot * settings.sourceFps / 60) + 1
+      p.image(settings.static ? 20 : image % 255)
+      const counted = Math.max(1, Math.floor(Math.floor(slot / 15) * settings.sourceFps / 4))
+      h.supply(counted)
+      if ((slot + 1) % settings.skipEvery !== 0)
+        h.frame(at, image, 0, counted)
+      h.raf(at + 0.2)
+      // 用独立timer推进GPU完成；GL导入计数只读取生产renderer。
+      h.gl.spend(1)
+      vi.advanceTimersByTime(1)
+    }
+    expect(new Set(imported).size).toBe(imported.length)
+    expect(imported.length).toBe(settings.expected)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: settings.expected, duplicateDrawCount: 0, submitFailureCount: 0 })
+    h.renderer.destroy()
+    expect(getVideoFrameSource(h.video as unknown as HTMLVideoElement).snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
+  })
+
   it('separates completed preparation, first usable candidate and successful draw clocks', async () => {
     const h = await harness(kind)
     expect(h.renderer.snapshotResources()?.preparation).toMatchObject({ startedAtMs: 0, finishedAtMs: 0 })

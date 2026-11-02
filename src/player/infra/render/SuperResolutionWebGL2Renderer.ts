@@ -583,7 +583,7 @@ class SuperResolutionProcessor {
           this.drawFrame()
         }
       }
-    })
+    }, { drawableTargetFps: () => this.targetFps })
   }
 
   destroy(): void {

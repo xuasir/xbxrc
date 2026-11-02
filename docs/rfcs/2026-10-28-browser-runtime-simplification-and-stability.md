@@ -432,3 +432,30 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Delivered: 既有dev像素探测新增initialization/drawImage/readback、coldReads/warmReads的次数/总耗时/max，firstRead/lastRead保存单调时钟、阶段成本、trackingSource、localSequence与outcome；异常阶段也保留耗时，快照深拷贝。8ms完整读取预算、原配对资格/频率与释放合同继续执行。
 - Validation: 新增8项回归，实施前8失败/39通过；117项定向、48文件445项全量、lint/类型/生产构建与diff检查通过。24组像素/准备及36组帧计数生产回放通过，off/dev交付和唯一图像一致，有效像素配对继续成立。737输入指纹bd14d98f856a7432f0767a1d01b3ae5efe70544e951f5af466a2376a71258120；详见[验证记录](../../dev-docs/validation/2026-11-02-video-pixel-read-cost-validation.md)。
 - Handoff: 旧17:43日志保留24ms总值；用新构建firstRead分项确认初始化/图像绘制/回读的实际成本，按低成本有效drawable配对决定共享帧源补供给。媒体/恢复/帧供给/提交与实际呈现继续同窗验收，S4保持In Progress，实机采集由用户手动完成。
+
+
+## 2026-11-02 10:59像素成本新日志验收
+
+- Evidence: runtime-trace-1793588378449-1.jsonl，3124行/214.742秒，737输入源码bd14d98f…匹配。首次dev像素读取32ms，初始化0ms、drawImage18ms、getImageData14ms；在原生video阶段触发8ms停止，距离首次SR提交34.591秒，有效配对0。
+- Supply: SR两段完整3s窗口48.087/58.444fps，同代际候选→提交296→294/176→176，rAF60.083/60.053Hz补帧0，稳态上传0.393ms，最新提交年龄P95/max15ms。最终video48个完整15s窗口59.927fps；SR完整15s样本0，长期足帧与效果/物理呈现继续待验。
+- Network: 接收59.945/解码59.458fps，loss0.159683%、RTT P9528ms、1次freeze1.11s/丢帧62；原生video阶段连续756ms收包/媒体计数零推进，随后接收73/解码1/drop60，再解码25/drop2恢复。首段SR突丢73包、buffer窗口均值43.134ms与回调136ms长尾单独保留。
+- Validation: 184个完整窗口、同代际增量、像素成本总值、生命周期顺序和SHA复算通过；browser行为/稳定性PASS、12组共享样本。内部ReferenceChain/锚点/显示闭环、逐NACK有效率与实际上屏缺证。详见[新日志报告](../../dev-docs/validation/2026-11-02-pixel-cost-fresh-trace-analysis.md)。
+- Handoff: 优化重点集中于video→Canvas2D绘制与同步回读，沿当前资源所有权评估低频异步缩略取证并保持8ms预算；有效配对后再选择共享帧源补供给。S4保持In Progress，实际采集由用户手动完成。
+
+
+## 2026-11-02 GPU异步像素补供给实施合同
+
+- Authorization: 用户明确要求找到解决方案并直接推进。本轮沿既有共享帧源、renderer和浏览器媒体所有权实施GPU异步像素补供给。
+- Mechanism: 把原Canvas2D像素读取替换为WebGL2 TexImage2D(video)导入、16×9 GPU缩略采样、PIXEL_PACK_BUFFER/readPixels与fenceSync。clientWaitSync始终timeout0，只有fence完成才getBufferSubData；GPU等待期间通过有界timer异步推进，原渲染继续处理。
+- Ownership: 同一video仍由VideoFrameSource拥有统一回调、计数抵扣和取消epoch；GPU观测器替换原像素观测资源。canvas renderer请求drawable补供给时启用功能路径，原生video/统计消费者保持现有路径，dev独立取证维持低频预算。
+- Identity: native入口建立缩略基线；rAF计数未推进时获取第二份。异步结果仅在native回调数量、源尺寸、计数基线、localSequence和取消epoch保持匹配时消费。像素变化提供一次新候选，播放计数及下一native的去重额度同步结算；迟到、重复及身份改变结果结束当前资格。原始RTP/native metadata保持原事实。
+- Budget: 只保留一个在途GPU读取、单个基线及最近8组差异证据；稳态CPU提交/取回预算8ms，GPU等待期限50ms。冷资源/源首次导入允许一次有界50ms初始化，成本单独记录；随后按8ms执行，失败释放资源并继续既有帧源/帧差回退。用户FPS限制与前后台预算继续决定补供给机会。
+- Validation: 生产模块回放覆盖60fps视频/250ms播放计数合批/45–50Hz RVFC，检查补供给后的唯一图像交付和实际处理；30fps源、静态/重复像素、迟到fence、native/counter/尺寸变化、关闭/context异常、off/dev模式及失败回退均有定向验证。完整网络/恢复/供给/实际呈现继续由用户手动新日志验收。
+
+
+## 2026-11-02 GPU异步像素补供给实施完成
+
+- Delivered: 共享VideoFrameSource拥有单个GPU缩略探测器；两种canvas renderer按动态FPS启用补供给。PBO/fence/timer替换同步Canvas2D，像素变化沿原请求立即交付，native和晚到播放计数共用去重额度。原生video/默认统计继续既有供帧，dev独立取证维持低频。
+- Boundary: native数量、源尺寸、计数、sequence及epoch按提交/完成资格验证。完全抵扣的批次允许在下一次读取前重对齐基线计数，原采样计数保存在baselineCounterFrames；新增8ms消费新鲜度期限。冷提交最多一次50ms，取消fence仍消耗冷额度，稳态CPU合计8ms/GPU等待50ms，单在途/单基线/8组证据；context与取消清理通过。
+- Validation: [实施验证](../../dev-docs/validation/2026-11-02-gpu-drawable-supply-validation.md)及40组生产模块回放通过。RVFC45/50Hz+250ms计数合批，两种renderer均600张唯一图像/10秒；30fps源和用户上限300张，静态与迟到结果保留原供帧。全量48文件460项、lint/类型/270模块构建及既有9/4/36/20/8组回放通过。
+- Handoff: 本轮代码与自动验证完成；S4继续新构建设备60fps、像素对应、GPU/真实呈现、源尺寸切换、平台与长测验收。网络接收停顿和内部恢复证据沿既有主线独立归属，自动实机运行保持暂停。

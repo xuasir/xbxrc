@@ -161,6 +161,8 @@ export class PlaybackService {
       nativeCounterCreditWindowMs: frameSource?.nativeCounterCreditWindowMs,
       pixelProbeCanvases: frameSource?.pixelProbeCanvases ?? 0,
       pixelProbePendingPairs: frameSource?.pixelProbePendingPairs ?? 0,
+      pixelProbeGpuReads: frameSource?.pixelProbeGpuReads ?? 0,
+      pixelProbeTimers: frameSource?.pixelProbeTimers ?? 0,
       frameRequests: frameSource?.frameRequests ?? 0,
       videoGeneration: frameSource?.videoGeneration,
       actualPipeline: this.current?.renderer.kind,
