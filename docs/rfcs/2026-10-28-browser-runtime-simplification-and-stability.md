@@ -5,7 +5,7 @@
 - Completion: P1–P4 主体及 S0–S3 策略代码、自动验证完成；P0 配对性能基线与 P5 / S4 实机验收进行中。
 - Current State: in-progress
 - Owner: 主窗口直接分析、执行与验证，遵循用户指定的协调方式。
-- Last Updated: 2026-10-30
+- Last Updated: 2026-11-02
 - 执行交接：用户指定 Mac + 主机手动测试，并要求暂停自动运行；后续依据新日志继续分析与验收。
 - 规划基线：`02f6db40d6138787ca85a582dedf3b5028ad57ea` 加规划时工作树改动；实施起点为公共可靠性改造提交 `bec3acfb`。
 - 实施授权：用户明确“按计划实施，直到改造完成”，持续执行 P0–P5。
@@ -416,3 +416,19 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Supply: SR正常完整3s窗口44–50fps；首次试探g3接收36.903/decode36.544/提交18.903fps并出现网络/媒体冻结。即时g1 297→293（额外差1.347%），g3/g5/g7/g9为58→58/310→310/290→290/139→139；最终video12个完整15s窗推进59.933fps。
 - Network: 丢失588包/0.31870%，RTT中位15ms/P9566ms；5次freeze共2.516s，g3同一inbound/SSRC下突增516包丢失、持续收包时媒体零推进、缓冲积压和decode恢复/drop7有时间线。PLI/FIR增量0，NACK+84，内部请求结果/ReferenceChain/cleanAnchorCommitted/DisplayStable继续unavailable。
 - Boundary: 同1440p918次后续上传0.477ms/总0.507ms；g3提交年龄max370ms，其余SR max32ms。browserBehavior PASS、稳定性MISSING仅sharedSamples0（failures0），退出和trace预算通过。下一步验证缺RVFC时rAF纹理内容推进、分段测量源尺寸切换467ms准备/等待及相邻回调停顿；S4保持In Progress，自动实机操作保持暂停。
+
+
+## 2026-11-02 SR60fps供给边界续查
+
+- Scope: 接续17:43日志和中断的SR满帧定位，当前最新可用日志仍为2026-10-30采集；本轮完成日志、代码与生产模块回放分析。
+- Evidence: 同代际SR实时区间rAF58.80/60.09Hz、RVFC52.62/54.78Hz，rAF新候选0，候选→提交263/264与165/165；网络接收/解码约59.94/59.95fps、freeze增量0。当前主要缺口定位于解码后到候选边界，drawable/metadata/合成与GPU的内部归因继续待验。
+- Validation: 170个完整窗口复算及36组生产模块回放通过；逐帧主计数补满600张唯一图像/60fps，250ms合批计数输出受回调与轮询相位约束，off/dev交付一致。详见[续查报告](../../dev-docs/validation/2026-11-02-sr-60fps-bottleneck-analysis.md)。
+- Handoff: 优先分段记录现有像素探测的初始化、drawImage与getImageData成本，取得低成本有效drawable配对；按同场景持续前台对照诊断/窗口状态与30→53fps边界。8ms慢读停止、共享帧源/当前renderer合同和技术边界继续保留；S4维持In Progress，实机采集由用户手动完成。
+
+
+## 2026-11-02 像素读取分段取证代码验证
+
+- User Decision: 用户要求继续，沿现有S4像素取证路径拆分首次24ms读取的成本。
+- Delivered: 既有dev像素探测新增initialization/drawImage/readback、coldReads/warmReads的次数/总耗时/max，firstRead/lastRead保存单调时钟、阶段成本、trackingSource、localSequence与outcome；异常阶段也保留耗时，快照深拷贝。8ms完整读取预算、原配对资格/频率与释放合同继续执行。
+- Validation: 新增8项回归，实施前8失败/39通过；117项定向、48文件445项全量、lint/类型/生产构建与diff检查通过。24组像素/准备及36组帧计数生产回放通过，off/dev交付和唯一图像一致，有效像素配对继续成立。737输入指纹bd14d98f856a7432f0767a1d01b3ae5efe70544e951f5af466a2376a71258120；详见[验证记录](../../dev-docs/validation/2026-11-02-video-pixel-read-cost-validation.md)。
+- Handoff: 旧17:43日志保留24ms总值；用新构建firstRead分项确认初始化/图像绘制/回读的实际成本，按低成本有效drawable配对决定共享帧源补供给。媒体/恢复/帧供给/提交与实际呈现继续同窗验收，S4保持In Progress，实机采集由用户手动完成。

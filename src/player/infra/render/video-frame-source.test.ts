@@ -128,6 +128,123 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
+  it('separates cold initialization, drawable copy and readback costs while keeping a valid pair', () => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    p.canvas.getContext.mockImplementation(() => {
+      now += 1
+      return { drawImage: p.drawImage, getImageData: p.getImageData }
+    })
+    p.drawImage.mockImplementation(() => {
+      now += 2
+    })
+    p.getImageData.mockImplementation(() => {
+      now += 3
+      return { data: new Uint8ClampedArray(16 * 9 * 4).fill(20) }
+    })
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    now = 16
+    h.poll(16)
+    const snapshot = h.source.snapshotDiagnostics().videoPixels
+    expect(snapshot).toMatchObject({ readCount: 2, pairCount: 1, readDurationTotalMs: 11, readDurationMaxMs: 6, readTiming: {
+      initialization: { count: 1, totalMs: 1, maxMs: 1 },
+      drawImage: { count: 2, totalMs: 4, maxMs: 2 },
+      readback: { count: 2, totalMs: 6, maxMs: 3 },
+      coldReads: { count: 1, totalMs: 6, maxMs: 6 },
+      warmReads: { count: 1, totalMs: 5, maxMs: 5 },
+      firstRead: { cold: true, readStartedAtMs: 0, readFinishedAtMs: 6, initializationMs: 1, drawImageMs: 2, readbackMs: 3, durationMs: 6, outcome: 'success', trackingSource: 'videoFrameCallback', localSequence: 1 },
+      lastRead: { cold: false, readStartedAtMs: 16, readFinishedAtMs: 21, drawImageMs: 2, readbackMs: 3, durationMs: 5, outcome: 'success', trackingSource: 'animationFrame', localSequence: 1 },
+    } })
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(1)
+    snapshot.readTiming.initialization.totalMs = -1
+    snapshot.readTiming.firstRead!.drawImageMs = -1
+    snapshot.readTiming.lastRead!.durationMs = -1
+    expect(h.source.snapshotDiagnostics().videoPixels.readTiming).toMatchObject({
+      initialization: { totalMs: 1 },
+      firstRead: { drawImageMs: 2 },
+      lastRead: { durationMs: 5 },
+    })
+    expect(now).toBe(21)
+    expect(p.getImageData).toHaveBeenCalledTimes(2)
+    h.cancel()
+  })
+
+  it.each(['initialization', 'drawImage', 'readback'] as const)('attributes slow %s reads and preserves the total budget and native delivery', (phase) => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    p.canvas.getContext.mockImplementation(() => {
+      now += phase === 'initialization' ? 24 : 0
+      return { drawImage: p.drawImage, getImageData: p.getImageData }
+    })
+    p.drawImage.mockImplementation(() => {
+      now += phase === 'drawImage' ? 24 : 0
+    })
+    p.getImageData.mockImplementation(() => {
+      now += phase === 'readback' ? 24 : 0
+      return { data: new Uint8ClampedArray(16 * 9 * 4) }
+    })
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    const snapshot = h.source.snapshotDiagnostics().videoPixels
+    expect(snapshot).toMatchObject({ readCount: 1, pairCount: 0, readDurationTotalMs: 24, disabledReason: 'readbackBudgetExceeded', readTiming: { [phase]: { count: 1, totalMs: 24, maxMs: 24 }, firstRead: { durationMs: 24, outcome: 'readbackBudgetExceeded' } } })
+    now = 1000
+    h.native(1000, 2)
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(2)
+    expect(p.getImageData).toHaveBeenCalledTimes(1)
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbePendingPairs: 0 })
+    h.cancel()
+  })
+
+  it('enforces the sum of read phases even when each phase fits the budget', () => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    p.canvas.getContext.mockImplementation(() => {
+      now += 3
+      return { drawImage: p.drawImage, getImageData: p.getImageData }
+    })
+    p.drawImage.mockImplementation(() => {
+      now += 3
+    })
+    p.getImageData.mockImplementation(() => {
+      now += 3
+      return { data: new Uint8ClampedArray(16 * 9 * 4) }
+    })
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ pairCount: 0, disabledReason: 'readbackBudgetExceeded', readTiming: { firstRead: { initializationMs: 3, drawImageMs: 3, readbackMs: 3, durationMs: 9 } } })
+    h.cancel()
+  })
+
+  it.each(['initialization', 'drawImage', 'readback'] as const)('retains the failed %s phase duration and releases probe resources', (phase) => {
+    const h = counterHarness(1)
+    const p = pixelCanvas(h.video)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    const fail = () => {
+      now += 2
+      throw new Error('pixelStageFailed')
+    }
+    if (phase === 'initialization')
+      p.canvas.getContext.mockImplementation(fail)
+    else if (phase === 'drawImage')
+      p.drawImage.mockImplementation(fail)
+    else
+      p.getImageData.mockImplementation(fail)
+    h.source.snapshotDiagnostics()
+    h.native(0, 1)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ disabledReason: 'readFailed', readTiming: { [phase]: { count: 1, totalMs: 2 }, lastRead: { durationMs: 2, outcome: 'readFailed' } } })
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(1)
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbePendingPairs: 0 })
+    h.cancel()
+  })
+
   it('reports equal static samples and cancels pixel pairs on native, counter, dimension and age changes', () => {
     const h = counterHarness(1)
     pixelCanvas(h.video)
