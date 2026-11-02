@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/xbox-streaming-protocol",
   "crates/ohmygamepad/protocol",
   "crates/ohmygamepad/core",
   "crates/ohmygamepad/bridge/host",
@@ -13,7 +14,8 @@ members = [
   "crates/xbox-webapi",
   "src-tauri",
 ]
-default-members = [ "src-tauri" ]
+default-members = [
+  "crates/xbox-streaming-protocol", "src-tauri" ]
 resolver = "2"
 
 [workspace.package]

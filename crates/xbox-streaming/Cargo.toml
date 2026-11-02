@@ -18,7 +18,7 @@ tokio.workspace = true
 async-trait.workspace = true
 log.workspace = true
 xbox-webapi = { path = "../xbox-webapi" }
-xbxengine-protocol = { path = "../xbxengine/protocol" }
+xbox-streaming-protocol = { path = "../xbox-streaming-protocol" }
 
 [lib]
 path = "src/lib.rs"

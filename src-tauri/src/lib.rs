@@ -6,6 +6,7 @@ use std::sync::Mutex as StdMutex;
 
 use tauri::Manager;
 
+pub mod build_info;
 pub mod error;
 pub mod event_bridge;
 pub mod mods;
@@ -18,7 +19,7 @@ pub use shell::state::{AppState, StartupFlagsState};
 /// 与 `src-tauri/tauri.conf.json` 的 `identifier` 保持一致。
 ///
 /// 启动日志要在 `AppHandle` 可用之前就能落盘，所以这里不能依赖 tauri 的路径解析。
-const APP_IDENTIFIER: &str = "com.xuasir.xbxrc";
+const APP_IDENTIFIER: &str = env!("XBX_APP_IDENTIFIER");
 
 /// 单个启动日志文件的体积上限，超过后轮转为 `startup.prev.log`。
 const STARTUP_LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;

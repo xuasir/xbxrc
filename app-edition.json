@@ -1,0 +1,6 @@
+{
+  "edition": "browser",
+  "developmentBranch": "main",
+  "releaseBranch": "release/test",
+  "rollingTag": "beta"
+}

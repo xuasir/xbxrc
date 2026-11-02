@@ -9198,8 +9198,8 @@ dependencies = [
  "xbox-auth-flow",
  "xbox-cloud-catalog-flow",
  "xbox-streaming",
+ "xbox-streaming-protocol",
  "xbox-webapi",
- "xbxengine-protocol",
 ]
 
 [[package]]
@@ -9213,8 +9213,16 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "xbox-streaming-protocol",
  "xbox-webapi",
- "xbxengine-protocol",
+]
+
+[[package]]
+name = "xbox-streaming-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

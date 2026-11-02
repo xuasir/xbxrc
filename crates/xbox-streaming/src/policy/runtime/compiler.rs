@@ -5,7 +5,7 @@ use crate::policy::runtime::{
     RuntimeVideoPipelinePlan, TurnPlan,
 };
 use crate::policy::types::{CompileError, Owner, Target, TurnSource};
-use xbxengine_protocol::{XbxEngineRemoteProfileKindDto, XbxEngineTargetTypeDto};
+use xbox_streaming_protocol::{RemoteProfileKind, SessionTargetType};
 
 pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan, CompileError> {
     let mode = resolve_runtime_mode(config, context)?;
@@ -127,17 +127,17 @@ fn compile_remb_ramp_down_factor(mode: RuntimeMode) -> u16 {
     }
 }
 
-fn resolve_runtime_remote_profile(target: Target) -> XbxEngineRemoteProfileKindDto {
+fn resolve_runtime_remote_profile(target: Target) -> RemoteProfileKind {
     let target_type = match target {
-        Target::Home => XbxEngineTargetTypeDto::Home,
-        Target::Cloud => XbxEngineTargetTypeDto::Cloud,
+        Target::Home => SessionTargetType::Home,
+        Target::Cloud => SessionTargetType::Cloud,
     };
-    XbxEngineRemoteProfileKindDto::from_target_type(target_type)
+    RemoteProfileKind::from_target_type(target_type)
 }
 
 fn compile_video_pipeline(
     mode: RuntimeMode,
-    remote_profile: XbxEngineRemoteProfileKindDto,
+    remote_profile: RemoteProfileKind,
 ) -> RuntimeVideoPipelinePlan {
     match mode {
         RuntimeMode::WebRtcDirect => RuntimeVideoPipelinePlan {
@@ -231,17 +231,17 @@ mod tests {
     use crate::policy::context::Context;
     use crate::policy::runtime::RuntimePreference;
     use crate::policy::types::Target;
-    use xbxengine_protocol::XbxEngineRemoteProfileKindDto;
+    use xbox_streaming_protocol::RemoteProfileKind;
 
     #[test]
     fn runtime_remote_profile_follows_shared_contract_baseline() {
         assert_eq!(
             resolve_runtime_remote_profile(Target::Cloud),
-            XbxEngineRemoteProfileKindDto::CloudGaming
+            RemoteProfileKind::CloudGaming
         );
         assert_eq!(
             resolve_runtime_remote_profile(Target::Home),
-            XbxEngineRemoteProfileKindDto::HomeLanGaming
+            RemoteProfileKind::HomeLanGaming
         );
     }
 

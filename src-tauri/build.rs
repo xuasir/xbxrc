@@ -56,6 +56,25 @@ fn clang_runtime_library_path(lib: &str) -> Option<PathBuf> {
 }
 
 fn emit_build_metadata() {
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("manifest directory"));
+    let edition_path = manifest_dir.join("../app-edition.json");
+    println!("cargo:rerun-if-changed={}", edition_path.display());
+    let edition: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(edition_path).expect("app edition manifest"))
+            .expect("valid app edition manifest");
+    println!(
+        "cargo:rustc-env=XBX_BUILD_EDITION={}",
+        edition["edition"].as_str().expect("edition")
+    );
+    let app: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(manifest_dir.join("tauri.conf.json")).expect("app config"),
+    )
+    .expect("valid app config");
+    println!(
+        "cargo:rustc-env=XBX_APP_IDENTIFIER={}",
+        app["identifier"].as_str().expect("app identifier")
+    );
     println!(
         "cargo:rustc-env=XBX_BUILD_SOURCE_SHA256={}",
         source_fingerprint().unwrap_or_else(|| "unknown".to_owned())
@@ -99,6 +118,7 @@ fn source_fingerprint() -> Option<String> {
         "src-tauri/resources/ffmpeg/macos-x64/lib/runtime-manifest.json",
         "crates",
         "Cargo.toml",
+        "app-edition.json",
         ".cargo/config.toml",
         "Cargo.lock",
         "rust-toolchain.toml",
