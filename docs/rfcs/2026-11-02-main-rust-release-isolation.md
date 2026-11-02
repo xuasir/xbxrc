@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current State: in-progress
+- Current State: validation-pending
 - Owner: 当前窗口直接执行，按用户要求使用中文且保持单窗口实施
 - Authorization: 用户设置目标“按这个方案，把分支、发布、代码都做好改造”
 - Date: 2026-11-02
@@ -27,10 +27,11 @@
 - [x] main 源码/workspace/Cargo 依赖树只含稳定能力，构建独立于 FFmpeg/SDL SDK
 - [x] 前端 lint:fix、类型、测试、生产构建；Rust fmt、公共与 Tauri 单元测试
 - [x] rust 原生编译/测试与运行库门禁，能力/开关/组合合同
-- [x] 两种配置身份、资源、更新 endpoint 和 manifest 对应，跨 edition 发布被门禁拒绝；Native实际包待追加
-- [ ] 两条开发及 release 分支对应到验证提交，流水线语法/门禁/产物验证
-- [ ] 实际本地安装包与可迁移依赖检查，记录尺寸和构建身份
-- [ ] 实机与长测继续按用户手动验收，独立记录平台/CI 证据范围
+- [x] 两种 app 身份、资源、更新 endpoint 和 manifest 对应，跨 edition 发布被门禁拒绝
+- [x] 本地开发及 release 分支对应到验证源码，流水线语法、发行门禁与模拟产物验证
+- [x] 实际本地 macOS arm64 安装包与可迁移依赖检查，记录尺寸和构建身份
+- [ ] 远端开发线同步与 Windows/macOS CI 的实际安装产物取证
+- [ ] 实机与长测按用户手动验收，独立记录平台/CI 证据范围
 
 ## Boundaries / Risks
 
@@ -42,7 +43,7 @@
 
 - 已保存 P0 基线 `37f632a`，rust 从此建立。公共协议与构建身份已拆分 `9abf17d`；公共发行/更新身份门禁 `10b771d` 已验证。
 - main 原生源码、依赖、SDK、前端入口及设置完成裁剪。直接 Tauri 构建和 main/release/test/stable 的来源门禁已接入独立 CI/cache；共同 manifest、SHA/架构/版本/跨 edition 检查及 updater 运行时检查已落地。
-- 当前证据：公共 Rust 147 项、main Tauri 44 项、前端 455 项、lint/typecheck/生产构建、生命周期测试及 8 项发行门禁/两 edition 模拟通过；Browser Cargo 依赖树门禁通过。实际包与 rust 原生 feature/身份装配继续实施。
-
-- rust 已合并 main 初次裁剪边界并保留原生源码，接上轻量 streaming/配置/键盘默认值。native-media/native-gamepad/none/组合四种编译与依赖门禁通过；媒体输入提交迁到媒体 RPC，支持 Browser 输入搭配原生媒体。
-- Native WIP 名称/identifier/固定更新渠道及当前平台SDK运行闭包已装配。前端473项、引擎1277项（24 ignored）、Tauri212项、手柄core36项、关闭原生的Tauri48项、Mac运行库8项和发行8项/双edition模拟通过；5个旧测试数据与断言按现行恢复合同校正，生产恢复逻辑保留。
+- main：公共 Rust 147 项、Tauri 44 项、前端 455 项、lint/typecheck/生产构建、生命周期测试及 8 项发行门禁/两 edition 模拟通过；Browser Cargo 依赖树门禁通过。
+- rust：原生媒体与手柄分别由 native-media / native-gamepad 控制，native-wip 聚合；四种特性组合的编译和依赖门禁通过。前端473项、引擎1277项（24 ignored）、Tauri212项、关闭原生Tauri48项、手柄core36项和Mac运行库探针8项通过。
+- 两条线默认使用 target/browser / target/native-wip，与 CI 的 edition 目录一致。Browser 默认目录重建与 Native WIP 实际 app/DMG 已完成，签名、独立身份、当前架构资源与可迁移依赖闭包通过。应用与 FFmpeg 的 macOS 最低要求保持26.0。
+- 本地源码及发行快照进入待验收状态；详细构建身份、尺寸和证据边界见[发行隔离验证](../../dev-docs/validation/2026-11-02-desktop-edition-isolation.md)。远端开发线同步与平台CI为下一步；实机和长测保持用户手动验收。

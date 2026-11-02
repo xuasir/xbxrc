@@ -8,8 +8,8 @@ import { checkMacosRuntime } from './macos-runtime-lib.mjs'
 const identity = readReleaseIdentity()
 const target = resolve(repositoryRoot, process.env.CARGO_TARGET_DIR ?? `target/${identity.edition}`, 'release')
 const architecture = process.argv[2]
-if (!["aarch64", "x86_64"].includes(architecture))
-  throw new Error("安装包检查需要明确架构 aarch64 / x86_64")
+if (!['aarch64', 'x86_64'].includes(architecture))
+  throw new Error('安装包检查需要明确架构 aarch64 / x86_64')
 const forbidden = /(?:ffmpeg|libavcodec|libavutil|libavformat|libswscale|libswresample|sdl3)/i
 if (process.platform === 'darwin') {
   const app = join(target, 'bundle/macos', `${identity.productName}.app`)
