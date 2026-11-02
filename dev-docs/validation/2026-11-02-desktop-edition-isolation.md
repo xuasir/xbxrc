@@ -13,7 +13,12 @@
 
 ## Native WIP
 
-正在适配并验证 native-media / native-gamepad 特性、资源、独立安装与更新身份，证据待追加。
+- 原生源码提交：`ebc368d`（main/rust 首次边界合并），构建提交：`9f4bb3c`；本地按 CI 转换为 `0.1.0-native-wip.1` 后构建，仓库保持基础版本。
+- none / native-media / native-gamepad / native-wip 编译和依赖归属门禁通过。媒体输入提交由 xbxEngine RPC 承担，媒体单项可以消费 Browser 输入。
+- 前端50文件/473项；Rust引擎1277项（24 ignored）、Tauri212项、手柄core36项；关闭原生的Tauri48项；Mac运行库/FFmpeg隔离版本探针8项；发行8项和两edition模拟通过。
+- 全量引擎测试发现5个旧测试数据/断言缺口：补齐clean-anchor来源，把host-present合成时间线绑定当前时钟，并校正display-stable投影；原有生产恢复逻辑继续保留。依据：现行completion/display/transport-recovery合同与2026-06-02恢复边界报告。
+- 实际 app 为55,599,963 bytes，DMG为25,471,961 bytes；安装身份 `com.xuasir.xbxrc.native-wip`，版本 `0.1.0-native-wip.1`，arm64、macOS26.0。包内14个当前架构Framework，含应用的15个Mach-O闭包与完整签名通过。
+- app/DMG 位于 `target/native-wip/release/bundle/{macos,dmg}`，app名称为 `xbxrc Native WIP.app`。移动到 `/private/tmp/xbxrc-p1-native-relocated.app` 后检查再次通过；资源只保留当前平台/架构SDK运行库与许可证。
 
 ## 证据边界
 
