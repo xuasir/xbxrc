@@ -7,6 +7,14 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
     emit_build_metadata();
+    // Windows版本字符串从实际应用版本读取，预览版本与安装包保持一致。
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read("tauri.conf.json").expect("app config"))
+            .expect("valid app config");
+    std::env::set_var(
+        "CARGO_PKG_VERSION",
+        config["version"].as_str().expect("app version"),
+    );
     tauri_build::build()
 }
 

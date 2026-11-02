@@ -1,4 +1,6 @@
-# SDL3 静态库在 macOS 11 部署目标下会引用 ___isPlatformVersionAtLeast，链接阶段会失败。
+[build]
+target-dir = "target/browser"
+
 # 应用与 CI 使用 macOS 26.0 部署目标。
 [env]
 MACOSX_DEPLOYMENT_TARGET = "26.0"

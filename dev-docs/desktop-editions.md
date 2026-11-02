@@ -7,7 +7,7 @@
 
 原生源码、依赖、SDK、设置和诊断随 rust 开发线维护。公共协议、认证、Xbox API、会话/信令、UI与几何导航在 main 修改后同步到 rust。稳定线裁剪提交与原生线装配提交形成一次性分叉边界，后续公共修复按提交同步。
 
-main 使用 `pnpm tauri build`，rust 使用带 FFmpeg SDK 的原生入口。Cargo target 与 CI cache 按 browser/native-wip 和架构隔离；应用和 FFmpeg 保持 macOS 26.0。
+main 使用 `pnpm tauri build`，rust 使用带 FFmpeg SDK 的原生入口。Cargo本地默认目录分别为 `target/browser` / `target/native-wip`，CI使用对应绝对目录；cache按edition和架构隔离；应用和 FFmpeg 保持 macOS 26.0。
 
 仓库版本保持基础 `X.Y.Z`，预览流水线追加 `-beta.<run>` 或 `-native-wip.<run>`。来源门禁验证 release 提交属于对应开发线，正式 tag 为 main 的 `vX.Y.Z`。两条 release 分支由已验证的对应开发提交更新。
 
