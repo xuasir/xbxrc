@@ -121,10 +121,8 @@ impl ConfigProvider for ConfigService {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
-            polling_rate: normalized
-                .get("polling_rate")
-                .and_then(Value::as_i64)
-                .unwrap_or(250),
+            // 原生媒体内部输入参数；浏览器采样由 rAF 驱动。
+            polling_rate: 250,
             vibration: normalized
                 .get("vibration")
                 .and_then(Value::as_bool)
@@ -134,11 +132,11 @@ impl ConfigProvider for ConfigService {
                 .and_then(Value::as_str)
                 .unwrap_or("realistic")
                 .to_string(),
-            stream_runtime_mode: normalized
-                .get("stream_runtime_mode")
-                .and_then(Value::as_str)
-                .unwrap_or("webrtc-direct")
-                .to_string(),
+            stream_runtime_mode: super::runtime_features::effective_runtime_mode(
+                &normalized,
+                super::runtime_features::runtime_feature_capabilities(),
+            )
+            .to_string(),
             power_on: normalized
                 .get("power_on")
                 .and_then(Value::as_bool)

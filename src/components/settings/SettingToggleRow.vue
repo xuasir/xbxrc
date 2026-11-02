@@ -5,6 +5,7 @@ interface SettingToggleRowProps {
   id: string
   scopeId: string
   label: string
+  description?: string
   enabled: boolean
   disabled?: boolean
   upNeighborId?: string
@@ -39,12 +40,16 @@ function handleConfirm(): void {
     :class="{ 'setting-toggle-row--active': props.enabled }"
     :scope-id="props.scopeId"
     :aria-label="props.label"
+    :aria-describedby="props.description ? `${props.id}.description` : undefined"
     :disabled="props.disabled"
     role="switch"
     :aria-checked="props.enabled"
     @click="handleConfirm"
   >
-    <span class="setting-toggle-row__label">{{ props.label }}</span>
+    <span class="setting-toggle-row__content">
+      <span class="setting-toggle-row__label">{{ props.label }}</span>
+      <span v-if="props.description" :id="`${props.id}.description`" class="setting-toggle-row__description">{{ props.description }}</span>
+    </span>
 
     <span class="setting-toggle-row__switch" aria-hidden="true">
       <span class="setting-toggle-row__track">
@@ -72,6 +77,18 @@ function handleConfirm(): void {
     border-color var(--ui-motion-fast),
     background-color var(--ui-motion-fast),
     box-shadow var(--ui-motion-fast);
+}
+
+.setting-toggle-row__content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-toggle-row__description {
+  font-size: var(--ui-settings-row-description-size, 13px);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
 }
 
 .setting-toggle-row__label {
@@ -130,7 +147,8 @@ function handleConfirm(): void {
   box-shadow: var(--shadow-xbox-focus);
 }
 
-.setting-toggle-row[data-focused='true'] .setting-toggle-row__label {
+.setting-toggle-row[data-focused='true'] .setting-toggle-row__label,
+.setting-toggle-row[data-focused='true'] .setting-toggle-row__description {
   color: var(--ui-focus-text);
 }
 

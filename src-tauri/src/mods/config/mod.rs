@@ -2,6 +2,7 @@ pub mod config_policy;
 pub mod defaults;
 pub mod grouping;
 pub mod rpc;
+pub mod runtime_features;
 pub mod service;
 pub mod storage_repository;
 

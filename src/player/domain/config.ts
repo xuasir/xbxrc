@@ -19,7 +19,6 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
     uiSystem: [10, 19, 31, 27, 32, -41],
     uiVersion: [0, 2, 0],
     input: {
-      pollingRate: 250,
       vibrationEnabled: true,
       vibrationStrength: 'realistic',
     },
@@ -29,7 +28,7 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
     },
     renderer: {
       enabled: true,
-      sharpness: 2,
+      sharpness: 0,
       pipelineType: 'auto',
       processing: 'usm',
       processingMode: 'quality',
@@ -37,7 +36,7 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
       contrast: 100,
       saturation: 100,
       targetFps: 60,
-      mode: 'webgl2',
+      mode: 'native',
       format: 'Contain',
       superResolutionEnabled: false,
       superResolutionAlgorithm: 'fsr1',

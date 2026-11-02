@@ -49,11 +49,7 @@ async fn load_startup_flags(app: &tauri::App) -> AppResult<Arc<RwLock<StartupFla
 
     let config_service = mods::config::ConfigService::new(app_handle.clone());
 
-    let keys = vec![
-        "fullscreen".to_string(),
-        "background_keepalive".to_string(),
-        "use_vulkan".to_string(),
-    ];
+    let keys = vec!["fullscreen".to_string(), "background_keepalive".to_string()];
 
     match config_service.get_by_keys(&keys) {
         Ok(config_values) => {
@@ -218,6 +214,8 @@ async fn build_services(
         native_video.clone(),
         runtime_trace.clone(),
         stats_snapshot_interval,
+        config_provider.clone(),
+        is_quitting.clone(),
     ));
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
         app_handle.clone(),
@@ -228,7 +226,10 @@ async fn build_services(
         runtime_trace.clone(),
     ));
 
-    let gamepad_service = Arc::new(mods::gamepad::GamepadService::new(app_handle.clone()));
+    let gamepad_service = Arc::new(mods::gamepad::GamepadService::new(
+        app_handle.clone(),
+        config_provider.clone(),
+    ));
 
     let app_state_service: mods::app_state::AppStateProviderRef =
         Arc::new(mods::app_state::AppStateService::new(
@@ -259,7 +260,6 @@ async fn build_services(
         let fullscreen = state.startup_flags.read().await.fullscreen;
         let _ = main_window.set_fullscreen(fullscreen);
     }
-    mods::native_video::configure_main_window_video_host(&app_handle);
 
     Ok(state)
 }
@@ -281,8 +281,6 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
             );
         }
     });
-
-    state.xbxengine.bind_tasks(state.is_quitting.clone());
 
     let _ = app_handle.tauri_plugin_keepawake().start(
         app_handle,

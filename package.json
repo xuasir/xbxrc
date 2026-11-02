@@ -8,6 +8,10 @@
     "build": "vite build",
     "test": "vitest run",
     "preview": "vite preview",
+    "lint": "eslint src",
+    "typecheck": "vue-tsc --noEmit",
+    "test:lifecycle": "python3 -B tests/runtime-trace/test_streaming_session_lifecycle_gate.py",
+    "test:macos-runtime": "node --test tests/build/macos-runtime.test.mjs",
     "lint:fix": "eslint src --fix",
     "skills:verify": "node scripts/sync-skills.mjs verify",
     "skills:lock": "node scripts/sync-skills.mjs lock",
@@ -18,6 +22,7 @@
     "tauri:build:release:macos": "pnpm tauri build --bundles app,dmg",
     "tauri:build:release:windows": "pnpm tauri build --bundles nsis",
     "release:check-bundle": "node scripts/release-check-bundle.mjs",
+    "release:check-macos-runtime": "node scripts/check-macos-runtime.mjs",
     "release:check-collected": "node scripts/release-check-collected.mjs",
     "release:verify-pipeline": "node scripts/release-verify-pipeline.mjs"
   },

@@ -21,13 +21,15 @@ struct NativeSession {
 /// 桌面原生后端只持有设备采样和触觉；输入归属由公共控制器管理。
 pub struct GamepadService {
     app_handle: AppHandle,
+    config: crate::mods::config::ConfigProviderRef,
     native: Mutex<Option<NativeSession>>,
 }
 
 impl GamepadService {
-    pub fn new(app_handle: AppHandle) -> Self {
+    pub fn new(app_handle: AppHandle, config: crate::mods::config::ConfigProviderRef) -> Self {
         Self {
             app_handle,
+            config,
             native: Mutex::new(None),
         }
     }
@@ -35,6 +37,7 @@ impl GamepadService {
 
 impl GamepadProvider for GamepadService {
     fn start_backend(&self) -> Result<GamepadRuntimeSnapshotDto, String> {
+        crate::mods::config::runtime_features::require_native_feature(self.config.as_ref(), false)?;
         let mut native = self.native.lock().map_err(|e| e.to_string())?;
         if let Some(session) = native.as_ref() {
             return session

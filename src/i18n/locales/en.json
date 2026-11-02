@@ -900,6 +900,7 @@
       "streamingExperience": {
         "title": "Streaming",
         "sectionShared": "General",
+        "sectionPreview": "Preview features",
         "sectionAdvanced": "Advanced",
         "sectionConsole": "Console streaming",
         "sectionCloud": "Cloud gaming"
@@ -928,6 +929,7 @@
       },
       "advancedDiagnostics": {
         "title": "Advanced & diagnostics",
+        "sectionPreview": "Preview features",
         "sectionAdvanced": "Advanced",
         "sectionDanger": "Danger zone",
         "dangerIntro": "Relay and expert server credentials are high-risk. Reveal these settings only when you understand the impact.",
@@ -1030,10 +1032,6 @@
       "background_keepalive": {
         "label": "Background keepalive",
         "description": "Keep the app session alive when the window moves to the background for faster return."
-      },
-      "use_vulkan": {
-        "label": "Use Vulkan rendering",
-        "description": "Prefer the Vulkan rendering path. Turn this off if your driver or platform is unstable with Vulkan."
       },
       "ui_haptics": {
         "label": "UI haptic feedback",
@@ -1203,25 +1201,6 @@
           }
         }
       },
-      "polling_rate": {
-        "label": "Polling Rate",
-        "options": {
-          "250": { "label": "250 HZ" },
-          "83_33": { "label": "83.33 HZ" },
-          "62_5": { "label": "62.5 HZ" },
-          "50": { "label": "50 HZ" },
-          "41_67": { "label": "41.67 HZ" },
-          "35_71": { "label": "35.71 HZ" },
-          "31_25": { "label": "31.25 HZ" },
-          "27_78": { "label": "27.78 HZ" },
-          "25": { "label": "25 HZ" },
-          "22_73": { "label": "22.73 HZ" },
-          "20_83": { "label": "20.83 HZ" },
-          "19_23": { "label": "19.23 HZ" },
-          "17_86": { "label": "17.86 HZ" },
-          "16_67": { "label": "16.67 HZ" }
-        }
-      },
       "video_format": {
         "label": "Picture fit mode",
         "options": {
@@ -1249,12 +1228,13 @@
         "label": "Super Resolution (Experimental)",
         "description": "Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure."
       },
-      "stream_runtime_mode": {
-        "label": "Streaming runtime",
-        "options": {
-          "webrtc_direct": { "label": "WebRTC Direct" },
-          "rust_owned": { "label": "Rust Owned" }
-        }
+      "rust_media_preview": {
+        "label": "Rust media preview",
+        "description": "Use Rust media from the next stream. Turning this off selects browser playback for the next stream."
+      },
+      "native_gamepad_preview": {
+        "label": "Native gamepad preview",
+        "description": "Use native gamepad input from the next app launch. Turning this off selects Browser Gamepad API on the next launch."
       },
       "display_options": {
         "label": "Picture style",
@@ -1355,7 +1335,7 @@
     "backend": "Controller input backend",
     "browser": "Browser",
     "native": "Native",
-    "backendHint": "Used the next time the app starts. The current session and input backend keep running.",
+    "nativePreviewLocation": "The native gamepad switch is in Advanced & diagnostics → Preview features.",
     "currentBackend": "Currently running:",
     "restartPending": "Applies next launch",
     "export": "Export input diagnostics",

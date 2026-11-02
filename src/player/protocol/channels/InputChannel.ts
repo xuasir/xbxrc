@@ -28,6 +28,7 @@ export class InputChannel extends BaseChannel {
     const inputTransport: InputTransport = {
       send: data => this.send(data),
       getReadyState: () => this.context.readyState(),
+      bufferedAmount: () => this.context.bufferedAmount(),
     }
     this.inputService.start(inputTransport)
     this.started = true

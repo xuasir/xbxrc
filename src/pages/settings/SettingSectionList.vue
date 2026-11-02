@@ -46,6 +46,8 @@ function fieldRow(entry: SettingSectionEntry): entry is SettingSectionEntry & { 
             :scope-id="props.scopeId"
             :label="entry.row.label"
             :enabled="entry.row.value === true"
+            :description="entry.row.description"
+            :disabled="props.pendingActionKey !== null"
             :order="entry.row.index"
             @confirm="emit('rowConfirm', entry.row)"
           />

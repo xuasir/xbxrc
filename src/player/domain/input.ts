@@ -36,7 +36,6 @@ export interface ProcessedVideoFrameMetadata {
 }
 
 export interface InputRuntimeConfig {
-  pollingRate: number
   vibrationEnabled: boolean
   vibrationStrength: VibrationStrengthPreset
 }

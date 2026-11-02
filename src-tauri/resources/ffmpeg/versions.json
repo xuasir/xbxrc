@@ -7,14 +7,16 @@
   },
   "macos-arm64": {
     "version": "8.1.x",
-    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared)",
+    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared --enable-version3)",
     "sha256": "b072aed6871998cce9b36e7774033105ca29e33632be5b6347f3206898e0756a",
-    "license": "LGPL-2.1-or-later"
+    "license": "LGPL-3.0-or-later",
+    "minimumSystemVersion": "26.0"
   },
   "macos-x64": {
     "version": "8.1.x",
-    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared --disable-x86asm)",
+    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared --disable-x86asm --enable-version3)",
     "sha256": "b072aed6871998cce9b36e7774033105ca29e33632be5b6347f3206898e0756a",
-    "license": "LGPL-2.1-or-later"
+    "license": "LGPL-3.0-or-later",
+    "minimumSystemVersion": "26.0"
   }
 }

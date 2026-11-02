@@ -16,6 +16,7 @@ use xbxengine_protocol::{
     XbxEngineSessionDto, XbxEngineTargetTypeDto, XbxEngineTurnServerDto, XbxEngineViewportDto,
 };
 
+use super::preview_lifecycle::{PreviewRuntimeSlot, PreviewStop, StopResult};
 use crate::error::{AppError, AppResult};
 use crate::mods::native_video::NativeVideoRegistryRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
@@ -32,9 +33,35 @@ fn runtime_tick_missed_behavior() -> tokio::time::MissedTickBehavior {
 }
 
 pub struct XbxEngineService {
-    runtime_state: Arc<XbxEngineRuntimeState>,
+    runtimes: Arc<StdMutex<PreviewRuntimeSlot<PreviewRuntimeInstance>>>,
+    app_handle: AppHandle,
+    native_video: NativeVideoRegistryRef,
+    config: crate::mods::config::ConfigProviderRef,
+    is_quitting: Arc<AtomicBool>,
+    stats_snapshot_interval: StdMutex<Duration>,
     last_runtime_event: Arc<StdMutex<Option<Value>>>,
     runtime_trace: RuntimeTraceRecorderRef,
+}
+
+struct PreviewRuntimeInstance {
+    state: Arc<XbxEngineRuntimeState>,
+    tick_task: StdMutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+}
+
+impl PreviewRuntimeInstance {
+    fn stop_tick(&self) {
+        if let Ok(mut task) = self.tick_task.lock() {
+            if let Some(task) = task.take() {
+                task.abort();
+            }
+        }
+    }
+}
+
+impl Drop for PreviewRuntimeInstance {
+    fn drop(&mut self) {
+        self.stop_tick();
+    }
 }
 
 impl XbxEngineService {
@@ -44,17 +71,179 @@ impl XbxEngineService {
         native_video: NativeVideoRegistryRef,
         runtime_trace: RuntimeTraceRecorderRef,
         stats_snapshot_interval: Duration,
+        config: crate::mods::config::ConfigProviderRef,
+        is_quitting: Arc<AtomicBool>,
     ) -> Self {
         Self {
-            runtime_state: Arc::new(XbxEngineRuntimeState::new(
-                app_handle,
-                last_runtime_event.clone(),
-                native_video,
-                runtime_trace.clone(),
-                stats_snapshot_interval,
-            )),
+            runtimes: Arc::new(StdMutex::new(PreviewRuntimeSlot::default())),
+            app_handle,
+            native_video,
+            config,
+            is_quitting,
+            stats_snapshot_interval: StdMutex::new(stats_snapshot_interval),
             last_runtime_event,
             runtime_trace,
+        }
+    }
+
+    fn current_runtime(&self) -> AppResult<Option<Arc<PreviewRuntimeInstance>>> {
+        Ok(self
+            .runtimes
+            .lock()
+            .map_err(|_| AppError::XbxEngine("nativeRuntimeSlotPoisoned".into()))?
+            .current())
+    }
+
+    fn start_runtime(
+        &self,
+        command: &XbxEngineControlCommandDto,
+    ) -> AppResult<(Arc<PreviewRuntimeInstance>, u64)> {
+        crate::mods::config::runtime_features::require_native_feature(self.config.as_ref(), true)?;
+        let interval = *self
+            .stats_snapshot_interval
+            .lock()
+            .map_err(|_| AppError::XbxEngine("nativeStatsIntervalPoisoned".into()))?;
+        let mut runtimes = self
+            .runtimes
+            .lock()
+            .map_err(|_| AppError::XbxEngine("nativeRuntimeSlotPoisoned".into()))?;
+        if self.is_quitting.load(Ordering::Acquire) {
+            return Err(AppError::XbxEngine("appTerminating".into()));
+        }
+        let instance = runtimes
+            .start(|| {
+                if let Ok(mut event) = self.last_runtime_event.lock() {
+                    *event = None;
+                }
+                PreviewRuntimeInstance {
+                    state: Arc::new(XbxEngineRuntimeState::new(
+                        self.app_handle.clone(),
+                        self.last_runtime_event.clone(),
+                        self.native_video.clone(),
+                        self.runtime_trace.clone(),
+                        interval,
+                    )),
+                    tick_task: StdMutex::new(None),
+                }
+            })
+            .map_err(|error| AppError::XbxEngine(error.into()))?;
+        crate::mods::native_video::configure_main_window_video_host(&self.app_handle);
+        // 定时任务只在预览会话存在时运行；弱引用让停止后资源自然释放。
+        let weak = Arc::downgrade(&instance);
+        let quitting = self.is_quitting.clone();
+        let task = tauri::async_runtime::spawn(async move {
+            let mut interval =
+                tokio::time::interval(Duration::from_millis(XBXENGINE_TICK_INTERVAL_MS));
+            interval.set_missed_tick_behavior(runtime_tick_missed_behavior());
+            loop {
+                interval.tick().await;
+                if quitting.load(Ordering::Acquire) {
+                    break;
+                }
+                let Some(instance) = weak.upgrade() else {
+                    break;
+                };
+                let state = instance.state.clone();
+                drop(instance);
+                match tauri::async_runtime::spawn_blocking(move || state.tick()).await {
+                    Ok(Ok(())) => {}
+                    result => log::warn!("xbxengine tick failed: {result:?}"),
+                }
+            }
+        });
+        *instance
+            .tick_task
+            .lock()
+            .map_err(|_| AppError::XbxEngine("nativeTickTaskPoisoned".into()))? = Some(task);
+        let epoch = instance.state.prepare_control(command);
+        Ok((instance, epoch))
+    }
+
+    async fn stop_runtime(
+        &self,
+        command: XbxEngineControlCommandDto,
+        expected: Option<&Arc<PreviewRuntimeInstance>>,
+    ) -> AppResult<()> {
+        let (stop, epoch) = {
+            let mut runtimes = self
+                .runtimes
+                .lock()
+                .map_err(|_| AppError::XbxEngine("nativeRuntimeSlotPoisoned".into()))?;
+            if let Some(expected) = expected {
+                if runtimes
+                    .current()
+                    .is_some_and(|current| !Arc::ptr_eq(&current, expected))
+                {
+                    return Ok(());
+                }
+            }
+            let stop = runtimes.begin_stop();
+            let epoch = match &stop {
+                PreviewStop::Started { runtime, .. } => {
+                    runtime.stop_tick();
+                    runtime.state.prepare_control(&command)
+                }
+                _ => 0,
+            };
+            (stop, epoch)
+        };
+        let mut receiver = match stop {
+            PreviewStop::Idle => return Ok(()),
+            PreviewStop::Waiting(receiver) => receiver,
+            PreviewStop::Started {
+                runtime,
+                completion,
+            } => {
+                let receiver = completion.subscribe();
+                let app_handle = self.app_handle.clone();
+                let runtimes = self.runtimes.clone();
+                let trace = self.runtime_trace.clone();
+                // 排空任务独立于 RPC 等待方；取消等待仍会完成资源回收并通知所有停止调用。
+                tauri::async_runtime::spawn(async move {
+                    let started_at = Instant::now();
+                    record_dispatch_trace(&trace, "StopRuntime", &command, "requested", None, None);
+                    let command_for_trace = command.clone();
+                    let state = runtime.state.clone();
+                    let result = tauri::async_runtime::spawn_blocking(move || {
+                        let result = state.apply_control(command, epoch, None, None);
+                        state.shutdown();
+                        result
+                    })
+                    .await
+                    .map_err(|error| {
+                        AppError::XbxEngine(format!("nativeStopTaskJoinFailed: {error}"))
+                    })
+                    .and_then(|result| {
+                        result.map_err(|error| AppError::XbxEngine(error.to_string()))
+                    });
+                    drop(runtime);
+                    crate::mods::native_video::restore_main_window_webview_host(&app_handle);
+                    record_dispatch_trace(
+                        &trace,
+                        "StopRuntime",
+                        &command_for_trace,
+                        "completed",
+                        Some(started_at.elapsed().as_millis()),
+                        result.as_ref().err(),
+                    );
+                    let shared_result = result.map_err(|error| error.to_string());
+                    if let Ok(mut slot) = runtimes.lock() {
+                        slot.finish_stop();
+                    }
+                    completion.send_replace(Some(shared_result));
+                });
+                receiver
+            }
+        };
+        loop {
+            let result: StopResult = receiver.borrow_and_update().clone();
+            if let Some(result) = result {
+                return result.map_err(AppError::XbxEngine);
+            }
+            receiver
+                .changed()
+                .await
+                .map_err(|_| AppError::XbxEngine("nativeStopCompletionLost".into()))?;
         }
     }
 }
@@ -68,7 +257,24 @@ impl XbxEngineProvider for XbxEngineService {
             .and_then(Value::as_str)
             .map(str::to_owned);
         let command = parse_control_command(command_name, params)?;
-        let control_epoch = self.runtime_state.prepare_control(&command);
+        let is_start = matches!(command, XbxEngineControlCommandDto::StartRuntime { .. });
+        if matches!(command, XbxEngineControlCommandDto::StopRuntime { .. }) {
+            return self.stop_runtime(command, None).await;
+        }
+        // 捕获实例与控制 epoch 在同一锁内完成，确保 Stop 撤销所有排队控制。
+        let (instance, control_epoch) = if is_start {
+            self.start_runtime(&command)?
+        } else {
+            let runtimes = self
+                .runtimes
+                .lock()
+                .map_err(|_| AppError::XbxEngine("nativeRuntimeSlotPoisoned".into()))?;
+            let instance = runtimes
+                .current()
+                .ok_or_else(|| AppError::XbxEngine("nativeRuntimeInactive".into()))?;
+            let epoch = instance.state.prepare_control(&command);
+            (instance, epoch)
+        };
         record_dispatch_trace(
             &self.runtime_trace,
             command_name,
@@ -80,7 +286,7 @@ impl XbxEngineProvider for XbxEngineService {
         let started_at = Instant::now();
         let deadline = matches!(command, XbxEngineControlCommandDto::RequestReconnect { .. })
             .then(|| started_at + Duration::from_secs(120));
-        let runtime_state = self.runtime_state.clone();
+        let runtime_state = instance.state.clone();
         let command_for_trace = command.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
             runtime_state.apply_control(
@@ -93,8 +299,21 @@ impl XbxEngineProvider for XbxEngineService {
         .await
         .map_err(|error| {
             AppError::XbxEngine(format!("xbxengine control task join failed: {error}"))
-        })?
-        .map_err(|error| AppError::XbxEngine(error.to_string()));
+        })
+        .and_then(|result| result.map_err(|error| AppError::XbxEngine(error.to_string())));
+        if is_start && result.is_err() {
+            if let Err(error) = self
+                .stop_runtime(
+                    XbxEngineControlCommandDto::StopRuntime {
+                        reason: Some("startFailed".into()),
+                    },
+                    Some(&instance),
+                )
+                .await
+            {
+                log::warn!("native runtime startup cleanup failed: {error}");
+            }
+        }
         record_dispatch_trace(
             &self.runtime_trace,
             command_name,
@@ -107,7 +326,10 @@ impl XbxEngineProvider for XbxEngineService {
     }
 
     async fn snapshot_stats(&self) -> AppResult<Value> {
-        self.runtime_state.snapshot_stats()
+        match self.current_runtime()? {
+            Some(runtime) => runtime.state.snapshot_stats(),
+            None => Ok(Value::Null),
+        }
     }
 
     fn get_last_runtime_event(&self) -> AppResult<Value> {
@@ -120,34 +342,16 @@ impl XbxEngineProvider for XbxEngineService {
     }
 
     fn is_runtime_available(&self) -> bool {
-        true
+        crate::mods::config::runtime_features::runtime_feature_capabilities().native_media
     }
 
     fn set_stats_snapshot_interval(&self, interval: Duration) {
-        self.runtime_state.set_stats_snapshot_interval(interval);
-    }
-
-    fn bind_tasks(&self, is_quitting: Arc<AtomicBool>) {
-        let runtime_state = self.runtime_state.clone();
-        tauri::async_runtime::spawn(async move {
-            let mut interval =
-                tokio::time::interval(Duration::from_millis(XBXENGINE_TICK_INTERVAL_MS));
-            interval.set_missed_tick_behavior(runtime_tick_missed_behavior());
-            while !is_quitting.load(Ordering::Relaxed) {
-                interval.tick().await;
-                let state = runtime_state.clone();
-                let result = tauri::async_runtime::spawn_blocking(move || state.tick()).await;
-                match result {
-                    Ok(Ok(())) => {}
-                    Ok(Err(error)) => {
-                        log::warn!("xbxengine tick failed: {}", error);
-                    }
-                    Err(error) => {
-                        log::warn!("xbxengine tick task join failed: {}", error);
-                    }
-                }
-            }
-        });
+        if let Ok(mut stored) = self.stats_snapshot_interval.lock() {
+            *stored = interval;
+        }
+        if let Ok(Some(runtime)) = self.current_runtime() {
+            runtime.state.set_stats_snapshot_interval(interval);
+        }
     }
 
     async fn shutdown(&self) {
@@ -159,7 +363,6 @@ impl XbxEngineProvider for XbxEngineService {
                 })),
             )
             .await;
-        self.runtime_state.shutdown();
     }
 }
 

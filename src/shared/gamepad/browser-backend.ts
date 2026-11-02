@@ -30,7 +30,12 @@ export interface BrowserInputEnvironment {
   requestFrame: (callback: () => void) => number
   cancelFrame: (id: number) => void
   now: () => number
+  startTimer?: (callback: () => void, intervalMs: number) => ReturnType<typeof setInterval>
+  stopTimer?: (id: ReturnType<typeof setInterval>) => void
 }
+
+const FALLBACK_SAMPLE_INTERVAL_MS = 50
+const FRAME_SAMPLE_STALE_MS = 100
 
 const STANDARD_BUTTONS: readonly ButtonKey[] = [
   'south',
@@ -76,6 +81,8 @@ export class BrowserGamepadBackend implements GamepadBackend {
   readonly kind = 'browser' as const
   private listener: ((snapshot: GamepadSnapshot) => void) | undefined
   private frame: number | undefined
+  private timer?: ReturnType<typeof setInterval>
+  private lastSampleAt = 0
   private sequence = 0
   private deviceGeneration = 0
   private generation = 0
@@ -86,6 +93,8 @@ export class BrowserGamepadBackend implements GamepadBackend {
     requestFrame: callback => requestAnimationFrame(callback),
     cancelFrame: id => cancelAnimationFrame(id),
     now: () => performance.now(),
+    startTimer: (callback, intervalMs) => setInterval(callback, intervalMs),
+    stopTimer: id => clearInterval(id),
   }) {}
 
   async start(onSnapshot: (snapshot: GamepadSnapshot) => void): Promise<void> {
@@ -107,6 +116,11 @@ export class BrowserGamepadBackend implements GamepadBackend {
       }
     }
     tick()
+    // rAF 暂停时重新读取真实设备状态，保持后台输入与释放键的新鲜度。
+    this.timer = this.environment.startTimer?.(() => {
+      if (generation === this.generation && this.listener && this.environment.now() - this.lastSampleAt >= FRAME_SAMPLE_STALE_MS)
+        this.sample()
+    }, FALLBACK_SAMPLE_INTERVAL_MS)
   }
 
   async stop(): Promise<void> {
@@ -115,12 +129,16 @@ export class BrowserGamepadBackend implements GamepadBackend {
     if (this.frame !== undefined)
       this.environment.cancelFrame(this.frame)
     this.frame = undefined
+    if (this.timer !== undefined)
+      this.environment.stopTimer?.(this.timer)
+    this.timer = undefined
     const stopping = [...this.devices.values()].map(device => this.stopRumble(device.id))
     this.devices.clear()
     await Promise.all(stopping)
   }
 
   private sample(): void {
+    this.lastSampleAt = this.environment.now()
     const snapshot: GamepadSnapshot = {
       devices: [],
       samples: [],

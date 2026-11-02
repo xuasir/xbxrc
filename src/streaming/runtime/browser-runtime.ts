@@ -219,7 +219,6 @@ function createPlayerClient(
   return new BrowserPlayerClient({
     container: playerElementId,
     input: {
-      pollingRate: spec.runtime.pollingRateHz,
       vibrationEnabled: spec.runtime.vibration,
       vibrationStrength: spec.runtime.vibrationStrength,
     },

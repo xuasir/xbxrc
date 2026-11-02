@@ -54,6 +54,7 @@ const keyboardControls = [...new Set(DEFAULT_KEYBOARD_MAPPING.bindings.map(bindi
 const diagnostic = computed(() => ({
   backend: snapshot.value.backend,
   configuredBackend: prefs.value.backend,
+  nativePreview: prefs.value.nativePreview,
   owner: snapshot.value.owner,
   backgroundPolicy: prefs.value.backgroundPolicy,
   isBackground: snapshot.value.isBackground ?? 'unknown',
@@ -391,10 +392,8 @@ function exportDiagnostic(): void {
         </button>
       </template>
       <template v-if="pane === 'advanced'">
-        <SettingRow :id="`${paneScope}.backend`" :scope-id="paneScope" :disabled="saving" :label="tr('backend')" select @click="selectPreference('gamepad_backend', tr('backend'), ['browser', 'native'], [tr('browser'), tr('native')], prefs.backend, tr('backendHint'))">
-          {{ tr(prefs.backend) }}
-        </SettingRow>
         <p>{{ tr('currentBackend') }} {{ snapshot.backend ? tr(snapshot.backend) : '—' }}<span v-if="prefs.backend !== snapshot.backend"> · {{ tr('restartPending') }}</span></p>
+        <p>{{ tr('nativePreviewLocation') }}</p>
         <pre class="pad-diagnostic">{{ diagnostic }}</pre>
         <Focusable :id="`${paneScope}.export`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="exportDiagnostic">
           {{ tr('export') }}

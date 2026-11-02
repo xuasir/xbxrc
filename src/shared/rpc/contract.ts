@@ -1,3 +1,4 @@
+import type { RuntimeFeatureCapabilities } from '../config/runtime-features'
 import type {
   GamepadRumbleRequestDto,
   GamepadRumbleResultDto,
@@ -105,6 +106,7 @@ export interface XBoxRpcSchema {
     logout: RpcMethod<void, { loggedOut: boolean }>
   }
   config: {
+    getRuntimeFeatures: RpcMethod<void, RuntimeFeatureCapabilities>
     get: RpcMethod<{ keys: string[] }, unknown>
     set: RpcMethod<{ patch: Record<string, unknown> }, unknown>
     getGroups: RpcMethod<

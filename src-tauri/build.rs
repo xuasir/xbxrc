@@ -7,8 +7,24 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
     emit_build_metadata();
+    link_macos_ffmpeg_runtime_paths();
     link_macos_availability_runtime();
     tauri_build::build()
+}
+
+/// 开发产物与app各自从相邻目录加载同一份SDK，安装包路径随应用移动。
+fn link_macos_ffmpeg_runtime_paths() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+    let sdk_target = match std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
+        Ok("aarch64") => "macos-arm64",
+        Ok("x86_64") => "macos-x64",
+        _ => panic!("unsupported macOS FFmpeg target"),
+    };
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Frameworks");
+    println!("cargo:rerun-if-changed=resources/ffmpeg/{sdk_target}/lib/runtime-manifest.json");
 }
 
 /// SDL3 静态库中的 ObjC `@available` 会引用 `___isPlatformVersionAtLeast`。
@@ -78,8 +94,12 @@ fn source_fingerprint() -> Option<String> {
         "src-tauri/build.rs",
         "src-tauri/tauri.conf.json",
         "src-tauri/Cargo.toml",
+        "src-tauri/resources/ffmpeg/versions.json",
+        "src-tauri/resources/ffmpeg/macos-arm64/lib/runtime-manifest.json",
+        "src-tauri/resources/ffmpeg/macos-x64/lib/runtime-manifest.json",
         "crates",
         "Cargo.toml",
+        ".cargo/config.toml",
         "Cargo.lock",
         "rust-toolchain.toml",
         "package.json",

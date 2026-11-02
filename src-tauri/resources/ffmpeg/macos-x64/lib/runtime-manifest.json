@@ -1,0 +1,116 @@
+{
+  "target": "macos-x64",
+  "version": "8.1.x",
+  "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared --disable-x86asm --enable-version3)",
+  "sourceSha256": "b072aed6871998cce9b36e7774033105ca29e33632be5b6347f3206898e0756a",
+  "minimumSystemVersion": "26.0",
+  "license": "LGPL-3.0-or-later",
+  "components": [],
+  "runtimeLibraries": [
+    {
+      "name": "libavcodec.62.28.100.dylib",
+      "sourceSha256": "dd705818b001c3bd3a163da811c87fa7a09091065ba72693502c0ddfd956a79b",
+      "sha256": "643372331ab8d73c7d6e8e6466e7f800893fd04eb388fbc437fe31ef5b8b88ec"
+    },
+    {
+      "name": "libavcodec.62.dylib",
+      "sourceSha256": "dd705818b001c3bd3a163da811c87fa7a09091065ba72693502c0ddfd956a79b",
+      "sha256": "643372331ab8d73c7d6e8e6466e7f800893fd04eb388fbc437fe31ef5b8b88ec"
+    },
+    {
+      "name": "libavcodec.dylib",
+      "sourceSha256": "dd705818b001c3bd3a163da811c87fa7a09091065ba72693502c0ddfd956a79b",
+      "sha256": "2ecccfc8ec871255692c3150ded1729a4c3ca10dacee5aab70fcaa24ed19c21a"
+    },
+    {
+      "name": "libavdevice.62.3.100.dylib",
+      "sourceSha256": "d0262344990979878a4e83942c6416cbe8f3172f75a85f57422941fee1375295",
+      "sha256": "5d98fe113422ed12757d59ab32d00d9f09a067859f78ab875d21aaa12eb75b65"
+    },
+    {
+      "name": "libavdevice.62.dylib",
+      "sourceSha256": "d0262344990979878a4e83942c6416cbe8f3172f75a85f57422941fee1375295",
+      "sha256": "5d98fe113422ed12757d59ab32d00d9f09a067859f78ab875d21aaa12eb75b65"
+    },
+    {
+      "name": "libavdevice.dylib",
+      "sourceSha256": "d0262344990979878a4e83942c6416cbe8f3172f75a85f57422941fee1375295",
+      "sha256": "574d1e204ade4fb3e295723f0a63976e5dc665a9ade3bd5e0f1934526305507d"
+    },
+    {
+      "name": "libavfilter.11.14.100.dylib",
+      "sourceSha256": "70294b149f582775f6e5c1518791157a1e9d15993ba48c1f18bc952d1b8a77b0",
+      "sha256": "9b187185c88561344dcd81847716e6c606b8d5baeb53910f50e48c50df4d9f9d"
+    },
+    {
+      "name": "libavfilter.11.dylib",
+      "sourceSha256": "70294b149f582775f6e5c1518791157a1e9d15993ba48c1f18bc952d1b8a77b0",
+      "sha256": "9b187185c88561344dcd81847716e6c606b8d5baeb53910f50e48c50df4d9f9d"
+    },
+    {
+      "name": "libavfilter.dylib",
+      "sourceSha256": "70294b149f582775f6e5c1518791157a1e9d15993ba48c1f18bc952d1b8a77b0",
+      "sha256": "fdc140529cd5bc41e7a624e9fe258a1ef9c4a73bdf6a45315743c39922de66d9"
+    },
+    {
+      "name": "libavformat.62.12.100.dylib",
+      "sourceSha256": "0421ed63799a4533af860d6fc0d4c76cfa03452a808bdfce8c9854e753a52322",
+      "sha256": "fc6740b346b30f007ec1f52df0163d6c7883f2e4d174c0fe29ad07fa65d7b7e4"
+    },
+    {
+      "name": "libavformat.62.dylib",
+      "sourceSha256": "0421ed63799a4533af860d6fc0d4c76cfa03452a808bdfce8c9854e753a52322",
+      "sha256": "fc6740b346b30f007ec1f52df0163d6c7883f2e4d174c0fe29ad07fa65d7b7e4"
+    },
+    {
+      "name": "libavformat.dylib",
+      "sourceSha256": "0421ed63799a4533af860d6fc0d4c76cfa03452a808bdfce8c9854e753a52322",
+      "sha256": "e050284fe534f3fe8661cce4e3547040db894956b80ca1b0ab54a3a8f2cb9af2"
+    },
+    {
+      "name": "libavutil.60.26.100.dylib",
+      "sourceSha256": "03a173e205800df5405e1835d27d96e652be143f236b51f0ef227fb62bc8e325",
+      "sha256": "d65e5312d4f8aadbadb7b5970752a82ff3596333b9ec89bdca6969b4bfb1ac9c"
+    },
+    {
+      "name": "libavutil.60.dylib",
+      "sourceSha256": "03a173e205800df5405e1835d27d96e652be143f236b51f0ef227fb62bc8e325",
+      "sha256": "d65e5312d4f8aadbadb7b5970752a82ff3596333b9ec89bdca6969b4bfb1ac9c"
+    },
+    {
+      "name": "libavutil.dylib",
+      "sourceSha256": "03a173e205800df5405e1835d27d96e652be143f236b51f0ef227fb62bc8e325",
+      "sha256": "1e679b612d21fea22007be3183146cde1764bb310cb88bb14b5dc26a48f334c2"
+    },
+    {
+      "name": "libswresample.6.3.100.dylib",
+      "sourceSha256": "43440feae2e9f6581d941b2b37d750cccb12672fc45cecdf10ea06f3cf417804",
+      "sha256": "18a9223712bf844916fd531aa415eee083cf4aedbcac055f89e86b56d13ae4ca"
+    },
+    {
+      "name": "libswresample.6.dylib",
+      "sourceSha256": "43440feae2e9f6581d941b2b37d750cccb12672fc45cecdf10ea06f3cf417804",
+      "sha256": "18a9223712bf844916fd531aa415eee083cf4aedbcac055f89e86b56d13ae4ca"
+    },
+    {
+      "name": "libswresample.dylib",
+      "sourceSha256": "43440feae2e9f6581d941b2b37d750cccb12672fc45cecdf10ea06f3cf417804",
+      "sha256": "2dfd9a94baab5fba16dd9682dbe34530f2ca63288733ca36cc44930b5bafd83b"
+    },
+    {
+      "name": "libswscale.9.5.100.dylib",
+      "sourceSha256": "83dc806f7d15ffc078269ae6a3e9f28bd1bcdf9fae3d63098137d71e2df63b7f",
+      "sha256": "446287038c3766da7fbf2cf080ee2f54f71f78721c03c78de3101e261af5d35a"
+    },
+    {
+      "name": "libswscale.9.dylib",
+      "sourceSha256": "83dc806f7d15ffc078269ae6a3e9f28bd1bcdf9fae3d63098137d71e2df63b7f",
+      "sha256": "446287038c3766da7fbf2cf080ee2f54f71f78721c03c78de3101e261af5d35a"
+    },
+    {
+      "name": "libswscale.dylib",
+      "sourceSha256": "83dc806f7d15ffc078269ae6a3e9f28bd1bcdf9fae3d63098137d71e2df63b7f",
+      "sha256": "b1a65af9d94923d92ef68cf4923fe92cf945858c6c5d48b423de0a00437ce922"
+    }
+  ]
+}

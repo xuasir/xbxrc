@@ -4,13 +4,18 @@ import { devWarnRateLimited } from '../../../shared/dev-log'
 
 export class DataChannelHub {
   private readonly handlers = new Map<string, BaseChannel>()
+  private readonly disposers = new Map<string, () => void>()
 
   constructor(private readonly transport: WebRtcTransport) {}
 
   register(name: string, init: RTCDataChannelInit, create: (context: ChannelContext) => BaseChannel): BaseChannel {
+    this.disposers.get(name)?.()
     const channel = this.transport.createDataChannel(name, init)
+    let active = true
     const context: ChannelContext = {
       send: (data) => {
+        if (!active)
+          return false
         try {
           if (typeof data === 'string') {
             channel.send(data)
@@ -31,16 +36,46 @@ export class DataChannelHub {
           return false
         }
       },
-      readyState: () => channel.readyState,
+      readyState: () => active ? channel.readyState : 'closed',
       bufferedAmount: () => channel.bufferedAmount,
     }
     const handler = create(context)
+    const onOpen = () => {
+      if (active)
+        handler.onOpen()
+    }
+    const onMessage = (event: MessageEvent) => {
+      if (active)
+        handler.onMessage(event)
+    }
+    const onClosing = () => {
+      if (active)
+        handler.onClosing()
+    }
+    const onError = () => {
+      if (active)
+        handler.onError()
+    }
+    const dispose = () => {
+      if (!active)
+        return
+      // 先撤销旧通道事件，再回收共享输入；迟到 close/握手只属于原会话。
+      active = false
+      channel.removeEventListener('open', onOpen)
+      channel.removeEventListener('message', onMessage)
+      channel.removeEventListener('closing', onClosing)
+      channel.removeEventListener('close', dispose)
+      channel.removeEventListener('error', onError)
+      handler.onClose()
+      channel.close()
+    }
     this.handlers.set(name, handler)
-    channel.addEventListener('open', () => handler.onOpen())
-    channel.addEventListener('message', event => handler.onMessage(event))
-    channel.addEventListener('closing', () => handler.onClosing())
-    channel.addEventListener('close', () => handler.onClose())
-    channel.addEventListener('error', () => handler.onError())
+    this.disposers.set(name, dispose)
+    channel.addEventListener('open', onOpen)
+    channel.addEventListener('message', onMessage)
+    channel.addEventListener('closing', onClosing)
+    channel.addEventListener('close', dispose)
+    channel.addEventListener('error', onError)
     return handler
   }
 
@@ -49,6 +84,9 @@ export class DataChannelHub {
   }
 
   clear(): void {
+    for (const dispose of this.disposers.values())
+      dispose()
+    this.disposers.clear()
     this.handlers.clear()
   }
 }

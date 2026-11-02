@@ -186,6 +186,8 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             }
         }
         "fullscreen"
+        | "rust_media_preview"
+        | "native_gamepad_preview"
         | "xhome_turn_fallback"
         | "enable_audio_control"
         | "vibration"
@@ -194,7 +196,6 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "performance_style"
         | "background_keepalive"
         | "super_resolution_experimental"
-        | "use_vulkan"
         | "ui_haptics"
         | "ui_audio"
         | "debug" => {
@@ -211,7 +212,6 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         "xhome_bitrate" | "xcloud_bitrate" | "audio_bitrate" => {
             normalize_number(key, value, fallback.as_i64().unwrap_or(20), 0, 200)
         }
-        "polling_rate" => normalize_number(key, value, fallback.as_i64().unwrap_or(250), 1, 1000),
         "vibration_strength" => normalize_string_enum(
             key,
             value,
@@ -226,15 +226,8 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
                 &["Auto", "Custom"],
             )
         }
-        "stream_runtime_mode" => normalize_string_enum(
-            key,
-            value,
-            fallback.as_str().unwrap_or("webrtc-direct"),
-            &["webrtc-direct", "rust-owned"],
-        ),
         "runtime_trace_mode" => normalize_runtime_trace_mode(value, fallback),
         "display_options" => normalize_display_options(key, value, fallback),
-        "gamepad_backend" => normalize_string_enum(key, value, "browser", &["browser", "native"]),
         "gamepad_background_policy" => {
             normalize_string_enum(key, value, "keep-active", &["keep-active", "follow-app"])
         }
@@ -320,7 +313,7 @@ mod tests {
         .contains_key("gamepad_device_profiles"));
         assert_eq!(normalized["gamepad_background_policy"], "follow-app");
         assert_eq!(normalized["ui_haptics"], true);
-        assert_eq!(normalized["gamepad_backend"], "browser");
+        assert_eq!(normalized["native_gamepad_preview"], false);
     }
 
     #[test]

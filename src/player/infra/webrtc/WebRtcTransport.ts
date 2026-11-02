@@ -49,11 +49,15 @@ export class WebRtcTransport {
   }
 
   bind(): RTCPeerConnection {
-    this.peer = new RTCPeerConnection(this.configuration)
+    this.close()
+    const peer = new RTCPeerConnection(this.configuration)
+    this.peer = peer
     debugLog('[player][webrtc] bind peer', {
       iceServerCount: this.configuration.iceServers?.length ?? 0,
     })
-    this.peer.ontrack = (event) => {
+    peer.ontrack = (event) => {
+      if (this.peer !== peer)
+        return
       const stream = event.streams[0]
       if (!stream) {
         return
@@ -65,8 +69,8 @@ export class WebRtcTransport {
       })
       this.emitter.emit('track', { kind: event.track.kind as 'audio' | 'video', stream })
     }
-    this.peer.addEventListener('icecandidate', (event) => {
-      if (!event.candidate) {
+    peer.addEventListener('icecandidate', (event) => {
+      if (this.peer !== peer || !event.candidate) {
         return
       }
       const candidate = {
@@ -81,19 +85,19 @@ export class WebRtcTransport {
       })
       this.emitter.emit('iceCandidate', candidate)
     })
-    this.peer.addEventListener('connectionstatechange', () => {
-      if (!this.peer) {
+    peer.addEventListener('connectionstatechange', () => {
+      if (this.peer !== peer) {
         return
       }
       debugLog('[player][webrtc] connection state', {
-        state: this.peer.connectionState,
+        state: peer.connectionState,
       })
-      this.emitter.emit('connectionState', { state: this.peer.connectionState })
+      this.emitter.emit('connectionState', { state: peer.connectionState })
     })
-    this.peer.addTransceiver('audio', { direction: 'sendrecv' })
-    this.peer.addTransceiver('video', { direction: 'recvonly' })
-    debugLog('[player][webrtc] transceivers ready', summarizeTransceivers(this.peer))
-    return this.peer
+    peer.addTransceiver('audio', { direction: 'sendrecv' })
+    peer.addTransceiver('video', { direction: 'recvonly' })
+    debugLog('[player][webrtc] transceivers ready', summarizeTransceivers(peer))
+    return peer
   }
 
   createDataChannel(name: string, init: RTCDataChannelInit): RTCDataChannel {
@@ -217,10 +221,13 @@ export class WebRtcTransport {
   }
 
   close(): void {
+    const peer = this.peer
+    this.peer = undefined
+    for (const channel of this.channels.values())
+      channel.close()
     this.channels.clear()
     this.iceCandidates.length = 0
-    this.peer?.close()
-    this.peer = undefined
+    peer?.close()
   }
 
   private ensurePeer(): RTCPeerConnection {

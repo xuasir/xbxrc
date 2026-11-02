@@ -13,7 +13,7 @@ fn pick_group_values(config: &Map<String, Value>, keys: &[&str]) -> Value {
 pub fn split_config_groups(config: &Map<String, Value>) -> Value {
     // 分组键保持与 renderer 端一致；streaming 组明确承载 policy + view 配置。
     json!({
-        "app": pick_group_values(config, &["locale", "theme", "fullscreen", "background_keepalive", "use_vulkan", "ui_haptics", "ui_audio", "debug", "runtime_trace_mode"]),
+        "app": pick_group_values(config, &["locale", "theme", "fullscreen", "background_keepalive", "ui_haptics", "ui_audio", "debug", "runtime_trace_mode"]),
         "streaming": pick_group_values(config, &[
             "resolution",
             "xhome_resolution",
@@ -30,7 +30,7 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "video_format",
             "ipv6",
             "power_on",
-            "stream_runtime_mode",
+            "rust_media_preview",
             "server_url",
             "server_username",
             "server_credential",
@@ -43,10 +43,9 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
         // xcloud 组当前不承载策略字段，避免与 streaming policy 分组重复返回。
         "xcloud": pick_group_values(config, &[]),
         "input": pick_group_values(config, &[
-            "polling_rate",
             "vibration",
             "vibration_strength",
-            "gamepad_backend",
+            "native_gamepad_preview",
             "gamepad_background_policy",
             "gamepad_control_source",
             "gamepad_game_controls",

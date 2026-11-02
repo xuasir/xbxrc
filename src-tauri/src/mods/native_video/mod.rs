@@ -720,6 +720,34 @@ pub fn configure_main_window_video_host(app_handle: &AppHandle) {
     configure_macos_main_window_video_host(app_handle);
 }
 
+/// 原生预览退出后恢复浏览器直出的不透明主窗口。
+pub fn restore_main_window_webview_host(app_handle: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    if let Some(window) = app_handle.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.with_webview(move |webview| unsafe {
+            use objc2::msg_send;
+            use objc2::runtime::{AnyClass, AnyObject};
+            use objc2_foundation::NSString;
+            let webview_ptr = webview.inner().cast::<AnyObject>();
+            let window_ptr = webview.ns_window().cast::<AnyObject>();
+            let Some(color_class) = AnyClass::get(c"NSColor") else {
+                return;
+            };
+            let black: *mut AnyObject = msg_send![color_class, blackColor];
+            let _: () = msg_send![webview_ptr, setOpaque: true];
+            let _: () = msg_send![webview_ptr, setBackgroundColor: black];
+            let _: () = msg_send![webview_ptr, setUnderPageBackgroundColor: black];
+            let _: () = msg_send![window_ptr, setOpaque: true];
+            let _: () = msg_send![window_ptr, setBackgroundColor: black];
+            if let Some(number_class) = AnyClass::get(c"NSNumber") {
+                let yes: *mut AnyObject = msg_send![number_class, numberWithBool: true];
+                let key = NSString::from_str("drawsBackground");
+                let _: () = msg_send![webview_ptr, setValue: yes, forKey: &*key];
+            }
+        });
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn configure_macos_main_window_video_host(app_handle: &AppHandle) {
     configure_macos_window_video_host(app_handle, MAIN_WINDOW_LABEL, true);

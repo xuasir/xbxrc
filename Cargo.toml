@@ -83,3 +83,7 @@ opt-level = 3
 lto = "thin"
 codegen-units = 8
 strip = true
+
+[profile.release.build-override]
+# 编译期宏保留元数据，应用产物继续使用 release strip。
+strip = "none"

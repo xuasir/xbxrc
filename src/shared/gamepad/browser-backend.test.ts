@@ -1,6 +1,6 @@
 import type { GamepadSnapshot } from './backend'
 import type { BrowserInputEnvironment, BrowserPad } from './browser-backend'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserGamepadBackend, browserPadState } from './browser-backend'
 import { neutralState } from './state'
 
@@ -26,6 +26,8 @@ function fixture() {
     pads = value
   }, tick: () => next() }
 }
+
+afterEach(() => vi.useRealTimers())
 
 describe('browserGamepadBackend', () => {
   it('maps standard axes and analog triggers without changing Y or applying deadzone', () => {
@@ -78,6 +80,29 @@ describe('browserGamepadBackend', () => {
     expect(input.vibrationActuator.reset).toHaveBeenCalled()
     f.tick()
     expect(f.snapshots.at(-1)?.error).toBeNull()
+  })
+
+  it('resamples hardware while rAF is suspended and cancels the fallback on stop', async () => {
+    vi.useFakeTimers()
+    const input = pad()
+    input.buttons[0].value = 1
+    const snapshots: GamepadSnapshot[] = []
+    const backend = new BrowserGamepadBackend({
+      getGamepads: () => [input],
+      requestFrame: () => 1,
+      cancelFrame: () => {},
+      now: () => Date.now(),
+      startTimer: (callback, ms) => setInterval(callback, ms),
+      stopTimer: id => clearInterval(id),
+    })
+    await backend.start(snapshot => snapshots.push(snapshot))
+    input.buttons[0].value = 0
+    vi.advanceTimersByTime(100)
+    expect(snapshots.map(snapshot => snapshot.samples[0].state.buttons.south)).toEqual([1, 0])
+    await backend.stop()
+    vi.advanceTimersByTime(1000)
+    expect(snapshots).toHaveLength(2)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('bounds effects and reports a late rumble result after disconnect as failed', async () => {

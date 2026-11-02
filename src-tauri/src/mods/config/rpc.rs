@@ -83,6 +83,7 @@ pub enum ConfigCommand {
         patch: serde_json::Map<String, Value>,
     },
     GetGroups,
+    GetRuntimeFeatures,
 }
 
 pub async fn handle_rpc(
@@ -118,5 +119,8 @@ pub async fn handle_rpc(
             Ok(result)
         }
         ConfigCommand::GetGroups => service.get_groups().map_err(Into::into),
+        ConfigCommand::GetRuntimeFeatures => Ok(serde_json::to_value(
+            super::runtime_features::runtime_feature_capabilities(),
+        )?),
     }
 }

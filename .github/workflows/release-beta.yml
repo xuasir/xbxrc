@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-26
             label: macos
             bundle: app,dmg
           - os: windows-latest
@@ -107,6 +107,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.93.1
+          components: rustfmt
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -125,12 +126,43 @@ jobs:
         with:
           arch: x64
 
+      - name: Validate frontend
+        shell: bash
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
+      - name: Python for lifecycle gates
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Validate lifecycle trace gates
+        shell: bash
+        run: pnpm test:lifecycle
+
+      - name: Validate Rust preview and shared contracts
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          node scripts/with-ffmpeg-sdk.mjs -- cargo test -p xbxrc --lib
+
       - name: Build Tauri bundle (${{ matrix.bundle }})
         run: pnpm tauri build --bundles ${{ matrix.bundle }}
         env:
           CI: true
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Verify macOS runtime dependency closure
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          pnpm test:macos-runtime
+          pnpm release:check-macos-runtime src-tauri/resources/ffmpeg/macos-arm64
+          pnpm release:check-macos-runtime src-tauri/resources/ffmpeg/macos-x64
+          pnpm release:check-macos-runtime target/release/bundle/macos/xbxrc.app
 
       - name: Verify release bundle layout
         shell: bash

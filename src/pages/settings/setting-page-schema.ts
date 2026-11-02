@@ -33,7 +33,6 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   theme: 'app',
   fullscreen: 'app',
   background_keepalive: 'app',
-  use_vulkan: 'app',
   ui_haptics: 'app',
   ui_audio: 'app',
   debug: 'app',
@@ -56,13 +55,13 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   force_region_ip: 'streaming',
   preferred_game_language: 'streaming',
   ipv6: 'streaming',
-  stream_runtime_mode: 'streaming',
+  rust_media_preview: 'streaming',
+  native_gamepad_preview: 'input',
   xhome_turn_fallback: 'streaming',
   server_url: 'streaming',
   server_username: 'streaming',
   server_credential: 'streaming',
 
-  polling_rate: 'input',
   vibration: 'input',
   vibration_strength: 'input',
 }
@@ -112,15 +111,6 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
     ],
   },
   {
-    key: 'advanced',
-    labelKey: 'setting.pages.streamingExperience.sectionAdvanced',
-    items: [
-      { kind: 'field', fieldKey: 'super_resolution_experimental' },
-      { kind: 'field', fieldKey: 'stream_runtime_mode' },
-      { kind: 'field', fieldKey: 'use_vulkan' },
-    ],
-  },
-  {
     key: 'console',
     labelKey: 'setting.pages.streamingExperience.sectionConsole',
     items: [
@@ -163,6 +153,15 @@ const PAGE_INPUT: SettingSchemaSectionDef[] = []
 
 export function getAdvancedDiagnosticsSections(dangerUnlocked: boolean): SettingSchemaSectionDef[] {
   const base: SettingSchemaSectionDef[] = [
+    {
+      key: 'preview',
+      labelKey: 'setting.pages.advancedDiagnostics.sectionPreview',
+      items: [
+        { kind: 'field', fieldKey: 'rust_media_preview' },
+        { kind: 'field', fieldKey: 'native_gamepad_preview' },
+        { kind: 'field', fieldKey: 'super_resolution_experimental' },
+      ],
+    },
     {
       key: 'advanced',
       labelKey: 'setting.pages.advancedDiagnostics.sectionAdvanced',

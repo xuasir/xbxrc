@@ -4,6 +4,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import process from "node:process";
+import { createMacosBundleConfig } from "./macos-bundle-config.mjs";
 
 function resolveSdkRoot() {
   const workspaceRoot = resolve(import.meta.dirname, "..");
@@ -51,7 +52,31 @@ function run() {
   const args = process.argv.slice(splitIdx + 2);
   const { sdkRoot, includeDir, libDir, binDir } = resolveSdkRoot();
   const workspaceRoot = resolve(import.meta.dirname, "..");
-  ensureLegacyRuntimeAlias({ sdkRoot });
+  const appConfig = JSON.parse(readFileSync(resolve(workspaceRoot, "src-tauri", "tauri.conf.json"), "utf8"));
+  if (process.platform === "darwin" && command === "tauri" && ["build", "bundle"].includes(args[0]) && !args.includes("--help") && !args.includes("-h")) {
+    let signingIdentity = appConfig.bundle.macOS.signingIdentity;
+    let hardenedRuntime = appConfig.bundle.macOS.hardenedRuntime;
+    let knownSigningConfig = true;
+    // 按Tauri配置顺序读取当前JSON覆盖；其他格式保留CLI自身的签名策略。
+    for (let index = 0; index < args.length; index++) {
+      if (!["--config", "-c"].includes(args[index])) continue;
+      const input = args[++index];
+      try {
+        const overlay = JSON.parse(input.trim().startsWith("{") ? input : readFileSync(resolve(input), "utf8"));
+        const mac = overlay.bundle?.macOS;
+        if (mac && Object.hasOwn(mac, "signingIdentity")) signingIdentity = mac.signingIdentity;
+        if (mac && Object.hasOwn(mac, "hardenedRuntime")) hardenedRuntime = mac.hardenedRuntime;
+      } catch {
+        knownSigningConfig = false;
+      }
+    }
+    const effectiveIdentity = signingIdentity ?? process.env.APPLE_SIGNING_IDENTITY ?? "-";
+    const overlay = createMacosBundleConfig(sdkRoot, { signingIdentity: effectiveIdentity, hardenedRuntime });
+    if (!knownSigningConfig) delete overlay.bundle.macOS.hardenedRuntime;
+    // 多个--config按顺序合并；此覆盖只装配SDK目录与已知签名策略。
+    const separator = args.indexOf("--");
+    args.splice(separator < 0 ? args.length : separator, 0, "--config", JSON.stringify(overlay));
+  }
   ensureRuntimeAssets({ workspaceRoot, libDir, binDir });
   const pkgConfigDir = resolve(libDir, "pkgconfig");
   const localPkgConfigDir = prepareLocalPkgConfig({
@@ -72,6 +97,13 @@ function run() {
     FFMPEG_DIR: sdkRoot,
     FFMPEG_INCLUDE_DIR: includeDir,
     FFMPEG_LIB_DIR: libDir,
+    MACOSX_DEPLOYMENT_TARGET: process.platform === "darwin"
+      ? appConfig.bundle.macOS.minimumSystemVersion
+      : process.env.MACOSX_DEPLOYMENT_TARGET,
+    // 未配置开发者证书时使用ad-hoc签名，保证本地与CI产物的签名完整性。
+    APPLE_SIGNING_IDENTITY: process.platform === "darwin"
+      ? process.env.APPLE_SIGNING_IDENTITY ?? appConfig.bundle.macOS.signingIdentity ?? "-"
+      : process.env.APPLE_SIGNING_IDENTITY,
     // 强制仅使用 vendored FFmpeg 的 pkg-config 元数据，避免误命中系统/Homebrew。
     PKG_CONFIG_PATH: localPkgConfigDir,
     PKG_CONFIG_LIBDIR: localPkgConfigDir,
@@ -109,49 +141,6 @@ function run() {
     }
     process.exit(code ?? 1);
   });
-}
-
-function ensureLegacyRuntimeAlias({ sdkRoot }) {
-  const platform = process.platform;
-  const arch = process.arch;
-  const ffmpegVersion = "ffmpeg-8.1";
-
-  let runtimeSuffix = null;
-  if (platform === "darwin" && arch === "arm64") {
-    runtimeSuffix = "out-arm64";
-  } else if (platform === "darwin" && arch === "x64") {
-    runtimeSuffix = "out-x64";
-  } else if (platform === "win32" && arch === "x64") {
-    runtimeSuffix = "out-x64";
-  } else {
-    return;
-  }
-
-  // Keep compatibility with historical install_name entries that hardcode /tmp.
-  const aliasPath = resolve("/tmp", ffmpegVersion, runtimeSuffix);
-  const aliasParent = resolve(aliasPath, "..");
-  mkdirSync(aliasParent, { recursive: true });
-
-  if (existsSync(aliasPath)) {
-    try {
-      const stat = lstatSync(aliasPath);
-      if (stat.isSymbolicLink()) {
-        const linkedTo = resolve(aliasParent, readlinkSync(aliasPath));
-        if (linkedTo === sdkRoot) {
-          return;
-        }
-        rmSync(aliasPath, { recursive: true, force: true });
-      } else {
-        // Existing non-link path blocks alias creation. Replace it to keep runtime deterministic.
-        rmSync(aliasPath, { recursive: true, force: true });
-      }
-    } catch {
-      rmSync(aliasPath, { recursive: true, force: true });
-    }
-  }
-
-  const symlinkType = process.platform === "win32" ? "junction" : "dir";
-  symlinkSync(sdkRoot, aliasPath, symlinkType);
 }
 
 function ensureRuntimeAssets({ workspaceRoot, libDir, binDir }) {

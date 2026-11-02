@@ -209,8 +209,6 @@ struct NativeVideoHostFeedbackSnapshot {
 /// 运行态只负责持有 runtime 实例和并发访问。
 pub struct XbxEngineRuntimeState {
     runtime: StdMutex<TauriXbxEngineRuntime>,
-    app_handle: AppHandle,
-    last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
     native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
     /// 与 `XbxEngineRuntime` 快照同步，供 `NativeVideoHostRenderFramePush` 在 renderer 线程读取。
@@ -256,8 +254,6 @@ impl XbxEngineRuntimeState {
         );
         Self {
             runtime: StdMutex::new(runtime),
-            app_handle,
-            last_runtime_event,
             native_video,
             runtime_trace,
             host_present_route,
@@ -351,28 +347,6 @@ impl XbxEngineRuntimeState {
             guard.viewport = snap.viewport.clone();
             guard.surface_id = snap.surface_id.clone();
         }
-    }
-
-    fn create_runtime_for_next_generation(&self) -> (TauriXbxEngineRuntime, u64) {
-        let generation = self
-            .active_event_generation
-            .fetch_add(1, Ordering::SeqCst)
-            .saturating_add(1);
-        if let Ok(mut last_runtime_event) = self.last_runtime_event.lock() {
-            *last_runtime_event = None;
-        }
-        let runtime = create_tauri_runtime(
-            self.app_handle.clone(),
-            self.last_runtime_event.clone(),
-            self.native_video.clone(),
-            self.runtime_trace.clone(),
-            self.host_present_route.clone(),
-            self.cancellation_epoch.clone(),
-            self.rumble_worker.clone(),
-            self.active_event_generation.clone(),
-            generation,
-        );
-        (runtime, generation)
     }
 
     /// 在进入 blocking 队列前捕获资格；Stop 立即撤销正在等待的旧控制请求。
@@ -507,58 +481,36 @@ impl XbxEngineRuntimeState {
             None,
         );
 
-        let replacement_started_at = Instant::now();
-        let (replacement_runtime, replacement_generation) =
-            self.create_runtime_for_next_generation();
+        // 会话停止在调用方的 blocking 任务中排空，完成后由 service 释放整个实例。
+        let drain_started_at = Instant::now();
+        self.runtime_trace.record_event(
+            "xbxengine-host",
+            "runtimeStopDrainStarted",
+            None,
+            serde_json::json!({}),
+        );
         if let Err(error) = runtime.apply_control(XbxEngineControlCommandDto::DetachViewport) {
             self.runtime_trace.record_event(
                 "xbxengine-host",
                 "runtimeStopPreDetachFailed",
                 None,
-                serde_json::json!({
-                    "error": error.to_string(),
-                }),
+                serde_json::json!({ "error": error.to_string() }),
             );
         }
-
-        let mut draining_runtime = std::mem::replace(&mut *runtime, replacement_runtime);
+        let result = runtime.apply_control(command.clone());
+        // Stop 的终态与错误先进入 trace，随后撤销该实例的迟到事件。
+        self.active_event_generation.fetch_add(1, Ordering::SeqCst);
         self.sync_host_present_route_from_runtime(&runtime);
-        drop(runtime);
-
-        let runtime_trace = self.runtime_trace.clone();
-        let drain_command = command.clone();
-        std::thread::spawn(move || {
-            let drain_started_at = Instant::now();
-            runtime_trace.record_event(
-                "xbxengine-host",
-                "runtimeStopDrainStarted",
-                None,
-                serde_json::json!({
-                    "replacementGeneration": replacement_generation,
-                }),
-            );
-            let result = draining_runtime.apply_control(drain_command);
-            runtime_trace.record_event(
-                "xbxengine-host",
-                "runtimeStopDrainCompleted",
-                None,
-                serde_json::json!({
-                    "durationMs": drain_started_at.elapsed().as_millis(),
-                    "ok": result.is_ok(),
-                    "error": result.as_ref().err().map(ToString::to_string),
-                    "replacementGeneration": replacement_generation,
-                }),
-            );
-        });
-
+        self.runtime_trace.record_event("xbxengine-host", "runtimeStopDrainCompleted", None,
+            serde_json::json!({ "durationMs": drain_started_at.elapsed().as_millis(), "ok": result.is_ok(), "error": result.as_ref().err().map(ToString::to_string) }));
         record_control_apply_trace(
             &self.runtime_trace,
             &command,
             "completed",
-            Some(replacement_started_at.elapsed().as_millis()),
-            None,
+            Some(drain_started_at.elapsed().as_millis()),
+            result.as_ref().err(),
         );
-        Ok(())
+        result
     }
 
     pub fn tick(&self) -> Result<(), XbxEngineRuntimeError> {

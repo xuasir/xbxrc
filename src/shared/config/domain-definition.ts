@@ -80,23 +80,6 @@ const CODEC_OPTIONS = [
   { value: 'video/H264-420', label: 'H.264 Baseline', description: 'Most compatible' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
-const POLLING_RATE_OPTIONS = [
-  { value: 250, label: '250 HZ' },
-  { value: 83.33, label: '83.33 HZ' },
-  { value: 62.5, label: '62.5 HZ' },
-  { value: 50, label: '50 HZ' },
-  { value: 41.67, label: '41.67 HZ' },
-  { value: 35.71, label: '35.71 HZ' },
-  { value: 31.25, label: '31.25 HZ' },
-  { value: 27.78, label: '27.78 HZ' },
-  { value: 25, label: '25 HZ' },
-  { value: 22.73, label: '22.73 HZ' },
-  { value: 20.83, label: '20.83 HZ' },
-  { value: 19.23, label: '19.23 HZ' },
-  { value: 17.86, label: '17.86 HZ' },
-  { value: 16.67, label: '16.67 HZ' },
-] as const satisfies readonly SettingSelectOptionDefinition[]
-
 const RUNTIME_TRACE_MODE_OPTIONS = [
   {
     value: 'off',
@@ -153,11 +136,6 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
         keys: ['locale', 'theme', 'fullscreen'],
       },
       {
-        key: 'graphics',
-        label: 'Graphics',
-        keys: ['use_vulkan'],
-      },
-      {
         key: 'runtime',
         label: 'Runtime',
         keys: ['background_keepalive', 'debug', 'runtime_trace_mode'],
@@ -207,7 +185,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
           'xcloud_bitrate',
           'audio_bitrate_mode',
           'audio_bitrate',
-          'stream_runtime_mode',
+          'rust_media_preview',
           'xhome_turn_fallback',
           'display_options',
           'super_resolution_experimental',
@@ -226,7 +204,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: ['polling_rate', 'vibration', 'vibration_strength'],
+        keys: ['native_gamepad_preview', 'vibration', 'vibration_strength'],
       },
     ],
   },
@@ -377,11 +355,6 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     control: 'singleSelect',
     options: CODEC_OPTIONS,
   },
-  polling_rate: {
-    label: 'Polling Rate',
-    control: 'singleSelect',
-    options: POLLING_RATE_OPTIONS,
-  },
   vibration: {
     label: 'Vibration',
     control: 'toggle',
@@ -420,19 +393,15 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'Compact performance overlay',
     control: 'toggle',
   },
-  stream_runtime_mode: {
-    label: 'Streaming runtime',
-    control: 'singleSelect',
-    options: [
-      {
-        value: 'webrtc-direct',
-        label: 'WebRTC Direct',
-      },
-      {
-        value: 'rust-owned',
-        label: 'Rust Owned',
-      },
-    ],
+  rust_media_preview: {
+    label: 'Rust media preview',
+    description: 'Use Rust media from the next stream. Turning this off selects browser playback for the next stream.',
+    control: 'toggle',
+  },
+  native_gamepad_preview: {
+    label: 'Native gamepad preview',
+    description: 'Use native gamepad input from the next app launch. Turning this off selects Browser Gamepad API on the next launch.',
+    control: 'toggle',
   },
   server_url: {
     label: 'Custom server URL',
@@ -459,11 +428,6 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   super_resolution_experimental: {
     label: 'Super Resolution (Experimental)',
     description: 'Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure.',
-    control: 'toggle',
-  },
-  use_vulkan: {
-    label: 'Use Vulkan rendering',
-    description: 'Prefer the Vulkan rendering path; turn this off if your driver or platform is unstable with Vulkan',
     control: 'toggle',
   },
   ui_haptics: {

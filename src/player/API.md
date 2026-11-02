@@ -3,7 +3,7 @@
 ## Entry
 
 ```ts
-import { PlayerClient } from './new'
+import { PlayerClient } from './api/PlayerClient'
 ```
 
 ## Create
@@ -14,16 +14,17 @@ const client = new PlayerClient({
   uiSystem: [10, 19, 31, 27, 32, -41],
   uiVersion: [0, 2, 0],
   input: {
-    pollingRate: 250
+    vibrationEnabled: true,
+    vibrationStrength: 'realistic'
   },
   audio: {
     enableAudioControl: true,
     volume: 1
   },
   renderer: {
-    enabled: false,
-    mode: 'webgl2',
-    sharpness: 2,
+    enabled: true,
+    mode: 'native',
+    sharpness: 0,
     format: 'Contain'
   },
   transport: {

@@ -11,6 +11,8 @@ import type {
 import {
   CONFIG_FIELD_DEFINITIONS,
 } from '@shared/config/domain-definition'
+import { BROWSER_ONLY_FEATURES } from '@shared/config/runtime-features'
+import { saveGamepadConfig } from '@shared/gamepad/runtime'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
@@ -82,7 +84,6 @@ function resolveDisplayPresetKey(value: DisplayOptionsValue): 'standard' | 'clea
 const RESTART_REQUIRED_KEYS = new Set([
   'locale',
   'background_keepalive',
-  'use_vulkan',
   'force_region_ip',
 ])
 
@@ -123,6 +124,7 @@ const CLEAR_AUTH_CACHE_KEYS = new Map<string, 'ephemeral' | 'all'>([
 const activeTabKey = ref<SettingTabKey>('general')
 const dangerZoneUnlocked = ref(false)
 const groupState = ref<SettingGroupMap | null>(null)
+const runtimeFeatures = ref({ ...BROWSER_ONLY_FEATURES })
 /** 首屏为 true，避免在 getGroups 返回前短暂出现「空分组」与侧栏已展示的错位 */
 const isLoading = ref(true)
 const pendingActionKey = ref<string | null>(null)
@@ -227,6 +229,10 @@ function buildPanelSections(): SettingIndexedSection[] {
 
       for (const item of secDef.items) {
         if (item.kind === 'field') {
+          if (item.fieldKey === 'rust_media_preview' && !runtimeFeatures.value.nativeMedia)
+            continue
+          if (item.fieldKey === 'native_gamepad_preview' && !runtimeFeatures.value.nativeGamepad)
+            continue
           const value = getConfigFieldValue(groups, item.fieldKey)
           const row = buildSettingRow(pageKey, item.fieldKey, value)
           entries.push({
@@ -333,7 +339,11 @@ const hasPanelContent = computed(
 )
 
 async function syncConfigGroups(): Promise<void> {
-  const nextGroupState = await rpc.config.getGroups()
+  const [nextGroupState, features] = await Promise.all([
+    rpc.config.getGroups(),
+    rpc.config.getRuntimeFeatures().catch(() => BROWSER_ONLY_FEATURES),
+  ])
+  runtimeFeatures.value = features
   groupState.value = nextGroupState
   const appConfig = nextGroupState.app as Record<string, unknown>
   setUiLocale(appConfig.locale as string)
@@ -380,11 +390,11 @@ async function persistRowValue(
     const patchValue = row.key === 'display_options' && typeof nextValue === 'string'
       ? DISPLAY_PRESET_VALUES[nextValue as keyof typeof DISPLAY_PRESET_VALUES]
       : nextValue
-    await rpc.config.set({
-      patch: {
-        [row.key]: patchValue,
-      },
-    })
+    const patch = { [row.key]: patchValue }
+    if (row.key === 'native_gamepad_preview')
+      await saveGamepadConfig(patch)
+    else
+      await rpc.config.set({ patch })
 
     if (row.key === 'fullscreen' && typeof nextValue === 'boolean') {
       if (nextValue) {

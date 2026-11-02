@@ -78,6 +78,12 @@ export class SessionService {
 
   bind(turnServer?: { url: string, username?: string, credential?: string }): void {
     this.assertState('bind', ['idle', 'closed', 'failed'])
+    if (this.channelHub) {
+      this.inputService.stop()
+      this.mediaService.destroy()
+      this.channelHub.clear()
+      this.channelHub = undefined
+    }
     this.transition('binding')
     debugLog('[player][session] bind start', {
       turnServer: turnServer?.url ?? null,
@@ -336,6 +342,7 @@ export class SessionService {
     this.inputService.stop()
     this.mediaService.destroy()
     this.channelHub?.clear()
+    this.channelHub = undefined
     this.transport.close()
     this.transition('closed')
   }
@@ -371,18 +378,24 @@ export class SessionService {
       iceGatheringState: peer.iceGatheringState,
     })
     peer.addEventListener('signalingstatechange', () => {
+      if (this.getPeer() !== peer)
+        return
       this.emitWebRtcTimeline({
         kind: 'signalingStateChanged',
         signalingState: peer.signalingState,
       })
     })
     peer.addEventListener('iceconnectionstatechange', () => {
+      if (this.getPeer() !== peer)
+        return
       this.emitWebRtcTimeline({
         kind: 'iceConnectionStateChanged',
         iceConnectionState: peer.iceConnectionState,
       })
     })
     peer.addEventListener('icegatheringstatechange', () => {
+      if (this.getPeer() !== peer)
+        return
       this.emitWebRtcTimeline({
         kind: 'iceGatheringStateChanged',
         iceGatheringState: peer.iceGatheringState,

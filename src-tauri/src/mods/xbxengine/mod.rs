@@ -1,5 +1,6 @@
 pub(crate) mod build_info;
 pub mod events;
+mod preview_lifecycle;
 pub mod rpc;
 mod rumble_worker;
 pub mod runtime_state;
@@ -27,7 +28,6 @@ pub trait XbxEngineProvider: Send + Sync {
     fn is_runtime_available(&self) -> bool;
     /// 与 `runtime_trace_mode` 联动：调整 stats / observability 快照写入间隔。
     fn set_stats_snapshot_interval(&self, interval: Duration);
-    fn bind_tasks(&self, is_quitting: std::sync::Arc<std::sync::atomic::AtomicBool>);
     async fn shutdown(&self);
 }
 

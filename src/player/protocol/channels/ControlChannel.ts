@@ -15,6 +15,7 @@ export class ControlChannel extends BaseChannel {
   private keyframeRequestSuccess = 0
   private lastError: string | undefined
   private sendFailBurst = 0
+  private gamepadAddedTimer?: number
 
   constructor(context: ChannelContext, private readonly delegate: ControlChannelDelegate) {
     super(context)
@@ -38,6 +39,8 @@ export class ControlChannel extends BaseChannel {
   }
 
   onClose(): void {
+    window.clearTimeout(this.gamepadAddedTimer)
+    this.gamepadAddedTimer = undefined
     this.started = false
     this.pendingStart = false
     this.lastError = 'channelClosed'
@@ -114,8 +117,11 @@ export class ControlChannel extends BaseChannel {
     // 浏览器 runtime 这里仅做一次性关键帧请求，用于缩短首帧空窗。
     // 周期性轮询在部分浏览器/远端组合上会持续触发 data channel send 错误。
     this.requestKeyframe()
-    window.setTimeout(
-      () => this.sendGamepadAdded(0),
+    this.gamepadAddedTimer = window.setTimeout(
+      () => {
+        this.gamepadAddedTimer = undefined
+        this.sendGamepadAdded(0)
+      },
       STREAM_CONTROL_PROFILE.gamepadAddedDelayMs,
     )
   }
