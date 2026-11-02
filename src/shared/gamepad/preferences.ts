@@ -16,7 +16,6 @@ export interface GameControls {
 
 export interface GamepadPreferences {
   backend: GamepadBackendKind
-  nativePreview: boolean
   backgroundPolicy: BackgroundPolicy
   controlSource: GameControlSource
   gameControls: GameControls
@@ -26,7 +25,6 @@ export interface GamepadPreferences {
 }
 
 export const GAMEPAD_CONFIG_KEYS = [
-  'native_gamepad_preview',
   'gamepad_background_policy',
   'gamepad_control_source',
   'gamepad_game_controls',
@@ -76,8 +74,7 @@ export function parseGameControls(value: unknown): GameControls {
 export function parseGamepadPreferences(value: unknown): GamepadPreferences {
   const raw = record(value)
   return {
-    backend: raw.native_gamepad_preview === true ? 'native' : 'browser',
-    nativePreview: raw.native_gamepad_preview === true,
+    backend: 'browser',
     // 平台来源未知时保持消费；有效用户选择始终优先。
     backgroundPolicy: raw.gamepad_background_policy === 'follow-app' ? 'follow-app' : 'keep-active',
     controlSource: raw.gamepad_control_source === 'keyboard' ? 'keyboard' : 'gamepad',

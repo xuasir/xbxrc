@@ -30,7 +30,6 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "video_format",
             "ipv6",
             "power_on",
-            "rust_media_preview",
             "server_url",
             "server_username",
             "server_credential",
@@ -45,7 +44,6 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
         "input": pick_group_values(config, &[
             "vibration",
             "vibration_strength",
-            "native_gamepad_preview",
             "gamepad_background_policy",
             "gamepad_control_source",
             "gamepad_game_controls",

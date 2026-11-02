@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { existsSync, realpathSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 function command(name, args) {
   return execFileSync(name, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
@@ -38,17 +37,16 @@ export function inspectMachO(path) {
 // 根据实际Mach-O搜索路径逐层检查；系统库由dyld shared cache提供。
 export function checkMacosRuntime(input, options = {}) {
   const root = realpathSync(input)
-  const app = root.endsWith('.app')
+  if (!root.endsWith('.app'))
+    throw new Error('稳定版运行库检查需要 app 目录')
   const minimumSystemVersion = options.minimumSystemVersion
-    ?? (app ? command('plutil', ['-extract', 'LSMinimumSystemVersion', 'raw', '-o', '-', join(root, 'Contents/Info.plist')]).trim() : '26.0')
-  const entries = app
-    ? [join(root, 'Contents/MacOS', command('plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', join(root, 'Contents/Info.plist')]).trim())]
-    : readdirSync(join(root, 'lib')).filter(name => name.endsWith('.dylib')).map(name => join(root, 'lib', name))
+    ?? command('plutil', ['-extract', 'LSMinimumSystemVersion', 'raw', '-o', '-', join(root, 'Contents/Info.plist')]).trim()
+  const entries = [join(root, 'Contents/MacOS', command('plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', join(root, 'Contents/Info.plist')]).trim())]
   if (entries.length === 0)
     throw new Error('没有可检查的Mach-O运行库')
   const requiredArchitectures = options.architectures ?? inspectMachO(entries[0]).architectures
-  const executableDir = app ? dirname(entries[0]) : join(root, 'lib')
-  const pending = entries.map(path => ({ path, inheritedRpaths: app ? [] : [join(root, 'lib')] }))
+  const executableDir = dirname(entries[0])
+  const pending = entries.map(path => ({ path, inheritedRpaths: [] }))
   const checked = new Set()
   const errors = []
   const expand = (value, loaderDir) => value
@@ -99,28 +97,7 @@ export function checkMacosRuntime(input, options = {}) {
   if (options.verifySignatures !== false) {
     for (const binary of checked)
       command('codesign', ['--verify', '--strict', binary])
-    if (app)
-      command('codesign', ['--verify', '--deep', '--strict', root])
-  }
-  // SDK清单把预编译资产纳入构建身份；正式app只消费已验证的同一份库。
-  if (!app) {
-    const manifestPath = join(root, 'lib/runtime-manifest.json')
-    if (!existsSync(manifestPath))
-      throw new Error('缺少SDK运行库清单: lib/runtime-manifest.json')
-    {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-      const names = new Set(manifest.runtimeLibraries.map(file => file.name))
-      if (names.size !== entries.length || entries.some(path => !names.has(basename(path))))
-        throw new Error('SDK运行库清单与实际文件集合不一致')
-      for (const file of manifest.runtimeLibraries) {
-        const path = join(root, 'lib', file.name)
-        if (basename(file.name) !== file.name || !within(root, realpathSync(path)))
-          throw new Error(`运行库清单路径非法: ${file.name}`)
-        const sha256 = createHash('sha256').update(readFileSync(path)).digest('hex')
-        if (sha256 !== file.sha256)
-          throw new Error(`运行库清单摘要不匹配: ${file.name}`)
-      }
-    }
+    command('codesign', ['--verify', '--deep', '--strict', root])
   }
   return { root, architectures: requiredArchitectures, minimumSystemVersion, binaries: checked.size }
 }

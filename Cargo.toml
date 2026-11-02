@@ -1,12 +1,6 @@
 [workspace]
 members = [
   "crates/xbox-streaming-protocol",
-  "crates/ohmygamepad/protocol",
-  "crates/ohmygamepad/core",
-  "crates/ohmygamepad/bridge/host",
-  "crates/ohmygamepad/backends/sdl3",
-  "crates/xbxengine/protocol",
-  "crates/xbxengine/core",
   "crates/xbox-auth-flow",
   "crates/xbox-cloud-catalog-flow",
   "crates/xbox-ios-bridge",
@@ -47,15 +41,6 @@ rand_core = "0.10.0"
 url = "2.5.8"
 parking_lot = "0.12.5"
 bytes = "1.10.1"
-cpal = "0.15.3"
-opus = "0.3.0"
-rtc = "0.9.0"
-rtc-rtp = "0.9.0"
-rtc-rtcp = "0.9.0"
-rtc-media = "0.9.0"
-rtc-shared = "0.9.0"
-rtc-stun = "0.9.0"
-rtc-turn = "0.9.0"
 p256 = { version = "0.13.2", features = [
   "jwk",
   "pkcs8",
@@ -68,8 +53,6 @@ sha2 = "0.10.9"
 hex-literal = "1.1.0"
 async-trait = "0.1"
 env_logger = "0.11.9"
-h264-reader = "0.8.0"
-ffmpeg-sys-next = "8.1.0"
 rfd = "0.15.4"
 
 [profile.dev]

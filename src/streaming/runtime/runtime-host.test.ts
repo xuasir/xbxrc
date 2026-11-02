@@ -6,7 +6,6 @@ import { INITIAL_CONNECTION_TIMEOUT_MS, useStreamRuntimeHost } from './runtime-h
 const harness = vi.hoisted(() => ({ factory: vi.fn(), trace: vi.fn(), recovery: vi.fn() }))
 vi.mock('../../services/rpc', () => ({ rpc: { runtimeTrace: { recordEvent: harness.trace }, streaming: { decideRecovery: harness.recovery } } }))
 vi.mock('./browser-runtime', () => ({ createBrowserRuntime: harness.factory }))
-vi.mock('./xbxengine-runtime', () => ({ createXbxEngineRuntime: harness.factory }))
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -80,51 +79,6 @@ describe('runtime host lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each([false, true])('reports native recovery rejection and consumes cleanup failure=%s', async (stopFails) => {
-    const runtime = port()
-    runtime.requestReconnect.mockRejectedValueOnce(new Error('nativeReconnectFailed'))
-    if (stopFails)
-      runtime.stop.mockRejectedValueOnce(new Error('nativeStopFailed'))
-    harness.factory.mockReturnValue(runtime)
-    const onRuntimeError = vi.fn()
-    const vm = host({ onRuntimeError })
-    const launchSpec = spec()
-    launchSpec.runtime.mode = 'rust-owned'
-    const launch = vm.startRuntime(launchSpec)
-    await vi.advanceTimersByTimeAsync(500)
-    await launch
-    runtime.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state: 'failed' })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(onRuntimeError).toHaveBeenCalledExactlyOnceWith('nativeReconnectFailed')
-    expect(runtime.stop).toHaveBeenCalledTimes(1)
-    await vm.closeRuntime()
-  })
-
-  it('absorbs an old native recovery rejection after a new runtime starts', async () => {
-    const old = port()
-    const next = port()
-    const recovery = deferred<void>()
-    old.requestReconnect.mockReturnValue(recovery.promise)
-    harness.factory.mockReturnValueOnce(old).mockReturnValueOnce(next)
-    const onRuntimeError = vi.fn()
-    const vm = host({ onRuntimeError })
-    const launchSpec = spec('old')
-    launchSpec.runtime.mode = 'rust-owned'
-    const launch = vm.startRuntime(launchSpec)
-    await vi.advanceTimersByTimeAsync(500)
-    await launch
-    old.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state: 'failed' })
-    await vi.advanceTimersByTimeAsync(0)
-    const replacement = vm.startRuntime(spec('new'))
-    await vi.advanceTimersByTimeAsync(500)
-    await replacement
-    recovery.reject(new Error('lateNativeFailure'))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(onRuntimeError).not.toHaveBeenCalled()
-    expect(next.stop).not.toHaveBeenCalled()
-    await vm.closeRuntime()
-  })
-
   it('terminates a browser connection that stays new after signaling', async () => {
     const runtime = port()
     harness.factory.mockReturnValue(runtime)
@@ -194,21 +148,6 @@ describe('runtime host lifecycle', () => {
     expect(vm.microphoneState.value.desiredEnabled).toBe(false)
     latest.resolve(false)
     expect(await disabling).toBe(false)
-    await vm.closeRuntime()
-  })
-  it('submits native transport failure to the engine admission without a second host RPC', async () => {
-    const runtime = port()
-    harness.factory.mockReturnValue(runtime)
-    const vm = host()
-    const launchSpec = spec()
-    launchSpec.runtime.mode = 'rust-owned'
-    const launched = vm.startRuntime(launchSpec)
-    await vi.advanceTimersByTimeAsync(1_000)
-    await launched
-    runtime.subscribe.mock.calls[0][0]({ type: 'connectionStateChanged', state: 'failed' })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(harness.recovery).toHaveBeenCalledTimes(0)
-    expect(runtime.requestReconnect).toHaveBeenCalledExactlyOnceWith('ice-failed')
     await vm.closeRuntime()
   })
   it('absorbs close during the launch delay before creating a runtime', async () => {

@@ -40,4 +40,6 @@
 
 ## Progress
 
-- 已核对当前工作树、已确定方案和现有 CI/Cargo/配置装配；进入基线与源码拆分。
+- 已保存 P0 基线 `37f632a`，rust 从此建立。公共协议与构建身份已拆分 `9abf17d`；公共发行/更新身份门禁 `10b771d` 已验证。
+- main 原生源码、依赖、SDK、前端入口及设置完成裁剪。直接 Tauri 构建和 main/release/test/stable 的来源门禁已接入独立 CI/cache；共同 manifest、SHA/架构/版本/跨 edition 检查及 updater 运行时检查已落地。
+- 当前证据：公共 Rust 147 项、main Tauri 44 项、前端 455 项、lint/typecheck/生产构建、生命周期测试及 8 项发行门禁/两 edition 模拟通过；Browser Cargo 依赖树门禁通过。实际包与 rust 原生 feature/身份装配继续实施。

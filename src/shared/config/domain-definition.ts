@@ -185,7 +185,6 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
           'xcloud_bitrate',
           'audio_bitrate_mode',
           'audio_bitrate',
-          'rust_media_preview',
           'xhome_turn_fallback',
           'display_options',
           'super_resolution_experimental',
@@ -204,7 +203,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: ['native_gamepad_preview', 'vibration', 'vibration_strength'],
+        keys: ['vibration', 'vibration_strength'],
       },
     ],
   },
@@ -391,16 +390,6 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   },
   performance_style: {
     label: 'Compact performance overlay',
-    control: 'toggle',
-  },
-  rust_media_preview: {
-    label: 'Rust media preview',
-    description: 'Use Rust media from the next stream. Turning this off selects browser playback for the next stream.',
-    control: 'toggle',
-  },
-  native_gamepad_preview: {
-    label: 'Native gamepad preview',
-    description: 'Use native gamepad input from the next app launch. Turning this off selects Browser Gamepad API on the next launch.',
     control: 'toggle',
   },
   server_url: {

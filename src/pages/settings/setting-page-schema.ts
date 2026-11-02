@@ -55,8 +55,6 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   force_region_ip: 'streaming',
   preferred_game_language: 'streaming',
   ipv6: 'streaming',
-  rust_media_preview: 'streaming',
-  native_gamepad_preview: 'input',
   xhome_turn_fallback: 'streaming',
   server_url: 'streaming',
   server_username: 'streaming',
@@ -157,8 +155,6 @@ export function getAdvancedDiagnosticsSections(dangerUnlocked: boolean): Setting
       key: 'preview',
       labelKey: 'setting.pages.advancedDiagnostics.sectionPreview',
       items: [
-        { kind: 'field', fieldKey: 'rust_media_preview' },
-        { kind: 'field', fieldKey: 'native_gamepad_preview' },
         { kind: 'field', fieldKey: 'super_resolution_experimental' },
       ],
     },

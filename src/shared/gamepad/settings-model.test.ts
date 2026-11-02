@@ -6,7 +6,7 @@ import { neutralState, PadReleaseBarrier } from './state'
 describe('controller preferences', () => {
   it('defaults to browser, keep-active, physical controls and silent UI', () => {
     expect(parseGamepadPreferences({})).toMatchObject({ backend: 'browser', backgroundPolicy: 'keep-active', controlSource: 'gamepad', vibration: true, uiHaptics: false })
-    expect(parseGamepadPreferences({ ui_haptics: true, gamepad_background_policy: 'follow-app', native_gamepad_preview: true })).toMatchObject({ uiHaptics: true, backgroundPolicy: 'follow-app', backend: 'native' })
+    expect(parseGamepadPreferences({ ui_haptics: true, gamepad_background_policy: 'follow-app' })).toMatchObject({ uiHaptics: true, backgroundPolicy: 'follow-app', backend: 'browser' })
   })
   it('swaps occupied bindings while preserving analog trigger roles and Home', () => {
     const config = defaultGameControls()

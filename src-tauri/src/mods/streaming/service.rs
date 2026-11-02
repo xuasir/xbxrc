@@ -6,7 +6,6 @@ use crate::mods::data::DataProviderRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::events;
 use crate::mods::streaming::types::*;
-use crate::mods::xbxengine::XbxEngineProviderRef;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
@@ -56,7 +55,6 @@ pub struct StreamingService {
     auth_provider: AuthProviderRef,
     config_provider: ConfigProviderRef,
     data_provider: DataProviderRef,
-    xbxengine_provider: XbxEngineProviderRef,
     runtime_trace: RuntimeTraceRecorderRef,
     inner: Arc<StreamingServiceInner>,
 }
@@ -544,7 +542,6 @@ impl StreamingService {
         auth_provider: AuthProviderRef,
         config_provider: ConfigProviderRef,
         data_provider: DataProviderRef,
-        xbxengine_provider: XbxEngineProviderRef,
         runtime_trace: RuntimeTraceRecorderRef,
     ) -> Self {
         let flow_provider = TauriSessionFlowProvider {
@@ -559,7 +556,6 @@ impl StreamingService {
             auth_provider,
             config_provider,
             data_provider,
-            xbxengine_provider,
             runtime_trace,
             inner: Arc::new(StreamingServiceInner {
                 flow: SessionFlowService::new(flow_provider),
@@ -588,7 +584,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             "runtimeBuildInfo",
             None,
             serde_json::json!({
-                "buildFingerprint": crate::mods::xbxengine::build_info::current_build_fingerprint(),
+                "buildFingerprint": crate::build_info::current_build_fingerprint(),
                 "platform": std::env::consts::OS,
                 "targetType": params.target_type,
             }),

@@ -149,9 +149,7 @@
       "showExperience": "Show streaming quality",
       "hideExperience": "Hide streaming quality",
       "showBrowserDiagnostics": "Show browser diagnostics",
-      "hideBrowserDiagnostics": "Hide browser diagnostics",
-      "showRustDiagnostics": "Show engine diagnostics",
-      "hideRustDiagnostics": "Hide engine diagnostics"
+      "hideBrowserDiagnostics": "Hide browser diagnostics"
     },
     "experience": {
       "title": "Streaming quality",
@@ -1022,8 +1020,12 @@
       "theme": {
         "label": "Theme",
         "options": {
-          "dark": { "label": "Dark" },
-          "light": { "label": "Light" }
+          "dark": {
+            "label": "Dark"
+          },
+          "light": {
+            "label": "Light"
+          }
         }
       },
       "fullscreen": {
@@ -1044,8 +1046,12 @@
       "resolution": {
         "label": "Cloud gaming max resolution",
         "options": {
-          "1440": { "label": "1440p" },
-          "1081": { "label": "Auto · 1080p HQ" },
+          "1440": {
+            "label": "1440p"
+          },
+          "1081": {
+            "label": "Auto · 1080p HQ"
+          },
           "1080": {
             "label": "1080p"
           },
@@ -1057,8 +1063,12 @@
       "xhome_resolution": {
         "label": "Console streaming max resolution",
         "options": {
-          "1440": { "label": "1440p" },
-          "1081": { "label": "Auto · 1080p HQ" },
+          "1440": {
+            "label": "1440p"
+          },
+          "1081": {
+            "label": "Auto · 1080p HQ"
+          },
           "1080": {
             "label": "1080p"
           },
@@ -1122,7 +1132,9 @@
         "label": "Audio bitrate limit",
         "description": "kb/s"
       },
-      "enable_audio_control": { "label": "In-stream volume control" },
+      "enable_audio_control": {
+        "label": "In-stream volume control"
+      },
       "preferred_game_language": {
         "label": "Preferred game language",
         "options": {
@@ -1130,33 +1142,87 @@
             "label": "Default",
             "description": "Follow the account or platform default language."
           },
-          "ar_sa": { "label": "Arabic (Saudi Arabia)" },
-          "cs_cz": { "label": "Czech" },
-          "da_dk": { "label": "Danish" },
-          "de_de": { "label": "German" },
-          "el_gr": { "label": "Greek" },
-          "en_gb": { "label": "English (United Kingdom)" },
-          "en_us": { "label": "English (United States)" },
-          "es_es": { "label": "Spanish (Spain)" },
-          "es_mx": { "label": "Spanish (Mexico)" },
-          "fi_fi": { "label": "Finnish" },
-          "fr_fr": { "label": "French" },
-          "he_il": { "label": "Hebrew" },
-          "hu_hu": { "label": "Hungarian" },
-          "it_it": { "label": "Italian" },
-          "ja_jp": { "label": "Japanese" },
-          "ko_kr": { "label": "Korean" },
-          "nb_no": { "label": "Norwegian" },
-          "nl_nl": { "label": "Dutch" },
-          "pl_pl": { "label": "Polish" },
-          "pt_br": { "label": "Portuguese (Brazil)" },
-          "pt_pt": { "label": "Portuguese (Portugal)" },
-          "ru_ru": { "label": "Russian" },
-          "sk_sk": { "label": "Slovak" },
-          "sv_se": { "label": "Swedish" },
-          "tr_tr": { "label": "Turkish" },
-          "zh_cn": { "label": "Simplified Chinese" },
-          "zh_tw": { "label": "Traditional Chinese" }
+          "ar_sa": {
+            "label": "Arabic (Saudi Arabia)"
+          },
+          "cs_cz": {
+            "label": "Czech"
+          },
+          "da_dk": {
+            "label": "Danish"
+          },
+          "de_de": {
+            "label": "German"
+          },
+          "el_gr": {
+            "label": "Greek"
+          },
+          "en_gb": {
+            "label": "English (United Kingdom)"
+          },
+          "en_us": {
+            "label": "English (United States)"
+          },
+          "es_es": {
+            "label": "Spanish (Spain)"
+          },
+          "es_mx": {
+            "label": "Spanish (Mexico)"
+          },
+          "fi_fi": {
+            "label": "Finnish"
+          },
+          "fr_fr": {
+            "label": "French"
+          },
+          "he_il": {
+            "label": "Hebrew"
+          },
+          "hu_hu": {
+            "label": "Hungarian"
+          },
+          "it_it": {
+            "label": "Italian"
+          },
+          "ja_jp": {
+            "label": "Japanese"
+          },
+          "ko_kr": {
+            "label": "Korean"
+          },
+          "nb_no": {
+            "label": "Norwegian"
+          },
+          "nl_nl": {
+            "label": "Dutch"
+          },
+          "pl_pl": {
+            "label": "Polish"
+          },
+          "pt_br": {
+            "label": "Portuguese (Brazil)"
+          },
+          "pt_pt": {
+            "label": "Portuguese (Portugal)"
+          },
+          "ru_ru": {
+            "label": "Russian"
+          },
+          "sk_sk": {
+            "label": "Slovak"
+          },
+          "sv_se": {
+            "label": "Swedish"
+          },
+          "tr_tr": {
+            "label": "Turkish"
+          },
+          "zh_cn": {
+            "label": "Simplified Chinese"
+          },
+          "zh_tw": {
+            "label": "Traditional Chinese"
+          }
         }
       },
       "force_region_ip": {
@@ -1166,14 +1232,30 @@
             "label": "Default",
             "description": "Use the default regional routing strategy."
           },
-          "203_41_44_20": { "label": "Australia" },
-          "200_221_11_101": { "label": "Brazil" },
-          "194_25_0_68": { "label": "Europe" },
-          "210_131_113_123": { "label": "Japan" },
-          "168_126_63_1": { "label": "Korea" },
-          "4_2_2_2": { "label": "United States" },
-          "104_211_224_146": { "label": "South India" },
-          "104_211_96_159": { "label": "Central India" }
+          "203_41_44_20": {
+            "label": "Australia"
+          },
+          "200_221_11_101": {
+            "label": "Brazil"
+          },
+          "194_25_0_68": {
+            "label": "Europe"
+          },
+          "210_131_113_123": {
+            "label": "Japan"
+          },
+          "168_126_63_1": {
+            "label": "Korea"
+          },
+          "4_2_2_2": {
+            "label": "United States"
+          },
+          "104_211_224_146": {
+            "label": "South India"
+          },
+          "104_211_96_159": {
+            "label": "Central India"
+          }
         }
       },
       "codec": {
@@ -1216,35 +1298,51 @@
             "label": "Crop & zoom",
             "description": "Crop edges"
           },
-          "16_10": { "label": "Fixed 16:10", "description": "16:10" },
-          "18_9": { "label": "Fixed 18:9", "description": "18:9" },
-          "21_9": { "label": "Fixed 21:9", "description": "21:9" },
-          "4_3": { "label": "Fixed 4:3", "description": "4:3" }
+          "16_10": {
+            "label": "Fixed 16:10",
+            "description": "16:10"
+          },
+          "18_9": {
+            "label": "Fixed 18:9",
+            "description": "18:9"
+          },
+          "21_9": {
+            "label": "Fixed 21:9",
+            "description": "21:9"
+          },
+          "4_3": {
+            "label": "Fixed 4:3",
+            "description": "4:3"
+          }
         }
       },
-      "ipv6": { "label": "Prefer IPv6" },
-      "performance_style": { "label": "Compact performance overlay" },
+      "ipv6": {
+        "label": "Prefer IPv6"
+      },
+      "performance_style": {
+        "label": "Compact performance overlay"
+      },
       "super_resolution_experimental": {
         "label": "Super Resolution (Experimental)",
         "description": "Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure."
       },
-      "rust_media_preview": {
-        "label": "Rust media preview",
-        "description": "Use Rust media from the next stream. Turning this off selects browser playback for the next stream."
-      },
-      "native_gamepad_preview": {
-        "label": "Native gamepad preview",
-        "description": "Use native gamepad input from the next app launch. Turning this off selects Browser Gamepad API on the next launch."
-      },
       "display_options": {
         "label": "Picture style",
         "options": {
-          "standard": { "label": "Standard" },
-          "clear": { "label": "Clear" },
-          "soft": { "label": "Soft" }
+          "standard": {
+            "label": "Standard"
+          },
+          "clear": {
+            "label": "Clear"
+          },
+          "soft": {
+            "label": "Soft"
+          }
         }
       },
-      "vibration": { "label": "Vibration" },
+      "vibration": {
+        "label": "Vibration"
+      },
       "vibration_strength": {
         "label": "Vibration Strength",
         "options": {
@@ -1262,10 +1360,18 @@
           }
         }
       },
-      "server_url": { "label": "Custom server URL" },
-      "server_username": { "label": "Custom server username" },
-      "server_credential": { "label": "Custom server credential" },
-      "debug": { "label": "Debug mode" },
+      "server_url": {
+        "label": "Custom server URL"
+      },
+      "server_username": {
+        "label": "Custom server username"
+      },
+      "server_credential": {
+        "label": "Custom server credential"
+      },
+      "debug": {
+        "label": "Debug mode"
+      },
       "runtime_trace_mode": {
         "label": "Runtime trace logging",
         "options": {
@@ -1335,7 +1441,6 @@
     "backend": "Controller input backend",
     "browser": "Browser",
     "native": "Native",
-    "nativePreviewLocation": "The native gamepad switch is in Advanced & diagnostics → Preview features.",
     "currentBackend": "Currently running:",
     "restartPending": "Applies next launch",
     "export": "Export input diagnostics",

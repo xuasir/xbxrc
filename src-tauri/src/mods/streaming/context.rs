@@ -144,7 +144,7 @@ impl StreamingService {
             input: title_capability.capabilities,
             input_capability: title_capability.input_capability,
             // runtime 能力按当前宿主真实 provider 状态计算，避免硬编码。
-            runtime: resolve_runtime_capabilities(self.xbxengine_provider.is_runtime_available()),
+            runtime: resolve_runtime_capabilities(),
             // xHome fallback TURN 由 provider 提供，失败时保守降级为 None。
             turn: DomainTurnContext {
                 fallback: self.resolve_fallback_turn_server(target_type).await,
@@ -250,12 +250,10 @@ impl StreamingService {
     }
 }
 
-pub(super) fn resolve_runtime_capabilities(
-    xbxengine_runtime_available: bool,
-) -> DomainRuntimeCapabilities {
+pub(super) fn resolve_runtime_capabilities() -> DomainRuntimeCapabilities {
     DomainRuntimeCapabilities {
         browser_webrtc: true,
-        rust_owned: xbxengine_runtime_available,
+        rust_owned: false,
         native_mkb: false,
         touch_surface: false,
         prefer_browser: true,

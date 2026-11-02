@@ -18,13 +18,10 @@ import { createConnectionRecoveryCoordinator } from './connection-recovery'
 import {
   buildRuntimeAttemptSpec,
   canRetryFallbackTurn,
-  hasDirectPathExhausted,
   resolveLaunchDelayMs,
-  RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS,
   shouldAttemptRecovery,
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'
-import { createXbxEngineRuntime } from './xbxengine-runtime'
 
 type BrowserInterval = number
 type BrowserTimeout = number
@@ -63,7 +60,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   let microphoneIntentVersion = 0
   const experienceMetricsEnabled = ref(false)
   const browserDiagnosticsEnabled = ref(false)
-  const rustDiagnosticsEnabled = ref(false)
   const performanceSnapshot = ref<StreamStats | null>(null)
   const displayOptions = ref<DisplayOptionsValue>({ ...DEFAULT_DISPLAY_OPTIONS })
   const renderProjection = shallowRef<StreamRenderProjection | null>(null)
@@ -118,12 +114,8 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   }
 
   function createRuntimePort(mode: RuntimeLaunchSpec['runtime']['mode']): RuntimePort {
-    if (mode === 'rust-owned') {
-      return createXbxEngineRuntime({
-        playerElementId: options.playerElementId,
-        initialAudioVolume: audioVolume.value,
-      })
-    }
+    if (mode !== 'webrtc-direct')
+      throw new Error('runtimeUnavailable: browser edition')
 
     return createBrowserRuntime({
       playerElementId: options.playerElementId,
@@ -242,7 +234,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   function refreshStatsPolling(): void {
     clearPerformancePolling()
     if (
-      (!experienceMetricsEnabled.value && !browserDiagnosticsEnabled.value && !rustDiagnosticsEnabled.value)
+      (!experienceMetricsEnabled.value && !browserDiagnosticsEnabled.value)
       || runtime.value === null
     ) {
       performanceSnapshot.value = null
@@ -281,11 +273,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
     if (currentRuntime === null || sessionId === null || !isRuntimeTokenActive(token)) {
       return false
-    }
-    if (activeMode === 'rust-owned') {
-      // 原生自动候选与控制请求归 engine 同一事务，当前会话授权随该事务执行。
-      await currentRuntime.requestReconnect(state === 'failed' ? 'ice-failed' : 'network-lost')
-      return true
     }
     return await connectionRecovery.run({
       factKey: `transportConnectionState:${state}`,
@@ -489,7 +476,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       await nextRuntime.stop('superseded-launch')
       return false
     }
-    scheduleRustDirectFirstExhaustionProbe(token, input, launchSpec)
     watchInitialConnection(token)
     nextRuntime.applyDisplayState({
       displayOptions: displayOptions.value,
@@ -512,73 +498,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       })
     }
     return true
-  }
-
-  function scheduleRustDirectFirstExhaustionProbe(
-    token: number,
-    input: RuntimeLaunchSpec,
-    launchSpec: RuntimeLaunchSpec,
-  ): void {
-    clearDirectExhaustionProbe()
-    if (
-      input.runtime.mode !== 'rust-owned'
-      || launchSpec.runtime.turnServer !== null
-      || !shouldUseDirectFirstFallback(input)
-    ) {
-      return
-    }
-    directExhaustionProbeTimer = window.setTimeout(() => {
-      directExhaustionProbeTimer = null
-      void probeRustDirectFirstExhaustion(token)
-    }, RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS)
-    void recordRuntimeTraceEvent('directFirstExhaustionProbeScheduled', {
-      source: 'runtime-host',
-      delayMs: RUST_DIRECT_FIRST_EXHAUSTION_PROBE_DELAY_MS,
-      mode: input.runtime.mode,
-      targetType: input.targetType,
-    }, input.sessionId)
-  }
-
-  async function probeRustDirectFirstExhaustion(token: number): Promise<void> {
-    const currentRuntime = runtime.value
-    const sessionId = activeSessionId
-    if (
-      currentRuntime === null
-      || sessionId === null
-      || activeConnected
-      || !isRuntimeTokenActive(token)
-    ) {
-      return
-    }
-    let snapshot: StreamStats | null = null
-    try {
-      snapshot = await currentRuntime.snapshotStats()
-    }
-    catch (error) {
-      void recordRuntimeTraceEvent('directFirstExhaustionProbe', {
-        source: 'runtime-host',
-        result: 'snapshotFailed',
-        error: error instanceof Error ? error.message : String(error),
-      }, sessionId)
-      return
-    }
-    if (!isRuntimeTokenActive(token) || activeConnected) {
-      return
-    }
-    const directPathExhausted = hasDirectPathExhausted({ snapshot })
-    void recordRuntimeTraceEvent('directFirstExhaustionProbe', {
-      source: 'runtime-host',
-      result: directPathExhausted ? 'exhausted' : 'stillPending',
-      transportState: snapshot.transportState ?? null,
-      transportCandidatePair: snapshot.transportCandidatePair ?? null,
-      inboundVideoPacketCountTotal: snapshot.inboundVideoPacketCountTotal ?? null,
-      inboundVideoBytesTotal: snapshot.inboundVideoBytesTotal ?? null,
-      icePolicyDigest: snapshot.icePolicyDigest ?? null,
-    }, sessionId)
-    if (!directPathExhausted) {
-      return
-    }
-    await tryFallbackTurnRetry(token, { directPathExhausted: true })
   }
 
   async function startRuntime(input: RuntimeLaunchSpec): Promise<void> {
@@ -654,10 +573,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     },
     setBrowserDiagnosticsEnabled(enabled: boolean) {
       browserDiagnosticsEnabled.value = enabled
-      refreshStatsPolling()
-    },
-    setRustDiagnosticsEnabled(enabled: boolean) {
-      rustDiagnosticsEnabled.value = enabled
       refreshStatsPolling()
     },
     applyDisplayOptions(nextValue: DisplayOptionsValue) {

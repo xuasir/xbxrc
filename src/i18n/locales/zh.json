@@ -149,9 +149,7 @@
       "showExperience": "显示体验指标",
       "hideExperience": "隐藏体验指标",
       "showBrowserDiagnostics": "显示浏览器内部诊断",
-      "hideBrowserDiagnostics": "隐藏浏览器内部诊断",
-      "showRustDiagnostics": "显示引擎内部诊断",
-      "hideRustDiagnostics": "隐藏引擎内部诊断"
+      "hideBrowserDiagnostics": "隐藏浏览器内部诊断"
     },
     "experience": {
       "title": "体验指标",
@@ -1022,8 +1020,12 @@
       "theme": {
         "label": "界面主题",
         "options": {
-          "dark": { "label": "深色" },
-          "light": { "label": "浅色" }
+          "dark": {
+            "label": "深色"
+          },
+          "light": {
+            "label": "浅色"
+          }
         }
       },
       "fullscreen": {
@@ -1044,8 +1046,12 @@
       "resolution": {
         "label": "云游戏最高分辨率",
         "options": {
-          "1440": { "label": "1440p" },
-          "1081": { "label": "自动 · 1080p 高画质" },
+          "1440": {
+            "label": "1440p"
+          },
+          "1081": {
+            "label": "自动 · 1080p 高画质"
+          },
           "1080": {
             "label": "1080p"
           },
@@ -1057,8 +1063,12 @@
       "xhome_resolution": {
         "label": "主机串流最高分辨率",
         "options": {
-          "1440": { "label": "1440p" },
-          "1081": { "label": "自动 · 1080p 高画质" },
+          "1440": {
+            "label": "1440p"
+          },
+          "1081": {
+            "label": "自动 · 1080p 高画质"
+          },
           "1080": {
             "label": "1080p"
           },
@@ -1122,7 +1132,9 @@
         "label": "音频码率上限",
         "description": "kb/s"
       },
-      "enable_audio_control": { "label": "串流内音量调节" },
+      "enable_audio_control": {
+        "label": "串流内音量调节"
+      },
       "preferred_game_language": {
         "label": "游戏语言偏好",
         "options": {
@@ -1130,33 +1142,87 @@
             "label": "默认",
             "description": "跟随账号或平台默认语言。"
           },
-          "ar_sa": { "label": "阿拉伯语（沙特）" },
-          "cs_cz": { "label": "捷克语" },
-          "da_dk": { "label": "丹麦语" },
-          "de_de": { "label": "德语" },
-          "el_gr": { "label": "希腊语" },
-          "en_gb": { "label": "英语（英国）" },
-          "en_us": { "label": "英语（美国）" },
-          "es_es": { "label": "西班牙语（西班牙）" },
-          "es_mx": { "label": "西班牙语（墨西哥）" },
-          "fi_fi": { "label": "芬兰语" },
-          "fr_fr": { "label": "法语" },
-          "he_il": { "label": "希伯来语" },
-          "hu_hu": { "label": "匈牙利语" },
-          "it_it": { "label": "意大利语" },
-          "ja_jp": { "label": "日语" },
-          "ko_kr": { "label": "韩语" },
-          "nb_no": { "label": "挪威语" },
-          "nl_nl": { "label": "荷兰语" },
-          "pl_pl": { "label": "波兰语" },
-          "pt_br": { "label": "葡萄牙语（巴西）" },
-          "pt_pt": { "label": "葡萄牙语（葡萄牙）" },
-          "ru_ru": { "label": "俄语" },
-          "sk_sk": { "label": "斯洛伐克语" },
-          "sv_se": { "label": "瑞典语" },
-          "tr_tr": { "label": "土耳其语" },
-          "zh_cn": { "label": "简体中文" },
-          "zh_tw": { "label": "繁體中文" }
+          "ar_sa": {
+            "label": "阿拉伯语（沙特）"
+          },
+          "cs_cz": {
+            "label": "捷克语"
+          },
+          "da_dk": {
+            "label": "丹麦语"
+          },
+          "de_de": {
+            "label": "德语"
+          },
+          "el_gr": {
+            "label": "希腊语"
+          },
+          "en_gb": {
+            "label": "英语（英国）"
+          },
+          "en_us": {
+            "label": "英语（美国）"
+          },
+          "es_es": {
+            "label": "西班牙语（西班牙）"
+          },
+          "es_mx": {
+            "label": "西班牙语（墨西哥）"
+          },
+          "fi_fi": {
+            "label": "芬兰语"
+          },
+          "fr_fr": {
+            "label": "法语"
+          },
+          "he_il": {
+            "label": "希伯来语"
+          },
+          "hu_hu": {
+            "label": "匈牙利语"
+          },
+          "it_it": {
+            "label": "意大利语"
+          },
+          "ja_jp": {
+            "label": "日语"
+          },
+          "ko_kr": {
+            "label": "韩语"
+          },
+          "nb_no": {
+            "label": "挪威语"
+          },
+          "nl_nl": {
+            "label": "荷兰语"
+          },
+          "pl_pl": {
+            "label": "波兰语"
+          },
+          "pt_br": {
+            "label": "葡萄牙语（巴西）"
+          },
+          "pt_pt": {
+            "label": "葡萄牙语（葡萄牙）"
+          },
+          "ru_ru": {
+            "label": "俄语"
+          },
+          "sk_sk": {
+            "label": "斯洛伐克语"
+          },
+          "sv_se": {
+            "label": "瑞典语"
+          },
+          "tr_tr": {
+            "label": "土耳其语"
+          },
+          "zh_cn": {
+            "label": "简体中文"
+          },
+          "zh_tw": {
+            "label": "繁體中文"
+          }
         }
       },
       "force_region_ip": {
@@ -1166,14 +1232,30 @@
             "label": "默认",
             "description": "使用系统默认的区域路由策略。"
           },
-          "203_41_44_20": { "label": "澳大利亚" },
-          "200_221_11_101": { "label": "巴西" },
-          "194_25_0_68": { "label": "欧洲" },
-          "210_131_113_123": { "label": "日本" },
-          "168_126_63_1": { "label": "韩国" },
-          "4_2_2_2": { "label": "美国" },
-          "104_211_224_146": { "label": "印度南部" },
-          "104_211_96_159": { "label": "印度中部" }
+          "203_41_44_20": {
+            "label": "澳大利亚"
+          },
+          "200_221_11_101": {
+            "label": "巴西"
+          },
+          "194_25_0_68": {
+            "label": "欧洲"
+          },
+          "210_131_113_123": {
+            "label": "日本"
+          },
+          "168_126_63_1": {
+            "label": "韩国"
+          },
+          "4_2_2_2": {
+            "label": "美国"
+          },
+          "104_211_224_146": {
+            "label": "印度南部"
+          },
+          "104_211_96_159": {
+            "label": "印度中部"
+          }
         }
       },
       "codec": {
@@ -1216,35 +1298,51 @@
             "label": "裁切放大",
             "description": "裁掉边缘"
           },
-          "16_10": { "label": "固定 16:10", "description": "16:10" },
-          "18_9": { "label": "固定 18:9", "description": "18:9" },
-          "21_9": { "label": "固定 21:9", "description": "21:9" },
-          "4_3": { "label": "固定 4:3", "description": "4:3" }
+          "16_10": {
+            "label": "固定 16:10",
+            "description": "16:10"
+          },
+          "18_9": {
+            "label": "固定 18:9",
+            "description": "18:9"
+          },
+          "21_9": {
+            "label": "固定 21:9",
+            "description": "21:9"
+          },
+          "4_3": {
+            "label": "固定 4:3",
+            "description": "4:3"
+          }
         }
       },
-      "ipv6": { "label": "优先使用 IPv6" },
-      "performance_style": { "label": "紧凑性能浮层" },
+      "ipv6": {
+        "label": "优先使用 IPv6"
+      },
+      "performance_style": {
+        "label": "紧凑性能浮层"
+      },
       "super_resolution_experimental": {
         "label": "超分辨率（实验）",
         "description": "浏览器端 FSR1 空间放大；可能增加 GPU 占用，失败时回退到常规锐化。"
       },
-      "rust_media_preview": {
-        "label": "Rust 媒体预览",
-        "description": "开启后下次串流使用 Rust 媒体；关闭后下次串流使用浏览器直出。"
-      },
-      "native_gamepad_preview": {
-        "label": "原生手柄预览",
-        "description": "开启后下次应用启动使用原生手柄；关闭后下次启动使用浏览器 Gamepad API。"
-      },
       "display_options": {
         "label": "画面风格",
         "options": {
-          "standard": { "label": "标准" },
-          "clear": { "label": "清晰" },
-          "soft": { "label": "柔和" }
+          "standard": {
+            "label": "标准"
+          },
+          "clear": {
+            "label": "清晰"
+          },
+          "soft": {
+            "label": "柔和"
+          }
         }
       },
-      "vibration": { "label": "手柄震动" },
+      "vibration": {
+        "label": "手柄震动"
+      },
       "vibration_strength": {
         "label": "震动强度",
         "options": {
@@ -1262,10 +1360,18 @@
           }
         }
       },
-      "server_url": { "label": "自定义服务器地址" },
-      "server_username": { "label": "自定义服务器用户名" },
-      "server_credential": { "label": "自定义服务器凭证" },
-      "debug": { "label": "调试模式" },
+      "server_url": {
+        "label": "自定义服务器地址"
+      },
+      "server_username": {
+        "label": "自定义服务器用户名"
+      },
+      "server_credential": {
+        "label": "自定义服务器凭证"
+      },
+      "debug": {
+        "label": "调试模式"
+      },
       "runtime_trace_mode": {
         "label": "运行时追踪日志",
         "options": {
@@ -1335,7 +1441,6 @@
     "backend": "手柄接入方式",
     "browser": "浏览器",
     "native": "原生",
-    "nativePreviewLocation": "原生手柄开关位于「高级与诊断 → 预览特性」。",
     "currentBackend": "当前正在使用：",
     "restartPending": "下次启动生效",
     "export": "导出输入诊断",

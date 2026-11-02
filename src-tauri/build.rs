@@ -7,52 +7,7 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
     emit_build_metadata();
-    link_macos_ffmpeg_runtime_paths();
-    link_macos_availability_runtime();
     tauri_build::build()
-}
-
-/// 开发产物与app各自从相邻目录加载同一份SDK，安装包路径随应用移动。
-fn link_macos_ffmpeg_runtime_paths() {
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
-        return;
-    }
-    let sdk_target = match std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
-        Ok("aarch64") => "macos-arm64",
-        Ok("x86_64") => "macos-x64",
-        _ => panic!("unsupported macOS FFmpeg target"),
-    };
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Frameworks");
-    println!("cargo:rerun-if-changed=resources/ffmpeg/{sdk_target}/lib/runtime-manifest.json");
-}
-
-/// SDL3 静态库中的 ObjC `@available` 会引用 `___isPlatformVersionAtLeast`。
-fn link_macos_availability_runtime() {
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
-        return;
-    }
-    let Some(path) = clang_runtime_library_path("libclang_rt.osx.a") else {
-        return;
-    };
-    println!("cargo:rustc-link-arg=-Wl,-force_load,{}", path.display());
-}
-
-fn clang_runtime_library_path(lib: &str) -> Option<PathBuf> {
-    let output = Command::new("clang")
-        .arg(format!("--print-file-name={lib}"))
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let path = String::from_utf8(output.stdout).ok()?;
-    let path = path.trim();
-    if path.is_empty() || path == lib {
-        return None;
-    }
-    let path = PathBuf::from(path);
-    path.exists().then_some(path)
 }
 
 fn emit_build_metadata() {
@@ -113,9 +68,6 @@ fn source_fingerprint() -> Option<String> {
         "src-tauri/build.rs",
         "src-tauri/tauri.conf.json",
         "src-tauri/Cargo.toml",
-        "src-tauri/resources/ffmpeg/versions.json",
-        "src-tauri/resources/ffmpeg/macos-arm64/lib/runtime-manifest.json",
-        "src-tauri/resources/ffmpeg/macos-x64/lib/runtime-manifest.json",
         "crates",
         "Cargo.toml",
         "app-edition.json",

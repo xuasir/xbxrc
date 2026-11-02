@@ -1,7 +1,6 @@
-use ohmygamepad_protocol::OhMyGamepadKeyboardMappingDto;
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 39] = [
+pub const APP_CONFIG_KEYS: [&str; 37] = [
     "locale",
     "theme",
     "fullscreen",
@@ -24,8 +23,6 @@ pub const APP_CONFIG_KEYS: [&str; 39] = [
     "video_format",
     "ipv6",
     "performance_style",
-    "rust_media_preview",
-    "native_gamepad_preview",
     "server_url",
     "server_username",
     "server_credential",
@@ -73,8 +70,6 @@ pub fn default_config_map() -> Map<String, Value> {
         "video_format": "",
         "ipv6": false,
         "performance_style": false,
-        "rust_media_preview": false,
-        "native_gamepad_preview": false,
         "server_url": "",
         "server_username": "",
         "server_credential": "",
@@ -103,11 +98,11 @@ pub fn default_config_map() -> Map<String, Value> {
 }
 
 pub fn default_keyboard_mapping_value() -> Value {
-    serde_json::to_value(OhMyGamepadKeyboardMappingDto::default()).unwrap_or_else(|_| {
-        json!({
-            "bindings": []
-        })
-    })
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../src/shared/gamepad/keyboard-defaults.json"
+    )))
+    .expect("valid shared keyboard defaults")
 }
 
 pub fn allowed_key(key: &str) -> bool {

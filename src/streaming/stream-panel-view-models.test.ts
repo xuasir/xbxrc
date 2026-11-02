@@ -1,9 +1,8 @@
 import type { StreamPerformanceSnapshot, StreamSessionDiagnosticsSnapshot } from './types'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   buildStreamBrowserDiagnosticsViewModel,
   buildStreamExperienceMetricsViewModel,
-  buildStreamRustDiagnosticsViewModel,
   EXPERIENCE_METRIC_KEYS,
   experienceMetricValue,
 } from './stream-panel-view-models'
@@ -137,36 +136,5 @@ describe('buildStreamBrowserDiagnosticsViewModel', () => {
     expect([vm.submitCost, vm.uploadCost, vm.glSubmitCost]).toEqual(['2.0ms', '1.5ms', '0.5ms'])
     expect(vm.gpuCost).toBe('streamPage.diagnostics.values.unavailable')
     expect(vm.scanout).toBe(vm.gpuCost)
-  })
-})
-
-describe('buildStreamRustDiagnosticsViewModel', () => {
-  it('translates rust-facing fields and includes decoder event when present', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(50_000)
-    const snapshot: StreamPerformanceSnapshot = {
-      transportState: 'connected',
-      videoHealth: 'healthy',
-      primaryIssueChain: 'steady:healthy',
-      latestDecisionSummary: 'noop',
-      recoveryOwnerState: 'stable-serving',
-      recoveryOwnerReason: 'none',
-      videoDecoderRecoveryState: 'nominal',
-      videoDecoderRecoveryEvent: 'reset',
-      stallKind: 'none',
-      diagnosis: 'ok',
-      recoveryRfcFaultDomain: 'net',
-      recoveryRfcStage: 's0',
-      recoveryRfcCeiling: 'c0',
-      hostMailboxDropCountTotal: 1,
-    }
-    const diagnostics = baseDiagnostics()
-    const vm = buildStreamRustDiagnosticsViewModel({
-      snapshot,
-      diagnostics,
-      i18n: createI18n(),
-    })
-    expect(vm.transportState).toBe('connected')
-    expect(vm.decoderEvent).toBe('reset')
-    expect(vm.hostPresentTelemetry).toContain('mbDrop:1')
   })
 })

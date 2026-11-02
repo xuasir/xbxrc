@@ -19,7 +19,7 @@ vi.mock('./browser-backend', () => ({ BrowserGamepadBackend: class {
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
-  mocks.get.mockResolvedValue({ native_gamepad_preview: false, ui_haptics: true })
+  mocks.get.mockResolvedValue({ ui_haptics: true })
 })
 
 describe('gamepad runtime configuration', () => {
@@ -31,7 +31,7 @@ describe('gamepad runtime configuration', () => {
     await runtime.initializeGamepadInput()
     expect(mocks.stop).not.toHaveBeenCalled()
     expect(mocks.features).not.toHaveBeenCalled()
-    expect(runtime.inputController.getSnapshot()).toMatchObject({ backend: 'browser', preferences: { backend: 'browser', nativePreview: false } })
+    expect(runtime.inputController.getSnapshot()).toMatchObject({ backend: 'browser', preferences: { backend: 'browser' } })
   })
   it('notifies configuration listeners only on initialization and successful persistence', async () => {
     const runtime = await import('./runtime')
@@ -64,9 +64,9 @@ describe('gamepad runtime configuration', () => {
   it('applies normalized saved values and defers backend changes', async () => {
     const runtime = await import('./runtime')
     await runtime.initializeGamepadInput()
-    mocks.set.mockResolvedValue({ native_gamepad_preview: true, gamepad_background_policy: 'follow-app', ui_haptics: true })
-    await runtime.saveGamepadConfig({ native_gamepad_preview: true })
-    expect(runtime.inputController.getSnapshot()).toMatchObject({ backend: 'browser', preferences: { backend: 'native', backgroundPolicy: 'follow-app', uiHaptics: true } })
+    mocks.set.mockResolvedValue({ gamepad_background_policy: 'follow-app', ui_haptics: true })
+    await runtime.saveGamepadConfig({ gamepad_background_policy: 'follow-app' })
+    expect(runtime.inputController.getSnapshot()).toMatchObject({ backend: 'browser', preferences: { backend: 'browser', backgroundPolicy: 'follow-app', uiHaptics: true } })
     expect(mocks.started).toHaveBeenCalledOnce()
   })
 

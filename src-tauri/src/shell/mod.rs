@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_keepawake::TauriPluginKeepawakeExt;
 use tokio::sync::RwLock;
@@ -8,13 +8,11 @@ use crate::error::{AppError, AppResult};
 use crate::mods;
 use crate::mods::auth::events as auth_events;
 
-pub mod bridge;
 pub mod cli;
 pub mod rpc;
 pub mod state;
 pub mod window;
 
-pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
 pub use state::{AppState, StartupFlagsState};
 pub use window::build_external_link_patch_script;
@@ -76,7 +74,6 @@ async fn build_services(
 ) -> AppResult<AppState> {
     let app_handle = app.handle();
     let is_quitting = Arc::new(AtomicBool::new(false));
-    let last_runtime_event = Arc::new(StdMutex::new(None));
 
     let config_service = Arc::new(mods::config::ConfigService::new(app_handle.clone()));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();
@@ -138,37 +135,6 @@ async fn build_services(
             }
         }
     };
-    let native_video = Arc::new(StdMutex::new(mods::native_video::NativeVideoRegistry::new(
-        app_handle.clone(),
-        Some(runtime_trace.clone()),
-    )));
-    mods::native_video::set_runtime_trace_recorder(runtime_trace.clone());
-    xbxengine::set_log_sink({
-        let runtime_trace = runtime_trace.clone();
-        Arc::new(move |record| {
-            runtime_trace.record_log(
-                "xbxengine",
-                "runtimeLog",
-                None,
-                serde_json::json!({
-                    "level": record.level.as_str(),
-                    "message": record.message,
-                    "tsMs": record.ts_ms,
-                }),
-            );
-        })
-    });
-    ohmygamepad_sdl3::set_runtime_trace_sink(Some({
-        let runtime_trace = runtime_trace.clone();
-        Arc::new(move |event, payload| {
-            runtime_trace.record_event("gamepad-source", event, None, payload);
-        })
-    }));
-    mods::runtime_trace::apply_xbxengine_trace_logging(
-        runtime_trace.trace_profile(),
-        runtime_trace.trace_dimensions(),
-    );
-
     if let Some(path) = runtime_trace.path() {
         log::info!(
             "Runtime trace recorder initialized at {} (mode={})",
@@ -184,17 +150,14 @@ async fn build_services(
 
     if runtime_trace.disk_enabled() {
         runtime_trace.record_state(
-            "xbxengine",
+            "app",
             "runtimeBuildInfo",
             None,
             serde_json::json!({
-                "buildFingerprint": crate::mods::xbxengine::build_info::current_build_fingerprint(),
+                "buildFingerprint": crate::build_info::current_build_fingerprint(),
             }),
         );
     }
-
-    let stats_snapshot_interval =
-        mods::runtime_trace::stats_snapshot_interval(runtime_trace.trace_profile());
 
     let auth_service = Arc::new(mods::auth::AuthService::new(
         app_handle.clone(),
@@ -208,27 +171,12 @@ async fn build_services(
         config_provider.clone(),
         runtime_trace.clone(),
     ));
-    let xbxengine_service = Arc::new(mods::xbxengine::XbxEngineService::new(
-        app_handle.clone(),
-        last_runtime_event.clone(),
-        native_video.clone(),
-        runtime_trace.clone(),
-        stats_snapshot_interval,
-        config_provider.clone(),
-        is_quitting.clone(),
-    ));
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
         app_handle.clone(),
         auth_provider.clone(),
         config_provider.clone(),
         data_service.clone(),
-        xbxengine_service.clone(),
         runtime_trace.clone(),
-    ));
-
-    let gamepad_service = Arc::new(mods::gamepad::GamepadService::new(
-        app_handle.clone(),
-        config_provider.clone(),
     ));
 
     let app_state_service: mods::app_state::AppStateProviderRef =
@@ -246,10 +194,7 @@ async fn build_services(
         data: data_service,
         streaming: streaming_service,
         runtime_trace,
-        xbxengine: xbxengine_service,
-        gamepad: gamepad_service,
         updater: updater_service,
-        native_video,
         startup_flags,
         is_quitting,
     };
@@ -321,8 +266,6 @@ pub async fn terminate(app_handle: &AppHandle) {
         }),
     );
 
-    state.gamepad.shutdown();
-    state.xbxengine.shutdown().await;
     state.streaming.shutdown().await;
 
     let _ = app_handle.tauri_plugin_keepawake().stop(app_handle);

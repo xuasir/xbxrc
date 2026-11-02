@@ -1,34 +1,18 @@
 import type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 import type { DataXcloudCatalogUpdatedRendererEvent } from './data'
-import type {
-  GamepadRuntimeSnapshotRendererEvent,
-} from './gamepad'
 import type { StreamingStartupEventRendererEvent } from './streaming'
 import type { UpdaterProgressEvent } from './updater'
-import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 import { AUTH_SESSION_READY_CHANNEL, AUTH_STATE_CHANGED_CHANNEL } from './auth'
 import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
-import {
-  GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
-
-} from './gamepad'
 import {
   STREAMING_STARTUP_EVENT_CHANNEL,
 } from './streaming'
 import { UPDATER_PROGRESS_CHANNEL } from './updater'
-import {
-  STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
-
-} from './xbxengine'
 
 export type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 export type { DataXcloudCatalogUpdatedRendererEvent } from './data'
-export type {
-  GamepadRuntimeSnapshotRendererEvent,
-} from './gamepad'
 export type { StreamingStartupEventRendererEvent } from './streaming'
 export type { UpdaterProgressEvent } from './updater'
-export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 
 /**
  * 事件总线契约
@@ -38,9 +22,7 @@ export interface XBoxEventSchema {
   'data.xcloudCatalogUpdated': DataXcloudCatalogUpdatedRendererEvent
   'auth.sessionReady': AuthSessionReadyRendererEvent
   'auth.stateChanged': AuthStateRendererEvent
-  'gamepad.runtimeSnapshot': GamepadRuntimeSnapshotRendererEvent
   'streaming.startupEvent': StreamingStartupEventRendererEvent
-  'streaming.xbxEngineRuntimeEvent': XbxEngineRuntimeEventRendererEvent
   'updater.progress': UpdaterProgressEvent
 }
 
@@ -54,8 +36,6 @@ export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
   'data.xcloudCatalogUpdated': DATA_XCLOUD_CATALOG_UPDATED_CHANNEL,
   'auth.sessionReady': AUTH_SESSION_READY_CHANNEL,
   'auth.stateChanged': AUTH_STATE_CHANGED_CHANNEL,
-  'gamepad.runtimeSnapshot': GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
   'streaming.startupEvent': STREAMING_STARTUP_EVENT_CHANNEL,
-  'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
   'updater.progress': UPDATER_PROGRESS_CHANNEL,
 }

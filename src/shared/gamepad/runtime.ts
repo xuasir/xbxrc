@@ -1,12 +1,7 @@
-import type { GamepadRuntimeSnapshotDto } from './contract'
-import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { rpc } from '../../services/rpc'
-import { BROWSER_ONLY_FEATURES, effectiveGamepadBackend } from '../config/runtime-features'
-import { GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL } from '../events/gamepad'
 import { BrowserGamepadBackend } from './browser-backend'
 import { InputController } from './input-controller'
-import { NativeGamepadBackend } from './native-backend'
 import { GAMEPAD_CONFIG_KEYS, parseGamepadPreferences } from './preferences'
 
 export const inputController = new InputController()
@@ -60,10 +55,6 @@ export function initializeGamepadInput(): Promise<void> {
       // 配置读取失败仍可用默认浏览器输入；错误保留在高级诊断。
       inputController.setInitializationError(`configReadFailed: ${String(error)}`)
     }
-    const capabilities = saved.native_gamepad_preview === true
-      ? await rpc.config.getRuntimeFeatures().catch(() => BROWSER_ONLY_FEATURES)
-      : BROWSER_ONLY_FEATURES
-    const effectiveBackend = effectiveGamepadBackend(saved, capabilities)
     applySavedConfig()
     disposeMenu = inputController.onMenuRequested(() => {
       window.dispatchEvent(new CustomEvent('stream-menu-toggle-requested', { detail: { source: 'gamepad', combo: 'menu+view' } }))
@@ -78,16 +69,7 @@ export function initializeGamepadInput(): Promise<void> {
     const focused = await appWindow.isFocused().catch(() => undefined)
     if (!eventReceived)
       inputController.setBackground(focused === undefined ? undefined : !focused)
-    const backend = effectiveBackend === 'browser'
-      ? new BrowserGamepadBackend()
-      : new NativeGamepadBackend({
-          subscribe: listener => listen<GamepadRuntimeSnapshotDto>(GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL, event => listener(event.payload)),
-          start: () => rpc.gamepad.startBackend(),
-          stop: () => rpc.gamepad.stopBackend(),
-          rumble: (deviceId, effect) => rpc.gamepad.playRumble({ request: { target: { kind: 'device', deviceId }, effect } }),
-          stopRumble: deviceId => rpc.gamepad.stopRumble({ target: { kind: 'device', deviceId } }),
-        })
-    await inputController.start(backend)
+    await inputController.start(new BrowserGamepadBackend())
   })()
   return initialized
 }

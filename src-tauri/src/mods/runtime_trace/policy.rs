@@ -5,7 +5,6 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::Value;
-use xbxengine::XbxLogLevel;
 
 static TRACE_EVENT_SAMPLE_TS_MS: OnceLock<Mutex<HashMap<String, f64>>> = OnceLock::new();
 
@@ -307,30 +306,6 @@ impl TraceMetadata {
         Self {
             dimension,
             importance,
-        }
-    }
-}
-
-/// 按 profile 和维度调整引擎日志是否进入 runtime trace sink。
-pub fn apply_xbxengine_trace_logging(profile: RuntimeTraceProfile, dimensions: TraceDimensionSet) {
-    xbxengine::set_stderr_enabled(false);
-    match profile {
-        RuntimeTraceProfile::Off => {
-            xbxengine::set_configured_level(Some(XbxLogLevel::Warn));
-            xbxengine::set_log_sink_min_level(None);
-        }
-        RuntimeTraceProfile::Production => {
-            xbxengine::set_configured_level(Some(XbxLogLevel::Warn));
-            xbxengine::set_log_sink_min_level(Some(XbxLogLevel::Error));
-        }
-        RuntimeTraceProfile::Dev => {
-            xbxengine::set_configured_level(Some(XbxLogLevel::Debug));
-            let min_level = if dimensions.contains(TraceDimension::EngineLog) {
-                Some(XbxLogLevel::Debug)
-            } else {
-                Some(XbxLogLevel::Error)
-            };
-            xbxengine::set_log_sink_min_level(min_level);
         }
     }
 }

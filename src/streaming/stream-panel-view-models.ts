@@ -3,18 +3,9 @@ import type {
   StreamBrowserDiagnosticsViewModel,
   StreamExperienceMetricsViewModel,
   StreamPerformanceSnapshot,
-  StreamRustDiagnosticsViewModel,
   StreamSessionDiagnosticsSnapshot,
 } from './types'
-import {
-  translateDiagnosticsDecoderRecovery,
-  translateDiagnosticsLatestDecision,
-  translateDiagnosticsOwnerReason,
-  translateDiagnosticsOwnerState,
-  translateDiagnosticsPrimaryIssueChain,
-  translateDiagnosticsStallKind,
-  translateDiagnosticsVideoHealth,
-} from './diagnostics-i18n'
+
 import {
   formatBufferedTrend,
   formatExperienceResolution,
@@ -148,74 +139,6 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
   }
 }
 
-function buildHostPresentTelemetry(snapshot: StreamPerformanceSnapshot | null): string {
-  if (snapshot === null) {
-    return '--'
-  }
-  const parts: string[] = []
-  const pushNum = (label: string, v: number | undefined): void => {
-    if (v === undefined || Number.isNaN(v)) {
-      return
-    }
-    parts.push(`${label}:${v}`)
-  }
-  pushNum('mbDrop', snapshot.hostMailboxDropCountTotal)
-  pushNum('mbOw', snapshot.hostMailboxOverwriteCountTotal)
-  pushNum('mbEnq', snapshot.hostMailboxEnqueueCountTotal)
-  pushNum('presentEpoch', snapshot.hostFramePresentEpoch)
-  pushNum('submitAge', snapshot.submitAgeMs)
-  pushNum('displayAge', snapshot.displayAgeMs)
-  pushNum('pktAge', snapshot.packetAgeMs)
-  pushNum('viewGen', snapshot.hostViewGeneration)
-  pushNum('emptyStreak', snapshot.hostPresentTakeEmptyStreak)
-  if (parts.length === 0) {
-    return '--'
-  }
-  return parts.join(' ')
-}
-
-export function buildStreamRustDiagnosticsViewModel(input: {
-  snapshot: StreamPerformanceSnapshot | null
-  diagnostics: StreamSessionDiagnosticsSnapshot
-  i18n: StreamPanelI18n
-}): StreamRustDiagnosticsViewModel {
-  const { snapshot, diagnostics, i18n } = input
-  const { t, te } = i18n
-  const s = snapshot
-
-  const decoderEventRaw = s?.videoDecoderRecoveryEvent ?? diagnostics.videoDecoderRecoveryEvent
-  const decoderEvent = stringOrDash(decoderEventRaw)
-
-  return {
-    transportState: stringOrDash(diagnostics.transportState ?? s?.transportState),
-    videoHealth: translateDiagnosticsVideoHealth(te, t, diagnostics.videoHealth ?? s?.videoHealth),
-    primaryIssueChain: translateDiagnosticsPrimaryIssueChain(
-      te,
-      t,
-      diagnostics.primaryIssueChain ?? s?.primaryIssueChain,
-    ),
-    latestDecision: translateDiagnosticsLatestDecision(
-      te,
-      t,
-      diagnostics.latestDecisionSummary ?? s?.latestDecisionSummary,
-    ),
-    ownerState: translateDiagnosticsOwnerState(te, t, diagnostics.recoveryOwnerState ?? s?.recoveryOwnerState),
-    ownerReason: translateDiagnosticsOwnerReason(te, t, diagnostics.recoveryOwnerReason ?? s?.recoveryOwnerReason),
-    decoderState: translateDiagnosticsDecoderRecovery(
-      te,
-      t,
-      diagnostics.videoDecoderRecoveryState ?? s?.videoDecoderRecoveryState,
-    ),
-    decoderEvent: decoderEvent === '--' ? undefined : decoderEvent,
-    stallKind: translateDiagnosticsStallKind(te, t, diagnostics.stallKind ?? s?.stallKind),
-    diagnosis: stringOrDash(diagnostics.diagnosis ?? s?.diagnosis),
-    recoveryRfcFaultDomain: stringOrDash(diagnostics.recoveryRfcFaultDomain ?? s?.recoveryRfcFaultDomain),
-    recoveryRfcStage: stringOrDash(diagnostics.recoveryRfcStage ?? s?.recoveryRfcStage),
-    recoveryRfcCeiling: stringOrDash(diagnostics.recoveryRfcCeiling ?? s?.recoveryRfcCeiling),
-    hostPresentTelemetry: buildHostPresentTelemetry(s),
-  }
-}
-
 export interface StreamInternalDiagnosticsRow { key: string, value: string }
 
 export function browserDiagnosticsRows(vm: StreamBrowserDiagnosticsViewModel): StreamInternalDiagnosticsRow[] {
@@ -266,28 +189,6 @@ export function browserDiagnosticsRows(vm: StreamBrowserDiagnosticsViewModel): S
     { key: 'qualityLadderLevel', value: vm.qualityLadderLevel },
     { key: 'decisionDigest', value: vm.decisionDigest },
   ]
-}
-
-export function rustDiagnosticsRows(vm: StreamRustDiagnosticsViewModel): StreamInternalDiagnosticsRow[] {
-  const rows: StreamInternalDiagnosticsRow[] = [
-    { key: 'transportState', value: vm.transportState },
-    { key: 'videoHealth', value: vm.videoHealth },
-    { key: 'primaryIssueChain', value: vm.primaryIssueChain },
-    { key: 'latestDecision', value: vm.latestDecision },
-    { key: 'ownerState', value: vm.ownerState },
-    { key: 'ownerReason', value: vm.ownerReason },
-    { key: 'decoderState', value: vm.decoderState },
-    { key: 'stallKind', value: vm.stallKind },
-    { key: 'diagnosis', value: vm.diagnosis },
-    { key: 'recoveryRfcFaultDomain', value: vm.recoveryRfcFaultDomain },
-    { key: 'recoveryRfcStage', value: vm.recoveryRfcStage },
-    { key: 'recoveryRfcCeiling', value: vm.recoveryRfcCeiling },
-    { key: 'hostPresentTelemetry', value: vm.hostPresentTelemetry },
-  ]
-  if (vm.decoderEvent !== undefined && vm.decoderEvent !== '') {
-    rows.splice(7, 0, { key: 'decoderEvent', value: vm.decoderEvent })
-  }
-  return rows
 }
 
 export const EXPERIENCE_METRIC_KEYS = [

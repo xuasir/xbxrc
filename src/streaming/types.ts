@@ -508,24 +508,6 @@ export interface StreamBrowserDiagnosticsViewModel {
   decisionDigest: string
 }
 
-/** rust-owned 内部诊断面板 */
-export interface StreamRustDiagnosticsViewModel {
-  transportState: string
-  videoHealth: string
-  primaryIssueChain: string
-  latestDecision: string
-  ownerState: string
-  ownerReason: string
-  decoderState: string
-  decoderEvent?: string
-  stallKind: string
-  diagnosis: string
-  recoveryRfcFaultDomain: string
-  recoveryRfcStage: string
-  recoveryRfcCeiling: string
-  hostPresentTelemetry: string
-}
-
 export type StreamMicrophoneActivationSource = 'none' | 'policy' | 'user'
 export type StreamMicrophonePhase = 'closed' | 'starting' | 'live' | 'paused'
 
@@ -541,7 +523,7 @@ export interface StreamMicrophoneSnapshot {
 }
 
 export type StreamEnhancementMountPhase = 'inactive' | 'mounted' | 'suspended'
-export type StreamEnhancementId = 'experience' | 'browserDiagnostics' | 'rustDiagnostics' | 'microphone'
+export type StreamEnhancementId = 'experience' | 'browserDiagnostics' | 'microphone'
 
 export interface StreamEnhancementMountState {
   phase: StreamEnhancementMountPhase
@@ -562,7 +544,6 @@ export interface StreamEnhancementMountSnapshot {
   order: StreamEnhancementId[]
   experience: StreamEnhancementMountState
   browserDiagnostics: StreamEnhancementMountState
-  rustDiagnostics: StreamEnhancementMountState
   microphone: StreamEnhancementMountState
 }
 

@@ -16,7 +16,6 @@ import StreamAudioSheet from '../components/stream/StreamAudioSheet.vue'
 import StreamBrowserDiagnosticsPanel from '../components/stream/StreamBrowserDiagnosticsPanel.vue'
 import StreamExperiencePanel from '../components/stream/StreamExperiencePanel.vue'
 import StreamMicrophoneStatus from '../components/stream/StreamMicrophoneStatus.vue'
-import StreamRustDiagnosticsPanel from '../components/stream/StreamRustDiagnosticsPanel.vue'
 import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
@@ -60,10 +59,8 @@ const {
   runtimeMode,
   experienceMetricsVisible,
   browserDiagnosticsVisible,
-  rustDiagnosticsVisible,
   experienceMetricsViewModel,
   browserDiagnosticsViewModel,
-  rustDiagnosticsViewModel,
   enhancementBindings,
   sessionHealth,
   audioVolume,
@@ -189,10 +186,6 @@ const browserDiagnosticsBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'browserDiagnostics'),
 )
 
-const rustDiagnosticsBinding = computed(() =>
-  resolveEnhancementBinding(enhancementBindings.value, 'rustDiagnostics'),
-)
-
 const microphoneBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'microphone'),
 )
@@ -208,7 +201,6 @@ const canUseDiagnosticsMenu = computed(
   () =>
     ability.canToggleExperienceMetrics.value
     || ability.canToggleBrowserDiagnostics.value
-    || ability.canToggleRustDiagnostics.value
     || ability.canToggleSuperResolution.value,
 )
 
@@ -307,14 +299,6 @@ const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
       label: execution.browserDiagnosticsVisible.value
         ? t('streamPage.diagnosticsMenu.hideBrowserDiagnostics')
         : t('streamPage.diagnosticsMenu.showBrowserDiagnostics'),
-    })
-  }
-  if (ability.canToggleRustDiagnostics.value) {
-    items.push({
-      id: 'toggleRustDiagnostics',
-      label: execution.rustDiagnosticsVisible.value
-        ? t('streamPage.diagnosticsMenu.hideRustDiagnostics')
-        : t('streamPage.diagnosticsMenu.showRustDiagnostics'),
     })
   }
   if (ability.canToggleSuperResolution.value) {
@@ -736,10 +720,6 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       revealChrome()
       actions.toggleBrowserDiagnostics()
     },
-    toggleRustDiagnostics: () => {
-      revealChrome()
-      actions.toggleRustDiagnostics()
-    },
     toggleSuperResolution: async () => {
       revealChrome()
       await actions.toggleSuperResolutionExperimental()
@@ -787,12 +767,6 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         :visible="browserDiagnosticsVisible && (isConnected || browserDiagnosticsBinding.phase === 'mounted')"
         :mount="browserDiagnosticsBinding"
         :model="browserDiagnosticsViewModel"
-      />
-      <StreamRustDiagnosticsPanel
-        v-if="runtimeMode === 'rust-owned'"
-        :visible="rustDiagnosticsVisible && (isConnected || rustDiagnosticsBinding.phase === 'mounted')"
-        :mount="rustDiagnosticsBinding"
-        :model="rustDiagnosticsViewModel"
       />
       <StreamMicrophoneStatus
         :mount="microphoneBinding"

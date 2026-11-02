@@ -9,7 +9,6 @@ import type {
 export const STREAM_ENHANCEMENT_CONTRACTS: StreamEnhancementContract[] = [
   { id: 'experience' },
   { id: 'browserDiagnostics' },
-  { id: 'rustDiagnostics' },
   { id: 'microphone' },
 ]
 
@@ -18,13 +17,12 @@ interface ResolveStreamEnhancementsInput {
   connected: boolean
   experienceRequested: boolean
   browserDiagnosticsRequested: boolean
-  rustDiagnosticsRequested: boolean
 }
 
 /**
  * 增强模块统一挂载协议：新模块只需注册 id，并在这里定义 mounted/suspended 规则。
  *
- * experience / browserDiagnostics / rustDiagnostics 沿用原 diagnostics 规则：
+ * experience / browserDiagnostics 沿用原 diagnostics 规则：
  * 已连接或处于 recovering 时允许 mounted，便于恢复过程中仍查看遥测。
  */
 export function resolveStreamEnhancementMounts(
@@ -45,11 +43,6 @@ export function resolveStreamEnhancementMounts(
       playingReady,
       recovering,
       input.browserDiagnosticsRequested,
-    ),
-    rustDiagnostics: resolveDiagnosticsStyleMountState(
-      playingReady,
-      recovering,
-      input.rustDiagnosticsRequested,
     ),
     microphone: resolveMicrophoneMountState(playingReady, recovering),
   }

@@ -132,11 +132,7 @@ impl ConfigProvider for ConfigService {
                 .and_then(Value::as_str)
                 .unwrap_or("realistic")
                 .to_string(),
-            stream_runtime_mode: super::runtime_features::effective_runtime_mode(
-                &normalized,
-                super::runtime_features::runtime_feature_capabilities(),
-            )
-            .to_string(),
+            stream_runtime_mode: "webrtc-direct".to_string(),
             power_on: normalized
                 .get("power_on")
                 .and_then(Value::as_bool)

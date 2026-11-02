@@ -1,12 +1,5 @@
 import type { RuntimeFeatureCapabilities } from '../config/runtime-features'
 import type {
-  GamepadRumbleRequestDto,
-  GamepadRumbleResultDto,
-  GamepadRumbleTargetDto,
-  GamepadRuntimeSnapshotDto,
-  LogicalPadStateDto,
-} from '../gamepad/contract'
-import type {
   RuntimeTraceAckResult,
   RuntimeTraceRecordEventParams,
 } from './runtimeTrace'
@@ -31,19 +24,6 @@ import type {
   StreamingSubmitIceResult,
 } from './streaming'
 import type { RpcMethod } from './types'
-import type {
-  XbxEngineAckResult,
-  XbxEngineApplyDisplayStateParams,
-  XbxEngineAttachViewportParams,
-  XbxEngineKeyboardPointerEnabledParams,
-  XbxEnginePushInputParams,
-  XbxEngineRequestReconnectParams,
-  XbxEngineRuntimeEventDto,
-  XbxEngineSetAudioVolumeParams,
-  XbxEngineStartRuntimeParams,
-  XbxEngineStatsDto,
-  XbxEngineStopRuntimeParams,
-} from './xbxengine'
 
 type RpcConfigGroup = Record<string, unknown>
 
@@ -119,14 +99,6 @@ export interface XBoxRpcSchema {
         input: RpcConfigGroup
       }
     >
-  }
-  gamepad: {
-    startBackend: RpcMethod<void, GamepadRuntimeSnapshotDto>
-    stopBackend: RpcMethod<void, void>
-    submitStreamState: RpcMethod<{ sessionId: string, sequence: number, state: LogicalPadStateDto }, boolean>
-    playRumble: RpcMethod<{ request: GamepadRumbleRequestDto }, GamepadRumbleResultDto>
-    stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
-
   }
   data: {
     getUserProfile: RpcMethod<
@@ -268,24 +240,6 @@ export interface XBoxRpcSchema {
   }
   runtimeTrace: {
     recordEvent: RpcMethod<RuntimeTraceRecordEventParams, RuntimeTraceAckResult>
-  }
-  xbxEngine: {
-    startRuntime: RpcMethod<XbxEngineStartRuntimeParams, XbxEngineAckResult>
-    requestReconnect: RpcMethod<XbxEngineRequestReconnectParams, XbxEngineAckResult>
-    stopRuntime: RpcMethod<XbxEngineStopRuntimeParams | void, XbxEngineAckResult>
-    attachViewport: RpcMethod<XbxEngineAttachViewportParams, XbxEngineAckResult>
-    detachViewport: RpcMethod<void, XbxEngineAckResult>
-    applyDisplayState: RpcMethod<XbxEngineApplyDisplayStateParams, XbxEngineAckResult>
-    setKeyboardPointerEnabled: RpcMethod<
-      XbxEngineKeyboardPointerEnabledParams,
-      XbxEngineAckResult
-    >
-    pushKeyboardPointerInput: RpcMethod<XbxEnginePushInputParams, XbxEngineAckResult>
-    setAudioVolume: RpcMethod<XbxEngineSetAudioVolumeParams, XbxEngineAckResult>
-    startMicrophone: RpcMethod<void, XbxEngineAckResult>
-    stopMicrophone: RpcMethod<void, XbxEngineAckResult>
-    snapshotStats: RpcMethod<void, XbxEngineStatsDto>
-    getLastRuntimeEvent: RpcMethod<void, XbxEngineRuntimeEventDto | null>
   }
   system: {
     openExternal: RpcMethod<{ url: string }, void>

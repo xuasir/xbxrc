@@ -186,8 +186,6 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             }
         }
         "fullscreen"
-        | "rust_media_preview"
-        | "native_gamepad_preview"
         | "xhome_turn_fallback"
         | "enable_audio_control"
         | "vibration"
@@ -313,7 +311,7 @@ mod tests {
         .contains_key("gamepad_device_profiles"));
         assert_eq!(normalized["gamepad_background_policy"], "follow-app");
         assert_eq!(normalized["ui_haptics"], true);
-        assert_eq!(normalized["native_gamepad_preview"], false);
+        assert!(!normalized.contains_key("native_gamepad_preview"));
     }
 
     #[test]
