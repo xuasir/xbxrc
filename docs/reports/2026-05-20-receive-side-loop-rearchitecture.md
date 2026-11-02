@@ -93,7 +93,7 @@ transport/rtc/
 
 ## 待人工验证（PR-4）
 
-按 [`recovery-layer-enable-guide.md`](../rfcs/recovery-layer-enable-guide.md) 采 Cloud/Home/Relay trace，对比：
+按 [串流公共主线本地验收](../../dev-docs/streaming-reliability-local-validation.md) 采 Cloud/Home/Relay trace，对比：
 
 - `bootstrapMissingIdr` 停留时长
 - 首帧 / 恢复后出图率

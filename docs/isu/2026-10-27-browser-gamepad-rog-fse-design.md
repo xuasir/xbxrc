@@ -1,5 +1,7 @@
 # 手柄统一接入：Browser / Rust 实现与后台策略
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 日期：2026-10-27。状态：设计细化，产品代码尚未修改。基线：`78e82a5a`。
 
 ## 1. 当前决定与范围
@@ -37,8 +39,8 @@
 
 | 代码证据 | 新设计的处理 |
 | --- | --- |
-| [arbiter](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/business-input-arbiter.ts:53) 只读后端 route，[controller](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/stream/stream-input-route-controller.ts:214) 又乐观写 stream，[browser adapter](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/stream-input-consumer-adapters.ts:27) 启停为空 | 浏览器 owner 由前端当前业务事实唯一派生，原生 route 退出稳定输入链 |
-| [wait-pad-neutral](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/wait-pad-neutral.ts:17) 要求所有槽位、所有轴/扳机严格等于零；等待本身无完成时限 | 仅跟踪活动设备交接时已按住的控件，各自归位后放行；其他控件立即可用 |
+| `arbiter`（历史路径：`src/shared/gamepad/business-input-arbiter.ts`） 只读后端 route，[controller](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/stream/stream-input-route-controller.ts:214) 又乐观写 stream，`browser adapter`（历史路径：`src/shared/gamepad/stream-input-consumer-adapters.ts`） 启停为空 | 浏览器 owner 由前端当前业务事实唯一派生，原生 route 退出稳定输入链 |
+| `wait-pad-neutral`（历史路径：`src/shared/gamepad/wait-pad-neutral.ts`） 要求所有槽位、所有轴/扳机严格等于零；等待本身无完成时限 | 仅跟踪活动设备交接时已按住的控件，各自归位后放行；其他控件立即可用 |
 | [导航组合键](/Users/guo.xu/Documents/code/games/xbxrc/src/navigation/core/gamepad-listener.ts:131) 和 [InputService 组合键](/Users/guo.xu/Documents/code/games/xbxrc/src/player/app/input/InputService.ts:152) 分别维护状态 | 组合键在 owner 分发前识别一次，触发后持续消费到组合键全部松开 |
 | [InputService](/Users/guo.xu/Documents/code/games/xbxrc/src/player/app/input/InputService.ts:79) 再监听 `stream-ui-input-mode`，保留 overlay suspend 和虚拟帧 bypass budget | 发送端只执行输入控制器给出的最终状态；软 Home 使用显式、有限的命令 |
 | [GamepadDriver](/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/input/GamepadDriver.ts) 维护原生快照和 shadow 状态，虚拟按钮可屏蔽物理输入 | 活动物理设备保持唯一；键盘/软按钮经过明确命令或显式输入源选择 |
@@ -180,7 +182,7 @@ keep-active保证应用自己的焦点、可见性与前后台策略始终允许
 
 #### 当前入口与调整依据
 
-主设置页实际由[设置schema](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/settings/setting-page-schema.ts:165)和[SettingInputToolsSection](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/Setting.vue:702)装配，主项为采样率、震动和强度，再打开测试与映射工具。[SettingGamepadSection](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/settings/SettingGamepadSection.vue)另有设备操作与重复映射实现，当前主页面采用前述入口。实施时收敛同类逻辑，并按引用关系清理旧入口。
+主设置页实际由[设置schema](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/settings/setting-page-schema.ts:165)和[SettingInputToolsSection](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/Setting.vue:702)装配，主项为采样率、震动和强度，再打开测试与映射工具。`SettingGamepadSection`（历史路径：`src/pages/settings/SettingGamepadSection.vue`）另有设备操作与重复映射实现，当前主页面采用前述入口。实施时收敛同类逻辑，并按引用关系清理旧入口。
 
 现有映射保存[取第一个profile编辑，再构造单元素profiles写回](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/settings/SettingInputToolsSection.vue:383)，还同时调用原生配置RPC和持久化RPC。新设计采用统一配置写入与公共输入层应用，完整保留旧配置记录，按迁移合同转换。
 

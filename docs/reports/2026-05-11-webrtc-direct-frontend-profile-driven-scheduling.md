@@ -4,15 +4,15 @@
 
 ## Summary
 
-- Related RFC: [`docs/rfcs/2026-05-11-webrtc-direct-frontend-profile-driven-scheduling.md`](docs/rfcs/2026-05-11-webrtc-direct-frontend-profile-driven-scheduling.md)
+- Related RFC: [`docs/rfcs/2026-05-11-webrtc-direct-frontend-profile-driven-scheduling.md`](../rfcs/2026-05-11-webrtc-direct-frontend-profile-driven-scheduling.md)
 - 在浏览器直连运行时侧引入可单测的画像模块，将统一 warmup、带宽判定、质量/显示 dwell 与渲染自适应中的绝对 fps 门槛改为「基线 + 动态 overlay + 相对内容帧率」驱动，并补齐 snapshot / diagnostics / 关键 trace 的 `frontEnd*` 观测字段。
 
 ## Delivered
 
-- [`src/streaming/runtime/browser-runtime-profile.ts`](src/streaming/runtime/browser-runtime-profile.ts)：baseline 分类、`buildRuntimeProfileClassification`、FPS 上沿窗口、`resolveExpectedContentFps`、`ProfilePolicyPreset` / `EffectiveFrontEndPolicy`、`evaluateProfileBandwidthState`、`explainFrontEndQualityUpshiftBlock`。
-- [`src/streaming/runtime/browser-runtime.ts`](src/streaming/runtime/browser-runtime.ts)：连接与 `checkMediaStalled` 主链接入上述策略；重连 warmup 与 ICE 重启对齐画像；`resolveAdaptiveRenderProfile` / `classifyRecoveryCause` / `resolveRenderCause` 使用相对帧率或策略阈值。
-- [`src/streaming/types.ts`](src/streaming/types.ts)、[`src/streaming/diagnostics.ts`](src/streaming/diagnostics.ts)：扩展 `frontEndProfileBaseline` 等字段。
-- [`src/streaming/runtime/browser-runtime-profile.test.ts`](src/streaming/runtime/browser-runtime-profile.test.ts)、[`src/streaming/diagnostics.test.ts`](src/streaming/diagnostics.test.ts) 用例更新。
+- [`src/streaming/runtime/browser-runtime-profile.ts`](../../src/streaming/runtime/browser-runtime-profile.ts)：baseline 分类、`buildRuntimeProfileClassification`、FPS 上沿窗口、`resolveExpectedContentFps`、`ProfilePolicyPreset` / `EffectiveFrontEndPolicy`、`evaluateProfileBandwidthState`、`explainFrontEndQualityUpshiftBlock`。
+- [`src/streaming/runtime/browser-runtime.ts`](../../src/streaming/runtime/browser-runtime.ts)：连接与 `checkMediaStalled` 主链接入上述策略；重连 warmup 与 ICE 重启对齐画像；`resolveAdaptiveRenderProfile` / `classifyRecoveryCause` / `resolveRenderCause` 使用相对帧率或策略阈值。
+- [`src/streaming/types.ts`](../../src/streaming/types.ts)、[`src/streaming/diagnostics.ts`](../../src/streaming/diagnostics.ts)：扩展 `frontEndProfileBaseline` 等字段。
+- [`src/streaming/runtime/browser-runtime-profile.test.ts`](../../src/streaming/runtime/browser-runtime-profile.test.ts)、[`src/streaming/diagnostics.test.ts`](../../src/streaming/diagnostics.test.ts) 用例更新。
 
 ## Changes
 

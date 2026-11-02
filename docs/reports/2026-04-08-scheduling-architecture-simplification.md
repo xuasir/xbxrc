@@ -1,5 +1,7 @@
 # 调度层架构简化与能力保留 Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -14,10 +16,10 @@
 - 收窄 [`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 的 transport-await 暴露面，将外部多布尔探测口统一成 staged local recovery surface。
 - 修正 `video_source` 最后两条回归合同，使 `clean anchor` 与 ramp-up 语义与当前恢复模型一致。
 - 参考 `moonlight-qt` 补上全链路动作边界收口：码流/decoder/显示供应等本地域问题只能停留在 `Wait / RequestKeyframe / RequestDecoderReset`，[`session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 只允许连接域 reason 进入 `RequestReconnectCandidate`，[`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 的 `TransportAwaitRecoveryKeyframe` hard fallback 也不再上抬成 reconnect。
-- 继续参考 `moonlight-qt` 的防风暴边界，在 [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 抬高 `sample loss` 进入 `WaitKeyframe` 的门槛，并在 [`escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 移除 `AdapterThinStream / AdapterIdleTimeout / TransportSampleLoss` 直接推动 `RequestDecoderReset` 的短链升级，让小抖动默认停留在 `drop / wait / request keyframe`。
-- 进一步在 [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 为 `idle timeout / thin stream stall` 增加 source 侧短确认窗：第一次命中先本地记账，只有短窗后仍持续满足条件才上报 observation；收到新包或样本完成会立即清空待确认状态。
-- 继续补上“首帧获取优先”的最后一层动作边界：[`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 现明确禁止 pre-first-frame 阶段仅凭 `deltaContinuationReady` 放行 non-IDR continuation，且 waiting-keyframe 时也不会再把未建立首帧前的 delta 当成可吸收本地波动；首帧未建立前只能继续 `WaitKeyframe / RequestKeyframe`。
-- 补强 keyframe episode 观测而不增加新的宏观概念：[`runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 新增 `response-observed` 状态，复用现有 `first_video_packet* / first_keyframe_packet* / status_detail` 记录“首个响应 non-keyframe”或“首个 keyframe 仍不可用”的原因；[`trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs) 同步新增 `keyframeRequestEpisodeResponseObserved` trace 事件。
+- 继续参考 `moonlight-qt` 的防风暴边界，在 `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 抬高 `sample loss` 进入 `WaitKeyframe` 的门槛，并在 [`escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 移除 `AdapterThinStream / AdapterIdleTimeout / TransportSampleLoss` 直接推动 `RequestDecoderReset` 的短链升级，让小抖动默认停留在 `drop / wait / request keyframe`。
+- 进一步在 `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 为 `idle timeout / thin stream stall` 增加 source 侧短确认窗：第一次命中先本地记账，只有短窗后仍持续满足条件才上报 observation；收到新包或样本完成会立即清空待确认状态。
+- 继续补上“首帧获取优先”的最后一层动作边界：`source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 现明确禁止 pre-first-frame 阶段仅凭 `deltaContinuationReady` 放行 non-IDR continuation，且 waiting-keyframe 时也不会再把未建立首帧前的 delta 当成可吸收本地波动；首帧未建立前只能继续 `WaitKeyframe / RequestKeyframe`。
+- 补强 keyframe episode 观测而不增加新的宏观概念：`runtime_stats_sink.rs`（历史路径：`crates/xbxengine/core/src/runtime_stats_sink.rs`） 新增 `response-observed` 状态，复用现有 `first_video_packet* / first_keyframe_packet* / status_detail` 记录“首个响应 non-keyframe”或“首个 keyframe 仍不可用”的原因；[`trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs) 同步新增 `keyframeRequestEpisodeResponseObserved` trace 事件。
 
 ## Changes
 
@@ -26,12 +28,12 @@
 - [`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 将 transport-await lane 降级为内部子状态机，外层只消费 recovery stage，而不是 probe/decode/reset 三套并列判据。
 - [`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 现在对 `TransportAwaitRecoveryKeyframe` 强制执行本地恢复边界：即便 hard fallback 超时，也只回到 `RequestDecoderReset / CoalescedDecoderResetInFlight`，不再产出 reconnect candidate。
 - [`session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 新增“昂贵恢复 reason 白名单”收口，只有连接域 reason 才能保留 `RequestReconnectCandidate`；媒体域 reconnect proposal 会被统一压回 `CooldownSuppressed` 并记录 `reconnectBlocked:localDomainOwnsRecovery`。
-- [`runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 与 [`source.test.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.test.rs) 对齐为同一合同：`clean anchor` 记录当前 recovery epoch，但只有 stable settle 才会关闭 recovery episode。
-- [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 现将 `sample loss` 的入口吸收层改为更保守的历史窗口：至少连续 3 次坏窗才从 `DropAndRequestKeyframe` 进入 `TriggerWaitKeyframe`，并要求更多 clean sample 才清空 burst。
-- [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 现为 `idle timeout / thin stream stall` 加入短 confirmation window，避免单次尖峰或短抖动直接变成 transport observation。
+- `runtime_stats_sink.rs`（历史路径：`crates/xbxengine/core/src/runtime_stats_sink.rs`） 与 `source.test.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.test.rs`） 对齐为同一合同：`clean anchor` 记录当前 recovery epoch，但只有 stable settle 才会关闭 recovery episode。
+- `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 现将 `sample loss` 的入口吸收层改为更保守的历史窗口：至少连续 3 次坏窗才从 `DropAndRequestKeyframe` 进入 `TriggerWaitKeyframe`，并要求更多 clean sample 才清空 burst。
+- `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 现为 `idle timeout / thin stream stall` 加入短 confirmation window，避免单次尖峰或短抖动直接变成 transport observation。
 - [`escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 现明确禁止 `AdapterThinStream / AdapterIdleTimeout / TransportSampleLoss` 仅凭“keyframe 后短窗再次出现”就直接升级到 `RequestDecoderReset`；decoder reset 只保留给 `persistent WaitKeyframe / persistent TransportAwaitRecoveryKeyframe / Reconfigure / DecoderBackendFailure` 等更硬证据路径。
-- [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 现把 `resolve_inspection_admission()` 与 `resolve_recovery_keyframe_action()` 都显式绑定到 `first_frame_acquired`，从动作边界上切断“首帧未建立但 delta chain 看起来 healthy”的误判。
-- [`runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 与 [`trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs) 现可直接投影 keyframe request 的首个响应阶段，避免再靠人工串 `keyframe episode + h264 inspection` 两条线猜首帧失败原因。
+- `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 现把 `resolve_inspection_admission()` 与 `resolve_recovery_keyframe_action()` 都显式绑定到 `first_frame_acquired`，从动作边界上切断“首帧未建立但 delta chain 看起来 healthy”的误判。
+- `runtime_stats_sink.rs`（历史路径：`crates/xbxengine/core/src/runtime_stats_sink.rs`） 与 [`trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs) 现可直接投影 keyframe request 的首个响应阶段，避免再靠人工串 `keyframe episode + h264 inspection` 两条线猜首帧失败原因。
 
 ## Validation
 

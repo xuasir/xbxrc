@@ -1,5 +1,7 @@
 # H264 Effective Bootstrap Preset Closure Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -10,7 +12,7 @@
 ## Delivered
 
 - 在 [`crates/xbxengine/core/src/media/video/h264/inspection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/h264/inspection.rs) 将当前 AU 的局部参数集与 committed 参数集合成为 effective decoder config。
-- 在 [`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 把 inspection admission 收口为统一的 bootstrap/continuation 判定。
+- 在 `crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`（历史路径） 把 inspection admission 收口为统一的 bootstrap/continuation 判定。
 - 补齐 H264 inspection 与 video source 的回归测试，覆盖 committed 参数集 bootstrap、局部参数集刷新复用、以及 admission 拒绝无 bootstrap/continuation 的帧。
 
 ## Changes

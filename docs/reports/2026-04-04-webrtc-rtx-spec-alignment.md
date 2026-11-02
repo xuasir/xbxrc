@@ -1,5 +1,7 @@
 # WebRTC RTX Spec Alignment Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -16,8 +18,8 @@
 ## Changes
 
 - [`packet_router.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_router.rs) 新增 `repair_video_ssrc_primary_ssrc` 与 `parse_ssrc_group_fid_line()`，answer SDP 现可解析 `a=ssrc-group:FID <primary> <repair>`。
-- [`sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 的 `unpack_rtx_packet()` 现要求同时拿到 `apt` 和 FID 映射，归一化后把 `meta.ssrc` 恢复为 primary SSRC；repair-route primary payload 直通也要求显式 FID 映射。
-- [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 的 reinject observation 改为直接使用归一化后的 primary SSRC，repair SSRC 仅保存在 provenance 中；`repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates` 也同步校正为 `primary_ssrc == 归一化后的媒体 SSRC`。
+- `sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 的 `unpack_rtx_packet()` 现要求同时拿到 `apt` 和 FID 映射，归一化后把 `meta.ssrc` 恢复为 primary SSRC；repair-route primary payload 直通也要求显式 FID 映射。
+- `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 的 reinject observation 改为直接使用归一化后的 primary SSRC，repair SSRC 仅保存在 provenance 中；`repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates` 也同步校正为 `primary_ssrc == 归一化后的媒体 SSRC`。
 
 ## Validation
 

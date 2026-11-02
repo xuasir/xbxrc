@@ -1,5 +1,7 @@
 # 播放期恢复单线收敛与 keyframe family gate 修复 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -59,11 +61,11 @@
 ## Scope
 
 - In scope:
-  - [`crates/xbxengine/core/src/transport/rtc/recovery/contract.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/contract.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/session/facts.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/facts.rs)
+  - `crates/xbxengine/core/src/transport/rtc/recovery/contract.rs`（历史路径）
+  - `crates/xbxengine/core/src/transport/rtc/session/facts.rs`（历史路径）
   - [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)
   - [`crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs)
-  - [`crates/xbxengine/core/src/runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs)
+  - `crates/xbxengine/core/src/runtime_stats_sink.rs`（历史路径）
   - [`crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs)
   - 恢复相关集成测试与 trace contract 测试：
     - `session/policy_tests/recovery_integration.rs`

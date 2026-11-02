@@ -1,5 +1,7 @@
 # Moonlight 帧价值模型落地 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -15,7 +17,7 @@
 - 现有实现并不是没有帧价值，而是把相关信号分散在多层里：
   - [`crates/xbxengine/core/src/media/video/types.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/types.rs) 里有 `FrameValue` / `FrameRecoveryDisposition`
   - [`crates/xbxengine/core/src/media/video/ingress/budget.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/budget.rs) 和 [`crates/xbxengine/core/src/media/video/ingress/scheduler.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/scheduler.rs) 里有准入、晚到、backlog 的局部预算
-  - [`crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs) 与 [`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack_policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack_policy.rs) 已在做 RTT / 价值 / deadline 的 admission 分档
+  - `crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`（历史路径） 与 `crates/xbxengine/core/src/transport/rtc/stream/video_source/nack_policy.rs`（历史路径） 已在做 RTT / 价值 / deadline 的 admission 分档
   - [`crates/xbxengine/core/src/transport/rtc/recovery/runtime_state.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/runtime_state.rs) 与 [`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 里已经能识别恢复阶段和主恢复视图
 - 最近的实机 trace 也暴露出同类失配：表面上是 `delta` 的晚到或恢复 keyframe 等待，但实际演化成整条参考链失活和 `Reconnecting/no-signal` 风暴。说明现有局部规则虽然各自合理，但还没有形成统一的“这一帧当前到底值不值得救”的合同。
 
@@ -33,13 +35,13 @@
   - [`crates/xbxengine/core/src/media/video/ingress/budget.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/budget.rs)
   - [`crates/xbxengine/core/src/media/video/ingress/scheduler.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/scheduler.rs)
   - [`crates/xbxengine/core/src/transport/rtc/stream/frame_cadence.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/frame_cadence.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack_policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack_policy.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs)
+  - `crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`（历史路径）
+  - `crates/xbxengine/core/src/transport/rtc/stream/video_source/nack_policy.rs`（历史路径）
+  - `crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`（历史路径）
+  - `crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`（历史路径）
   - [`crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs)
   - [`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/recovery/hard_stall.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/hard_stall.rs)
+  - `crates/xbxengine/core/src/transport/rtc/recovery/hard_stall.rs`（历史路径）
   - runtime stats / diagnostics / trace projection 里与帧价值、恢复阶段、deadline 来源相关的字段
 - Out of scope:
   - 引入第二条 transport / signaling / media pipeline

@@ -1,5 +1,7 @@
 # 退化 Host Timing 驱动的 Decoder Reset 与 Release Gate RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -11,7 +13,7 @@
 
 ## Background
 
-- 新 trace [`runtime-trace-1776737338599-1.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1776737338599-1.jsonl) 已确认消费链可以打通，`renderer submit -> host accepted -> prepare_sample_ready -> sample_presented` 连续成功。
+- 新 trace `runtime-trace-1776737338599-1.jsonl`（历史路径：`runtime-logs/runtime-trace-1776737338599-1.jsonl`） 已确认消费链可以打通，`renderer submit -> host accepted -> prepare_sample_ready -> sample_presented` 连续成功。
 - 恢复刚显示两帧后，`external-decoder-reset-requested` 触发本地 decoder reset，decode 端随即回到 `waiting-keyframe`，并进入连续 `bootstrap-gate-rejected / NonIdrVcl`，供给再次枯竭。
 - 当前控制环把 host timing 动态信号同时喂给 local decoder reset 和 pacer release gate，恢复期正常抖动会被放大成供给中断。
 
@@ -77,10 +79,10 @@
 - Update: `runtime_port` 已改为记录 `videoHostTimingShiftObserved`，不再发送 local decoder reset；`pacer` 已退出 host release gate，`next_wait_duration` 与 `drive_ready_frames` 统一回到 deadline/cadence 驱动。
 - Decision: 保留 `resolve_host_release_wait_duration()` 兼容接口和 host telemetry 字段，方便下一轮 trace 对比与更大范围的 host/presentation 退化设计。
 - Date: 2026-04-21 | Status: in-progress
-- Update: 新 trace [`runtime-trace-1776740205734-1.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1776740205734-1.jsonl) 显示 host/pacer 已退出主坏链，尾段故障前移到 decoder continuation 消费：`cleanAnchorCommitted` 后连续 `backend-no-output + bootstrapReject=NonIdrVcl`，host 仅 retained 旧帧。
+- Update: 新 trace `runtime-trace-1776740205734-1.jsonl`（历史路径：`runtime-logs/runtime-trace-1776740205734-1.jsonl`） 显示 host/pacer 已退出主坏链，尾段故障前移到 decoder continuation 消费：`cleanAnchorCommitted` 后连续 `backend-no-output + bootstrapReject=NonIdrVcl`，host 仅 retained 旧帧。
 - Decision: continuation no-output 恢复由 decoder 自治处理，优先用本地证据 `latestDecodedSeq + backendNoOutputStreak + inputFramesSinceLastDecoded + NonIdrVcl` 触发 soft fallback / reset。
 - Date: 2026-04-21 | Status: in-progress
-- Update: 新 trace [`runtime-trace-1776742790364-1.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1776742790364-1.jsonl) 显示坏链继续前移到 post-decode 消费层；本轮已把 `window_source=recovery` 作为局部信号，decode queue 对 recovery burst 放宽到 5 帧并增加 stale slack，pacer 在 recovery burst 期间保持默认 queue cap，不再随 `Priming/Starved` 收紧。
+- Update: 新 trace `runtime-trace-1776742790364-1.jsonl`（历史路径：`runtime-logs/runtime-trace-1776742790364-1.jsonl`） 显示坏链继续前移到 post-decode 消费层；本轮已把 `window_source=recovery` 作为局部信号，decode queue 对 recovery burst 放宽到 5 帧并增加 stale slack，pacer 在 recovery burst 期间保持默认 queue cap，不再随 `Priming/Starved` 收紧。
 - Decision: 恢复窗口放宽只绑定 `budget.window_source=Recovery`，避免 `FrameRecoveryDisposition::Repairing` 的宽覆盖面把常态 playout 路径一起放大。
 - Validation: `cargo test -p xbxengine video_decode -- --nocapture`、`cargo test -p xbxengine media::video::pacer -- --nocapture`、`cargo check -p xbxengine` 已通过。
 - Date: 2026-04-21 | Status: in-progress

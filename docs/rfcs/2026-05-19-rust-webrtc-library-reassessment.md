@@ -1,5 +1,7 @@
 # Rust/WebRTC 成熟接收闭环重评估 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -15,9 +17,9 @@
 - 当前 `transport/rtc` 主线并不是只在“调几个上层阈值”，而是在事实上拥有一整套自建接收端媒体闭环，关键收口点集中在：
   - [`connection/twcc_feedback.rs`](../../crates/xbxengine/core/src/transport/rtc/connection/twcc_feedback.rs)
   - [`connection/service.rs`](../../crates/xbxengine/core/src/transport/rtc/connection/service.rs)
-  - [`stream/video_source/source.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs)
-  - [`stream/video_source/timeline.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs)
-  - [`stream/nack_scheduler.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs)
+  - `stream/video_source/source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`）
+  - `stream/video_source/timeline.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`）
+  - `stream/nack_scheduler.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`）
   - [`policy/scheduling.rs`](../../crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs)
   - [`stack/transport_session.rs`](../../crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs)
 - 当前视频主轨是 `Recvonly`，见 [`connection/builder.rs`](../../crates/xbxengine/core/src/transport/rtc/connection/builder.rs)。主问题不在发送端 pacer，而在接收端 `packet -> frame -> bootstrap -> recovery -> decode -> host present` 闭环。

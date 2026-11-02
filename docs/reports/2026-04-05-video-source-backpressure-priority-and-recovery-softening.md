@@ -1,5 +1,7 @@
 # Video Source Backpressure Priority And Recovery Softening Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 ## Summary
 
 - Related RFC: [`docs/rfcs/2026-04-05-video-source-backpressure-priority-and-recovery-softening.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-04-05-video-source-backpressure-priority-and-recovery-softening.md)
@@ -7,11 +9,11 @@
 
 ## Delivered
 
-- 在 [`sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 落地 priority / best-effort 分级背压与有界本地 backlog。
+- 在 `sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 落地 priority / best-effort 分级背压与有界本地 backlog。
 - 让 repair passthrough、RTX reinject 以及恢复优先 H264 primary 不再与普通 delta 一起被统一 `try_send` 挤掉。
 - 为本地背压丢弃补充显式 `video_frame_drop` 观测，并补齐 `sink` 定向回归测试。
-- 基于 [`runtime-trace-1775345271853.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775345271853.jsonl) 追加在 [`nack.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs) 与 [`timeline.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs) 增加 `displayStarvedLowValueAdmission`，把显示链已 `critical starved` 时的小型 delta gap 直接降级为软缺口。
-- 第三阶段继续在 [`session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)、[`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs)、[`recovery/nack_outcome.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/nack_outcome.rs)、[`api/runtime/lifecycle.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/api/runtime/lifecycle.rs) 与 [`api/runtime/mod.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/api/runtime/mod.rs) 完成 recovery domain gate，把 `displaySupplyCritical` 明确收口为本地域问题，禁止它被洗成 transport reconnect。
+- 基于 `runtime-trace-1775345271853.jsonl`（历史路径：`runtime-logs/runtime-trace-1775345271853.jsonl`） 追加在 `nack.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`） 与 `timeline.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`） 增加 `displayStarvedLowValueAdmission`，把显示链已 `critical starved` 时的小型 delta gap 直接降级为软缺口。
+- 第三阶段继续在 [`session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)、[`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs)、`recovery/nack_outcome.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/recovery/nack_outcome.rs`）、[`api/runtime/lifecycle.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/api/runtime/lifecycle.rs) 与 [`api/runtime/mod.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/api/runtime/mod.rs) 完成 recovery domain gate，把 `displaySupplyCritical` 明确收口为本地域问题，禁止它被洗成 transport reconnect。
 - 收尾阶段进一步把 `reason_domain` 强类型透传补齐到测试与验证层：runtime gate 现在按 `Local / ConnectivityTransport / Unknown` 结构化字段验收 pending reconnect candidate，`planner/scheduling/transport_session/runtime` 的回归都覆盖了 domain 保留与放行/拒绝边界。
 
 ## Changes

@@ -1,10 +1,12 @@
 # Session Flow Canonicalization Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 - Related RFC: [`docs/rfcs/2026-03-24-session-flow-canonicalization.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-03-24-session-flow-canonicalization.md)
 
 ## Delivered
 
-- 新增 [`docs/stream-session-flow.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/stream-session-flow.md)，把当前 desktop app 的 canonical session flow 固定下来。
+- 新增 `docs/stream-session-flow.md`（历史路径），把当前 desktop app 的 canonical session flow 固定下来。
 - 文档覆盖了：
   - 前端 -> Tauri -> domain flow -> scheduler -> runtime host bridge 的整条主链
   - home / cloud 分叉

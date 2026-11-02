@@ -1,5 +1,7 @@
 # Home Timeline Soft/Hard Split Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -15,7 +17,7 @@
 
 ## Changes
 
-- [`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs) 新增 clean-anchor 软重入保护窗与预算。
+- `crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`（历史路径） 新增 clean-anchor 软重入保护窗与预算。
 - `mark_gap_reorder_pending`、`mark_gap_nack_candidate`、`mark_gap_repair_in_flight`、`mark_gap_resolved`、`mark_gap_expired` 统一接入软/硬分层。
 - 新增单测覆盖软重入、预算耗尽与 reference 硬破链不变。
 

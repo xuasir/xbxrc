@@ -1,5 +1,7 @@
 # Docs 标准化与 docs1 Cutover Report
 
+> 2026-11-02 维护：任务快照已合并到[历史任务索引](../project-task.archive.md)，开发规范与专项验收使用[dev-docs 入口](../../dev-docs/README.md)，SDL3 历史切换备注由[统一手柄 RFC](../rfcs/2026-10-27-unified-gamepad-input.md)接续。下文保留 2026-04-24 的迁移记录。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary

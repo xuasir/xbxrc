@@ -29,7 +29,7 @@ CPU draw duration 表达 JavaScript/WebGL 提交成本；GPU 时间和真实 sca
 | `pnpm test` | 44 文件 / 326 项全部通过 |
 | `pnpm exec vue-tsc --noEmit` | 通过 |
 | `pnpm build` | 266 个模块，生产构建通过 |
-| `python3 -B -m unittest discover -s scripts/tests -p 'test_browser_runtime_stability_report.py'` | 18 项通过 |
+| `python3 -B -m unittest discover -s tests/runtime-trace -p 'test_browser_runtime_stability_report.py'` | 18 项通过；测试入口于 2026-11-02 统一目录 |
 | `git diff --check` | 通过 |
 
 本批保持 Tauri + Vue 3 + TypeScript + Rust 与现有浏览器/公共执行链；本批 Rust 源码改动为零。

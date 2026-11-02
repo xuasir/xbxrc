@@ -1,5 +1,7 @@
 # 本地 Decoder Reset 与 Transport Epoch 解耦 Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -24,16 +26,16 @@
 - [`escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 新增 `VideoEscalationReason::from_recovery_reason_label()` 与 `action_success_advances_transport_recovery_epoch()`，并将 `RecoveryActionContract` 收束为 owner/budget contract。
 - [`transport_session.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs) 不再按静态 contract 推进 epoch，而是通过 reason-aware helper 把 `displaySupplyDegraded` 等本地 decoder reset 保持在当前 epoch。
 - [`escalation.test.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.test.rs) 与 [`transport_session.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs) 测试新增本地 lane 不推进 epoch 的回归覆盖。
-- [`coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 已将 `AdapterThinStream/AdapterIdleTimeout/Reconfigure/DecoderBackendFailure` 归入 `Local` signal domain；[`repeat_suppression.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/repeat_suppression.rs) 对 local lane 改为纯本地 time-window/in-flight coalescing，不再以 transport epoch 轮转作为放行条件。
+- [`coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 已将 `AdapterThinStream/AdapterIdleTimeout/Reconfigure/DecoderBackendFailure` 归入 `Local` signal domain；`repeat_suppression.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/recovery/repeat_suppression.rs`） 对 local lane 改为纯本地 time-window/in-flight coalescing，不再以 transport epoch 轮转作为放行条件。
 - [`coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 继续收紧 `transportAwaitRecoveryAnchor`：只有在 `keyframeRequestEpisode` 为 `missed/late`、`decoded` 后短宽限内仍 unresolved 且无 recent clean anchor、或 anchor candidate 被 `awaitingRecoveryKeyframe/referenceChainUnrecoverable/bootstrap reject` 等失败原因拒绝时，才允许 stage upgrade 到 decoder reset。
 - [`escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 新增 `allow_transport_await_stage_escalation` 门禁，禁止 controller 仅凭 `persistent_transport_await_recovery_keyframe` 自动把 transport-await 推到 decoder reset / reconnect。
-- [`coordinator.test.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.test.rs) 新增/更新回归：无失败证据时继续停留在 keyframe stage；`missed`、`decoded 但仍无 clean anchor`、anchor candidate `Rejected` 时才升级到 decoder reset。
+- `coordinator.test.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.test.rs`） 新增/更新回归：无失败证据时继续停留在 keyframe stage；`missed`、`decoded 但仍无 clean anchor`、anchor candidate `Rejected` 时才升级到 decoder reset。
 - [`coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 现对 `WaitKeyframe` 复用同类 keyframe failure evidence gate，并把 gate 结果传入 [`escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 的 `allow_wait_keyframe_stage_escalation`，从 controller 侧切断 `persistent_wait_keyframe -> RequestDecoderReset` 的固定节拍升级。
-- [`repeat_suppression.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/repeat_suppression.rs) 对 `WaitKeyframe/transportAwaitRecoveryKeyframe` 链路新增更长的 decoder-reset in-flight 吸收窗，优先把最近一次 `requestDecoderReset` 视为 `CoalescedDecoderResetInFlight`，避免 transport session 已 defer 时上层继续刷 ledger/budget。
-- [`escalation.test.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.test.rs) 与 [`coordinator.test.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.test.rs) 新增 `WaitKeyframe` 反例/正例和 recent decoder-reset repeat suppression 回归。
+- `repeat_suppression.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/recovery/repeat_suppression.rs`） 对 `WaitKeyframe/transportAwaitRecoveryKeyframe` 链路新增更长的 decoder-reset in-flight 吸收窗，优先把最近一次 `requestDecoderReset` 视为 `CoalescedDecoderResetInFlight`，避免 transport session 已 defer 时上层继续刷 ledger/budget。
+- [`escalation.test.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.test.rs) 与 `coordinator.test.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.test.rs`） 新增 `WaitKeyframe` 反例/正例和 recent decoder-reset repeat suppression 回归。
 - [`coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 新增 220ms unsent grace：`requested && sent_at_ms == null` 只在该窗口内作为短暂 priming 吸收，超窗后立即终结为 `expired-unsent`，释放 keyframe in-flight 语义。
 - [`transport_session.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs) 现在会在 keyframe command `deferred/failed` 时同步把 `latest_keyframe_request_episode` 标记为 `deferred/failed`，不再让 trace 停留在长期 `requested`。
-- [`runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 新增 `keyframeRequestEpisodeDeferred`、`keyframeRequestEpisodeFailed`、`keyframeRequestEpisodeUnsentExpired` 三类观测及测试，补齐 unsent/failed 路径的 episode 闭环。
+- `runtime_stats_sink.rs`（历史路径：`crates/xbxengine/core/src/runtime_stats_sink.rs`） 新增 `keyframeRequestEpisodeDeferred`、`keyframeRequestEpisodeFailed`、`keyframeRequestEpisodeUnsentExpired` 三类观测及测试，补齐 unsent/failed 路径的 episode 闭环。
 
 ## Validation
 

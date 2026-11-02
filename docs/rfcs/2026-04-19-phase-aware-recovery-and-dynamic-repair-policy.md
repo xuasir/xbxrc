@@ -1,5 +1,7 @@
 # 阶段化恢复进度与动态修复价值策略 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -30,12 +32,12 @@
 ## Scope
 
 - In scope:
-  - [`crates/xbxengine/core/src/transport/rtc/recovery/contract.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/contract.rs)
-  - [`crates/xbxengine/core/src/runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/session/facts.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/facts.rs)
+  - `crates/xbxengine/core/src/transport/rtc/recovery/contract.rs`（历史路径）
+  - `crates/xbxengine/core/src/runtime_stats_sink.rs`（历史路径）
+  - `crates/xbxengine/core/src/transport/rtc/session/facts.rs`（历史路径）
   - [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)
   - [`crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs)
+  - `crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`（历史路径）
   - [`crates/xbxengine/core/src/media/video/ingress/budget.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/budget.rs)
   - [`src-tauri/src/mods/xbxengine/trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs)
 - Out of scope:
@@ -141,7 +143,7 @@
 - [`crates/xbxengine/core/src/transport/rtc/connection/service.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/connection/service.rs)
   - 当前已有 `PLI -> FIR -> control keyframe` 梯子
   - 目标是让图片级恢复出口符合 `PLI` 主路径与 `FIR` 重保底
-- [`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs)
+- `crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`（历史路径）
   - 当前已有 `DynamicRepairValueTier`、`FrameBudgetWindowSource::Recovery`、clean-anchor 供给窗
   - 目标是保留这些能力，并把输入统一改成 `phase policy + remote profile`
 - [`crates/xbxengine/core/src/media/video/ingress/budget.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/budget.rs)
@@ -209,19 +211,19 @@
 
 ### 6. 模块改造顺序
 
-1. [`crates/xbxengine/core/src/transport/rtc/recovery/contract.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/contract.rs)
+1. `crates/xbxengine/core/src/transport/rtc/recovery/contract.rs`（历史路径）
    - 固化 `RecoveryProgressLevel` 与 `progress -> allowed actions`
 2. [`crates/xbxengine/core/src/transport/rtc/connection/service.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/connection/service.rs)
    - 收口为 `PLI/FIR` 主图片恢复出口
 3. [`crates/xbxengine/core/src/media/video/ingress/budget.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/ingress/budget.rs)
    - 将动态修复价值绑定到 phase policy
-4. [`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs)
+4. `crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`（历史路径）
    - 落地 post-IDR climbing、clean-anchor 宽容与 profile 参数
 5. [`crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs)
    - 收成阶段 owner 与 completion gate
 6. [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)
    - 收成 orchestrator
-7. [`crates/xbxengine/core/src/runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 与 [`src-tauri/src/mods/xbxengine/trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs)
+7. `crates/xbxengine/core/src/runtime_stats_sink.rs`（历史路径） 与 [`src-tauri/src/mods/xbxengine/trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs)
    - 对齐 trace summary、lifecycle cause、progress projection
 
 ## Plan

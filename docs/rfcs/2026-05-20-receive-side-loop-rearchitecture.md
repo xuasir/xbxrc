@@ -1,5 +1,7 @@
 # 基于 `rtc` 的低延迟优先 Receive-side Loop 重构 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -16,9 +18,9 @@
   - [`connection/builder.rs`](../../crates/xbxengine/core/src/transport/rtc/connection/builder.rs)
   - [`connection/twcc_feedback.rs`](../../crates/xbxengine/core/src/transport/rtc/connection/twcc_feedback.rs)
   - [`connection/service.rs`](../../crates/xbxengine/core/src/transport/rtc/connection/service.rs)
-  - [`stream/video_source/source.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs)
-  - [`stream/video_source/timeline.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs)
-  - [`stream/nack_scheduler.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs)
+  - `stream/video_source/source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`）
+  - `stream/video_source/timeline.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`）
+  - `stream/nack_scheduler.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`）
   - [`policy/scheduling.rs`](../../crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs)
   - [`stack/transport_session.rs`](../../crates/xbxengine/core/src/transport/rtc/stack/transport_session.rs)
 - 现有多轮任务已经证明，这条主线不是简单的 transport glue，而是长期在修补同一组接收侧闭环问题：
@@ -232,7 +234,7 @@
 
 ### 4. H264 Bootstrap 改成 Tracker-first
 
-保留并扩大当前已经存在的 parameter-set salvage 思路，见 [`source.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs)。
+保留并扩大当前已经存在的 parameter-set salvage 思路，见 `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`）。
 
 新规则：
 
@@ -256,7 +258,7 @@
 
 ### 5. NACK 改成 Receiver-local Requester
 
-当前 [`nack_scheduler.rs`](../../crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs) 混入了：
+当前 `nack_scheduler.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`） 混入了：
 
 - frame importance
 - playout deadline

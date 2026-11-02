@@ -1,5 +1,7 @@
 # 调度层架构简化与能力保留 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -49,7 +51,7 @@
   - [`crates/xbxengine/core/src/transport/rtc/recovery/runtime_state.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/runtime_state.rs)
   - [`crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs)
   - [`crates/xbxengine/core/src/transport/rtc/connection/twcc_feedback.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/connection/twcc_feedback.rs)
-  - [`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs)
+  - `crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`（历史路径）
   - [`crates/xbxengine/core/src/diagnostics/stats.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/diagnostics/stats.rs)
   - [`src-tauri/src/mods/xbxengine/trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs)
   - recovery / scheduling / trace 相关回归测试与 `docs/project-task.md`
@@ -222,15 +224,15 @@ Facts
 - Decision: 调度层的最终动作边界固定为“下层只能申请本地动作，上层才有权批准昂贵动作，连接失败必须由连接证据证明，不能由解码失败或码流坏窗猜出来”。
 - Validation Note: `cargo test -p xbxengine transport::rtc::recovery::coordinator -- --nocapture` 与 `cargo test -p xbxengine transport::rtc::session::policy -- --nocapture` 已通过，说明全链路边界收口没有回退现有恢复合同。
 - Date: 2026-04-08 | Status: completed
-- Update: 对照 `moonlight-qt` 的“小波动先吸收、持续失败再 reset”边界，继续在 [`stream/video_source/source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 与 [`recovery/escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 做防风暴收口：`sample loss` 需更长的连续坏窗才会从 `DropAndRequestKeyframe` 升到 `WaitKeyframe`；`AdapterThinStream / AdapterIdleTimeout / TransportSampleLoss` 不再因为 keyframe 后短窗重复出现而直接升级到 `RequestDecoderReset`，decoder reset 只保留给 `WaitKeyframe / TransportAwaitRecoveryKeyframe / Reconfigure / DecoderBackendFailure` 这类更硬的持续失败证据。
+- Update: 对照 `moonlight-qt` 的“小波动先吸收、持续失败再 reset”边界，继续在 `stream/video_source/source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 与 [`recovery/escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 做防风暴收口：`sample loss` 需更长的连续坏窗才会从 `DropAndRequestKeyframe` 升到 `WaitKeyframe`；`AdapterThinStream / AdapterIdleTimeout / TransportSampleLoss` 不再因为 keyframe 后短窗重复出现而直接升级到 `RequestDecoderReset`，decoder reset 只保留给 `WaitKeyframe / TransportAwaitRecoveryKeyframe / Reconfigure / DecoderBackendFailure` 这类更硬的持续失败证据。
 - Decision: 小波动抖动的默认处理边界固定为“等待 / 丢帧 / 请求关键帧”，而不是“重复轻信号 -> keyframe -> decoder reset”的短链升级；本地 decoder reset 现在只由持续性局部失败证据驱动。
 - Validation Note: `cargo fmt --all`、`cargo test -p xbxengine transport::rtc::recovery::escalation -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture` 已通过，说明防风暴收口未回退现有恢复主链。
 - Date: 2026-04-08 | Status: completed
-- Update: 继续沿 `moonlight-qt` 的“先等待一个短窗口再决定是否上报”思路，在 [`stream/video_source/source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 为 `idle timeout / thin stream stall` 新增入口确认窗：首次命中只启动短暂 confirmation window，只有短窗后仍持续满足条件才真正发出 timeout/thin-stream observation；一旦收到新包或样本完成，待确认状态立即清空。
+- Update: 继续沿 `moonlight-qt` 的“先等待一个短窗口再决定是否上报”思路，在 `stream/video_source/source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 为 `idle timeout / thin stream stall` 新增入口确认窗：首次命中只启动短暂 confirmation window，只有短窗后仍持续满足条件才真正发出 timeout/thin-stream observation；一旦收到新包或样本完成，待确认状态立即清空。
 - Decision: `idle timeout / thin stream` 现在不再是“单点命中即上报”的边界，而是“短确认窗内持续存在才上报”；这层吸收逻辑属于 source 本地历史窗口，不上抬到上层恢复控制面。
 - Validation Note: `cargo fmt --all` 与 `cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture` 已通过，新增确认窗回归也已覆盖。
 - Date: 2026-04-08 | Status: completed
-- Update: 基于真实 trace 中“decoder 仍在 waiting-keyframe，但 source/timeline 已把 delta continuation 当成可继续链”的错位，本轮继续收紧 [`stream/video_source/source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 的首帧边界：`resolve_inspection_admission()` 现在显式绑定 `first_frame_acquired`，pre-first-frame 阶段即便 `committed SPS/PPS + deltaContinuationReady` 也不会放行 non-IDR continuation；`resolve_recovery_keyframe_action()` 在首帧未建立且仍处于 waiting-keyframe 时不再吸收 non-keyframe delta，必须继续停留在本地 `WaitKeyframe`。
+- Update: 基于真实 trace 中“decoder 仍在 waiting-keyframe，但 source/timeline 已把 delta continuation 当成可继续链”的错位，本轮继续收紧 `stream/video_source/source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 的首帧边界：`resolve_inspection_admission()` 现在显式绑定 `first_frame_acquired`，pre-first-frame 阶段即便 `committed SPS/PPS + deltaContinuationReady` 也不会放行 non-IDR continuation；`resolve_recovery_keyframe_action()` 在首帧未建立且仍处于 waiting-keyframe 时不再吸收 non-keyframe delta，必须继续停留在本地 `WaitKeyframe`。
 - Decision: “首帧获取优先”不再只是命名变化，而是正式成为 source admission / local recovery 的动作边界：首帧未建立前，delta continuation 只能作为观测事实，不能被误升成链路恢复成功或 soft reentry 依据。
-- Update: 同时补强 keyframe episode 观测链而不继续膨胀 DTO：[`runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 新增 `response-observed` 中间状态，用现有 `first_video_packet* / first_keyframe_packet* / status_detail` 直接记录“首个响应是 non-keyframe”或“首个 keyframe 仍因 bootstrapMissingSps/InvalidSliceHeader 等不可用”；[`trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs) 同步投影 `keyframeRequestEpisodeResponseObserved` 事件，便于直接在 trace 中定位“请求已发出，但首个响应为何不可用”。
+- Update: 同时补强 keyframe episode 观测链而不继续膨胀 DTO：`runtime_stats_sink.rs`（历史路径：`crates/xbxengine/core/src/runtime_stats_sink.rs`） 新增 `response-observed` 中间状态，用现有 `first_video_packet* / first_keyframe_packet* / status_detail` 直接记录“首个响应是 non-keyframe”或“首个 keyframe 仍因 bootstrapMissingSps/InvalidSliceHeader 等不可用”；[`trace_projection.rs`](/Users/guo.xu/Documents/code/games/xbxrc/src-tauri/src/mods/xbxengine/trace_projection.rs) 同步投影 `keyframeRequestEpisodeResponseObserved` 事件，便于直接在 trace 中定位“请求已发出，但首个响应为何不可用”。
 - Validation Note: `cargo fmt --all`、`cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture`、`cargo test -p xbxengine runtime_stats_sink -- --nocapture`、`cargo test -p xbxrc trace_projection -- --nocapture` 已通过。

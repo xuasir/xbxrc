@@ -1,5 +1,7 @@
 # Tauri Updater + GitHub Release 集成 — 实施报告
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 ## 摘要
 
 已完成 Phase 1 最小闭环的代码与 CI 配置：Tauri updater 插件、双通道 endpoint、设置页手动更新 UI，以及 `release/test → beta` / `tag v* → stable` 两条 GitHub Release workflow。仓库为公开 Release 假设，GitHub 坐标固定为 [xuasir/xbxrc](https://github.com/xuasir/xbxrc)。
@@ -9,20 +11,20 @@
 ### Rust / Tauri
 
 - `tauri-plugin-updater`、`tauri-plugin-process` 与 `createUpdaterArtifacts`
-- [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json)：`pubkey`、stable fallback endpoint、Windows `passive` 安装
-- [`src-tauri/src/mods/updater/`](../src-tauri/src/mods/updater/)：`stable` / `beta` 通道、endpoint 组装、`updater` RPC namespace
-- 能力：[`capabilities/default.json`](../src-tauri/capabilities/default.json) 增加 `updater:default`、`process:allow-restart`
+- [`src-tauri/tauri.conf.json`](../../src-tauri/tauri.conf.json)：`pubkey`、stable fallback endpoint、Windows `passive` 安装
+- [`src-tauri/src/mods/updater/`](../../src-tauri/src/mods/updater)：`stable` / `beta` 通道、endpoint 组装、`updater` RPC namespace
+- 能力：[`capabilities/default.json`](../../src-tauri/capabilities/default.json) 增加 `updater:default`、`process:allow-restart`
 
 ### 前端
 
-- [`src/composables/useAppUpdater.ts`](../src/composables/useAppUpdater.ts) 状态机
-- [`src/pages/settings/SettingAppUpdateSection.vue`](../src/pages/settings/SettingAppUpdateSection.vue) 挂载于设置 → 通用
+- [`src/composables/useAppUpdater.ts`](../../src/composables/useAppUpdater.ts) 状态机
+- [`src/pages/settings/SettingAppUpdateSection.vue`](../../src/pages/settings/SettingAppUpdateSection.vue) 挂载于设置 → 通用
 - RPC / 事件合同：`updater.*`、`updater.progress`
 
 ### CI
 
-- [`.github/workflows/release-beta.yml`](../.github/workflows/release-beta.yml)：`release/test` → rolling tag `beta`
-- [`.github/workflows/release-stable.yml`](../.github/workflows/release-stable.yml)：`v*` tag → GitHub `latest`
+- `.github/workflows/release-beta.yml`（历史路径：`docs/.github/workflows/release-beta.yml`）：`release/test` → rolling tag `beta`
+- `.github/workflows/release-stable.yml`（历史路径：`docs/.github/workflows/release-stable.yml`）：`v*` tag → GitHub `latest`
 
 ### 运维（已由开发者完成）
 

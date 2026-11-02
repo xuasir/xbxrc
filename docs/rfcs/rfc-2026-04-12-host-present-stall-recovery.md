@@ -1,6 +1,6 @@
 # Host Present 停滞与显示链恢复 RFC
 
-> 对应落地：`docs/references/sdl3-cutover-notes.md` 与显示链/解码背压/transport-await 组合恢复。
+> 历史方案对应[Host Present 停滞修复报告](../reports/2026-04-12-host-present-stall-recovery.md)，涵盖显示链、解码背压与 transport-await 组合恢复。
 
 ## Status
 

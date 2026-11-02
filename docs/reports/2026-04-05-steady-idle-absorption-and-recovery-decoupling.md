@@ -1,5 +1,7 @@
 # Steady Idle Absorption And Recovery Decoupling Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -9,7 +11,7 @@
 
 ## Delivered
 
-- 在 [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 为实时 idle timeout 增加 steady/render-aware 吸收条件，只有 transport 已连接、当前 recovery epoch 存在 clean anchor、decoder/renderer 未 stalled 且 present/decode 仍在 slack window 内时才吸收短空窗。
+- 在 `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 为实时 idle timeout 增加 steady/render-aware 吸收条件，只有 transport 已连接、当前 recovery epoch 存在 clean anchor、decoder/renderer 未 stalled 且 present/decode 仍在 slack window 内时才吸收短空窗。
 - 在 [`policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 增加两层 `adapterIdleTimeout` 保护：实时 diagnosis 吸收与 render slack 抑制，避免 source 单点判定直接落入旧的恢复升级链。
 - 补齐 source / policy 两侧正反回归测试，覆盖“steady 短空窗被吸收”和“真实持续无包 stall 仍进入恢复”的行为边界。
 
@@ -37,4 +39,4 @@
 ## Follow-up
 
 - 用下一份真实 runtime trace 验证“健康链路开始游玩”场景下，尾段不再因短时无包空窗直接打入 reconnect。
-- 继续关注 [`video_source/sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) repair / RTX 识别与投递路径是否还会制造额外的空窗放大。
+- 继续关注 `video_source/sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） repair / RTX 识别与投递路径是否还会制造额外的空窗放大。

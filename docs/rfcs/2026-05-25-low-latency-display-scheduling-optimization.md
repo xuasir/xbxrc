@@ -1,5 +1,7 @@
 # 低延迟显示调度优化 RFC（不硬对齐 WebRTC）
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 >
 > 关联 trace：`runtime-trace-1779701428966-1.jsonl`（~150s 稳态播放）、对照 `runtime-trace-1779699130686-1.jsonl`。
@@ -285,7 +287,7 @@ cargo test -p xbxrc --lib native_video::mod::tests::host_timing
 
 全时段仍允许 `decode_fps - fps` 宽 gap；**不以全局 present≈decode 为 KPI**。
 
-门禁脚本：[`scripts/trace_midsegment_report.py`](../../scripts/trace_midsegment_report.py)（输出 `GLOBAL_LATENCY_GATE` + `STEADY_SUPPLY_GATE`）。
+门禁脚本：`scripts/trace_midsegment_report.py`（历史路径）（输出 `GLOBAL_LATENCY_GATE` + `STEADY_SUPPLY_GATE`）。
 
 ### 失败归因规则
 

@@ -1,5 +1,7 @@
 # Steady Jitter Gentle Absorption Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -18,7 +20,7 @@
 - [`video_scheduling_owner.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs) 增加 `DegradedServing` 的迁移、health 映射与 clean-anchor 短窗滞回。
 - [`session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)、[`policy/scheduling.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs)、[`diagnostics/stats.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/diagnostics/stats.rs) 把 `DegradedServing` 作为 steady-serving 的同语义变体接入 liveness/BWE/diagnostics。
 - [`recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 为 clean anchor 增加上一 epoch 的短时复用窗口，降低恢复斜坡的过敏感度。
-- [`packet_router.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_router.rs) 与 [`sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 补充 primary video PT 识别、唯一主 PT 回退与 repair route primary 直通策略。
+- [`packet_router.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_router.rs) 与 `sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 补充 primary video PT 识别、唯一主 PT 回退与 repair route primary 直通策略。
 
 ## Validation
 

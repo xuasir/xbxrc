@@ -1,5 +1,7 @@
 # Windows SDL3 FSE 手柄输入排查报告
 
+> 历史报告：2026-06-29。当前手柄后端与路由以 [统一手柄 RFC](../rfcs/2026-10-27-unified-gamepad-input.md)及[交付报告](2026-10-27-unified-gamepad-input.md)为准；本文提及的 FSE XInput 验证指南已于 2026-11-02 删除，原内容保存在 Git 历史。
+
 ## 结论
 
 当前实现的高风险点集中在 SDL3 设备发现层与 XInput 兜底层之间。本轮已完成修复：SDL3 opened-device fallback 保留，Windows source 级 XInput direct poller 已加入同一 source 线程。

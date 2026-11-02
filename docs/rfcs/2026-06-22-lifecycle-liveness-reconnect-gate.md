@@ -1,5 +1,7 @@
 # Lifecycle Liveness Reconnect Gate RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -11,7 +13,7 @@
 
 ## Background
 
-最新 trace [`runtime-trace-1782114876554-1.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1782114876554-1.jsonl) 表明：
+最新 trace `runtime-trace-1782114876554-1.jsonl`（历史路径：`runtime-logs/runtime-trace-1782114876554-1.jsonl`） 表明：
 
 - +42.348s transport 进入 `Connected`，+43.385s 进入 `DisplayStable`，+46.849s stats 达到 `present_fps=60.79 / decode_fps=60.79`。
 - ICE probe 多次给出 `hasSelectedOrNominatedPair=true`、`failedPairCount=0`、`directChecksWithoutResponse=false`。

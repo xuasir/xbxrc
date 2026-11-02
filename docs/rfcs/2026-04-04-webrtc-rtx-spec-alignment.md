@@ -1,5 +1,7 @@
 # WebRTC RTX Spec Alignment RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -12,7 +14,7 @@
 ## Background
 
 - 上一轮已把 repair/RTX 从“隐式改写成 primary 包”收口为“显式 provenance 进入 source”，提升了可观测性和误投递防护。
-- 但当前 [`video_source/sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 的 RTX 解包仍只恢复了 OSN 和 apt 对应的 primary PT，没有恢复 FID 关联下的 primary SSRC。
+- 但当前 `video_source/sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 的 RTX 解包仍只恢复了 OSN 和 apt 对应的 primary PT，没有恢复 FID 关联下的 primary SSRC。
 - 对 WebRTC / RFC 4588 语义来说，RTX 包在 receiver 侧解包后应恢复为“原始媒体包”的主流身份；如果缺少 `apt` / `ssrc-group:FID` 等关键协商信息，不应该靠猜测把 repair 包继续混入主视频流水线。
 
 ## Goal
@@ -65,6 +67,6 @@
 - Update: 用户要求继续推进 repair/RTX 改造，并明确要求遵循 WebRTC 对 RTX 处理的规范；本轮将把重点从“显式 provenance”进一步推进到“恢复原始媒体身份 + 去猜测化”。
 - Decision: 延续现有 `payload_route_map + sink/source` 主路径，不引入并行大系统；以 `apt + ssrc-group:FID` 为最小必需协商信息。
 - Date: 2026-04-04 | Status: completed
-- Update: 已在 [`packet_router.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_router.rs) 为 answer SDP 补齐 `a=ssrc-group:FID` 解析，并把 repair SSRC -> primary SSRC 关系收进 `RtcPayloadRouteMap`；[`sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 的 de-RTX 现改为同时恢复 OSN、apt 对应的 primary PT 与 FID 对应的 primary SSRC。
+- Update: 已在 [`packet_router.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_router.rs) 为 answer SDP 补齐 `a=ssrc-group:FID` 解析，并把 repair SSRC -> primary SSRC 关系收进 `RtcPayloadRouteMap`；`sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 的 de-RTX 现改为同时恢复 OSN、apt 对应的 primary PT 与 FID 对应的 primary SSRC。
 - Decision: RTX reinject 现在把 `apt + FID` 视为最低必需协商信息，不再保留“唯一主 PT fallback”之类的猜测式恢复；缺 `apt`、缺 FID、缺 payload map 时统一保守丢弃。
-- Update: [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 侧改为直接按归一化后的主媒体 SSRC 推进 reinject observation，repair SSRC 仅保留在 provenance 中，不再参与 `primary_ssrc` 推断；已补 packet_router / sink / source 定向回归并完成 `cargo test -p xbxengine transport::rtc::stream::packet_router -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::sink -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture`、`cargo check -p xbxengine`。
+- Update: `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 侧改为直接按归一化后的主媒体 SSRC 推进 reinject observation，repair SSRC 仅保留在 provenance 中，不再参与 `primary_ssrc` 推断；已补 packet_router / sink / source 定向回归并完成 `cargo test -p xbxengine transport::rtc::stream::packet_router -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::sink -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture`、`cargo check -p xbxengine`。

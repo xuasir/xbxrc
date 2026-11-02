@@ -1,48 +1,19 @@
-# FFmpeg SDK 封装化使用说明
+# FFmpeg SDK 构建说明
 
-## 目录约定
-
-- `third_party/ffmpeg/windows-x64/{include,lib,bin}`
-- `third_party/ffmpeg/macos-arm64/{include,lib}`
-- `third_party/ffmpeg/macos-x64/{include,lib}`
-
-构建和打包统一从上述目录读取头文件、链接库和运行库。
-
-## 许可证策略
-
-- 当前默认策略：仅接入 `LGPL-2.1-or-later` 的 FFmpeg 产物。
-- 许可证元数据记录在 `third_party/ffmpeg/versions.json`。
-- 发布产物需随包携带：
-  - `third_party/ffmpeg/LICENSE-NOTICE.md`
-  - `third_party/ffmpeg/COPYING.LGPLv2.1`
+固定 SDK 位于 `src-tauri/resources/ffmpeg/{windows-x64,macos-arm64,macos-x64}`；目标布局、版本、来源和校验值见 [SDK 目录说明](../../src-tauri/resources/ffmpeg/README.md)与 [versions.json](../../src-tauri/resources/ffmpeg/versions.json)。每个目标包含 include/、lib/，Windows 额外包含 bin/。
 
 ## 本地构建
 
-- 日常开发与调试：
-  - `pnpm tauri dev`
-- macOS DMG:
-  - `pnpm tauri:build:dmg`
-- Windows NSIS:
-  - `pnpm tauri:build:nsis`
+```sh
+pnpm tauri dev
+pnpm tauri:build:dmg
+pnpm tauri:build:nsis
+```
 
-以上命令都会通过 `scripts/with-ffmpeg-sdk.mjs` 注入（`tauri` 命令已统一包装）：
+package.json 的 tauri 入口统一经过 [with-ffmpeg-sdk.mjs](../../scripts/with-ffmpeg-sdk.mjs)，注入 FFMPEG_DIR/FFMPEG_INCLUDE_DIR/FFMPEG_LIB_DIR、固定 SDK 的 pkg-config、运行库搜索路径与 CMake 兼容参数。macOS 同时设置 dyld 搜索路径；本地 target/debug 与 target/release 使用 SDK 运行库。XBX_FFMPEG_SDK_TARGET 可覆盖所选目标目录。
 
-- `FFMPEG_DIR`
-- `FFMPEG_INCLUDE_DIR`
-- `FFMPEG_LIB_DIR`
-- 运行时库搜索路径（`PATH` 前置 SDK 路径）
+## 更新与发布验证
 
-## SDK 资产更新
+替换目标 SDK 后更新 src-tauri/resources/ffmpeg/versions.json，同步 [LICENSE-NOTICE.md](../../src-tauri/resources/ffmpeg/LICENSE-NOTICE.md)和 [COPYING.LGPLv2.1](../../src-tauri/resources/ffmpeg/COPYING.LGPLv2.1)。默认许可策略为 LGPL-2.1-or-later。
 
-1. 替换目标目录下的 SDK 文件（保持目录结构不变）。
-2. 更新 `third_party/ffmpeg/versions.json` 的版本、来源、哈希、许可证信息。
-3. 运行最小验证：
-   - `cargo test -p xbox-webapi`
-   - `cargo check -p xbxrc`
-   - `pnpm tauri:build:dmg`（macOS）
-   - `pnpm tauri:build:nsis`（Windows）
-
-## CI 说明
-
-- GitHub Actions 不再下载外部 FFmpeg 预编译包。
-- 工作流会先检查 `third_party/ffmpeg` 目录是否完整，再执行打包。
+按目标执行 cargo check -p xbxrc 和对应 Tauri 构建，再运行 pnpm release:check-bundle；发布资产集合使用 pnpm release:check-collected，工作流合同使用 pnpm release:verify-pipeline。CI 使用仓库中的同一资源目录，构建与发布检查以这些脚本和工作流为准。

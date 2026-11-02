@@ -1,10 +1,12 @@
 # 标准 SR 修正后的 Mac/cloud 前台日志查验
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../../docs/README.md)为准。
+
 2026-10-29：标准输出尺寸与源下限通过本次日志核验；共享帧源的新帧交付与 SR 绘制计数存在持续缺口，实际可见画面的帧率与层归属继续取证。用户确认测试期间持续在前台，并补充实际观感明显好于 3fps。
 
 ## 范围与构建身份
 
-- 日志：[runtime-trace-1793263671826-1.jsonl](/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1793263671826-1.jsonl)。北京时间 16:47:51.827–16:50:58.927，共 187.100s、2,832 行；媒体采样覆盖 128.905s。
+- 日志：`runtime-trace-1793263671826-1.jsonl`（历史路径：`/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1793263671826-1.jsonl`）。北京时间 16:47:51.827–16:50:58.927，共 187.100s、2,832 行；媒体采样覆盖 128.905s。
 - 环境：macOS debug、cloud、schema v3 / dev；H264 constrained-baseline，answer `profile-level-id=42e02a`。
 - Git revision `bec3acfb`、workspaceDirty=true；构建源码 SHA-256 为 `4f1e7668766be3f1e6329f0b732dfa0d07a0de78f2fd4a5cdff13626bca38800`。按 `src-tauri/build.rs` 同一算法复算当前 726 个输入路径，完全匹配本轮标准 SR 与最新帧修正版本。
 - 采样区间本地 renderer 预算保持 60fps；一次初始 pipeline 选择、两次 SR 档位冻结、四次 plan 应用。窗口焦点条件采用用户提供的持续前台事实。

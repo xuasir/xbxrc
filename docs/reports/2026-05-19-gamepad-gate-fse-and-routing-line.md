@@ -1,5 +1,7 @@
 # Gamepad Gate、FSE 专线与前端的 Routing 收口
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 ## 摘要
 
 落实 [`rfcs/2026-05-14-gamepad-tauri-active-gate-and-always-on-sampling.md`](../rfcs/2026-05-14-gamepad-tauri-active-gate-and-always-on-sampling.md) 的 gate + FSE + 前端 routing 主线。
@@ -8,11 +10,11 @@
 
 - `ShellWindowGateHints` 主字段改为 `app_is_foreground_candidate`；`focused/visible/minimized/fse_active/foreground_hwnd_matches_main` 仅诊断。
 - `derive_input_gate_from_hints`：`gateOpen = lifecycle==Active && app_is_foreground_candidate`。
-- Tauri [`input_gate.rs`](../../src-tauri/src/mods/gamepad/input_gate.rs) 负责计算 hints 并写入 ohmygamepad；非 Windows 仅保留 `focused_from_event` 作为 foreground candidate 硬条件。
+- Tauri `input_gate.rs`（历史路径：`src-tauri/src/mods/gamepad/input_gate.rs`） 负责计算 hints 并写入 ohmygamepad；非 Windows 仅保留 `focused_from_event` 作为 foreground candidate 硬条件。
 
 ## Windows FSE
 
-- 新模块 [`fse_windows.rs`](../../src-tauri/src/mods/gamepad/fse_windows.rs)：运行时加载 `GamingExperience.dll`，`IsGamingFullScreenExperienceActive` + change notification。
+- 新模块 `fse_windows.rs`（历史路径：`src-tauri/src/mods/gamepad/fse_windows.rs`）：运行时加载 `GamingExperience.dll`，`IsGamingFullScreenExperienceActive` + change notification。
 - FSE 下 `app_is_foreground_candidate = (GetForegroundWindow() == main_hwnd)`。
 - 启动时在 `build_services` 调用 `init_fse_monitor`。
 - FSE change callback 现在显式触发 `sync_gamepad_input_gate + refresh_gamepad_on_window_foreground`，把 `BackgroundWarm -> Active` 恢复链重新挂回 foreground 事实，而不是继续等 Tauri `Focused(true)`。

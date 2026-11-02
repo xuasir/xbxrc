@@ -1,5 +1,7 @@
 # 串流面板信息架构拆分 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -11,7 +13,7 @@
 
 ## Background
 
-- 当前串流页同时存在 [`StreamDiagnosticsPanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamDiagnosticsPanel.vue) 与 [`StreamPerformancePanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamPerformancePanel.vue) 两块浮层面板，[`Stream.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/Stream.vue:719) 直接把两者都挂到播放层上。
+- 当前串流页同时存在 `StreamDiagnosticsPanel.vue`（历史路径：`src/components/stream/StreamDiagnosticsPanel.vue`） 与 `StreamPerformancePanel.vue`（历史路径：`src/components/stream/StreamPerformancePanel.vue`） 两块浮层面板，[`Stream.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/Stream.vue:719) 直接把两者都挂到播放层上。
 - 两个面板已经持续吸收同一批 runtime 字段：
   - 用户体验指标
   - 恢复状态
@@ -37,8 +39,8 @@
 
 - In scope:
   - [`src/pages/Stream.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/Stream.vue)
-  - [`src/components/stream/StreamDiagnosticsPanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamDiagnosticsPanel.vue)
-  - [`src/components/stream/StreamPerformancePanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamPerformancePanel.vue)
+  - `src/components/stream/StreamDiagnosticsPanel.vue`（历史路径）
+  - `src/components/stream/StreamPerformancePanel.vue`（历史路径）
   - [`src/streaming/useStreamExecution.ts`](/Users/guo.xu/Documents/code/games/xbxrc/src/streaming/useStreamExecution.ts)
   - [`src/streaming/diagnostics.ts`](/Users/guo.xu/Documents/code/games/xbxrc/src/streaming/diagnostics.ts)
   - [`src/streaming/types.ts`](/Users/guo.xu/Documents/code/games/xbxrc/src/streaming/types.ts)
@@ -53,13 +55,13 @@
 
 ### 1. 用户面板与工程诊断混层
 
-- 诊断面板当前同时展示 `region/server/path/status` 与 `recoveryBudget/controlChannelError/decisionDigest/rfcFaultDomain` 这类内部字段。[`StreamDiagnosticsPanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamDiagnosticsPanel.vue:129)
-- 性能面板当前同时展示 `RTT/JIT/FPS/bitrate` 与 `RecoLv/RecoRs/RecoEff/DecEvt` 这类恢复算法和 decoder 事件。[`StreamPerformancePanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamPerformancePanel.vue:120)
+- 诊断面板当前同时展示 `region/server/path/status` 与 `recoveryBudget/controlChannelError/decisionDigest/rfcFaultDomain` 这类内部字段。`StreamDiagnosticsPanel.vue`（历史路径：`src/components/stream/StreamDiagnosticsPanel.vue`）
+- 性能面板当前同时展示 `RTT/JIT/FPS/bitrate` 与 `RecoLv/RecoRs/RecoEff/DecEvt` 这类恢复算法和 decoder 事件。`StreamPerformancePanel.vue`（历史路径：`src/components/stream/StreamPerformancePanel.vue`）
 
 ### 2. 两个面板重复消费同一组语义
 
 - `status/transport/SR/bandwidth/controlChannel/recoveryCause/networkConfidence/decodeConfidence` 在两个面板中重复展示。
-- `resolveStatusText` 与 SR 运行态格式化逻辑在两个组件中重复维护，并已开始出现行为分叉。[`StreamDiagnosticsPanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamDiagnosticsPanel.vue:86) [`StreamPerformancePanel.vue`](/Users/guo.xu/Documents/code/games/xbxrc/src/components/stream/StreamPerformancePanel.vue:86)
+- `resolveStatusText` 与 SR 运行态格式化逻辑在两个组件中重复维护，并已开始出现行为分叉。`StreamDiagnosticsPanel.vue`（历史路径：`src/components/stream/StreamDiagnosticsPanel.vue`） `StreamPerformancePanel.vue`（历史路径：`src/components/stream/StreamPerformancePanel.vue`）
 
 ### 3. 统一快照合同继续放大 runtime 差异
 

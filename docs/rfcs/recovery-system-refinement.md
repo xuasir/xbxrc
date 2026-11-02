@@ -256,7 +256,7 @@ fn enqueue_decoded_frame(...) {
 ## 参考
 
 - 原始修复计划：`/Users/guo.xu/.claude/plans/stateful-toasting-snowflake.md`
-- 修复清单：`docs/references/sdl3-cutover-notes.md`
+- 后续恢复行为收口：[修复报告](../reports/2026-04-17-recovery-behavior-differences-repair.md)
 - 相关代码：
   - `crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`
   - `crates/xbxengine/core/src/media/video/ingress/budget.rs`

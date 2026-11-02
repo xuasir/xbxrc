@@ -31,7 +31,7 @@ browser runtime 完成信令后，host 对首次 connected 等待设置 15 秒�
 - Rust `xbox-streaming --lib`：140 项通过。HTTP 用例使用本地回环；命令对 localhost 排除环境代理，并在具备 socket 监听权限的环境运行。
 - `cargo check -p xbxrc -p xbox-ios-bridge --offline` 通过；保留 xbxengine 两条既有未使用代码告警。
 - `cargo fmt -p xbox-streaming`、`pnpm lint:fix`、`vue-tsc --noEmit`、`pnpm build`、`git diff --check` 通过。
-- [结构化验证与源码摘要](../../dev-docs/validation/2026-10-30-common-startup-fixes.metrics.json)。前序审查脚本及其 metrics 保留修复前证据，当前回归入口位于正式测试文件。
+- [结构化验证与源码摘要](../../dev-docs/validation/2026-10-30-common-startup-fixes.metrics.json)。前序审查报告及 metrics 保留修复前证据；2026-11-02 已删除断言旧缺陷的临时回放，当前回归入口位于正式测试文件。
 
 回归入口：
 

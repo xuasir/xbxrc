@@ -1,5 +1,7 @@
 # Repair RTX Explicit Reinject RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -11,7 +13,7 @@
 
 ## Background
 
-- 当前 [`video_source/sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 已从“非 RTX repair 一律丢弃”收敛为“RTX 解包 / repair-primary 直通 / unsupported repair 丢弃”。
+- 当前 `video_source/sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 已从“非 RTX repair 一律丢弃”收敛为“RTX 解包 / repair-primary 直通 / unsupported repair 丢弃”。
 - 但 repair/RTX 目前仍是 sink 本地隐式改写为 `RtcVideoRtpPacket` 再直接送入 source，下游无法显式区分包的来源与接受原因。
 - 这种“先改写成像 primary 的包，再由 source 事后推断是否命中 gap/nack”的模式不够鲁棒，会让 repair provenance、观测链和后续 reinject 调优持续耦合不清。
 
@@ -66,6 +68,6 @@
 - Update: 用户要求继续把 repair/RTX 识别和投递改得更健壮、更有鲁棒性，本轮计划把 sink 的隐式改写收敛为显式 provenance + source 内可解释的 reinject 流程。
 - Decision: 继续沿现有 `sink -> source` 主路径演进，不新增独立 repair worker；优先最小改造达成“来源可解释、阶段可验证”。
 - Date: 2026-04-04 | Status: completed
-- Update: 已在 [`packet_types.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_types.rs) 为 `RtcVideoRtpPacket` 增加 `RtcVideoIngressKind` / `RtcVideoRepairMetadata`，让 repair-primary-pass-through 与 RTX reinject 都以显式 provenance 进入 source；[`sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 去掉“无 payload map 时按 `pt=97` 猜 RTX”的乐观 fallback，并在成功排入 source 前记录 `queued`；[`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 改为直接按 provenance 推进 `adapterRead / sampleBuilderPush / adapterResolved / adapterResolveMiss` 等 reinject stage。
+- Update: 已在 [`packet_types.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_types.rs) 为 `RtcVideoRtpPacket` 增加 `RtcVideoIngressKind` / `RtcVideoRepairMetadata`，让 repair-primary-pass-through 与 RTX reinject 都以显式 provenance 进入 source；`sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 去掉“无 payload map 时按 `pt=97` 猜 RTX”的乐观 fallback，并在成功排入 source 前记录 `queued`；`source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 改为直接按 provenance 推进 `adapterRead / sampleBuilderPush / adapterResolved / adapterResolveMiss` 等 reinject stage。
 - Decision: 不新增独立 repair 队列或 quarantine 子系统，先把现有主路径做成“识别更保守、来源可追踪、阶段可验证”的最小闭环；同时避免 repair SSRC 污染 primary 媒体 SSRC。
 - Update: 已补定向回归，包括 sink 侧 provenance 断言与 `repair_rtx_without_payload_map_is_not_reinjected_by_pt_guess`，以及 source 侧 `repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates`，并完成 `cargo test -p xbxengine transport::rtc::stream::video_source::sink -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture`、`cargo test -p xbxengine diagnostics::stats -- --nocapture`、`cargo check -p xbxengine`。

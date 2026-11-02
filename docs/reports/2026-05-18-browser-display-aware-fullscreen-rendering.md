@@ -4,7 +4,7 @@
 
 ## Summary
 
-- Related RFC: [`docs/rfcs/2026-05-18-browser-display-aware-fullscreen-rendering.md`](docs/rfcs/2026-05-18-browser-display-aware-fullscreen-rendering.md)
+- Related RFC: [`docs/rfcs/2026-05-18-browser-display-aware-fullscreen-rendering.md`](../rfcs/2026-05-18-browser-display-aware-fullscreen-rendering.md)
 - 浏览器侧 render policy 现在会编译 `presentTarget`，把显示尺寸、DPR、全屏状态、刷新率与源分辨率一起投影到 renderer attach / runtime snapshot / diagnostics；标准 `webgl2` renderer 也已拆开 source texture size 与 output present target size。
 
 ## Postscript
@@ -15,12 +15,12 @@
 
 ## Delivered
 
-- [`src/streaming/runtime/browser-video-display.ts`](docs/../src/streaming/runtime/browser-video-display.ts)：新增 `resolveDisplayViewport()`，统一 fullscreen `Contain` / 显式 aspect-ratio 的 CSS viewport 与 backing size 计算。
-- [`src/streaming/runtime/browser-render-policy.ts`](docs/../src/streaming/runtime/browser-render-policy.ts)：`BrowserRendererPlan` 新增 `presentTarget`，`planToRendererRuntimeConfigPatch()` / `planToRendererAttachSpec()` 同步投影显示上下文。
-- [`src/player/domain/media.ts`](docs/../src/player/domain/media.ts)：新增 `RendererPresentTarget`，把 present target 合同接入 `RendererAttachSpec` / `RendererRuntimeConfig` / `StreamStats`。
-- [`src/player/infra/render/Renderers.ts`](docs/../src/player/infra/render/Renderers.ts)：标准 `webgl2` 现在区分 source resolution 与 output resolution，shader 的采样 texel 基于 source，默认 framebuffer 输出基于 present target。
-- [`src/player/infra/render/SuperResolutionWebGL2Renderer.ts`](docs/../src/player/infra/render/SuperResolutionWebGL2Renderer.ts)：SR canvas 跟随同一 viewport 合同更新 CSS 显示尺寸。
-- [`src/streaming/runtime/browser-runtime.ts`](docs/../src/streaming/runtime/browser-runtime.ts)、[`src/streaming/diagnostics.ts`](docs/../src/streaming/diagnostics.ts)、[`src/streaming/types.ts`](docs/../src/streaming/types.ts)：新增 `renderDisplay* / renderPresentTarget* / renderViewport* / renderSource*` 观测字段。
+- [`src/streaming/runtime/browser-video-display.ts`](../../src/streaming/runtime/browser-video-display.ts)：新增 `resolveDisplayViewport()`，统一 fullscreen `Contain` / 显式 aspect-ratio 的 CSS viewport 与 backing size 计算。
+- [`src/streaming/runtime/browser-render-policy.ts`](../../src/streaming/runtime/browser-render-policy.ts)：`BrowserRendererPlan` 新增 `presentTarget`，`planToRendererRuntimeConfigPatch()` / `planToRendererAttachSpec()` 同步投影显示上下文。
+- [`src/player/domain/media.ts`](../../src/player/domain/media.ts)：新增 `RendererPresentTarget`，把 present target 合同接入 `RendererAttachSpec` / `RendererRuntimeConfig` / `StreamStats`。
+- [`src/player/infra/render/Renderers.ts`](../../src/player/infra/render/Renderers.ts)：标准 `webgl2` 现在区分 source resolution 与 output resolution，shader 的采样 texel 基于 source，默认 framebuffer 输出基于 present target。
+- [`src/player/infra/render/SuperResolutionWebGL2Renderer.ts`](../../src/player/infra/render/SuperResolutionWebGL2Renderer.ts)：SR canvas 跟随同一 viewport 合同更新 CSS 显示尺寸。
+- [`src/streaming/runtime/browser-runtime.ts`](../../src/streaming/runtime/browser-runtime.ts)、[`src/streaming/diagnostics.ts`](../../src/streaming/diagnostics.ts)、[`src/streaming/types.ts`](../../src/streaming/types.ts)：新增 `renderDisplay* / renderPresentTarget* / renderViewport* / renderSource*` 观测字段。
 
 ## Changes
 

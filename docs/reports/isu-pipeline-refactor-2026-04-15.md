@@ -122,8 +122,8 @@
 - RFC：`docs/rfcs/` 中的相关改造计划
 - 审查计划：`/Users/guo.xu/.claude/plans/snazzy-gliding-galaxy.md`
 - 能力梳理：
-  - `dev-docs/isu/frame-to-display-pipeline.md`
-  - `dev-docs/isu/packet-to-frame-pipeline.md`
+  - [帧到显示历史分析](../isu/frame-to-display-pipeline.md)
+  - [数据包到产帧历史分析](../isu/packet-to-frame-pipeline.md)
 
 ## 提交信息
 

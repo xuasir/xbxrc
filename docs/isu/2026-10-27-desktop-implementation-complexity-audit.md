@@ -1,5 +1,7 @@
 # 桌面端实现与复杂度分析
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 日期：2026-10-27。代码基线：`78e82a5a`。范围：当前 Tauri + Vue 3 + TypeScript + Rust 桌面实现。本轮产物为分析文档，产品代码保持原状。
 
 后续方向更新：用户随后明确优先交付浏览器输入与媒体稳定版，推荐路线见[浏览器稳定版方案](/Users/guo.xu/Documents/code/games/xbxrc/docs/isu/2026-10-27-browser-stable-desktop-plan.md)。本文保留当时的实现分析与证据。
@@ -99,7 +101,7 @@ SDL3 跨平台采样、逻辑槽位、映射、震动 provider、几何导航都
 
 通过当前 TS 源码、实际 arbiter/controller/adapter 和模拟后端快照做最小复现，得到：`before=stream, after=ui, streamActive=true, rpcCalls=[]`。该证据确认路由契约冲突；具体设备上的触发时机需要实机验收。
 
-相关代码：[浏览器空 adapter](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/stream-input-consumer-adapters.ts:29)、[唯一 owner 派生](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/business-input-arbiter.ts:53)、[事件覆盖](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/business-input-arbiter.ts:109)、[输入消费门槛](/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/input/GamepadDriver.ts:163)。
+相关代码：`浏览器空 adapter`（历史路径：`src/shared/gamepad/stream-input-consumer-adapters.ts`）、`唯一 owner 派生`（历史路径：`src/shared/gamepad/business-input-arbiter.ts`）、`事件覆盖`（历史路径：`src/shared/gamepad/business-input-arbiter.ts`）、[输入消费门槛](/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/input/GamepadDriver.ts:163)。
 
 简化方向：明确“会话输入归属”和“具体 transport 是否执行输入发送”的区别，两个 runtime 共用一套归属合同；采样继续常驻；菜单归位等待集中在一个交接入口。当前 source 4ms、MaxPrecision 标称 1000Hz backend polling、Rust input 8ms 各有含义，设置页应展示实际可兑现的节拍。
 

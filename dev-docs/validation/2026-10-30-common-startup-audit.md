@@ -93,11 +93,9 @@ Rust 测试在临时副本追加审查用例，生产 Rust 文件保持原状。
 
 `createOutcomeUnresolved` 在同服务实例内阻止同目标重试，当前没有服务端 active-session 查询来解除未知创建归属。这是 [公共可靠性 RFC](../../docs/rfcs/2026-10-28-streaming-common-reliability-simplification.md) 明确保留的限制，单列为后续产品闭环项。
 
-## 复现产物
+## 历史复现证据与当前回归
 
 - [结构化观测与源码 SHA-256](2026-10-30-common-startup-audit.metrics.json)
-- [TypeScript 回放入口](2026-10-30-common-startup-audit.cjs)：`node dev-docs/validation/2026-10-30-common-startup-audit.cjs`
-- [Rust 副本准备脚本](2026-10-30-common-startup-audit-prepare.py)：`python3 dev-docs/validation/2026-10-30-common-startup-audit-prepare.py`，执行输出的格式化及测试命令。
-- [Rust 回放用例](2026-10-30-common-startup-audit.rs)
+- [修复报告与正式回归入口](../../docs/reports/2026-10-30-common-startup-fixes.md)
 
-建议按 1 → 2/4 → 3 → 5 的顺序修复，将缺陷回放转换为安全行为回归，并补一次 home 直连失败转 TURN 的完整实机 trace。
+2026-11-02 已删除断言修复前缺陷行为的 TypeScript/Rust 临时副本回放，保留本报告与 metrics 中的原始证据。当前验证使用正式源码测试中的安全行为断言，home/TURN 故障路径实机验收范围见修复报告。

@@ -1,5 +1,7 @@
 # Transport Await-Anchor Simplification RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -35,10 +37,10 @@
 ## Scope
 
 - In scope:
-  - [`crates/xbxengine/core/src/transport/rtc/session/facts.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/facts.rs)
+  - `crates/xbxengine/core/src/transport/rtc/session/facts.rs`（历史路径）
   - [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs)
   - [`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs)
-  - [`crates/xbxengine/core/src/runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs)
+  - `crates/xbxengine/core/src/runtime_stats_sink.rs`（历史路径）
   - [`crates/xbxengine/core/src/transport/rtc/session/expensive_recovery_gate.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/expensive_recovery_gate.rs)
   - 相关 trace / diagnostics / tests
 - Out of scope:
@@ -51,7 +53,7 @@
 
 ### 0. 先收 owner，再谈动作
 
-基于新 trace [`runtime-trace-1778749346018-1.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1778749346018-1.jsonl) 的复核，本 RFC 新增一个更高优先级约束：
+基于新 trace `runtime-trace-1778749346018-1.jsonl`（历史路径：`runtime-logs/runtime-trace-1778749346018-1.jsonl`） 的复核，本 RFC 新增一个更高优先级约束：
 
 - 当前主要问题不是动作种类不够，而是**同一个坏窗被 display pressure / local repair pending / continuation-only / clean-anchor pending 四套半状态同时解释**。
 - 当强事实与弱事实并存时，系统仍允许弱事实长期压住强事实，导致调度解释权分叉：

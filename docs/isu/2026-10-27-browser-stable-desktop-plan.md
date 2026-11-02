@@ -1,5 +1,7 @@
 # 桌面稳定版：浏览器输入、WebRTC 直出与 WebGL 后处理方案
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 日期：2026-10-27。状态：方案，待进入实施任务。代码基线：`78e82a5a`。
 
 2026-10-28 后续方向：用户明确要求浏览器方案精简逻辑、完整保留现有功能并保障稳定性，具体计划见[浏览器功能保留与精简 RFC](../rfcs/2026-10-28-browser-runtime-simplification-and-stability.md)。该计划基于当前统一输入和公共可靠性改造，保留 USM/CAS、FSR1、麦克风、截图与动态适应；本文的首版功能范围、策略移出及发行依赖隔离作为历史探索选项保存，当前优化按新 RFC 的功能保留合同推进。
@@ -88,7 +90,7 @@ Vue：登录、主机/云游戏列表、会话进度、串流菜单、设置
 
 FSE 前后台信号的可靠性当前尚未确认。Windows 默认 keep-active，覆盖 FSE 使用场景，省去运行时识别和焦点补偿；其明确代价是后台游戏仍可能响应手柄。该策略只保证应用自己的路由持续允许输入，WebView 挂起与 Gamepad API 的供给能力仍受运行时约束。系统 Home 键可被系统接管，串流菜单提供软 Home 入口。
 
-涉及现有入口：[输入归属](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/business-input-arbiter.ts)、[菜单路由](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/stream/stream-input-route-controller.ts)、[键盘桥](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/keyboard-fallback-bridge.ts)、[串流震动](/Users/guo.xu/Documents/code/games/xbxrc/src/player/app/input/RumbleService.ts)、[导航震动](/Users/guo.xu/Documents/code/games/xbxrc/src/navigation/core/haptics.ts)、[手柄设置](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/settings/SettingGamepadSection.vue)。
+涉及现有入口：`输入归属`（历史路径：`src/shared/gamepad/business-input-arbiter.ts`）、[菜单路由](/Users/guo.xu/Documents/code/games/xbxrc/src/pages/stream/stream-input-route-controller.ts)、[键盘桥](/Users/guo.xu/Documents/code/games/xbxrc/src/shared/gamepad/keyboard-fallback-bridge.ts)、[串流震动](/Users/guo.xu/Documents/code/games/xbxrc/src/player/app/input/RumbleService.ts)、[导航震动](/Users/guo.xu/Documents/code/games/xbxrc/src/navigation/core/haptics.ts)、`手柄设置`（历史路径：`src/pages/settings/SettingGamepadSection.vue`）。
 
 ### 4.3 WebRTC 直出
 

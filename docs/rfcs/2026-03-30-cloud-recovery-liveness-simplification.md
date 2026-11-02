@@ -1,5 +1,7 @@
 # Cloud Recovery Liveness Simplification RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -13,9 +15,9 @@
 
 - Cloud 场景近期多份 runtime trace 反复出现同类冻结：恢复链路能触发一次 reconnect，但重连后长时间停在 `Connecting + Priming/SeekingAnchor`，且后续无新的恢复动作，最终画面卡死。
 - 代表性日志：
-  - [`runtime-trace-1774854083591.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1774854083591.jsonl)
-  - [`runtime-trace-1774857742839.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1774857742839.jsonl)
-  - [`runtime-trace-1774850865543.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1774850865543.jsonl)
+  - `runtime-trace-1774854083591.jsonl`（历史路径：`runtime-logs/runtime-trace-1774854083591.jsonl`）
+  - `runtime-trace-1774857742839.jsonl`（历史路径：`runtime-logs/runtime-trace-1774857742839.jsonl`）
+  - `runtime-trace-1774850865543.jsonl`（历史路径：`runtime-logs/runtime-trace-1774850865543.jsonl`）
 - 当前策略问题不是单点 bug，而是结构性问题：局部抑制策略（去抖、cooldown、预算）叠加后缺少“全局活性保证”。
 
 ## Goal

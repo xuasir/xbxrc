@@ -1,5 +1,7 @@
 # H264 Preset/Profile Semantics Closure RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -11,7 +13,7 @@
 
 ## Background
 
-- 新 trace [`runtime-trace-1775297730377.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775297730377.jsonl) 暴露了启动期 `bootstrapMissingSps` 恢复窗口，提示当前 Rust-owned 启动 bootstrap 对首个 clean keyframe 质量高度敏感。
+- 新 trace `runtime-trace-1775297730377.jsonl`（历史路径：`runtime-logs/runtime-trace-1775297730377.jsonl`） 暴露了启动期 `bootstrapMissingSps` 恢复窗口，提示当前 Rust-owned 启动 bootstrap 对首个 clean keyframe 质量高度敏感。
 - 代码排查发现 H264 preset/profile 语义在不同链路上已经分叉：
   - 浏览器直出路径按 `64 > 4d > 42e > 420` 排序。
   - Rust-owned SDP 排序却按 `4d > 42e > 420 > 64`。

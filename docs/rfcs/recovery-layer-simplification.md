@@ -1,11 +1,13 @@
 # 恢复层简化 RFC
 
+> 历史方案：2026-04。当前恢复权责由 [2026-06-02 receive/恢复边界 RFC](2026-06-02-webrtc-recovery-boundary-redesign.md)接续；旧 SimplifiedRecoveryCoordinator 启用/迁移指南及基线已于 2026-11-02 清理，本文保留原始方案和执行记录。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
 
 - Completion: 未完成
-- Current State: planned
+- Current State: superseded（历史记录）
 - Owner: recovery module
 - Last Updated: 2026-04-16
 

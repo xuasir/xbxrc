@@ -1,5 +1,7 @@
 # Win/mac H.264 FFmpeg Video Backend Unification RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -243,7 +245,7 @@
 - Decision: 发布策略明确采用“应用自带 FFmpeg 运行时”，不依赖宿主 FFmpeg 环境。
 - Risk/Blocker: 当前 `native_video` 与 `wgpu_renderer` 的 platform import 能力对 macOS 更成熟，对 Windows `D3D11VA` surface 导入仍需补齐桥接设计；这是本 RFC 后续实现的第一优先级结构风险。
 - Date: 2026-04-06 | Status: in progress
-- Update: 已完成 M1 最小骨架重构：`video_decode.rs` 仅保留主控/恢复/队列逻辑；新增 [`crates/xbxengine/core/src/media/video/decode/backend.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/decode/backend.rs) 承载统一 backend trait、candidate/probe/failure reason 与工厂；新增 [`crates/xbxengine/core/src/media/video/decode/backend_macos_videotoolbox.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/decode/backend_macos_videotoolbox.rs) 承载现有 macOS VideoToolbox 实现与 FFI。
+- Update: 已完成 M1 最小骨架重构：`video_decode.rs` 仅保留主控/恢复/队列逻辑；新增 [`crates/xbxengine/core/src/media/video/decode/backend.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/decode/backend.rs) 承载统一 backend trait、candidate/probe/failure reason 与工厂；新增 `crates/xbxengine/core/src/media/video/decode/backend_macos_videotoolbox.rs`（历史路径） 承载现有 macOS VideoToolbox 实现与 FFI。
 - Decision: M1 不切默认主线、不引入 FFmpeg、不改恢复策略；当前候选链维持为 `macOS videotoolbox -> software-placeholder -> noop`，用于先把结构边界立住。
 - Validation: `cargo check -p xbxengine`、`cargo test -p xbxengine request_decoder_reset_calls_hardware_decoder_reset --lib -q` 已通过；现阶段仍存在仓库既有 `dead_code/unused` 警告，本轮未扩展到非目标模块处理。
 - Date: 2026-04-06 | Status: in progress
@@ -282,7 +284,7 @@
 - Decision: 本项目 Windows 零拷贝主线现在明确采用“两段约束”策略：1) FFmpeg `hw_frames_ctx` 初始化时先约束解码 surface 资源属性；2) 宿主 renderer 再以 `Vulkan external-memory import` 直接消费 shared handle。后续即使要补 quirk gate 或 bind/copy 双路径，也必须建立在这个前移后的资源分配语义上，而不是退回“默认 copyback，再看能否导入”。
 - Validation: `cargo fmt --all`、`cargo check -p xbxengine`、`cargo check -p xbxrc` 已通过；本轮仅完成代码级与宿主侧条件编译验证，尚未完成 Windows 目标编译和不同 GPU/驱动上的 FFmpeg hwframes 分配行为验证。
 - Date: 2026-04-07 | Status: in progress
-- Update: 已从 [`crates/xbxengine/core/src/media/video/decode/backend.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/decode/backend.rs) 的 probe 候选链中移除 `videotoolbox-legacy`，并删除 [`crates/xbxengine/core/src/media/video/decode/backend_macos_videotoolbox.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/decode/backend_macos_videotoolbox.rs)。至此 macOS 旧手写 VideoToolbox backend 已不再参与编译，也不再作为 FFmpeg backend 失败后的隐藏 fallback。
+- Update: 已从 [`crates/xbxengine/core/src/media/video/decode/backend.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/decode/backend.rs) 的 probe 候选链中移除 `videotoolbox-legacy`，并删除 `crates/xbxengine/core/src/media/video/decode/backend_macos_videotoolbox.rs`（历史路径）。至此 macOS 旧手写 VideoToolbox backend 已不再参与编译，也不再作为 FFmpeg backend 失败后的隐藏 fallback。
 - Decision: macOS H.264 解码主线现正式收敛为 `ffmpeg-videotoolbox -> ffmpeg-software -> noop`；后续若 `ffmpeg-videotoolbox` 命中问题，应在统一 FFmpeg backend 内补 quirk/probe/fallback，而不是恢复一条并行手写 VT 实现。
 - Validation: 待本轮 `cargo fmt --all`、`cargo check -p xbxengine`、`cargo check -p xbxrc` 回归后确认。
 - Date: 2026-04-07 | Status: in progress

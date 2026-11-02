@@ -1,5 +1,7 @@
 # 帧到显示：局部能力梳理
 
+> 历史方案：2026-04-15。当前 receive/恢复边界见 [2026-06-02 RFC](../rfcs/2026-06-02-webrtc-recovery-boundary-redesign.md)，本文件保留当时的能力分析与决策背景。
+
 更新时间：2026-04-15
 
 本文梳理从 `AssembledVideoFrame` 离开 source 层到最终呈现这段链路的现有实现与待优化项。与 `packet-to-frame-pipeline.md` 衔接：入口是 `recv_frame_inner` 返回的 `AssembledVideoFrame`，出口是 Renderer 的 present 回调。

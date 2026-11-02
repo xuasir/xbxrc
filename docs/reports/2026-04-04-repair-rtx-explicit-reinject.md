@@ -1,5 +1,7 @@
 # Repair RTX Explicit Reinject Report
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：本 Report 仅用于复杂任务完全完成后的最终总结，不用于记录执行中的阶段性进度；中间过程应持续回写到对应 RFC。
 
 ## Summary
@@ -16,8 +18,8 @@
 ## Changes
 
 - [`packet_types.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/packet_types.rs) 新增 `RtcVideoRepairMetadata`、`RtcVideoIngressKind`，`RtcVideoRtpPacket` 增加 `ingress_kind` 字段；[`test_fixtures.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/media/video/test_fixtures.rs) 默认构造 `Primary`。
-- [`sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs) 将 repair-primary 直通与 RTX 解包都改为显式 provenance 投递；`is_rtx_payload` 不再在无 map 时猜测 RTX；`unpack_rtx_packet` 只有在能解析出 primary payload type 时才 reinject；成功入队后立即记录 `queued` observation。
-- [`video_source/mod.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/mod.rs) 注入共享 `RuntimeStatsSink`；[`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs) 改为由 provenance 驱动 `adapterRead / sampleBuilderPush / adapterResolved / adapterResolveMiss` 阶段推进，并避免 `RtxReinject` 污染当前 primary SSRC。
+- `sink.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/sink.rs`） 将 repair-primary 直通与 RTX 解包都改为显式 provenance 投递；`is_rtx_payload` 不再在无 map 时猜测 RTX；`unpack_rtx_packet` 只有在能解析出 primary payload type 时才 reinject；成功入队后立即记录 `queued` observation。
+- `video_source/mod.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/mod.rs`） 注入共享 `RuntimeStatsSink`；`source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`） 改为由 provenance 驱动 `adapterRead / sampleBuilderPush / adapterResolved / adapterResolveMiss` 阶段推进，并避免 `RtxReinject` 污染当前 primary SSRC。
 
 ## Validation
 

@@ -1,5 +1,7 @@
 # 时间线价值运行模式完整升级 RFC
 
+> 路径说明（2026-11-02）：文中的“历史路径”对应记录编写时的文件，可从 Git 历史读取；当前模块位置以源码及[文档入口](../README.md)为准。
+
 > 说明：复杂任务在执行中的里程碑、状态、决策变更、阻塞项统一记录在本 RFC 内；仅在任务完全完成后再单独产出 Report。
 
 ## Status
@@ -11,13 +13,13 @@
 
 ## Background
 
-- [docs/mode.md](/Users/guo.xu/Documents/code/games/xbxrc/docs/mode.md) 已经明确提出目标运行模式：系统真正管理的是“时间线价值”，总约束是 `reference chain > frame > packet`，NACK 只是恢复投资工具，而不是默认动作。
+- `docs/mode.md`（历史路径） 已经明确提出目标运行模式：系统真正管理的是“时间线价值”，总约束是 `reference chain > frame > packet`，NACK 只是恢复投资工具，而不是默认动作。
 - 当前 `xbxengine` 已经有部分能力接近该目标，包括 Cloud 高 RTT 下的 `latency-first` NACK admission、`wait-keyframe`、`frame unrecoverable`、decode 前放弃与 latest-slot render，但整体仍是分散实现，尚未形成 `gap / frame / chain / decode / render / timeout` 的清晰 owner 和闭环状态机。
 - 如果继续按局部补丁推进，后续会把 `mode.md` 的语义打散到 `video_source / ingress / recovery / pacer / diagnostics` 多处；这会让“理念一致、实现碎片化”的问题持续累积，影响后续 Xbox 远端主线升级。
 
 ## Goal
 
-- 以 [docs/mode.md](/Users/guo.xu/Documents/code/games/xbxrc/docs/mode.md) 为目标形态，规划并逐步完成当前 Rust-owned Xbox 远端视频运行时的完整升级。
+- 以 `docs/mode.md`（历史路径） 为目标形态，规划并逐步完成当前 Rust-owned Xbox 远端视频运行时的完整升级。
 - 把现有实现从“以 NACK/恢复补丁驱动的局部止损”升级为“以时间线价值驱动的分层调度系统”，让 `packet / gap / frame / reference chain / decode / render / timeout` 的职责边界明确、状态语义一致、观测链路完整。
 - 在升级过程中保持当前 canonical 技术路线不变，不引入第二套媒体运行时，不破坏现有 Cloud/Home 主链可用性。
 
@@ -425,7 +427,7 @@
 - Decision: 现有 [`docs/rfcs/2026-03-27-cloud-high-rtt-latency-first-recovery.md`](/Users/guo.xu/Documents/code/games/xbxrc/docs/rfcs/2026-03-27-cloud-high-rtt-latency-first-recovery.md) 视为本 RFC 的已启动子阶段，不再作为最终架构目标的替代品。
 - Decision: 升级优先级固定为 `chain > frame > packet` 的语义收口，不再继续以局部 NACK/BWE 参数微调充当主方案。
 - Decision: 第一轮实现优先保持现有 Rust-owned 主链可运行，在当前模块内渐进收口 owner，再决定是否需要进一步模块拆分。
-- Update: 第一轮已不再把 `waiting_for_recovery_keyframe` 和 frame recovery ledger 作为松散布尔/Map 组合维护，而是在 [`crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs) 建立统一状态 owner，并接到 [`source.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs)、[`nack.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs)、[`mod.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/video_source/mod.rs) 主链。
+- Update: 第一轮已不再把 `waiting_for_recovery_keyframe` 和 frame recovery ledger 作为松散布尔/Map 组合维护，而是在 `crates/xbxengine/core/src/transport/rtc/stream/video_source/timeline.rs`（历史路径） 建立统一状态 owner，并接到 `source.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/source.rs`）、`nack.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/nack.rs`）、`mod.rs`（历史路径：`crates/xbxengine/core/src/transport/rtc/stream/video_source/mod.rs`） 主链。
 - Update: 本轮验证已通过 `cargo check -p xbxengine`、`cargo test -p xbxengine transport::rtc::stream::video_source::timeline -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::nack_scheduler -- --nocapture`。
 - Update: 本轮继续把 `video_source` 从“有 owner、但观测不全”推进到“owner + observation 单链闭环”：清理了 `timeline.rs` 中重复的局部 snapshot/重复状态字符串实现，统一保留 `VideoTimelineObservation` 为唯一对外结构；并将 `gap/frame/chain` 的关键迁移直接投影到 runtime stats / protocol dto / Tauri trace，包括 `gap-observed-* / gap-nack-candidate / gap-repair-in-flight / gap-resolved / gap-expired-* / chain-broken / chain-recovery-keyframe-requested / frame-observed / frame-complete-candidate / frame-inspection-*-await-keyframe / frame-recovery-ledger-write / frame-recovery-ledger-consume`。
 - Decision: diagnostics/trace 不再额外维护第二套 timeline 状态仓，只消费 `video_source::timeline` owner 在状态推进点生成的 `VideoTimelineObservation`；后续 decode/render/timeout 也必须沿这条 owner-first 路径扩展，而不是在 diagnostics 层补推导状态。
@@ -475,7 +477,7 @@
 - Date: 2026-03-28 | Status: in-progress
 - Update: 基于新 Cloud trace `runtime-trace-1774698555592.jsonl` 的运行态复盘，继续推进 owner 主链收口：`timeline.rs` 引入“稳定恢复门禁”，`Repairing/Recovering/Stalled` 不再因单个 `frame-complete-candidate` 直接回到 `Healthy`，而是要求跨过最小稳定窗口并看到连续 clean frame 后才允许恢复；`on_clean_keyframe_submitted()` 仍保留 clean keyframe 直达 `Healthy` 的锚点语义。新增测试覆盖：`single_complete_candidate_does_not_whiten_recovering_chain_without_stable_window`、`recovering_chain_requires_stable_clean_frames_before_healthy`、`frame_observed_after_timeout_moves_stalled_to_repairing_then_healthy`。
 - Update: `recovery::escalation` 继续从“冷却驱动重试”收口到“recovery epoch 驱动重试”：新增 `keyframe_epoch_active`，同一 epoch 内 `TransportAwaitRecoveryKeyframe/TransportExpiredDeadline` 等理由不会持续重发 `requestKeyframe`；只有显式 `reset_keyframe_epoch()` 或 reason class 切换后才允许下一次 keyframe 请求。保留 sample-loss / idle-timeout / thin-stream 到 decoder-reset / reconnect 的既有升级优先级。新增测试覆盖：`await_recovery_keyframe_is_throttled_within_same_epoch`、`keyframe_epoch_resets_on_reason_change`、`keyframe_epoch_can_be_reset_explicitly_after_recovery`、`repeated_transport_deadline_failures_are_throttled_within_epoch`。
-- Update: 本轮把“clean anchor 已建立”从局部 timeline 事件提升为 runtime 持久事实，并与 `recovery_epoch` 显式绑定：[`crates/xbxengine/core/src/api/backend.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/api/backend.rs) 新增 `video_anchor_clean_epoch / video_anchor_clean_observed_at_ms / video_anchor_clean_source_event`；[`crates/xbxengine/core/src/diagnostics/observation_bus.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/diagnostics/observation_bus.rs) 在 `chain-clean-anchor-submitted` 到来时写入该事实；[`crates/xbxengine/core/src/runtime_stats_sink.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/runtime_stats_sink.rs) 在新 `recovery episode` 开始时主动失效旧事实。由此，clean anchor 不再只是 trace 可见事件，而成为 owner / recovery 主链可消费的恢复完成证据。
+- Update: 本轮把“clean anchor 已建立”从局部 timeline 事件提升为 runtime 持久事实，并与 `recovery_epoch` 显式绑定：[`crates/xbxengine/core/src/api/backend.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/api/backend.rs) 新增 `video_anchor_clean_epoch / video_anchor_clean_observed_at_ms / video_anchor_clean_source_event`；[`crates/xbxengine/core/src/diagnostics/observation_bus.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/diagnostics/observation_bus.rs) 在 `chain-clean-anchor-submitted` 到来时写入该事实；`crates/xbxengine/core/src/runtime_stats_sink.rs`（历史路径） 在新 `recovery episode` 开始时主动失效旧事实。由此，clean anchor 不再只是 trace 可见事件，而成为 owner / recovery 主链可消费的恢复完成证据。
 - Update: owner 恢复完成契约已进一步收紧：[`crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/video_scheduling_owner.rs) 的 `resolve_recovery_completion_evidence(...)` 现在在 `RebuildingSupply -> StableServing` 路径上要求“存在属于当前 `recovery_epoch` 的 clean anchor fact”，`frame-observed / frame-complete-candidate + fresh present/decode` 不再足以单独退出 recovering；[`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 已把 runtime stats 中的 clean anchor fact 接到 owner 输入，并补齐 `frame_observed_without_clean_anchor_fact_cannot_exit_recovering`、`owner_exits_recovering_after_recovery_completion_evidence` 等回归。
 - Update: clean anchor 现在会主动结束上一轮 anchor 恢复上下文，而不是只让 owner 变绿：[`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 新增 `acknowledge_clean_anchor()`，在 owner 稳定回到 `StableServing` 且 clean anchor fact 属于当前 epoch 时重置 `await_recovery_keyframe_streak` 并调用 `reset_keyframe_epoch()`；[`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 在连接层进入 `Recovering` 时会先废弃陈旧 clean anchor fact，避免旧锚点跨 reconnect/lifecycle recovering 泄漏到新一轮恢复。
 - Update: 本轮新增验收通过：`cargo test -p xbxengine transport::rtc::stream::video_source::timeline -- --nocapture`、`cargo test -p xbxengine transport::rtc::recovery::escalation -- --nocapture`、`cargo test -p xbxengine transport::rtc::session::policy -- --nocapture`。当前残余风险已收敛为“运行态是否需要把 `keyframe epoch` 的显式 reset 真正绑定到稳定 `healthy` 窗口的上层 session/trace 信号”，需要继续用补丁后的最新 Cloud/Home trace 复核。
@@ -621,7 +623,7 @@
 
 ### Update（2026-04-01, pass8）
 
-- 新 trace [`runtime-trace-1775031750214.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775031750214.jsonl) 表明 connecting 侧已明显收敛，但主故障已下沉为两类：A. `TransportAwaitRecoveryKeyframe` 在 `keyframe / decoder reset / reconnect` 间摆动；B. reconnect 后 cloud `TWCC` 仍要经历 `builder-configured / missing-local-feedback / local-feedback` warmup，但该阶段此前没有进入调度模型。
+- 新 trace `runtime-trace-1775031750214.jsonl`（历史路径：`runtime-logs/runtime-trace-1775031750214.jsonl`） 表明 connecting 侧已明显收敛，但主故障已下沉为两类：A. `TransportAwaitRecoveryKeyframe` 在 `keyframe / decoder reset / reconnect` 间摆动；B. reconnect 后 cloud `TWCC` 仍要经历 `builder-configured / missing-local-feedback / local-feedback` warmup，但该阶段此前没有进入调度模型。
 - 针对 A，本轮在 [`crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/escalation.rs) 与 [`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 收口为 staged recovery：`TransportAwaitRecoveryKeyframe` 的同 reason epoch 自动释放只在未升级到 decoder reset / reconnect 时才兜底重发 keyframe；transport-await hard fallback 只有在出现过 decoder reset 证据后才允许 reconnect，避免 media-domain 过早跳入 reconnect。
 - 针对 B，本轮在 [`crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/policy/scheduling.rs) 引入最小 `TwccWarmupState`，并在 [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 从 runtime stats 解析 cloud warmup：`BuilderConfigured / MissingLocalFeedback` 阶段继续允许 recovery，但 BWE proposal 与调度下发都被硬 gate；仅当 `local-feedback` 且 `twcc_sample_valid=true` 时恢复 BWE。
 - 配套在 [`crates/xbxengine/core/src/diagnostics/stats.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/diagnostics/stats.rs) 明确 `twccObservationState` 为 diagnostics 展示与 session warmup 共享契约，避免状态名变更与调度消费脱节。
@@ -646,7 +648,7 @@
 
 ### Update（2026-04-01, pass11）
 
-- 新 trace [`runtime-trace-1775037211971.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775037211971.jsonl) 显示 pass8-pass10 对 warmup / media-domain 已继续收敛，但主瓶颈重新上浮到 connecting 首帧前：`streamIdleTimeout=0`、`twcc-gcc-cloud-await-feedback=0`、`local-feedback` 明显增加，同时 `livenessNoProgressTimeout` 与 `livenessReconnectAttemptLimitExceeded` 大幅反弹，且第一次 failed-terminal 在第 3 次 no-progress reconnect 后即出现。
+- 新 trace `runtime-trace-1775037211971.jsonl`（历史路径：`runtime-logs/runtime-trace-1775037211971.jsonl`） 显示 pass8-pass10 对 warmup / media-domain 已继续收敛，但主瓶颈重新上浮到 connecting 首帧前：`streamIdleTimeout=0`、`twcc-gcc-cloud-await-feedback=0`、`local-feedback` 明显增加，同时 `livenessNoProgressTimeout` 与 `livenessReconnectAttemptLimitExceeded` 大幅反弹，且第一次 failed-terminal 在第 3 次 no-progress reconnect 后即出现。
 - 针对这一回归，本轮只在 [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 收口 connecting 域，不回碰 pass8-pass10 的 cloud warmup / media-domain 逻辑：
   - 为 `connecting + 首帧前` 单独引入更保守的 lifecycle reconnect proposal interval（4.5s），避免在尚未拿到稳定 transport/cloud 语义时继续按 1.5s 短节奏推进 reconnect。
   - 将 `connecting + 首帧前` 的 `livenessReconnectAttemptLimitExceeded` 改成“双门槛”：attempt limit 先作为软上限，只有 no-progress 长窗持续 90s 以上时，才允许真正进入 failed-terminal。
@@ -656,7 +658,7 @@
 
 ### Update（2026-04-02, pass12）
 
-- 新 trace [`runtime-trace-1775093548670.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775093548670.jsonl) 证明 pass11 的 soft hold 仍然命中过晚：第一次 `failed-terminal` 出现在 `seq=6782 / ts=1775093566698`，但首次 `builder-configured` 要到 `seq=196007` 才出现，首次 `Connected` 要到 `seq=199671`，说明主故障仍落在 cloud early connecting 的 pre-builder-configured 首窗。
+- 新 trace `runtime-trace-1775093548670.jsonl`（历史路径：`runtime-logs/runtime-trace-1775093548670.jsonl`） 证明 pass11 的 soft hold 仍然命中过晚：第一次 `failed-terminal` 出现在 `seq=6782 / ts=1775093566698`，但首次 `builder-configured` 要到 `seq=196007` 才出现，首次 `Connected` 要到 `seq=199671`，说明主故障仍落在 cloud early connecting 的 pre-builder-configured 首窗。
 - 针对这一点，本轮继续只在 [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 做最小收口，不回碰 pass8-pass10 的 warmup/media reconnect 调度：
   - 将 `should_enter_connecting_pre_first_frame_failed_terminal()` 的 soft hold 条件从“cloud warmup 已建立后”前移到“cloud + pre-first-frame + Connecting/Recovering”窗口，不再要求 `twcc_warmup_state.blocks_bwe_updates()` 已成立后才开始保护 early connecting。
   - 保留 non-cloud 不受影响，且仍要求 no-progress 长窗达到 90s 后才允许真正进入 `failed-terminal`，避免把 terminal 完全取消。
@@ -666,7 +668,7 @@
 
 ### Update（2026-04-02, pass13）
 
-- 新 trace [`runtime-trace-1775096033088.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775096033088.jsonl) 显示 pass12 已经把 “首次 `failed-terminal` 后长期锁死” 压掉，`Connected` 从坏样本的 `529s` 级别收敛到约 `28.858s`；但第一次 `failed-terminal` 仍稳定落在约 `18.026s`，说明 cloud 首帧前还有一段 pre-builder / `twccObservationState=unavailable` 的 `lifecycle=New` 首窗没有吃到 soft hold。
+- 新 trace `runtime-trace-1775096033088.jsonl`（历史路径：`runtime-logs/runtime-trace-1775096033088.jsonl`） 显示 pass12 已经把 “首次 `failed-terminal` 后长期锁死” 压掉，`Connected` 从坏样本的 `529s` 级别收敛到约 `28.858s`；但第一次 `failed-terminal` 仍稳定落在约 `18.026s`，说明 cloud 首帧前还有一段 pre-builder / `twccObservationState=unavailable` 的 `lifecycle=New` 首窗没有吃到 soft hold。
 - 针对这一残点，本轮继续只在 [`crates/xbxengine/core/src/transport/rtc/session/policy.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/session/policy.rs) 内最小收口，不扩散到 warmup/media reconnect 语义：
   - 将 `should_soft_hold_cloud_early_connecting_failed_terminal()` 的 cloud pre-first-frame 保护从 `Connecting/Recovering` 进一步补齐到 `New`，让 `builder` 尚未出现、TWCC 仍 unavailable 的首窗也复用同一条 soft hold。
   - 这样 `livenessReconnectAttemptLimitExceeded` 在 cloud early `New` 首窗里继续只作为软上限，必须等 no-progress 长窗达到 `90s` 后才允许真正进入 `failed-terminal`，而不是在约 `18s` 就被短促硬判死。
@@ -676,10 +678,10 @@
 
 ### Update（2026-04-02, pass14）
 
-- 对 trace [`runtime-trace-1775096033088.jsonl`](/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/runtime-trace-1775096033088.jsonl) 继续下钻后确认，主矛盾已经从 early terminal 切到后段帧率：`Connected` 之后并非云侧无流量，反而能看到 `TWCC=stable`、`inbound_video_bitrate_kbps` 持续在数 Mbps 到十余 Mbps，但 `presentFps` 会掉到约 `1`，同时反复出现 `transportAwaitRecoveryKeyframe / waitKeyframe / referenceChainUnrecoverable / retryBudgetExhausted / noPendingFrame`。
+- 对 trace `runtime-trace-1775096033088.jsonl`（历史路径：`runtime-logs/runtime-trace-1775096033088.jsonl`） 继续下钻后确认，主矛盾已经从 early terminal 切到后段帧率：`Connected` 之后并非云侧无流量，反而能看到 `TWCC=stable`、`inbound_video_bitrate_kbps` 持续在数 Mbps 到十余 Mbps，但 `presentFps` 会掉到约 `1`，同时反复出现 `transportAwaitRecoveryKeyframe / waitKeyframe / referenceChainUnrecoverable / retryBudgetExhausted / noPendingFrame`。
 - 本轮继续做最小改动，只收口两个和 trace 直接对上的残点：
   - 在 [`crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/recovery/coordinator.rs) 放宽 `transportAwaitRecoveryAnchor` 的 streak 判定窗口，让 trace 中 1.5s-3s 级别的稀疏重复上报仍能累计到同一轮 staged escalation；避免 `requestKeyframe` 之后因为事件不够密，就长期重新掉回 `cooldownSuppressed`，无法及时升级到 `requestDecoderReset`。
-  - 在 [`crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`](/Users/guo.xu/Documents/code/games/xbxrc/crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs) 为 `cloudHighRttLowValueAdmission` 增加关键帧旁路：当缺失帧本身是 keyframe/高价值恢复帧时，不再直接按 `SkippedLowValue` 放弃，而是允许进入正常 NACK pending，避免高 RTT 云侧把恢复关键路径本身“低价值化”。
+  - 在 `crates/xbxengine/core/src/transport/rtc/stream/nack_scheduler.rs`（历史路径） 为 `cloudHighRttLowValueAdmission` 增加关键帧旁路：当缺失帧本身是 keyframe/高价值恢复帧时，不再直接按 `SkippedLowValue` 放弃，而是允许进入正常 NACK pending，避免高 RTT 云侧把恢复关键路径本身“低价值化”。
   - 不动 early terminal、warmup 分阶段 reconnect 节流、media-domain reconnect gate 的既有语义，保证前半段已经收敛的结果不回退。
 - 这一步的目标不是“把所有 recovering 都改激进”，而是只缩短 `Connected` 后“已有码流但长期等恢复关键帧”的坏窗，并减少云侧高 RTT admission 对关键恢复帧的反向伤害。
 - 新增验收通过：`cargo test -p xbxengine coordinator_staged_recovery_handles_sparse_transport_await_signals -- --nocapture`、`cargo test -p xbxengine low_value_admission_does_not_skip_keyframe_recovery -- --nocapture`、`cargo test -p xbxengine transport::rtc::recovery::coordinator -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::nack_scheduler -- --nocapture`。
