@@ -1,15 +1,14 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
+import { readReleaseIdentity, repositoryRoot, sourceCommit, validateReleaseVersion } from './release-edition.mjs'
 
 export function resolveBundleRoot(root) {
-  const candidates = []
-  if (process.env.RELEASE_BUNDLE_ROOT) {
-    candidates.push(resolve(process.env.RELEASE_BUNDLE_ROOT))
-  }
-  candidates.push(
-    join(root, 'target', 'release', 'bundle'),
-    join(root, 'src-tauri', 'target', 'release', 'bundle'),
-  )
+  const candidates = process.env.RELEASE_BUNDLE_ROOT
+    ? [resolve(process.env.RELEASE_BUNDLE_ROOT)]
+    : process.env.CARGO_TARGET_DIR
+      ? [resolve(root, process.env.CARGO_TARGET_DIR, 'release/bundle')]
+      : [resolve(root, 'target', readReleaseIdentity(root).edition, 'release/bundle')]
   const hit = candidates.find(path => existsSync(path))
   if (!hit) {
     throw new Error(
@@ -37,29 +36,30 @@ export function findBundleFile(dir, suffix, options = {}) {
     return null
   }
   const { excludeSuffix } = options
-  return (
-    readdirSync(dir).find((name) => {
+  const matches = readdirSync(dir).filter((name) => {
       if (!name.endsWith(suffix)) {
         return false
       }
       if (excludeSuffix && name.endsWith(excludeSuffix)) {
         return false
       }
-      return true
-    }) ?? null
-  )
+      return statSync(join(dir, name)).isFile()
+    })
+  if (matches.length > 1)
+    throw new Error(`产物目录存在多个 *${suffix}，请清理旧产物: ${matches.join(', ')}`)
+  return matches[0] ?? null
 }
 
 /** 收集后的 artifact 目录（release-assets-<label>/）应有文件 */
 export const COLLECTED_RELEASE_EXPECTATIONS = {
   macos: [
-    { suffix: '-macos.dmg', hint: 'macOS 安装包' },
+    { suffix: '.dmg', hint: 'macOS 安装包' },
     { suffix: '.tar.gz', hint: 'updater 包', excludeSuffix: '.tar.gz.sig' },
     { suffix: '.tar.gz.sig', hint: 'updater 签名' },
   ],
   windows: [
-    { suffix: '-windows-setup.exe', hint: 'Windows 安装包', excludeSuffix: '.exe.sig' },
-    { suffix: '-windows-setup.exe.sig', hint: 'updater 签名' },
+    { suffix: '-setup.exe', hint: 'Windows 安装包', excludeSuffix: '.exe.sig' },
+    { suffix: '-setup.exe.sig', hint: 'updater 签名' },
   ],
 }
 
@@ -99,7 +99,7 @@ export function resolveCollectedDir(assetsRoot, label) {
   return null
 }
 
-export function checkReleaseCollected(assetsRoot, label) {
+export function checkReleaseCollected(assetsRoot, label, identity = readReleaseIdentity(), commit = sourceCommit()) {
   const dir = resolveCollectedDir(assetsRoot, label)
   if (!dir) {
     return {
@@ -130,10 +130,58 @@ export function checkReleaseCollected(assetsRoot, label) {
       missing.push({ ...item, dir, listing })
     }
   }
+  if (missing.length === 0)
+    validateCollectedManifest(dir, label, identity, commit)
   return { dir, found, missing }
 }
 
-export function checkReleaseBundle(label, root = resolve(import.meta.dirname, '..')) {
+export function assetName(identity, version, label, architecture, kind) {
+  const base = `${identity.artifactPrefix}-${version}-${label}-${architecture}`
+  const suffix = label === 'macos'
+    ? { installer: '.dmg', updater: '.app.tar.gz', signature: '.app.tar.gz.sig' }
+    : { updater: '-setup.exe', signature: '-setup.exe.sig' }
+  if (!suffix[kind])
+    throw new Error(`未知 ${label} 资产类型: ${kind}`)
+  return `${base}${suffix[kind]}`
+}
+
+export function fileDigest(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+export function validateCollectedManifest(dir, label, identity, commit) {
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
+  if (manifest.schemaVersion !== 1 || manifest.edition !== identity.edition
+    || manifest.identifier !== identity.identifier || manifest.sourceCommit !== commit
+    || manifest.label !== label || JSON.stringify(manifest.features) !== JSON.stringify(identity.features))
+    throw new Error(`${label} 产物清单的 edition、应用身份、features 或源码提交不符`)
+  validateReleaseVersion(identity, manifest.version)
+  const allowedArchitectures = label === 'macos' ? ['aarch64', 'x86_64'] : ['x86_64']
+  if (!allowedArchitectures.includes(manifest.architecture))
+    throw new Error(`${label} 产物架构不符: ${manifest.architecture}`)
+  const kinds = label === 'macos' ? ['installer', 'updater', 'signature'] : ['updater', 'signature']
+  if (!Array.isArray(manifest.files) || manifest.files.length !== kinds.length)
+    throw new Error('产物清单必须完整且唯一')
+  const files = []
+  for (const kind of kinds) {
+    const entry = manifest.files.find(file => file.kind === kind)
+    const name = assetName(identity, manifest.version, label, manifest.architecture, kind)
+    if (!entry || entry.name !== name)
+      throw new Error(`产物文件名与清单不符: ${name}`)
+    const path = join(dir, name)
+    if (!statSync(path).isFile() || entry.bytes !== statSync(path).size || entry.sha256 !== fileDigest(path))
+      throw new Error(`产物内容与清单哈希不符: ${name}`)
+    if (kind === 'signature' && !readFileSync(path, 'utf8').trim())
+      throw new Error(`updater 签名为空: ${name}`)
+    files.push(name)
+  }
+  const actual = readdirSync(dir).sort()
+  if (JSON.stringify(actual) !== JSON.stringify([...files, 'manifest.json'].sort()))
+    throw new Error('产物目录包含清单以外的文件')
+  return manifest
+}
+
+export function checkReleaseBundle(label, root = repositoryRoot) {
   const bundleRoot = resolveBundleRoot(root)
   const expectations = RELEASE_BUNDLE_EXPECTATIONS[label]
   if (!expectations) {

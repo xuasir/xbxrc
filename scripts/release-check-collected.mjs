@@ -5,7 +5,8 @@
  */
 import { readdirSync } from 'node:fs'
 import process from 'node:process'
-import { checkReleaseCollected, COLLECTED_RELEASE_EXPECTATIONS } from './release-bundle-lib.mjs'
+import { checkReleaseCollected, COLLECTED_RELEASE_EXPECTATIONS, validateCollectedManifest } from './release-bundle-lib.mjs'
+import { readReleaseIdentity, sourceCommit } from './release-edition.mjs'
 
 const assetsRoot = process.argv[2]
 const onlyLabel = process.argv[3]
@@ -17,9 +18,12 @@ if (!assetsRoot) {
 
 const labels = onlyLabel ? [onlyLabel] : Object.keys(COLLECTED_RELEASE_EXPECTATIONS)
 let failed = false
+const identity = readReleaseIdentity()
+const commit = sourceCommit()
+let version
 
 for (const label of labels) {
-  const { dir, found, missing } = checkReleaseCollected(assetsRoot, label)
+  const { dir, found, missing } = checkReleaseCollected(assetsRoot, label, identity, commit)
   if (!dir) {
     console.error(`[${label}] 未找到收集目录 (root=${assetsRoot})`)
     failed = true
@@ -28,6 +32,12 @@ for (const label of labels) {
   console.log(`[${label}] ${dir}`)
   for (const item of found) {
     console.log(`  ok  ${item.hint}: ${item.name}`)
+  }
+  if (missing.length === 0) {
+    const manifest = validateCollectedManifest(dir, label, identity, commit)
+    version ??= manifest.version
+    if (version !== manifest.version)
+      throw new Error('不同平台产物版本不符')
   }
   if (missing.length > 0) {
     failed = true

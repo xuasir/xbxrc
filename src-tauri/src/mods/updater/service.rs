@@ -105,6 +105,12 @@ impl UpdaterService {
         let update = updater.check().await.map_err(|error| error.to_string())?;
 
         if let Some(update) = update {
+            super::manifest::validate_update_manifest(
+                &update.raw_json,
+                channel.as_str(),
+                env!("XBX_BUILD_EDITION"),
+                env!("XBX_APP_IDENTIFIER"),
+            )?;
             let result = UpdaterCheckResult {
                 current_version,
                 update_available: true,

@@ -1,6 +1,7 @@
 pub mod channel;
 pub mod endpoints;
 pub mod events;
+mod manifest;
 pub mod rpc;
 pub mod service;
 

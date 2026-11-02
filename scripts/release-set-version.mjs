@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { BASE_VERSION } from './release-edition.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
@@ -17,13 +18,8 @@ if (!version) {
   process.exit(1)
 }
 
-if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) {
+if (!BASE_VERSION.test(version)) {
   console.error(`无效版本号: ${version}（期望形如 0.2.0，勿带 v 前缀）`)
-  process.exit(1)
-}
-
-if (version.includes('-beta.')) {
-  console.error('基础版本不要包含 -beta.N；beta 后缀由 CI 在 release/test 上自动追加')
   process.exit(1)
 }
 
