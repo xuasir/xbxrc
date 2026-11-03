@@ -4,6 +4,9 @@
 
 | 当前阅读入口 | 证据与待验项 |
 | --- | --- |
+| [SR冷准备与运行态补供帧修复](../../docs/reports/2026-11-03-sr-cold-preparation-and-runtime-supply-fix.md) | 前置准备、一次有界重试与56组回放通过；171ms/25ms冷成本之后运行态600张唯一图像/10秒，实机持续60fps待验 |
+| [SR GPU补供帧最新设备日志](2026-11-03-sr-gpu-supply-fresh-trace-analysis.md) | 首次CPU196ms超冷预算停用、补帧0；SR同窗51.39/46.97fps，冷启动与恢复资格待修 |
+| [GPU异步补供给实施验证](2026-11-02-gpu-drawable-supply-validation.md) | 40组受控回放通过；设备warm成本、有效像素配对及实际补帧待验 |
 | [像素读取成本分段](2026-11-02-video-pixel-read-cost-validation.md) | 当前代码验证；cold/warm 读取开销和有效 drawable 配对待新日志 |
 | [SR60fps 瓶颈续查](2026-11-02-sr-60fps-bottleneck-analysis.md) | 同代际 RVFC/rAF、候选交付和回放；SR60fps/实际呈现待验 |
 | [最新网络与渲染分析](2026-11-02-network-render-fresh-trace-analysis.md) | 同窗网络、恢复、供帧、处理成本与长尾 |

@@ -1,7 +1,7 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import type { RendererResources } from './render-observation'
 import type { RenderSurfaceObservation } from './render-surface-observation'
-import type { ObservedVideoFrameMetadata } from './video-frame-source'
+import type { ObservedVideoFrameMetadata, VideoFramePreparation } from './video-frame-source'
 import { FrameCaptureQueue } from './frame-capture-queue'
 import { FramePacer } from './frame-pacer'
 import { RenderObservation } from './render-observation'
@@ -59,6 +59,7 @@ abstract class BaseCanvasVideoProcessor {
   private hasFreshFrame = false
   protected readonly drawObservation = new RenderObservation()
   private readonly boundDrawFrame: (atMs: number, metadata?: ObservedVideoFrameMetadata) => void
+  private framePreparation?: VideoFramePreparation
   protected onFailure?: (reason: string) => void
 
   constructor(video: HTMLVideoElement) {
@@ -78,12 +79,22 @@ abstract class BaseCanvasVideoProcessor {
 
   async init(): Promise<void> {
     this.drawObservation.beginPreparation()
-    await this.setup()
-    if (this.isStopped)
-      return
-    this.drawObservation.endPreparation()
-    if (this.options.targetFps > 0)
-      this.animFrameId = this.frameCallback(this.boundDrawFrame)
+    this.framePreparation = getVideoFrameSource(this.video).prepareDrawable(this.options.targetFps)
+    try {
+      await this.framePreparation.ready
+      if (this.isStopped)
+        return
+      await this.setup()
+      if (this.isStopped)
+        return
+      this.drawObservation.endPreparation()
+      if (this.options.targetFps > 0)
+        this.animFrameId = this.frameCallback(this.boundDrawFrame)
+    }
+    finally {
+      this.framePreparation?.release()
+      this.framePreparation = undefined
+    }
   }
 
   updateOptions(newOptions: Partial<StreamPlayerOptions>, refresh = false): void {
@@ -107,6 +118,8 @@ abstract class BaseCanvasVideoProcessor {
   }
 
   destroy(): void {
+    this.framePreparation?.release()
+    this.framePreparation = undefined
     this.isStopped = true
     if (this.renderRafId !== null) {
       cancelAnimationFrame(this.renderRafId)

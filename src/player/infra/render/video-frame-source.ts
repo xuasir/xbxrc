@@ -16,6 +16,10 @@ type FrameRequest = (atMs: number, metadata?: ObservedVideoFrameMetadata) => voi
 interface FrameRequestOptions {
   drawableTargetFps?: () => number
 }
+export interface VideoFramePreparation {
+  ready: Promise<void>
+  release: () => void
+}
 const sources = new WeakMap<HTMLVideoElement, VideoFrameSource>()
 let videoGeneration = 0
 const NATIVE_COUNTER_CREDIT_WINDOW_MS = 1000
@@ -69,6 +73,7 @@ function readVideoFrameCounter(video: HTMLVideoElement): VideoFrameCounter | und
 /** 同一 video 的原始 metadata 和最新帧轮询共用帧身份、消费者与取消代际。 */
 class VideoFrameSource {
   private readonly pending = new Map<number, { callback: FrameRequest, options?: FrameRequestOptions }>()
+  private readonly preparing = new Set<number>()
   private nextRequest = 0
   private frameSequence = 0
   private lastPresentedFrames?: number
@@ -99,7 +104,7 @@ class VideoFrameSource {
   }
 
   snapshotResources() {
-    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
+    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, framePreparationRequests: this.preparing.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
   }
 
   snapshotDiagnostics() {
@@ -121,11 +126,27 @@ class VideoFrameSource {
     return id
   }
 
+  prepareDrawable(targetFps: number): VideoFramePreparation {
+    if (!Number.isFinite(targetFps) || targetFps <= 0)
+      return { ready: Promise.resolve(), release: () => {} }
+    const id = ++this.nextRequest
+    this.preparing.add(id)
+    return {
+      ready: this.pixelObservation.prepare(true),
+      release: () => {
+        if (!this.preparing.delete(id))
+          return
+        if (this.preparing.size === 0 && this.drawableTargetFps() === 0)
+          this.pixelObservation.reset()
+      },
+    }
+  }
+
   cancel(id: number): void {
     this.pending.delete(id)
     if (this.pending.size === 0)
       this.cancelScheduled()
-    else if (this.drawableTargetFps() === 0)
+    else if (this.preparing.size === 0 && this.drawableTargetFps() === 0)
       this.pixelObservation.reset()
   }
 
@@ -175,7 +196,8 @@ class VideoFrameSource {
     this.uncountedNativeFrames = this.polledFramesSinceNative = 0
     this.nativeCreditStartedAtMs = this.counterProgressAtMs = undefined
     this.identityObservation.resetTimingBaseline()
-    this.pixelObservation.reset()
+    if (this.preparing.size === 0)
+      this.pixelObservation.reset()
     this.epoch++
   }
 

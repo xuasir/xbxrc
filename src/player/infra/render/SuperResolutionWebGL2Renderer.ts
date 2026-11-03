@@ -13,6 +13,7 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import type { RendererResources } from './render-observation'
 import type { RenderSurfaceObservation } from './render-surface-observation'
+import type { VideoFramePreparation } from './video-frame-source'
 import { FrameCaptureQueue } from './frame-capture-queue'
 import { FramePacer } from './frame-pacer'
 import { computeFsrEasuCon, computeFsrRcasCon, rcasStopsToMobileFsrSharpness } from './fsr1-cpu'
@@ -355,6 +356,7 @@ class SuperResolutionProcessor {
   private viewportWidthCss: number | null = null
   private viewportHeightCss: number | null = null
   private targetFps = 60
+  private framePreparation?: VideoFramePreparation
   private readonly framePacer = new FramePacer()
   private animRafId: number | null = null
   private videoFrameCbId: number | null = null
@@ -527,11 +529,21 @@ class SuperResolutionProcessor {
     }
   }
 
-  init(): void {
+  async init(): Promise<void> {
     this.drawObservation.beginPreparation()
-    this.setupGl()
-    this.drawObservation.endPreparation()
-    this.startPresentationLoop()
+    this.framePreparation = getVideoFrameSource(this.video).prepareDrawable(this.targetFps)
+    try {
+      await this.framePreparation.ready
+      if (this.stopped)
+        return
+      this.setupGl()
+      this.drawObservation.endPreparation()
+      this.startPresentationLoop()
+    }
+    finally {
+      this.framePreparation?.release()
+      this.framePreparation = undefined
+    }
   }
 
   private startPresentationLoop(): void {
@@ -587,6 +599,8 @@ class SuperResolutionProcessor {
   }
 
   destroy(): void {
+    this.framePreparation?.release()
+    this.framePreparation = undefined
     this.drainFrameCaptureWaiters(false)
     this.stopped = true
     if (this.animRafId !== null) {
@@ -1072,7 +1086,7 @@ export class SuperResolutionWebGL2Renderer {
     this.processor.setColorOptions(this.config.brightness, this.config.contrast, this.config.saturation)
     this.processor.setRcasStops(this.config.superResolutionRcasStops ?? 0.88)
     this.processor.setTargetFps(this.config.targetFps)
-    this.processor.init()
+    await this.processor.init()
     video.dataset.renderPipeline = 'webgl2-sr'
   }
 

@@ -2,6 +2,7 @@ export interface ChannelContext {
   send: (data: ArrayBuffer | string) => boolean
   readyState: () => RTCDataChannelState
   bufferedAmount: () => number
+  onWritable?: (threshold: number, listener: () => void) => () => void
 }
 
 export abstract class BaseChannel {

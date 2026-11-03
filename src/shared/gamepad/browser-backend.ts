@@ -1,7 +1,7 @@
 import type { GamepadBackend, GamepadSnapshot, RumbleResult } from './backend'
 import type { GamepadRumbleEffectDto, LogicalPadStateDto } from './contract'
 import type { ButtonKey } from './state'
-import { axisValue, buttonValue, neutralState } from './state'
+import { axisValue, buttonValue, neutralState, stateEquals } from './state'
 
 interface BrowserActuator {
   effects?: readonly string[]
@@ -34,8 +34,20 @@ export interface BrowserInputEnvironment {
   stopTimer?: (id: ReturnType<typeof setInterval>) => void
 }
 
-const FALLBACK_SAMPLE_INTERVAL_MS = 50
-const FRAME_SAMPLE_STALE_MS = 100
+const SAMPLE_INTERVAL_MS = 4
+const SNAPSHOT_HEARTBEAT_MS = 100
+
+function snapshotEquals(a: GamepadSnapshot, b: GamepadSnapshot): boolean {
+  return a.error === b.error && a.devices.length === b.devices.length
+    && a.devices.every((device, index) => {
+      const other = b.devices[index]
+      return device.id === other.id && device.name === other.name
+        && device.standard === other.standard && device.rumble === other.rumble
+    })
+    && a.samples.length === b.samples.length
+    && a.samples.every((sample, index) => sample.deviceId === b.samples[index].deviceId
+      && stateEquals(sample.state, b.samples[index].state))
+}
 
 const STANDARD_BUTTONS: readonly ButtonKey[] = [
   'south',
@@ -82,7 +94,7 @@ export class BrowserGamepadBackend implements GamepadBackend {
   private listener: ((snapshot: GamepadSnapshot) => void) | undefined
   private frame: number | undefined
   private timer?: ReturnType<typeof setInterval>
-  private lastSampleAt = 0
+  private lastPublished?: GamepadSnapshot
   private sequence = 0
   private deviceGeneration = 0
   private generation = 0
@@ -102,6 +114,7 @@ export class BrowserGamepadBackend implements GamepadBackend {
       return
     this.listener = onSnapshot
     this.sequence = 0
+    this.lastPublished = undefined
     const generation = ++this.generation
     const tick = () => {
       if (generation !== this.generation || !this.listener)
@@ -116,11 +129,13 @@ export class BrowserGamepadBackend implements GamepadBackend {
       }
     }
     tick()
-    // rAF 暂停时重新读取真实设备状态，保持后台输入与释放键的新鲜度。
-    this.timer = this.environment.startTimer?.(() => {
-      if (generation === this.generation && this.listener && this.environment.now() - this.lastSampleAt >= FRAME_SAMPLE_STALE_MS)
-        this.sample()
-    }, FALLBACK_SAMPLE_INTERVAL_MS)
+    // rAF 与定时器共用同一设备源；补采缩小短按窗口，相同状态只发布心跳。
+    if (generation === this.generation && this.listener) {
+      this.timer = this.environment.startTimer?.(() => {
+        if (generation === this.generation && this.listener)
+          this.sample()
+      }, SAMPLE_INTERVAL_MS)
+    }
   }
 
   async stop(): Promise<void> {
@@ -138,7 +153,6 @@ export class BrowserGamepadBackend implements GamepadBackend {
   }
 
   private sample(): void {
-    this.lastSampleAt = this.environment.now()
     const snapshot: GamepadSnapshot = {
       devices: [],
       samples: [],
@@ -173,7 +187,11 @@ export class BrowserGamepadBackend implements GamepadBackend {
         void this.stopRumble(device.id)
       this.devices.clear()
     }
-    this.listener?.(snapshot)
+    if (!this.lastPublished || !snapshotEquals(this.lastPublished, snapshot)
+      || snapshot.observedAt - this.lastPublished.observedAt >= SNAPSHOT_HEARTBEAT_MS) {
+      this.lastPublished = snapshot
+      this.listener?.(snapshot)
+    }
   }
 
   async rumble(deviceId: string, effect: GamepadRumbleEffectDto): Promise<RumbleResult> {

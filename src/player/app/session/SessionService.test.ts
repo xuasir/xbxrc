@@ -18,6 +18,7 @@ vi.mock('../../../services/rpc', () => ({ rpc: { runtimeTrace: { recordEvent: as
 class FakeDataChannel extends EventTarget {
   readyState: RTCDataChannelState = 'open'
   bufferedAmount = 0
+  bufferedAmountLowThreshold = 0
   send = vi.fn<(data: string | ArrayBuffer) => void>()
   close = vi.fn(() => {
     if (this.readyState === 'closed')
@@ -108,6 +109,7 @@ function dispatchLateEvents(peer: FakePeer): void {
     peer.channels.get(name)!.dispatchEvent(new Event('close'))
   }
   peer.channels.get('input')!.dispatchEvent(new MessageEvent('message', { data: new ArrayBuffer(13) }))
+  peer.channels.get('input')!.dispatchEvent(new Event('bufferedamountlow'))
   peer.ontrack?.({ streams: [{}], track: { kind: 'video' } } as unknown as RTCTrackEvent)
   peer.dispatchEvent(Object.assign(new Event('icecandidate'), {
     candidate: { candidate: 'old-candidate', sdpMid: 'video', sdpMLineIndex: 1 },
@@ -118,6 +120,27 @@ function dispatchLateEvents(peer: FakePeer): void {
 }
 
 describe('browser session replacement', () => {
+  it('flushes input directly on the live data channel drain event and cleans up its listener', () => {
+    const f = fixture()
+    f.session.bind()
+    const peer = FakePeer.instances[0]
+    peer.channels.get('message')!.handshake()
+    const channel = peer.channels.get('input')!
+    expect(channel.bufferedAmountLowThreshold).toBe(8192)
+    channel.bufferedAmount = 18 * 1024
+    const state = neutralState()
+    state.buttons.south = 1
+    f.input.queueGamepadState({ gamepadIndex: 0, state })
+    const count = channel.send.mock.calls.length
+    channel.bufferedAmount = 0
+    channel.dispatchEvent(new Event('bufferedamountlow'))
+    expect(channel.send).toHaveBeenCalledTimes(count + 1)
+    expect(new DataView(channel.send.mock.calls.at(-1)![0] as ArrayBuffer).getUint16(16, true)).toBe(16)
+    f.session.close()
+    const closedCount = channel.send.mock.calls.length
+    channel.dispatchEvent(new Event('bufferedamountlow'))
+    expect(channel.send).toHaveBeenCalledTimes(closedCount)
+  })
   it('isolates input, handshake, rumble, tracks and ICE from a failed peer after rebinding', () => {
     const f = fixture()
     f.session.bind()

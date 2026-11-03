@@ -9,18 +9,41 @@ import { RumbleService } from './RumbleService'
 
 const MAX_DECODE_TIME_MS = 10
 const MAX_INPUT_BUFFERED_BYTES = 16 * 1024
-const MAX_PENDING_INPUTS = 8
+const MAX_PENDING_INPUTS = 128
+const MAX_INPUT_AGE_MS = 250
+const RELEASE_BUFFER_BYTES = 1024
 const MAX_PENDING_METADATA = 58
 const INPUT_RETRY_INTERVAL_MS = 50
 const INPUT_HEARTBEAT_INTERVAL_MS = 100
-let lastInputTraceSignature = ''
+const INPUT_TRACE_INTERVAL_MS = 100
+
+interface PendingInput {
+  frame: GamepadFrame
+  enqueuedAtMs: number
+  edge: boolean
+  release: boolean
+  reset: boolean
+}
+
+function sameDigitalButtons(a: GamepadFrame['state'], b: GamepadFrame['state']): boolean {
+  return BUTTON_KEYS.every(key => key === 'l2' || key === 'r2' || (a.buttons[key] > 0) === (b.buttons[key] > 0))
+}
+
+function trigger(state: GamepadFrame['state'], side: 'left' | 'right'): number {
+  return side === 'left' ? Math.max(state.buttons.l2, state.leftTrigger) : Math.max(state.buttons.r2, state.rightTrigger)
+}
+
+function sameControls(a: GamepadFrame['state'], b: GamepadFrame['state']): boolean {
+  return sameDigitalButtons(a, b) && trigger(a, 'left') === trigger(b, 'left') && trigger(a, 'right') === trigger(b, 'right')
+}
+
+function releasesControl(a: GamepadFrame['state'], b: GamepadFrame['state']): boolean {
+  return BUTTON_KEYS.some(key => a.buttons[key] > 0 && b.buttons[key] <= 0)
+    || trigger(b, 'left') < trigger(a, 'left') || trigger(b, 'right') < trigger(a, 'right')
+    || (['leftStick', 'rightStick'] as const).some(key => (a[key].x !== 0 || a[key].y !== 0) && b[key].x === 0 && b[key].y === 0)
+}
 
 function recordInputTrace(event: string, payload: Record<string, unknown>): void {
-  const signature = `${event}:${JSON.stringify(payload)}`
-  if (signature === lastInputTraceSignature) {
-    return
-  }
-  lastInputTraceSignature = signature
   void rpc.runtimeTrace.recordEvent({
     event,
     payload,
@@ -42,18 +65,27 @@ export interface InputTransport {
   send: (data: ArrayBuffer) => boolean
   getReadyState: () => RTCDataChannelState | 'closed'
   bufferedAmount: () => number
+  onWritable?: (threshold: number, listener: () => void) => () => void
 }
 
 export class InputService {
   private inputSequenceNum = 0
   private frameMetadataQueue: Array<ProcessedVideoFrameMetadata> = []
   private currentInputTransport?: InputTransport
-  private pendingInputs: GamepadFrame[] = []
+  private pendingInputs: PendingInput[] = []
+  private lastQueuedState = neutralState()
   private clientMetadataPending = false
   private retryTimer?: ReturnType<typeof setInterval>
   private lastSentAt = 0
   private flushing = false
-  private releasePending = false
+  private disposeWritable?: () => void
+  private generation = 0
+  private lastTraceAt = Number.NEGATIVE_INFINITY
+  private lastDeferredTraceAt = Number.NEGATIVE_INFINITY
+  private deferredAttempts = 0
+  private lastTraceState = neutralState()
+  private leftTriggerPeak = 0
+  private rightTriggerPeak = 0
   private readonly rumbleService: RumbleService
   readonly gamepadDriver: InputDriverLike
 
@@ -70,6 +102,11 @@ export class InputService {
     this.inputSequenceNum = 0
     this.frameMetadataQueue = []
     this.currentInputTransport = inputTransport
+    const generation = ++this.generation
+    this.disposeWritable = inputTransport.onWritable?.(MAX_INPUT_BUFFERED_BYTES / 2, () => {
+      if (generation === this.generation && this.currentInputTransport === inputTransport)
+        this.flush()
+    })
     this.clientMetadataPending = true
     this.lastSentAt = performance.now()
     this.flush()
@@ -86,6 +123,9 @@ export class InputService {
   }
 
   stop(): void {
+    ++this.generation
+    this.disposeWritable?.()
+    this.disposeWritable = undefined
     inputController.setStreamReady(false)
     if (this.currentInputTransport) {
       this.enqueue({ gamepadIndex: 0, state: neutralState() })
@@ -98,7 +138,12 @@ export class InputService {
     this.pendingInputs = []
     this.frameMetadataQueue = []
     this.clientMetadataPending = false
-    this.releasePending = false
+    this.lastQueuedState = neutralState()
+    this.lastTraceState = neutralState()
+    this.lastTraceAt = Number.NEGATIVE_INFINITY
+    this.lastDeferredTraceAt = Number.NEGATIVE_INFINITY
+    this.deferredAttempts = 0
+    this.leftTriggerPeak = this.rightTriggerPeak = 0
     this.rumbleService.destroy()
   }
 
@@ -118,26 +163,39 @@ export class InputService {
   }
 
   private enqueue(frame: GamepadFrame): void {
-    const next = { ...frame, state: clonePadState(frame.state) }
+    const now = performance.now()
+    const next = { ...frame, state: clonePadState(frame.state), observedAtMs: Number.isFinite(frame.observedAtMs) ? Math.min(now, frame.observedAtMs!) : now }
     const neutral = stateEquals(next.state, neutralState())
-    // owner交接先释放远端状态；普通按下/松开保留在有界边沿队列。
-    if (neutral && inputController.getSnapshot().owner !== 'stream') {
-      this.pendingInputs = [next]
-      this.releasePending = true
+    // 交接取消旧源未发送状态，再建立中性基线。
+    if (next.resetReason || (neutral && inputController.getSnapshot().owner !== 'stream')) {
+      this.resetInputs(next, next.resetReason ?? 'owner-changed', now)
       return
     }
     const last = this.pendingInputs.at(-1)
-    const sameButtons = last && BUTTON_KEYS.every(key => (last.state.buttons[key] > 0) === (next.state.buttons[key] > 0))
-    if (sameButtons && !(this.releasePending && this.pendingInputs.length === 1))
-      this.pendingInputs[this.pendingInputs.length - 1] = next
+    const pending: PendingInput = { frame: next, enqueuedAtMs: now, edge: !sameControls(this.lastQueuedState, next.state), release: releasesControl(this.lastQueuedState, next.state), reset: false }
+    // 边沿、扳机变化和归零帧各自保留；连续纯摇杆更新合并为最新值。
+    if (last && !last.edge && !last.release && !last.reset && !pending.release && sameControls(last.frame.state, next.state))
+      this.pendingInputs[this.pendingInputs.length - 1] = pending
     else
-      this.pendingInputs.push(next)
+      this.pendingInputs.push(pending)
+    this.lastQueuedState = clonePadState(next.state)
     if (this.pendingInputs.length > MAX_PENDING_INPUTS) {
-      const discarded = this.pendingInputs.length
-      this.pendingInputs = neutral ? [next] : [{ gamepadIndex: next.gamepadIndex, state: neutralState() }, next]
-      this.releasePending = true
-      recordInputTrace('gamepadInputBackpressure', { reason: 'edge-budget-exhausted', discarded })
+      this.resetInputs(next, 'edge-budget-exhausted', now)
     }
+  }
+
+  private resetInputs(latest: GamepadFrame, reason: string, now: number): void {
+    const discarded = this.pendingInputs.length
+    const oldestAgeMs = discarded ? now - this.pendingInputs[0].enqueuedAtMs : 0
+    const neutral = { gamepadIndex: latest.gamepadIndex, state: neutralState(), observedAtMs: now }
+    this.pendingInputs = [{ frame: neutral, enqueuedAtMs: now, edge: true, release: true, reset: true }]
+    const fresh = now - (latest.observedAtMs ?? now) <= MAX_INPUT_AGE_MS
+    if (fresh && !stateEquals(latest.state, neutral.state)) {
+      this.pendingInputs.push({ frame: latest, enqueuedAtMs: now, edge: true, release: false, reset: false })
+    }
+    this.lastQueuedState = clonePadState(this.pendingInputs.at(-1)!.frame.state)
+    if (discarded)
+      recordInputTrace('gamepadInputBackpressure', { reason, discarded, oldestAgeMs, retained: this.pendingInputs.length })
   }
 
   private flush(): void {
@@ -146,6 +204,10 @@ export class InputService {
       return
     this.flushing = true
     try {
+      const now = performance.now()
+      const oldest = this.pendingInputs.find(pending => !pending.reset)
+      if (oldest && now - (oldest.frame.observedAtMs ?? oldest.enqueuedAtMs) > MAX_INPUT_AGE_MS)
+        this.resetInputs(this.pendingInputs.at(-1)!.frame, 'input-age-exhausted', now)
       if (this.clientMetadataPending) {
         if (transport.bufferedAmount() >= MAX_INPUT_BUFFERED_BYTES)
           return
@@ -156,45 +218,77 @@ export class InputService {
         this.clientMetadataPending = false
       }
       for (let attempt = 0; attempt < MAX_PENDING_INPUTS; attempt++) {
-        const frame = this.pendingInputs[0]
-        const metadataQueue = this.frameMetadataQueue.slice(0, 29)
+        const pending = this.pendingInputs[0]
+        const frame = pending?.frame
+        let metadataQueue = this.frameMetadataQueue.slice(0, 29)
         if (!frame && metadataQueue.length === 0)
           return
-        // 中性释放允许一份小报文越过普通水位，仍受硬水位限制。
+        // 释放前的按下保持顺序，在释放余量内共同排空；metadata 让出空间。
         const buffered = transport.bufferedAmount()
-        const canRelease = this.releasePending && buffered < MAX_INPUT_BUFFERED_BYTES + 1024
-        if (buffered >= MAX_INPUT_BUFFERED_BYTES && !canRelease)
-          return
+        const drainingRelease = !!frame && this.pendingInputs.some(input => input.release)
+        const limit = MAX_INPUT_BUFFERED_BYTES + (drainingRelease ? RELEASE_BUFFER_BYTES : 0)
+        if (buffered >= MAX_INPUT_BUFFERED_BYTES)
+          metadataQueue = []
         const packet = new InputPacketEncoder((this.inputSequenceNum + 1) >>> 0)
-        packet.setData(canRelease ? [] : metadataQueue, frame ? [frame] : [], [], [], [])
-        const buffer = packet.toBuffer()
+        packet.setData(metadataQueue, frame ? [frame] : [], [], [], [])
+        let buffer = packet.toBuffer()
+        if (buffered + buffer.byteLength > limit && frame && metadataQueue.length) {
+          metadataQueue = []
+          const inputOnly = new InputPacketEncoder((this.inputSequenceNum + 1) >>> 0)
+          inputOnly.setData([], [frame], [], [], [])
+          buffer = inputOnly.toBuffer()
+        }
+        if ((!frame && metadataQueue.length === 0) || buffered + buffer.byteLength > limit)
+          return
         if (!this.trySend(transport, buffer))
           return
         this.inputSequenceNum = (this.inputSequenceNum + 1) >>> 0
-        const metadataFrames = canRelease ? 0 : metadataQueue.length
+        const metadataFrames = metadataQueue.length
         this.frameMetadataQueue.splice(0, metadataFrames)
         if (frame)
           this.pendingInputs.shift()
-        this.releasePending = false
         this.lastSentAt = performance.now()
         this.emitter.emit('stats.inputPacket', { packetBytes: buffer.byteLength, metadataFrames, gamepadFrames: Number(frame !== undefined), pointerFrames: 0, mouseFrames: 0, keyboardFrames: 0 })
-        if (frame)
-          recordInputTrace('gamepadFrameSent', { inputSequenceNum: this.inputSequenceNum, south: frame.state.buttons.south, east: frame.state.buttons.east, menu: frame.state.buttons.menu, view: frame.state.buttons.view, leftStickX: frame.state.leftStick.x, leftStickY: frame.state.leftStick.y })
+        if (pending)
+          this.traceSent(pending, buffered)
       }
     }
     finally { this.flushing = false }
+  }
+
+  private traceSent(pending: PendingInput, bufferedBytes: number): void {
+    const { frame } = pending
+    const now = performance.now()
+    this.leftTriggerPeak = Math.max(this.leftTriggerPeak, trigger(frame.state, 'left'))
+    this.rightTriggerPeak = Math.max(this.rightTriggerPeak, trigger(frame.state, 'right'))
+    if (!pending.reset && sameDigitalButtons(this.lastTraceState, frame.state) && now - this.lastTraceAt < INPUT_TRACE_INTERVAL_MS)
+      return
+    recordInputTrace('gamepadFrameSent', { inputSequenceNum: this.inputSequenceNum, sampleSequence: frame.sampleSequence, sampledAtMs: frame.sampledAtMs, observedAtMs: frame.observedAtMs, observationToSendMs: now - (frame.observedAtMs ?? now), queueWaitMs: now - pending.enqueuedAtMs, pendingInputs: this.pendingInputs.length, bufferedBytes, reset: pending.reset, ...frame.state.buttons, leftStickX: frame.state.leftStick.x, leftStickY: frame.state.leftStick.y, rightStickX: frame.state.rightStick.x, rightStickY: frame.state.rightStick.y, leftTrigger: trigger(frame.state, 'left'), rightTrigger: trigger(frame.state, 'right'), leftTriggerPeak: this.leftTriggerPeak, rightTriggerPeak: this.rightTriggerPeak })
+    this.lastTraceAt = now
+    this.lastTraceState = clonePadState(frame.state)
+    this.leftTriggerPeak = this.rightTriggerPeak = 0
   }
 
   private trySend(transport: InputTransport, buffer: ArrayBuffer): boolean {
     try {
       if (transport.send(buffer))
         return true
-      recordInputTrace('gamepadInputSendDeferred', { reason: 'transport-rejected', bufferedBytes: transport.bufferedAmount() })
+      this.traceDeferred({ reason: 'transport-rejected', bufferedBytes: transport.bufferedAmount() })
     }
     catch (error) {
-      recordInputTrace('gamepadInputSendDeferred', { reason: 'transport-error', error: String(error) })
+      this.traceDeferred({ reason: 'transport-error', error: String(error) })
     }
     return false
+  }
+
+  private traceDeferred(payload: Record<string, unknown>): void {
+    ++this.deferredAttempts
+    const now = performance.now()
+    if (now - this.lastDeferredTraceAt < INPUT_TRACE_INTERVAL_MS)
+      return
+    recordInputTrace('gamepadInputSendDeferred', { ...payload, deferredAttempts: this.deferredAttempts })
+    this.lastDeferredTraceAt = now
+    this.deferredAttempts = 0
   }
 
   setGamepadState(frame: GamepadFrame): void {

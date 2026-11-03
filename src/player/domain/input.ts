@@ -6,6 +6,11 @@ import type {
 export interface GamepadFrame {
   gamepadIndex: number
   state: LogicalPadStateDto
+  /** 单调时钟中的逻辑态观测时间；自定义 Driver 可省略，由入队边界补齐。 */
+  observedAtMs?: number
+  sampledAtMs?: number
+  sampleSequence?: number
+  resetReason?: 'owner-changed' | 'device-changed' | 'controls-changed'
 }
 
 export interface PointerFrame {

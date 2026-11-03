@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-02",
+  "branch": "main",
+  "commit": "85c39d6b",
+  "environment": "real input modules; simulated hardware, frame scheduler, clock, RPC and DataChannel",
+  "existingTestsPassed": 50,
+  "auditScenariosPassed": 9,
+  "observations": [
+    { "scenario": "20Hz taps / 60Hz sample / 10s", "physicalTaps": 200, "sentPresses": 200, "sampledToSendMockMs": 0 },
+    { "scenario": "8ms press at t=4..12; sample t=0/17", "physicalTaps": 1, "sentPresses": 0 },
+    { "scenario": "8ms release at t=20..28; sample t=17/33", "physicalTaps": 2, "sentPresses": 1 },
+    { "scenario": "rAF suspended; 50ms press t=20..70", "actualFallbackSampleIntervalMs": 100, "physicalTaps": 1, "sentPresses": 0 },
+    { "scenario": "9 alternating edges blocked at 18KiB", "blockedEdges": 9, "sentMasksAfterDrain": [0, 16] },
+    { "scenario": "RT 0.1->0.9->0.1 under pressure", "sentTriggerValuesAfterDrain": [0.09999237048905166], "fullPullRetained": false },
+    { "scenario": "disconnect sampled at 34ms; drain after 50ms", "releaseSentAtMs": 100, "releaseDelayMs": 66 },
+    { "scenario": "menu ownership release at soft+500B", "releaseDelayMockMs": 0 },
+    { "scenario": "press/release sampled t=17/33; send resumes t=34", "sentAtMs": [50, 50], "sampledPressToSendMs": 33, "sampledReleaseToSendMs": 17 }
+  ]
+}

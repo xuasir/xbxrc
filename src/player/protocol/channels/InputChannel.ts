@@ -29,6 +29,7 @@ export class InputChannel extends BaseChannel {
       send: data => this.send(data),
       getReadyState: () => this.context.readyState(),
       bufferedAmount: () => this.context.bufferedAmount(),
+      onWritable: this.context.onWritable,
     }
     this.inputService.start(inputTransport)
     this.started = true

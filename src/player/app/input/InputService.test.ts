@@ -2,7 +2,7 @@ import type { GamepadSnapshot } from '@shared/gamepad/backend'
 import type { PlayerEvents } from '../../api/events'
 import { inputController } from '@shared/gamepad/runtime'
 import { neutralState } from '@shared/gamepad/state'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TypedEventEmitter } from '../../api/events'
 import { GamepadDriver } from '../../infra/input/GamepadDriver'
 import { InputService } from './InputService'
@@ -11,7 +11,9 @@ vi.mock('@shared/gamepad/runtime', async () => {
   const { InputController } = await import('@shared/gamepad/input-controller')
   return { inputController: new InputController() }
 })
-vi.mock('../../../services/rpc', () => ({ rpc: { runtimeTrace: { recordEvent: async () => {} } } }))
+const recordEvent = vi.hoisted(() => vi.fn(async (_event: unknown) => {}))
+vi.mock('../../../services/rpc', () => ({ rpc: { runtimeTrace: { recordEvent } } }))
+beforeEach(() => recordEvent.mockClear())
 afterEach(async () => inputController.stop())
 
 describe('browser input integration', () => {
@@ -79,6 +81,11 @@ function reliabilityFixture() {
   vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
   let accepts = true
   let buffered = 0
+  let fillBuffer = false
+  let writable: (() => void) | undefined
+  const unsubscribe = vi.fn(() => {
+    writable = undefined
+  })
   const sent: DataView[] = []
   const attempts: DataView[] = []
   const emitter = new TypedEventEmitter<PlayerEvents>()
@@ -87,13 +94,20 @@ function reliabilityFixture() {
   const service = new InputService({ start: () => {}, stop: () => {}, requestStates: () => [{ gamepadIndex: 0, state: neutralState() }] }, emitter)
   activeServices.add(service)
   const transport = {
+    onWritable: vi.fn((_threshold: number, callback: () => void) => {
+      writable = callback
+      return unsubscribe
+    }),
     getReadyState: () => 'open' as const,
     bufferedAmount: () => buffered,
     send: (buffer: ArrayBuffer) => {
       const packet = new DataView(buffer)
       attempts.push(packet)
-      if (accepts)
+      if (accepts) {
         sent.push(packet)
+        if (fillBuffer)
+          buffered += buffer.byteLength
+      }
       return accepts
     },
   }
@@ -103,14 +117,20 @@ function reliabilityFixture() {
     sent,
     attempts,
     stats,
+    unsubscribe,
+    writable: () => writable?.(),
+    capturedWritable: () => writable,
     accepting: (value: boolean) => { accepts = value },
     buffer: (value: number) => { buffered = value },
+    fillBuffer: () => { fillBuffer = true },
+    buffered: () => buffered,
     queue: (south = 0, stick = 0) => {
       const state = neutralState()
       state.buttons.south = south
       state.leftStick.x = stick
       service.queueGamepadState({ gamepadIndex: 0, state })
     },
+    queueState: (state: GamepadSnapshot['samples'][number]['state'], observedAtMs?: number) => service.queueGamepadState({ gamepadIndex: 0, state, observedAtMs }),
     metadata: (key: number) => service.addProcessedFrame({ serverDataKey: key, firstFramePacketArrivalTimeMs: 1, frameSubmittedTimeMs: 2, frameDecodedTimeMs: 3, frameRenderedTimeMs: 4 }),
   }
 }
@@ -156,15 +176,15 @@ describe('input delivery under pressure', () => {
   it('keeps press/release order and coalesces the latest analog state behind the soft waterline', () => {
     const f = reliabilityFixture()
     f.service.start(f.transport)
-    f.buffer(16 * 1024)
+    f.buffer(18 * 1024)
     f.queue(1, 0.1)
     f.queue(1, 0.8)
     f.queue(0)
     expect(f.sent).toHaveLength(1)
     f.buffer(0)
     vi.advanceTimersByTime(50)
-    expect(f.sent.slice(1).map(buttonMask)).toEqual([16, 0])
-    expect(f.sent[1].getInt16(18, true)).toBe(Math.trunc(0.8 * 32767))
+    expect(f.sent.slice(1).map(buttonMask)).toEqual([16, 16, 0])
+    expect(f.sent[2].getInt16(18, true)).toBe(Math.trunc(0.8 * 32767))
   })
 
   it('prioritizes ownership release within the hard waterline and defers metadata', () => {
@@ -183,7 +203,7 @@ describe('input delivery under pressure', () => {
     expect(f.sent.at(-1)!.getUint32(15, true)).toBe(88)
   })
 
-  it('bounds an overflowing edge queue with neutral release followed by the newest state', () => {
+  it('retains nine alternating input states through brief backpressure', () => {
     const f = reliabilityFixture()
     f.service.start(f.transport)
     f.buffer(18 * 1024)
@@ -191,7 +211,124 @@ describe('input delivery under pressure', () => {
     expect(f.sent).toHaveLength(1)
     f.buffer(0)
     vi.advanceTimersByTime(50)
+    expect(f.sent.slice(1).map(buttonMask)).toEqual(Array.from({ length: 9 }, (_, i) => i % 2 === 0 ? 16 : 0))
+  })
+
+  it('preserves a trigger pull and return above a nonzero rest value', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    for (const value of [0.1, 0.9, 0.1]) {
+      const state = neutralState()
+      state.rightTrigger = state.buttons.r2 = value
+      f.queueState(state)
+    }
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.slice(1).map(packet => packet.getUint16(28, true))).toEqual([0.1, 0.9, 0.1].map(value => Math.trunc(value * 65535)))
+  })
+
+  it('coalesces continuous stick-only motion while retaining a stop', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    for (const stick of [0.1, 0.4, 0.8]) f.queue(0, stick)
+    f.queue(0)
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.slice(1).map(packet => packet.getInt16(18, true))).toEqual([Math.trunc(0.8 * 32767), 0])
+  })
+
+  it('releases one button while another remains held within the release budget', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    const state = neutralState()
+    state.buttons.south = state.buttons.east = 1
+    f.queueState(state)
+    f.buffer(16 * 1024 + 500)
+    state.buttons.south = 0
+    f.queueState(state)
+    expect(buttonMask(f.sent.at(-1)!)).toBe(32)
+  })
+
+  it('respects packet size at the hard waterline and immediately retries after a writable event', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.queue(1)
+    f.buffer(17 * 1024 - 10)
+    f.queue(0)
+    expect(buttonMask(f.sent.at(-1)!)).toBe(16)
+    f.buffer(0)
+    f.writable()
+    expect(buttonMask(f.sent.at(-1)!)).toBe(0)
+    expect(f.transport.onWritable).toHaveBeenCalledWith(8192, expect.any(Function))
+  })
+
+  it('discards old clicks after 250ms and synchronizes only the fresh latest state', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    f.queue(1)
+    f.queue(0)
+    vi.advanceTimersByTime(249)
+    f.queue(1)
+    vi.advanceTimersByTime(2)
+    f.buffer(0)
+    f.writable()
     expect(f.sent.slice(1).map(buttonMask)).toEqual([0, 16])
+    expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'gamepadInputBackpressure', payload: expect.objectContaining({ reason: 'input-age-exhausted', discarded: 3 }) }))
+  })
+
+  it('drains ordered edges only while their bytes fit in the release reserve', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    for (let i = 0; i < 9; i++) f.queue(i % 2 === 0 ? 1 : 0)
+    f.fillBuffer()
+    f.buffer(16 * 1024 + 900)
+    f.writable()
+    expect(f.sent.slice(1).map(buttonMask)).toEqual([16, 0, 16])
+    expect(f.buffered()).toBeLessThanOrEqual(17 * 1024)
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.slice(1).map(buttonMask)).toEqual(Array.from({ length: 9 }, (_, i) => i % 2 === 0 ? 16 : 0))
+  })
+
+  it('keeps a neutral reset when every pending observation has expired', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    f.queue(1)
+    vi.advanceTimersByTime(251)
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.slice(1).map(buttonMask)).toEqual([0])
+  })
+
+  it('bounds an excessive edge burst and records the loss explicitly', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    for (let i = 0; i < 129; i++) f.queue(i % 2 === 0 ? 1 : 0)
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.slice(1).map(buttonMask)).toEqual([0, 16])
+    expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'gamepadInputBackpressure', payload: expect.objectContaining({ reason: 'edge-budget-exhausted', discarded: 129, retained: 2 }) }))
+  })
+
+  it('invalidates a captured writable callback when replacing or stopping the transport', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    const oldWritable = f.capturedWritable()!
+    const replacement = { getReadyState: () => 'open' as const, bufferedAmount: () => 0, send: vi.fn(() => false) }
+    f.service.start(replacement)
+    const count = replacement.send.mock.calls.length
+    oldWritable()
+    expect(replacement.send).toHaveBeenCalledTimes(count)
+    expect(f.unsubscribe).toHaveBeenCalled()
+    f.service.stop()
+    oldWritable()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('retries release after the hard waterline clears', () => {

@@ -18,7 +18,7 @@ const config: RendererRuntimeConfig = {
   saturation: 100,
 }
 
-async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRuntimeConfig> = {}, dualPass = false, counter: 'none' | 'playbackQuality' | 'webkit' = 'none') {
+async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRuntimeConfig> = {}, dualPass = false, counter: 'none' | 'playbackQuality' | 'webkit' = 'none', prepareProbe?: (video: HTMLVideoElement, spend: (ms: number) => void) => void) {
   let atMs = 0
   let presentedFrames = 0
   let droppedFrames = 0
@@ -125,6 +125,7 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
       webkitDroppedFrameCount: { get: () => droppedFrames },
     })
   }
+  prepareProbe?.(video as unknown as HTMLVideoElement, gl.spend)
   const failure = vi.fn()
   const cfg = { ...config, superResolutionOutputWidth: video.videoWidth, superResolutionOutputHeight: video.videoHeight, ...options, rendererRuntimeFailureNotifier: failure }
   const renderer = kind === 'webgl2_sr' ? new SuperResolutionWebGL2Renderer(cfg) : new WebGL2VideoRenderer(cfg)
@@ -207,8 +208,11 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     { sourceFps: 60, targetFps: 60, skipEvery: 6, static: true, expected: 500 },
   ])('imports unique drawable frames for $sourceFps fps source / $targetFps fps target / skip $skipEvery / static $static', async (settings) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const h = await harness(kind, { targetFps: settings.targetFps }, false, 'playbackQuality')
-    const p = gpuProbe(h.video as unknown as HTMLVideoElement)
+    let p!: ReturnType<typeof gpuProbe>
+    const h = await harness(kind, { targetFps: settings.targetFps }, false, 'playbackQuality', (video) => {
+      p = gpuProbe(video)
+      return p
+    })
     const imported: number[] = []
     let image = 0
     h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
@@ -250,6 +254,78 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     snapshot.preparation!.firstCandidateAtMs = -1
     expect(h.renderer.snapshotResources()?.preparation?.firstCandidateAtMs).toBe(100)
     h.renderer.destroy()
+  })
+
+  it.each([4, 6])('delivers 600 unique runtime images after 171ms preparation with sparse callbacks / skip %i', async (skipEvery) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let p!: ReturnType<typeof gpuProbe>
+    let coldImport = true
+    const h = await harness(kind, {}, false, 'playbackQuality', (video, spend) => {
+      p = gpuProbe(video)
+      p.canvas.getContext.mockImplementation(() => {
+        spend(171)
+        return p.gl
+      })
+      p.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+        if (args.at(-1) === video && coldImport) {
+          spend(25)
+          coldImport = false
+        }
+      })
+    })
+    const source = getVideoFrameSource(h.video as unknown as HTMLVideoElement)
+    expect(source.snapshotResources()).toMatchObject({ framePreparationRequests: 0, pixelProbePreparations: 0, pixelProbeCanvases: 1 })
+    // 首导入独立预热，运行态窗口从后续连续运动图像开始结算。
+    p.image(1)
+    h.frame(200, 1, 0, 1)
+    h.gl.spend(1)
+    vi.advanceTimersByTime(1)
+    p.image(2)
+    h.frame(250, 2, 0, 2)
+    h.gl.spend(1)
+    vi.advanceTimersByTime(1)
+    const before = h.renderer.snapshotResources()!.realtimeDrawCount
+    const pixelBefore = source.snapshotDiagnostics().videoPixels.deliveredFrameCount
+    const imports: number[] = []
+    let image = 0
+    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+      if (args.at(-1) === h.video)
+        imports.push(image)
+    })
+    for (let slot = 0; slot < 600; slot++) {
+      const at = 300 + slot * 1000 / 60
+      image = slot + 3
+      p.image(image % 255)
+      const counted = 2 + Math.floor(slot / 15) * 15
+      h.supply(counted)
+      if ((slot + 1) % skipEvery !== 0)
+        h.frame(at, image, 0, counted)
+      h.raf(at + 0.2)
+      h.gl.spend(1)
+      vi.advanceTimersByTime(1)
+    }
+    expect(imports).toHaveLength(600)
+    expect(new Set(imports).size).toBe(600)
+    expect(h.renderer.snapshotResources()!.realtimeDrawCount! - before!).toBe(600)
+    const pixels = source.snapshotDiagnostics().videoPixels
+    expect(pixels.deliveredFrameCount - pixelBefore).toBe(600 / skipEvery)
+    expect(pixels).toMatchObject({ disabledReason: undefined, preparationTiming: { count: 1, totalMs: 171 }, readTiming: { firstRead: { durationMs: 25, initializationMs: 0 } } })
+    h.renderer.destroy()
+    expect(source.snapshotResources()).toMatchObject({ frameRequests: 0, framePreparationRequests: 0, pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0, pixelProbePreparations: 0 })
+  })
+
+  it('releases a renderer cancelled while GPU preparation is queued', async () => {
+    let p!: ReturnType<typeof gpuProbe>
+    const h = await harness(kind, {}, false, 'playbackQuality', (video) => {
+      p = gpuProbe(video)
+      return p
+    })
+    h.renderer.destroy()
+    const attaching = h.renderer.attach(h.video as unknown as HTMLVideoElement)
+    h.renderer.destroy()
+    await attaching
+    expect(p.canvas.getContext).toHaveBeenCalledTimes(1)
+    expect(getVideoFrameSource(h.video as unknown as HTMLVideoElement).snapshotResources()).toMatchObject({ frameRequests: 0, framePreparationRequests: 0, pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0, pixelProbePreparations: 0 })
   })
 
   it('preserves 60fps candidates with a millisecond callback clock', async () => {

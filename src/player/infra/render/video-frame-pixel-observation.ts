@@ -42,7 +42,7 @@ interface PixelPairEvidence {
   absoluteRgbDeltaTotal: number
 }
 
-type DisabledReason = 'contextUnavailable' | 'readFailed' | 'readbackBudgetExceeded' | 'gpuWaitExpired'
+type DisabledReason = 'contextUnavailable' | 'initializationBudgetExceeded' | 'readFailed' | 'readbackBudgetExceeded' | 'gpuWaitExpired'
 type CpuPhase = 'initialization' | 'upload' | 'readback'
 type CostPhase = CpuPhase | 'gpuWait' | 'coldReads' | 'warmReads'
 interface ReadCost { count: number, totalMs: number, maxMs: number }
@@ -68,6 +68,9 @@ const MIN_GAP_MS = 8
 const MAX_GAP_MS = 50
 const READ_BUDGET_MS = 8
 const COLD_BUDGET_MS = 50
+const PREPARATION_BUDGET_MS = 2000
+const RETRY_COOLDOWN_MS = 3000
+const MAX_RETRIES = 1
 const MAX_DELIVERY_AGE_MS = 8
 const VERTEX = `#version 300 es
 precision mediump float;
@@ -103,6 +106,22 @@ export class VideoFramePixelObservation {
   private importedWidth = 0
   private importedHeight = 0
   private mode = 0
+  private prepared = false
+  private preparation?: Promise<void>
+  private preparationEpoch = 0
+  private retryCount = 0
+  private retryAfterMs = 0
+  private readonly preparationTiming = {
+    count: 0,
+    totalMs: 0,
+    maxMs: 0,
+    context: { count: 0, totalMs: 0, maxMs: 0 },
+    shader: { count: 0, totalMs: 0, maxMs: 0 },
+    resources: { count: 0, totalMs: 0, maxMs: 0 },
+  }
+
+  private lastPreparation?: { startedAtMs: number, finishedAtMs: number, durationMs: number, outcome: 'success' | DisabledReason }
+  private eligibility?: { observedAtMs: number, state: string, visibilityState: string, paused: boolean, readyState: number, sourceWidth: number, sourceHeight: number, drawableTargetFps: number }
   private baselineCount = 0
   private pairCount = 0
   private changedPairCount = 0
@@ -134,16 +153,86 @@ export class VideoFramePixelObservation {
     private readonly onChanged: (input: PixelObservationInput) => PixelObservationInput | undefined,
   ) {}
 
+  /** 接入阶段准备资源；逐帧回调只消费已完成的context/program/FBO。 */
+  prepare(allowRetry = false): Promise<void> {
+    if (this.disabledReason) {
+      if (!allowRetry || this.retryCount >= MAX_RETRIES || performance.now() < this.retryAfterMs)
+        return Promise.resolve()
+      this.retryCount++
+      this.disabledReason = undefined
+    }
+    if (this.prepared)
+      return Promise.resolve()
+    if (this.preparation)
+      return this.preparation
+    const epoch = this.preparationEpoch
+    const preparation = Promise.resolve().then(() => {
+      if (epoch !== this.preparationEpoch)
+        return
+      const startedAtMs = performance.now()
+      let outcome: 'success' | DisabledReason = 'success'
+      try {
+        this.initialize()
+        if (performance.now() - startedAtMs > PREPARATION_BUDGET_MS)
+          outcome = 'initializationBudgetExceeded'
+        else
+          this.prepared = true
+      }
+      catch {
+        outcome = 'contextUnavailable'
+      }
+      const durationMs = performance.now() - startedAtMs
+      this.preparationTiming.count++
+      this.preparationTiming.totalMs += durationMs
+      this.preparationTiming.maxMs = Math.max(this.preparationTiming.maxMs, durationMs)
+      this.cost('initialization', durationMs)
+      this.lastPreparation = { startedAtMs, finishedAtMs: performance.now(), durationMs, outcome }
+      if (outcome !== 'success')
+        this.fail(outcome)
+    }).finally(() => {
+      if (this.preparation === preparation)
+        this.preparation = undefined
+    })
+    this.preparation = preparation
+    return preparation
+  }
+
   observe(input: PixelObservationInput, options: { drawableTargetFps: number, diagnostic: boolean, lastDeliveredAtMs: number }): void {
     this.mode = options.drawableTargetFps
+    const state = this.disabledReason
+      ? 'disabled'
+      : !this.mode && !options.diagnostic
+          ? 'inactive'
+          : this.video.ownerDocument?.visibilityState === 'hidden'
+            ? 'hidden'
+            : this.video.paused
+              ? 'paused'
+              : this.video.readyState < 2
+                ? 'videoNotReady'
+                : !this.video.videoWidth || !this.video.videoHeight
+                    ? 'dimensionsMissing'
+                    : !this.prepared ? 'preparing' : 'active'
+    this.eligibility = { observedAtMs: performance.now(), state, visibilityState: this.video.ownerDocument?.visibilityState ?? 'unknown', paused: this.video.paused, readyState: this.video.readyState, sourceWidth: this.video.videoWidth, sourceHeight: this.video.videoHeight, drawableTargetFps: this.mode }
     if (this.disabledReason)
       return
-    if ((!this.mode && !options.diagnostic) || !this.drawable() || !Number.isFinite(input.enteredAtMs)) {
+    if ((!this.mode && !options.diagnostic) || !Number.isFinite(input.enteredAtMs)) {
       this.reset()
       return
     }
-    if (this.gl && (this.importedWidth !== this.video.videoWidth || this.importedHeight !== this.video.videoHeight))
-      this.reset()
+    if (!this.drawable()) {
+      // 待首帧期间保留已准备的GPU资源，恢复只建立新的帧资格。
+      this.discard('videoNotDrawable')
+      return
+    }
+    if (this.importedWidth && (this.importedWidth !== this.video.videoWidth || this.importedHeight !== this.video.videoHeight)) {
+      this.discard('sourceSizeChanged')
+      this.cold = true
+      this.importedWidth = this.importedHeight = 0
+    }
+    if (!this.prepared) {
+      void this.prepare()
+      return
+    }
     if (input.counterReset || input.trackingSource === 'videoFrameCallback' || input.newFrame) {
       this.discard(input.counterReset ? 'counterReset' : input.trackingSource === 'videoFrameCallback' ? 'nativeIntervened' : 'identityChanged')
       if (input.counterReset)
@@ -194,6 +283,26 @@ export class VideoFramePixelObservation {
   }
 
   private initialize(): void {
+    this.measurePreparation('context', () => this.initializeContext())
+    this.measurePreparation('shader', () => this.initializeProgram())
+    this.measurePreparation('resources', () => this.initializeResources())
+  }
+
+  private measurePreparation(phase: 'context' | 'shader' | 'resources', action: () => void): void {
+    const startedAtMs = performance.now()
+    try {
+      action()
+    }
+    finally {
+      const value = this.preparationTiming[phase]
+      const durationMs = performance.now() - startedAtMs
+      value.count++
+      value.totalMs += durationMs
+      value.maxMs = Math.max(value.maxMs, durationMs)
+    }
+  }
+
+  private initializeContext(): void {
     this.canvas = this.video.ownerDocument.createElement('canvas')
     this.canvas.width = WIDTH
     this.canvas.height = HEIGHT
@@ -202,6 +311,10 @@ export class VideoFramePixelObservation {
     this.gl = gl ?? undefined
     if (!gl || typeof gl.fenceSync !== 'function' || typeof gl.getBufferSubData !== 'function')
       throw new Error('contextUnavailable')
+  }
+
+  private initializeProgram(): void {
+    const gl = this.gl!
     const program = gl.createProgram()
     if (!program)
       throw new Error('programUnavailable')
@@ -220,6 +333,10 @@ export class VideoFramePixelObservation {
     gl.linkProgram(program)
     if (!gl.getProgramParameter(program, gl.LINK_STATUS))
       throw new Error('programFailed')
+  }
+
+  private initializeResources(): void {
+    const gl = this.gl!
     this.texture = gl.createTexture() ?? undefined
     this.target = gl.createTexture() ?? undefined
     this.framebuffer = gl.createFramebuffer() ?? undefined
@@ -240,8 +357,8 @@ export class VideoFramePixelObservation {
       throw new Error('framebufferFailed')
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.buffer)
     gl.bufferData(gl.PIXEL_PACK_BUFFER, BYTES, gl.STREAM_READ)
-    gl.useProgram(program)
-    gl.uniform1i(gl.getUniformLocation(program, 'videoTexture'), 0)
+    gl.useProgram(this.program!)
+    gl.uniform1i(gl.getUniformLocation(this.program!, 'videoTexture'), 0)
     gl.viewport(0, 0, WIDTH, HEIGHT)
   }
 
@@ -274,8 +391,6 @@ export class VideoFramePixelObservation {
     const timing: ReadTiming = { readStartedAtMs: performance.now(), readFinishedAtMs: 0, durationMs: 0, cold: this.cold, initializationMs: 0, uploadMs: 0, readbackMs: 0, gpuWaitMs: 0, trackingSource: input.trackingSource, localSequence: input.localSequence, outcome: 'success' }
     this.readCount++
     try {
-      if (!this.gl)
-        this.measure('initialization', timing, () => this.initialize())
       const gl = this.gl!
       this.measure('upload', timing, () => {
         gl.activeTexture(gl.TEXTURE0)
@@ -428,10 +543,14 @@ export class VideoFramePixelObservation {
 
   private fail(reason: DisabledReason): void {
     this.disabledReason = reason
+    this.retryAfterMs = performance.now() + RETRY_COOLDOWN_MS
     this.reset()
   }
 
   reset(): void {
+    this.preparationEpoch++
+    this.preparation = undefined
+    this.prepared = false
     this.discard('observationInterrupted')
     const gl = this.gl
     if (gl) {
@@ -458,10 +577,61 @@ export class VideoFramePixelObservation {
   }
 
   snapshotResources() {
-    return { pixelProbeCanvases: Number(this.canvas !== undefined), pixelProbePendingPairs: Number(this.baseline !== undefined), pixelProbeGpuReads: Number(this.sync !== undefined), pixelProbeTimers: Number(this.timer !== undefined) }
+    return { pixelProbeCanvases: Number(this.canvas !== undefined), pixelProbePendingPairs: Number(this.baseline !== undefined), pixelProbeGpuReads: Number(this.sync !== undefined), pixelProbeTimers: Number(this.timer !== undefined), pixelProbePreparations: Number(this.preparation !== undefined) }
   }
 
   snapshot() {
-    return { evidence: 'webgl2AsyncVideoPixels', sampleWidth: WIDTH, sampleHeight: HEIGHT, readbackBytes: BYTES, minimumPairIntervalMs: this.mode ? 0 : INTERVAL_MS, minimumGapMs: MIN_GAP_MS, maximumGapMs: MAX_GAP_MS, maximumDeliveryAgeMs: MAX_DELIVERY_AGE_MS, readBudgetMs: READ_BUDGET_MS, coldReadBudgetMs: COLD_BUDGET_MS, drawableTargetFps: this.mode, baselineCount: this.baselineCount, pairCount: this.pairCount, changedPairCount: this.changedPairCount, deliveredFrameCount: this.deliveredFrameCount, readCount: this.readCount, completedReadCount: this.costs.coldReads.count + this.costs.warmReads.count, cancelledReadCount: this.cancelledReadCount, counterRebaseCount: this.counterRebaseCount, readDurationTotalMs: this.readDurationTotalMs, readDurationMaxMs: this.readDurationMaxMs, readTiming: { initialization: { ...this.costs.initialization }, upload: { ...this.costs.upload }, readback: { ...this.costs.readback }, gpuWait: { ...this.costs.gpuWait }, coldReads: { ...this.costs.coldReads }, warmReads: { ...this.costs.warmReads }, firstRead: this.firstRead ? { ...this.firstRead } : undefined, lastRead: this.lastRead ? { ...this.lastRead } : undefined }, disabledReason: this.disabledReason, discarded: { ...this.discarded }, evidenceLimit: 8, pairs: this.evidence.map(pair => ({ ...pair })), ...this.snapshotResources() }
+    return {
+      evidence: 'webgl2AsyncVideoPixels',
+      sampleWidth: WIDTH,
+      sampleHeight: HEIGHT,
+      readbackBytes: BYTES,
+      minimumPairIntervalMs: this.mode ? 0 : INTERVAL_MS,
+      minimumGapMs: MIN_GAP_MS,
+      maximumGapMs: MAX_GAP_MS,
+      maximumDeliveryAgeMs: MAX_DELIVERY_AGE_MS,
+      readBudgetMs: READ_BUDGET_MS,
+      coldReadBudgetMs: COLD_BUDGET_MS,
+      preparationBudgetMs: PREPARATION_BUDGET_MS,
+      drawableTargetFps: this.mode,
+      preparationState: this.disabledReason ? 'disabled' : this.prepared ? 'ready' : this.preparation ? 'preparing' : 'idle',
+      preparationTiming: {
+        ...this.preparationTiming,
+        context: { ...this.preparationTiming.context },
+        shader: { ...this.preparationTiming.shader },
+        resources: { ...this.preparationTiming.resources },
+        last: this.lastPreparation ? { ...this.lastPreparation } : undefined,
+      },
+      retryCount: this.retryCount,
+      maximumRetryCount: MAX_RETRIES,
+      retryCooldownMs: RETRY_COOLDOWN_MS,
+      retryAfterMs: this.disabledReason ? this.retryAfterMs : undefined,
+      eligibility: this.eligibility ? { ...this.eligibility } : undefined,
+      baselineCount: this.baselineCount,
+      pairCount: this.pairCount,
+      changedPairCount: this.changedPairCount,
+      deliveredFrameCount: this.deliveredFrameCount,
+      readCount: this.readCount,
+      completedReadCount: this.costs.coldReads.count + this.costs.warmReads.count,
+      cancelledReadCount: this.cancelledReadCount,
+      counterRebaseCount: this.counterRebaseCount,
+      readDurationTotalMs: this.readDurationTotalMs,
+      readDurationMaxMs: this.readDurationMaxMs,
+      readTiming: {
+        initialization: { ...this.costs.initialization },
+        upload: { ...this.costs.upload },
+        readback: { ...this.costs.readback },
+        gpuWait: { ...this.costs.gpuWait },
+        coldReads: { ...this.costs.coldReads },
+        warmReads: { ...this.costs.warmReads },
+        firstRead: this.firstRead ? { ...this.firstRead } : undefined,
+        lastRead: this.lastRead ? { ...this.lastRead } : undefined,
+      },
+      disabledReason: this.disabledReason,
+      discarded: { ...this.discarded },
+      evidenceLimit: 8,
+      pairs: this.evidence.map(pair => ({ ...pair })),
+      ...this.snapshotResources(),
+    }
   }
 }

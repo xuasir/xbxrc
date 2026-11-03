@@ -68,7 +68,7 @@ function counterHarness(initialFrames = 0, drawableTargetFps?: () => number) {
   }
 }
 
-describe('shared video frame callback', () => {
+describe('shared video frame callback', async () => {
   function pixelHarness(fps?: () => number) {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const h = counterHarness(1, fps)
@@ -81,17 +81,29 @@ describe('shared video frame callback', () => {
       now++
       vi.advanceTimersByTime(1)
     }
+    const preparations: ReturnType<typeof h.source.prepareDrawable>[] = []
     return {
       ...h,
       ...p,
       tick,
       spend: (ms: number) => { now += ms },
+      prepare: async () => {
+        const preparation = h.source.prepareDrawable(60)
+        preparations.push(preparation)
+        await preparation.ready
+        return preparation
+      },
+      cancel: () => {
+        h.cancel()
+        for (const preparation of preparations) preparation.release()
+      },
     }
   }
 
-  it('proves GPU pixel changes in diagnostic mode while preserving native delivery', () => {
+  it('proves GPU pixel changes in diagnostic mode while preserving native delivery', async () => {
     const h = pixelHarness()
     h.source.snapshotDiagnostics()
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.image(30)
     h.tick(16, () => h.poll(16))
@@ -110,8 +122,9 @@ describe('shared video frame callback', () => {
     expect(h.lost()).toBe(true)
   })
 
-  it('delivers GPU confirmed frames once and credits both a late RVFC and a playback batch', () => {
+  it('delivers GPU confirmed frames once and credits both a late RVFC and a playback batch', async () => {
     const h = pixelHarness(() => 60)
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.image(30)
     h.tick(17, () => h.poll(17))
@@ -128,12 +141,13 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('keeps default subscriptions free of GPU resources and bounds independent dev probes', () => {
+  it('keeps default subscriptions free of GPU resources and bounds independent dev probes', async () => {
     const h = pixelHarness()
     h.tick(0, () => h.native(0, 1))
     h.tick(17, () => h.poll(17))
     expect(h.ownerDocument.createElement).not.toHaveBeenCalled()
     h.source.snapshotDiagnostics()
+    await h.prepare()
     for (let i = 0; i < 20; i++) {
       const at = 1000 + i * 700
       h.tick(at, () => h.native(at, i + 2))
@@ -146,9 +160,10 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('waits asynchronously for a fence and keeps one PBO read in flight', () => {
+  it('waits asynchronously for a fence and keeps one PBO read in flight', async () => {
     const h = pixelHarness(() => 60)
     h.signaled(false)
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.tick(4, () => h.poll(4))
     expect(h.gl.getBufferSubData).not.toHaveBeenCalled()
@@ -161,7 +176,7 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('allows bounded cold import and enforces the summed warm CPU budget', () => {
+  it('allows bounded cold import and enforces the summed warm CPU budget', async () => {
     const h = pixelHarness(() => 60)
     h.canvas.getContext.mockImplementation(() => {
       h.spend(1)
@@ -175,8 +190,9 @@ describe('shared video frame callback', () => {
       h.spend(14)
       bytes.fill(20)
     })
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
-    expect(h.source.snapshotDiagnostics().videoPixels.readTiming.firstRead).toMatchObject({ cold: true, durationMs: 33, initializationMs: 1, uploadMs: 18, readbackMs: 14, outcome: 'success' })
+    expect(h.source.snapshotDiagnostics().videoPixels.readTiming.firstRead).toMatchObject({ cold: true, durationMs: 32, initializationMs: 0, uploadMs: 18, readbackMs: 14, outcome: 'success' })
     h.gl.texImage2D.mockImplementation(() => h.spend(4))
     h.gl.getBufferSubData.mockImplementation((_target, _offset, bytes) => {
       h.spend(5)
@@ -189,7 +205,126 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it.each(['initialization', 'upload', 'readback'] as const)('retains a failed %s phase cost and releases GPU resources', (phase) => {
+  it('prepares a 171ms context ahead of frames and keeps the 25ms cold import independent', async () => {
+    const h = pixelHarness(() => 60)
+    h.canvas.getContext.mockImplementation(() => {
+      h.spend(171)
+      return h.gl
+    })
+    let coldImport = true
+    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+      if (args.at(-1) === h.video && coldImport) {
+        h.spend(25)
+        coldImport = false
+      }
+    })
+    await h.prepare()
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({
+      preparationState: 'ready',
+      readCount: 0,
+      preparationTiming: { count: 1, totalMs: 171, context: { totalMs: 171 } },
+    })
+    h.tick(200, () => h.native(200, 1))
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({
+      disabledReason: undefined,
+      baselineCount: 1,
+      readTiming: { firstRead: { cold: true, durationMs: 25, initializationMs: 0, uploadMs: 25, outcome: 'success' } },
+    })
+    h.image(30)
+    h.tick(234, () => h.poll(234))
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({
+      deliveredFrameCount: 1,
+      eligibility: { state: 'active', drawableTargetFps: 60 },
+    })
+    expect(h.observed.filter(frame => frame.newFrame).map(frame => frame.localSequence)).toEqual([1, 2])
+    h.cancel()
+  })
+
+  it('retries a stopped probe once at explicit renderer reattachment after cooldown', async () => {
+    const h = pixelHarness(() => 60)
+    await h.prepare()
+    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+      if (args.at(-1) === h.video)
+        h.spend(51)
+    })
+    h.tick(0, () => h.native(0, 1))
+    expect(h.source.snapshotDiagnostics().videoPixels.disabledReason).toBe('readbackBudgetExceeded')
+    await h.prepare()
+    expect(h.source.snapshotDiagnostics().videoPixels.retryCount).toBe(0)
+    h.gl.texImage2D.mockImplementation(() => {})
+    h.tick(3100)
+    h.tick(3110, () => h.native(3110, 2))
+    expect(h.canvas.getContext).toHaveBeenCalledTimes(1)
+    await h.prepare()
+    h.tick(3120, () => h.native(3120, 3))
+    h.image(30)
+    h.tick(3137, () => h.poll(3137))
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ retryCount: 1, deliveredFrameCount: 1, disabledReason: undefined })
+    h.gl.texImage2D.mockImplementation(() => h.spend(9))
+    h.tick(3200, () => h.native(3200, 4))
+    h.tick(7000)
+    await h.prepare()
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ retryCount: 1, disabledReason: 'readbackBudgetExceeded' })
+    expect(h.canvas.getContext).toHaveBeenCalledTimes(2)
+    h.cancel()
+  })
+
+  it('retains prepared resources while the video waits for its first usable frame', async () => {
+    const h = pixelHarness(() => 60)
+    Object.assign(h.video, { paused: true, readyState: 0, videoWidth: 0, videoHeight: 0 })
+    await h.prepare()
+    h.tick(10, () => h.poll(10))
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ preparationState: 'ready', readCount: 0, eligibility: { state: 'paused', readyState: 0 } })
+    Object.assign(h.video, { paused: false, readyState: 4, videoWidth: 2560, videoHeight: 1440 })
+    h.tick(100, () => h.native(100, 1))
+    h.image(30)
+    h.tick(117, () => h.poll(117))
+    expect(h.source.snapshotDiagnostics().videoPixels.deliveredFrameCount).toBe(1)
+    expect(h.canvas.getContext).toHaveBeenCalledTimes(1)
+    h.cancel()
+  })
+
+  it('reuses preparation across a source resize with a new cold import', async () => {
+    const h = pixelHarness(() => 60)
+    await h.prepare()
+    h.tick(0, () => h.native(0, 1))
+    Object.assign(h.video, { videoWidth: 1280, videoHeight: 720 })
+    h.tick(100, () => h.native(100, 2))
+    h.image(30)
+    h.tick(117, () => h.poll(117))
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ deliveredFrameCount: 1, readTiming: { coldReads: { count: 2 } } })
+    expect(h.canvas.getContext).toHaveBeenCalledTimes(1)
+    h.cancel()
+  })
+
+  it('cancels pending GPU preparation before context allocation', async () => {
+    const h = pixelHarness(() => 60)
+    const preparation = h.source.prepareDrawable(60)
+    h.cancel()
+    preparation.release()
+    await preparation.ready
+    expect(h.canvas.getContext).not.toHaveBeenCalled()
+    expect(h.source.snapshotResources()).toMatchObject({ frameRequests: 0, framePreparationRequests: 0, pixelProbeCanvases: 0, pixelProbePreparations: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
+  })
+
+  it('bounds initialization separately and shares one preparation across owners', async () => {
+    const h = pixelHarness(() => 60)
+    h.canvas.getContext.mockImplementation(() => {
+      h.spend(2001)
+      return h.gl
+    })
+    const a = h.source.prepareDrawable(60)
+    const b = h.source.prepareDrawable(60)
+    a.release()
+    await b.ready
+    expect(h.canvas.getContext).toHaveBeenCalledTimes(1)
+    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ disabledReason: 'initializationBudgetExceeded', readCount: 0, preparationTiming: { last: { durationMs: 2001 } } })
+    h.cancel()
+    b.release()
+    expect(h.source.snapshotResources()).toMatchObject({ framePreparationRequests: 0, pixelProbePreparations: 0, pixelProbeCanvases: 0 })
+  })
+
+  it.each(['initialization', 'upload', 'readback'] as const)('retains a failed %s phase cost and releases GPU resources', async (phase) => {
     const h = pixelHarness(() => 60)
     const fail = () => {
       h.spend(2)
@@ -207,15 +342,25 @@ describe('shared video frame callback', () => {
     else {
       h.gl.getBufferSubData.mockImplementation(fail)
     }
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
-    expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ disabledReason: phase === 'initialization' ? 'contextUnavailable' : 'readFailed', readTiming: { [phase]: { count: 1, totalMs: 2 }, lastRead: { durationMs: 2 } } })
+    const snapshot = h.source.snapshotDiagnostics().videoPixels
+    expect(snapshot).toMatchObject({ disabledReason: phase === 'initialization' ? 'contextUnavailable' : 'readFailed', readTiming: { [phase]: { count: 1, totalMs: 2 } } })
+    if (phase === 'initialization') {
+      expect(snapshot.preparationTiming.last).toMatchObject({ durationMs: 2, outcome: 'contextUnavailable' })
+      expect(snapshot.readCount).toBe(0)
+    }
+    else {
+      expect(snapshot.readTiming.lastRead).toMatchObject({ durationMs: 2 })
+    }
     expect(JSON.stringify(h.source.snapshotDiagnostics())).not.toContain('private-pixels')
     expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
     h.cancel()
   })
 
-  it.each(['native', 'counter', 'size', 'cancel', 'hidden'] as const)('discards async pixels when %s changes before completion', (change) => {
+  it.each(['native', 'counter', 'size', 'cancel', 'hidden'] as const)('discards async pixels when %s changes before completion', async (change) => {
     const h = pixelHarness(() => 60)
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.image(30)
     h.signaled(false)
@@ -237,8 +382,9 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it.each(['context', 'fence', 'expiry'] as const)('falls back to native delivery after GPU %s failure', (failure) => {
+  it.each(['context', 'fence', 'expiry'] as const)('falls back to native delivery after GPU %s failure', async (failure) => {
     const h = pixelHarness(() => 60)
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.image(30)
     h.signaled(false)
@@ -255,9 +401,10 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('preserves static pixels and dynamically respects a 30fps request', () => {
+  it('preserves static pixels and dynamically respects a 30fps request', async () => {
     let fps = 60
     const h = pixelHarness(() => fps)
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.tick(17, () => h.poll(17))
     expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ pairCount: 1, changedPairCount: 0 })
@@ -270,8 +417,9 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('keeps late samples out of delivery and resumes after a fresh baseline', () => {
+  it('keeps late samples out of delivery and resumes after a fresh baseline', async () => {
     const h = pixelHarness(() => 60)
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.image(30)
     h.signaled(false)
@@ -286,13 +434,14 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('uses the cold CPU allowance once even when the first fence is cancelled', () => {
+  it('uses the cold CPU allowance once even when the first fence is cancelled', async () => {
     const h = pixelHarness(() => 60)
     h.signaled(false)
     h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
       if (args.at(-1) === h.video)
         h.spend(18)
     })
+    await h.prepare()
     h.tick(0, () => h.native(0, 1))
     h.tick(50, () => h.native(50, 2))
     expect(h.source.snapshotDiagnostics().videoPixels).toMatchObject({ cancelledReadCount: 1, disabledReason: 'readbackBudgetExceeded', readTiming: { lastRead: { cold: false, durationMs: 18 } } })
@@ -300,13 +449,15 @@ describe('shared video frame callback', () => {
     h.cancel()
   })
 
-  it('cleans renderer GPU resources while a default metadata consumer remains', () => {
+  it('cleans renderer GPU resources while a default metadata consumer remains', async () => {
     const h = pixelHarness()
     let rendererId = 0
     const request = () => {
       rendererId = h.source.request(() => request(), { drawableTargetFps: () => 60 })
     }
     request()
+    const preparation = await h.prepare()
+    preparation.release()
     h.tick(0, () => h.native(0, 1))
     h.image(30)
     h.signaled(false)

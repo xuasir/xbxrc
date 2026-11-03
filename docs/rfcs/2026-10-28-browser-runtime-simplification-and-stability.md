@@ -459,3 +459,31 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Boundary: native数量、源尺寸、计数、sequence及epoch按提交/完成资格验证。完全抵扣的批次允许在下一次读取前重对齐基线计数，原采样计数保存在baselineCounterFrames；新增8ms消费新鲜度期限。冷提交最多一次50ms，取消fence仍消耗冷额度，稳态CPU合计8ms/GPU等待50ms，单在途/单基线/8组证据；context与取消清理通过。
 - Validation: [实施验证](../../dev-docs/validation/2026-11-02-gpu-drawable-supply-validation.md)及40组生产模块回放通过。RVFC45/50Hz+250ms计数合批，两种renderer均600张唯一图像/10秒；30fps源和用户上限300张，静态与迟到结果保留原供帧。全量48文件460项、lint/类型/270模块构建及既有9/4/36/20/8组回放通过。
 - Handoff: 本轮代码与自动验证完成；S4继续新构建设备60fps、像素对应、GPU/真实呈现、源尺寸切换、平台与长测验收。网络接收停顿和内部恢复证据沿既有主线独立归属，自动实机运行保持暂停。
+
+
+## 2026-11-03 GPU补供给新日志验收
+
+- Evidence: 2026-11-02 17:36采集runtime-trace-1793612198686-1.jsonl，1678行/196.053秒，browser/debug/macOS/home、commit85c39d6b。GPU首读CPU196ms（初始化171ms、上传分项25ms、取回阶段0），超50ms冷预算后readbackBudgetExceeded停用；同video后续SR重试保留停用状态，warm/像素配对/补交付均0。
+- Supply: SR两段完整3s输出中位51.388/46.972fps，解码60.033/60.142fps，逐窗差中位8.370/13.169fps；即时候选→提交292→291/143→143，rAF56.090/60.093Hz、补帧0。诊断前29.180秒提交29.164fps；两段SR完整15s窗口0，长期足帧待验。
+- Latency: 1329次后续绘制CPU均值0.561ms、上传0.517ms；probe冷段最新提交年龄201ms，其余10份2–17ms。初始SR准备1870ms、候选等待9437ms、首draw214ms单独记账。GPU执行及真实submit→present缺证。
+- Network: 媒体接收58.274/解码57.230fps、loss0.070901%、RTT P9572.45ms/max736ms；4次freeze4.803s及drop104均发生在video阶段，SR两段freeze/drop0。后两次756/1007ms包与媒体停顿后PLI和新关键帧decode各+1；最终1个健康完整15s窗video推进59.900fps。逐NACK有效性/ReferenceChain/媒体锚点/显示闭环缺证。
+- Validation: [验收报告](../../dev-docs/validation/2026-11-03-sr-gpu-supply-fresh-trace-analysis.md)及metrics完成1678唯一seq、89完整窗口、同代际/CPU总值/生命周期/SHA核对；browser行为与runtime稳定性PASS，退出资源和trace预算通过。
+- Handoff: 优先前置GPU冷准备、分解context/shader/首导入成本并明确冷失败后的有界恢复资格，同时补probe eligibility连续事实；保留8ms稳态及新鲜度、单在途合同。取得warm/有效像素配对/补交付后再验收SR60fps，S4保持In Progress，实机采集继续由用户手动完成。
+
+
+## 2026-11-03 冷准备与运行态补供帧修复执行
+
+- Authorization: 用户明确要求继续修复冷初始化/有界重新启用及运行态SR帧率缺口，主窗口直接执行。
+- Scope: 继续使用同一VideoFrameSource/GPU像素观测器和两个canvas renderer。renderer接入时通过短期准备资格提前初始化GPU资源，首个帧回调沿准备完成的资源执行；取消准备、关闭和renderer切换继续由共享帧源统一清理。
+- Budget: 资源准备独立记录context/shader/resources成本，采用2秒完成期限；逐次video导入与PBO取回保持一次50ms冷导入、8ms稳态预算，结果消费新鲜度8ms。资源准备成本与逐帧CPU成本分别结算。
+- Retry: 失败后保留停用诊断与3秒冷却；显式新renderer接入最多允许一次重新准备，同video内逐帧观察保持原供给。成功的尺寸/生命周期重建沿原资源合同执行。
+- Evidence: 补准备状态、请求所有权、可见性/暂停/readyState/尺寸/FPS和重试计数；生产模块回放验证171ms初始化+25ms冷导入后仍能从稀疏RVFC补齐唯一图像，并覆盖失败重接入、取消、30fps、静态和迟到结果。
+- Acceptance: 自动回归与生产回放验证代码行为，实机持续60fps、GPU执行和物理呈现继续由用户手动采集新日志验收。
+
+
+## 2026-11-03 冷准备与运行态补供帧修复完成
+
+- Delivered: 两个canvas renderer接入先取得共享帧源准备资格，完成GPU context/shader/FBO/PBO准备后注册帧请求并交还资格。初始化独立2秒耗时阈值，逐次CPU保持50ms冷导入/8ms稳态；失败3秒冷却后显式新接入最多一次重试，待首帧与尺寸变化复用准备资源。
+- Evidence: preparationTiming/context/shader/resources、preparationState、eligibility及retry计数透出；pixelProbePreparations/framePreparationRequests随PlaybackService资源统计清零。准备CPU与read CPU分别结算，逐read initializationMs=0。
+- Validation: [修复报告](../reports/2026-11-03-sr-cold-preparation-and-runtime-supply-fix.md)、144定向/485全量、56组生产回放、lint/类型/构建通过。171ms初始化+25ms首导入后，45/50Hz RVFC与250ms合批计数的10秒运行态，两种renderer均600张唯一图像；3ms GPU等待保持600，30fps/静态/迟到和关闭合同通过。
+- Boundary: 准备包含同步WebGL调用，设备warm成本、drawable更新、GPU/真实submit→present及持续SR完整15s窗口待新构建日志验收；旧日志51.39/46.97fps保留修复前证据。S4保持In Progress，实机采集由用户手动完成。

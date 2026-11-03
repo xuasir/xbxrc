@@ -1,4 +1,5 @@
 import type { LogicalButtonDto } from '@shared/gamepad/contract'
+import type { InputSnapshot } from '@shared/gamepad/input-controller'
 import type { GamepadFrame } from '../../domain/input'
 import { inputController } from '@shared/gamepad/runtime'
 import { clonePadState, neutralState, stateEquals } from '@shared/gamepad/state'
@@ -14,6 +15,7 @@ export class GamepadDriver {
   private virtual = neutralState()
   private lastSent = neutralState()
   private lastSentAt = 0
+  private lastSnapshot?: InputSnapshot
 
   constructor(private readonly delegate: GamepadDriverDelegate) {}
 
@@ -24,11 +26,14 @@ export class GamepadDriver {
     this.lastSentAt = Number.NEGATIVE_INFINITY
     this.dispose = inputController.subscribe((snapshot) => {
       const now = performance.now()
-      if (stateEquals(this.lastSent, snapshot.gameState) && now - this.lastSentAt < 100)
+      const resetReason = this.resetReason(snapshot)
+      this.lastSnapshot = snapshot
+      // 同为中性态的设备/归属交接仍需取消已积压的旧源输入。
+      if (!resetReason && stateEquals(this.lastSent, snapshot.gameState) && now - this.lastSentAt < 100)
         return
       this.lastSent = clonePadState(snapshot.gameState)
       this.lastSentAt = now
-      this.delegate.onFrame({ gamepadIndex: 0, state: clonePadState(snapshot.gameState) })
+      this.delegate.onFrame({ ...this.frame(snapshot), resetReason })
     })
   }
 
@@ -37,6 +42,7 @@ export class GamepadDriver {
       return
     this.dispose?.()
     this.dispose = undefined
+    this.lastSnapshot = undefined
     this.virtual = neutralState()
     inputController.setVirtualState(this.virtual)
     inputController.setSystemHome(false)
@@ -44,7 +50,27 @@ export class GamepadDriver {
   }
 
   requestStates(): GamepadFrame[] {
-    return [{ gamepadIndex: 0, state: clonePadState(inputController.getSnapshot().gameState) }]
+    return [this.frame(inputController.getSnapshot())]
+  }
+
+  private frame(snapshot: InputSnapshot): GamepadFrame {
+    return { gamepadIndex: 0, state: clonePadState(snapshot.gameState), observedAtMs: performance.now(), sampledAtMs: snapshot.observedAt, sampleSequence: snapshot.sequence }
+  }
+
+  private resetReason(snapshot: InputSnapshot): GamepadFrame['resetReason'] {
+    const previous = this.lastSnapshot
+    if (!previous)
+      return undefined
+    if (previous.owner !== snapshot.owner)
+      return 'owner-changed'
+    if (previous.activeDeviceId !== snapshot.activeDeviceId)
+      return 'device-changed'
+    if (previous.preferences.controlSource !== snapshot.preferences.controlSource
+      || (previous.preferences.gameControls !== snapshot.preferences.gameControls
+        && JSON.stringify(previous.preferences.gameControls) !== JSON.stringify(snapshot.preferences.gameControls))) {
+      return 'controls-changed'
+    }
+    return undefined
   }
 
   setGamepadState(frame: GamepadFrame): void {

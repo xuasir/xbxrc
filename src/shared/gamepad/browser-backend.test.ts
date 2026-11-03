@@ -124,4 +124,27 @@ describe('browserGamepadBackend', () => {
     expect(await result).toBe('failed')
     expect(reset).toHaveBeenCalled()
   })
+
+  it('keeps stationary snapshots at heartbeat cadence while resampling every 4ms', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const getGamepads = vi.fn(() => [pad()])
+    const snapshots: GamepadSnapshot[] = []
+    const backend = new BrowserGamepadBackend({
+      getGamepads,
+      requestFrame: () => 1,
+      cancelFrame: () => {},
+      now: () => Date.now(),
+      startTimer: (callback, ms) => setInterval(callback, ms),
+      stopTimer: id => clearInterval(id),
+    })
+    await backend.start(snapshot => snapshots.push(snapshot))
+    vi.advanceTimersByTime(100)
+    expect(getGamepads).toHaveBeenCalledTimes(26)
+    expect(snapshots.map(snapshot => snapshot.observedAt)).toEqual([0, 100])
+    await backend.stop()
+    const count = getGamepads.mock.calls.length
+    vi.advanceTimersByTime(100)
+    expect(getGamepads).toHaveBeenCalledTimes(count)
+  })
 })

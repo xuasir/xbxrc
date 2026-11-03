@@ -12,6 +12,7 @@ export class DataChannelHub {
     this.disposers.get(name)?.()
     const channel = this.transport.createDataChannel(name, init)
     let active = true
+    const writableDisposers = new Set<() => void>()
     const context: ChannelContext = {
       send: (data) => {
         if (!active)
@@ -38,6 +39,22 @@ export class DataChannelHub {
       },
       readyState: () => active ? channel.readyState : 'closed',
       bufferedAmount: () => channel.bufferedAmount,
+      onWritable: (threshold, listener) => {
+        channel.bufferedAmountLowThreshold = threshold
+        const onLow = () => {
+          if (active)
+            listener()
+        }
+        const unsubscribe = () => {
+          channel.removeEventListener('bufferedamountlow', onLow)
+          writableDisposers.delete(unsubscribe)
+        }
+        if (active) {
+          channel.addEventListener('bufferedamountlow', onLow)
+          writableDisposers.add(unsubscribe)
+        }
+        return unsubscribe
+      },
     }
     const handler = create(context)
     const onOpen = () => {
@@ -61,6 +78,8 @@ export class DataChannelHub {
         return
       // 先撤销旧通道事件，再回收共享输入；迟到 close/握手只属于原会话。
       active = false
+      for (const unsubscribe of writableDisposers)
+        unsubscribe()
       channel.removeEventListener('open', onOpen)
       channel.removeEventListener('message', onMessage)
       channel.removeEventListener('closing', onClosing)

@@ -17,9 +17,20 @@ const gpuProbe = new Function('vi', 'exports', ts.transpileModule(support, {
 }).outputText + '\nreturn exports.gpuProbe;')(vi, {})
 
 async function run(kind, settings, diagnostics, enabled = true) {
-  const h = await harness(kind, { targetFps: settings.targetFps ?? 60 }, false, 'playbackQuality')
+  let p
+  const h = await harness(kind, { targetFps: settings.targetFps ?? 60 }, false, 'playbackQuality', (video, spend) => {
+    p = gpuProbe(video)
+    if (settings.initializationMs) p.canvas.getContext = vi.fn(() => { spend(settings.initializationMs); return p.gl })
+    let coldImport = true
+    p.gl.texImage2D = vi.fn((...args) => {
+      if (args.at(-1) === video && coldImport) {
+        spend(settings.coldImportMs ?? 0)
+        coldImport = false
+      }
+    })
+    if (!enabled) p.canvas.getContext.mockReturnValue(null)
+  })
   const source = getVideoFrameSource(h.video)
-  const p = gpuProbe(h.video)
   let timerId = 0
   const timers = new Map()
   vi.stubGlobal('setTimeout', (callback, ms) => {
@@ -28,7 +39,6 @@ async function run(kind, settings, diagnostics, enabled = true) {
     return id
   })
   vi.stubGlobal('clearTimeout', id => timers.delete(id))
-  if (!enabled) p.canvas.getContext.mockReturnValue(null)
   p.gl.fenceSync = vi.fn(() => ({ readyAt: performance.now() + (settings.delayMs ?? 1) }))
   p.gl.clientWaitSync = vi.fn(sync => performance.now() >= sync.readyAt ? p.gl.CONDITION_SATISFIED : p.gl.TIMEOUT_EXPIRED)
   const pump = until => {
@@ -54,12 +64,27 @@ async function run(kind, settings, diagnostics, enabled = true) {
   subscribe()
   if (diagnostics) source.snapshotDiagnostics()
   const sourceFps = settings.sourceFps ?? 60
+  let warmupFrames = 0
+  if (settings.coldImportMs) {
+    const start = performance.now() + 10
+    for (let index = 0; index < 2; index++) {
+      image = index + 1
+      p.image(image)
+      h.frame(start + index * 50, image, 0, image)
+      pump(start + index * 50 + settings.coldImportMs + 5)
+    }
+    warmupFrames = 2
+    imports.length = candidates.length = 0
+  }
+  const before = h.renderer.snapshotResources().realtimeDrawCount
+  const pixelBefore = source.snapshotDiagnostics().videoPixels.deliveredFrameCount
+  const origin = settings.coldImportMs ? performance.now() + 50 : 0
   let callbacks = 0
   for (let slot = 0; slot < 600; slot++) {
-    const at = slot * 1000 / 60
-    image = Math.floor(slot * sourceFps / 60) + 1
+    const at = origin + slot * 1000 / 60
+    image = warmupFrames + Math.floor(slot * sourceFps / 60) + 1
     p.image(settings.static ? 20 : image % 255)
-    const counted = settings.perFrame ? image : Math.max(1, Math.floor(Math.floor(slot / 15) * sourceFps / 4))
+    const counted = settings.perFrame ? image : warmupFrames + Math.max(warmupFrames ? 0 : 1, Math.floor(Math.floor(slot / 15) * sourceFps / 4))
     h.supply(counted)
     if (settings.pollFirst) h.raf(at)
     if ((slot + 1) % (settings.skipEvery ?? 6) !== 0) {
@@ -74,7 +99,7 @@ async function run(kind, settings, diagnostics, enabled = true) {
   assert.equal(new Set(imports).size, imports.length, `${settings.name}: duplicate imports`)
   assert.equal(new Set(candidates.map(c => c.image)).size, candidates.length, `${settings.name}: duplicate candidates`)
   assert.equal(new Set(candidates.map(c => c.localSequence)).size, candidates.length)
-  assert.equal(renderer.realtimeDrawCount, imports.length)
+  assert.equal(renderer.realtimeDrawCount - before, imports.length)
   assert.equal(renderer.duplicateDrawCount, 0)
   assert.equal(renderer.submitFailureCount, 0)
   assert.ok(pixels.pairs.length <= 8)
@@ -94,9 +119,9 @@ async function run(kind, settings, diagnostics, enabled = true) {
   source.cancel(requestId)
   assert.equal(timers.size, 0)
   const closed = source.snapshotResources()
-  for (const key of ['frameRequests', 'nativeFrameCallbacks', 'animationCallbacks', 'pixelProbeCanvases', 'pixelProbeGpuReads', 'pixelProbePendingPairs', 'pixelProbeTimers'])
+  for (const key of ['frameRequests', 'nativeFrameCallbacks', 'animationCallbacks', 'pixelProbeCanvases', 'pixelProbeGpuReads', 'pixelProbePendingPairs', 'pixelProbeTimers', 'pixelProbePreparations', 'framePreparationRequests'])
     assert.equal(closed[key], 0, key)
-  const result = { kind, name: settings.name, diagnostics, enabled, nativeCallbacks: callbacks, candidates: candidates.length, submitted: imports.length, uniqueImportedImages: new Set(imports).size, pixelDelivered: pixels.deliveredFrameCount, pixelPairs: pixels.pairCount, counterRebases: pixels.counterRebaseCount, discarded: pixels.discarded, closed }
+  const result = { kind, name: settings.name, diagnostics, enabled, nativeCallbacks: callbacks, candidates: candidates.length, submitted: imports.length, uniqueImportedImages: new Set(imports).size, pixelDelivered: pixels.deliveredFrameCount - pixelBefore, warmupFrames, preparationTiming: pixels.preparationTiming, firstRead: pixels.readTiming.firstRead, pixelPairs: pixels.pairCount, counterRebases: pixels.counterRebaseCount, discarded: pixels.discarded, closed }
   vi.restore()
   return result
 }
