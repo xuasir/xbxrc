@@ -59,6 +59,7 @@
 
 ## Recent Completed
 
+- 2026-11-03: 仓库缓存清理完成。清理84处Rust编译中间产物、Vite/Python缓存、生成dist及Finder缓存，仓库占用50.1→4.1GiB（减少46.0GiB），target49.6→3.6GiB；1099份受保护源码/文件内容、15944项依赖/安装包/日志元数据、Git状态及暂存差异校验一致。
 - 2026-11-02: 手柄高频输入交付修复完成。4ms补采、边沿与扳机峰值保持、128状态/250ms预算、普通/断开释放余量、缓冲恢复即时flush、源时间及限频诊断落地；473项回归、lint、类型、构建通过。实机时延及平台长测继续归入Browser stable P0待验。[RFC](rfcs/2026-11-02-gamepad-input-delivery-fixes.md) · [修复报告](reports/2026-11-02-gamepad-input-delivery-fixes.md)。
 - 2026-11-02: main 手柄输入整链审计完成。相关50项回归与9项模拟实验通过；确认短按/短释放漏采、100ms后台补采、8状态溢出丢边沿、扳机峰值合并丢失、普通释放和50ms重试等待。生产实现保持当前版本，实机端到端时延待测。[审计报告](reports/2026-11-02-gamepad-input-chain-audit.md)。
 - 2026-11-02: 精简并对齐 dev-docs、docs、scripts、tests。合并10份任务快照、删除旧指南/重复计划/缺陷回放、统一Python测试和文档入口；21项回归、22场景夹具、发布校验、脚本语法与本地链接检查通过。[清理报告](reports/2026-11-02-repository-support-cleanup.md)。
