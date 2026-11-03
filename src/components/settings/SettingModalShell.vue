@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface SettingModalShellProps {
@@ -14,6 +15,7 @@ interface SettingModalShellProps {
   defaultFocusId?: string
   trap?: boolean
   restoreFocus?: boolean
+  busy?: boolean
 }
 
 const props = withDefaults(defineProps<SettingModalShellProps>(), {
@@ -35,8 +37,37 @@ const { t } = useI18n()
 const closeNodeId = computed(() => `${props.scopeId}.close`)
 
 function handleClose(): void {
-  emit('close')
+  if (!props.busy)
+    emit('close')
 }
+
+function handleEscape(event: KeyboardEvent): void {
+  if (event.defaultPrevented || !navigationEngine.isTopmostScope(props.scopeId))
+    return
+  if (event.key === 'Tab' && props.trap) {
+    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
+    const index = nodes.indexOf(document.activeElement as HTMLElement)
+    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
+    if (next) {
+      event.preventDefault()
+      navigationEngine.focusElement(next, false)
+    }
+    return
+  }
+  if (event.key !== 'Escape')
+    return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  handleClose()
+}
+watch(() => props.open, (open) => {
+  window.removeEventListener('keydown', handleEscape)
+  if (!open)
+    navigationEngine.updateActiveScope(props.scopeId, false)
+  if (open)
+    window.addEventListener('keydown', handleEscape)
+}, { immediate: true })
+onUnmounted(() => window.removeEventListener('keydown', handleEscape))
 </script>
 
 <template>
@@ -58,6 +89,7 @@ function handleClose(): void {
               maxHeight: props.maxHeight,
             }"
             :aria-label="props.title"
+            role="dialog" aria-modal="true" :aria-busy="props.busy"
           >
             <header class="setting-modal-shell__header">
               <div class="setting-modal-shell__header-copy">
@@ -87,13 +119,14 @@ function handleClose(): void {
                 :scope-id="props.scopeId"
                 :on-back="handleClose"
                 :aria-label="t('setting.editor.cancel')"
+                :disabled="props.busy"
                 @click="handleClose"
               >
                 <span class="setting-modal-shell__close-icon" aria-hidden="true">✕</span>
               </Focusable>
             </header>
 
-            <div class="setting-modal-shell__body">
+            <div class="setting-modal-shell__body" data-nav-scroll-container>
               <slot />
             </div>
 
@@ -117,13 +150,16 @@ function handleClose(): void {
   justify-content: center;
   padding: var(--ui-settings-modal-padding);
   background: var(--ui-scrim-bg);
+  backdrop-filter: blur(var(--ui-settings-glass-blur));
 }
 
 .setting-modal-shell__panel {
   padding: var(--ui-settings-modal-panel-padding);
+  background: var(--ui-settings-glass-overlay-bg);
+  --color-focus-bg-strong: var(--ui-focus-surface);
   gap: var(--ui-space-lg);
-  /* 圆角裁切交给子层；主体滚动在 __body，避免 footer 固定时上方内容被裁切 */
-  overflow: hidden;
+  /* body 独立滚动，标题和操作栏保留外扩焦点阴影。 */
+  overflow: visible;
   min-height: 0;
 }
 
@@ -160,17 +196,18 @@ function handleClose(): void {
 }
 
 .setting-modal-shell__hint {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.4;
+  margin: var(--ui-space-xs) 0 0;
+  font-size: var(--ui-settings-row-description-size);
+  line-height: var(--ui-line-height-relaxed);
   color: var(--color-text-secondary);
 }
 
 .setting-modal-shell__close {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  border: 0;
+  position: relative;
+  width: var(--ui-settings-modal-control-min-height);
+  height: var(--ui-settings-modal-control-min-height);
+  border: 2px solid transparent;
   border-radius: 50%;
   background: var(--color-state-hover);
   color: var(--ui-page-text);
@@ -185,6 +222,8 @@ function handleClose(): void {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
+  border-color: transparent;
+  z-index: 10;
 }
 
 .setting-modal-shell__close-icon {
@@ -198,11 +237,15 @@ function handleClose(): void {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail);
+  margin-inline: calc(-1 * var(--ui-settings-focus-safe));
+  scroll-padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail);
 }
 
 .setting-modal-shell__footer {
   flex-shrink: 0;
-  padding-top: var(--ui-space-md);
+  padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail);
+  margin: 0 calc(-1 * var(--ui-settings-focus-safe)) calc(-1 * var(--ui-settings-focus-safe));
   border-top: 1px solid var(--ui-border-subtle);
 }
 

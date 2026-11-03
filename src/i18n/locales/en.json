@@ -146,19 +146,21 @@
     "diagnosticsMenu": {
       "title": "Diagnostics & experiments",
       "iconButtonLabel": "Diagnostics & experiments",
-      "showExperience": "Show streaming quality",
-      "hideExperience": "Hide streaming quality",
-      "showBrowserDiagnostics": "Show browser diagnostics",
-      "hideBrowserDiagnostics": "Hide browser diagnostics"
+      "showExperience": "Show runtime metrics",
+      "hideExperience": "Hide runtime metrics",
+      "showBrowserDiagnostics": "Show diagnostics",
+      "hideBrowserDiagnostics": "Hide diagnostics"
     },
     "experience": {
-      "title": "Streaming quality",
+      "title": "Runtime metrics",
       "statusOwner": "Optimizing connection",
       "notices": {
         "relay": "Using a relay connection",
-        "recovering": "Recovering stream",
-        "displaySupplyLimited": "Display supply limited",
-        "noVideo": "No video signal"
+        "recovering": "Recovering",
+        "displaySupplyLimited": "Video stalled",
+        "noVideo": "No video",
+        "sampling": "Sampling",
+        "stale": "Data stale"
       },
       "metrics": {
         "status": "Status",
@@ -177,7 +179,7 @@
     },
     "diagnosticsPanel": {
       "browser": {
-        "title": "Browser diagnostics",
+        "title": "Diagnostics",
         "fields": {
           "receivedFps": "Received frames/s",
           "decodedFps": "Decoded frames/s",
@@ -188,15 +190,15 @@
           "observation": "Observation / sample",
           "sourceSize": "Actual source size",
           "outputSize": "Actual output size",
-          "submitAge": "Submission age",
-          "submitCost": "CPU submission mean",
+          "submitAge": "Latest submit age",
+          "submitCost": "Mean CPU draw duration",
           "uploadCost": "CPU texture upload mean",
           "glSubmitCost": "CPU GL submission mean",
           "gpuCost": "GPU time",
           "scanout": "Actual scanout",
           "renderCause": "Display cause",
           "renderEffect": "Display action effect",
-          "frameCauses": "Overwrite / pace / failure / capture draws",
+          "frameCauses": "Total overwrite / pacing / failures / captures",
           "rttBaseline": "Path RTT baseline",
           "rttDelta": "RTT growth",
           "qualityRequested": "Requested bitrate cap",
@@ -223,7 +225,17 @@
           "keyframeSuccessRate": "Keyframe success",
           "recoveryCause": "Recovery cause",
           "qualityLadderLevel": "Quality ladder",
-          "decisionDigest": "Decision digest"
+          "decisionDigest": "Decision digest",
+          "rtt": "Network RTT",
+          "jitter": "Network jitter",
+          "packetLoss": "Packet loss (5s)",
+          "totalBitrate": "Total inbound bitrate",
+          "connectedElapsed": "Connection duration",
+          "mediaReadyElapsed": "First-frame duration",
+          "transportPath": "Connection path",
+          "serverHost": "Server",
+          "sampleAge": "Sample age",
+          "senderPolicyCause": "Sender policy cause"
         }
       },
       "rust": {
@@ -244,6 +256,23 @@
           "recoveryRfcCeiling": "RFC ceiling",
           "hostPresentTelemetry": "Host present telemetry"
         }
+      },
+      "close": "Close diagnostics",
+      "groupsLabel": "Diagnostic groups",
+      "groups": {
+        "network": "Network",
+        "display": "Display",
+        "recovery": "Recovery",
+        "session": "Session"
+      },
+      "copy": "Copy metrics snapshot",
+      "copied": "Copied",
+      "failed": "Copy failed",
+      "hints": {
+        "network": "Loss uses a 5-second window. RTT measures network round trips. Video bitrate is received traffic; limits are requested or negotiated ceilings.",
+        "display": "FPS observes video advancement / renderer submissions. CPU draw duration measures cost; submit age measures freshness. GPU time and physical scanout are unavailable.",
+        "recovery": "Causes and action effects use existing diagnostic facts. Interpret keyframe success with requests and responses in the current window.",
+        "session": "Connection and first-frame durations are fixed milestones. Copies contain allowlisted metrics; full paths and decisions remain in this panel and trace."
       }
     },
     "display": {
@@ -803,8 +832,8 @@
       "eyebrow": "Edit Setting",
       "valueLabel": "Value",
       "invalidNumber": "Enter a valid number",
-      "decrease": "Decrease value",
-      "increase": "Increase value",
+      "decrease": "Decrease",
+      "increase": "Increase",
       "clear": "Clear input",
       "clearShort": "Clear",
       "cancel": "Cancel",
@@ -940,7 +969,8 @@
       "presets": {
         "standard": "Standard",
         "clear": "Clear",
-        "soft": "Soft"
+        "soft": "Soft",
+        "custom": "Custom"
       }
     },
     "states": {
@@ -1029,7 +1059,8 @@
         }
       },
       "fullscreen": {
-        "label": "Launch in fullscreen"
+        "label": "Launch in fullscreen",
+        "description": "Enter fullscreen automatically when the app starts."
       },
       "background_keepalive": {
         "label": "Background keepalive",
@@ -1226,7 +1257,7 @@
         }
       },
       "force_region_ip": {
-        "label": "Region routing override",
+        "label": "Cloud gaming region",
         "options": {
           "empty": {
             "label": "Default",
@@ -1256,30 +1287,31 @@
           "104_211_96_159": {
             "label": "Central India"
           }
-        }
+        },
+        "description": "Choose the region used for cloud gaming connections."
       },
       "codec": {
         "label": "Preferred video codec tier",
         "options": {
           "empty": {
             "label": "Auto",
-            "description": "Automatic"
+            "description": "Negotiate a supported H.264 profile automatically."
           },
           "video_h264_64": {
             "label": "H.264 · High",
-            "description": "Sharper"
+            "description": "Prefer the High profile."
           },
           "video_h264_4d": {
             "label": "H.264 · Main",
-            "description": "Balanced"
+            "description": "Prefer the Main profile."
           },
           "video_h264_42e": {
             "label": "H.264 · Constrained Baseline",
-            "description": "More compatible"
+            "description": "Prefer the Constrained Baseline profile."
           },
           "video_h264_420": {
             "label": "H.264 · Baseline",
-            "description": "Most compatible"
+            "description": "Prefer the Baseline profile."
           }
         }
       },
@@ -1389,6 +1421,89 @@
           }
         }
       }
+    },
+    "experience": {
+      "loadFailed": "Could not load settings. Please retry.",
+      "retry": "Retry",
+      "saving": "Saving…",
+      "saveFailed": "Could not save. Please retry.",
+      "savedRefreshPending": "Saved. Authentication cache refresh failed; retry before the next connection.",
+      "restartNow": "Restart app",
+      "restartHint": "Restarting ends the current session. Saved startup preferences and installed updates take effect after restart.",
+      "restartFailed": "Could not restart. Please retry.",
+      "confirm": "Confirm",
+      "show": "Show",
+      "hide": "Hide",
+      "discardTitle": "Discard unapplied changes?",
+      "discardHint": "Closing restores your saved settings.",
+      "range": "Range {min}–{max}, step {step}.",
+      "effects": {
+        "instant": "Applies immediately",
+        "nextConnection": "Applies on next connection",
+        "nextLaunch": "Applies on next launch"
+      },
+      "saved": {
+        "instant": "Saved and applied.",
+        "nextConnection": "Saved. Applies on next connection.",
+        "nextLaunch": "Saved. Applies on next launch."
+      },
+      "validation": {
+        "required": "Enter a number.",
+        "number": "Enter a valid number.",
+        "range": "Enter a value between {min} and {max}.",
+        "step": "Use increments of {step}."
+      },
+      "sections": {
+        "startup": "Startup",
+        "feedback": "Interface feedback",
+        "resolution": "Resolution",
+        "picture": "Picture",
+        "sound": "Audio",
+        "streamingAdvanced": "Advanced · Codec and bitrate",
+        "cloudPreferences": "Cloud gaming preferences",
+        "network": "Connection policy",
+        "connectionAdvanced": "Advanced · Custom relay",
+        "diagnostics": "Logs and diagnostics"
+      },
+      "turn": {
+        "title": "Custom relay server",
+        "hint": "TURN relay for streaming. Enter the address, username and credential from your provider. Applies on next connection.",
+        "enable": "Use custom relay",
+        "url": "TURN address",
+        "username": "Username",
+        "credential": "Credential",
+        "default": "Use default relay",
+        "custom": "Custom relay configured",
+        "incomplete": "Enter the address, username and credential.",
+        "urlError": "Enter a valid TURN address.",
+        "reset": "Restore default relay",
+        "resetHint": "Clears the saved custom address and credentials. The next connection uses the default relay."
+      },
+      "update": {
+        "current": "You are up to date on this channel.",
+        "retryDownload": "Retry download and install",
+        "channelHelp": "Stable is for everyday use; beta offers early access to new features.",
+        "checkedAt": "Last checked · {time}",
+        "releasedAt": "Released · {date}",
+        "notes": "Release notes",
+        "later": "Keep using the app; restart later to apply.",
+        "switchStable": "Switch to stable?",
+        "stableWarning": "The stable version may be older than your current beta. You may need to install stable manually. Confirm to change the update channel.",
+        "target": "Target version {version}",
+        "retryChannel": "Reload update channel"
+      },
+      "input": {
+        "controllerHint": "Select a field and press A to enter text, or click to use your keyboard.",
+        "keyboardHint": "Move to a key, press A to enter, or B to cancel. Done returns to the form.",
+        "empty": "Empty",
+        "uppercase": "Uppercase",
+        "letters": "Letters",
+        "symbols": "Symbols",
+        "space": "Space",
+        "backspace": "Backspace",
+        "clear": "Clear",
+        "done": "Done"
+      }
     }
   },
   "gamepadSettings": {
@@ -1426,8 +1541,8 @@
     "captureHint": "Press a control to bind. Use Esc or the screen button to cancel.",
     "cancelCapture": "Cancel recording",
     "layoutHint": "Select a game action, then press a controller button. Occupied bindings swap. This layout applies to all standard controllers.",
-    "keyboardHint": "When enabled, the keyboard controls the game and the controller navigates menus. Select an action, press a key, then apply.",
-    "testHint": "Input is captured by this panel. Use Esc or the screen button to finish.",
+    "keyboardHint": "Use the keyboard for games and menus: WASD / arrows to move, J to confirm, K to go back, 1 / 2 to switch pages, and 3 / 4 to switch tabs. Customize game bindings, then apply.",
+    "testHint": "Controls show input during testing. Menu opens the action controls; B returns.",
     "testRemaining": "Time remaining",
     "finishTest": "Finish test",
     "rumbleTest": "Test vibration · 200ms",
@@ -1447,7 +1562,7 @@
     "reset": "Reset controller preferences",
     "resetHint": "Reset background behavior, layout, sticks, keyboard controller, and vibration. Keep the backend choice and device connection.",
     "confirmReset": "Confirm reset",
-    "resetDraft": "Reset current draft",
+    "resetDraft": "Reset defaults",
     "apply": "Apply",
     "leftStickUp": "Left stick up",
     "leftStickDown": "Left stick down",
@@ -1460,6 +1575,10 @@
     "standardInput": "Standard input",
     "gameOutput": "Game controls preview",
     "leftStick": "Left stick",
-    "rightStick": "Right stick"
+    "rightStick": "Right stick",
+    "captureControllerHint": "Menu + View cancels capture",
+    "testControllerHint": "Press Menu to navigate controls and pause the test timer.",
+    "testNavigationHint": "Controls · B returns, Menu resumes input testing.",
+    "resumeTest": "Resume input test"
   }
 }

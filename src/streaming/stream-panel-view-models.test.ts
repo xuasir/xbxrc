@@ -1,10 +1,15 @@
 import type { StreamPerformanceSnapshot, StreamSessionDiagnosticsSnapshot } from './types'
 import { describe, expect, it } from 'vitest'
 import {
+  buildDiagnosticClipboardSnapshot,
   buildStreamBrowserDiagnosticsViewModel,
   buildStreamExperienceMetricsViewModel,
+  DIAGNOSTIC_GROUPS,
+  diagnosticGroupRows,
   EXPERIENCE_METRIC_KEYS,
   experienceMetricValue,
+  initialDiagnosticGroup,
+  RUNTIME_METRIC_KEYS,
 } from './stream-panel-view-models'
 
 function createI18n(): { t: (key: string, values?: Record<string, unknown>) => string, te: (key: string) => boolean } {
@@ -33,6 +38,35 @@ function baseDiagnostics(overrides: Partial<StreamSessionDiagnosticsSnapshot> = 
 }
 
 describe('buildStreamExperienceMetricsViewModel', () => {
+  it('keeps actual source resolution, render FPS and video bitrate separate from receive and output', () => {
+    const vm = buildStreamExperienceMetricsViewModel({
+      snapshot: { resolution: '1920x1080', renderSourceWidth: 1280, renderSourceHeight: 720, renderActualOutputWidth: 2560, renderActualOutputHeight: 1440, inboundVideoFps: 60, presentFps: 24.6, inboundVideoBitrateKbps: 12600, inboundBitrateKbps: 13100, networkRttMs: 26.4, networkPacketLossRatio: 0.0123 },
+      diagnostics: baseDiagnostics(),
+      runtimeMode: 'webrtc-direct',
+      i18n: createI18n(),
+    })
+    expect(RUNTIME_METRIC_KEYS.map(key => experienceMetricValue(vm, key))).toEqual(['720p', '24.6', '12.6 Mbps', '26 ms', '1.2%'])
+    expect(vm.notice).toBeUndefined()
+  })
+
+  it('shows finite zero facts and rejects unknown or nonfinite startup placeholders', () => {
+    const input = { diagnostics: baseDiagnostics(), runtimeMode: 'webrtc-direct' as const, i18n: createI18n() }
+    const zero = buildStreamExperienceMetricsViewModel({ ...input, snapshot: { presentFps: 0, inboundVideoBitrateKbps: 0, rtt: 0, networkPacketLossRatio: 0 } })
+    expect([zero.presentFps, zero.videoBitrate, zero.rtt, zero.packetLoss]).toEqual(['0.0', '0.0 Mbps', '0 ms', '0.0%'])
+    const missing = buildStreamExperienceMetricsViewModel({ ...input, snapshot: { presentFps: Number.NaN, inboundVideoBitrateKbps: Infinity, rtt: '-1 (-1%)', pl: '-1 (-1%)' } })
+    expect([missing.presentFps, missing.videoBitrate, missing.rtt, missing.packetLoss]).toEqual(['--', '--', '--', '--'])
+    expect(buildStreamExperienceMetricsViewModel({ ...input, snapshot: null }).notice).toBe('sampling')
+  })
+
+  it('withholds stale values while prioritizing a single authoritative video notice', () => {
+    const input = { runtimeMode: 'webrtc-direct' as const, i18n: createI18n(), snapshot: { resolution: '1920x1080', presentFps: 60, statsObservationState: 'stale' as const } }
+    const vm = buildStreamExperienceMetricsViewModel({ ...input, diagnostics: baseDiagnostics() })
+    expect(vm.presentFps).toBe('--')
+    expect(vm.resolution).toBe('--')
+    expect(vm.notice).toBe('stale')
+    expect(buildStreamExperienceMetricsViewModel({ ...input, diagnostics: baseDiagnostics({ isRecovering: true, isDisplaySupplyLimited: true, hasNoVideoWarning: true }) }).notice).toBe('noVideo')
+    expect(buildStreamExperienceMetricsViewModel({ ...input, diagnostics: baseDiagnostics({ isRecovering: true, isDisplaySupplyLimited: true }) }).notice).toBe('displaySupplyLimited')
+  })
   it('produces the same metric key ordering for webrtc-direct and rust-owned', () => {
     const snapshot: StreamPerformanceSnapshot = {
       resolution: '1920x1080',
@@ -90,6 +124,21 @@ describe('buildStreamExperienceMetricsViewModel', () => {
 })
 
 describe('buildStreamBrowserDiagnosticsViewModel', () => {
+  it('moves milestones and detailed network information into groups and replaces unavailable rows with capability hints', () => {
+    const vm = buildStreamBrowserDiagnosticsViewModel({ snapshot: { pl: '3 (0.23%)', inboundBitrateKbps: 13100, transportPath: 'UDP direct' }, diagnostics: baseDiagnostics({ connectedMilestoneElapsedText: '1.3s', mediaReadyMilestoneElapsedText: '2.1s', serverHost: 'private-host' }), i18n: createI18n() })
+    const rows = DIAGNOSTIC_GROUPS.flatMap(group => diagnosticGroupRows(vm, group))
+    expect(rows.find(row => row.key === 'totalBitrate')?.value).toBe('13.1 Mbps')
+    expect(rows.find(row => row.key === 'connectedElapsed')?.value).toBe('1.3s')
+    expect(rows.map(row => row.key)).not.toContain('gpuCost')
+    expect(rows.map(row => row.key)).not.toContain('scanout')
+    expect(rows.map(row => row.key)).not.toContain('controlChannelError')
+    const copy = JSON.parse(buildDiagnosticClipboardSnapshot(vm))
+    expect(copy.session.connectedElapsed).toBe('1.3s')
+    expect(copy.session.serverHost).toBeUndefined()
+    expect(copy.session.transportPath).toBeUndefined()
+    expect(copy.session.decisionDigest).toBeUndefined()
+    expect(initialDiagnosticGroup(baseDiagnostics({ isRecovering: true, isDisplaySupplyLimited: true }))).toBe('display')
+  })
   it('fills browser-specific rows from snapshot', () => {
     const snapshot: StreamPerformanceSnapshot = {
       transportState: 'connected',

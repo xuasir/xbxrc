@@ -42,6 +42,20 @@ export function clonePadState(state: LogicalPadStateDto): LogicalPadStateDto {
   }
 }
 
+/** 数字控件取并集；第二来源的活动摇杆优先，避免方向互相抵消。 */
+export function mergePadStates(primary: LogicalPadStateDto, secondary: LogicalPadStateDto): LogicalPadStateDto {
+  const state = clonePadState(primary)
+  for (const key of BUTTON_KEYS)
+    state.buttons[key] = Math.max(state.buttons[key], secondary.buttons[key])
+  for (const key of ['leftStick', 'rightStick'] as const) {
+    if (secondary[key].x || secondary[key].y)
+      state[key] = { ...secondary[key] }
+  }
+  state.leftTrigger = Math.max(state.leftTrigger, secondary.leftTrigger)
+  state.rightTrigger = Math.max(state.rightTrigger, secondary.rightTrigger)
+  return state
+}
+
 export function axisValue(value: number | undefined): number {
   return Number.isFinite(value) ? Math.max(-1, Math.min(1, value!)) : 0
 }

@@ -331,7 +331,7 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     control: 'numberInput',
     input: {
       min: 0,
-      max: 512,
+      max: 200,
       step: 1,
     },
   },

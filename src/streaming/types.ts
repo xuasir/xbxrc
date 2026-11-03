@@ -440,6 +440,8 @@ export interface StreamSessionDiagnosticsSnapshot extends BrowserPlaybackStats {
 
 /** 串流页共享体验指标（browser / rust 同版展示） */
 export interface StreamExperienceMetricsViewModel {
+  observationState: 'fresh' | 'stale' | 'unavailable'
+  notice?: 'noVideo' | 'displaySupplyLimited' | 'recovering' | 'sampling' | 'stale'
   status: string
   resolution: string
   rtt: string
@@ -460,6 +462,15 @@ export interface StreamExperienceMetricsViewModel {
 
 /** webrtc-direct 内部诊断面板 */
 export interface StreamBrowserDiagnosticsViewModel {
+  rtt: string
+  jitter: string
+  packetLoss: string
+  totalBitrate: string
+  connectedElapsed: string
+  mediaReadyElapsed: string
+  transportPath: string
+  serverHost: string
+  sampleAge: string
   receivedFps: string
   decodedFps: string
   videoAdvancementFps: string

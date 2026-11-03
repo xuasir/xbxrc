@@ -4,7 +4,7 @@ import type { GamepadPreferences, InputOwner } from './preferences'
 import { emptyGamepadSnapshot } from './backend'
 import { applyGameControls, deriveInputOwner, parseGamepadPreferences } from './preferences'
 import { gameRumbleEffect } from './rumble'
-import { BUTTON_KEYS, clonePadState, neutralState, PadReleaseBarrier } from './state'
+import { BUTTON_KEYS, clonePadState, mergePadStates, neutralState, PadReleaseBarrier } from './state'
 
 export interface InputSnapshot {
   backend: GamepadBackend['kind'] | null
@@ -35,9 +35,11 @@ export class InputController {
   private isBackground: boolean | undefined
   private captures = new Map<string, boolean>()
   private keyboard = neutralState()
+  private keyboardUi = neutralState()
   private virtual = neutralState()
   private systemHome = false
   private uiBarrier = new PadReleaseBarrier()
+  private keyboardUiBarrier = new PadReleaseBarrier()
   private gameBarrier = new PadReleaseBarrier()
   private owner: InputOwner = 'ui'
   private generation = 0
@@ -108,6 +110,7 @@ export class InputController {
     this.streamReady = false
     this.captures.clear()
     this.keyboard = neutralState()
+    this.keyboardUi = neutralState()
     this.virtual = neutralState()
     this.systemHome = false
     this.comboHeld = false
@@ -182,8 +185,9 @@ export class InputController {
     return true
   }
 
-  setKeyboardState(state: LogicalPadStateDto): void {
+  setKeyboardState(state: LogicalPadStateDto, uiState: LogicalPadStateDto = state): void {
     this.keyboard = clonePadState(state)
+    this.keyboardUi = clonePadState(uiState)
     if (this.preferences.controlSource === 'keyboard')
       this.checkMenuCombo(true)
     this.publish()
@@ -222,20 +226,17 @@ export class InputController {
   }
 
   private gameInput(): LogicalPadStateDto {
-    const state = clonePadState(this.preferences.controlSource === 'keyboard' ? this.keyboard : this.physical())
-    for (const key of BUTTON_KEYS)
-      state.buttons[key] = Math.max(state.buttons[key], this.virtual.buttons[key])
-    for (const key of ['leftStick', 'rightStick'] as const) {
-      if (this.virtual[key].x || this.virtual[key].y)
-        state[key] = { ...this.virtual[key] }
-    }
-    state.leftTrigger = Math.max(state.leftTrigger, this.virtual.leftTrigger)
-    state.rightTrigger = Math.max(state.rightTrigger, this.virtual.rightTrigger)
-    return state
+    return mergePadStates(this.preferences.controlSource === 'keyboard' ? this.keyboard : this.physical(), this.virtual)
+  }
+
+  private keyboardUiInput(): LogicalPadStateDto {
+    return this.preferences.controlSource === 'keyboard' ? this.keyboardUi : neutralState()
   }
 
   private rearm(): void {
     this.uiBarrier.capture(this.physical())
+    // 各来源独立归位，键盘持键期间物理手柄的新按键仍可导航。
+    this.keyboardUiBarrier.capture(this.keyboardUiInput())
     this.gameBarrier = new PadReleaseBarrier(
       this.preferences.gameControls.leftDeadzone,
       this.preferences.gameControls.rightDeadzone,
@@ -289,7 +290,7 @@ export class InputController {
   private buildSnapshot(): InputSnapshot {
     const exclusive = [...this.captures.values()].some(Boolean)
     const physicalState = clonePadState(this.physical())
-    const ui = this.uiBarrier.apply(physicalState)
+    const ui = mergePadStates(this.uiBarrier.apply(physicalState), this.keyboardUiBarrier.apply(this.keyboardUiInput()))
     const gameInput = this.gameBarrier.apply(this.gameInput())
     if (this.comboHeld) {
       ui.buttons.menu = ui.buttons.view = 0

@@ -12,7 +12,9 @@ export type SettingPageKey
     | 'inputDevices'
     | 'advancedDiagnostics'
 
-export type SettingActionId = 'expertReset' | 'unlockDangerZone'
+export type SettingActionId = 'customTurn'
+
+export type SettingEffect = 'instant' | 'nextConnection' | 'nextLaunch'
 
 export type SettingSchemaItemDef
   = | { kind: 'field', fieldKey: string }
@@ -25,6 +27,7 @@ export interface SettingSchemaSectionDef {
   /** i18n 完整键，例如 setting.pages.general.sectionAppearance */
   labelKey: string
   items: SettingSchemaItemDef[]
+  collapsible?: boolean
 }
 
 /** 每个配置字段所在 RPC 分组（与 src-tauri/src/mods/config/grouping.rs 对齐） */
@@ -64,6 +67,14 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   vibration_strength: 'input',
 }
 
+export function getSettingEffect(fieldKey: string): SettingEffect {
+  if (fieldKey === 'fullscreen')
+    return 'nextLaunch'
+  if (CONFIG_FIELD_RPC_GROUP[fieldKey] === 'streaming')
+    return 'nextConnection'
+  return 'instant'
+}
+
 export const SETTING_PAGE_ORDER: readonly SettingPageKey[] = [
   'general',
   'streamingExperience',
@@ -81,137 +92,80 @@ export const SETTING_PAGE_LABEL_KEYS: Record<SettingPageKey, string> = {
 }
 
 const PAGE_GENERAL: SettingSchemaSectionDef[] = [
-  {
-    key: 'appearance',
-    labelKey: 'setting.pages.general.sectionAppearance',
-    items: [
-      { kind: 'field', fieldKey: 'locale' },
-      { kind: 'field', fieldKey: 'theme' },
-      { kind: 'field', fieldKey: 'fullscreen' },
-      { kind: 'field', fieldKey: 'ui_audio' },
-      { kind: 'field', fieldKey: 'background_keepalive' },
-    ],
-  },
+  { key: 'appearance', labelKey: 'setting.pages.general.sectionAppearance', items: [
+    { kind: 'field', fieldKey: 'locale' },
+    { kind: 'field', fieldKey: 'theme' },
+  ] },
+  { key: 'startup', labelKey: 'setting.experience.sections.startup', items: [
+    { kind: 'field', fieldKey: 'fullscreen' },
+  ] },
+  { key: 'feedback', labelKey: 'setting.experience.sections.feedback', items: [
+    { kind: 'field', fieldKey: 'ui_audio' },
+  ] },
 ]
 
 const PAGE_STREAMING: SettingSchemaSectionDef[] = [
-  {
-    key: 'shared',
-    labelKey: 'setting.pages.streamingExperience.sectionShared',
-    items: [
-      { kind: 'field', fieldKey: 'video_format' },
-      { kind: 'field', fieldKey: 'display_options' },
-      { kind: 'field', fieldKey: 'enable_audio_control' },
-      { kind: 'field', fieldKey: 'codec' },
-      { kind: 'field', fieldKey: 'audio_bitrate_mode' },
-      { kind: 'field', fieldKey: 'audio_bitrate' },
-      { kind: 'field', fieldKey: 'performance_style' },
-    ],
-  },
-  {
-    key: 'console',
-    labelKey: 'setting.pages.streamingExperience.sectionConsole',
-    items: [
-      { kind: 'field', fieldKey: 'xhome_resolution' },
-      { kind: 'field', fieldKey: 'xhome_bitrate_mode' },
-      { kind: 'field', fieldKey: 'xhome_bitrate' },
-    ],
-  },
-  {
-    key: 'cloud',
-    labelKey: 'setting.pages.streamingExperience.sectionCloud',
-    items: [
-      { kind: 'field', fieldKey: 'resolution' },
-      { kind: 'field', fieldKey: 'xcloud_bitrate_mode' },
-      { kind: 'field', fieldKey: 'xcloud_bitrate' },
-    ],
-  },
+  { key: 'resolution', labelKey: 'setting.experience.sections.resolution', items: [
+    { kind: 'field', fieldKey: 'xhome_resolution' },
+    { kind: 'field', fieldKey: 'resolution' },
+  ] },
+  { key: 'picture', labelKey: 'setting.experience.sections.picture', items: [
+    { kind: 'field', fieldKey: 'video_format' },
+    { kind: 'field', fieldKey: 'display_options' },
+    { kind: 'field', fieldKey: 'super_resolution_experimental' },
+  ] },
+  { key: 'sound', labelKey: 'setting.experience.sections.sound', items: [
+    { kind: 'field', fieldKey: 'enable_audio_control' },
+  ] },
+  { key: 'advanced', labelKey: 'setting.experience.sections.streamingAdvanced', items: [
+    { kind: 'field', fieldKey: 'codec' },
+    { kind: 'field', fieldKey: 'xhome_bitrate_mode' },
+    { kind: 'field', fieldKey: 'xhome_bitrate' },
+    { kind: 'field', fieldKey: 'xcloud_bitrate_mode' },
+    { kind: 'field', fieldKey: 'xcloud_bitrate' },
+    { kind: 'field', fieldKey: 'audio_bitrate_mode' },
+    { kind: 'field', fieldKey: 'audio_bitrate' },
+  ] },
 ]
 
 const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
-  {
-    key: 'general',
-    labelKey: 'setting.pages.connectionHost.sectionGeneral',
-    items: [
-      { kind: 'field', fieldKey: 'preferred_game_language' },
-      { kind: 'field', fieldKey: 'force_region_ip' },
-      { kind: 'field', fieldKey: 'ipv6' },
-    ],
-  },
-  {
-    key: 'console',
-    labelKey: 'setting.pages.connectionHost.sectionConsole',
-    items: [
-      { kind: 'field', fieldKey: 'xhome_turn_fallback' },
-    ],
-  },
+  { key: 'cloud', labelKey: 'setting.experience.sections.cloudPreferences', items: [
+    { kind: 'field', fieldKey: 'force_region_ip' },
+    { kind: 'field', fieldKey: 'preferred_game_language' },
+  ] },
+  { key: 'network', labelKey: 'setting.experience.sections.network', items: [
+    { kind: 'field', fieldKey: 'ipv6' },
+    { kind: 'field', fieldKey: 'xhome_turn_fallback' },
+  ] },
+  { key: 'advanced', labelKey: 'setting.experience.sections.connectionAdvanced', collapsible: true, items: [
+    { kind: 'action', actionId: 'customTurn' },
+  ] },
 ]
 
-const PAGE_INPUT: SettingSchemaSectionDef[] = []
+const PAGE_ADVANCED: SettingSchemaSectionDef[] = [
+  { key: 'diagnostics', labelKey: 'setting.experience.sections.diagnostics', items: [
+    { kind: 'field', fieldKey: 'runtime_trace_mode' },
+    { kind: 'field', fieldKey: 'debug' },
+  ] },
+]
 
-export function getAdvancedDiagnosticsSections(dangerUnlocked: boolean): SettingSchemaSectionDef[] {
-  const base: SettingSchemaSectionDef[] = [
-    {
-      key: 'preview',
-      labelKey: 'setting.pages.advancedDiagnostics.sectionPreview',
-      items: [
-        { kind: 'field', fieldKey: 'super_resolution_experimental' },
-      ],
-    },
-    {
-      key: 'advanced',
-      labelKey: 'setting.pages.advancedDiagnostics.sectionAdvanced',
-      items: [
-        { kind: 'field', fieldKey: 'debug' },
-        { kind: 'field', fieldKey: 'runtime_trace_mode' },
-      ],
-    },
-  ]
-
-  if (!dangerUnlocked) {
-    base.push({
-      key: 'danger',
-      labelKey: 'setting.pages.advancedDiagnostics.sectionDanger',
-      items: [
-        { kind: 'notice', noticeKey: 'setting.pages.advancedDiagnostics.dangerIntro' },
-        { kind: 'action', actionId: 'unlockDangerZone' },
-      ],
-    })
-    return base
-  }
-
-  base.push({
-    key: 'danger',
-    labelKey: 'setting.pages.advancedDiagnostics.sectionDanger',
-    items: [
-      { kind: 'notice', noticeKey: 'setting.streaming.expert.riskHint' },
-      { kind: 'field', fieldKey: 'server_url' },
-      { kind: 'field', fieldKey: 'server_username' },
-      { kind: 'field', fieldKey: 'server_credential' },
-      { kind: 'action', actionId: 'expertReset' },
-    ],
-  })
-  return base
-}
-
-const STATIC_PAGE_SECTIONS: Record<
-  Exclude<SettingPageKey, 'advancedDiagnostics'>,
-  SettingSchemaSectionDef[]
-> = {
+const PAGE_SECTIONS: Record<SettingPageKey, SettingSchemaSectionDef[]> = {
   general: PAGE_GENERAL,
   streamingExperience: PAGE_STREAMING,
   connectionHost: PAGE_CONNECTION,
-  inputDevices: PAGE_INPUT,
+  inputDevices: [],
+  advancedDiagnostics: PAGE_ADVANCED,
 }
 
-export function getSectionsForPage(
-  pageKey: SettingPageKey,
-  dangerUnlocked: boolean,
-): SettingSchemaSectionDef[] {
-  if (pageKey === 'advancedDiagnostics') {
-    return getAdvancedDiagnosticsSections(dangerUnlocked)
-  }
-  return STATIC_PAGE_SECTIONS[pageKey]
+export function getSectionsForPage(pageKey: SettingPageKey): SettingSchemaSectionDef[] {
+  return PAGE_SECTIONS[pageKey]
+}
+
+/** 自动模式保留存储值，展示仅开放当前会消费的手动上限。 */
+export function isSettingFieldVisible(groups: Record<string, unknown> | null, fieldKey: string): boolean {
+  const modeKeys: Record<string, string> = { xhome_bitrate: 'xhome_bitrate_mode', xcloud_bitrate: 'xcloud_bitrate_mode', audio_bitrate: 'audio_bitrate_mode' }
+  const modeKey = modeKeys[fieldKey]
+  return !modeKey || getConfigFieldValue(groups, modeKey) === 'Custom'
 }
 
 export function getConfigFieldValue(

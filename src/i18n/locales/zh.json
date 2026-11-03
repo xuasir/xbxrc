@@ -146,19 +146,21 @@
     "diagnosticsMenu": {
       "title": "诊断与实验",
       "iconButtonLabel": "诊断与实验",
-      "showExperience": "显示体验指标",
-      "hideExperience": "隐藏体验指标",
-      "showBrowserDiagnostics": "显示浏览器内部诊断",
-      "hideBrowserDiagnostics": "隐藏浏览器内部诊断"
+      "showExperience": "显示运行指标",
+      "hideExperience": "隐藏运行指标",
+      "showBrowserDiagnostics": "显示诊断指标",
+      "hideBrowserDiagnostics": "隐藏诊断指标"
     },
     "experience": {
-      "title": "体验指标",
+      "title": "运行指标",
       "statusOwner": "正在优化连接",
       "notices": {
         "relay": "当前使用中继",
-        "recovering": "当前处于恢复中",
-        "displaySupplyLimited": "显示供给受限",
-        "noVideo": "当前无画面"
+        "recovering": "画面恢复中",
+        "displaySupplyLimited": "画面暂时停滞",
+        "noVideo": "当前无画面",
+        "sampling": "采集中",
+        "stale": "数据暂缺"
       },
       "metrics": {
         "status": "状态",
@@ -177,7 +179,7 @@
     },
     "diagnosticsPanel": {
       "browser": {
-        "title": "浏览器内部诊断",
+        "title": "诊断指标",
         "fields": {
           "receivedFps": "接收帧 / 秒",
           "decodedFps": "解码帧 / 秒",
@@ -188,15 +190,15 @@
           "observation": "观测 / 样本",
           "sourceSize": "实际源尺寸",
           "outputSize": "实际输出尺寸",
-          "submitAge": "提交年龄",
-          "submitCost": "CPU 提交平均耗时",
+          "submitAge": "最新提交距今",
+          "submitCost": "CPU 绘制平均耗时",
           "uploadCost": "CPU 纹理上传平均耗时",
           "glSubmitCost": "CPU GL 提交平均耗时",
           "gpuCost": "GPU 耗时",
           "scanout": "实际上屏",
           "renderCause": "显示归因",
           "renderEffect": "显示动作效果",
-          "frameCauses": "覆盖 / 限流 / 失败 / 截图绘制",
+          "frameCauses": "累计覆盖 / 限流 / 失败 / 截图绘制",
           "rttBaseline": "路径 RTT 基线",
           "rttDelta": "RTT 增量",
           "qualityRequested": "请求码率上限",
@@ -223,7 +225,17 @@
           "keyframeSuccessRate": "关键帧成功率",
           "recoveryCause": "恢复归因",
           "qualityLadderLevel": "质量阶梯",
-          "decisionDigest": "决策摘要"
+          "decisionDigest": "决策摘要",
+          "rtt": "网络 RTT",
+          "jitter": "网络抖动",
+          "packetLoss": "近 5 秒丢包",
+          "totalBitrate": "总下行",
+          "connectedElapsed": "连接耗时",
+          "mediaReadyElapsed": "首帧耗时",
+          "transportPath": "连接路径",
+          "serverHost": "服务器",
+          "sampleAge": "采样距今",
+          "senderPolicyCause": "发送策略归因"
         }
       },
       "rust": {
@@ -244,6 +256,23 @@
           "recoveryRfcCeiling": "RFC 上限",
           "hostPresentTelemetry": "主机呈现遥测"
         }
+      },
+      "close": "关闭诊断指标",
+      "groupsLabel": "诊断分组",
+      "groups": {
+        "network": "网络",
+        "display": "显示",
+        "recovery": "恢复",
+        "session": "会话"
+      },
+      "copy": "复制指标快照",
+      "copied": "已复制",
+      "failed": "复制失败",
+      "hints": {
+        "network": "丢包采用最近 5 秒窗口；RTT 表示网络往返。视频码率表示实际下行，上限表示请求或协商目标。",
+        "display": "FPS 使用视频推进 / 渲染提交观测。CPU 绘制耗时与提交距今分别表示执行成本与新鲜度；GPU 耗时和实际屏幕上屏当前能力不可用。",
+        "recovery": "恢复归因与动作效果来自既有诊断事实。关键帧成功率需结合当前窗口请求与响应情况判断。",
+        "session": "连接和首帧耗时固定在里程碑时刻。复制快照仅包含指标白名单，完整路径与决策可在当前详情和 trace 查看。"
       }
     },
     "display": {
@@ -803,8 +832,8 @@
       "eyebrow": "编辑设置",
       "valueLabel": "当前值",
       "invalidNumber": "请输入有效数字",
-      "decrease": "减少数值",
-      "increase": "增加数值",
+      "decrease": "减少",
+      "increase": "增加",
       "clear": "清空输入",
       "clearShort": "清空",
       "cancel": "取消",
@@ -940,7 +969,8 @@
       "presets": {
         "standard": "标准",
         "clear": "清晰",
-        "soft": "柔和"
+        "soft": "柔和",
+        "custom": "自定义"
       }
     },
     "states": {
@@ -1029,7 +1059,8 @@
         }
       },
       "fullscreen": {
-        "label": "启动时全屏"
+        "label": "启动时全屏",
+        "description": "应用启动时自动进入全屏。"
       },
       "background_keepalive": {
         "label": "后台保活",
@@ -1226,7 +1257,7 @@
         }
       },
       "force_region_ip": {
-        "label": "区域路由覆盖",
+        "label": "云游戏地区",
         "options": {
           "empty": {
             "label": "默认",
@@ -1256,30 +1287,31 @@
           "104_211_96_159": {
             "label": "印度中部"
           }
-        }
+        },
+        "description": "选择云游戏连接使用的地区。"
       },
       "codec": {
         "label": "视频编码档位偏好",
         "options": {
           "empty": {
             "label": "自动",
-            "description": "自动"
+            "description": "自动协商服务端支持的 H.264 档位。"
           },
           "video_h264_64": {
             "label": "H.264 · High",
-            "description": "更清晰"
+            "description": "优先协商 High 档位。"
           },
           "video_h264_4d": {
             "label": "H.264 · Main",
-            "description": "均衡"
+            "description": "优先协商 Main 档位。"
           },
           "video_h264_42e": {
             "label": "H.264 · Constrained Baseline",
-            "description": "更兼容"
+            "description": "优先协商 Constrained Baseline 档位。"
           },
           "video_h264_420": {
             "label": "H.264 · Baseline",
-            "description": "兼容性最高"
+            "description": "优先协商 Baseline 档位。"
           }
         }
       },
@@ -1389,6 +1421,89 @@
           }
         }
       }
+    },
+    "experience": {
+      "loadFailed": "设置读取失败，请重试。",
+      "retry": "重试",
+      "saving": "正在保存…",
+      "saveFailed": "保存失败，请重试。",
+      "savedRefreshPending": "已保存；认证缓存刷新失败，下次连接时可重试。",
+      "restartNow": "重启应用",
+      "restartHint": "重启会结束当前会话。已保存的启动设置与应用更新将在重启后生效。",
+      "restartFailed": "重启失败，请重试。",
+      "confirm": "确认",
+      "show": "显示",
+      "hide": "隐藏",
+      "discardTitle": "放弃未应用的修改？",
+      "discardHint": "退出后将恢复已保存的设置。",
+      "range": "允许范围 {min}–{max}，步长 {step}。",
+      "effects": {
+        "instant": "立即生效",
+        "nextConnection": "下次连接生效",
+        "nextLaunch": "下次启动生效"
+      },
+      "saved": {
+        "instant": "已保存并生效。",
+        "nextConnection": "已保存，下次连接生效。",
+        "nextLaunch": "已保存，下次启动生效。"
+      },
+      "validation": {
+        "required": "请输入数值。",
+        "number": "请输入有效数字。",
+        "range": "请输入 {min}–{max} 范围内的数值。",
+        "step": "请按步长 {step} 输入。"
+      },
+      "sections": {
+        "startup": "启动",
+        "feedback": "界面反馈",
+        "resolution": "分辨率",
+        "picture": "画面",
+        "sound": "声音",
+        "streamingAdvanced": "高级 · 编码与码率",
+        "cloudPreferences": "云游戏偏好",
+        "network": "连接策略",
+        "connectionAdvanced": "高级 · 自定义中继",
+        "diagnostics": "日志与诊断"
+      },
+      "turn": {
+        "title": "自定义中继服务器",
+        "hint": "用于串流的 TURN 中继。请填写服务商提供的地址、用户名和凭据；配置将在下次连接时使用。",
+        "enable": "使用自定义中继",
+        "url": "TURN 地址",
+        "username": "用户名",
+        "credential": "凭据",
+        "default": "使用默认中继",
+        "custom": "已配置自定义中继",
+        "incomplete": "请填写完整的地址、用户名和凭据。",
+        "urlError": "请输入有效的 TURN 地址。",
+        "reset": "恢复默认中继",
+        "resetHint": "将清除保存的自定义地址和凭据，下次连接使用默认中继。"
+      },
+      "update": {
+        "current": "当前通道已是最新版本。",
+        "retryDownload": "重试下载并安装",
+        "channelHelp": "稳定版适合日常使用；测试版可提前体验新功能。",
+        "checkedAt": "上次检查 · {time}",
+        "releasedAt": "发布日期 · {date}",
+        "notes": "更新内容",
+        "later": "可继续使用，稍后重启生效。",
+        "switchStable": "切换到稳定版？",
+        "stableWarning": "稳定版版本号可能低于当前测试版，切换后可能需要手动安装稳定版。确认将更改后续更新通道。",
+        "target": "目标版本 {version}",
+        "retryChannel": "重新读取更新通道"
+      },
+      "input": {
+        "controllerHint": "选中输入框按 A 录入；也可点击后使用键盘。",
+        "keyboardHint": "方向键选择，A 输入，B 取消；完成后返回表单。",
+        "empty": "空",
+        "uppercase": "大写",
+        "letters": "字母",
+        "symbols": "符号",
+        "space": "空格",
+        "backspace": "退格",
+        "clear": "清空",
+        "done": "完成"
+      }
     }
   },
   "gamepadSettings": {
@@ -1426,8 +1541,8 @@
     "captureHint": "按下要绑定的控件；Esc 或屏幕按钮可取消",
     "cancelCapture": "取消录入",
     "layoutHint": "选择游戏动作后按下手柄控件。已占用控件会交换绑定。此布局适用于所有标准手柄。",
-    "keyboardHint": "开启后键盘控制游戏，物理手柄保留菜单导航。选中动作后按下键盘按键；应用后生效。",
-    "testHint": "测试期间按键仅用于此面板。使用 Esc 或屏幕按钮结束。",
+    "keyboardHint": "开启后键盘控制游戏并支持菜单导航：WASD / 方向键移动，J 确认，K 返回，1 / 2 切换页面，3 / 4 切换分类。游戏绑定可自定义，应用后生效。",
+    "testHint": "测试期间按键用于观察输入；Menu 切换到操作按钮，B 返回。",
     "testRemaining": "测试剩余",
     "finishTest": "结束测试",
     "rumbleTest": "测试震动 · 200ms",
@@ -1447,7 +1562,7 @@
     "reset": "恢复手柄偏好",
     "resetHint": "恢复后台策略、游戏布局、摇杆、键盘模拟和震动默认值。接入方式与设备连接保留。",
     "confirmReset": "确认恢复偏好",
-    "resetDraft": "恢复当前草稿默认值",
+    "resetDraft": "恢复默认值",
     "apply": "应用",
     "leftStickUp": "左摇杆上",
     "leftStickDown": "左摇杆下",
@@ -1460,6 +1575,10 @@
     "standardInput": "标准输入",
     "gameOutput": "游戏设置效果",
     "leftStick": "左摇杆",
-    "rightStick": "右摇杆"
+    "rightStick": "右摇杆",
+    "captureControllerHint": "Menu + View 取消录入",
+    "testControllerHint": "按 Menu 切换到操作按钮，输入测试剩余时间会暂停。",
+    "testNavigationHint": "操作区 · B 返回，Menu 恢复输入测试。",
+    "resumeTest": "恢复输入测试"
   }
 }

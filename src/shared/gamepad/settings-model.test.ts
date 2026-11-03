@@ -1,9 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import { applyGameControls, defaultGameControls, parseGamepadPreferences } from './preferences'
-import { assignGameButton } from './settings-model'
+import { assignGameButton, createGamepadCaptureReader, readGamepadCapture } from './settings-model'
 import { neutralState, PadReleaseBarrier } from './state'
 
 describe('controller preferences', () => {
+  it('absorbs the initiating A across repeated snapshots and accepts the next B press', () => {
+    const initial = neutralState()
+    initial.buttons.south = 1
+    const read = createGamepadCaptureReader(initial)
+    expect(read(initial)).toBeUndefined()
+    expect(read(structuredClone(initial))).toBeUndefined()
+    expect(read(neutralState())).toBeUndefined()
+    const next = neutralState()
+    next.buttons.east = 1
+    expect(read(next)).toEqual({ kind: 'assign', source: 'east' })
+  })
+  it('requires initially held Menu to release and press again before binding on release', () => {
+    const initial = neutralState()
+    initial.buttons.menu = 1
+    const read = createGamepadCaptureReader(initial)
+    expect(read(neutralState())).toBeUndefined()
+    expect(read(initial)).toBeUndefined()
+    expect(read(neutralState())).toEqual({ kind: 'assign', source: 'menu' })
+  })
+  it('keeps B assignable and defers Menu/View so the cancellation combo preserves the draft', () => {
+    const state = neutralState()
+    state.buttons.east = 1
+    expect(readGamepadCapture(neutralState(), state)).toEqual({ kind: 'assign', source: 'east' })
+    state.buttons.east = 0
+    state.buttons.menu = 1
+    expect(readGamepadCapture(neutralState(), state)).toBeUndefined()
+    const combo = structuredClone(state)
+    combo.buttons.view = 1
+    expect(readGamepadCapture(state, combo)).toEqual({ kind: 'cancel' })
+    expect(readGamepadCapture(state, neutralState())).toEqual({ kind: 'assign', source: 'menu' })
+  })
   it('defaults to browser, keep-active, physical controls and silent UI', () => {
     expect(parseGamepadPreferences({})).toMatchObject({ backend: 'browser', backgroundPolicy: 'keep-active', controlSource: 'gamepad', vibration: true, uiHaptics: false })
     expect(parseGamepadPreferences({ ui_haptics: true, gamepad_background_policy: 'follow-app' })).toMatchObject({ uiHaptics: true, backgroundPolicy: 'follow-app', backend: 'browser' })

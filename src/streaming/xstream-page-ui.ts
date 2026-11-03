@@ -5,7 +5,7 @@ import { streamInputRouteController } from '../pages/stream/stream-input-route-c
 
 type BrowserTimeout = number
 
-export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'display' | 'audio' | 'text'
+export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'diagnosticDetails' | 'display' | 'audio' | 'text'
 export type StreamPageOverlayState = 'none' | 'loading' | 'error' | 'connecting'
 
 interface UseXStreamPageUiOptions {
@@ -37,7 +37,7 @@ function captureReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): U
   if (sheet === 'menu') {
     return 'menu'
   }
-  if (sheet === 'diagnosticsMenu') {
+  if (sheet === 'diagnosticsMenu' || sheet === 'diagnosticDetails') {
     return 'diagnostics'
   }
   return 'sheet'
@@ -47,7 +47,7 @@ function releaseReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): U
   if (sheet === 'menu') {
     return 'menu-close'
   }
-  if (sheet === 'diagnosticsMenu') {
+  if (sheet === 'diagnosticsMenu' || sheet === 'diagnosticDetails') {
     return 'diagnostics-close'
   }
   return 'sheet-close'
@@ -216,6 +216,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
       shouldShowChrome,
       isMenuSheetOpen: computed(() => activeSheet.value === 'menu'),
       isDiagnosticsMenuSheetOpen: computed(() => activeSheet.value === 'diagnosticsMenu'),
+      isDiagnosticDetailsOpen: computed(() => activeSheet.value === 'diagnosticDetails'),
       isDisplaySheetOpen: computed(() => activeSheet.value === 'display'),
       isAudioSheetOpen: computed(() => activeSheet.value === 'audio'),
       isTextSheetOpen: computed(() => activeSheet.value === 'text'),

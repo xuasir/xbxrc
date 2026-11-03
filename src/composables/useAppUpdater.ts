@@ -1,10 +1,11 @@
 import type { UpdaterProgressEvent } from '@shared/events/updater'
-import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 
 export type AppUpdaterState
   = | 'idle'
+    | 'current'
     | 'checking'
     | 'available'
     | 'downloading'
@@ -14,12 +15,17 @@ export type AppUpdaterState
 
 export type UpdateChannel = 'stable' | 'beta'
 
-export function useAppUpdater() {
+function createAppUpdater() {
   const state = ref<AppUpdaterState>('idle')
   const channel = ref<UpdateChannel>('stable')
   const currentVersion = ref('')
   const targetVersion = ref<string | null>(null)
   const releaseNotes = ref<string | null>(null)
+  const releaseDate = ref<string | null>(null)
+  const checkedAt = ref<number | null>(null)
+  const channelError = ref<string | null>(null)
+  const channelLoading = ref(false)
+  const channelReady = ref(false)
   const errorMessage = ref<string | null>(null)
   const downloadProgress = ref(0)
   const downloadTotal = ref<number | null>(null)
@@ -28,6 +34,8 @@ export function useAppUpdater() {
     switch (state.value) {
       case 'idle':
         return ''
+      case 'current':
+        return 'current'
       case 'checking':
         return 'checking'
       case 'available':
@@ -52,52 +60,83 @@ export function useAppUpdater() {
     return Math.min(100, Math.round((downloadProgress.value / downloadTotal.value) * 100))
   })
 
+  const busy = computed(() => ['checking', 'downloading', 'installing'].includes(state.value))
+  const channelSaving = ref(false)
+  let channelRevision = 0
+
   async function refreshCurrentVersion() {
-    currentVersion.value = await rpc.app.getVersion()
+    try {
+      currentVersion.value = await rpc.app.getVersion()
+    }
+    catch { currentVersion.value = '—' }
   }
 
   async function loadChannel() {
+    if (channelLoading.value || channelSaving.value || busy.value)
+      return
+    channelLoading.value = true
+    const revision = channelRevision
     try {
       const result = await rpc.updater.getChannel()
+      if (revision !== channelRevision || channelSaving.value)
+        return
       channel.value = result.channel
+      channelReady.value = true
+      channelError.value = null
     }
     catch (error) {
-      console.error('[useAppUpdater] Failed to load update channel', error)
+      if (revision === channelRevision)
+        channelError.value = error instanceof Error ? error.message : String(error)
     }
+    finally { channelLoading.value = false }
   }
 
   async function setChannel(next: UpdateChannel) {
+    if (busy.value || channelSaving.value || state.value === 'installed')
+      return
+    channelSaving.value = true
+    ++channelRevision
     try {
       await rpc.updater.setChannel({ channel: next })
     }
     catch (error) {
-      console.error('[useAppUpdater] Failed to save update channel', error)
+      channelError.value = error instanceof Error ? error.message : String(error)
       throw error
     }
+    finally { channelSaving.value = false }
     channel.value = next
+    channelReady.value = true
+    channelError.value = null
+    checkedAt.value = null
     state.value = 'idle'
     targetVersion.value = null
     releaseNotes.value = null
+    releaseDate.value = null
     errorMessage.value = null
   }
 
   async function checkForUpdate() {
+    if (busy.value || channelSaving.value || state.value === 'installed')
+      return
     state.value = 'checking'
     errorMessage.value = null
     targetVersion.value = null
     releaseNotes.value = null
+    releaseDate.value = null
     downloadProgress.value = 0
     downloadTotal.value = null
 
     try {
       const result = await rpc.updater.check()
       currentVersion.value = result.currentVersion
+      checkedAt.value = Date.now()
+      releaseDate.value = result.date ?? null
       if (!result.updateAvailable || !result.version) {
-        state.value = 'idle'
+        state.value = 'current'
         return
       }
       targetVersion.value = result.version
-      releaseNotes.value = result.notes
+      releaseNotes.value = result.notes?.trim() || null
       state.value = 'available'
     }
     catch (error) {
@@ -107,6 +146,8 @@ export function useAppUpdater() {
   }
 
   function handleProgress(event: UpdaterProgressEvent) {
+    if (state.value !== 'downloading' && state.value !== 'installing')
+      return
     if (event.event === 'started') {
       state.value = 'downloading'
       downloadProgress.value = 0
@@ -123,11 +164,13 @@ export function useAppUpdater() {
   }
 
   async function downloadAndInstall() {
-    if (state.value !== 'available') {
+    if (state.value !== 'available' && !(state.value === 'error' && targetVersion.value)) {
       return
     }
     state.value = 'downloading'
     errorMessage.value = null
+    downloadProgress.value = 0
+    downloadTotal.value = null
     try {
       await rpc.updater.downloadAndInstall()
       state.value = 'installed'
@@ -139,28 +182,28 @@ export function useAppUpdater() {
   }
 
   async function relaunch() {
-    await rpc.updater.relaunch()
+    errorMessage.value = null
+    try {
+      await rpc.updater.relaunch()
+    }
+    catch (error) { errorMessage.value = error instanceof Error ? error.message : String(error) }
   }
 
-  let unsubscribeProgress: (() => void) | null = null
-
-  onMounted(async () => {
-    unsubscribeProgress = events.on('updater.progress', handleProgress)
-    await Promise.all([refreshCurrentVersion(), loadChannel()])
-  })
-
-  // 设置页被 KeepAlive 缓存后再次进入时不会 remount，需主动从 store 刷新通道。
-  onActivated(() => {
-    void loadChannel()
-  })
-
-  onUnmounted(() => {
-    unsubscribeProgress?.()
-    unsubscribeProgress = null
-  })
+  // 更新任务拥有应用级状态，分类组件仅展示，进度订阅跨页面持续存在。
+  const unsubscribeProgress = events.on('updater.progress', handleProgress)
+  void Promise.all([refreshCurrentVersion(), loadChannel()])
+  if (import.meta.hot)
+    import.meta.hot.dispose(() => unsubscribeProgress())
 
   return {
     state,
+    busy,
+    channelError,
+    channelLoading,
+    channelReady,
+    channelSaving,
+    releaseDate,
+    checkedAt,
     channel,
     currentVersion,
     targetVersion,
@@ -175,5 +218,12 @@ export function useAppUpdater() {
     downloadAndInstall,
     relaunch,
     refreshCurrentVersion,
+    loadChannel,
   }
+}
+
+let sharedUpdater: ReturnType<typeof createAppUpdater> | undefined
+export function useAppUpdater() {
+  sharedUpdater ??= createAppUpdater()
+  return sharedUpdater
 }

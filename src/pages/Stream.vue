@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { StreamDiagnosticGroup } from '../streaming/stream-panel-view-models'
 import type { DisplayOptionsValue } from '../streaming/types'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core/engine'
@@ -20,6 +21,7 @@ import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 import { resolveEnhancementBinding } from '../streaming/enhancements'
+import { initialDiagnosticGroup } from '../streaming/stream-panel-view-models'
 import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
 import { streamInputRouteController } from './stream/stream-input-route-controller'
@@ -55,7 +57,6 @@ const {
   hasError,
   warningVisible,
   displayOptions,
-  performanceStyle,
   runtimeMode,
   experienceMetricsVisible,
   browserDiagnosticsVisible,
@@ -97,6 +98,7 @@ const {
   shouldShowChrome,
   isMenuSheetOpen,
   isDiagnosticsMenuSheetOpen,
+  isDiagnosticDetailsOpen,
   isDisplaySheetOpen,
   isAudioSheetOpen,
   isTextSheetOpen,
@@ -106,6 +108,32 @@ const {
   openSheet,
   closeSheet,
 } = pageActions
+
+const diagnosticGroup = ref<StreamDiagnosticGroup | null>(null)
+
+function closeDiagnosticDetails(): void {
+  const wasOpen = isDiagnosticDetailsOpen.value
+  if (browserDiagnosticsVisible.value)
+    actions.toggleBrowserDiagnostics()
+  closeSheet('diagnosticDetails')
+  if (wasOpen && !hasError.value && !warningVisible.value)
+    void moveStreamSpatialNavFocusToPostOverlaySink()
+}
+
+// 同一临时 UI owner 负责菜单到详情的切换，保持输入捕获连续。
+watch(browserDiagnosticsVisible, (visible) => {
+  if (visible) {
+    diagnosticGroup.value ??= initialDiagnosticGroup(execution.diagnostics.value)
+    openSheet('diagnosticDetails')
+  }
+  else {
+    closeSheet('diagnosticDetails')
+  }
+}, { flush: 'sync' })
+
+watch(execution.sessionId, () => {
+  diagnosticGroup.value = null
+})
 
 function applyStreamUiWindowClass(active: boolean): void {
   // 串流页运行在上层透明 UI 窗口，需要显式切换全局页面底色。
@@ -185,6 +213,11 @@ const experienceBinding = computed(() =>
 const browserDiagnosticsBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'browserDiagnostics'),
 )
+
+watch([isDiagnosticDetailsOpen, isConnected, hasError, warningVisible, browserDiagnosticsBinding], ([open, connected, failed, warning, binding]) => {
+  if (browserDiagnosticsVisible.value && (!open || failed || warning || (!connected && binding.phase !== 'mounted')))
+    closeDiagnosticDetails()
+})
 
 const microphoneBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'microphone'),
@@ -732,6 +765,8 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
 
   if (handlers[id]) {
     await handlers[id]?.()
+    if (id === 'toggleBrowserDiagnostics' && browserDiagnosticsVisible.value)
+      return
     closeDiagnosticsMenu()
   }
 }
@@ -758,15 +793,17 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       <div id="stream-page-video" class="stream-page__video" />
       <StreamExperiencePanel
         :visible="experienceMetricsVisible && (isConnected || experienceBinding.phase === 'mounted')"
-        :compact="performanceStyle"
         :mount="experienceBinding"
         :model="experienceMetricsViewModel"
       />
       <StreamBrowserDiagnosticsPanel
         v-if="runtimeMode === 'webrtc-direct'"
-        :visible="browserDiagnosticsVisible && (isConnected || browserDiagnosticsBinding.phase === 'mounted')"
+        :visible="browserDiagnosticsVisible && isDiagnosticDetailsOpen"
         :mount="browserDiagnosticsBinding"
         :model="browserDiagnosticsViewModel"
+        :group="diagnosticGroup ?? 'network'"
+        @group-change="diagnosticGroup = $event"
+        @close="closeDiagnosticDetails"
       />
       <StreamMicrophoneStatus
         :mount="microphoneBinding"

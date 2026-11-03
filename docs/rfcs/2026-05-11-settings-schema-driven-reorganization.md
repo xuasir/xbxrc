@@ -4,10 +4,10 @@
 
 ## Status
 
-- Completion: 未完成
-- Current State: planned
+- Completion: 已完成（由后续完整改造承接）
+- Current State: superseded
 - Owner: Codex
-- Last Updated: 2026-05-11
+- Last Updated: 2026-11-03
 
 ## Background
 
@@ -308,3 +308,8 @@ interface SettingFieldItem {
 - Decision: 首轮实现保持 `rpc.config.getGroups/set`、字段 key、默认值和现有 sheets 组件稳定，页面重构聚焦信息架构与渲染模型。
 - Decision: `xcloud` 空顶层页收掉，`host` 顶层语义并入“连接与主机”，输入页拆成配置、概览、工具三类对象。
 - Risk/Blocker: 展示 schema 与现有 `CONFIG_GROUP_DEFINITIONS` 的迁移边界需要在实现前再确认一次，避免短期内出现双源维护。
+
+## Follow-up Closure（2026-11-03）
+
+- 五类展示 schema 已落地；本提案的布局、生效标签、编辑、特殊操作与焦点体验由 [设置完整改造 RFC](2026-11-03-settings-experience-completion.md) 和 [最终报告](../reports/2026-11-03-settings-experience-completion.md)承接收口。
+- 上文保留 2026-05-11 的方案快照；当前 Browser 主线字段、手柄模块与自定义 TURN 组织以新 RFC 和源码为准。

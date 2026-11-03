@@ -52,6 +52,53 @@ afterEach(() => {
 })
 
 describe('runtime host lifecycle', () => {
+  it.each(['resolved', 'rejected'] as const)('absorbs a late %s panel read after polling restarts', async (outcome) => {
+    const reading = deferred<{ presentFps: number }>()
+    const snapshotStats = vi.fn().mockResolvedValue({ presentFps: 60, statsObservationState: 'fresh' })
+    const runtime = { ...port(), snapshotStats }
+    harness.factory.mockReturnValue(runtime)
+    const vm = host()
+    const launch = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    vm.setExperienceMetricsEnabled(true)
+    await vi.advanceTimersByTimeAsync(0)
+    snapshotStats.mockReturnValueOnce(reading.promise)
+    await vi.advanceTimersByTimeAsync(2000)
+    vm.setExperienceMetricsEnabled(false)
+    expect(vm.performanceSnapshot.value).toBeNull()
+    snapshotStats.mockResolvedValue({ presentFps: 25, statsObservationState: 'fresh' })
+    vm.setExperienceMetricsEnabled(true)
+    await vi.advanceTimersByTimeAsync(0)
+    if (outcome === 'resolved')
+      reading.resolve({ presentFps: 60 })
+    else
+      reading.reject(new Error('late stats failure'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vm.performanceSnapshot.value?.presentFps).toBe(25)
+    await vm.closeRuntime()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('clears a failed panel read and resumes from the shared runtime snapshot', async () => {
+    const snapshotStats = vi.fn().mockResolvedValue({ presentFps: 60, statsObservationState: 'fresh' })
+    const runtime = { ...port(), snapshotStats }
+    harness.factory.mockReturnValue(runtime)
+    const vm = host()
+    const launch = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(500)
+    await launch
+    vm.setExperienceMetricsEnabled(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vm.performanceSnapshot.value?.presentFps).toBe(60)
+    snapshotStats.mockRejectedValueOnce(new Error('stats unavailable'))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(vm.performanceSnapshot.value).toBeNull()
+    snapshotStats.mockResolvedValue({ presentFps: 25, statsObservationState: 'fresh' })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(vm.performanceSnapshot.value?.presentFps).toBe(25)
+    await vm.closeRuntime()
+    expect(vi.getTimerCount()).toBe(0)
+  })
   it.each(['during-stop', 'after-fallback-launch'])('preserves TURN handoff when the previous launch rejects %s', async (timing) => {
     const old = port()
     const next = port()

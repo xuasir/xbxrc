@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SettingSelectOptionDefinition } from '@shared/config/domain-definition'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
 import SettingModalShell from './SettingModalShell.vue'
 
@@ -12,6 +13,8 @@ interface SettingSingleSelectPopupSheetProps {
   options: readonly SettingSelectOptionDefinition[]
   currentValue: string | number | null
   maxListHeight?: string
+  busy?: boolean
+  error?: string
 }
 
 const props = withDefaults(defineProps<SettingSingleSelectPopupSheetProps>(), {
@@ -24,78 +27,23 @@ const emit = defineEmits<{
   (event: 'select', value: string | number): void
 }>()
 
-const inputListRef = ref<HTMLElement | null>(null)
-let focusObserver: MutationObserver | undefined
+const { t } = useI18n()
 
 const optionNodeId = (index: number): string => `${props.scopeId}.option.${index}`
-const defaultFocusId = computed(() => (props.options.length > 0 ? optionNodeId(0) : undefined))
+const defaultFocusId = computed(() => {
+  const currentIndex = props.options.findIndex(option => option.value === props.currentValue)
+  return props.options.length ? optionNodeId(Math.max(0, currentIndex)) : undefined
+})
 
 function handleClose(): void {
   emit('close')
 }
-
-function scrollFocusedOptionIntoView(): void {
-  const listElement = inputListRef.value
-  if (listElement === null) {
-    return
-  }
-
-  const focusedOption = listElement.querySelector<HTMLElement>(
-    '.setting-single-select-popup-sheet__option[data-focused="true"]',
-  )
-  if (focusedOption === null) {
-    return
-  }
-
-  focusedOption.scrollIntoView({
-    block: 'nearest',
-    inline: 'nearest',
-    behavior: 'smooth',
-  })
-}
-
-async function setupFocusObserver(): Promise<void> {
-  await nextTick()
-
-  if (!props.open || inputListRef.value === null) {
-    return
-  }
-
-  focusObserver?.disconnect()
-  focusObserver = new MutationObserver(() => {
-    scrollFocusedOptionIntoView()
-  })
-
-  focusObserver.observe(inputListRef.value, {
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['data-focused'],
-  })
-
-  scrollFocusedOptionIntoView()
-}
-
-watch(
-  () => props.open,
-  (open) => {
-    if (!open) {
-      focusObserver?.disconnect()
-      return
-    }
-    void setupFocusObserver()
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(() => {
-  focusObserver?.disconnect()
-  focusObserver = undefined
-})
 </script>
 
 <template>
   <SettingModalShell
     :open="props.open"
+    :busy="props.busy"
     :scope-id="props.scopeId"
     :title="props.title"
     :hint="props.hint"
@@ -104,8 +52,8 @@ onBeforeUnmount(() => {
     @close="handleClose"
   >
     <div
-      ref="inputListRef"
-      class="setting-single-select-popup-sheet__list"
+
+      class="setting-single-select-popup-sheet__list" role="radiogroup" :aria-label="props.title"
       :style="{ '--setting-single-select-popup-sheet-max-height': props.maxListHeight }"
     >
       <Focusable
@@ -120,6 +68,7 @@ onBeforeUnmount(() => {
         }"
         :scope-id="props.scopeId"
         :aria-label="option.label"
+        role="radio" :aria-checked="props.currentValue === option.value" :disabled="props.busy"
         :on-back="handleClose"
         @click="emit('select', option.value)"
       >
@@ -140,86 +89,28 @@ onBeforeUnmount(() => {
         </span>
       </Focusable>
     </div>
+    <p v-if="props.busy" class="setting-panel__status" role="status">
+      {{ t('setting.experience.saving') }}
+    </p>
+    <p v-if="props.error" class="setting-panel__status setting-panel__status--error" role="alert">
+      {{ props.error }}
+    </p>
   </SettingModalShell>
 </template>
 
+<style scoped src="./setting-layout.css"></style>
+
 <style scoped>
-.setting-single-select-popup-sheet__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: min(
-    var(--setting-single-select-popup-sheet-max-height),
-    calc(90vh - 220px)
-  );
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  /* 左右留白，避免焦点环/box-shadow 被 overflow 裁切 */
-  padding: 16px 10px;
-}
-
-.setting-single-select-popup-sheet__option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 2px solid transparent;
-  border-radius: var(--ui-radius-sm);
-  background: var(--color-state-hover);
-  text-align: left;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-single-select-popup-sheet__option--active {
-  background: color-mix(in srgb, var(--brand-primary) 14%, transparent);
-}
-
-.setting-single-select-popup-sheet__indicator {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: transparent;
-  border: 2px solid var(--ui-page-text-soft);
-}
-
-.setting-single-select-popup-sheet__indicator--active {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-
-.setting-single-select-popup-sheet__copy {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.setting-single-select-popup-sheet__option-title {
-  font-size: 16px;
-  line-height: 1.2;
-  font-weight: 600;
-  color: var(--ui-page-text);
-}
-
-.setting-single-select-popup-sheet__option-desc {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--ui-page-text-soft);
-}
-
-.setting-single-select-popup-sheet__option[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
+.setting-single-select-popup-sheet__list { display: flex; flex-direction: column; gap: var(--ui-space-sm); }
+.setting-single-select-popup-sheet__option { position: relative; display: flex; align-items: center; gap: var(--ui-space-lg); padding: var(--ui-settings-row-padding); min-height: var(--ui-settings-row-min-height); border: 2px solid transparent; border-radius: var(--ui-radius-md); background: var(--ui-surface-panel); text-align: left; scroll-margin: var(--ui-settings-focus-safe); transition: border-color var(--ui-motion-fast), background-color var(--ui-motion-fast), box-shadow var(--ui-motion-fast); }
+.setting-single-select-popup-sheet__option--active { border-color: var(--brand-primary); background: var(--ui-surface-panel-strong); }
+.setting-single-select-popup-sheet__indicator { flex-shrink: 0; width: var(--ui-settings-single-select-indicator-size); height: var(--ui-settings-single-select-indicator-size); border-radius: var(--ui-radius-pill); border: 2px solid var(--color-text-tertiary); }
+.setting-single-select-popup-sheet__indicator--active { background: var(--brand-primary); border-color: var(--brand-primary); }
+.setting-single-select-popup-sheet__copy { display: flex; flex-direction: column; gap: var(--ui-space-xs); min-width: 0; }
+.setting-single-select-popup-sheet__option-title { font-size: var(--ui-settings-row-label-size); color: var(--color-text-primary); font-weight: var(--ui-font-weight-semibold); }
+.setting-single-select-popup-sheet__option-desc { font-size: var(--ui-settings-row-description-size); line-height: var(--ui-line-height-relaxed); color: var(--color-text-secondary); }
+.setting-single-select-popup-sheet__option[data-focused='true'] { border-color: transparent; background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
 .setting-single-select-popup-sheet__option[data-focused='true'] .setting-single-select-popup-sheet__option-title,
-.setting-single-select-popup-sheet__option[data-focused='true'] .setting-single-select-popup-sheet__option-desc {
-  color: var(--ui-focus-text);
-}
-
-.setting-single-select-popup-sheet__option[data-focused='true'] .setting-single-select-popup-sheet__indicator {
-  border-color: var(--ui-focus-text);
-}
+.setting-single-select-popup-sheet__option[data-focused='true'] .setting-single-select-popup-sheet__option-desc { color: var(--ui-focus-text); }
+.setting-single-select-popup-sheet__option:disabled { opacity: 0.5; }
 </style>

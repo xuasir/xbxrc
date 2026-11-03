@@ -840,7 +840,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       warningVisible,
       displayOptions: computed(() => streamConfig.value.display_options ?? null),
       resolutionMode: streamResolutionMode,
-      performanceStyle: computed(() => streamConfig.value.performance_style === true),
       runtimeMode: streamRuntimeMode,
       metadata: sessionMetadata,
       capabilities: sessionCapabilities,

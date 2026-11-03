@@ -3,14 +3,14 @@ import type { StreamPerformanceSnapshot, StreamSessionDiagnosticsSnapshot } from
 export type StreamPanelTranslate = (key: string, values?: Record<string, unknown>) => string
 
 export function formatPanelMs(value?: number): string {
-  if (value === undefined || Number.isNaN(value)) {
+  if (value === undefined || !Number.isFinite(value)) {
     return '--'
   }
   return `${value.toFixed(1)}ms`
 }
 
 export function formatPanelKbps(value?: number): string {
-  if (value === undefined || value <= 0) {
+  if (value === undefined || !Number.isFinite(value) || value < 0) {
     return '--'
   }
   if (value >= 1000) {
@@ -24,10 +24,36 @@ export function formatPanelFps(value?: string | number): string {
     return '--'
   }
   const numericValue = Number(value)
-  if (Number.isNaN(numericValue)) {
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
     return '--'
   }
   return numericValue.toFixed(1)
+}
+
+/** 运行条使用数值事实；兼容旧的带单位字符串，同时过滤启动占位值。 */
+export function panelNumericValue(value?: string | number): number | undefined {
+  if (value === undefined || String(value).trim() === '')
+    return undefined
+  const numeric = typeof value === 'number' ? value : Number.parseFloat(value)
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : undefined
+}
+
+export function formatRuntimeResolution(snapshot: StreamPerformanceSnapshot | null): string {
+  const dimensions = snapshot?.resolution?.match(/^(\d+)\s*[x×]\s*(\d+)/i)
+  const width = snapshot?.renderSourceWidth ?? (dimensions ? Number(dimensions[1]) : undefined)
+  const height = snapshot?.renderSourceHeight ?? (dimensions ? Number(dimensions[2]) : undefined)
+  if (!width || !height)
+    return '--'
+  const standard: Record<number, number> = { 720: 1280, 1080: 1920, 1440: 2560, 2160: 3840 }
+  return standard[height] === width ? `${height}p` : formatPanelDimensions(width, height)
+}
+
+export function formatRuntimeLoss(snapshot: StreamPerformanceSnapshot | null): string {
+  const ratio = snapshot?.networkPacketLossRatio
+  const percent = typeof ratio === 'number' && Number.isFinite(ratio) && ratio >= 0 && ratio <= 1
+    ? ratio * 100
+    : panelNumericValue(String(snapshot?.pl ?? '').match(/(-?\d+(?:\.\d+)?)\s*%/)?.[1])
+  return percent === undefined || percent > 100 ? '--' : `${percent.toFixed(1)}%`
 }
 
 export function formatPanelDimensions(width?: number, height?: number): string {
@@ -62,18 +88,6 @@ export function formatRenderShaderPath(value?: 'usm' | 'cas' | 'none'): string {
     return value.toUpperCase()
   }
   return '--'
-}
-
-export function formatExperienceResolution(input: {
-  snapshot: StreamPerformanceSnapshot | null
-  resolutionMode?: number
-  runtimeMode: 'webrtc-direct' | 'rust-owned'
-}): string {
-  const resolution = input.snapshot?.resolution
-  if (resolution === undefined || resolution === '') {
-    return input.runtimeMode === 'webrtc-direct' ? '' : '--'
-  }
-  return input.resolutionMode === 1081 ? `${resolution}(HQ)` : resolution
 }
 
 export function formatSrRuntimeFromSnapshot(

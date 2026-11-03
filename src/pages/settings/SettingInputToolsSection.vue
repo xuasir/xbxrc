@@ -5,11 +5,12 @@ import type { ButtonKey } from '@shared/gamepad/state'
 import { DEFAULT_KEYBOARD_MAPPING, KEY_CODE_TO_DTO } from '@shared/gamepad/keyboard-fallback-bridge'
 import { applyGameControls, defaultGameControls } from '@shared/gamepad/preferences'
 import { gamepadConfig, inputController, saveGamepadConfig } from '@shared/gamepad/runtime'
-import { assignGameButton, BUTTON_LABELS } from '@shared/gamepad/settings-model'
+import { assignGameButton, BUTTON_LABELS, createGamepadCaptureReader } from '@shared/gamepad/settings-model'
 import { BUTTON_KEYS, clonePadState } from '@shared/gamepad/state'
-import { computed, onBeforeUnmount, ref, shallowRef, toRaw } from 'vue'
+import { computed, onBeforeUnmount, onDeactivated, ref, shallowRef, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
+import SettingConfirmSheet from '../../components/settings/SettingConfirmSheet.vue'
 import SettingModalShell from '../../components/settings/SettingModalShell.vue'
 import SettingRow from '../../components/settings/SettingRow.vue'
 import SettingSingleSelectPopupSheet from '../../components/settings/SettingSingleSelectPopupSheet.vue'
@@ -29,20 +30,30 @@ const keyboardEnabled = ref(false)
 const saving = ref(false)
 const rumbleTesting = ref(false)
 const message = ref('')
+const saveError = ref(false)
+const discardOpen = ref(false)
+const initialDraft = ref('')
 const panel = useGamepadPanelSession(inputController, target => document.getElementById(`${paneScope}.${target}`)?.focus({ preventScroll: true }))
-const { pane, capturing, captureCountdown, testCountdown } = panel
+const { pane, capturing, captureCountdown, testCountdown, testNavigation } = panel
+const draftState = computed(() => JSON.stringify(pane.value === 'keyboard' ? { mapping: keyboardDraft.value, enabled: keyboardEnabled.value } : draft.value))
+const dirty = computed(() => ['layout', 'sticks', 'keyboard'].includes(pane.value ?? '') && draftState.value !== initialDraft.value)
+const paneDefaultFocus = computed(() => {
+  const target = { layout: 'south', sticks: 'leftDeadzone', keyboard: 'enabled', test: 'finishTest', advanced: 'export', reset: 'confirmReset' }[pane.value ?? 'layout']
+  return `${paneScope}.${target}`
+})
 const frequency = ref(0)
 let sampleCount = 0
 let lastSequence = -1
 let measurementStart = performance.now()
 let previousPhysical = clonePadState(snapshot.value.physicalState)
+let captureReader: ReturnType<typeof createGamepadCaptureReader> | null = null
 
 const choice = ref<{
   title: string
   hint?: string
   options: SettingSelectOptionDefinition[]
   current: string | number | null
-  apply: (value: string | number) => void | Promise<void>
+  apply: (value: string | number) => void | Promise<void | boolean>
 } | null>(null)
 const layoutSummary = computed(() => BUTTON_KEYS.every(key => prefs.value.gameControls.buttons[key] === key) ? tr('standard') : tr('custom'))
 const preview = computed(() => applyGameControls(snapshot.value.physicalState, draft.value))
@@ -81,6 +92,7 @@ async function persist(patch: Record<string, unknown>): Promise<boolean> {
     return false
   saving.value = true
   message.value = ''
+  saveError.value = false
   const token = panel.getRevision()
   try {
     await saveGamepadConfig(patch)
@@ -90,17 +102,32 @@ async function persist(patch: Record<string, unknown>): Promise<boolean> {
     return true
   }
   catch (error) {
-    if (panel.isCurrent(token))
+    if (panel.isCurrent(token)) {
+      saveError.value = true
       message.value = `${tr('saveFailed')} ${error instanceof Error ? error.message : String(error)}`
+    }
     return false
   }
   finally { saving.value = false }
 }
 
 function stopCapture(): void {
+  captureReader = null
   panel.stopCapture()
 }
+function requestClosePane(): void {
+  if (saving.value || discardOpen.value)
+    return
+  if (capturing.value) {
+    stopCapture()
+    return
+  }
+  if (dirty.value)
+    discardOpen.value = true
+  else closePane()
+}
 function closePane(): void {
+  discardOpen.value = false
   choice.value = null
   rumbleTesting.value = false
   panel.close()
@@ -117,12 +144,16 @@ function openPane(next: NonNullable<typeof pane.value>): void {
     keyboardEnabled.value = prefs.value.controlSource === 'keyboard'
   }
   panel.open(next, snapshot.value.activeDeviceId)
+  initialDraft.value = draftState.value
 }
 function startCapture(target: ButtonKey | GamepadKeyboardControlDto): void {
-  previousPhysical = clonePadState(snapshot.value.physicalState)
-  panel.startCapture(target, snapshot.value.activeDeviceId)
+  const current = inputController.getSnapshot()
+  captureReader = createGamepadCaptureReader(current.physicalState)
+  panel.startCapture(target, current.activeDeviceId)
 }
 const dispose = inputController.subscribe((next) => {
+  const before = previousPhysical
+  previousPhysical = clonePadState(next.physicalState)
   snapshot.value = next
   panel.updateDevice(next.activeDeviceId)
   if (next.sequence !== lastSequence) {
@@ -135,14 +166,21 @@ const dispose = inputController.subscribe((next) => {
     sampleCount = 0
     measurementStart = now
   }
-  if (capturing.value && pane.value === 'layout') {
-    const source = BUTTON_KEYS.find(key => previousPhysical.buttons[key] <= 0.5 && next.physicalState.buttons[key] > 0.5)
-    if (source && assignGameButton(draft.value, capturing.value as ButtonKey, source))
+  if (pane.value === 'test' && before.buttons.menu <= 0.5 && next.physicalState.buttons.menu > 0.5) {
+    panel.toggleTestNavigation()
+    return
+  }
+  if (capturing.value) {
+    const action = captureReader?.(next.physicalState)
+    if (action?.kind === 'cancel')
       stopCapture()
-    previousPhysical = clonePadState(next.physicalState)
+    else if (action?.kind === 'assign' && pane.value === 'layout' && assignGameButton(draft.value, capturing.value as ButtonKey, action.source))
+      stopCapture()
   }
 })
 function onKey(event: KeyboardEvent): void {
+  if (discardOpen.value || saving.value || event.defaultPrevented)
+    return
   if (choice.value) {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -153,12 +191,18 @@ function onKey(event: KeyboardEvent): void {
   }
   if (!pane.value)
     return
+  if (pane.value === 'test' && event.code === 'Enter' && !event.repeat) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    panel.toggleTestNavigation()
+    return
+  }
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopImmediatePropagation()
     if (capturing.value)
       stopCapture()
-    else closePane()
+    else requestClosePane()
     return
   }
   if (pane.value === 'keyboard' && capturing.value && !event.repeat) {
@@ -174,6 +218,7 @@ function onKey(event: KeyboardEvent): void {
   }
 }
 window.addEventListener('keydown', onKey, true)
+onDeactivated(closePane)
 onBeforeUnmount(() => {
   dispose()
   panel.dispose()
@@ -190,7 +235,7 @@ function selectDevice(): void {
 }
 function selectPreference(key: string, title: string, values: string[], labels: string[], current: string, hint?: string): void {
   choice.value = { title, hint, current, options: values.map((value, i) => ({ value, label: labels[i] })), apply: async (value) => {
-    await persist({ [key]: value })
+    return await persist({ [key]: value })
   } }
 }
 function chooseDeadzone(side: 'leftDeadzone' | 'rightDeadzone'): void {
@@ -200,8 +245,11 @@ function chooseDeadzone(side: 'leftDeadzone' | 'rightDeadzone'): void {
 }
 async function applyChoice(value: string | number): Promise<void> {
   const selected = choice.value
-  choice.value = null
-  await selected?.apply(value)
+  if (saving.value)
+    return
+  const applied = await selected?.apply(value)
+  if (applied !== false)
+    choice.value = null
 }
 async function applyDraft(): Promise<void> {
   stopCapture()
@@ -262,7 +310,7 @@ function exportDiagnostic(): void {
 
 <template>
   <div class="setting-panel__list">
-    <p v-if="message" role="status">
+    <p v-if="message" class="setting-panel__status" :class="{ 'setting-panel__status--error': saveError }" :role="saveError ? 'alert' : 'status'">
       {{ message }}
     </p>
     <section class="setting-panel__section">
@@ -327,18 +375,18 @@ function exportDiagnostic(): void {
       </div>
     </section>
   </div>
-  <SettingModalShell :open="pane !== null" :scope-id="paneScope" :title="pane ? tr(pane) : ''" :hint="pane === 'keyboard' ? tr('keyboardHint') : pane === 'layout' ? tr('layoutHint') : pane === 'test' ? tr('testHint') : ''" @close="closePane">
+  <SettingModalShell :open="pane !== null" :default-focus-id="paneDefaultFocus" :busy="saving" :scope-id="paneScope" :title="pane ? tr(pane) : ''" :hint="pane === 'keyboard' ? tr('keyboardHint') : pane === 'layout' ? tr('layoutHint') : pane === 'test' ? tr('testHint') : ''" @close="requestClosePane">
     <div class="pad-editor">
-      <p v-if="message" role="status">
+      <p v-if="message" class="setting-panel__status" :class="{ 'setting-panel__status--error': saveError }" :role="saveError ? 'alert' : 'status'">
         {{ message }}
       </p>
       <template v-if="capturing">
         <p role="status">
-          {{ tr('captureHint') }} · {{ captureCountdown }}s
+          {{ tr('captureHint') }} · {{ captureCountdown }}s · {{ tr('captureControllerHint') }}
         </p>
-        <button class="setting-panel__action" @click="stopCapture">
+        <Focusable :id="`${paneScope}.cancelCapture`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="stopCapture">
           {{ tr('cancelCapture') }}
-        </button>
+        </Focusable>
       </template>
       <template v-if="pane === 'layout'">
         <SettingRow v-for="key in BUTTON_KEYS.filter(key => key !== 'home')" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :disabled="saving || capturing !== null || !activeDevice" :label="BUTTON_LABELS[key]" select @click="startCapture(key)">
@@ -346,7 +394,7 @@ function exportDiagnostic(): void {
         </SettingRow>
       </template>
       <template v-if="pane === 'sticks'">
-        <SettingRow v-for="key in (['leftDeadzone', 'rightDeadzone'] as const)" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :label="tr(key)" select @click="chooseDeadzone(key)">
+        <SettingRow v-for="key in (['leftDeadzone', 'rightDeadzone'] as const)" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :label="tr(key)" :disabled="saving" select @click="chooseDeadzone(key)">
           {{ Math.round(draft[key] * 100) }}%
         </SettingRow>
         <SettingToggleRow :id="`${paneScope}.invert`" :scope-id="paneScope" :label="tr('invertY')" :enabled="draft.invertRightY" :disabled="saving" @confirm="draft.invertRightY = !draft.invertRightY" />
@@ -367,6 +415,10 @@ function exportDiagnostic(): void {
       </template>
       <template v-if="pane === 'test'">
         <p>{{ tr('testRemaining') }} {{ testCountdown }}s</p>
+        <p>{{ tr(testNavigation ? 'testNavigationHint' : 'testControllerHint') }}</p>
+        <Focusable v-if="testNavigation" :id="`${paneScope}.resumeTest`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="panel.toggleTestNavigation">
+          {{ tr('resumeTest') }}
+        </Focusable>
         <section v-for="view in inputViews" :key="view.label" class="pad-test-section">
           <h3 class="pad-test-title">
             {{ view.label }}
@@ -383,12 +435,12 @@ function exportDiagnostic(): void {
             </div>
           </div>
         </section>
-        <button class="setting-panel__action" :disabled="!activeDevice?.rumble || rumbleTesting" @click="testRumble">
+        <Focusable :id="`${paneScope}.rumbleTest`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="!activeDevice?.rumble || rumbleTesting" @click="testRumble">
           {{ tr('rumbleTest') }}
-        </button>
-        <button class="setting-panel__action" @click="closePane">
+        </Focusable>
+        <Focusable :id="`${paneScope}.finishTest`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="requestClosePane">
           {{ tr('finishTest') }}
-        </button>
+        </Focusable>
       </template>
       <template v-if="pane === 'advanced'">
         <p>{{ tr('currentBackend') }} {{ snapshot.backend ? tr(snapshot.backend) : '—' }}<span v-if="prefs.backend !== snapshot.backend"> · {{ tr('restartPending') }}</span></p>
@@ -408,17 +460,21 @@ function exportDiagnostic(): void {
       </template>
     </div>
     <template v-if="pane === 'layout' || pane === 'sticks' || pane === 'keyboard'" #footer>
-      <div class="pad-editor-actions">
+      <div class="setting-panel__actions">
+        <Focusable :id="`${paneScope}.cancel`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="saving" @click="requestClosePane">
+          {{ t('setting.editor.cancel') }}
+        </Focusable>
         <Focusable :id="`${paneScope}.defaults`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="saving || capturing !== null" @click="resetDraft">
           {{ tr('resetDraft') }}
         </Focusable>
-        <Focusable :id="`${paneScope}.apply`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="saving || capturing !== null" @click="applyDraft">
-          {{ tr('apply') }}
+        <Focusable :id="`${paneScope}.apply`" as="button" :scope-id="paneScope" class="setting-panel__action setting-panel__action--primary" :disabled="saving || capturing !== null || !dirty" @click="applyDraft">
+          {{ saving ? t('setting.experience.saving') : tr('apply') }}
         </Focusable>
       </div>
     </template>
   </SettingModalShell>
-  <SettingSingleSelectPopupSheet :open="choice !== null" scope-id="setting.gamepad.choice" :title="choice?.title ?? ''" :hint="choice?.hint ?? ''" :options="choice?.options ?? []" :current-value="choice?.current ?? null" @close="choice = null" @select="applyChoice" />
+  <SettingSingleSelectPopupSheet :open="choice !== null" :busy="saving" :error="saveError ? message : ''" scope-id="setting.gamepad.choice" :title="choice?.title ?? ''" :hint="choice?.hint ?? ''" :options="choice?.options ?? []" :current-value="choice?.current ?? null" @close="choice = null" @select="applyChoice" />
+  <SettingConfirmSheet :open="discardOpen" scope-id="setting.gamepad.discard" :title="t('setting.experience.discardTitle')" :message="t('setting.experience.discardHint')" @close="discardOpen = false" @confirm="closePane" />
 </template>
 
 <style scoped src="../../components/settings/setting-layout.css"></style>
@@ -426,7 +482,7 @@ function exportDiagnostic(): void {
 <style scoped>
 .pad-editor {
   display: grid;
-  gap: var(--ui-space-md);
+  gap: var(--ui-settings-form-gap);
 }
 
 .pad-editor p {
@@ -435,22 +491,7 @@ function exportDiagnostic(): void {
   font-size: var(--ui-text-body-sm);
   line-height: var(--ui-line-height-relaxed);
 }
-
-.pad-editor-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.pad-editor-actions .setting-panel__action {
-  min-width: 100px;
-}
-
-.pad-editor-actions .setting-panel__action:last-child {
-  background: var(--brand-primary);
-  color: var(--brand-on-primary);
-}
+.pad-editor .setting-panel__status--error { color: var(--color-danger); }
 
 .pad-hint {
   margin: 0;

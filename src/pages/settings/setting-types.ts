@@ -4,6 +4,7 @@ import type {
   SettingSelectOptionDefinition,
 } from '@shared/config/domain-definition'
 import type { SettingTabKey } from '../../navigation/spatial-nav.constants'
+import type { SettingEffect } from './setting-page-schema'
 
 export interface SettingTabNavItem {
   key: SettingTabKey
@@ -27,6 +28,7 @@ export interface SettingRow {
   nodeId: string
   /** 展示「需重启」等生效提示 */
   needsRestart?: boolean
+  effect?: SettingEffect
 }
 
 export interface SettingIndexedRow extends SettingRow {
@@ -44,6 +46,7 @@ export interface SettingSectionEntryAction {
   nodeId: string
   label: string
   variant: 'default' | 'danger'
+  value?: string
   index: number
 }
 
@@ -69,4 +72,5 @@ export interface SettingIndexedSection {
   key: string
   label: string
   entries: SettingSectionEntry[]
+  collapsible?: boolean
 }

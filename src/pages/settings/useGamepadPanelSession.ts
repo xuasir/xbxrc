@@ -11,11 +11,14 @@ interface PanelInput {
 }
 
 /** 面板会话拥有输入捕获和期限，退出时统一释放；异步结果按会话身份提交。 */
-export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target: CaptureTarget) => void) {
+export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target: string) => void) {
   const pane = ref<Pane | null>(null)
   const capturing = ref<CaptureTarget | null>(null)
   const captureCountdown = ref(0)
   const testCountdown = ref(0)
+  const testNavigation = ref(false)
+  let testDeadline = 0
+  let testRemainingMs = 0
   let captureDevice: string | null = null
   let testDevice: string | null = null
   let captureTimer: ReturnType<typeof setInterval> | undefined
@@ -54,6 +57,7 @@ export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target:
     clearInterval(testTimer)
     testTimer = undefined
     testCountdown.value = 0
+    testNavigation.value = false
     stopCapture(false)
     input.setUiCapture('settings:test', false)
     input.setUiCapture('settings:panel', false)
@@ -74,15 +78,35 @@ export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target:
         return
       }
       const token = revision
-      const deadline = performance.now() + 20_000
+      testRemainingMs = 20_000
+      testDeadline = performance.now() + testRemainingMs
       testCountdown.value = 20
       testTimer = setInterval(() => {
-        if (!isCurrent(token))
+        if (!isCurrent(token) || testNavigation.value)
           return
-        testCountdown.value = Math.max(0, Math.ceil((deadline - performance.now()) / 1000))
+        testCountdown.value = Math.max(0, Math.ceil((testDeadline - performance.now()) / 1000))
         if (!testCountdown.value)
           close()
       }, 250)
+      input.setUiCapture('settings:test', true, true)
+    }
+  }
+
+  function toggleTestNavigation(): void {
+    if (disposed || pane.value !== 'test')
+      return
+    testNavigation.value = !testNavigation.value
+    if (testNavigation.value) {
+      testRemainingMs = Math.max(0, testDeadline - performance.now())
+      input.setUiCapture('settings:test', false)
+      const token = revision
+      void nextTick(() => {
+        if (isCurrent(token) && testNavigation.value)
+          restoreFocus('finishTest')
+      })
+    }
+    else {
+      testDeadline = performance.now() + testRemainingMs
       input.setUiCapture('settings:test', true, true)
     }
   }
@@ -119,5 +143,5 @@ export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target:
     close()
   }
 
-  return { pane, capturing, captureCountdown, testCountdown, open, close, startCapture, stopCapture, updateDevice, dispose, isCurrent, getRevision: () => revision }
+  return { pane, capturing, captureCountdown, testCountdown, testNavigation, toggleTestNavigation, open, close, startCapture, stopCapture, updateDevice, dispose, isCurrent, getRevision: () => revision }
 }

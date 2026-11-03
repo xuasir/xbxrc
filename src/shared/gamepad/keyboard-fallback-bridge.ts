@@ -61,6 +61,22 @@ let uninstall: (() => void) | undefined
 let mapping = DEFAULT_KEYBOARD_MAPPING
 let controlSource: unknown
 const pressedKeys = new Set<GamepadKeyboardKeyDto>()
+const UI_NAV_CONTROLS = new Set<GamepadKeyboardControlDto>([
+  'leftStickUp',
+  'leftStickDown',
+  'leftStickLeft',
+  'leftStickRight',
+  'dpadUp',
+  'dpadDown',
+  'dpadLeft',
+  'dpadRight',
+  'south',
+  'east',
+  'l1',
+  'r1',
+  'l2',
+  'r2',
+])
 
 export function installKeyboardFallbackBridge(): () => void {
   if (uninstall)
@@ -76,6 +92,8 @@ export function installKeyboardFallbackBridge(): () => void {
   window.addEventListener('keydown', handleKeyDown, { capture: true })
   window.addEventListener('keyup', handleKeyUp, { capture: true })
   window.addEventListener('blur', clearPressedKeys)
+  window.addEventListener('focusin', handleFocusIn)
+  window.addEventListener('pointerdown', handlePointerDown, { capture: true })
   document.addEventListener('visibilitychange', handleVisibilityChange)
   const cleanup = () => {
     if (uninstall !== cleanup)
@@ -84,6 +102,8 @@ export function installKeyboardFallbackBridge(): () => void {
     window.removeEventListener('keydown', handleKeyDown, { capture: true })
     window.removeEventListener('keyup', handleKeyUp, { capture: true })
     window.removeEventListener('blur', clearPressedKeys)
+    window.removeEventListener('focusin', handleFocusIn)
+    window.removeEventListener('pointerdown', handlePointerDown, { capture: true })
     document.removeEventListener('visibilitychange', handleVisibilityChange)
     clearPressedKeys()
     uninstall = undefined
@@ -97,19 +117,37 @@ function handleVisibilityChange(): void {
     clearPressedKeys()
 }
 
+function handleFocusIn(event: FocusEvent): void {
+  if (isEditableTarget(event.target))
+    clearPressedKeys()
+}
+
+function handlePointerDown(event: PointerEvent): void {
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
+    clearPressedKeys()
+}
+
 if (import.meta.hot)
   import.meta.hot.dispose(() => uninstall?.())
 
 function handleKeyDown(event: KeyboardEvent): void {
   const snapshot = inputController.getSnapshot()
-  if (snapshot.preferences.controlSource !== 'keyboard' || event.ctrlKey || event.metaKey || event.altKey)
-    return
-  const key = KEY_CODE_TO_DTO[event.code]
-  if (key === undefined || isEditableTarget(event.target) || !mapping.bindings.some(binding => binding.key === key)) {
+  if (snapshot.preferences.controlSource !== 'keyboard' || snapshot.exclusiveCapture
+    || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
     return
   }
-  if (snapshot.owner === 'stream')
+  const key = KEY_CODE_TO_DTO[event.code]
+  if (key === undefined || isEditableTarget(event.target))
+    return
+  const gameBinding = mapping.bindings.some(binding => binding.key === key)
+  const uiBinding = DEFAULT_KEYBOARD_MAPPING.bindings.find(binding => binding.key === key)
+  if (!gameBinding && !uiBinding)
+    return
+  // 游戏采用保存的绑定；菜单采用固定布局。Enter/Tab/Esc 继续走原生表单动作。
+  if ((snapshot.owner === 'stream' && gameBinding)
+    || (snapshot.owner === 'ui' && uiBinding && UI_NAV_CONTROLS.has(uiBinding.control))) {
     event.preventDefault()
+  }
   // 保持浏览器默认动作抑制；持键重复等待真实松开与下一次按下。
   if (event.repeat)
     return
@@ -136,12 +174,12 @@ function clearPressedKeys(): void {
 }
 
 function submitCurrentState(): void {
-  inputController.setKeyboardState(buildState())
+  inputController.setKeyboardState(buildState(mapping), buildState(DEFAULT_KEYBOARD_MAPPING))
 }
 
-function buildState(): LogicalPadStateDto {
+function buildState(bindings: GamepadKeyboardMappingDto): LogicalPadStateDto {
   const state = neutralState()
-  for (const binding of mapping.bindings) {
+  for (const binding of bindings.bindings) {
     if (!pressedKeys.has(binding.key)) {
       continue
     }
@@ -214,8 +252,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
   }
-  return target.isContentEditable
-    || target instanceof HTMLInputElement
-    || target instanceof HTMLTextAreaElement
-    || target instanceof HTMLSelectElement
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+    return !target.readOnly
+  return target.isContentEditable || target instanceof HTMLSelectElement
 }

@@ -7,6 +7,7 @@ interface SettingToggleRowProps {
   label: string
   description?: string
   enabled: boolean
+  effectLabel?: string
   disabled?: boolean
   upNeighborId?: string
   downNeighborId?: string
@@ -48,6 +49,7 @@ function handleConfirm(): void {
   >
     <span class="setting-toggle-row__content">
       <span class="setting-toggle-row__label">{{ props.label }}</span>
+      <span v-if="props.effectLabel" class="setting-row__effect">{{ props.effectLabel }}</span>
       <span v-if="props.description" :id="`${props.id}.description`" class="setting-toggle-row__description">{{ props.description }}</span>
     </span>
 
@@ -59,45 +61,9 @@ function handleConfirm(): void {
   </Focusable>
 </template>
 
+<style scoped src="./setting-row.css"></style>
+
 <style scoped>
-.setting-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-settings-row-gap);
-  width: 100%;
-  min-height: var(--ui-settings-row-min-height);
-  padding: 10px 16px;
-  border: 2px solid transparent;
-  border-radius: var(--settings-item-radius);
-  background: transparent;
-  color: var(--color-text-primary);
-  text-align: left;
-  transition:
-    border-color var(--ui-motion-fast),
-    background-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast);
-}
-
-.setting-toggle-row__content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.setting-toggle-row__description {
-  font-size: var(--ui-settings-row-description-size, 13px);
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-}
-
-.setting-toggle-row__label {
-  font-size: var(--ui-settings-row-label-size);
-  line-height: 1.2;
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--color-text-primary);
-}
-
 .setting-toggle-row__switch {
   flex: 0 0 auto;
 }
@@ -137,10 +103,6 @@ function handleConfirm(): void {
   transform: translate(var(--ui-settings-toggle-thumb-offset), -50%);
 }
 
-.setting-toggle-row:hover {
-  background: var(--color-state-hover);
-}
-
 .setting-toggle-row[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
@@ -153,29 +115,15 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__track {
-  border-color: color-mix(in srgb, var(--ui-focus-text) 60%, transparent);
+  border-color: var(--ui-focus-text);
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__thumb {
-  background: var(--ui-focus-text);
+  background: var(--color-text-primary);
 }
 
 .setting-toggle-row[data-focused='true'].setting-toggle-row--active .setting-toggle-row__track {
   background: var(--brand-primary);
   border-color: transparent;
-}
-
-:global(html[data-ui-density='compact']) .setting-toggle-row,
-:global(html[data-ui-density='narrow']) .setting-toggle-row {
-  padding: 6px 10px;
-}
-
-:global(html[data-ui-density='compact']) .setting-toggle-row__label,
-:global(html[data-ui-density='narrow']) .setting-toggle-row__label {
-  font-size: var(--ui-settings-row-label-size);
-}
-.setting-toggle-row:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 </style>

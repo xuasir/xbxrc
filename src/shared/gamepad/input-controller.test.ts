@@ -203,7 +203,7 @@ describe('inputController', () => {
     expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 1 })
   })
 
-  it('keyboard source controls the game while physical input controls menus', async () => {
+  it('routes keyboard and physical input to menus while the keyboard controls the game', async () => {
     const { controller: c, backend, send } = fixture()
     c.configure(parseGamepadPreferences({ gamepad_control_source: 'keyboard' }))
     await c.start(backend)
@@ -213,9 +213,59 @@ describe('inputController', () => {
     send({ a: pressed('south') })
     expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 1 })
     c.setUiCapture('menu', true)
+    expect(c.getSnapshot().uiState.buttons.east).toBe(0)
+    c.setKeyboardState(neutralState())
+    c.setKeyboardState(pressed('east'))
+    expect(c.getSnapshot().uiState.buttons.east).toBe(1)
     send({ a: neutralState() })
     send({ a: pressed('south') })
     expect(c.getSnapshot().uiState.buttons.south).toBe(1)
+    expect(c.getSnapshot().uiState.buttons.east).toBe(1)
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+  })
+
+  it('releases each UI source independently across captures and stream ownership', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ gamepad_control_source: 'keyboard' }))
+    await c.start(backend)
+    send({ a: neutralState() })
+    c.setStreamReady(true)
+    c.setKeyboardState(pressed('south'))
+    c.setUiCapture('menu', true)
+    expect(c.getSnapshot().uiState.buttons.south).toBe(0)
+    send({ a: pressed('south') })
+    expect(c.getSnapshot().uiState.buttons.south).toBe(1)
+    send({ a: neutralState() })
+    expect(c.getSnapshot().uiState.buttons.south).toBe(0)
+    c.setKeyboardState(neutralState())
+    c.setKeyboardState(pressed('south'))
+    expect(c.getSnapshot().uiState.buttons.south).toBe(1)
+    c.setUiCapture('menu', false)
+    expect(c.getSnapshot().gameState.buttons.south).toBe(0)
+    c.setKeyboardState(neutralState())
+    c.setKeyboardState(pressed('south'))
+    expect(c.getSnapshot().gameState.buttons.south).toBe(1)
+  })
+
+  it('keeps keyboard UI standard through game remapping and exclusive capture', async () => {
+    const { controller: c } = fixture()
+    const prefs = parseGamepadPreferences({ gamepad_control_source: 'keyboard' })
+    prefs.gameControls.buttons.east = 'west'
+    prefs.gameControls.buttons.west = 'east'
+    c.configure(prefs)
+    c.setKeyboardState(pressed('east'), pressed('south'))
+    expect(c.getSnapshot().uiState.buttons).toMatchObject({ south: 1, east: 0, west: 0 })
+    c.setUiCapture('capture', true, true)
+    expect(c.getSnapshot().uiState).toEqual(neutralState())
+    c.setUiCapture('capture', false)
+    expect(c.getSnapshot().uiState.buttons.south).toBe(0)
+    c.setKeyboardState(neutralState())
+    c.setStreamReady(true)
+    c.setKeyboardState(pressed('east'), pressed('south'))
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 0, west: 1 })
+    c.configure(parseGamepadPreferences({ gamepad_control_source: 'gamepad' }))
+    c.setStreamReady(false)
+    expect(c.getSnapshot().uiState).toEqual(neutralState())
   })
 
   it('publishes a fresh snapshot after a consumer changes ownership synchronously', async () => {

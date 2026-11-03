@@ -53,6 +53,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const runtime = shallowRef<RuntimePort | null>(null)
   const runtimeStarted = ref(false)
   const performanceTimer = ref<BrowserInterval | null>(null)
+  let performancePollGeneration = 0
   let directExhaustionProbeTimer: BrowserTimeout | null = null
   let initialConnectionTimer: BrowserTimeout | null = null
   const audioVolume = ref(1)
@@ -96,10 +97,14 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   }
 
   function clearPerformancePolling(): void {
+    // 停止或重新开启轮询后，旧读取结果应由原轮询生命周期吸收。
+    performancePollGeneration += 1
     if (performanceTimer.value !== null) {
       clearInterval(performanceTimer.value)
       performanceTimer.value = null
     }
+    if (performanceSnapshot.value !== null)
+      performanceSnapshot.value = { ...performanceSnapshot.value, statsObservationState: 'stale' }
   }
 
   function clearDirectExhaustionProbe(): void {
@@ -243,13 +248,17 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
     const polledRuntime = runtime.value
     const token = runtimeToken
+    const pollGeneration = performancePollGeneration
     const refresh = (): void => {
       void polledRuntime?.snapshotStats().then(
         (snapshot) => {
-          if (isRuntimeTokenActive(token) && runtime.value === polledRuntime)
+          if (isRuntimeTokenActive(token) && runtime.value === polledRuntime && performancePollGeneration === pollGeneration)
             performanceSnapshot.value = snapshot
         },
-        () => {},
+        () => {
+          if (isRuntimeTokenActive(token) && runtime.value === polledRuntime && performancePollGeneration === pollGeneration)
+            performanceSnapshot.value = null
+        },
       )
     }
 

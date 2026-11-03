@@ -156,12 +156,12 @@ watch(
     </section>
 
     <template #footer>
-      <div class="setting-display-options-sheet__actions">
+      <div class="setting-panel__actions">
         <Focusable
           :id="cancelNodeId"
           as="button"
           type="button"
-          class="setting-display-options-sheet__action setting-display-options-sheet__action--secondary"
+          class="setting-panel__action"
           :scope-id="props.scopeId"
           :on-back="handleClose"
           @click="handleClose"
@@ -173,7 +173,7 @@ watch(
           :id="submitNodeId"
           as="button"
           type="button"
-          class="setting-display-options-sheet__action setting-display-options-sheet__action--primary"
+          class="setting-panel__action setting-panel__action--primary"
           :scope-id="props.scopeId"
           :on-back="handleClose"
           @click="handleSubmit"
@@ -185,117 +185,15 @@ watch(
   </SettingModalShell>
 </template>
 
+<style scoped src="./setting-layout.css"></style>
+
 <style scoped>
-.setting-display-options-sheet__section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.setting-display-options-sheet__section + .setting-display-options-sheet__section {
-  margin-top: 20px;
-}
-
-.setting-display-options-sheet__section-title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-}
-
-.setting-display-options-sheet__preset-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.setting-display-options-sheet__preset {
-  min-height: 48px;
-  border: 2px solid transparent;
-  border-radius: var(--ui-radius-sm);
-  background: var(--color-state-hover);
-  color: var(--ui-page-text);
-  font-size: 15px;
-  font-weight: 700;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-display-options-sheet__preset--active {
-  background: color-mix(in srgb, var(--brand-primary), transparent 82%);
-  color: var(--brand-primary);
-  border-color: color-mix(in srgb, var(--brand-primary), transparent 65%);
-}
-
-.setting-display-options-sheet__preset[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-display-options-sheet__preset-help {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--color-text-tertiary);
-}
-
-.setting-display-options-sheet__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.setting-display-options-sheet__action {
-  min-width: 100px;
-  min-height: 36px;
-  padding: 0 20px;
-  border: 2px solid transparent;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-display-options-sheet__action--secondary {
-  background: var(--color-state-hover);
-  color: var(--ui-page-text);
-}
-
-.setting-display-options-sheet__action--primary {
-  background: var(--brand-primary);
-  color: var(--brand-on-primary);
-}
-
-.setting-display-options-sheet__action[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.02);
-}
-
-.setting-display-options-sheet__action--primary[data-focused='true'] {
-  background: var(--brand-primary-strong);
-  color: var(--brand-on-primary);
-}
-
-.setting-display-options-sheet-transition-leave-to .setting-display-options-sheet__panel {
-}
-
-:global(html[data-ui-density='narrow']) .setting-display-options-sheet__list {
-  grid-template-columns: 1fr;
-}
-
-:global(html[data-ui-density='narrow']) .setting-display-options-sheet__preset-list {
-  grid-template-columns: 1fr;
-}
-
-:global(html[data-ui-density='narrow']) .setting-display-options-sheet__actions {
-  flex-direction: column-reverse;
-}
-
-:global(html[data-ui-density='narrow']) .setting-display-options-sheet__action {
-  width: 100%;
-}
+.setting-display-options-sheet__section { display: flex; flex-direction: column; gap: var(--ui-settings-form-gap); }
+.setting-display-options-sheet__section + .setting-display-options-sheet__section { margin-top: var(--ui-space-xl); }
+.setting-display-options-sheet__section-title { margin: 0; font-size: var(--ui-settings-section-title-size); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-secondary); }
+.setting-display-options-sheet__preset-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ui-space-md); }
+.setting-display-options-sheet__preset { position: relative; min-height: var(--ui-settings-control-height); padding: var(--ui-space-sm) var(--ui-settings-control-padding); border: 2px solid transparent; border-radius: var(--ui-radius-md); background: var(--ui-surface-panel); color: var(--color-text-primary); font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-relaxed); font-weight: var(--ui-font-weight-semibold); transition: all var(--ui-motion-fast); }
+.setting-display-options-sheet__preset--active { border-color: var(--brand-primary); background: var(--ui-surface-panel-strong); }
+.setting-display-options-sheet__preset[data-focused='true'] { border-color: transparent; background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
+.setting-display-options-sheet__preset-help { margin: 0; font-size: var(--ui-settings-row-description-size); line-height: var(--ui-line-height-relaxed); color: var(--color-text-secondary); }
 </style>

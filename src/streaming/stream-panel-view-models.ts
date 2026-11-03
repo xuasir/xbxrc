@@ -8,7 +8,6 @@ import type {
 
 import {
   formatBufferedTrend,
-  formatExperienceResolution,
   formatOptionalPercent,
   formatPanelDimensions,
   formatPanelFps,
@@ -17,7 +16,10 @@ import {
   formatRenderPipelineType,
   formatRenderProcessing,
   formatRenderShaderPath,
+  formatRuntimeLoss,
+  formatRuntimeResolution,
   formatSrRuntimeFromSnapshot,
+  panelNumericValue,
   resolveExperienceStatusText,
   stringOrDash,
 } from './stream-panel-formatters'
@@ -34,29 +36,39 @@ export function buildStreamExperienceMetricsViewModel(input: {
   runtimeMode: 'webrtc-direct' | 'rust-owned'
   i18n: StreamPanelI18n
 }): StreamExperienceMetricsViewModel {
-  const { snapshot, diagnostics, resolutionMode, runtimeMode, i18n } = input
+  const { snapshot, diagnostics, i18n } = input
   const { t } = i18n
 
   const connectedElapsed = diagnostics.connectedMilestoneElapsedText?.trim()
   const mediaReadyElapsed = diagnostics.mediaReadyMilestoneElapsedText?.trim()
+  const observationState = snapshot?.statsObservationState ?? (snapshot ? 'fresh' : 'unavailable')
+  const usable = observationState === 'fresh' ? snapshot : null
+  const rtt = panelNumericValue(usable?.networkRttMs ?? usable?.rtt)
+  const bitrate = panelNumericValue(usable?.inboundVideoBitrateKbps)
 
   return {
+    observationState,
+    notice: diagnostics.hasNoVideoWarning
+      ? 'noVideo'
+      : diagnostics.isDisplaySupplyLimited
+        ? 'displaySupplyLimited'
+        : diagnostics.isRecovering
+          ? 'recovering'
+          : observationState === 'stale'
+            ? 'stale'
+            : observationState === 'unavailable' ? 'sampling' : undefined,
     status: resolveExperienceStatusText(diagnostics, t),
-    resolution: formatExperienceResolution({ snapshot, resolutionMode, runtimeMode }),
-    rtt: stringOrDash(
-      snapshot?.rtt !== undefined && snapshot.rtt !== null ? String(snapshot.rtt) : undefined,
-    ),
+    resolution: formatRuntimeResolution(usable),
+    rtt: rtt === undefined ? '--' : `${Math.round(rtt)} ms`,
     jit: stringOrDash(
       snapshot?.jit !== undefined && snapshot.jit !== null ? String(snapshot.jit) : undefined,
     ),
     recvFps: formatPanelFps(snapshot?.inboundVideoFps),
     decodeFps: formatPanelFps(snapshot?.decodeFps),
     // 呈现 FPS 只认渲染侧实测值：回退到 `fps`（接收帧率）会把两个指标显示成同一个数。
-    presentFps: formatPanelFps(snapshot?.presentFps),
-    packetLoss: stringOrDash(
-      snapshot?.pl !== undefined && snapshot.pl !== null ? String(snapshot.pl) : undefined,
-    ),
-    videoBitrate: formatPanelKbps(snapshot?.inboundVideoBitrateKbps),
+    presentFps: formatPanelFps(usable?.presentFps),
+    packetLoss: formatRuntimeLoss(usable),
+    videoBitrate: bitrate === undefined ? '--' : `${(bitrate / 1000).toFixed(1)} Mbps`,
     totalBitrate: formatPanelKbps(snapshot?.inboundBitrateKbps),
     connectedElapsed: connectedElapsed === '' ? undefined : connectedElapsed,
     mediaReadyElapsed: mediaReadyElapsed === '' ? undefined : mediaReadyElapsed,
@@ -84,6 +96,15 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
     : `${(openRatio * 100).toFixed(0)}%`
 
   return {
+    rtt: formatPanelMs(panelNumericValue(s?.networkRttMs ?? s?.rtt)),
+    jitter: formatPanelMs(panelNumericValue(s?.networkJitterMs ?? s?.jit)),
+    packetLoss: stringOrDash(s?.pl === undefined ? undefined : String(s.pl)),
+    totalBitrate: formatPanelKbps(s?.inboundBitrateKbps),
+    connectedElapsed: stringOrDash(diagnostics.connectedMilestoneElapsedText),
+    mediaReadyElapsed: stringOrDash(diagnostics.mediaReadyMilestoneElapsedText),
+    transportPath: stringOrDash(diagnostics.transportPath ?? s?.transportPath),
+    serverHost: stringOrDash(diagnostics.serverHost),
+    sampleAge: formatPanelMs(s?.statsSampleAgeMs),
     receivedFps: formatPanelFps(short ? short.inboundFpsAvg : s?.inboundVideoFps),
     decodedFps: formatPanelFps(short ? short.decodeFpsAvg : s?.decodeFps),
     videoAdvancementFps: formatPanelFps(short ? short.videoPresentFpsAvg : s?.videoPresentFps),
@@ -110,16 +131,18 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
     qualityEffect: stringOrDash(s?.qualityActionEffect),
     recoveryEffect: stringOrDash(s?.lastRecoveryActionEffect),
     transportState: stringOrDash(diagnostics.transportState ?? s?.transportState),
-    presentationMilestone: stringOrDash(diagnostics.presentationMilestone),
+    presentationMilestone: stringOrDash(diagnostics.presentationMilestone ?? s?.presentationMilestone),
     renderPipelineType: formatRenderPipelineType(s?.renderPipelineType ?? diagnostics.renderPipelineType),
     renderProcessing: formatRenderProcessing(s?.renderProcessing ?? diagnostics.renderProcessing),
     renderShaderPath: formatRenderShaderPath(s?.renderShaderPath ?? diagnostics.renderShaderPath),
     frontEndProfileBaseline: stringOrDash(diagnostics.frontEndProfileBaseline ?? s?.frontEndProfileBaseline),
     frontEndProfileDynamic: stringOrDash(diagnostics.frontEndProfileDynamic ?? s?.frontEndProfileDynamic),
     frontEndPolicyPreset: stringOrDash(diagnostics.frontEndPolicyPreset ?? s?.frontEndPolicyPreset),
-    srSetting: diagnostics.renderSuperResolutionEnabled === true
-      ? t('streamPage.performance.values.srSettingOn')
-      : t('streamPage.performance.values.srSettingOff'),
+    srSetting: (diagnostics.renderSuperResolutionEnabled ?? s?.renderSuperResolutionEnabled) === undefined
+      ? '--'
+      : (diagnostics.renderSuperResolutionEnabled ?? s?.renderSuperResolutionEnabled)
+          ? t('streamPage.performance.values.srSettingOn')
+          : t('streamPage.performance.values.srSettingOff'),
     srRuntime: formatSrRuntimeFromSnapshot(s, t),
     bandwidthState: stringOrDash(diagnostics.bandwidthState ?? s?.bandwidthState),
     bandwidthAction: stringOrDash(diagnostics.bandwidthAction ?? s?.bandwidthAction),
@@ -141,55 +164,38 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
 
 export interface StreamInternalDiagnosticsRow { key: string, value: string }
 
-export function browserDiagnosticsRows(vm: StreamBrowserDiagnosticsViewModel): StreamInternalDiagnosticsRow[] {
-  return [
-    { key: 'receivedFps', value: vm.receivedFps },
-    { key: 'decodedFps', value: vm.decodedFps },
-    { key: 'videoAdvancementFps', value: vm.videoAdvancementFps },
-    { key: 'callbackDeliveryFps', value: vm.callbackDeliveryFps },
-    { key: 'rendererSubmitFps', value: vm.rendererSubmitFps },
-    { key: 'frameWindow', value: vm.frameWindow },
-    { key: 'observation', value: vm.observation },
-    { key: 'sourceSize', value: vm.sourceSize },
-    { key: 'outputSize', value: vm.outputSize },
-    { key: 'submitAge', value: vm.submitAge },
-    { key: 'submitCost', value: vm.submitCost },
-    { key: 'uploadCost', value: vm.uploadCost },
-    { key: 'glSubmitCost', value: vm.glSubmitCost },
-    { key: 'gpuCost', value: vm.gpuCost },
-    { key: 'scanout', value: vm.scanout },
-    { key: 'renderCause', value: vm.renderCause },
-    { key: 'renderEffect', value: vm.renderEffect },
-    { key: 'frameCauses', value: vm.frameCauses },
-    { key: 'rttBaseline', value: vm.rttBaseline },
-    { key: 'rttDelta', value: vm.rttDelta },
-    { key: 'qualityRequested', value: vm.qualityRequested },
-    { key: 'qualityNegotiated', value: vm.qualityNegotiated },
-    { key: 'qualityObserved', value: vm.qualityObserved },
-    { key: 'qualityEffect', value: vm.qualityEffect },
-    { key: 'recoveryEffect', value: vm.recoveryEffect },
-    { key: 'transportState', value: vm.transportState },
-    { key: 'presentationMilestone', value: vm.presentationMilestone },
-    { key: 'renderPipelineType', value: vm.renderPipelineType },
-    { key: 'renderProcessing', value: vm.renderProcessing },
-    { key: 'renderShaderPath', value: vm.renderShaderPath },
-    { key: 'frontEndProfileBaseline', value: vm.frontEndProfileBaseline },
-    { key: 'frontEndProfileDynamic', value: vm.frontEndProfileDynamic },
-    { key: 'frontEndPolicyPreset', value: vm.frontEndPolicyPreset },
-    { key: 'srSetting', value: vm.srSetting },
-    { key: 'srRuntime', value: vm.srRuntime },
-    { key: 'bandwidthState', value: vm.bandwidthState },
-    { key: 'bandwidthAction', value: vm.bandwidthAction },
-    { key: 'controlChannelState', value: vm.controlChannelState },
-    { key: 'controlChannelError', value: vm.controlChannelError },
-    { key: 'controlChannelOpenRatio', value: vm.controlChannelOpenRatio },
-    { key: 'controlChannelBufferedTrend', value: vm.controlChannelBufferedTrend },
-    { key: 'keyframeSuccessRate', value: vm.keyframeSuccessRate },
-    { key: 'recoveryCause', value: vm.recoveryCause },
-    { key: 'qualityLadderLevel', value: vm.qualityLadderLevel },
-    { key: 'decisionDigest', value: vm.decisionDigest },
-  ]
+export const DIAGNOSTIC_GROUPS = ['network', 'display', 'recovery', 'session'] as const
+export type StreamDiagnosticGroup = typeof DIAGNOSTIC_GROUPS[number]
+
+const DIAGNOSTIC_KEYS: Record<StreamDiagnosticGroup, readonly (keyof StreamBrowserDiagnosticsViewModel)[]> = {
+  network: ['rtt', 'rttBaseline', 'rttDelta', 'jitter', 'packetLoss', 'qualityObserved', 'totalBitrate', 'qualityRequested', 'qualityNegotiated', 'qualityEffect', 'bandwidthState', 'bandwidthAction', 'controlChannelState', 'controlChannelError', 'controlChannelOpenRatio', 'controlChannelBufferedTrend'],
+  display: ['receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'callbackDeliveryFps', 'sourceSize', 'outputSize', 'submitAge', 'submitCost', 'uploadCost', 'glSubmitCost', 'renderPipelineType', 'srRuntime', 'srSetting', 'renderProcessing', 'renderShaderPath', 'renderCause', 'renderEffect', 'frameCauses'],
+  recovery: ['presentationMilestone', 'recoveryCause', 'recoveryEffect', 'keyframeSuccessRate'],
+  session: ['connectedElapsed', 'mediaReadyElapsed', 'transportState', 'transportPath', 'serverHost', 'frameWindow', 'observation', 'sampleAge', 'frontEndProfileBaseline', 'frontEndProfileDynamic', 'frontEndPolicyPreset', 'qualityLadderLevel', 'senderPolicyCause', 'decisionDigest'],
 }
+
+export function diagnosticGroupRows(vm: StreamBrowserDiagnosticsViewModel, group: StreamDiagnosticGroup): StreamInternalDiagnosticsRow[] {
+  const required = new Set(['rtt', 'jitter', 'packetLoss', 'qualityObserved', 'totalBitrate', 'controlChannelState', 'receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'sourceSize', 'outputSize', 'renderPipelineType', 'srRuntime', 'presentationMilestone', 'recoveryCause', 'recoveryEffect', 'keyframeSuccessRate', 'connectedElapsed', 'mediaReadyElapsed', 'frameWindow', 'observation', 'sampleAge'])
+  return DIAGNOSTIC_KEYS[group].map(key => ({ key, value: vm[key] }))
+    .filter(row => row.key !== 'controlChannelError' || !['--', 'none'].includes(row.value))
+    .filter(row => required.has(row.key) || !/^--(?:\s*\/\s*--)*$/.test(row.value))
+}
+
+/** 剪贴板只包含指标白名单，地址和完整内部决策继续留在当前详情与 trace。 */
+export function buildDiagnosticClipboardSnapshot(vm: StreamBrowserDiagnosticsViewModel): string {
+  const excluded = new Set(['serverHost', 'transportPath', 'decisionDigest', 'observation', 'controlChannelError'])
+  return JSON.stringify(Object.fromEntries(DIAGNOSTIC_GROUPS.map(group => [group, Object.fromEntries(diagnosticGroupRows(vm, group).filter(row => !excluded.has(row.key)).map(row => [row.key, row.value]))])), null, 2)
+}
+
+export function initialDiagnosticGroup(diagnostics: StreamSessionDiagnosticsSnapshot): StreamDiagnosticGroup {
+  return diagnostics.hasNoVideoWarning
+    ? 'recovery'
+    : diagnostics.isDisplaySupplyLimited
+      ? 'display'
+      : diagnostics.isRecovering ? 'recovery' : 'network'
+}
+
+export const RUNTIME_METRIC_KEYS = ['resolution', 'presentFps', 'videoBitrate', 'rtt', 'packetLoss'] as const
 
 export const EXPERIENCE_METRIC_KEYS = [
   'status',

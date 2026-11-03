@@ -2,163 +2,69 @@
 import type { StreamEnhancementMountState, StreamExperienceMetricsViewModel } from '../../streaming/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { EXPERIENCE_METRIC_KEYS, experienceMetricValue } from '../../streaming/stream-panel-view-models'
+import { experienceMetricValue, RUNTIME_METRIC_KEYS } from '../../streaming/stream-panel-view-models'
 
 const props = defineProps<{
   visible: boolean
-  compact: boolean
   mount: StreamEnhancementMountState
   model: StreamExperienceMetricsViewModel
 }>()
-
 const { t } = useI18n()
-
-const panelVisible = computed(() =>
-  props.visible && props.mount.phase === 'mounted',
-)
-
-const metricRows = computed(() => {
-  const vm = props.model
-  return EXPERIENCE_METRIC_KEYS.flatMap((key) => {
-    const value = experienceMetricValue(vm, key)
-    if (key === 'resolution' && value === '') {
-      return []
-    }
-    if ((key === 'connectedElapsed' || key === 'mediaReadyElapsed') && value === '--') {
-      return []
-    }
-    return [{ key, value }]
-  })
-})
-
-const notices = computed(() => {
-  const vm = props.model
-  const items: Array<{ id: string, text: string }> = []
-  if (vm.relayNotice) {
-    items.push({ id: 'relay', text: t('streamPage.experience.notices.relay') })
-  }
-  if (vm.displaySupplyNotice) {
-    items.push({ id: 'displaySupply', text: t('streamPage.experience.notices.displaySupplyLimited') })
-  }
-  else if (vm.recoveringNotice) {
-    items.push({ id: 'recovering', text: t('streamPage.experience.notices.recovering') })
-  }
-  if (vm.noVideoNotice) {
-    items.push({ id: 'noVideo', text: t('streamPage.experience.notices.noVideo') })
-  }
-  return items
-})
+const panelVisible = computed(() => props.visible && props.mount.phase === 'mounted')
+const rows = computed(() => RUNTIME_METRIC_KEYS.map(key => ({ key, value: experienceMetricValue(props.model, key) })))
+const notice = computed(() => props.model.notice ? t(`streamPage.experience.notices.${props.model.notice}`) : '')
 </script>
 
 <template>
-  <div
-    v-if="panelVisible"
-    class="stream-experience"
-    :class="{ 'stream-experience--compact': compact }"
-  >
-    <strong v-if="!compact" class="stream-experience__title">
-      {{ t('streamPage.experience.title') }}
-    </strong>
-    <template v-if="compact">
-      <span
-        v-for="row in metricRows"
-        :key="row.key"
-        class="stream-experience__metric"
-      >
-        {{ t(`streamPage.experience.metrics.${row.key}`) }}: {{ row.value }}
+  <div v-if="panelVisible" class="stream-runtime-bar" :aria-label="t('streamPage.experience.title')" :data-notice="model.notice">
+    <template v-for="row in rows" :key="row.key">
+      <span v-if="row.key !== 'videoBitrate' || !notice" class="stream-runtime-bar__metric" :class="`stream-runtime-bar__metric--${row.key}`">
+        <span v-if="row.key === 'rtt' || row.key === 'packetLoss'" class="stream-runtime-bar__label">{{ t(`streamPage.experience.metrics.${row.key}`) }}</span>
+        <span>{{ row.value }}</span>
+        <span v-if="row.key === 'presentFps'" class="stream-runtime-bar__label">FPS</span>
       </span>
+      <span v-else class="stream-runtime-bar__metric stream-runtime-bar__notice" aria-live="polite">{{ notice }}</span>
     </template>
-    <template v-else>
-      <div
-        v-for="row in metricRows"
-        :key="row.key"
-        class="stream-experience__row"
-      >
-        <span>{{ t(`streamPage.experience.metrics.${row.key}`) }}</span>
-        <strong>{{ row.value }}</strong>
-      </div>
-    </template>
-    <div v-if="notices.length > 0" class="stream-experience__notices">
-      <div
-        v-for="n in notices"
-        :key="n.id"
-        class="stream-experience__notice"
-      >
-        {{ n.text }}
-      </div>
-    </div>
   </div>
 </template>
 
 <style scoped>
-.stream-experience {
+.stream-runtime-bar {
   position: absolute;
-  top: 24px;
-  right: 24px;
-  z-index: 14;
-  padding: 12px 14px;
-  background: var(--ui-surface-info-panel);
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 14px;
-  color: var(--ui-page-text);
-  font-family: var(--ui-font-family-mono, monospace);
-  font-size: 11px;
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: min(420px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.stream-experience--compact {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 12px;
-  width: min(1000px, calc(100vw - 48px));
-  max-height: unset;
-  overflow-y: visible;
-  overflow-x: auto;
-}
-
-.stream-experience__title {
-  margin-bottom: 4px;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ui-page-text-soft);
-}
-
-.stream-experience__metric {
-  white-space: nowrap;
-  opacity: 0.9;
-}
-
-.stream-experience__row {
+  top: var(--ui-stream-metrics-top);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-stream-metrics);
+  max-width: calc(100% - var(--ui-stream-metrics-inset) * 2);
+  min-height: var(--ui-stream-metrics-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  padding: var(--ui-space-xs);
+  border-radius: 0 0 var(--ui-radius-sm) var(--ui-radius-sm);
+  background: var(--ui-stream-metrics-bg);
+  color: var(--ui-stream-metrics-text);
+  font-family: var(--ui-font-family);
+  font-size: var(--ui-stream-metrics-font-size);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--ui-line-height-default);
+  text-shadow: var(--ui-stream-metrics-text-shadow);
+  white-space: nowrap;
+  pointer-events: none;
 }
-
-.stream-experience__row strong {
-  color: var(--brand-accent);
+.stream-runtime-bar__metric {
+  display: inline-flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: var(--ui-space-xs);
+  padding-inline: var(--ui-stream-metrics-cell-padding);
+  min-width: var(--ui-stream-metrics-cell-width);
 }
-
-.stream-experience__notices {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--ui-border-subtle);
+.stream-runtime-bar__metric + .stream-runtime-bar__metric {
+  border-left: 1px solid var(--ui-stream-metrics-divider);
 }
-
-.stream-experience__notice {
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--ui-page-text-soft);
-}
+.stream-runtime-bar__label { color: var(--ui-stream-metrics-label); }
+.stream-runtime-bar__notice { color: var(--color-warning); }
+.stream-runtime-bar[data-notice='sampling'] .stream-runtime-bar__notice,
+.stream-runtime-bar[data-notice='stale'] .stream-runtime-bar__notice { color: var(--ui-stream-metrics-label); }
+.stream-runtime-bar[data-notice='noVideo'] .stream-runtime-bar__notice { color: var(--color-danger); }
 </style>

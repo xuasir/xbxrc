@@ -1,5 +1,6 @@
 import type { IntentHandler } from './input'
 import type { Direction } from './pathfinding'
+import { getFocusScrollDelta } from './focus-scroll'
 import { playNavSound, triggerNavHaptic } from './haptics'
 import { inputDispatcher, NavigationIntent } from './input'
 import { findNextFocusable } from './pathfinding'
@@ -93,7 +94,7 @@ export class NavigationEngine {
   private handleFocusLoss(): void {
     const zoneId = this.currentFocus ? this.getZoneId(this.currentFocus) : null
     this.currentFocus = null
-    if (zoneId) {
+    if (zoneId && document.getElementById(zoneId)) {
       this.focusFirstInScope(zoneId)
     }
     else {
@@ -129,6 +130,12 @@ export class NavigationEngine {
       if (index !== -1) {
         const state = this.scopeStack[index]
         this.scopeStack.splice(index, 1)
+        // 嵌套弹层同时退出时，子层的恢复目标沿父层回到页面来源。
+        const scopeElement = document.getElementById(scopeId)
+        for (const remaining of this.scopeStack) {
+          if (remaining.previousFocus && (scopeElement?.contains(remaining.previousFocus) || this.getZoneId(remaining.previousFocus) === scopeId))
+            remaining.previousFocus = state.previousFocus
+        }
         this.isCacheDirty = true
 
         if (this.currentFocus && this.getZoneId(this.currentFocus) === scopeId) {
@@ -143,9 +150,19 @@ export class NavigationEngine {
     }
   }
 
+  isTopmostScope(scopeId: string): boolean {
+    return this.scopeStack.at(-1)?.id === scopeId
+  }
+
   focusElement(el: HTMLElement | null, soundAndHaptic = true, isRapid = false): void {
-    if (!el || el === this.currentFocus)
+    if (!el)
       return
+    if (el === this.currentFocus) {
+      this.scrollToFocus(el, isRapid)
+      if (el.matches(FOCUSABLE_SELECTOR) && document.activeElement !== el)
+        el.focus({ preventScroll: true })
+      return
+    }
 
     if (this.currentFocus) {
       this.currentFocus.classList.remove('is-focused')
@@ -289,7 +306,7 @@ export class NavigationEngine {
       return
 
     const memory = this.zoneMemory.get(scopeId)
-    if (memory && document.contains(memory)) {
+    if (memory && document.contains(memory) && memory.matches(FOCUSABLE_SELECTOR)) {
       this.focusElement(memory)
       return
     }
@@ -314,6 +331,9 @@ export class NavigationEngine {
       return false
     playNavSound('action')
     triggerNavHaptic('action')
+    // 输入控件可消费确认动作；其余节点继续走既有 click 入口。
+    if (!this.currentFocus.dispatchEvent(new Event('nav-action', { bubbles: true, cancelable: true })))
+      return true
     this.currentFocus.click()
     return true
   }
@@ -321,6 +341,8 @@ export class NavigationEngine {
   private triggerBack(): boolean {
     playNavSound('back')
     triggerNavHaptic('back')
+    if (this.currentFocus && !this.currentFocus.dispatchEvent(new Event('nav-back', { bubbles: true, cancelable: true })))
+      return true
     const topmost = this.getTopmostActiveScope()
     if (topmost) {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -343,23 +365,24 @@ export class NavigationEngine {
   }
 
   private scrollToFocus(el: HTMLElement, isRapid = false): void {
-    const scrollContainer = el.closest<HTMLElement>('.setting-panel')
+    const scrollContainer = el.closest<HTMLElement>('[data-nav-scroll-container]')
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect()
-      const rect = el.getBoundingClientRect()
-
-      const safePaddingY = Math.min(64, containerRect.height * 0.15)
-
-      const topLimit = containerRect.top + safePaddingY
-      const bottomLimit = containerRect.bottom - safePaddingY
-
-      if (rect.top < topLimit || rect.bottom > bottomLimit) {
-        const currentScrollTop = scrollContainer.scrollTop
-        const elOffsetTop = rect.top - containerRect.top + currentScrollTop
-        const targetScrollTop = Math.max(0, elOffsetTop - (containerRect.height / 2 - rect.height / 2))
-
+      const styles = getComputedStyle(scrollContainer)
+      const padding = {
+        top: Number.parseFloat(styles.scrollPaddingTop) || 0,
+        bottom: Number.parseFloat(styles.scrollPaddingBottom) || 0,
+        left: Number.parseFloat(styles.scrollPaddingLeft) || 0,
+        right: Number.parseFloat(styles.scrollPaddingRight) || 0,
+      }
+      const header = scrollContainer.querySelector<HTMLElement>('[data-nav-scroll-header]')
+      if (header)
+        padding.top += Math.max(0, header.getBoundingClientRect().bottom - containerRect.top)
+      const delta = getFocusScrollDelta(el.getBoundingClientRect(), containerRect, padding)
+      if (delta.top || delta.left) {
         scrollContainer.scrollTo({
-          top: targetScrollTop,
+          top: scrollContainer.scrollTop + delta.top,
+          left: scrollContainer.scrollLeft + delta.left,
           behavior: isRapid ? 'auto' : 'smooth',
         })
       }
