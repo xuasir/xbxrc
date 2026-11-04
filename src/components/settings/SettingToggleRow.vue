@@ -49,8 +49,8 @@ function handleConfirm(): void {
   >
     <span class="setting-toggle-row__content">
       <span class="setting-toggle-row__label">{{ props.label }}</span>
-      <span v-if="props.effectLabel" class="setting-row__effect">{{ props.effectLabel }}</span>
       <span v-if="props.description" :id="`${props.id}.description`" class="setting-toggle-row__description">{{ props.description }}</span>
+      <span v-if="props.effectLabel" class="setting-row__effect">{{ props.effectLabel }}</span>
     </span>
 
     <span class="setting-toggle-row__switch" aria-hidden="true">
@@ -73,9 +73,9 @@ function handleConfirm(): void {
   display: block;
   width: var(--ui-settings-toggle-track-width);
   height: var(--ui-settings-toggle-track-height);
-  border: 2px solid var(--color-text-tertiary);
+  border: 1px solid var(--color-text-tertiary);
   border-radius: var(--ui-radius-pill);
-  background: transparent;
+  background: var(--ui-settings-switch-off-bg);
   transition:
     border-color var(--ui-motion-fast),
     background-color var(--ui-motion-fast),
@@ -100,26 +100,22 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row--active .setting-toggle-row__thumb {
+  background: var(--brand-on-primary);
   transform: translate(var(--ui-settings-toggle-thumb-offset), -50%);
 }
 
 .setting-toggle-row[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
+  background: var(--ui-material-selected);
   color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
-.setting-toggle-row[data-focused='true'] .setting-toggle-row__label,
-.setting-toggle-row[data-focused='true'] .setting-toggle-row__description {
+.setting-toggle-row[data-focused='true'] .setting-toggle-row__label {
   color: var(--ui-focus-text);
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__track {
   border-color: var(--ui-focus-text);
-}
-
-.setting-toggle-row[data-focused='true'] .setting-toggle-row__thumb {
-  background: var(--color-text-primary);
 }
 
 .setting-toggle-row[data-focused='true'].setting-toggle-row--active .setting-toggle-row__track {

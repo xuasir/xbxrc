@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CustomTurnDraft } from './setting-validation'
+import { useNavigationButtonLabels } from '@shared/gamepad/navigation-hints'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
@@ -13,6 +14,7 @@ import { validateCustomTurn } from './setting-validation'
 const props = defineProps<{ open: boolean, config: CustomTurnDraft }>()
 const emit = defineEmits<{ close: [], saved: [] }>()
 const { t } = useI18n()
+const buttons = useNavigationButtonLabels()
 const scope = 'setting.custom-turn'
 const draft = ref<CustomTurnDraft>({ ...props.config })
 const enabled = ref(false)
@@ -74,7 +76,7 @@ function confirm() {
       <SettingToggleRow :id="`${scope}.enabled`" :scope-id="scope" :label="t('setting.experience.turn.enable')" :enabled="enabled" :disabled="saving" @confirm="enabled = !enabled" />
       <template v-if="enabled">
         <p class="setting-panel__status">
-          {{ t('setting.experience.input.controllerHint') }}
+          {{ t('setting.experience.input.controllerHint', { confirm: buttons.south }) }}
         </p>
         <SettingTextField :id="`${scope}.url`" v-model="draft.server_url" :scope-id="scope" :label="t('setting.experience.turn.url')" placeholder="turn:relay.example.com:3478" :disabled="saving" />
         <SettingTextField :id="`${scope}.username`" v-model="draft.server_username" :scope-id="scope" :label="t('setting.experience.turn.username')" :disabled="saving" />

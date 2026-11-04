@@ -1,231 +1,72 @@
 <script setup lang="ts">
-import type { TopNavNodeKey } from '../../navigation/spatial-nav.constants'
-import {
-  SPATIAL_NAV_NODE_IDS,
-} from '../../navigation/spatial-nav.constants'
+import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
+import { useI18n } from 'vue-i18n'
+import { APP_PAGE_LABEL_KEYS, SPATIAL_NAV_NODE_IDS } from '../../navigation/spatial-nav.constants'
 import SpatialNavIconButton from './SpatialNavIconButton.vue'
 
 type TopNavIcons = Partial<Record<TopNavNodeKey, string>>
-
-interface TopNavBarProps {
+const props = withDefaults(defineProps<{
   icons?: TopNavIcons
-  activeNav?: 'xhome' | 'xcloud' | 'setting'
+  activeNav?: AppPageRouteName
   profileImageUrl?: string
+  profileDisplayName?: string
+  profileOpen?: boolean
   controllerActive?: boolean
   showController?: boolean
-}
-
-const props = withDefaults(defineProps<TopNavBarProps>(), {
-  icons: () => ({}),
-  activeNav: 'xhome',
-  profileImageUrl: '',
-  controllerActive: false,
-  showController: true,
-})
-
-const emit = defineEmits<{
-  (event: 'select', node: TopNavNodeKey): void
-}>()
-
-function getIcon(node: TopNavNodeKey): string {
-  return props.icons[node] ?? ''
-}
-
-function emitSelect(node: TopNavNodeKey): void {
-  emit('select', node)
-}
+}>(), { icons: () => ({}), activeNav: 'xhome', profileImageUrl: '', profileDisplayName: 'X', profileOpen: false, controllerActive: false, showController: true })
+const emit = defineEmits<{ select: [node: TopNavNodeKey] }>()
+const { t } = useI18n()
+const pages = [{ key: 'xhome', label: 'shell.home' }, { key: 'xcloud', label: 'shell.cloud' }] as const
 </script>
 
 <template>
-  <header class="top-nav">
-    <div class="top-nav__group top-nav__group--left">
-      <SpatialNavIconButton
-        :id="SPATIAL_NAV_NODE_IDS.topNav.brand"
-        label="Xbox Logo"
-        :icon-src="getIcon('brand')"
-        :round="true"
-        @click="() => emitSelect('brand')"
-      />
-    </div>
-
-    <nav class="top-nav__group top-nav__group--center" aria-label="Top Navigation">
-      <SpatialNavIconButton
-        :id="SPATIAL_NAV_NODE_IDS.topNav.xhome"
-        label="XHome"
-        :icon-src="getIcon('xhome')"
-        :round="true"
-        :active="props.activeNav === 'xhome'"
-        @click="() => emitSelect('xhome')"
-      />
-      <SpatialNavIconButton
-        :id="SPATIAL_NAV_NODE_IDS.topNav.xcloud"
-        label="XCloud"
-        :icon-src="getIcon('xcloud')"
-        :round="true"
-        :active="props.activeNav === 'xcloud'"
-        @click="() => emitSelect('xcloud')"
-      />
-      <SpatialNavIconButton
-        :id="SPATIAL_NAV_NODE_IDS.topNav.setting"
-        label="Setting"
-        :icon-src="getIcon('setting')"
-        :round="true"
-        :active="props.activeNav === 'setting'"
-        @click="() => emitSelect('setting')"
-      />
-    </nav>
-
-    <div class="top-nav__group top-nav__group--right">
-      <SpatialNavIconButton
-        v-if="props.showController"
-        :id="SPATIAL_NAV_NODE_IDS.topNav.controller"
-        label="Controller Status"
-        :icon-src="getIcon('controller')"
-        :round="true"
-        :active="props.controllerActive"
-        @click="() => emitSelect('controller')"
-      />
-
-      <div class="top-nav__avatar">
-        <SpatialNavIconButton
-          :id="SPATIAL_NAV_NODE_IDS.topNav.profile"
-          label="Profile"
-          :round="true"
-          @click="() => emitSelect('profile')"
-        >
-          <template #default>
-            <img
-              v-if="props.profileImageUrl"
-              class="top-nav__avatar-image"
-              :src="props.profileImageUrl"
-              alt="Profile avatar"
-            >
-            <span v-else class="top-nav__avatar-placeholder" aria-hidden="true" />
-          </template>
+  <div class="top-nav">
+    <header class="top-nav__header" data-tauri-drag-region>
+      <SpatialNavIconButton :id="SPATIAL_NAV_NODE_IDS.topNav.brand" class="top-nav__brand" :label="t('shell.brand')" @click="emit('select', 'brand')">
+        <img :src="props.icons.brand" alt="" class="top-nav__brand-image"><span>XBXRC</span>
+      </SpatialNavIconButton>
+      <span class="top-nav__context" data-tauri-drag-region>{{ t(APP_PAGE_LABEL_KEYS[props.activeNav]) }}</span>
+      <SpatialNavIconButton :id="SPATIAL_NAV_NODE_IDS.topNav.profile" class="top-nav__avatar" :label="t('shell.profile')" :round="true" :aria-expanded="props.profileOpen" aria-controls="user-menu-panel" @click="emit('select', 'profile')">
+        <img v-if="props.profileImageUrl" class="top-nav__avatar-image" :src="props.profileImageUrl" alt="">
+        <span v-else class="top-nav__avatar-placeholder" aria-hidden="true">{{ props.profileDisplayName.slice(0, 1).toUpperCase() }}</span>
+      </SpatialNavIconButton>
+    </header>
+    <nav class="top-nav__dock" :aria-label="t('shell.navigation')">
+      <div class="top-nav__group">
+        <SpatialNavIconButton v-for="page in pages" :id="SPATIAL_NAV_NODE_IDS.topNav[page.key]" :key="page.key" :label="t(page.label)" :active="props.activeNav === page.key" :aria-current="props.activeNav === page.key ? 'page' : undefined" @click="emit('select', page.key)">
+          <img class="top-nav__icon" :src="props.icons[page.key]" alt=""><span>{{ t(page.label) }}</span>
         </SpatialNavIconButton>
       </div>
-    </div>
-  </header>
+      <div class="top-nav__group">
+        <SpatialNavIconButton :id="SPATIAL_NAV_NODE_IDS.topNav.setting" :label="t('shell.settings')" :active="props.activeNav === 'setting'" :aria-current="props.activeNav === 'setting' ? 'page' : undefined" @click="emit('select', 'setting')">
+          <img class="top-nav__icon" :src="props.icons.setting" alt=""><span>{{ t('shell.settings') }}</span>
+        </SpatialNavIconButton>
+        <SpatialNavIconButton v-if="props.showController" :id="SPATIAL_NAV_NODE_IDS.topNav.controller" :label="t('shell.controller')" :active="props.activeNav === 'controller'" :aria-current="props.activeNav === 'controller' ? 'page' : undefined" @click="emit('select', 'controller')">
+          <img class="top-nav__icon" :src="props.icons.controller" alt=""><span>{{ t('shell.controller') }}</span><span v-if="props.controllerActive" class="top-nav__connected" aria-hidden="true" />
+        </SpatialNavIconButton>
+      </div>
+    </nav>
+  </div>
 </template>
 
 <style scoped>
-.top-nav {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
-  height: calc(var(--ui-size-nav-height) + var(--ui-space-2));
-  padding: var(--ui-space-xl) var(--ui-page-inset);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--ui-space-xl);
-}
-
-.top-nav__group {
-  display: flex;
-  align-items: center;
-}
-
-.top-nav__group--left {
-  justify-self: start;
-  justify-content: flex-start;
-}
-
-.top-nav__group--center {
-  justify-self: center;
-  gap: var(--ui-space-md);
-  justify-content: center;
-}
-
-.top-nav__group--right {
-  justify-self: end;
-  gap: var(--ui-space-md);
-  justify-content: flex-end;
-}
-
-.top-nav__avatar {
-  display: inline-flex;
-}
-
-.top-nav__avatar :deep(.sn-icon-button) {
-  padding: 0;
-  overflow: hidden;
-}
-
-.top-nav :deep(.sn-icon-button) {
-  width: var(--ui-size-control-xl);
-  height: var(--ui-size-control-xl);
-}
-
-.top-nav :deep(.sn-icon-button--active) {
-  background: var(--color-state-selected);
-  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
-}
-
-.top-nav :deep(.sn-icon-button--active[data-focused='true']) {
-  background: var(--color-state-selected);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.top-nav :deep(.sn-icon-button__icon-shell),
-.top-nav :deep(.sn-icon-button__icon),
-.top-nav :deep(.sn-icon-button__icon-empty) {
-  width: var(--ui-size-icon-lg);
-  height: var(--ui-size-icon-lg);
-}
-
-.top-nav__avatar-image,
-.top-nav__avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  border-radius: 999px;
-  display: block;
-}
-
-.top-nav__avatar-image {
-  object-fit: cover;
-}
-
-.top-nav__avatar-placeholder {
-  border: 1px dashed var(--color-border-subtle);
-  background: var(--color-surface-2);
-}
-
-:global(html[data-ui-density='compact']) .top-nav,
-:global(html[data-ui-density='narrow']) .top-nav {
-  grid-template-columns: auto auto auto;
-  padding: var(--ui-space-3) calc(var(--ui-space-3) + var(--ui-space-1));
-  gap: calc(var(--ui-space-1) + 2px);
-}
-
-:global(html[data-ui-density='compact']) .top-nav__group--center,
-:global(html[data-ui-density='compact']) .top-nav__group--right,
-:global(html[data-ui-density='narrow']) .top-nav__group--center,
-:global(html[data-ui-density='narrow']) .top-nav__group--right {
-  gap: var(--ui-space-2);
-}
-
-:global(html[data-ui-density='narrow']) .top-nav {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'left right'
-    'center center';
-  height: auto;
-}
-
-:global(html[data-ui-density='narrow']) .top-nav__group--left {
-  grid-area: left;
-}
-
-:global(html[data-ui-density='narrow']) .top-nav__group--center {
-  grid-area: center;
-  width: 100%;
-  justify-content: flex-start;
-}
-
-:global(html[data-ui-density='narrow']) .top-nav__group--right {
-  grid-area: right;
-  margin-left: 0;
-}
+.top-nav { display: contents; }
+.top-nav__header { grid-column: 1 / -1; grid-row: 1; position: relative; z-index: var(--z-nav); display: flex; align-items: center; gap: var(--space-24); min-width: 0; height: var(--ui-shell-header-height); padding-left: var(--space-12); background: transparent; }
+.top-nav__brand { width: auto; height: 36px; gap: var(--space-8); padding: 0; font-size: 14px; font-weight: 600; letter-spacing: .03em; }
+.top-nav__brand-image { width: 24px; height: 24px; filter: var(--ui-nav-icon-filter); }
+.top-nav__context { padding-left: var(--space-24); border-left: 1px solid var(--ui-border-subtle); color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
+.top-nav__avatar { width: 36px; height: 36px; flex-shrink: 0; margin-left: auto; padding: 0; overflow: visible; border: 1px solid var(--ui-border-subtle); background: var(--ui-material-glass); box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low); }
+.top-nav__avatar-image, .top-nav__avatar-placeholder { width: 100%; height: 100%; border-radius: 50%; }
+.top-nav__avatar-image { object-fit: cover; }
+.top-nav__avatar-placeholder { display: flex; align-items: center; justify-content: center; color: var(--ui-icon-text); font-size: 16px; }
+.top-nav__dock { grid-column: 1; grid-row: 2; align-self: start; position: relative; z-index: var(--z-nav); display: flex; flex-direction: column; gap: var(--space-24); padding-top: var(--space-24); }
+.top-nav__group { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8) 7px; background: transparent; }
+.top-nav__dock :deep(.sn-icon-button) { position: relative; display: flex; flex-direction: column; gap: var(--space-4); width: 56px; min-height: 56px; height: auto; padding: var(--space-4); font-size: 12px; line-height: 16px; color: var(--ui-icon-text); }
+.top-nav__icon { width: 20px; height: 20px; object-fit: contain; filter: var(--ui-nav-icon-filter); }
+.top-nav__connected { position: absolute; right: 12px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--ui-status-positive); }
+.top-nav :deep(.sn-icon-button:hover), .top-nav :deep(.sn-icon-button[data-focused='true']) { background: var(--ui-material-hover); color: var(--color-text-primary); border-color: transparent; }
+.top-nav :deep(.sn-icon-button--active) { background: var(--ui-material-selected); border-color: transparent; box-shadow: none; color: var(--color-text-primary); }
+.top-nav :deep(.sn-icon-button[data-focused='true']) { box-shadow: var(--shadow-xbox-focus); }
+.top-nav :deep(.top-nav__brand), .top-nav :deep(.top-nav__brand:hover), .top-nav :deep(.top-nav__brand[data-focused='true']) { background: transparent; }
+@media(max-width:700px) { .top-nav__header { grid-column: 1; padding-left: var(--space-4); gap: var(--space-12); } .top-nav__context { padding-left: var(--space-12); } .top-nav__dock { grid-column: 1; grid-row: 2; flex-direction: row; gap: var(--space-12); padding-top: 0; align-self: stretch; } .top-nav__group { flex: 1; flex-direction: row; padding: var(--space-4); gap: var(--space-4); } .top-nav__dock :deep(.sn-icon-button) { flex: 1; min-width: 44px; width: auto; min-height: 48px; } }
 </style>

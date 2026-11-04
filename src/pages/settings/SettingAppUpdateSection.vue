@@ -97,10 +97,10 @@ async function confirmed() {
         {{ t('setting.experience.update.target', { version: updater.targetVersion.value }) }}
       </p>
       <div class="setting-app-update__channel">
+        <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="`${props.navNodeBaseId}.channel`" :label="t('setting.pages.general.appUpdate.channelLabel')" :options="channelOptions" :current-value="updater.channel.value" :disabled="locked" @select="changeChannel" />
         <p class="setting-panel__status">
           {{ t('setting.experience.update.channelHelp') }}
         </p>
-        <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="`${props.navNodeBaseId}.channel`" :label="t('setting.pages.general.appUpdate.channelLabel')" :options="channelOptions" :current-value="updater.channel.value" :disabled="locked" @select="changeChannel" />
         <Focusable v-if="updater.channelError.value" :id="`${props.navNodeBaseId}.retryChannel`" as="button" :scope-id="props.scopeId" class="setting-panel__action" :disabled="updater.busy.value || updater.channelLoading.value" @click="updater.loadChannel">
           {{ t('setting.experience.update.retryChannel') }}
         </Focusable>
@@ -108,40 +108,42 @@ async function confirmed() {
           {{ updater.channelError.value }}
         </p>
       </div>
-      <div class="setting-app-update__result" :aria-busy="updater.busy.value">
-        <p class="setting-app-update__status" role="status">
-          {{ status }}
-        </p>
-        <p v-if="updater.checkedAt.value" class="setting-app-update__meta">
-          {{ t('setting.experience.update.checkedAt', { time: date(updater.checkedAt.value) }) }}
-        </p>
-        <p v-if="updater.releaseDate.value && updater.targetVersion.value" class="setting-app-update__meta">
-          {{ t('setting.experience.update.releasedAt', { date: date(updater.releaseDate.value) }) }}
-        </p>
-        <template v-if="updater.state.value === 'downloading' || updater.state.value === 'installing'">
-          <div class="setting-app-update__progress" :class="{ 'setting-app-update__progress--indeterminate': updater.progressPercent.value === null }" role="progressbar" :aria-label="status" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="updater.progressPercent.value ?? undefined">
-            <span :style="{ width: `${updater.progressPercent.value ?? 25}%` }" />
-          </div>
-          <p class="setting-app-update__meta">
-            {{ bytes(updater.downloadProgress.value) }}<template v-if="updater.downloadTotal.value">
-              / {{ bytes(updater.downloadTotal.value) }}
-            </template><template v-if="updater.progressPercent.value !== null">
-              · {{ updater.progressPercent.value }}%
-            </template>
+      <div class="setting-app-update__footer">
+        <div class="setting-app-update__result" :aria-busy="updater.busy.value">
+          <p class="setting-app-update__status" role="status">
+            {{ status }}
           </p>
-        </template>
-        <p v-if="updater.errorMessage.value" role="alert" class="setting-panel__status setting-panel__status--error">
-          {{ updater.errorMessage.value }}
-        </p>
-        <div v-if="updater.releaseNotes.value" class="setting-app-update__notes">
-          <h3>{{ t('setting.experience.update.notes') }}</h3><p>{{ updater.releaseNotes.value }}</p>
+          <p v-if="updater.checkedAt.value" class="setting-app-update__meta">
+            {{ t('setting.experience.update.checkedAt', { time: date(updater.checkedAt.value) }) }}
+          </p>
+          <p v-if="updater.releaseDate.value && updater.targetVersion.value" class="setting-app-update__meta">
+            {{ t('setting.experience.update.releasedAt', { date: date(updater.releaseDate.value) }) }}
+          </p>
+          <template v-if="updater.state.value === 'downloading' || updater.state.value === 'installing'">
+            <div class="setting-app-update__progress" :class="{ 'setting-app-update__progress--indeterminate': updater.progressPercent.value === null }" role="progressbar" :aria-label="status" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="updater.progressPercent.value ?? undefined">
+              <span :style="{ width: `${updater.progressPercent.value ?? 25}%` }" />
+            </div>
+            <p class="setting-app-update__meta">
+              {{ bytes(updater.downloadProgress.value) }}<template v-if="updater.downloadTotal.value">
+                / {{ bytes(updater.downloadTotal.value) }}
+              </template><template v-if="updater.progressPercent.value !== null">
+                · {{ updater.progressPercent.value }}%
+              </template>
+            </p>
+          </template>
+          <p v-if="updater.errorMessage.value" role="alert" class="setting-panel__status setting-panel__status--error">
+            {{ updater.errorMessage.value }}
+          </p>
+          <div v-if="updater.releaseNotes.value" class="setting-app-update__notes">
+            <h3>{{ t('setting.experience.update.notes') }}</h3><p>{{ updater.releaseNotes.value }}</p>
+          </div>
         </div>
-      </div>
-      <div class="setting-panel__actions">
-        <Focusable :id="`${props.navNodeBaseId}.primary`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--primary" :disabled="updater.busy.value || updater.channelSaving.value || updater.channelLoading.value || !updater.channelReady.value || restarting" @click="primary">
-          {{ primaryLabel }}
-        </Focusable>
-        <span v-if="updater.state.value === 'installed'" class="setting-app-update__meta">{{ t('setting.experience.update.later') }}</span>
+        <div class="setting-panel__actions">
+          <Focusable :id="`${props.navNodeBaseId}.primary`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--primary" :disabled="updater.busy.value || updater.channelSaving.value || updater.channelLoading.value || !updater.channelReady.value || restarting" @click="primary">
+            {{ primaryLabel }}
+          </Focusable>
+          <span v-if="updater.state.value === 'installed'" class="setting-app-update__meta">{{ t('setting.experience.update.later') }}</span>
+        </div>
       </div>
     </div>
     <SettingConfirmSheet :open="!!confirm" scope-id="setting.update.confirm" :title="t(confirm === 'channel' ? 'setting.experience.update.switchStable' : 'setting.experience.restartNow')" :message="t(confirm === 'channel' ? 'setting.experience.update.stableWarning' : 'setting.experience.restartHint')" :busy="updater.channelSaving.value || restarting" @close="confirm = null" @confirm="confirmed" />
@@ -152,11 +154,17 @@ async function confirmed() {
 
 <style scoped>
 .setting-app-update { padding: var(--ui-settings-focus-safe) var(--ui-settings-side-padding) var(--ui-settings-focus-tail); }
-.setting-app-update__card { display: flex; flex-direction: column; gap: var(--ui-space-4xl); padding: var(--ui-space-4xl); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-lg); background: var(--ui-surface-panel); backdrop-filter: blur(var(--ui-settings-glass-blur)); }
-.setting-app-update__identity, .setting-app-update__channel, .setting-app-update__result { display: grid; gap: var(--ui-space-md); min-width: 0; }
-.setting-app-update__identity strong { font-size: var(--ui-settings-row-label-size); color: var(--color-text-primary); }
-.setting-app-update__status { margin: 0; color: var(--color-text-primary); font-size: var(--ui-settings-row-label-size); }
-.setting-app-update__meta { margin: 0; color: var(--color-text-tertiary); font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); }
+.setting-app-update__card { display: flex; flex-direction: column; gap: var(--ui-space-lg); padding: var(--ui-space-lg); border-radius: var(--ui-radius-md); background: var(--ui-settings-item-bg); }
+.setting-app-update__identity { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ui-space-sm) var(--ui-space-lg); }
+.setting-app-update__channel, .setting-app-update__result { display: grid; gap: var(--ui-space-sm); min-width: 0; }
+.setting-app-update__channel :deep(.setting-inline-select) { padding: 0; }
+.setting-app-update__channel .setting-panel__status { font-size: var(--ui-settings-row-description-size); }
+.setting-app-update__identity strong { font-size: var(--ui-settings-row-label-size); color: var(--color-text-primary); font-weight: var(--ui-font-weight-semibold); }
+.setting-app-update__status { margin: 0; color: var(--color-text-primary); font-size: var(--ui-settings-row-description-size); line-height: var(--ui-line-height-relaxed); }
+.setting-app-update__meta { margin: 0; color: var(--color-text-secondary); font-size: var(--ui-settings-effect-size); line-height: var(--ui-line-height-relaxed); }
+.setting-app-update__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ui-space-md) var(--ui-space-lg); }
+.setting-app-update__result { flex: 1 1 220px; }
+.setting-app-update__footer .setting-panel__action { min-height: 40px; }
 .setting-app-update__progress { height: var(--ui-space-md); border-radius: var(--ui-radius-sm); background: var(--color-state-hover); overflow: hidden; }
 .setting-app-update__progress span { display: block; height: 100%; background: var(--brand-primary); transition: width var(--ui-motion-fast); }
 .setting-app-update__progress--indeterminate span { animation: setting-update-progress var(--ui-settings-progress-duration) linear infinite alternate; }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { effectScope } from 'vue'
 import { gamepadUIListener } from '../../navigation/core/gamepad-listener'
 import { inputDispatcher, NavigationIntent } from '../../navigation/core/input'
 import { parseGamepadPreferences } from './preferences'
@@ -64,6 +65,45 @@ async function fixture() {
 }
 
 describe('keyboard game controls', () => {
+  it('updates hints with the input source and keeps them aligned with fixed menu actions after remapping games', async () => {
+    const { c, key, configure } = await fixture()
+    c.setStreamReady(false)
+    const { useNavigationButtonLabels } = await import('./navigation-hints')
+    const scope = effectScope()
+    const buttons = scope.run(useNavigationButtonLabels)!
+    gamepadUIListener.start()
+    const dispatch = vi.fn()
+    const dispose = inputDispatcher.subscribe(dispatch)
+    try {
+      configure({ gamepad_keyboard_mapping: { bindings: [{ key: 'keyL', control: 'south' }] } })
+      for (const [code, control, label, intent] of [
+        ['KeyJ', 'south', 'J', NavigationIntent.Action],
+        ['KeyK', 'east', 'K', NavigationIntent.Back],
+        ['Digit1', 'l1', '1', NavigationIntent.PagePrev],
+        ['Digit2', 'r1', '2', NavigationIntent.PageNext],
+        ['Digit3', 'l2', '3', NavigationIntent.TabPrev],
+        ['Digit4', 'r2', '4', NavigationIntent.TabNext],
+      ] as const) {
+        expect(buttons.value[control]).toBe(label)
+        key('keydown', code)
+        expect(dispatch.mock.lastCall?.[0]).toBe(intent)
+        key('keyup', code)
+      }
+      configure({ gamepad_control_source: 'gamepad' })
+      expect([buttons.value.south, buttons.value.east, buttons.value.l1, buttons.value.r1, buttons.value.l2, buttons.value.r2])
+        .toEqual(['A', 'B', 'LB', 'RB', 'LT', 'RT'])
+      configure({ gamepad_control_source: 'keyboard' })
+      expect(buttons.value.south).toBe('J')
+      scope.stop()
+      configure({ gamepad_control_source: 'gamepad' })
+      expect(buttons.value.south).toBe('J')
+    }
+    finally {
+      scope.stop()
+      dispose()
+    }
+  })
+
   it('navigates readonly input controls and preserves direct keyboard editing after pointer activation', async () => {
     const { c, key, input } = await fixture()
     c.setStreamReady(false)

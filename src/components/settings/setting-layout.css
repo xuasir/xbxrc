@@ -1,4 +1,5 @@
 .setting-panel__list {
+  animation: ui-content-enter 200ms ease-out;
   display: flex;
   flex-direction: column;
   gap: var(--ui-settings-section-gap);
@@ -7,8 +8,9 @@
 }
 .setting-panel__section { min-width: 0; }
 .setting-panel__section-header { margin-bottom: var(--ui-space-md); }
-.setting-panel__section-title { margin: 0; font-size: var(--ui-settings-section-title-size); font-weight: var(--ui-font-weight-semibold); line-height: var(--ui-line-height-relaxed); color: var(--color-text-secondary); }
-.setting-panel__section-body { display: flex; flex-direction: column; gap: var(--ui-space-sm); }
+.setting-panel__section-title { margin: 0; font-size: var(--ui-settings-section-title-size); font-weight: var(--ui-font-weight-semibold); line-height: var(--ui-line-height-relaxed); color: var(--color-text-primary); }
+/* 独立选项底块与组间留白表达层次，焦点高亮保持完整圆角。 */
+.setting-panel__section-body { display: flex; flex-direction: column; gap: var(--ui-space-lg); }
 .setting-panel__notice,
 .setting-panel__summary { margin: 0; padding: var(--ui-space-md) 0; font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); color: var(--color-text-secondary); }
 .setting-panel__action {
@@ -19,25 +21,28 @@
   min-width: var(--ui-settings-modal-action-min-width);
   min-height: var(--ui-settings-control-height);
   padding: var(--ui-space-sm) var(--ui-settings-control-padding);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   border-radius: var(--ui-radius-md);
-  background: var(--ui-surface-panel-strong);
+  background: var(--ui-settings-item-bg);
   color: var(--color-text-primary);
   font-size: var(--ui-settings-row-label-size);
-  font-weight: var(--ui-font-weight-semibold);
+  font-weight: var(--ui-font-weight-medium);
   line-height: var(--ui-line-height-relaxed);
   text-align: center;
   scroll-margin: var(--ui-settings-focus-safe);
   transition: border-color var(--ui-motion-fast), background-color var(--ui-motion-fast), box-shadow var(--ui-motion-fast);
 }
+.setting-panel__action:hover { background: var(--ui-material-hover); }
 .setting-panel__action--primary { background: var(--brand-primary); color: var(--brand-on-primary); }
+.setting-panel__action--primary:hover { background: var(--brand-primary-strong); }
 .setting-panel__action--danger { color: var(--color-danger); }
-.setting-panel__action[data-focused='true'] { border-color: transparent; background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
+.setting-panel__action[data-focused='true'] { border-color: transparent; background: var(--ui-material-selected); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
 .setting-panel__action:disabled { opacity: 0.5; }
 .setting-panel__action--icon { flex: 0 0 var(--ui-settings-control-height); width: var(--ui-settings-control-height); height: var(--ui-settings-control-height); min-width: 0; padding: 0; }
 .setting-panel__action--short { flex: 0 0 var(--ui-settings-short-action-width); min-width: 0; width: var(--ui-settings-short-action-width); }
 .setting-panel__collapse { display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; }
 .setting-panel__collapse + .setting-panel__section-body { padding-top: var(--ui-settings-focus-safe); }
 .setting-panel__status { margin: 0; font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); color: var(--color-text-secondary); }
+.setting-panel__effect { width: fit-content; margin: var(--ui-space-xs) var(--ui-settings-control-padding) 0; padding: 2px 6px; border-radius: var(--ui-radius-sm); background: var(--ui-settings-choice-bg); color: var(--color-text-secondary); font-size: var(--ui-settings-effect-size); line-height: var(--ui-line-height-relaxed); }
 .setting-panel__status--error { color: var(--color-danger); }
-.setting-panel__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ui-space-md); }
+.setting-panel__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ui-space-sm); }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamAudioSheetProps {
@@ -55,6 +56,7 @@ watch(
         :id="props.scopeId"
         as="section"
         class="stream-audio-sheet__panel"
+        data-nav-scroll-container
         :active="props.open"
         :default-focus-id="decreaseNodeId"
       >
@@ -83,7 +85,7 @@ watch(
           <Focusable
             :id="valueNodeId"
             as="label"
-            class="stream-audio-sheet__value"
+            class="stream-audio-sheet__value ui-focus-outline"
             :on-back="handleClose"
           >
             <span class="stream-audio-sheet__label">{{ t('streamPage.audio.volume') }}</span>
@@ -96,6 +98,7 @@ watch(
               step="1"
               :value="draftValue"
               :aria-label="t('streamPage.audio.volume')"
+              @focus="(event) => navigationEngine.focusElement(event.target as HTMLInputElement, false)"
               @click.stop
               @input="(event) => updateValue(Number((event.target as HTMLInputElement).value))"
             >
@@ -146,6 +149,8 @@ watch(
 }
 
 .stream-audio-sheet__panel {
+  overflow: auto;
+  scroll-padding: 24px;
   position: relative;
   z-index: 1;
   width: min(calc(100vw - 48px), 360px);
@@ -154,7 +159,7 @@ watch(
   padding: 32px 24px;
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
+  border-radius: var(--ui-radius-panel);
   display: flex;
   flex-direction: column;
   color: var(--ui-page-text);
@@ -185,13 +190,15 @@ watch(
   grid-template-columns: 60px 1fr 60px;
   gap: 12px;
   margin-top: 8px;
+  margin-bottom: 24px;
 }
 
 .stream-audio-sheet__step,
 .stream-audio-sheet__close {
+  --focus-ring-border-width: 2px;
   min-height: 56px;
   border: 2px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--ui-radius-md);
   background: var(--color-state-hover);
   color: var(--ui-page-text);
   font-size: 20px;
@@ -201,6 +208,7 @@ watch(
 }
 
 .stream-audio-sheet__value {
+  --focus-ring-border-width: 2px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -208,7 +216,7 @@ watch(
   gap: 4px;
   padding: 10px;
   border: 2px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--ui-radius-md);
   background: var(--color-state-hover);
   transition: all var(--ui-motion-fast);
 }
@@ -230,6 +238,8 @@ watch(
   text-align: center;
 }
 
+.stream-audio-sheet__input:focus-visible { outline: none; }
+
 .stream-audio-sheet__close {
   width: 100%;
   margin-top: auto;
@@ -238,10 +248,11 @@ watch(
 
 .stream-audio-sheet__step[data-focused='true'],
 .stream-audio-sheet__value[data-focused='true'],
+.stream-audio-sheet__value:focus-within,
 .stream-audio-sheet__close[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
-  transform: scale(1.02);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 /* 动画 */

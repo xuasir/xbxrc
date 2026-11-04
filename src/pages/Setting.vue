@@ -10,6 +10,7 @@ import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
 import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
+import { useShellPageHints } from '../components/layout/shell-context'
 import SettingConfirmSheet from '../components/settings/SettingConfirmSheet.vue'
 import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleSelectPopupSheet.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
@@ -19,7 +20,6 @@ import { rpc } from '../services/rpc'
 import { getConfigFieldValue, getSectionsForPage, getSettingEffect, isSettingFieldVisible, SETTING_PAGE_LABEL_KEYS, SETTING_PAGE_ORDER } from './settings/setting-page-schema'
 import SettingAppUpdateSection from './settings/SettingAppUpdateSection.vue'
 import SettingCustomTurnSheet from './settings/SettingCustomTurnSheet.vue'
-import SettingInputToolsSection from './settings/SettingInputToolsSection.vue'
 import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
 
@@ -150,6 +150,7 @@ const tabs = computed<SettingTabNavItem[]>(() => SETTING_PAGE_ORDER.map((key, or
   upNeighborId: SPATIAL_NAV_NODE_IDS.topNav.setting,
 })))
 const activeLabel = computed(() => t(SETTING_PAGE_LABEL_KEYS[activeTabKey.value as SettingPageKey]))
+useShellPageHints(() => ({ regionLabel: t('shell.hints.categories'), status: loadError.value || statusMessage.value || activeLabel.value, error: !!loadError.value || statusError.value }))
 const panelScope = computed(() => `setting.content.${activeTabKey.value}`)
 const turnConfig = computed(() => ({
   server_url: String(getConfigFieldValue(groupState.value, 'server_url') ?? ''),
@@ -349,7 +350,7 @@ function closeEditors() {
 onMounted(() => {
   void loadConfigGroups()
   disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
-    if (!pageActive || document.querySelector('.setting-modal-shell'))
+    if (!pageActive || !navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell))
       return
     const index = SETTING_PAGE_ORDER.indexOf(activeTabKey.value as SettingPageKey) + (direction === 'next' ? 1 : -1)
     const key = SETTING_PAGE_ORDER[index]
@@ -375,33 +376,32 @@ onUnmounted(() => disposeTabSwitch?.())
   <section class="setting-page ui-page-shell">
     <div class="setting-page__layout" :aria-busy="isLoading">
       <SettingSidebar :tabs="tabs" :active-tab-key="activeTabKey" :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell" @tab-change="handleTabChange" />
-      <section ref="panelRef" class="setting-panel" data-nav-scroll-container :aria-label="t('setting.aria.panel', { group: activeLabel })">
-        <header class="setting-panel__header" data-nav-scroll-header>
+      <section class="setting-panel" :aria-label="t('setting.aria.panel', { group: activeLabel })">
+        <!-- 标题独立于滚动内容，透明背景沿用页面环境光。 -->
+        <header class="setting-panel__header">
           <h1 class="setting-panel__group-title">
             {{ activeLabel }}
           </h1>
         </header>
-        <div v-if="loadError" class="setting-panel__state">
-          <p role="alert">
-            {{ loadError }}
-          </p>
-          <Focusable id="setting.retry" as="button" :scope-id="panelScope" class="setting-panel__action" @click="loadConfigGroups">
-            {{ t('setting.experience.retry') }}
-          </Focusable>
-        </div>
-        <template v-else-if="!isLoading">
-          <div v-if="statusMessage || restartPending" class="setting-panel__feedback">
-            <p v-if="statusMessage" class="setting-panel__status" :class="{ 'setting-panel__status--error': statusError }" :role="statusError ? 'alert' : 'status'">
-              {{ statusMessage }}
+        <div ref="panelRef" class="setting-panel__content" data-nav-scroll-container>
+          <div v-if="loadError" class="setting-panel__state">
+            <p role="alert">
+              {{ loadError }}
             </p>
-            <Focusable v-if="restartPending" id="setting.restart" as="button" :scope-id="panelScope" class="setting-panel__action" :disabled="!!pendingActionKey" @click="restartConfirm = true">
-              {{ t('setting.experience.restartNow') }}
+            <Focusable id="setting.retry" as="button" :scope-id="panelScope" class="setting-panel__action" @click="loadConfigGroups">
+              {{ t('setting.experience.retry') }}
             </Focusable>
           </div>
-          <SettingSectionList v-if="activeTabKey !== 'inputDevices'" :key="activeTabKey" v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="customTurnOpen = true" />
-          <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
-          <SettingInputToolsSection v-if="activeTabKey === 'inputDevices'" :scope-id="panelScope" :nav-node-base-id="SPATIAL_NAV_NODE_IDS.settingTabs.inputDevices" />
-        </template>
+          <template v-else-if="!isLoading">
+            <div v-if="restartPending" class="setting-panel__feedback">
+              <Focusable v-if="restartPending" id="setting.restart" as="button" :scope-id="panelScope" class="setting-panel__action" :disabled="!!pendingActionKey" @click="restartConfirm = true">
+                {{ t('setting.experience.restartNow') }}
+              </Focusable>
+            </div>
+            <SettingSectionList :key="activeTabKey" v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="customTurnOpen = true" />
+            <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
+          </template>
+        </div>
       </section>
       <div v-if="isLoading" class="setting-page__loading-overlay" role="status">
         <BrandedLoading :label="t('setting.states.loading')" size="lg" />
@@ -417,11 +417,12 @@ onUnmounted(() => disposeTabSwitch?.())
 <style scoped src="../components/settings/setting-layout.css"></style>
 
 <style scoped>
-.setting-page { position: relative; min-height: 0; height: 100%; overflow: hidden; --color-focus-bg-strong: var(--ui-focus-surface); }
-.setting-page__layout { position: relative; display: grid; grid-template-columns: var(--ui-settings-layout-columns); grid-template-rows: var(--ui-settings-layout-rows); height: 100%; min-height: 0; }
-.setting-panel { position: relative; min-height: 0; min-width: 0; overflow: auto; scroll-padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail); }
-.setting-panel__header { position: sticky; top: 0; z-index: var(--z-sticky); padding: var(--ui-settings-header-padding) var(--ui-settings-side-padding); background: var(--ui-settings-glass-header-bg); backdrop-filter: blur(var(--ui-settings-glass-blur)); border-bottom: 1px solid var(--ui-border-subtle); }
-.setting-panel__group-title { margin: 0; font-size: var(--ui-text-title-lg); line-height: var(--ui-line-height-tight); font-weight: var(--ui-font-weight-bold); color: var(--color-text-primary); }
+.setting-page { position: relative; min-height: 0; height: 100%; overflow: hidden; --color-focus-bg-strong: var(--ui-material-selected); }
+.setting-page__layout { position: relative; display: grid; grid-template-columns: var(--ui-settings-layout-columns); grid-template-rows: var(--ui-settings-layout-rows); height: 100%; min-height: 0; gap: var(--space-16); }
+.setting-panel { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; background: transparent; }
+.setting-panel__content { min-height: 0; min-width: 0; overflow: auto; scroll-padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail); }
+.setting-panel__header { padding: var(--ui-space-lg) var(--ui-settings-side-padding); }
+.setting-panel__group-title { margin: 0; font-size: var(--ui-text-title-lg); line-height: var(--ui-line-height-tight); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-primary); }
 .setting-panel__feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-lg); padding: var(--ui-settings-focus-safe) var(--ui-settings-side-padding) var(--ui-settings-focus-tail); }
 .setting-panel__state { display: grid; justify-items: start; gap: var(--ui-space-xl); padding: var(--ui-settings-side-padding); color: var(--color-text-secondary); }
 .setting-page__loading-overlay { position: absolute; inset: 0; z-index: var(--z-overlay); display: flex; align-items: center; justify-content: center; background: var(--ui-settings-glass-bg); backdrop-filter: blur(var(--ui-settings-glass-blur)); }

@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
             {{ error }}
           </p>
 
-          <div class="stream-action-sheet__list">
+          <div class="stream-action-sheet__list" data-nav-scroll-container>
             <Focusable
               v-for="item in props.items"
               :id="item.id"
@@ -157,7 +157,7 @@ onBeforeUnmount(() => {
   padding: 32px 12px;
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
+  border-radius: var(--ui-radius-panel);
   display: flex;
   flex-direction: column;
   color: var(--ui-page-text);
@@ -186,11 +186,14 @@ onBeforeUnmount(() => {
 }
 
 .stream-action-sheet__list {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   overflow-y: auto;
-  padding: 8px 4px;
+  padding: 12px;
+  scroll-padding: 12px;
   scrollbar-width: none;
 }
 
@@ -202,8 +205,8 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 52px;
   padding: 12px 16px;
-  border: 2px solid transparent;
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-md);
   background: transparent;
   color: var(--ui-page-text);
   display: flex;
@@ -223,7 +226,7 @@ onBeforeUnmount(() => {
 .stream-action-sheet__item[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
-  transform: scale(1.02);
+  box-shadow: var(--shadow-xbox-focus);
   z-index: 10;
 }
 

@@ -50,7 +50,7 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
   height: var(--ui-size-control-lg);
   padding: 3px;
   border: 1px solid transparent;
-  border-radius: var(--btn-radius);
+  border-radius: var(--focus-ring-radius);
   background: transparent;
   color: var(--color-text-primary);
   display: inline-flex;
@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
 }
 
 .sn-icon-button--round {
-  border-radius: 999px;
+  --focus-ring-radius: var(--ui-radius-pill);
 }
 
 .sn-icon-button[data-focused='true'] {

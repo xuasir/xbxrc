@@ -365,6 +365,7 @@ export class NavigationEngine {
   }
 
   private scrollToFocus(el: HTMLElement, isRapid = false): void {
+    const scrollBehavior = isRapid || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
     const scrollContainer = el.closest<HTMLElement>('[data-nav-scroll-container]')
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect()
@@ -376,14 +377,15 @@ export class NavigationEngine {
         right: Number.parseFloat(styles.scrollPaddingRight) || 0,
       }
       const header = scrollContainer.querySelector<HTMLElement>('[data-nav-scroll-header]')
-      if (header)
+      // sticky 标题中的搜索和跳转控件已可见，内容节点才需要避让标题。
+      if (header && !header.contains(el))
         padding.top += Math.max(0, header.getBoundingClientRect().bottom - containerRect.top)
       const delta = getFocusScrollDelta(el.getBoundingClientRect(), containerRect, padding)
       if (delta.top || delta.left) {
         scrollContainer.scrollTo({
           top: scrollContainer.scrollTop + delta.top,
           left: scrollContainer.scrollLeft + delta.left,
-          behavior: isRapid ? 'auto' : 'smooth',
+          behavior: scrollBehavior,
         })
       }
       return
@@ -406,7 +408,7 @@ export class NavigationEngine {
 
     if (needsScroll) {
       el.scrollIntoView({
-        behavior: isRapid ? 'auto' : 'smooth',
+        behavior: scrollBehavior,
         block: 'nearest',
         inline: 'nearest',
       })

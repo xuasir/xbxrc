@@ -205,8 +205,8 @@ watch(
 .setting-display-options-sheet__section + .setting-display-options-sheet__section { margin-top: var(--ui-space-xl); }
 .setting-display-options-sheet__section-title { margin: 0; font-size: var(--ui-settings-section-title-size); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-secondary); }
 .setting-display-options-sheet__preset-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ui-space-md); }
-.setting-display-options-sheet__preset { position: relative; min-height: var(--ui-settings-control-height); padding: var(--ui-space-sm) var(--ui-settings-control-padding); border: 2px solid transparent; border-radius: var(--ui-radius-md); background: var(--ui-surface-panel); color: var(--color-text-primary); font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-relaxed); font-weight: var(--ui-font-weight-semibold); transition: all var(--ui-motion-fast); }
-.setting-display-options-sheet__preset--active { border-color: var(--brand-primary); background: var(--ui-surface-panel-strong); }
-.setting-display-options-sheet__preset[data-focused='true'] { border-color: transparent; background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
+.setting-display-options-sheet__preset { position: relative; min-height: var(--ui-settings-control-height); padding: var(--ui-space-sm) var(--ui-settings-control-padding); border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-primary); font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-relaxed); font-weight: var(--ui-font-weight-medium); transition: all var(--ui-motion-fast); }
+.setting-display-options-sheet__preset--active { background: var(--ui-material-selected); }
+.setting-display-options-sheet__preset[data-focused='true'] { border-color: transparent; background: var(--ui-material-hover); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
 .setting-display-options-sheet__preset-help { margin: 0; font-size: var(--ui-settings-row-description-size); line-height: var(--ui-line-height-relaxed); color: var(--color-text-secondary); }
 </style>

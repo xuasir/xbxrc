@@ -52,6 +52,45 @@ function fixture() {
 }
 afterEach(() => vi.unstubAllGlobals())
 
+describe('sticky header focus', () => {
+  it.each([[false, 'smooth'], [true, 'auto']] as const)('uses reduced motion = %s when scrolling to focus', (matches, behavior) => {
+    const { engine, node } = fixture()
+    vi.stubGlobal('window', { innerWidth: 1280, innerHeight: 720, matchMedia: () => ({ matches }) })
+    const scrollTo = vi.fn()
+    const container = {
+      scrollTop: 0,
+      scrollLeft: 0,
+      getBoundingClientRect: () => ({ top: 0, bottom: 200, left: 0, right: 1280 }),
+      querySelector: () => null,
+      scrollTo,
+    }
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingTop: '16', scrollPaddingBottom: '24', scrollPaddingLeft: '8', scrollPaddingRight: '8' }))
+    const field = { ...node('offscreen'), closest: (selector: string) => selector === '[data-nav-scroll-container]' ? container : null }
+    engine.focusElement(field as unknown as HTMLElement, false)
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior }))
+  })
+  it('preserves the catalog position when focusing a visible search field', () => {
+    const { engine, node } = fixture()
+    const field = node('search')
+    const scrollTo = vi.fn()
+    const container = {
+      scrollTop: 532,
+      scrollLeft: 0,
+      getBoundingClientRect: () => ({ top: 52, bottom: 648, left: 116, right: 1248 }),
+      querySelector: () => ({ contains: () => true, getBoundingClientRect: () => ({ bottom: 193 }) }),
+      scrollTo,
+    }
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingTop: '16', scrollPaddingBottom: '24', scrollPaddingLeft: '8', scrollPaddingRight: '8' }))
+    const search = {
+      ...field,
+      closest: (selector: string) => selector === '[data-nav-scroll-container]' ? container : null,
+      getBoundingClientRect: () => ({ top: 86, bottom: 126, left: 941, right: 1225 }),
+    }
+    engine.focusElement(search as unknown as HTMLElement, false)
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+})
+
 describe('settings modal focus recovery', () => {
   it('allows a focused input to consume controller activation before the native click fallback', () => {
     const { engine, node } = fixture()

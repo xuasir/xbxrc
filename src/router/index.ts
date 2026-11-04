@@ -66,6 +66,16 @@ const routes: RouteRecordRaw[] = [
       keepAlive: true,
     },
   },
+  {
+    path: '/controller',
+    name: 'controller',
+    component: () => import('../pages/Controller.vue'),
+    meta: {
+      requiresAuth: true,
+      layout: 'shell',
+      keepAlive: true,
+    },
+  },
 ]
 
 export const router = createRouter({

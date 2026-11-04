@@ -10,6 +10,7 @@ import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import GameCard from '../components/common/GameCard.vue'
 import HorizontalListRail from '../components/common/HorizontalListRail.vue'
+import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
@@ -33,7 +34,12 @@ const appLevel = ref(0)
 const titles = ref<XcloudTitle[]>([])
 const cacheState = ref<XcloudCatalogPayload['cacheState']>('miss')
 const updatedAt = ref<number | undefined>(undefined)
+const loadError = ref('')
 const searchKeyword = ref('')
+const contentRef = ref<HTMLElement | null>(null)
+const activeSection = ref('xcloud-recent')
+let contentScroller: HTMLElement | null = null
+let searchScroll = 0
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const renderedTitleCount = ref(0)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
@@ -144,6 +150,55 @@ watch(
   { immediate: true },
 )
 
+useShellPageHints(() => ({
+  regionLabel: hasFullAccess.value && !isSearching.value && titles.value.length > 0 ? t('shell.hints.regions') : undefined,
+  error: !!loadError.value,
+  status: loadError.value || (isRefreshing.value ? t('xcloudPage.refreshingHint') : isSearching.value ? resultCountLabel.value : cacheState.value === 'stale' && updatedAtLabel.value ? t('xcloudPage.cachedHint', { time: updatedAtLabel.value }) : resultCountLabel.value),
+}))
+
+function getVisibleSections(): HTMLElement[] {
+  return XCLOUD_SECTION_IDS.map(id => document.querySelector<HTMLElement>(`[data-nav-section="${id}"]`)).filter((element): element is HTMLElement => element !== null)
+}
+
+function handleContentScroll(): void {
+  if (!contentScroller)
+    return
+  const boundary = contentScroller.getBoundingClientRect().top + 24
+  const sections = getVisibleSections()
+  const last = sections.filter(section => section.getBoundingClientRect().top <= boundary).at(-1) ?? sections[0]
+  if (last)
+    activeSection.value = last.dataset.navSection ?? 'xcloud-all'
+}
+function setupContentScroller(): void {
+  contentScroller?.removeEventListener('scroll', handleContentScroll)
+  contentScroller = contentRef.value
+  contentScroller?.addEventListener('scroll', handleContentScroll, { passive: true })
+  handleContentScroll()
+}
+function jumpToSection(id: string): void {
+  const section = getVisibleSections().find(section => section.dataset.navSection === id)
+  if (!section || !contentScroller)
+    return
+  const offset = section.getBoundingClientRect().top - contentScroller.getBoundingClientRect().top + contentScroller.scrollTop - 16
+  contentScroller.scrollTo({ top: Math.max(0, offset), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+  const first = section.querySelector<HTMLElement>(`.horizontal-list-rail__scroller ${FOCUSABLE_SELECTOR}`) ?? section.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+  if (first)
+    navigationEngine.focusElement(first, false, true)
+  activeSection.value = id
+}
+watch(contentRef, setupContentScroller, { flush: 'post' })
+// 进入搜索时同步保存位置，恢复安排在列表 DOM 更新完成后。
+watch(isSearching, (searching) => {
+  if (searching && contentScroller)
+    searchScroll = contentScroller.scrollTop
+}, { flush: 'sync' })
+watch(isSearching, async (searching) => {
+  await nextTick()
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+  if (contentScroller && isSearching.value === searching)
+    contentScroller.scrollTop = searching ? 0 : searchScroll
+}, { flush: 'post' })
+
 function handleResize(): void {
   viewportWidth.value = window.innerWidth
 }
@@ -232,16 +287,22 @@ async function loadTitles(forceRefresh = false): Promise<void> {
     isRefreshing.value = true
   }
 
+  loadError.value = ''
   try {
-    const [authState, catalogPayload] = await Promise.all([
+    const [authState, catalogPayload] = await Promise.allSettled([
       rpc.auth.getState(),
       forceRefresh ? rpc.data.refreshXcloudTitles() : rpc.data.getXcloudTitles(),
     ])
-    appLevel.value = authState.appLevel
-    applyCatalogPayload(catalogPayload)
+    if (authState.status === 'fulfilled')
+      appLevel.value = authState.value.appLevel
+    else throw authState.reason
+    if (catalogPayload.status === 'fulfilled')
+      applyCatalogPayload(catalogPayload.value)
+    else throw catalogPayload.reason
   }
   catch (error) {
     devWarn('[XCloud] load titles failed:', error)
+    loadError.value = t('xcloudPage.loadFailed')
     if (titles.value.length === 0) {
       titles.value = []
       cacheState.value = 'miss'
@@ -263,6 +324,7 @@ onMounted(() => {
   void loadTitles()
   void nextTick(setupLoadMoreObserver)
   registerTabSwitch()
+  void nextTick(setupContentScroller)
 })
 
 onActivated(() => {
@@ -271,13 +333,17 @@ onActivated(() => {
   }
   void nextTick(setupLoadMoreObserver)
   registerTabSwitch()
+  void nextTick(setupContentScroller)
 })
 
 onDeactivated(() => {
+  contentScroller?.removeEventListener('scroll', handleContentScroll)
+  loadMoreObserver?.disconnect()
   unregisterTabSwitch()
 })
 
 onBeforeUnmount(() => {
+  contentScroller?.removeEventListener('scroll', handleContentScroll)
   window.removeEventListener('resize', handleResize)
   loadMoreObserver?.disconnect()
   loadMoreObserver = null
@@ -294,6 +360,8 @@ function registerTabSwitch(): void {
     return
 
   disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
+    if (isSearching.value || !navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell))
+      return
     // 动态构建当前可见的 section 列表
     const visibleSections = XCLOUD_SECTION_IDS
       .map(id => document.querySelector(`[data-nav-section="${id}"]`) as HTMLElement | null)
@@ -320,14 +388,9 @@ function registerTabSwitch(): void {
       return
     }
 
-    // 聚焦目标区域的第一个可聚焦元素
-    const targetSection = visibleSections[nextIndex]
-    const firstFocusable = targetSection.querySelector(FOCUSABLE_SELECTOR) as HTMLElement | null
-    if (firstFocusable) {
-      playNavSound('move')
-      triggerNavHaptic('move')
-      navigationEngine.focusElement(firstFocusable, false)
-    }
+    playNavSound('move')
+    triggerNavHaptic('move')
+    jumpToSection(visibleSections[nextIndex].dataset.navSection ?? 'xcloud-all')
   })
 }
 
@@ -362,7 +425,7 @@ function unregisterTabSwitch(): void {
         type="button"
         class="xcloud-page__action-button ui-action-button ui-action-button--brand"
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :aria-label="t('xcloudPage.action.ariaLabel')"
+        :aria-label="t('xcloudPage.actions.refresh')"
         @click="handlePrimaryAction"
       >
         {{ t('xcloudPage.actions.refresh') }}
@@ -380,32 +443,39 @@ function unregisterTabSwitch(): void {
               {{ t('xcloudPage.toolbar.hint', { count: titles.length }) }}
             </p>
           </div>
-          <label class="xcloud-page__search-shell" :aria-label="t('xcloudPage.searchLabel')">
-            <span class="xcloud-page__search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" class="xcloud-page__search-svg">
-                <path
-                  d="M10.5 4.5a6 6 0 1 0 3.789 10.652l4.279 4.279 1.414-1.414-4.279-4.279A6 6 0 0 0 10.5 4.5Z"
-                  fill="currentColor"
-                />
-              </svg>
-            </span>
-            <input
-              v-model="searchKeyword"
-              type="search"
-              class="xcloud-page__search-input"
-              :placeholder="t('xcloudPage.searchPlaceholder')"
-            >
-          </label>
+          <div class="xcloud-page__search-actions">
+            <label class="xcloud-page__search-shell" :aria-label="t('xcloudPage.searchLabel')">
+              <span class="xcloud-page__search-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="xcloud-page__search-svg" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                  <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />
+                </svg>
+              </span>
+              <input
+                v-model="searchKeyword"
+                type="search"
+                class="xcloud-page__search-input"
+                :placeholder="t('xcloudPage.searchPlaceholder')"
+                :aria-label="t('xcloudPage.searchLabel')"
+                data-focusable="true"
+                @focus="navigationEngine.focusElement($event.target as HTMLInputElement, false)"
+              >
+            </label>
+            <Focusable id="xcloud.refresh" as="button" type="button" class="xcloud-page__refresh" :aria-label="t('xcloudPage.actions.refresh')" :title="t('xcloudPage.actions.refresh')" :aria-busy="isRefreshing" :disabled="isRefreshing" @click="loadTitles(true)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" :class="{ 'xcloud-page__refresh-icon--spinning': isRefreshing }"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8" /></svg>
+            </Focusable>
+          </div>
         </div>
-        <p v-if="isRefreshing" class="xcloud-page__refreshing-hint">
-          {{ t('xcloudPage.refreshingHint') }}
-        </p>
-        <p
-          v-else-if="cacheState === 'stale' && updatedAtLabel !== ''"
-          class="xcloud-page__refreshing-hint"
-        >
-          {{ t('xcloudPage.cachedHint', { time: updatedAtLabel }) }}
-        </p>
+        <nav v-if="!isSearching && titles.length" class="xcloud-page__jumps" :aria-label="t('shell.hints.regions')">
+          <Focusable v-if="recentCards.length" id="xcloud.jump.recent" as="button" type="button" :aria-pressed="activeSection === 'xcloud-recent'" @click="jumpToSection('xcloud-recent')">
+            {{ t('xcloudPage.sections.recent.title') }}
+          </Focusable>
+          <Focusable v-if="newCards.length" id="xcloud.jump.new" as="button" type="button" :aria-pressed="activeSection === 'xcloud-new'" @click="jumpToSection('xcloud-new')">
+            {{ t('xcloudPage.sections.new.title') }}
+          </Focusable>
+          <Focusable id="xcloud.jump.all" as="button" type="button" :aria-pressed="activeSection === 'xcloud-all'" @click="jumpToSection('xcloud-all')">
+            {{ t('xcloudPage.sections.all.title') }}
+          </Focusable>
+        </nav>
       </header>
 
       <section
@@ -448,7 +518,7 @@ function unregisterTabSwitch(): void {
         </Focusable>
       </section>
 
-      <div v-else class="xcloud-page__content">
+      <div v-else ref="contentRef" class="xcloud-page__content" data-nav-scroll-container>
         <!-- 横向轨道 (仅非搜索状态显示) -->
         <template v-if="!isSearching">
           <HorizontalListRail
@@ -538,8 +608,10 @@ function unregisterTabSwitch(): void {
 .xcloud-page {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
-  padding-bottom: var(--ui-space-4xl);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overflow-anchor: none;
 }
 
 .xcloud-page__loading {
@@ -550,25 +622,19 @@ function unregisterTabSwitch(): void {
   min-height: 0;
 }
 
-.xcloud-page__header {
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: calc(var(--ui-app-shell-content-padding-top) * -1);
-  z-index: 10;
-  margin: calc(var(--ui-app-shell-content-padding-top) * -1) calc(var(--ui-page-inset) * -1) 0;
-  padding: var(--ui-app-shell-content-padding-top) var(--ui-page-inset);
-  background: color-mix(in srgb, var(--ui-page-bg), transparent 15%);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--color-divider);
-}
+.xcloud-page__header { display: flex; flex: 0 0 auto; flex-direction: column; gap: var(--space-16); padding: var(--space-16) var(--space-8); background: transparent; }
+.xcloud-page__jumps { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.xcloud-page__jumps button { min-height: 32px; padding: var(--space-4) var(--space-12); border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 13px; line-height: 18px; cursor: pointer; }
+.xcloud-page__jumps button[aria-pressed='true'] { background: var(--ui-choice-selected-bg); color: var(--color-text-primary); border-color: var(--ui-choice-selected-border); }
+.xcloud-page__jumps button:hover { background: var(--ui-material-hover); }
+.xcloud-page__jumps button[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
 
 .xcloud-page__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 12px 0; /* 给标题和搜索框增加内部垂直居中的余地 */
+  padding: 0;
 }
 
 .xcloud-page__title-block {
@@ -579,10 +645,10 @@ function unregisterTabSwitch(): void {
 }
 
 .xcloud-page__title {
-  font-size: clamp(22px, 1.8vw, 30px);
+  font-size: 28px;
   line-height: 1.08;
-  font-weight: var(--ui-font-weight-bold);
-  letter-spacing: -0.03em;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
 }
 
@@ -600,16 +666,26 @@ function unregisterTabSwitch(): void {
   color: var(--color-text-secondary);
 }
 
+.xcloud-page__search-actions { display: flex; align-items: center; gap: var(--space-12); flex: 0 1 344px; min-width: 0; }
+.xcloud-page__refresh { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 8px; border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
+.xcloud-page__refresh svg { width: 20px; height: 20px; }
+.xcloud-page__refresh:hover { background: var(--ui-material-hover); }
+.xcloud-page__refresh[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
+.xcloud-page__refresh:disabled { opacity: .5; cursor: default; }
+.xcloud-page__refresh-icon--spinning { animation: xcloud-refresh-spin 900ms linear infinite; }
+@keyframes xcloud-refresh-spin { to { transform: rotate(360deg); } }
+
 .xcloud-page__search-shell {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 0 min(100%, 360px);
-  min-height: var(--ui-xcloud-search-height);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
   padding: 0 var(--ui-xcloud-search-padding-inline);
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--btn-radius);
-  background: var(--color-surface-1);
+  border-radius: var(--ui-radius-md);
+  background: color-mix(in srgb, var(--ui-panel-bottom) 70%, transparent);
 }
 
 .xcloud-page__search-icon {
@@ -633,7 +709,7 @@ function unregisterTabSwitch(): void {
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: clamp(15px, 1.6vw, 18px);
+  font-size: 14px;
   line-height: 1.2;
 }
 
@@ -641,24 +717,22 @@ function unregisterTabSwitch(): void {
   color: var(--color-text-tertiary);
 }
 
-.xcloud-page__search-input:focus {
-  outline: none;
-}
+.xcloud-page__search-shell:focus-within { box-shadow: var(--shadow-xbox-focus); }
+.xcloud-page__search-input:focus-visible { outline: none; }
 
 .xcloud-page__content {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-space-4xl);
-  margin-top: var(--ui-space-2xl);
+  gap: var(--space-24);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-12) var(--space-8) var(--space-24);
+  scroll-padding: var(--space-12) var(--space-8) var(--space-24);
 }
 
 .xcloud-page__rail {
   /* Offset inside padding if needed, but HorizontalListRail handles its own scroll padding */
-}
-
-.xcloud-page__rail :deep(.game-card) {
-  /* The default width/height defined in GameCard are used here,
-     but we ensure it doesn't get overridden by anything else */
 }
 
 .xcloud-page__grid-section {
@@ -672,13 +746,13 @@ function unregisterTabSwitch(): void {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 4px; /* match grid's padding to align text */
+  padding: 0 var(--space-8);
 }
 
 .xcloud-page__grid-title {
   margin: 0;
   font-size: var(--ui-rail-title-size);
-  font-weight: var(--ui-font-weight-bold);
+  font-weight: 500;
   line-height: 1.1;
   color: var(--color-text-primary);
 }
@@ -696,7 +770,7 @@ function unregisterTabSwitch(): void {
   grid-template-columns: repeat(var(--xcloud-grid-columns), minmax(0, 1fr));
   gap: var(--ui-xcloud-grid-gap);
   align-items: start;
-  padding: 12px 4px; /* Room for scaling at the edges */
+  padding: var(--space-12) var(--space-8); /* 为首尾卡片保留完整焦点环。 */
 }
 
 .xcloud-page__load-more-sentinel {
@@ -794,23 +868,5 @@ function unregisterTabSwitch(): void {
   transform: none;
 }
 
-:global(html[data-ui-density='compact']) .xcloud-page__toolbar,
-:global(html[data-ui-density='narrow']) .xcloud-page__toolbar {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-:global(html[data-ui-density='compact']) .xcloud-page__results,
-:global(html[data-ui-density='narrow']) .xcloud-page__results {
-  white-space: normal;
-}
-
-:global(html[data-ui-density='narrow']) .xcloud-page__header {
-  top: calc(var(--ui-space-1) * -1);
-}
-
-:global(html[data-ui-density='narrow']) .xcloud-page__search-shell {
-  flex-basis: auto;
-  width: 100%;
-}
+@media(max-width:700px) { .xcloud-page__toolbar { flex-direction: column; align-items: stretch; gap: var(--space-16); } .xcloud-page__title { font-size: 24px; } .xcloud-page__search-actions { flex-basis: auto; width: 100%; } .xcloud-page__results { white-space: normal; } .xcloud-page__jumps { gap: var(--space-4); } }
 </style>

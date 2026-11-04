@@ -3,6 +3,7 @@ import type { SettingSelectOptionDefinition } from '@shared/config/domain-defini
 import type { GamepadKeyboardControlDto, GamepadKeyboardMappingDto } from '@shared/gamepad/contract'
 import type { ButtonKey } from '@shared/gamepad/state'
 import { DEFAULT_KEYBOARD_MAPPING, KEY_CODE_TO_DTO } from '@shared/gamepad/keyboard-fallback-bridge'
+import { navigationButtonLabels } from '@shared/gamepad/navigation-hints'
 import { applyGameControls, defaultGameControls } from '@shared/gamepad/preferences'
 import { gamepadConfig, inputController, saveGamepadConfig } from '@shared/gamepad/runtime'
 import { assignGameButton, BUTTON_LABELS, createGamepadCaptureReader } from '@shared/gamepad/settings-model'
@@ -19,9 +20,12 @@ import { useGamepadPanelSession } from './useGamepadPanelSession'
 
 const props = defineProps<{ scopeId: string, navNodeBaseId: string }>()
 const { t } = useI18n()
-const tr = (key: string) => t(`gamepadSettings.${key}`)
+const tr = (key: string, values: Record<string, string> = {}) => t(`gamepadSettings.${key}`, values)
 const snapshot = shallowRef(inputController.getSnapshot())
 const prefs = computed(() => snapshot.value.preferences)
+const buttons = computed(() => navigationButtonLabels(prefs.value.controlSource))
+// 输入测试独占期间由面板直接消费 Enter，以实际动作标注测试提示。
+const testButtons = computed(() => ({ menu: prefs.value.controlSource === 'keyboard' ? 'Enter' : 'Menu', back: buttons.value.east }))
 const activeDevice = computed(() => snapshot.value.devices.find(device => device.id === snapshot.value.activeDeviceId))
 const paneScope = 'setting.gamepad.editor'
 const draft = ref(defaultGameControls())
@@ -218,21 +222,16 @@ function onKey(event: KeyboardEvent): void {
   }
 }
 window.addEventListener('keydown', onKey, true)
-onDeactivated(closePane)
+onDeactivated(() => {
+  choice.value = null
+  closePane()
+})
 onBeforeUnmount(() => {
   dispose()
   panel.dispose()
   window.removeEventListener('keydown', onKey, true)
 })
 
-function selectDevice(): void {
-  choice.value = {
-    title: tr('device'),
-    current: snapshot.value.activeDeviceId,
-    options: snapshot.value.devices.filter(device => device.standard).map(device => ({ value: device.id, label: device.name })),
-    apply: (value) => { inputController.selectDevice(String(value)) },
-  }
-}
 function selectPreference(key: string, title: string, values: string[], labels: string[], current: string, hint?: string): void {
   choice.value = { title, hint, current, options: values.map((value, i) => ({ value, label: labels[i] })), apply: async (value) => {
     return await persist({ [key]: value })
@@ -253,8 +252,9 @@ async function applyChoice(value: string | number): Promise<void> {
 }
 async function applyDraft(): Promise<void> {
   stopCapture()
+  // 录入筛选后的绑定可能含嵌套响应式代理，逐项构造可持久化的 DTO。
   const patch = pane.value === 'keyboard'
-    ? { gamepad_control_source: keyboardEnabled.value ? 'keyboard' : 'gamepad', gamepad_keyboard_mapping: structuredClone(toRaw(keyboardDraft.value)) }
+    ? { gamepad_control_source: keyboardEnabled.value ? 'keyboard' : 'gamepad', gamepad_keyboard_mapping: { bindings: keyboardDraft.value.bindings.map(({ key, control }) => ({ key, control })) } }
     : { gamepad_game_controls: structuredClone(toRaw(draft.value)) }
   if (await persist(patch))
     closePane()
@@ -320,9 +320,6 @@ function exportDiagnostic(): void {
         </h2>
       </header>
       <div class="setting-panel__section-body">
-        <SettingRow :id="`${props.navNodeBaseId}.device`" :scope-id="props.scopeId" :disabled="!snapshot.devices.some(device => device.standard)" :label="tr('device')" select @click="selectDevice">
-          {{ activeDevice?.name || tr('noDevice') }}
-        </SettingRow>
         <SettingRow :id="`${props.navNodeBaseId}.background`" :scope-id="props.scopeId" :disabled="saving" :label="tr('background')" select @click="selectPreference('gamepad_background_policy', tr('background'), ['keep-active', 'follow-app'], [tr('keepActive'), tr('followApp')], prefs.backgroundPolicy, tr('backgroundHint'))">
           {{ tr(prefs.backgroundPolicy === 'keep-active' ? 'keepActive' : 'followApp') }}
         </SettingRow>
@@ -375,14 +372,14 @@ function exportDiagnostic(): void {
       </div>
     </section>
   </div>
-  <SettingModalShell :open="pane !== null" :default-focus-id="paneDefaultFocus" :busy="saving" :scope-id="paneScope" :title="pane ? tr(pane) : ''" :hint="pane === 'keyboard' ? tr('keyboardHint') : pane === 'layout' ? tr('layoutHint') : pane === 'test' ? tr('testHint') : ''" @close="requestClosePane">
+  <SettingModalShell :open="pane !== null" :default-focus-id="paneDefaultFocus" :busy="saving" :scope-id="paneScope" :title="pane ? tr(pane) : ''" :hint="pane === 'keyboard' ? tr('keyboardHint') : pane === 'layout' ? tr('layoutHint') : pane === 'test' ? tr('testHint', testButtons) : ''" @close="requestClosePane">
     <div class="pad-editor">
       <p v-if="message" class="setting-panel__status" :class="{ 'setting-panel__status--error': saveError }" :role="saveError ? 'alert' : 'status'">
         {{ message }}
       </p>
       <template v-if="capturing">
         <p role="status">
-          {{ tr('captureHint') }} · {{ captureCountdown }}s · {{ tr('captureControllerHint') }}
+          {{ tr('captureHint') }} · {{ captureCountdown }}s<span v-if="prefs.controlSource === 'gamepad'"> · {{ tr('captureControllerHint') }}</span>
         </p>
         <Focusable :id="`${paneScope}.cancelCapture`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="stopCapture">
           {{ tr('cancelCapture') }}
@@ -415,7 +412,7 @@ function exportDiagnostic(): void {
       </template>
       <template v-if="pane === 'test'">
         <p>{{ tr('testRemaining') }} {{ testCountdown }}s</p>
-        <p>{{ tr(testNavigation ? 'testNavigationHint' : 'testControllerHint') }}</p>
+        <p>{{ tr(testNavigation ? 'testNavigationHint' : 'testControllerHint', testButtons) }}</p>
         <Focusable v-if="testNavigation" :id="`${paneScope}.resumeTest`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="panel.toggleTestNavigation">
           {{ tr('resumeTest') }}
         </Focusable>

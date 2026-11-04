@@ -22,6 +22,14 @@
         "notReady": "当前暂不可开始游玩"
       },
       "ariaLabel": "主机 {name}"
+    },
+    "hero": {
+      "title": "我的主机",
+      "hint": "选择主机，开始远程游玩",
+      "switch": "切换主机",
+      "play": "开始串流",
+      "wake": "唤醒并连接",
+      "error": "主机状态加载失败，请重试"
     }
   },
   "xcloudPage": {
@@ -81,7 +89,8 @@
       "clearSearch": "清空搜索",
       "playNow": "开始游玩",
       "playSelected": "开始游玩 {name}"
-    }
+    },
+    "loadFailed": "游戏库加载失败，请刷新重试"
   },
   "streamPage": {
     "ariaLabel": "串流 {name}",
@@ -790,7 +799,9 @@
     "loggedOut": "未登录",
     "logout": "注销",
     "logoutHint": "退出当前账号",
-    "loggingOut": "正在注销..."
+    "loggingOut": "正在注销...",
+    "confirmLogout": "退出当前账户？",
+    "cancelLogout": "取消"
   },
   "gamepadCard": {
     "close": "关闭手柄卡片",
@@ -1596,8 +1607,8 @@
         "retryChannel": "重新读取更新通道"
       },
       "input": {
-        "controllerHint": "选中输入框按 A 录入；也可点击后使用键盘。",
-        "keyboardHint": "方向键选择，A 输入，B 取消；完成后返回表单。",
+        "controllerHint": "选中输入框按 {confirm} 录入；也可点击后使用键盘。",
+        "keyboardHint": "方向键选择，{confirm} 输入，{back} 取消；完成后返回表单。",
         "empty": "空",
         "uppercase": "大写",
         "letters": "字母",
@@ -1609,7 +1620,25 @@
       }
     }
   },
+  "controllerPage": {
+    "connection": "连接状态",
+    "settings": "手柄设置",
+    "connectionHint": "查看设备、连接能力和实时输入",
+    "settingsHint": "管理输入方式、游戏控制与震动偏好",
+    "inputSource": "输入方式",
+    "inputOwner": "当前输入用途",
+    "connectionType": "连接方式",
+    "liveInput": "实时输入",
+    "leftStick": "左摇杆",
+    "rightStick": "右摇杆",
+    "owners": {
+      "ui": "界面导航",
+      "stream": "游戏串流",
+      "blocked": "暂停输入"
+    }
+  },
   "gamepadSettings": {
+    "pageHint": "管理设备、输入方式与游戏控制",
     "deviceBehavior": "设备与行为",
     "device": "当前手柄",
     "selected": "使用中",
@@ -1645,7 +1674,7 @@
     "cancelCapture": "取消录入",
     "layoutHint": "选择游戏动作后按下手柄控件。已占用控件会交换绑定。此布局适用于所有标准手柄。",
     "keyboardHint": "开启后键盘控制游戏并支持菜单导航：WASD / 方向键移动，J 确认，K 返回，1 / 2 切换页面，3 / 4 切换分类。游戏绑定可自定义，应用后生效。",
-    "testHint": "测试期间按键用于观察输入；Menu 切换到操作按钮，B 返回。",
+    "testHint": "测试期间按键用于观察输入；{menu} 切换到操作按钮后，按 {back} 返回。",
     "testRemaining": "测试剩余",
     "finishTest": "结束测试",
     "rumbleTest": "测试震动 · 200ms",
@@ -1680,8 +1709,34 @@
     "leftStick": "左摇杆",
     "rightStick": "右摇杆",
     "captureControllerHint": "Menu + View 取消录入",
-    "testControllerHint": "按 Menu 切换到操作按钮，输入测试剩余时间会暂停。",
-    "testNavigationHint": "操作区 · B 返回，Menu 恢复输入测试。",
+    "testControllerHint": "按 {menu} 切换到操作按钮，输入测试剩余时间会暂停。",
+    "testNavigationHint": "操作区 · {back} 返回，{menu} 恢复输入测试。",
     "resumeTest": "恢复输入测试"
+  },
+  "shell": {
+    "brand": "XBXRC",
+    "navigation": "主导航",
+    "home": "主机",
+    "cloud": "云游戏",
+    "settings": "设置",
+    "controller": "手柄",
+    "profile": "账户头像",
+    "hints": {
+      "label": "操作提示",
+      "confirm": "确认",
+      "close": "关闭",
+      "pages": "切换页面",
+      "regions": "切换区域",
+      "categories": "切换分类",
+      "busy": "正在处理",
+      "exclusive": "当前操作正在使用手柄输入",
+      "inactive": "界面输入暂停",
+      "back": "返回"
+    },
+    "account": "账户"
+  },
+  "commonRail": {
+    "previous": "向左浏览",
+    "next": "向右浏览"
   }
 }

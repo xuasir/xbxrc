@@ -9,16 +9,16 @@
   --color-surface-0: var(--color-bg);
   --color-surface-1: var(--ui-surface-panel);
   --color-surface-2: var(--ui-surface-panel-strong);
-  --color-surface-3: var(--ui-surface-panel-strong);
+  --color-surface-3: var(--ui-surface-overlay);
 
   --color-text-primary: var(--ui-page-text);
   --color-text-secondary: var(--ui-page-text-soft);
-  --color-text-tertiary: var(--ui-page-text-soft);
+  --color-text-tertiary: var(--ui-icon-text);
   --color-text-disabled: color-mix(in srgb, var(--ui-page-text-soft) 58%, transparent);
   --color-text-on-media: #ffffff;
 
   --color-border-subtle: var(--ui-border-subtle);
-  --color-border: var(--ui-border-subtle);
+  --color-border: var(--ui-border-hover);
   --color-border-strong: var(--ui-border-focus);
   --color-divider: var(--ui-border-subtle);
 
@@ -29,9 +29,11 @@
 
   --color-success: var(--ui-status-positive);
   --color-focus-ring: var(--ui-border-focus);
-  --color-focus-ring-outer: var(--ui-focus-shadow);
+  --color-focus-ring-outer: transparent;
+  --color-focus-glow: var(--ui-focus-shadow);
+  --shadow-xbox-focus: 0 0 0 2px var(--ui-page-bg), 0 0 0 4px var(--ui-focus-ring-start), 0 0 12px var(--ui-focus-halo);
 
-  --focus-ring-width: 1px;
+  --focus-ring-width: 2px;
   --focus-ring-radius: var(--ui-radius-md);
 
   --tile-radius: var(--ui-console-card-radius);
@@ -46,12 +48,12 @@
   --shelf-scroll-padding: var(--ui-rail-padding-inline);
 
   --btn-radius: var(--ui-radius-md);
-  --btn-height-md: var(--ui-size-control-lg);
+  --btn-height-md: 44px;
   --btn-height-lg: var(--ui-size-control-xl);
   --btn-primary-bg: var(--ui-login-button-bg);
   --btn-primary-bg-hover: var(--ui-login-button-bg-focused);
   --btn-primary-text: var(--ui-login-button-text);
-  --btn-border: var(--ui-border-subtle);
+  --btn-border: var(--ui-brand-border);
 
   --settings-nav-width: 320px;
   --settings-item-height: var(--ui-settings-row-min-height);

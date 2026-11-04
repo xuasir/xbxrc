@@ -3,13 +3,13 @@ import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
 import SettingModalShell from './SettingModalShell.vue'
 
-const props = defineProps<{ open: boolean, scopeId: string, title: string, message: string, confirmLabel?: string, busy?: boolean }>()
+const props = defineProps<{ open: boolean, scopeId: string, title: string, message: string, confirmLabel?: string, eyebrow?: string, busy?: boolean }>()
 const emit = defineEmits<{ close: [], confirm: [] }>()
 const { t } = useI18n()
 </script>
 
 <template>
-  <SettingModalShell :open="props.open" :scope-id="props.scopeId" :title="props.title" :busy="props.busy" :default-focus-id="`${props.scopeId}.cancel`" @close="emit('close')">
+  <SettingModalShell :open="props.open" :scope-id="props.scopeId" :eyebrow="props.eyebrow" :title="props.title" :busy="props.busy" :default-focus-id="`${props.scopeId}.cancel`" @close="emit('close')">
     <p class="setting-panel__notice">
       {{ props.message }}
     </p>

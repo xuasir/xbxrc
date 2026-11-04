@@ -43,7 +43,7 @@ function effect(row: SettingIndexedRow) {
               <p v-if="entry.row.description" class="setting-panel__status">
                 {{ entry.row.description }}
               </p>
-              <p v-if="effect(entry.row)" class="setting-panel__status">
+              <p v-if="effect(entry.row)" class="setting-panel__effect">
                 {{ effect(entry.row) }}
               </p>
               <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="entry.row.nodeId" :label="entry.row.label" :options="entry.row.options" :current-value="typeof entry.row.value === 'object' ? entry.row.options.find(option => option.label === entry.row.valueText)?.value ?? null : (entry.row.value as string | number)" :disabled="props.pendingActionKey !== null" @select="emit('rowSelect', entry.row, $event)" />
@@ -63,6 +63,7 @@ function effect(row: SettingIndexedRow) {
 <style scoped src="../../components/settings/setting-layout.css"></style>
 
 <style scoped>
-.setting-panel__inline-label { margin: 0 0 var(--ui-space-xs); padding: 0 var(--ui-space-xl); font-size: var(--ui-settings-row-label-size); color: var(--color-text-primary); font-weight: var(--ui-font-weight-semibold); }
-.setting-panel__inline-field > .setting-panel__status { padding: 0 var(--ui-space-xl); }
+.setting-panel__inline-field { padding: var(--ui-space-md) 0 0; border-radius: var(--ui-radius-md); background: var(--ui-settings-item-bg); }
+.setting-panel__inline-label { margin: 0 0 var(--ui-space-xs); padding: 0 var(--ui-settings-control-padding); font-size: var(--ui-settings-row-label-size); color: var(--color-text-primary); font-weight: var(--ui-font-weight-medium); }
+.setting-panel__inline-field > .setting-panel__status { padding: 0 var(--ui-settings-control-padding); font-size: var(--ui-settings-row-description-size); }
 </style>

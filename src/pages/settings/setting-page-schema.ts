@@ -9,7 +9,6 @@ export type SettingPageKey
   = | 'general'
     | 'streamingExperience'
     | 'connectionHost'
-    | 'inputDevices'
     | 'advancedDiagnostics'
 
 export type SettingActionId = 'customTurn'
@@ -79,7 +78,6 @@ export const SETTING_PAGE_ORDER: readonly SettingPageKey[] = [
   'general',
   'streamingExperience',
   'connectionHost',
-  'inputDevices',
   'advancedDiagnostics',
 ] as const
 
@@ -87,7 +85,6 @@ export const SETTING_PAGE_LABEL_KEYS: Record<SettingPageKey, string> = {
   general: 'setting.pages.general.title',
   streamingExperience: 'setting.pages.streamingExperience.title',
   connectionHost: 'setting.pages.connectionHost.title',
-  inputDevices: 'setting.pages.inputDevices.title',
   advancedDiagnostics: 'setting.pages.advancedDiagnostics.title',
 }
 
@@ -153,7 +150,6 @@ const PAGE_SECTIONS: Record<SettingPageKey, SettingSchemaSectionDef[]> = {
   general: PAGE_GENERAL,
   streamingExperience: PAGE_STREAMING,
   connectionHost: PAGE_CONNECTION,
-  inputDevices: [],
   advancedDiagnostics: PAGE_ADVANCED,
 }
 

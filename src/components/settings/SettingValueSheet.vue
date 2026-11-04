@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useNavigationButtonLabels } from '@shared/gamepad/navigation-hints'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
@@ -21,6 +22,7 @@ const props = withDefaults(defineProps<{
 }>(), { hint: '' })
 const emit = defineEmits<{ close: [], submit: [value: string] }>()
 const { t } = useI18n()
+const buttons = useNavigationButtonLabels()
 const draftValue = ref('')
 const fieldId = computed(() => `${props.scopeId}.field`)
 const validation = computed(() => props.mode === 'number' ? validateSettingNumber(draftValue.value, props) : null)
@@ -58,7 +60,7 @@ watch(() => props.open, (open) => {
         {{ validationText || (props.mode === 'number' ? t('setting.experience.range', { min: props.min, max: props.max, step: props.step ?? 1 }) : '') }}
       </p>
       <p class="setting-panel__status">
-        {{ t('setting.experience.input.controllerHint') }}
+        {{ t('setting.experience.input.controllerHint', { confirm: buttons.south }) }}
       </p>
       <p v-if="props.error" class="setting-panel__status setting-panel__status--error" role="alert">
         {{ props.error }}

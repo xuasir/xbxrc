@@ -158,13 +158,13 @@ onBeforeUnmount(() => {
 .stream-alert-sheet__body { margin: 0; font-size: 15px; line-height: 1.6; }
 .stream-alert-sheet__help { margin: 10px 0 0; font-size: 13px; line-height: 1.6; color: var(--ui-page-text-soft); }
 .stream-alert-sheet__actions { display: flex; flex-wrap: wrap; gap: 12px; flex-shrink: 0; }
-.stream-alert-sheet__action { flex: 1 1 140px; min-height: 44px; padding: 11px 16px; border: 2px solid transparent; border-radius: var(--ui-radius-md); background: var(--color-state-hover); color: var(--ui-page-text); font: inherit; font-size: 14px; font-weight: 600; transition: background var(--ui-motion-fast); }
+.stream-alert-sheet__action { --focus-ring-border-width: 2px; flex: 1 1 140px; min-height: 44px; padding: 11px 16px; border: 2px solid transparent; border-radius: var(--ui-radius-md); background: var(--color-state-hover); color: var(--ui-page-text); font: inherit; font-size: 14px; font-weight: 600; transition: background var(--ui-motion-fast); }
 .stream-alert-sheet__action--primary { background: var(--brand-primary); color: var(--brand-on-primary); }
 .stream-alert-sheet__action--danger { color: var(--ui-status-danger); }
 .stream-alert-sheet__action[data-focused='true'], .stream-alert-sheet__details-toggle[data-focused='true'] { background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 1; }
 .stream-alert-sheet__action:disabled { opacity: .5; }
 .stream-alert-sheet__details-header { flex-shrink: 0; }
-.stream-alert-sheet__details-toggle { min-height: 44px; padding: 8px 12px; border: 2px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-page-text-soft); font: inherit; font-size: 13px; }
+.stream-alert-sheet__details-toggle { --focus-ring-border-width: 2px; min-height: 44px; padding: 8px 12px; border: 2px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-page-text-soft); font: inherit; font-size: 13px; }
 .stream-alert-sheet__details { overflow: auto; min-height: 0; border-top: 1px solid var(--ui-border-subtle); padding: 16px 12px 28px; margin-inline: -12px; scroll-padding: 12px 12px 28px; }
 .stream-alert-sheet__details dl { margin: 0 0 16px; display: grid; gap: 10px; font-size: 12px; line-height: 1.5; }
 .stream-alert-sheet__details dl > div { display: grid; grid-template-columns: minmax(80px, 1fr) minmax(0, 2fr); gap: 12px; }

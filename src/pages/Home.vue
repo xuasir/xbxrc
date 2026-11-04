@@ -3,11 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Focusable } from '@/navigation/core/vue'
-import seriesSImage from '../assets/console/series-s.jpeg'
-import seriesXImage from '../assets/console/series-x.png'
+import seriesSImage from '../assets/console/series-s-transparent.png'
+import seriesXImage from '../assets/console/series-x-transparent.png'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import ConsoleStatusCard from '../components/common/ConsoleStatusCard.vue'
-import HorizontalListRail from '../components/common/HorizontalListRail.vue'
+import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
@@ -19,6 +19,8 @@ type HostSummary = Awaited<ReturnType<typeof rpc.data.getHosts>>[number]
 
 interface HostCardViewModel {
   host: HostSummary
+  sourceIndex: number
+  consoleType: string
   hostKey: string
   nodeId: string
   title: string
@@ -29,6 +31,8 @@ interface HostCardViewModel {
 
 const isLoading = ref(false)
 const hosts = ref<HostSummary[]>([])
+const selectedHostKey = ref('')
+const loadError = ref('')
 
 function resolveHostId(host: HostSummary, index: number): string {
   return host.serverId ?? host.id ?? host.deviceId ?? `host-${index}`
@@ -109,11 +113,10 @@ function resolveHostDescription(host: HostSummary): string {
 const hostCards = computed<HostCardViewModel[]>(() =>
   hosts.value.map((host, index) => ({
     host,
+    sourceIndex: index,
+    consoleType: resolveHostConsoleType(host),
     hostKey: resolveHostId(host, index),
-    nodeId:
-      index === 0
-        ? SPATIAL_NAV_NODE_IDS.pagePrimary.xhome
-        : `xhome.host.${resolveHostId(host, index)}`,
+    nodeId: `xhome.host.${resolveHostId(host, index)}`,
     title: resolveHostTitle(host),
     imageSrc: resolveConsoleImage(resolveHostConsoleType(host)),
     status: resolveHostStatus(host),
@@ -121,19 +124,41 @@ const hostCards = computed<HostCardViewModel[]>(() =>
   })),
 )
 
+const selectedCard = computed(() => hostCards.value.find(card => card.hostKey === selectedHostKey.value) ?? hostCards.value[0])
+const canStreamSelected = computed(() => {
+  const host = selectedCard.value?.host
+  if (!host)
+    return false
+  const state = resolvePowerState(host.powerState)
+  return (state === 'on' && host.consoleStreamingEnabled !== false)
+    || (state === 'standby' && host.remoteManagementEnabled === true)
+})
+const primaryLabel = computed(() => !canStreamSelected.value
+  ? t('homePage.refresh')
+  : t(resolvePowerState(selectedCard.value?.host.powerState) === 'standby' ? 'homePage.hero.wake' : 'homePage.hero.play'))
+useShellPageHints(() => ({ status: loadError.value || selectedCard.value?.description, error: !!loadError.value }))
+
+function handlePrimaryAction(): void {
+  const card = selectedCard.value
+  if (card && canStreamSelected.value)
+    handleSelectHost(card.host, card.sourceIndex)
+  else handleRefresh()
+}
+
 async function loadHosts(): Promise<void> {
   if (isLoading.value) {
     return
   }
 
   isLoading.value = true
+  loadError.value = ''
   try {
     const result = await rpc.data.getHosts()
     hosts.value = Array.isArray(result) ? result : []
   }
   catch (error) {
     devWarn('[Home] load hosts failed:', error)
-    hosts.value = []
+    loadError.value = t('homePage.hero.error')
   }
   finally {
     isLoading.value = false
@@ -165,47 +190,61 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="home-page ui-page-shell" aria-label="XHome Page">
-    <div v-if="isLoading" class="home-page__loading">
+  <section class="home-page ui-page-shell" :aria-label="t('homePage.hero.title')">
+    <header class="home-page__header">
+      <div>
+        <h1 class="home-page__title">
+          {{ t('homePage.hero.title') }}
+        </h1><p class="home-page__hint">
+          {{ t('homePage.hero.hint') }}
+        </p>
+      </div>
+      <Focusable id="xhome.refresh" as="button" type="button" class="home-page__refresh" :aria-label="t('homePage.refresh')" :title="t('homePage.refresh')" :disabled="isLoading" @click="handleRefresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8" /></svg>
+      </Focusable>
+    </header>
+    <div v-if="isLoading && !selectedCard" class="home-page__loading">
       <BrandedLoading :label="t('homePage.loading')" />
     </div>
-
-    <HorizontalListRail
-      v-else-if="hostCards.length > 0"
-      class="home-page__content"
-      :title="t('homePage.railTitle')"
-      :hint="t('homePage.railHint', { count: hosts.length })"
-      :aria-label="t('homePage.railAriaLabel')"
-    >
-      <ConsoleStatusCard
-        v-for="(card, index) in hostCards"
-        :id="card.nodeId"
-        :key="card.hostKey"
-        :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :title="card.title"
-        :status="card.status"
-        :description="card.description"
-        :image-src="card.imageSrc"
-        :image-alt="card.title"
-        :aria-label="t('homePage.consoleCard.ariaLabel', { name: card.title })"
-        @click="() => handleSelectHost(card.host, index)"
-      />
-    </HorizontalListRail>
-
+    <template v-else-if="selectedCard">
+      <div class="home-page__hero-edge">
+        <Transition name="panel-slide" mode="out-in">
+          <section :key="selectedCard.hostKey" class="home-page__hero" :aria-label="selectedCard.title">
+            <div class="home-page__hero-copy">
+              <p class="home-page__eyebrow">
+                REMOTE PLAY · {{ selectedCard.consoleType }}
+              </p>
+              <h2 class="home-page__console-name">
+                {{ selectedCard.title }}
+              </h2>
+              <p class="home-page__status" :data-power="resolvePowerState(selectedCard.host.powerState)">
+                {{ selectedCard.status }}
+              </p>
+              <p class="home-page__description">
+                {{ selectedCard.description }}
+              </p>
+              <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="home-page__primary ui-action-button ui-action-button--brand" :disabled="isLoading" @click="handlePrimaryAction">
+                {{ primaryLabel }}
+              </Focusable>
+            </div>
+            <img class="home-page__console-art" :src="selectedCard.imageSrc" :alt="selectedCard.consoleType">
+          </section>
+        </Transition>
+      </div>
+      <section v-if="hostCards.length > 1" class="home-page__devices" :aria-label="t('homePage.hero.switch')">
+        <header class="home-page__devices-header">
+          <h2>{{ t('homePage.hero.switch') }}</h2><span>{{ t('homePage.railHint', { count: hosts.length }) }}</span>
+        </header>
+        <div class="home-page__device-grid">
+          <ConsoleStatusCard v-for="card in hostCards" :id="card.nodeId" :key="card.hostKey" :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell" :title="card.title" :status="card.status" :description="card.description" :image-src="card.imageSrc" :image-alt="card.consoleType" :selected="card.hostKey === selectedCard.hostKey" :aria-label="t('homePage.consoleCard.ariaLabel', { name: card.title })" @click="selectedHostKey = card.hostKey" />
+        </div>
+      </section>
+    </template>
     <section v-else class="home-page__empty-state" :aria-label="t('homePage.empty')">
-      <p class="home-page__empty-copy">
-        {{ t('homePage.empty') }}
+      <p class="home-page__empty-copy" :role="loadError ? 'alert' : undefined">
+        {{ loadError || t('homePage.empty') }}
       </p>
-
-      <Focusable
-        :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome"
-        as="button"
-        type="button"
-        class="home-page__refresh-button"
-        :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :aria-label="t('homePage.refresh')"
-        @click="handleRefresh"
-      >
+      <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="ui-action-button ui-action-button--brand" @click="handleRefresh">
         {{ t('homePage.refresh') }}
       </Focusable>
     </section>
@@ -213,89 +252,34 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.home-page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-page-stack-gap);
-  min-height: 100%;
-}
-
-.home-page__loading {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-}
-
-.home-page__content {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 10px 0 calc(var(--ui-space-4xl) + 8px) 0;
-}
-
-.home-page__empty-state {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 18px;
-  flex: 1 1 auto;
-  width: min(100%, var(--ui-home-empty-width));
-  margin: auto;
-  min-height: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-.home-page__empty-copy {
-  max-width: var(--ui-home-empty-copy-max-width);
-  font-size: var(--ui-home-empty-copy-size);
-  line-height: 1.55;
-  color: var(--color-text-secondary);
-  text-align: center;
-}
-
-.home-page__refresh-button {
-  min-width: var(--ui-home-action-min-width);
-  min-height: var(--ui-home-action-min-height);
-  padding: 0 18px;
-  border: 1px solid var(--btn-border);
-  border-radius: var(--btn-radius);
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  font-size: 14px;
-  font-weight: var(--ui-font-weight-semibold);
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    border-color var(--ui-motion-fast),
-    background-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast),
-    transform var(--ui-motion-fast);
-}
-
-.home-page__refresh-button:hover {
-  background: var(--btn-primary-bg-hover);
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--brand-primary), transparent 78%);
-}
-
-.home-page__refresh-button[data-focused='true'] {
-  background: var(--btn-primary-bg-hover);
-  color: var(--btn-primary-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-:global(html[data-ui-density='compact']) .home-page__content,
-:global(html[data-ui-density='narrow']) .home-page__content {
-  padding-top: 8px;
-  padding-bottom: calc(var(--ui-space-4xl) + 4px);
-}
-
-:global(html[data-ui-density='compact']) .home-page__refresh-button,
-:global(html[data-ui-density='narrow']) .home-page__refresh-button {
-  font-size: 13px;
-}
+.home-page { display: flex; flex-direction: column; gap: var(--space-24); min-height: 100%; }
+.home-page__header, .home-page__devices-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); }
+.home-page__title { font-size: 24px; line-height: 32px; font-weight: 500; letter-spacing: -.02em; }
+.home-page__hint { margin-top: var(--space-8); color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
+.home-page__refresh { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 8px; border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
+.home-page__refresh svg { width: 20px; height: 20px; }
+.home-page__refresh:disabled { opacity: .5; cursor: default; }
+.home-page__hero-edge { min-height: var(--ui-console-hero-height); border-radius: var(--ui-radius-panel); }
+.home-page__hero { display: grid; grid-template-columns: 1.15fr 1fr; align-items: center; gap: var(--space-24); min-height: var(--ui-console-hero-height); padding: var(--ui-console-hero-padding); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); background: var(--ui-console-hero-bg); backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low); }
+.home-page__hero-copy { min-width: 0; }
+.home-page__eyebrow { margin-bottom: var(--space-16); color: var(--color-text-secondary); font-size: 12px; line-height: 16px; letter-spacing: .08em; }
+.home-page__console-name { font-size: var(--ui-console-hero-title-size); line-height: 1.18; font-weight: 500; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.home-page__status { display: flex; align-items: center; gap: var(--space-8); margin-top: var(--space-12); color: var(--color-text-secondary); font-size: 14px; line-height: 20px; }
+.home-page__status::before { content: ''; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--color-text-tertiary); }
+.home-page__status[data-power='on']::before, .home-page__status[data-power='standby']::before { background: var(--ui-status-positive); }
+.home-page__description { margin-top: var(--space-4); color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
+.home-page__primary { min-width: 0; margin-top: var(--space-24); }
+.home-page__primary[data-focused='true'], .home-page__refresh[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
+.home-page__primary:hover { background: var(--btn-primary-bg-hover); }
+.home-page__refresh:hover { background: var(--ui-material-hover); }
+.home-page__console-art { width: 100%; height: var(--ui-console-hero-image-height); object-fit: contain; filter: drop-shadow(12px 16px 12px color-mix(in srgb, var(--neutral-0) 40%, transparent)); }
+.home-page__devices { display: flex; flex-direction: column; gap: var(--space-16); }
+.home-page__devices-header h2 { font-size: 18px; line-height: 24px; font-weight: 500; }
+.home-page__devices-header span { color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
+.home-page__device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); }
+.home-page__loading, .home-page__empty-state { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-24); }
+.home-page__empty-copy { max-width: 440px; color: var(--color-text-secondary); text-align: center; font-size: 14px; line-height: 1.5; }
+@media(max-height:680px) { .home-page { gap: var(--space-16); } .home-page__primary { margin-top: var(--space-16); } .home-page__eyebrow { margin-bottom: var(--space-12); } }
+@media(max-width:700px) { .home-page__header { flex-wrap: wrap; } .home-page__title { font-size: 24px; line-height: 32px; } .home-page__hero { grid-template-columns: 1fr .55fr; gap: var(--space-12); padding: var(--space-16); } .home-page__console-name { font-size: 24px; } .home-page__console-art { height: 160px; } .home-page__device-grid { grid-template-columns: minmax(0, 1fr); } }
+@media(max-width:370px) { .home-page__hero { grid-template-columns: minmax(0, 1fr) .35fr; gap: var(--space-8); padding: var(--space-12); } .home-page__console-name { font-size: 22px; } .home-page__console-art { height: 144px; } }
 </style>

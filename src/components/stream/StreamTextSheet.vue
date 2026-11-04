@@ -92,6 +92,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
         :id="props.scopeId"
         as="section"
         class="stream-text-sheet__panel"
+        data-nav-scroll-container
         :active="props.open"
         :default-focus-id="defaultFocusId"
         role="dialog" aria-modal="true" :aria-label="t('streamPage.text.title')" :aria-busy="props.loading"
@@ -111,7 +112,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
         <Focusable
           :id="fieldNodeId"
           as="div"
-          class="stream-text-sheet__field-focus"
+          class="stream-text-sheet__field-focus ui-focus-outline"
           :on-back="handleClose"
           @click="focusInput"
         >
@@ -122,6 +123,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
             type="text"
             :placeholder="t('streamPage.text.placeholder')"
             :aria-label="t('streamPage.text.title')"
+            @focus="(event) => navigationEngine.focusElement(event.target as HTMLInputElement, false)"
             @click.stop
             @keydown.enter.prevent="handleSubmit"
           >
@@ -178,6 +180,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
 }
 
 .stream-text-sheet__panel {
+  overflow: auto;
+  scroll-padding: 24px;
   position: relative;
   z-index: 1;
   width: min(calc(100vw - 48px), 480px);
@@ -186,7 +190,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
   padding: 32px 24px;
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
+  border-radius: var(--ui-radius-panel);
   display: flex;
   flex-direction: column;
   color: var(--ui-page-text);
@@ -220,6 +224,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
 }
 
 .stream-text-sheet__field-focus {
+  --focus-ring-border-width: 0px;
+  border-radius: var(--ui-radius-md);
   margin-top: 8px;
 }
 
@@ -227,15 +233,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
   width: 100%;
   padding: 16px;
   border: 2px solid var(--ui-border-subtle);
-  border-radius: 12px;
+  border-radius: var(--ui-radius-md);
   background: var(--color-state-hover);
   color: var(--ui-page-text);
   font-size: 16px;
   transition: all var(--ui-motion-fast);
 }
 
+.stream-text-sheet__input:focus-visible { outline: none; }
 .stream-text-sheet__field-focus[data-focused='true'] .stream-text-sheet__input {
-  border-color: var(--color-focus-ring);
   background: var(--color-focus-bg);
   color: var(--ui-focus-text);
 }
@@ -247,10 +253,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
 }
 
 .stream-text-sheet__action {
+  --focus-ring-border-width: 0px;
   flex: 1;
   padding: 14px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--ui-radius-md);
   background: var(--color-focus-bg);
   color: var(--ui-page-text);
   font-size: 16px;
@@ -266,7 +273,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true)
 .stream-text-sheet__action[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
-  transform: scale(1.02);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-text-sheet__action--primary[data-focused='true'] {

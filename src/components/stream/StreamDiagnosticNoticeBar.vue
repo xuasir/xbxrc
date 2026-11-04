@@ -89,7 +89,7 @@ const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
 .stream-diagnostic-notice-bar__item {
   max-width: 100%;
   padding: 10px 14px;
-  border-radius: 14px;
+  border-radius: var(--ui-radius-lg);
   color: var(--ui-page-text);
   font-size: 12px;
   font-weight: 600;

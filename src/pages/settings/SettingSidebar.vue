@@ -1,27 +1,26 @@
-<script setup lang="ts">
-import type { SettingTabKey } from '../../navigation/spatial-nav.constants'
-import type { SettingTabNavItem } from './setting-types'
+<script setup lang="ts" generic="TabKey extends string">
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
 
 defineProps<{
-  tabs: SettingTabNavItem[]
-  activeTabKey: SettingTabKey
+  tabs: { key: TabKey, label: string, nodeId: string }[]
+  activeTabKey: TabKey
   scopeId: string
+  title?: string
 }>()
 
 const emit = defineEmits<{
-  tabChange: [tabKey: SettingTabKey]
+  tabChange: [tabKey: TabKey]
 }>()
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <aside class="setting-sidebar" :aria-label="t('setting.aria.groups')">
+  <aside class="setting-sidebar" :aria-label="title || t('setting.aria.groups')">
     <header class="setting-sidebar__header">
       <h1 class="setting-sidebar__title">
-        {{ t('setting.title') }}
+        {{ title || t('setting.title') }}
       </h1>
     </header>
 
@@ -52,13 +51,12 @@ const { t } = useI18n()
   display: flex;
   flex-direction: column;
   gap: var(--ui-settings-sidebar-gap);
-  padding: var(--ui-settings-focus-safe);
-  background: var(--ui-settings-glass-bg);
-  backdrop-filter: blur(var(--ui-settings-glass-blur));
-  border-right: 1px solid var(--ui-border-subtle);
+  padding: var(--space-4);
+  background: transparent;
+
 }
 .setting-sidebar__header { display: var(--ui-settings-sidebar-header-display); padding: var(--ui-space-md) var(--ui-settings-focus-safe); }
-.setting-sidebar__title { margin: 0; font-size: var(--ui-text-title-md); font-weight: var(--ui-font-weight-bold); color: var(--color-text-primary); }
+.setting-sidebar__title { margin: 0; font-size: var(--ui-text-title-md); font-weight: 500; color: var(--color-text-primary); }
 .setting-sidebar__nav {
   min-width: 0;
   min-height: 0;
@@ -75,7 +73,7 @@ const { t } = useI18n()
   min-height: var(--ui-settings-row-min-height);
   width: var(--ui-settings-sidebar-tab-width);
   padding: var(--ui-space-md) var(--ui-space-lg);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   border-radius: var(--ui-radius-md);
   background: transparent;
   color: var(--color-text-secondary);
@@ -84,10 +82,11 @@ const { t } = useI18n()
   scroll-margin: var(--ui-settings-focus-safe);
   transition: border-color var(--ui-motion-fast), background-color var(--ui-motion-fast), box-shadow var(--ui-motion-fast);
 }
-.setting-sidebar__tab:hover { background: var(--ui-surface-panel); }
-.setting-sidebar__tab--active { background: var(--ui-surface-panel-strong); color: var(--color-text-primary); }
-.setting-sidebar__tab--active::before { content: ''; position: absolute; left: 0; top: 25%; bottom: 25%; width: 2px; background: var(--brand-primary); }
-.setting-sidebar__tab[data-focused='true'] { border-color: transparent; background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
-.setting-sidebar__tab-label { font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-default); font-weight: var(--ui-font-weight-semibold); }
+.setting-sidebar__tab:hover { background: var(--ui-material-hover); }
+.setting-sidebar__tab--active { background: var(--ui-choice-selected-bg); color: var(--color-text-primary); }
+.setting-sidebar__tab--active::after { content: ''; position: absolute; left: 0; top: 25%; bottom: 25%; width: 3px; border-radius: 2px; background: var(--ui-status-positive); }
+.setting-sidebar__tab[data-focused='true'] { border-color: transparent; color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
+.setting-sidebar__tab--active:hover { background: var(--ui-choice-selected-bg); }
+.setting-sidebar__tab-label { font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-default); font-weight: 400; }
 .setting-sidebar__tab[data-focused='true'] .setting-sidebar__tab-label { color: var(--ui-focus-text); }
 </style>

@@ -22,6 +22,14 @@
         "notReady": "Not ready to play yet"
       },
       "ariaLabel": "Console {name}"
+    },
+    "hero": {
+      "title": "My consoles",
+      "hint": "Choose a console and play remotely",
+      "switch": "Switch console",
+      "play": "Start streaming",
+      "wake": "Wake and connect",
+      "error": "Could not load console status. Try again."
     }
   },
   "xcloudPage": {
@@ -81,7 +89,8 @@
       "clearSearch": "Clear Search",
       "playNow": "Play Now",
       "playSelected": "Play {name}"
-    }
+    },
+    "loadFailed": "Could not load your library. Please refresh to try again."
   },
   "streamPage": {
     "ariaLabel": "Stream {name}",
@@ -790,7 +799,9 @@
     "loggedOut": "Signed out",
     "logout": "Sign out",
     "logoutHint": "Sign out of this account",
-    "loggingOut": "Signing out..."
+    "loggingOut": "Signing out...",
+    "confirmLogout": "Sign out of this account?",
+    "cancelLogout": "Cancel"
   },
   "gamepadCard": {
     "close": "Close gamepad card",
@@ -1596,8 +1607,8 @@
         "retryChannel": "Reload update channel"
       },
       "input": {
-        "controllerHint": "Select a field and press A to enter text, or click to use your keyboard.",
-        "keyboardHint": "Move to a key, press A to enter, or B to cancel. Done returns to the form.",
+        "controllerHint": "Select a field and press {confirm} to enter text, or click to use your keyboard.",
+        "keyboardHint": "Move to a key, press {confirm} to enter, or {back} to cancel. Done returns to the form.",
         "empty": "Empty",
         "uppercase": "Uppercase",
         "letters": "Letters",
@@ -1609,7 +1620,25 @@
       }
     }
   },
+  "controllerPage": {
+    "connection": "Connection status",
+    "settings": "Controller settings",
+    "connectionHint": "View devices, capabilities and live input",
+    "settingsHint": "Manage input, game controls and vibration",
+    "inputSource": "Input source",
+    "inputOwner": "Input destination",
+    "connectionType": "Connection type",
+    "liveInput": "Live input",
+    "leftStick": "Left stick",
+    "rightStick": "Right stick",
+    "owners": {
+      "ui": "UI navigation",
+      "stream": "Game streaming",
+      "blocked": "Input paused"
+    }
+  },
   "gamepadSettings": {
+    "pageHint": "Manage devices, input sources and game controls",
     "deviceBehavior": "Device and behavior",
     "device": "Current controller",
     "selected": "Active",
@@ -1645,7 +1674,7 @@
     "cancelCapture": "Cancel recording",
     "layoutHint": "Select a game action, then press a controller button. Occupied bindings swap. This layout applies to all standard controllers.",
     "keyboardHint": "Use the keyboard for games and menus: WASD / arrows to move, J to confirm, K to go back, 1 / 2 to switch pages, and 3 / 4 to switch tabs. Customize game bindings, then apply.",
-    "testHint": "Controls show input during testing. Menu opens the action controls; B returns.",
+    "testHint": "Controls show input during testing. Press {menu} to open the action controls, then {back} to return.",
     "testRemaining": "Time remaining",
     "finishTest": "Finish test",
     "rumbleTest": "Test vibration · 200ms",
@@ -1680,8 +1709,34 @@
     "leftStick": "Left stick",
     "rightStick": "Right stick",
     "captureControllerHint": "Menu + View cancels capture",
-    "testControllerHint": "Press Menu to navigate controls and pause the test timer.",
-    "testNavigationHint": "Controls · B returns, Menu resumes input testing.",
+    "testControllerHint": "Press {menu} to navigate controls and pause the test timer.",
+    "testNavigationHint": "Controls · {back} returns, {menu} resumes input testing.",
     "resumeTest": "Resume input test"
+  },
+  "shell": {
+    "brand": "XBXRC",
+    "navigation": "Main navigation",
+    "home": "Consoles",
+    "cloud": "Cloud",
+    "settings": "Settings",
+    "controller": "Controller",
+    "profile": "Account avatar",
+    "hints": {
+      "label": "Action hints",
+      "confirm": "Select",
+      "close": "Close",
+      "pages": "Switch page",
+      "regions": "Switch region",
+      "categories": "Switch category",
+      "busy": "Working",
+      "exclusive": "Controller input is in use by the current action",
+      "inactive": "UI input paused",
+      "back": "Back"
+    },
+    "account": "Account"
+  },
+  "commonRail": {
+    "previous": "Browse left",
+    "next": "Browse right"
   }
 }

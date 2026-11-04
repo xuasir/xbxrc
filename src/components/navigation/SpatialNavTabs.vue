@@ -78,9 +78,10 @@ function isActiveTab(tabKey: string): boolean {
 }
 
 .sn-tabs__item {
+  --focus-ring-radius: var(--ui-radius-sm);
   position: relative;
   border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm);
+  border-radius: var(--focus-ring-radius);
   background: transparent;
   color: var(--ui-page-text-soft);
   font-family: var(--ui-font-family);
@@ -122,10 +123,6 @@ function isActiveTab(tabKey: string): boolean {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
-}
-
-.sn-tabs__item[data-focused='true']:not(.sn-tabs__item--active)::after {
-  background: var(--ui-focus-text);
 }
 
 .sn-tabs__item:disabled {

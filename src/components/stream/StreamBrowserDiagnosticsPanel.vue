@@ -3,6 +3,7 @@ import type { StreamDiagnosticGroup } from '../../streaming/stream-panel-view-mo
 import type { StreamBrowserDiagnosticsViewModel, StreamEnhancementMountState } from '../../streaming/types'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { buildDiagnosticClipboardSnapshot, DIAGNOSTIC_GROUPS, diagnosticGroupRows } from '../../streaming/stream-panel-view-models'
 
@@ -23,6 +24,18 @@ const rows = computed(() => diagnosticGroupRows(props.model, props.group))
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 
 function handleEscape(event: KeyboardEvent): void {
+  if (event.defaultPrevented || !navigationEngine.isTopmostScope(scopeId))
+    return
+  if (event.key === 'Tab') {
+    const nodes = [...(document.getElementById(scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
+    const index = nodes.indexOf(document.activeElement as HTMLElement)
+    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
+    if (next) {
+      event.preventDefault()
+      navigationEngine.focusElement(next, false)
+    }
+    return
+  }
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
@@ -82,14 +95,15 @@ async function copySnapshot(): Promise<void> {
           {{ t(`streamPage.diagnosticsPanel.groups.${tab}`) }}
         </Focusable>
       </div>
-      <div :id="`${scopeId}.content`" :key="group" class="stream-diagnostic__rows" role="tabpanel" :aria-labelledby="`${scopeId}.${group}`">
+      <div :id="`${scopeId}.content`" :key="group" class="stream-diagnostic__rows" role="tabpanel" :aria-labelledby="`${scopeId}.${group}`" data-nav-scroll-container>
         <Focusable
           v-for="row in rows"
           :id="`${scopeId}.row.${row.key}`"
           :key="row.key"
           :scope-id="scopeId"
           as="div"
-          class="stream-diagnostic__row"
+          class="stream-diagnostic__row ui-focus-outline"
+          tabindex="0"
         >
           <span class="stream-diagnostic__label">{{ t(`streamPage.diagnosticsPanel.browser.fields.${row.key}`) }}</span>
           <span class="stream-diagnostic__value">{{ row.value }}</span>
@@ -131,12 +145,12 @@ async function copySnapshot(): Promise<void> {
 }
 .stream-diagnostic__header { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-md); }
 .stream-diagnostic__header h2 { margin: 0; font-size: var(--ui-text-title-md); font-weight: var(--ui-font-weight-bold); }
-.stream-diagnostic__tabs { display: flex; gap: var(--ui-space-xs); }
+.stream-diagnostic__tabs { display: flex; gap: 12px; padding: 8px; margin-inline: -8px; }
 .stream-diagnostic__button {
   min-height: var(--ui-stream-diagnostic-control-height);
   padding: var(--ui-space-sm);
-  border: 2px solid transparent;
-  border-radius: var(--ui-radius-sm);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-md);
   background: transparent;
   color: var(--ui-page-text);
   font: inherit;
@@ -144,16 +158,18 @@ async function copySnapshot(): Promise<void> {
 }
 .stream-diagnostic__close { min-width: var(--ui-stream-diagnostic-control-height); font-size: var(--ui-text-title-md); }
 .stream-diagnostic__tab { flex: 1; min-width: 0; white-space: nowrap; }
-.stream-diagnostic__tab[aria-selected='true'] { background: var(--ui-surface-panel-strong); border-bottom-color: var(--brand-primary); }
-.stream-diagnostic__rows { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--ui-space-xs); }
-.stream-diagnostic__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ui-space-lg); padding: var(--ui-space-md) var(--ui-space-xs); border-bottom: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-sm); }
+.stream-diagnostic__button:hover { background: var(--ui-material-hover); }
+.stream-diagnostic__tab[aria-selected='true'] { background: var(--ui-choice-selected-bg); }
+.stream-diagnostic__rows { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px; margin-inline: -12px; scroll-padding: 12px; animation: ui-content-enter 160ms ease-out; }
+.stream-diagnostic__row { --focus-ring-radius: var(--ui-radius-sm); display: flex; align-items: baseline; justify-content: space-between; gap: var(--ui-space-lg); padding: var(--ui-space-md) var(--ui-space-xs); border: 1px solid transparent; border-bottom-color: var(--ui-border-subtle); border-radius: var(--focus-ring-radius); }
 .stream-diagnostic__label { flex: 1; color: var(--ui-page-text-soft); }
 .stream-diagnostic__value { max-width: 60%; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .stream-diagnostic__hint { margin: 0; color: var(--ui-page-text-soft); font-size: var(--ui-stream-metrics-font-size); line-height: var(--ui-line-height-relaxed); }
 .stream-diagnostic__footer { display: flex; align-items: center; gap: var(--ui-space-sm); }
 .stream-diagnostic__copy { border-color: var(--ui-border-subtle); }
 .stream-diagnostic__copy-state { color: var(--ui-page-text-soft); }
-.stream-diagnostic__button[data-focused='true'], .stream-diagnostic__row[data-focused='true'] { background: var(--color-focus-bg-strong); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); border-color: var(--color-focus-ring); position: relative; z-index: 1; }
+.stream-diagnostic__button[data-focused='true'], .stream-diagnostic__row[data-focused='true'] { color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); position: relative; z-index: 1; }
+.stream-diagnostic__row[data-focused='true'] { background: var(--ui-material-selected); }
 .stream-diagnostic__row[data-focused='true'] .stream-diagnostic__label, .stream-diagnostic__row[data-focused='true'] .stream-diagnostic__value { color: var(--ui-focus-text); }
 .stream-diagnostic-enter-active, .stream-diagnostic-leave-active { transition: opacity var(--ui-motion-fast), transform var(--ui-motion-fast); }
 .stream-diagnostic-enter-from, .stream-diagnostic-leave-to { opacity: 0; transform: translateX(var(--ui-space-xl)); }

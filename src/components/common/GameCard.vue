@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Direction } from '@/navigation/core'
+import { ref, watch } from 'vue'
 import { Focusable } from '@/navigation/core/vue'
 
 type SpatialNavNeighbors = Partial<Record<Direction, string>>
@@ -32,6 +33,10 @@ const props = withDefaults(defineProps<GameCardProps>(), {
 const emit = defineEmits<{
   (event: 'select'): void
 }>()
+const imageFailed = ref(false)
+watch(() => props.imageUrl, () => {
+  imageFailed.value = false
+})
 
 // 统一收敛点击和确认事件，页面层只处理一次选择回调。
 function handleSelect(): void {
@@ -51,11 +56,16 @@ function handleSelect(): void {
     @click="handleSelect"
   >
     <span class="game-card__image-shell">
-      <span
+      <img
+        v-if="props.imageUrl && !imageFailed"
         class="game-card__image"
-        :style="{ backgroundImage: props.imageUrl ? `url(${props.imageUrl})` : undefined }"
+        :src="props.imageUrl || undefined"
+        alt=""
+        loading="lazy"
+        decoding="async"
         aria-hidden="true"
-      />
+        @error="imageFailed = true"
+      >
       <span class="game-card__title-overlay">
         <span class="game-card__title-text">{{ props.title }}</span>
       </span>
@@ -65,17 +75,18 @@ function handleSelect(): void {
 
 <style scoped>
 .game-card {
+  --focus-ring-radius: var(--ui-game-card-radius);
   flex: 0 0 var(--ui-game-card-size);
   width: var(--ui-game-card-size);
   height: var(--ui-game-card-size);
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 86%, color-mix(in srgb, var(--neutral-1000) 6%, transparent));
-  border-radius: var(--ui-game-card-radius);
-  background: color-mix(in srgb, var(--color-surface-2) 94%, color-mix(in srgb, var(--neutral-0) 12%, transparent));
+  border: 1px solid transparent;
+  border-radius: var(--focus-ring-radius);
+  background: transparent;
   color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   transition:
     transform var(--ui-motion-fast),
     border-color var(--ui-motion-fast),
@@ -85,13 +96,13 @@ function handleSelect(): void {
 }
 
 .game-card:hover {
-  filter: brightness(1.03);
+  border-color: var(--ui-border-hover);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--ui-accent-glow) 12%, transparent);
 }
 
 .game-card[data-focused='true'] {
-  background: var(--color-focus-bg);
+  background: transparent;
   box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.02);
   z-index: 10;
 }
 
@@ -105,16 +116,14 @@ function handleSelect(): void {
 .game-card__image-shell {
   position: relative;
   overflow: hidden;
+  border-radius: inherit;
 }
 
 .game-card__image {
   position: relative;
   z-index: 1;
-  background-color: color-mix(in srgb, var(--color-surface-3) 94%, color-mix(in srgb, var(--neutral-0) 18%, transparent));
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
-  transform: scale(1.01);
+  background: transparent;
+  object-fit: contain;
   transition:
     transform 220ms ease,
     filter 220ms ease;
@@ -136,8 +145,7 @@ function handleSelect(): void {
     color-mix(in srgb, var(--neutral-0) 72%, transparent) 40%,
     color-mix(in srgb, var(--neutral-0) 94%, transparent)
   );
-  opacity: 0.92;
-  transform: translateY(6px);
+  opacity: 1;
   transition:
     opacity var(--ui-motion-fast),
     transform var(--ui-motion-fast);
@@ -148,7 +156,7 @@ function handleSelect(): void {
   overflow: hidden;
   font-size: var(--ui-game-card-title-font-size);
   line-height: 1.2;
-  font-weight: var(--ui-font-weight-bold);
+  font-weight: 400;
   color: var(--color-text-on-media);
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;

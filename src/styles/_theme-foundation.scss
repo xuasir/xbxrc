@@ -2,9 +2,9 @@ $color-neutral-0: #ffffff;
 $color-neutral-1000: #000000;
 
 // 基础色板：只保留可复用的原始色，不直接绑定具体组件或页面
-$color-slate-50: #f6f7fb;
-$color-slate-820: #1a1b1e;
-$color-slate-950: #0f0f10;
+$color-slate-50: #eef1f5;
+$color-slate-820: #17191b;
+$color-slate-950: #07090b;
 
 $color-blue-100: #f5f8ff;
 $color-blue-550: #4177db;
@@ -22,10 +22,10 @@ $color-frost-blue-740: #427af6;
 
 $color-steel-500: #3a537e;
 
-$color-brand-green: #107c10;
-$color-brand-green-600: #107c10;
-$color-brand-green-500: #158f15;
-$color-status-online: #24d158;
+$color-brand-green: #007738;
+$color-brand-green-600: #007738;
+$color-brand-green-500: #008746;
+$color-status-online: #73d9b2;
 
 // 透明度刻度：透明色规则优先在这里统一定义
 $alpha-4: 0.04;
@@ -49,21 +49,24 @@ $alpha-88: 0.88;
 $alpha-92: 0.92;
 
 $ui-font-family:
+  'Segoe Sans Variable Text',
+  'Segoe UI Variable Text',
   'Segoe UI',
-  'WestEuropean',
+  system-ui,
+  'PingFang SC',
   'Microsoft YaHei',
   sans-serif;
 
-// 基础刻度：以二级标题 20px 为目标，整体按 20 / 36 比例收缩界面密度
+// 基础间距沿 4 / 8 / 12 / 16 / 24 / 32px 尺度。
 $ui-space-1: 4px;
-$ui-space-2: 7px;
-$ui-space-3: 9px;
-$ui-space-4: 13px;
-$ui-space-5: 16px;
-$ui-space-6: 19px;
-$ui-space-7: 20px;
-$ui-space-8: 24px;
-$ui-space-9: 27px;
+$ui-space-2: 8px;
+$ui-space-3: 12px;
+$ui-space-4: 16px;
+$ui-space-5: 24px;
+$ui-space-6: 24px;
+$ui-space-7: 32px;
+$ui-space-8: 32px;
+$ui-space-9: 32px;
 
 // 统一标准间距命名，组件样式优先消费这组 token
 $ui-space-2xs: 2px;
@@ -77,21 +80,23 @@ $ui-space-3xl: $ui-space-7;
 $ui-space-4xl: $ui-space-8;
 $ui-space-5xl: $ui-space-9;
 
-$ui-radius-sm: 4px;
-$ui-radius-md: 8px;
-$ui-radius-lg: 12px;
+// 小圆角形成方正轮廓，控件、卡片和浮层共享同一尺度。
+$ui-radius-sm: 2px;
+$ui-radius-md: 4px;
+$ui-radius-lg: 6px;
+$ui-radius-panel: 8px;
 $ui-radius-pill: 999px;
 
-$ui-text-body-sm: 13px;
-$ui-text-body-md: 17px;
-$ui-text-body-lg: 19px;
+$ui-text-body-sm: 14px;
+$ui-text-body-md: 16px;
+$ui-text-body-lg: 18px;
 $ui-text-body-xl: 16px;
 $ui-text-title-md: 20px;
-$ui-text-title-lg: 31px;
+$ui-text-title-lg: 28px;
 
-$ui-line-height-tight: 1.1;
-$ui-line-height-default: 1.2;
-$ui-line-height-relaxed: 1.3;
+$ui-line-height-tight: 1.25;
+$ui-line-height-default: 1.4;
+$ui-line-height-relaxed: 1.5;
 
 $ui-font-weight-medium: 500;
 $ui-font-weight-semibold: 600;
@@ -146,8 +151,8 @@ $color-login-overlay-gradient-bottom-light-base: #e4ecf9;
 $color-login-button-border-dark-base: $color-neutral-0;
 $color-login-button-border-light-base: #39578a;
 
-$ui-page-text-dark: $color-slate-50;
-$ui-page-text-soft-dark: rgba($ui-page-text-dark, $alpha-72);
+$ui-page-text-dark: #ffffff;
+$ui-page-text-soft-dark: #b9bec6;
 $ui-page-bg-dark: $color-slate-950;
 $ui-page-glow-dark: rgba($color-page-glow-dark-base, $alpha-28);
 $ui-page-glow-soft-dark: rgba($color-page-glow-soft-dark-base, $alpha-14);
@@ -156,16 +161,16 @@ $ui-page-glow-strong-dark: rgba($color-page-glow-strong-dark-base, $alpha-26);
 // 主题色阶：dark/light 只在这里拼装，semantic 层只消费结果
 $ui-surface-panel-dark: rgba($color-panel-surface-dark-base, $alpha-82);
 $ui-surface-panel-strong-dark: rgba($color-panel-surface-dark-base, $alpha-88);
-$ui-border-panel-dark: rgba($color-panel-border-dark-base, $alpha-8);
+$ui-border-panel-dark: rgba(#9b9ea4, .17);
 
-$ui-focus-border-dark: rgba($color-focus-border-dark-base, 0.72);
+$ui-focus-border-dark: #ffffff;
 $ui-focus-bg-dark: rgba($color-focus-surface-dark-base, 0.12);
-$ui-focus-shadow-dark: rgba($color-focus-shadow-dark-base, 0.2);
+$ui-focus-shadow-dark: rgba(#ffffff, .19);
 $ui-icon-placeholder-border-dark: rgba($color-icon-placeholder-border-dark-base, $alpha-32);
 $ui-icon-placeholder-bg-dark: rgba($color-icon-placeholder-bg-dark-base, $alpha-4);
 
-$ui-page-text-light: $color-slate-950;
-$ui-page-text-soft-light: rgba($ui-page-text-light, $alpha-72);
+$ui-page-text-light: #202329;
+$ui-page-text-soft-light: #525963;
 $ui-page-bg-light: $color-slate-50;
 $ui-page-glow-light: rgba($color-page-glow-light-base, $alpha-28);
 $ui-page-glow-soft-light: rgba($color-page-glow-soft-light-base, $alpha-18);
@@ -175,9 +180,9 @@ $ui-surface-panel-light: rgba($color-panel-surface-light-base, $alpha-72);
 $ui-surface-panel-strong-light: rgba($color-panel-surface-light-base, $alpha-86);
 $ui-border-panel-light: rgba($color-panel-border-light-base, $alpha-18);
 
-$ui-focus-border-light: rgba($color-focus-border-light-base, 0.7);
+$ui-focus-border-light: #176376;
 $ui-focus-bg-light: rgba($color-focus-surface-light-base, 0.08);
-$ui-focus-shadow-light: rgba($color-focus-shadow-light-base, 0.16);
+$ui-focus-shadow-light: rgba(#176376, .19);
 $ui-icon-placeholder-border-light: rgba($color-icon-placeholder-border-light-base, $alpha-26);
 $ui-icon-placeholder-bg-light: rgba($color-icon-placeholder-bg-light-base, $alpha-66);
 
@@ -189,7 +194,7 @@ $ui-scrollbar-thumb-hover-light: rgba($color-neutral-1000, 0.24);
 $ui-nav-icon-filter-dark: brightness(0) invert(1);
 $ui-nav-icon-filter-light: none;
 
-$ui-layout-side-gap: 19px;
+$ui-layout-side-gap: 24px;
 $ui-status-online: $color-status-online;
 
 $ui-login-button-text-dark: $color-neutral-0;
@@ -208,4 +213,4 @@ $ui-login-overlay-glow-light: rgba($color-login-overlay-glow-light-base, $alpha-
 $ui-login-overlay-gradient-top-light: rgba($color-login-overlay-gradient-top-light-base, $alpha-6);
 $ui-login-overlay-gradient-bottom-light: rgba($color-login-overlay-gradient-bottom-light-base, $alpha-44);
 
-$ui-motion-fast: 160ms ease;
+$ui-motion-fast: 140ms ease;

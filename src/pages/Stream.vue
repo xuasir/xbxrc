@@ -1168,7 +1168,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   padding: 12px 16px;
   background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--brand-primary) 24%, transparent);
-  border-radius: 14px;
+  border-radius: var(--ui-radius-lg);
   color: var(--ui-page-text);
 }
 
@@ -1177,7 +1177,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   padding: 14px 16px;
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
+  border-radius: var(--ui-radius-panel);
   color: var(--ui-page-text-soft);
 }
 

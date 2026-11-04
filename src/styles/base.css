@@ -4,11 +4,18 @@
   box-sizing: border-box;
   margin: 0;
   font-weight: normal;
-  outline: none !important;
+  outline: none;
 }
 
 ul {
   list-style: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 body {
@@ -89,7 +96,7 @@ body {
   background: transparent;
 }
 
-/* 路由切换动画：淡入淡出 + 轻微缩放 */
+/* 路由切换只移动内容，保持壳层与导航位置稳定。 */
 .page-fade-enter-active,
 .page-fade-leave-active {
   transition: opacity 220ms ease, transform 220ms ease;
@@ -97,13 +104,54 @@ body {
 
 .page-fade-enter-from {
   opacity: 0;
-  transform: scale(0.98);
+  transform: translateY(4px);
 }
 
 .page-fade-leave-to {
   opacity: 0;
-  transform: scale(1.02);
+  transform: translateY(-4px);
 }
+
+.panel-slide-enter-active, .panel-slide-leave-active { transition: opacity 160ms ease, transform 160ms ease; }
+.panel-slide-enter-from { opacity: 0; transform: translateY(8px); }
+.panel-slide-leave-to { opacity: 0; transform: translateY(-4px); }
+@keyframes ui-content-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ui-focus-enter { from { transform: scale(.995); } to { transform: scale(1); } }
+.app-shell [data-focusable='true'] { transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, filter 160ms ease; }
+.app-shell [data-focused='true'] { animation: ui-focus-enter 160ms ease-out; }
+.app-shell .game-card:hover, .app-shell .console-status-card:hover { transform: translateY(-2px); }
+.app-shell [data-focusable='true']:active { transform: scale(.985); }
+
+@property --ui-focus-angle { syntax: '<angle>'; inherits: false; initial-value: 125deg; }
+@keyframes ui-focus-flow { to { --ui-focus-angle: 485deg; } }
+
+/* 轮廓独立于选中底色；原生输入通过外层安全容器显示同一流动渐变。 */
+:where([data-focusable='true']:is(button, a), .ui-focus-outline, .xcloud-page__search-shell) {
+  position: relative;
+  --focus-ring-border-width: 1px;
+  --shadow-xbox-focus: 0 0 0 2px var(--ui-page-bg), 0 0 12px var(--ui-focus-halo);
+}
+:where([data-focusable='true']:is(button, a), .ui-focus-outline, .xcloud-page__search-shell)::before {
+  content: '';
+  position: absolute;
+  /* 绝对定位以元素内边框为起点，补足边框宽度后向外留出 4px。 */
+  inset: calc(-4px - var(--focus-ring-border-width));
+  z-index: 20;
+  padding: var(--focus-ring-width);
+  border-radius: calc(var(--focus-ring-radius) + 4px);
+  background: conic-gradient(from var(--ui-focus-angle), var(--ui-focus-ring-start), var(--ui-focus-ring-end), var(--ui-focus-ring-start));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--ui-motion-fast);
+}
+[data-focusable='true']:is(button, a)[data-focused='true']::before,
+.ui-focus-outline[data-focused='true']::before,
+.ui-focus-outline:focus-within::before,
+.xcloud-page__search-shell:focus-within::before { opacity: 1; animation: ui-focus-flow 8s linear infinite; }
 
 /* 路由视图容器样式 */
 .app-view-container,
@@ -136,4 +184,13 @@ body {
   border-radius: 999px;
   background-color: color-mix(in srgb, var(--ui-scrollbar-thumb) 88%, transparent);
   background-clip: padding-box;
+}
+
+[data-focusable="true"]:focus-visible:not([data-focused="true"]), input:focus-visible:not([data-focused="true"]), select:focus-visible:not([data-focused="true"]), textarea:focus-visible:not([data-focused="true"]) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

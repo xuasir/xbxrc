@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { KeyboardEdit } from './keyboard-editing'
+import { useNavigationButtonLabels } from '@shared/gamepad/navigation-hints'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
@@ -9,6 +10,7 @@ import SettingModalShell from './SettingModalShell.vue'
 const props = defineProps<{ open: boolean, scopeId: string, title: string, value: string, mode?: 'text' | 'number', sensitive?: boolean }>()
 const emit = defineEmits<{ close: [], submit: [value: string] }>()
 const { t } = useI18n()
+const buttons = useNavigationButtonLabels()
 const draft = ref('')
 const uppercase = ref(false)
 const symbols = ref(false)
@@ -38,7 +40,7 @@ watch(() => props.open, (open) => {
 </script>
 
 <template>
-  <SettingModalShell :open="props.open" :scope-id="props.scopeId" :title="props.title" :hint="t('setting.experience.input.keyboardHint')" :default-focus-id="`${props.scopeId}.key.0.0`" :width="props.mode === 'number' ? 'min(100%, var(--ui-settings-editor-width))' : 'min(100%, var(--ui-settings-keyboard-width))'" @close="emit('close')">
+  <SettingModalShell :open="props.open" :scope-id="props.scopeId" :title="props.title" :hint="t('setting.experience.input.keyboardHint', { confirm: buttons.south, back: buttons.east })" :default-focus-id="`${props.scopeId}.key.0.0`" :width="props.mode === 'number' ? 'min(100%, var(--ui-settings-editor-width))' : 'min(100%, var(--ui-settings-keyboard-width))'" @close="emit('close')">
     <div class="setting-keyboard">
       <div class="setting-keyboard__preview" role="textbox" aria-readonly="true" :aria-label="props.title">
         {{ preview || t('setting.experience.input.empty') }}
@@ -90,7 +92,7 @@ watch(() => props.open, (open) => {
 
 <style scoped>
 .setting-keyboard { display: flex; flex-direction: column; gap: var(--ui-settings-form-gap); min-width: 0; }
-.setting-keyboard__preview { min-height: var(--ui-settings-control-height); padding: var(--ui-space-md) var(--ui-settings-control-padding); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-md); background: var(--ui-surface-panel); color: var(--color-text-primary); font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-relaxed); overflow-wrap: anywhere; }
+.setting-keyboard__preview { min-height: var(--ui-settings-control-height); padding: var(--ui-space-md) var(--ui-settings-control-padding); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-md); background: var(--ui-material-glass); color: var(--color-text-primary); font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-relaxed); overflow-wrap: anywhere; }
 .setting-keyboard__grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--ui-settings-keyboard-gap); }
 .setting-keyboard__grid--number { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .setting-keyboard__key { min-width: 0; height: var(--ui-settings-control-height); padding: 0; }

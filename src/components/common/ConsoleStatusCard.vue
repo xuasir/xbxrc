@@ -23,6 +23,7 @@ interface ConsoleStatusCardProps {
   neighbors?: SpatialNavNeighbors
   index?: SpatialNavNodeIndex
   disabled?: boolean
+  selected?: boolean
   onClick?: () => void
 }
 
@@ -32,6 +33,7 @@ const props = withDefaults(defineProps<ConsoleStatusCardProps>(), {
   neighbors: undefined,
   index: undefined,
   disabled: false,
+  selected: false,
   onClick: undefined,
 })
 
@@ -49,6 +51,7 @@ const resolvedAriaLabel = computed(() => {
     class="console-status-card"
     :scope-id="props.scopeId"
     :disabled="props.disabled"
+    :aria-pressed="props.selected"
     :aria-label="resolvedAriaLabel"
     @click="props.onClick"
   >
@@ -65,111 +68,15 @@ const resolvedAriaLabel = computed(() => {
 </template>
 
 <style scoped>
-.console-status-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  flex: 0 0 clamp(var(--ui-console-card-min-width), 24vw, var(--ui-console-card-width));
-  width: clamp(var(--ui-console-card-min-width), 24vw, var(--ui-console-card-width));
-  min-height: clamp(var(--ui-console-card-min-height-min), 30vw, var(--ui-console-card-min-height));
-  padding: var(--ui-console-card-padding);
-  border-radius: var(--ui-console-card-radius);
-  border: 1px solid var(--ui-border-subtle);
-  background: var(--ui-surface-panel);
-  color: var(--ui-page-text);
-  text-align: left;
-  overflow: hidden;
-  cursor: pointer;
-  box-shadow: var(--ui-shadow-floating);
-  transition:
-    border-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast),
-    transform var(--ui-motion-fast);
-}
-
-.console-status-card[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.02);
-  z-index: 10;
-}
-
-.console-status-card[data-focused='true'] .console-status-card__title,
-.console-status-card[data-focused='true'] .console-status-card__status,
-.console-status-card[data-focused='true'] .console-status-card__description {
-  color: var(--ui-focus-text);
-}
-
-.console-status-card__media,
-.console-status-card__body {
-  position: relative;
-  z-index: 1;
-}
-
-.console-status-card__media {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: var(--ui-console-card-media-height);
-  padding-top: 2px;
-}
-
-.console-status-card__image {
-  width: min(
-    100%,
-    clamp(var(--ui-console-card-image-min-width), 15vw, var(--ui-console-card-image-width))
-  );
-  height: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 16px 18px color-mix(in srgb, var(--neutral-0) 34%, transparent))
-    drop-shadow(0 6px 8px color-mix(in srgb, var(--neutral-0) 18%, transparent));
-}
-
-.console-status-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.console-status-card__title {
-  font-size: var(--ui-console-card-title-size);
-  line-height: 1;
-  font-weight: var(--ui-font-weight-bold);
-  letter-spacing: -0.03em;
-  color: var(--ui-page-text);
-}
-
-.console-status-card__status {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: var(--ui-console-card-status-size);
-  line-height: 1.2;
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--ui-page-text-soft);
-  text-overflow: ellipsis;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.console-status-card__description {
-  display: -webkit-box;
-  overflow: hidden;
-  margin-top: 10px;
-  font-size: var(--ui-console-card-description-size);
-  line-height: 1.18;
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--ui-page-text-soft);
-  opacity: 0.82;
-  text-overflow: ellipsis;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-:global(html[data-ui-density='compact']) .console-status-card__description,
-:global(html[data-ui-density='narrow']) .console-status-card__description {
-  margin-top: 8px;
-}
+.console-status-card { --focus-ring-radius: var(--ui-radius-lg); position: relative; display: flex; align-items: center; gap: var(--space-16); min-width: 0; width: 100%; min-height: 88px; padding: var(--space-12) var(--space-16); border: 1px solid var(--ui-border-subtle); border-radius: var(--focus-ring-radius); background: var(--ui-material-glass); color: var(--color-text-primary); text-align: left; cursor: pointer; box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low); transition: background var(--ui-motion-fast), border-color var(--ui-motion-fast), box-shadow var(--ui-motion-fast); }
+.console-status-card[aria-pressed='true'] { background: var(--ui-choice-selected-bg); border-color: var(--ui-choice-selected-border); box-shadow: none; }
+.console-status-card:hover { background: var(--ui-material-hover); border-color: transparent; }
+.console-status-card[aria-pressed='true']:hover { background: var(--ui-choice-selected-bg); border-color: var(--ui-choice-selected-border); }
+.console-status-card[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); z-index: 1; }
+.console-status-card__media { flex: 0 0 48px; height: 60px; }
+.console-status-card__image { display: block; width: 100%; height: 100%; object-fit: contain; }
+.console-status-card__body { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.console-status-card__title { font-size: 16px; line-height: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.console-status-card__status, .console-status-card__description { font-size: 12px; line-height: 18px; color: var(--color-text-secondary); }
+.console-status-card__description { display: none; }
 </style>
