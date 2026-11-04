@@ -8,11 +8,12 @@ const props = defineProps<{
   visible: boolean
   mount: StreamEnhancementMountState
   model: StreamExperienceMetricsViewModel
+  suppressNotice?: boolean
 }>()
 const { t } = useI18n()
 const panelVisible = computed(() => props.visible && props.mount.phase === 'mounted')
 const rows = computed(() => RUNTIME_METRIC_KEYS.map(key => ({ key, value: experienceMetricValue(props.model, key) })))
-const notice = computed(() => props.model.notice ? t(`streamPage.experience.notices.${props.model.notice}`) : '')
+const notice = computed(() => !props.suppressNotice && props.model.notice ? t(`streamPage.experience.notices.${props.model.notice}`) : '')
 </script>
 
 <template>

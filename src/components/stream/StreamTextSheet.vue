@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamTextSheetProps {
   open: boolean
   scopeId: string
   loading?: boolean
+  error?: string
 }
 
 const props = withDefaults(defineProps<StreamTextSheetProps>(), {
@@ -45,17 +47,40 @@ function handleSubmit(): void {
   emit('submit', draftValue.value)
 }
 
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.defaultPrevented || !navigationEngine.isTopmostScope(props.scopeId))
+    return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    handleClose()
+  }
+  if (event.key === 'Tab') {
+    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])].map(node => node.querySelector<HTMLInputElement>('input') ?? node)
+    const index = nodes.indexOf(document.activeElement as HTMLElement)
+    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
+    if (next) {
+      event.preventDefault()
+      navigationEngine.focusElement(next, false)
+    }
+  }
+}
+
 watch(
   () => props.open,
   (open) => {
+    window.removeEventListener('keydown', handleKeydown, true)
     if (!open) {
       draftValue.value = ''
       return
     }
     draftValue.value = ''
+    window.addEventListener('keydown', handleKeydown, true)
     void focusInput()
   },
+  { immediate: true },
 )
+onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true))
 </script>
 
 <template>
@@ -69,6 +94,7 @@ watch(
         class="stream-text-sheet__panel"
         :active="props.open"
         :default-focus-id="defaultFocusId"
+        role="dialog" aria-modal="true" :aria-label="t('streamPage.text.title')" :aria-busy="props.loading"
       >
         <header class="stream-text-sheet__header">
           <p class="stream-text-sheet__eyebrow">
@@ -101,6 +127,10 @@ watch(
           >
         </Focusable>
 
+        <p v-if="props.error" class="stream-text-sheet__error" role="alert">
+          {{ props.error }}
+        </p>
+
         <div class="stream-text-sheet__actions">
           <Focusable
             :id="cancelNodeId"
@@ -131,6 +161,7 @@ watch(
 </template>
 
 <style scoped>
+.stream-text-sheet__error { margin: 12px 0 0; color: var(--ui-status-danger); font-size: 13px; line-height: 1.5; }
 .stream-text-sheet-layer {
   position: fixed;
   inset: 0;

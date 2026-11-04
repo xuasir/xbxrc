@@ -4,6 +4,7 @@ import type {
 } from '@shared/rpc/streaming'
 import type { StreamRuntimePhase } from '../runtime/runtime-contract'
 import type { resolveProgressError, resolveStreamError, SessionUiPhase } from '../session'
+import type { StreamCleanupState, StreamFailureSnapshot } from '../stream-errors'
 import type {
   StreamErrorKind,
   StreamingSessionProgress,
@@ -34,11 +35,15 @@ export interface StreamExecutionViewState {
   errorKind: StreamErrorKind
   startupBoundedRetry: StreamingStartupBoundedRetry | null
   lifecyclePhase: StreamSessionLifecyclePhase
+  failure?: StreamFailureSnapshot | null
+  cleanupState?: StreamCleanupState
+  hasPresentedFrame?: boolean
 }
 
 export type StreamExecutionViewAction
   = | { type: 'targetMissing', message: string }
-    | { type: 'resolvedError', resolved: ResolvedStreamErrorSnapshot }
+    | { type: 'resolvedError', resolved: ResolvedStreamErrorSnapshot, failure?: StreamFailureSnapshot }
+    | { type: 'cleanupChanged', state: StreamCleanupState }
     | { type: 'startupEvent', event: StreamingStartupEvent, statusText: string }
     | {
       type: 'sessionProgress'
@@ -67,10 +72,12 @@ export function reduceViewState(
   const terminal = state.sessionUiPhase === 'closing'
     || state.sessionUiPhase === 'closed'
     || state.sessionUiPhase === 'failed'
-  if (terminal && !['startRequested', 'retryRequested', 'disconnecting', 'disconnected', 'targetMissing'].includes(action.type)) {
+  if (terminal && !['startRequested', 'retryRequested', 'disconnecting', 'disconnected', 'targetMissing', 'cleanupChanged'].includes(action.type)) {
     return state
   }
   switch (action.type) {
+    case 'cleanupChanged':
+      return { ...state, cleanupState: action.state }
     case 'targetMissing':
       return {
         ...state,
@@ -84,12 +91,14 @@ export function reduceViewState(
       return {
         ...state,
         errorKind: action.resolved.kind,
+        failure: action.failure ?? null,
         errorText: action.resolved.message,
         errorDiagnosticText: action.resolved.diagnosticSummary ?? '',
         startupBoundedRetry: action.resolved.boundedRetry ?? null,
         lifecyclePhase: 'failed',
         sessionUiPhase: 'failed',
         isLoading: false,
+        isConnected: false,
       }
     case 'startupEvent':
       if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
@@ -169,6 +178,9 @@ export function reduceViewState(
         errorText: '',
         errorDiagnosticText: '',
         startupBoundedRetry: null,
+        failure: null,
+        cleanupState: 'idle',
+        hasPresentedFrame: false,
       }
     case 'startPreparing':
       return {
@@ -179,6 +191,7 @@ export function reduceViewState(
     case 'retryRequested':
       return {
         ...state,
+        failure: null,
         errorText: '',
         errorDiagnosticText: '',
         startupBoundedRetry: null,
@@ -224,6 +237,7 @@ export function reduceViewState(
             statusText: action.statusText,
             sessionUiPhase: 'connected',
             lifecyclePhase: 'playing',
+            hasPresentedFrame: true,
           }
     case 'runtimePhaseChanged':
       if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
@@ -250,6 +264,7 @@ export function reduceViewState(
             isLoading: false,
             sessionUiPhase: 'connected',
             lifecyclePhase: 'playing',
+            hasPresentedFrame: true,
           }
     case 'runtimeLaunchRequested':
       if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {

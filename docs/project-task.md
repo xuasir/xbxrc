@@ -8,6 +8,7 @@
 
 | ID | Task | Status | Started On | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-11-03-stream-error-experience | 完成串流错误分类、统一弹窗、等待与局部反馈 P0/P1/P2 | Completed | 2026-11-03 | [RFC](rfcs/2026-11-03-stream-error-experience.md) / [Report](reports/2026-11-03-stream-error-experience.md)。错误快照、统一卡、清理/导航/登录/关机竞态、等待与局部回滚完成；55 文件 574 项测试、lint/typecheck/build/diff check 通过。真实 Vue 模拟场景与深浅/窄窗口验证通过；真实串流、系统操作和物理手柄按约定实机验收。 |
 | 2026-11-03-settings-update-empty-notes | 修正更新说明预览与空内容展示 | Completed | 2026-11-03 | 核对发行清单 notes 为空；空字符串/空白/null 隐藏说明区块，updater 10 项测试、lint/typecheck 通过；重做空说明截图并修正[报告](reports/2026-11-03-settings-experience-completion.md)。 |
 | 2026-11-03-settings-experience-completion | 完成设置页排布、交互、更新、高级连接与焦点裁切改造（XBX） | Completed | 2026-11-03 | [RFC](rfcs/2026-11-03-settings-experience-completion.md) / [Report](reports/2026-11-03-settings-experience-completion.md)。左右分栏/毛玻璃/码率直接展示/单环；原生输入A开启文字/数字键盘，测试Menu切操作区，录入Menu+View取消与A释放屏障；控件统一48/44px。53文件549项测试、lint/typecheck/build/diff check通过；真实Vue+键盘桥及模拟物理标准态验证三种窗口/深浅主题/录入保存/返回/测试预算。系统更新、中继连接与真实物理手柄按约定实机验收。 |
 | 2026-11-03-stream-metrics-layout-correction | 修正运行条吸顶、五项显示与诊断右侧三分之一布局 | Completed | 2026-11-03 | 按用户实机反馈移除密度隐藏和满宽规则；运行条顶距 0、12% 实色底，诊断固定三分之一宽、55% 实色底。真实 Vue 复验 800 / 1024 / 1280px：五项可见、顶距 0、面板宽占比 33.333%；lint、typecheck、build、diff check 通过。证据回写原 [Report](reports/2026-11-03-stream-metrics-low-interference.md)。 |

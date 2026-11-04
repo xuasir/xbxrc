@@ -13,6 +13,12 @@ const harness = vi.hoisted(() => ({
   cancelStartup: vi.fn(),
   closeSession: vi.fn(),
   config: vi.fn(),
+  saveConfig: vi.fn(),
+  logout: vi.fn(),
+  powerOff: vi.fn(),
+  captureInput: vi.fn(),
+  applyDisplayOptions: vi.fn(),
+  progress: vi.fn(),
   closeRuntime: vi.fn(),
   startRuntime: vi.fn(),
   resetInput: vi.fn(),
@@ -30,18 +36,20 @@ vi.mock('vue', async (original) => {
 vi.mock('../services/events', () => ({ events: { on: vi.fn(() => () => {}) } }))
 vi.mock('../services/rpc', () => ({
   rpc: {
-    config: { get: harness.config },
+    config: { get: harness.config, set: harness.saveConfig },
+    auth: { logout: harness.logout },
+    data: { powerOffConsole: harness.powerOff },
     streaming: {
       startSession: harness.startSession,
       cancelStartup: harness.cancelStartup,
       closeSession: harness.closeSession,
-      getSessionProgress: vi.fn(async () => null),
+      getSessionProgress: harness.progress,
     },
     runtimeTrace: { recordEvent: harness.trace },
   },
 }))
 vi.mock('../pages/stream/stream-input-route-controller', () => ({
-  streamInputRouteController: { resetOnLeaveStream: harness.resetInput },
+  streamInputRouteController: { resetOnLeaveStream: harness.resetInput, captureUiInput: harness.captureInput },
 }))
 vi.mock('./runtime/runtime-host', () => ({
   useStreamRuntimeHost: (options: typeof harness.runtimeOptions) => {
@@ -57,6 +65,7 @@ vi.mock('./runtime/runtime-host', () => ({
       setExperienceMetricsEnabled: vi.fn(),
       setBrowserDiagnosticsEnabled: vi.fn(),
       setRustDiagnosticsEnabled: vi.fn(),
+      applyDisplayOptions: harness.applyDisplayOptions,
     }
   },
 }))
@@ -86,11 +95,11 @@ function started(id = 'session-1'): StreamingStartSessionResult {
 }
 
 let scope: EffectScope
-function setup() {
+function setup(router = { push: vi.fn(async () => {}) }) {
   scope = effectScope()
   return scope.run(() => useStreamExecution({
-    route: { meta: {}, params: { targetId: 'console-1' }, query: {} } as unknown as RouteLocationNormalizedLoaded,
-    router: { push: vi.fn(async () => {}) } as unknown as Router,
+    route: { meta: {}, params: { targetId: 'console-1' }, query: { remoteManagementEnabled: '1' }, fullPath: '/xhome/stream/console-1' } as unknown as RouteLocationNormalizedLoaded,
+    router: router as unknown as Router,
     t: key => key,
   }))!
 }
@@ -101,7 +110,7 @@ async function flush() {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance'] })
   vi.stubGlobal('window', { setTimeout, clearTimeout, setInterval, clearInterval, dispatchEvent: vi.fn() })
   vi.clearAllMocks()
   harness.mount.length = 0
@@ -113,6 +122,11 @@ beforeEach(() => {
   harness.closeRuntime.mockResolvedValue(undefined)
   harness.startRuntime.mockResolvedValue(undefined)
   harness.resetInput.mockResolvedValue(undefined)
+  harness.captureInput.mockResolvedValue(undefined)
+  harness.progress.mockResolvedValue(started().progress)
+  harness.logout.mockResolvedValue({ loggedOut: true })
+  harness.powerOff.mockResolvedValue({ accepted: true })
+  harness.saveConfig.mockResolvedValue({})
 })
 afterEach(() => {
   scope?.stop()
@@ -199,5 +213,171 @@ describe('stream execution resource lifecycle', () => {
     stopped.resolve()
     await Promise.all([first, second])
     expect(harness.closeSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains the original failure while cleanup is pending, then retries cleanup before opening a new session', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    harness.runtimeOptions?.onFrameReady()
+    harness.closeSession.mockRejectedValueOnce(new Error('remoteStopFailed'))
+    harness.runtimeOptions?.onConnectionStateChange('failed')
+    expect(vm.execution.failure.value).toMatchObject({ phase: 'playback', error: { kind: 'connectionFailed', code: 'connectionFailed', retryable: true } })
+    const failure = vm.execution.failure.value
+    await flush()
+    expect(vm.execution.cleanupState.value).toBe('pending')
+    expect(vm.execution.failure.value).toBe(failure)
+    expect(vm.execution.sessionId.value).toBe('')
+    expect(harness.captureInput).toHaveBeenCalledWith('failed')
+    await vm.actions.handleRetry()
+    expect(harness.closeSession).toHaveBeenCalledTimes(2)
+    expect(harness.startSession).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the failure readable when cleanup fails again and creates no overlapping session', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    harness.closeSession.mockRejectedValue(new Error('remoteStopFailed'))
+    harness.runtimeOptions?.onRuntimeError('iceConnectionTimeout')
+    await flush()
+    const failure = vm.execution.failure.value
+    await expect(vm.actions.handleRetry()).rejects.toThrow('previousExecutionCleanupPending')
+    expect(vm.execution.failure.value).toBe(failure)
+    expect(vm.execution.cleanupState.value).toBe('pending')
+    expect(harness.startSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('honors exit requested during teardown and cancels the pending retry', async () => {
+    const router = { push: vi.fn(async () => {}) }
+    const vm = setup(router)
+    harness.mount[0]()
+    await flush()
+    const stop = deferred<void>()
+    harness.closeRuntime.mockReturnValue(stop.promise)
+    const retry = vm.actions.handleRetry()
+    const exit = vm.actions.disconnectStream({ navigateBack: true })
+    await flush()
+    stop.resolve()
+    await Promise.all([retry, exit])
+    expect(harness.startSession).toHaveBeenCalledTimes(1)
+    expect(router.push).toHaveBeenCalledWith('/xhome')
+  })
+
+  it('opens sign-in after cleanup and explicit logout, preserving the original target', async () => {
+    const router = { push: vi.fn(async () => {}) }
+    const vm = setup(router)
+    harness.startSession.mockRejectedValue({ details: { errorKind: 'auth', retryable: false, phase: 'resolvingContext' } })
+    harness.mount[0]()
+    await flush()
+    expect(vm.execution.failure.value?.error.kind).toBe('auth')
+    await vm.actions.handleRetry()
+    expect(harness.startSession).toHaveBeenCalledTimes(1)
+    await vm.actions.relogin()
+    expect(harness.logout).toHaveBeenCalledTimes(1)
+    expect(router.push).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/xhome/stream/console-1' } })
+    expect(harness.closeRuntime.mock.invocationCallOrder[0]).toBeLessThan(harness.logout.mock.invocationCallOrder[0])
+  })
+
+  it('keeps an older sign-in request from navigating after an explicit return', async () => {
+    const router = { push: vi.fn(async () => {}) }
+    const vm = setup(router)
+    const logout = deferred<{ loggedOut: boolean }>()
+    harness.logout.mockReturnValue(logout.promise)
+    const login = vm.actions.relogin()
+    await flush()
+    await vm.actions.disconnectStream({ navigateBack: true })
+    logout.resolve({ loggedOut: true })
+    await login
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/xhome')
+  })
+
+  it.each(['accepted', 'rejected'] as const)('absorbs a late %s shutdown result after the user returns', async (outcome) => {
+    const router = { push: vi.fn(async () => {}) }
+    const vm = setup(router)
+    harness.mount[0]()
+    await flush()
+    const command = deferred<{ accepted: boolean }>()
+    harness.powerOff.mockReturnValue(command.promise)
+    const powerOff = vm.actions.powerOffAndDisconnect()
+    await flush()
+    expect(harness.powerOff).toHaveBeenCalledTimes(1)
+    await vm.actions.disconnectStream({ navigateBack: true })
+    if (outcome === 'accepted')
+      command.resolve({ accepted: true })
+    else
+      command.reject(new Error('late shutdown'))
+    await powerOff
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/xhome')
+  })
+
+  it('retains the original failure after a navigation rejection and allows returning again', async () => {
+    const router = { push: vi.fn().mockRejectedValueOnce(new Error('navigation')) }
+    const vm = setup(router)
+    harness.mount[0]()
+    await flush()
+    harness.runtimeOptions?.onRuntimeError('iceConnectionTimeout')
+    await flush()
+    const failure = vm.execution.failure.value
+    await expect(vm.actions.disconnectStream({ navigateBack: true })).rejects.toThrow('streamNavigationFailed')
+    expect(vm.execution.failure.value).toBe(failure)
+    router.push.mockResolvedValue(undefined)
+    await vm.actions.disconnectStream({ navigateBack: true })
+    expect(router.push).toHaveBeenCalledTimes(2)
+  })
+
+  it('restores display state on save failure and isolates rollback from a newer execution', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    const draft = { sharpness: 3, saturation: 105, contrast: 105, brightness: 100 }
+    harness.saveConfig.mockRejectedValueOnce(new Error('save'))
+    await expect(vm.actions.saveDisplayOptions(draft)).rejects.toThrow('save')
+    expect(harness.applyDisplayOptions.mock.calls.at(-1)?.[0]).toEqual({ sharpness: 0, saturation: 100, contrast: 100, brightness: 100 })
+    const save = deferred<void>()
+    harness.saveConfig.mockReturnValue(save.promise)
+    const pending = vm.actions.saveDisplayOptions(draft)
+    const result = expect(pending).rejects.toThrow('late save')
+    await vm.actions.disconnectStream()
+    const calls = harness.applyDisplayOptions.mock.calls.length
+    save.reject(new Error('late save'))
+    await result
+    expect(harness.applyDisplayOptions).toHaveBeenCalledTimes(calls)
+  })
+
+  it('restores super-resolution on save failure and keeps late rollback out of the new config', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    harness.saveConfig.mockRejectedValueOnce(new Error('save'))
+    await expect(vm.actions.setSuperResolutionExperimental(true)).rejects.toThrow('save')
+    expect(vm.execution.superResolutionExperimental.value).toBe(false)
+    const save = deferred<void>()
+    harness.saveConfig.mockReturnValueOnce(save.promise)
+    const pending = vm.actions.setSuperResolutionExperimental(true)
+    const result = expect(pending).rejects.toThrow('late save')
+    await vm.actions.handleRetry()
+    save.reject(new Error('late save'))
+    await result
+    expect(vm.execution.superResolutionExperimental.value).toBe(false)
+  })
+
+  it('shows a waiting warning once per interruption and rearms it after actual frame progress', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    harness.runtimeOptions?.onPresentationMilestoneChange({ milestone: 'connected' })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(vm.execution.warningVisible.value).toBe(true)
+    expect(vm.execution.warningPhase.value).toBe('firstFrame')
+    vm.actions.dismissWarning()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(vm.execution.warningVisible.value).toBe(false)
+    harness.runtimeOptions?.onFrameReady()
+    expect(vm.execution.warningPhase.value).toBe('playback')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(vm.execution.warningVisible.value).toBe(true)
+    harness.runtimeOptions?.onFrameReady()
+    expect(vm.execution.warningVisible.value).toBe(false)
   })
 })

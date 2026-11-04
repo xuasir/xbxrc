@@ -624,6 +624,8 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         if (!isRuntimeTokenActive(token) || runtime.value !== currentRuntime || intentVersion !== microphoneIntentVersion)
           return false
         applyMicrophoneResult(result)
+        if (result !== enabled)
+          microphoneState.value = previousState
         return result
       }
       catch (error) {

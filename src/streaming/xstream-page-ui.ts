@@ -5,7 +5,7 @@ import { streamInputRouteController } from '../pages/stream/stream-input-route-c
 
 type BrowserTimeout = number
 
-export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'diagnosticDetails' | 'display' | 'audio' | 'text'
+export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'diagnosticDetails' | 'display' | 'audio' | 'text' | 'warning' | 'exportError'
 export type StreamPageOverlayState = 'none' | 'loading' | 'error' | 'connecting'
 
 interface UseXStreamPageUiOptions {
@@ -34,6 +34,8 @@ function syncStreamUiInputMode(enabled: boolean, overlayOpen: boolean): void {
 }
 
 function captureReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): UiCaptureReason {
+  if (sheet === 'warning')
+    return 'warning'
   if (sheet === 'menu') {
     return 'menu'
   }
@@ -44,6 +46,8 @@ function captureReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): U
 }
 
 function releaseReasonForSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): UiReleaseReason {
+  if (sheet === 'warning')
+    return 'warning-close'
   if (sheet === 'menu') {
     return 'menu-close'
   }
@@ -63,12 +67,14 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   const lastOpenedSheet = ref<Exclude<StreamPageActiveSheet, 'none'> | null>(null)
 
   const showFailedSheet = computed(
-    () => options.getHasError() && options.getErrorKind() === 'connectionFailed',
+    () => options.getHasError(),
   )
   const showWarningSheet = computed(
-    () => options.getWarningVisible() && !options.getHasError(),
+    () => activeSheet.value === 'warning' && options.getWarningVisible() && !options.getHasError(),
   )
   const overlayState = computed<StreamPageOverlayState>(() => {
+    if (showFailedSheet.value)
+      return 'none'
     if (options.getIsLoading()) {
       return 'loading'
     }
@@ -121,6 +127,8 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   }
 
   function openSheet(sheet: Exclude<StreamPageActiveSheet, 'none'>): void {
+    if (options.getHasError())
+      return
     revealChrome()
     const previous = activeSheet.value
     const previousCapture = previous !== 'none' && previous !== sheet
@@ -188,8 +196,16 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
     { immediate: true },
   )
 
-  watch(showFailedSheet, (visible, wasVisible) =>
-    syncOverlayCapture(visible, wasVisible, 'failed', 'failed-close'))
+  watch(showFailedSheet, (visible, wasVisible) => {
+    syncOverlayCapture(visible, wasVisible, 'failed', 'failed-close')
+    if (visible)
+      closeSheet()
+  }, { flush: 'sync' })
+
+  watch(() => options.getWarningVisible(), (visible) => {
+    if (!visible)
+      closeSheet('warning')
+  }, { flush: 'sync' })
 
   watch(showWarningSheet, (visible, wasVisible) =>
     syncOverlayCapture(visible, wasVisible, 'warning', 'warning-close'))
@@ -210,6 +226,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
 
   return {
     state: {
+      hasInteractiveSheet: computed(() => showFailedSheet.value || activeSheet.value !== 'none'),
       overlayState,
       showFailedSheet,
       showWarningSheet,
@@ -220,6 +237,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
       isDisplaySheetOpen: computed(() => activeSheet.value === 'display'),
       isAudioSheetOpen: computed(() => activeSheet.value === 'audio'),
       isTextSheetOpen: computed(() => activeSheet.value === 'text'),
+      isExportErrorSheetOpen: computed(() => activeSheet.value === 'exportError'),
     },
     actions: {
       revealChrome,

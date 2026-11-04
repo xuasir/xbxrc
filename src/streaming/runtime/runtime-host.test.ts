@@ -197,6 +197,22 @@ describe('runtime host lifecycle', () => {
     expect(await disabling).toBe(false)
     await vm.closeRuntime()
   })
+  it('restores a rejected microphone enable intent and accepts normal disable returning false', async () => {
+    const runtime = { ...port(), setMicrophoneEnabled: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true).mockResolvedValueOnce(false) }
+    harness.factory.mockReturnValue(runtime)
+    const vm = host()
+    const launch = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(1_000)
+    await launch
+    expect(await vm.toggleMicrophone()).toBe(false)
+    expect(vm.microphoneState.value.desiredEnabled).toBe(false)
+    expect(await vm.toggleMicrophone()).toBe(true)
+    expect(vm.microphoneState.value.open).toBe(true)
+    expect(await vm.toggleMicrophone()).toBe(false)
+    expect(vm.microphoneState.value.open).toBe(false)
+    expect(runtime.setMicrophoneEnabled.mock.calls.map(call => call[0])).toEqual([true, true, false])
+    await vm.closeRuntime()
+  })
   it('absorbs close during the launch delay before creating a runtime', async () => {
     harness.factory.mockImplementation(port)
     const vm = host()

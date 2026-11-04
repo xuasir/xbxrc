@@ -560,6 +560,17 @@ export interface StreamEnhancementMountSnapshot {
 
 export type StreamErrorKind
   = | 'none'
+    | 'sessionCreate'
+    | 'sessionReady'
+    | 'runtime'
+    | 'network'
+    | 'auth'
+    | 'target'
+    | 'hostRemotePlayUnavailable'
+    | 'hostRegistrationRetryExhausted'
+    | 'cleanupPending'
+    | 'powerOffFailed'
+    | 'navigationFailed'
     | 'connectionFailed'
     | 'connectionClosed'
     | 'invalidAnswer'

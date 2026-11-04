@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watch } from 'vue'
+import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamActionItem {
@@ -15,6 +16,7 @@ interface StreamActionSheetProps {
   title: string
   eyebrow?: string
   items: readonly StreamActionItem[]
+  error?: string
 }
 
 const props = withDefaults(defineProps<StreamActionSheetProps>(), {
@@ -26,17 +28,30 @@ const emit = defineEmits<{
   (event: 'select', id: string): void
 }>()
 
-const defaultFocusId = computed(() => props.items[0]?.id)
+const defaultFocusId = computed(() => props.items.find(item => !item.disabled)?.id)
 
 function handleClose(): void {
   emit('close')
 }
 
 function handleSelect(id: string): void {
-  emit('select', id)
+  if (props.items.find(item => item.id === id && !item.disabled))
+    emit('select', id)
 }
 
 function handleEscapeKeydown(event: KeyboardEvent): void {
+  if (event.defaultPrevented || !navigationEngine.isTopmostScope(props.scopeId))
+    return
+  if (event.key === 'Tab') {
+    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
+    const index = nodes.indexOf(document.activeElement as HTMLElement)
+    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
+    if (next) {
+      event.preventDefault()
+      navigationEngine.focusElement(next, false)
+    }
+    return
+  }
   if (event.key !== 'Escape') {
     return
   }
@@ -74,6 +89,7 @@ onBeforeUnmount(() => {
           class="stream-action-sheet__panel"
           :active="props.open"
           :default-focus-id="defaultFocusId"
+          role="dialog" aria-modal="true" :aria-label="title"
         >
           <header class="stream-action-sheet__header">
             <p v-if="props.eyebrow" class="stream-action-sheet__eyebrow">
@@ -83,6 +99,9 @@ onBeforeUnmount(() => {
               {{ props.title }}
             </h2>
           </header>
+          <p v-if="error" class="stream-action-sheet__error" role="alert">
+            {{ error }}
+          </p>
 
           <div class="stream-action-sheet__list">
             <Focusable
@@ -107,6 +126,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.stream-action-sheet__error { margin: 0 16px 12px; color: var(--ui-status-danger); font-size: 13px; line-height: 1.5; }
 .stream-action-sheet-layer {
   position: fixed;
   inset: 0;

@@ -19,6 +19,8 @@ interface SettingDisplayOptionsSheetProps {
   title: string
   hint?: string
   currentValue: DisplayOptionsValue | null
+  loading?: boolean
+  error?: string
 }
 
 const props = withDefaults(defineProps<SettingDisplayOptionsSheetProps>(), {
@@ -92,6 +94,8 @@ function handleClose(): void {
 }
 
 function applyPreset(key: DisplayPresetKey): void {
+  if (props.loading)
+    return
   const preset = DISPLAY_PRESETS[key]
   draft.sharpness = preset.sharpness
   draft.saturation = preset.saturation
@@ -105,7 +109,8 @@ function createPresetNodeId(key: DisplayPresetKey): string {
 }
 
 function handleSubmit(): void {
-  emit('submit', { ...draft })
+  if (!props.loading)
+    emit('submit', { ...draft })
 }
 
 watch(
@@ -125,6 +130,7 @@ watch(
     :hint="props.hint"
     width="min(100%, 640px)"
     :default-focus-id="defaultFocusId"
+    :busy="props.loading"
     @close="handleClose"
   >
     <section class="setting-display-options-sheet__section">
@@ -142,6 +148,7 @@ watch(
           :class="{ 'setting-display-options-sheet__preset--active': activePresetKey === presetKey }"
           :scope-id="props.scopeId"
           :on-back="handleClose"
+          :disabled="props.loading"
           @click="applyPreset(presetKey)"
         >
           {{ t(`setting.displayOptions.presets.${presetKey}`) }}
@@ -156,12 +163,16 @@ watch(
     </section>
 
     <template #footer>
+      <p v-if="props.error" class="setting-display-options-sheet__error" role="alert">
+        {{ props.error }}
+      </p>
       <div class="setting-panel__actions">
         <Focusable
           :id="cancelNodeId"
           as="button"
           type="button"
           class="setting-panel__action"
+          :disabled="props.loading"
           :scope-id="props.scopeId"
           :on-back="handleClose"
           @click="handleClose"
@@ -174,11 +185,12 @@ watch(
           as="button"
           type="button"
           class="setting-panel__action setting-panel__action--primary"
+          :disabled="props.loading"
           :scope-id="props.scopeId"
           :on-back="handleClose"
           @click="handleSubmit"
         >
-          {{ t('setting.editor.save') }}
+          {{ props.loading ? t('streamPage.failure.saving') : t('setting.editor.save') }}
         </Focusable>
       </div>
     </template>
@@ -188,6 +200,7 @@ watch(
 <style scoped src="./setting-layout.css"></style>
 
 <style scoped>
+.setting-display-options-sheet__error { color: var(--ui-status-danger); font-size: 13px; margin: 0 0 12px; }
 .setting-display-options-sheet__section { display: flex; flex-direction: column; gap: var(--ui-settings-form-gap); }
 .setting-display-options-sheet__section + .setting-display-options-sheet__section { margin-top: var(--ui-space-xl); }
 .setting-display-options-sheet__section-title { margin: 0; font-size: var(--ui-settings-section-title-size); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-secondary); }

@@ -1,7 +1,5 @@
 import type {
   StreamingSessionError,
-  StreamingStartupBoundedRetry,
-  StreamingStartupError,
   StreamingStartupPhase,
   StreamingTargetType,
 } from '@shared/rpc/streaming'
@@ -9,14 +7,13 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import type {
   DisplayOptionsValue,
   StreamConfigSnapshot,
-  StreamErrorKind,
   StreamingSessionProgress,
   StreamRouteDescriptor,
 } from './types'
 import { computed } from 'vue'
 import { rpc } from '../services/rpc'
 import { withOperationTimeout } from './execution/async-operation'
-import { isRecord, normalizeErrorMessage } from './utils'
+import { isRecord } from './utils'
 
 export type SessionUiPhase
   = | 'idle'
@@ -41,11 +38,6 @@ export interface SessionHealthSnapshot {
   errorMessage?: string
   error?: StreamingSessionError
   updatedAt: number
-}
-
-interface StreamErrorInput {
-  error: unknown
-  t: (key: string, params?: Record<string, unknown>) => string
 }
 
 interface SessionProgressSubscriptionInput {
@@ -272,93 +264,7 @@ export function buildSessionHealthSnapshot(
   }
 }
 
-type StructuredSessionErrorLike = Pick<
-  StreamingSessionError,
-  'errorKind' | 'userMessageKey' | 'diagnosticSummary' | 'rawMessage' | 'retryable' | 'boundedRetry'
->
-
-function resolveStructuredSessionError(
-  error: StructuredSessionErrorLike,
-  t: (key: string, params?: Record<string, unknown>) => string,
-): {
-  kind: StreamErrorKind
-  message: string
-  diagnosticSummary?: string
-  boundedRetry?: StreamingStartupBoundedRetry
-} {
-  return {
-    kind: 'startFailed',
-    message: t(error.userMessageKey),
-    diagnosticSummary: error.diagnosticSummary,
-    boundedRetry: error.boundedRetry ?? undefined,
-  }
-}
-
-export function resolveStreamError(input: StreamErrorInput): {
-  kind: StreamErrorKind
-  message: string
-  diagnosticSummary?: string
-  boundedRetry?: StreamingStartupBoundedRetry
-} {
-  const structuredStartupError = extractStructuredStartupError(input.error)
-  if (structuredStartupError !== null) {
-    return resolveStructuredSessionError(structuredStartupError, input.t)
-  }
-
-  const message = normalizeErrorMessage(input.error)
-  if (message.startsWith('remoteConsoleNotReady:')) {
-    const details = message.slice('remoteConsoleNotReady:'.length)
-    return {
-      kind: 'startFailed',
-      message: input.t('streamPage.errors.remoteConsoleNotReady', {
-        details,
-      }),
-      diagnosticSummary: details,
-    }
-  }
-  if (message === 'invalidAnswer') {
-    return { kind: 'invalidAnswer', message: input.t('streamPage.errors.invalidAnswer') }
-  }
-  if (message === 'invalidOffer') {
-    return { kind: 'invalidOffer', message: input.t('streamPage.errors.invalidOffer') }
-  }
-  if (message === 'sessionMissing') {
-    return { kind: 'sessionMissing', message: input.t('streamPage.errors.sessionMissing') }
-  }
-  if (message === 'connectionFailed' || message === 'createOfferTimeout') {
-    return { kind: 'connectionFailed', message: input.t('streamPage.errors.connectionFailed') }
-  }
-  if (message === 'connectionClosed') {
-    return { kind: 'connectionClosed', message: input.t('streamPage.errors.connectionClosed') }
-  }
-  if (message === 'targetMissing') {
-    return { kind: 'targetMissing', message: input.t('streamPage.errors.targetMissing') }
-  }
-  if (message === 'unknown') {
-    return { kind: 'unknown', message: input.t('streamPage.errors.unknown') }
-  }
-  return { kind: 'unknown', message }
-}
-
-export function resolveProgressError(
-  progress: StreamingSessionProgress,
-  t: (key: string, params?: Record<string, unknown>) => string,
-): {
-  kind: StreamErrorKind
-  message: string
-  diagnosticSummary?: string
-  boundedRetry?: StreamingStartupBoundedRetry
-} {
-  if (progress.error !== undefined && progress.error !== null) {
-    return resolveStructuredSessionError(progress.error, t)
-  }
-
-  return {
-    kind: 'startFailed',
-    message: progress.errorMessage ?? t('streamPage.errors.connectionFailed'),
-    diagnosticSummary: progress.errorMessage ?? undefined,
-  }
-}
+export { resolveProgressError, resolveStreamError } from './stream-errors'
 
 export function resolveStartupPhaseStatusTextKey(
   phase: StreamingStartupPhase,
@@ -398,47 +304,6 @@ export function resolveStartupPhasePrimaryStatusTextKey(
 
 export function createStartupAttemptId(): string {
   return crypto.randomUUID()
-}
-
-function extractStructuredStartupError(error: unknown): StreamingStartupError | null {
-  if (!isRecord(error)) {
-    return null
-  }
-  const details = isRecord(error.details) ? error.details : null
-  if (details === null) {
-    return null
-  }
-  if (
-    typeof details.attemptId !== 'string'
-    || typeof details.phase !== 'string'
-    || typeof details.errorKind !== 'string'
-    || typeof details.userMessageKey !== 'string'
-    || typeof details.diagnosticSummary !== 'string'
-    || typeof details.rawMessage !== 'string'
-    || typeof details.retryable !== 'boolean'
-  ) {
-    return null
-  }
-  if (
-    details.boundedRetry !== undefined
-    && details.boundedRetry !== null
-    && !isStreamingStartupBoundedRetry(details.boundedRetry)
-  ) {
-    return null
-  }
-  return details as unknown as StreamingStartupError
-}
-
-function isStreamingStartupBoundedRetry(value: unknown): value is StreamingStartupBoundedRetry {
-  if (!isRecord(value)) {
-    return false
-  }
-  return (
-    typeof value.reason === 'string'
-    && typeof value.status === 'string'
-    && typeof value.retryCount === 'number'
-    && typeof value.retryLimit === 'number'
-  )
 }
 
 /**

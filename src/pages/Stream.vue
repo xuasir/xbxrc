@@ -5,7 +5,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core/engine'
-import { Focusable, FocusScope } from '@/navigation/core/vue'
+import { FocusScope } from '@/navigation/core/vue'
 import xboxLogoIcon from '../assets/nav/xbox-logo.svg'
 import streamDiagnosticsIcon from '../assets/stream/stream-diagnostics.svg'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
@@ -17,10 +17,13 @@ import StreamAudioSheet from '../components/stream/StreamAudioSheet.vue'
 import StreamBrowserDiagnosticsPanel from '../components/stream/StreamBrowserDiagnosticsPanel.vue'
 import StreamExperiencePanel from '../components/stream/StreamExperiencePanel.vue'
 import StreamMicrophoneStatus from '../components/stream/StreamMicrophoneStatus.vue'
+import StreamStatusNotice from '../components/stream/StreamStatusNotice.vue'
 import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 import { resolveEnhancementBinding } from '../streaming/enhancements'
+import { buildFailureClipboard, captureStreamFailure, failureDiagnosticRows, streamFailureBody, streamFailureTitle } from '../streaming/stream-errors'
+import { useStreamPageOperations } from '../streaming/stream-page-operations'
 import { initialDiagnosticGroup } from '../streaming/stream-panel-view-models'
 import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
@@ -50,8 +53,9 @@ const {
   isConnected,
   isLoading,
   statusText,
-  errorText,
-  errorDiagnosticText,
+  failure,
+  cleanupState,
+  warningPhase,
   errorKind,
   startupBoundedRetry,
   hasError,
@@ -69,9 +73,21 @@ const {
   microphoneOpen,
 } = execution
 const dismissWarning = actions.dismissWarning
-const sendingText = ref(false)
-const exportingSrComparison = ref(false)
+const operations = useStreamPageOperations(t)
+const exportInFlight = ref(false)
+const sendingText = computed(() => operations.pending.text === true)
+const exportingSrComparison = computed(() => operations.pending.export === true || exportInFlight.value)
+const lastMenuAction = ref<string | null>(null)
+const appVersion = ref('')
+let pageDisposed = false
+const waitingSnapshot = ref<ReturnType<typeof captureStreamFailure> | null>(null)
+const menuError = computed(() => ['microphone', 'powerOff', 'fullscreen', 'superResolution', 'export'].map(key => operations.errors[key as keyof typeof operations.errors]).find(Boolean) ?? '')
+const menuBusy = computed(() => exportInFlight.value || Object.values(operations.pending).some(Boolean))
+const localFailure = ref<ReturnType<typeof captureStreamFailure> | null>(null)
+const pageFailure = computed(() => failure.value ?? localFailure.value)
+const pageHasError = computed(() => pageFailure.value !== null)
 const exportSrComparisonError = ref('')
+const busyStatusText = computed(() => operations.pending.exit ? t('streamPage.failure.returning') : operations.pending.powerOff ? t('streamPage.failure.poweringOff') : execution.closing.value ? t('streamPage.failure.ending') : statusText.value || t('streamPage.status.preparing'))
 
 interface StreamMenuActionViewModel {
   id: string
@@ -83,7 +99,7 @@ interface StreamMenuActionViewModel {
 const pageUi = useXStreamPageUi({
   getIsConnected: () => isConnected.value,
   getIsLoading: () => isLoading.value,
-  getHasError: () => hasError.value,
+  getHasError: () => pageHasError.value,
   getErrorKind: () => errorKind.value,
   getWarningVisible: () => warningVisible.value,
 })
@@ -92,6 +108,7 @@ const {
   actions: pageActions,
 } = pageUi
 const {
+  hasInteractiveSheet,
   overlayState,
   showFailedSheet,
   showWarningSheet,
@@ -102,12 +119,14 @@ const {
   isDisplaySheetOpen,
   isAudioSheetOpen,
   isTextSheetOpen,
+  isExportErrorSheetOpen,
 } = pageState
 const {
   revealChrome,
   openSheet,
   closeSheet,
 } = pageActions
+const showBusyOverlay = computed(() => overlayState.value === 'loading' || (!pageHasError.value && (execution.closing.value || operations.pending.exit || operations.pending.powerOff)))
 
 const diagnosticGroup = ref<StreamDiagnosticGroup | null>(null)
 
@@ -116,7 +135,7 @@ function closeDiagnosticDetails(): void {
   if (browserDiagnosticsVisible.value)
     actions.toggleBrowserDiagnostics()
   closeSheet('diagnosticDetails')
-  if (wasOpen && !hasError.value && !warningVisible.value)
+  if (wasOpen && !pageHasError.value && !showWarningSheet.value)
     void moveStreamSpatialNavFocusToPostOverlaySink()
 }
 
@@ -144,10 +163,16 @@ function applyStreamUiWindowClass(active: boolean): void {
 
 onMounted(() => {
   applyStreamUiWindowClass(true)
+  void rpc.app.getVersion().then((version) => {
+    if (!pageDisposed)
+      appVersion.value = version
+  }).catch(() => {})
   window.addEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
 
 onBeforeUnmount(() => {
+  pageDisposed = true
+  operations.invalidate()
   applyStreamUiWindowClass(false)
   void streamInputRouteController.resetOnLeaveStream()
   window.removeEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
@@ -155,7 +180,7 @@ onBeforeUnmount(() => {
 
 // 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
 const defaultFocusId = computed(() =>
-  hasError.value ? SPATIAL_NAV_NODE_IDS.streamPage.retry : SPATIAL_NAV_NODE_IDS.streamPage.menu,
+  SPATIAL_NAV_NODE_IDS.streamPage.menu,
 )
 
 const queueDetails = computed(() => sessionHealth.value?.queue)
@@ -197,15 +222,6 @@ const hostRegistrationRetryingNotice = computed(() => {
   return t('streamPage.status.waitingForHostRegistrationRetry')
 })
 
-const showHostRegistrationRetryHelp = computed(() => {
-  const boundedRetry = startupBoundedRetry.value
-  return (
-    boundedRetry?.reason === 'waitingForServerRegistration'
-    && boundedRetry.status === 'exhausted'
-    && errorKind.value === 'startFailed'
-  )
-})
-
 const experienceBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'experience'),
 )
@@ -214,7 +230,7 @@ const browserDiagnosticsBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'browserDiagnostics'),
 )
 
-watch([isDiagnosticDetailsOpen, isConnected, hasError, warningVisible, browserDiagnosticsBinding], ([open, connected, failed, warning, binding]) => {
+watch([isDiagnosticDetailsOpen, isConnected, pageHasError, showWarningSheet, browserDiagnosticsBinding], ([open, connected, failed, warning, binding]) => {
   if (browserDiagnosticsVisible.value && (!open || failed || warning || (!connected && binding.phase !== 'mounted')))
     closeDiagnosticDetails()
 })
@@ -225,8 +241,14 @@ const microphoneBinding = computed(() =>
 
 const exportSrComparisonErrorActions = computed(() => [
   {
-    id: 'dismiss',
-    label: t('streamPage.actions.back'),
+    id: 'stream.export.retry',
+    label: t('streamPage.failure.tryAgain'),
+    primary: true,
+    disabled: exportingSrComparison.value,
+  },
+  {
+    id: 'stream.export.dismiss',
+    label: t('streamPage.failure.close'),
   },
 ])
 
@@ -240,6 +262,7 @@ const canUseDiagnosticsMenu = computed(
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   if (!isConnected.value) {
     return [
+      ...(lastMenuAction.value && menuError.value ? [{ id: 'retryOperation', label: t('streamPage.failure.tryAgain') }] : []),
       {
         id: 'exit',
         label: t('streamPage.actions.exit'),
@@ -352,23 +375,78 @@ const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   return items
 })
 
-const failedSheetActions = computed(() => [
-  {
-    id: 'stream.alert.failed.exit',
-    label: t('streamPage.actions.exit'),
-    danger: true,
-  },
-])
+const failureDetails = computed(() => pageFailure.value ? failureDiagnosticRows(pageFailure.value, cleanupState.value, t, appVersion.value) : [])
+const failureClipboard = computed(() => pageFailure.value ? buildFailureClipboard(pageFailure.value, cleanupState.value, t, appVersion.value) : '')
+const failureFeedback = computed(() => operations.errors.retry || operations.errors.login || operations.errors.exit || operations.errors.powerOff || (cleanupState.value === 'running' || cleanupState.value === 'pending' ? t(`streamPage.failure.cleanup.${cleanupState.value}`) : ''))
+const failedSheetActions = computed(() => {
+  const list: Array<{ id: string, label: string, primary?: boolean, disabled?: boolean }> = []
+  if (pageFailure.value?.error.kind === 'powerOffFailed') {
+    list.push({ id: 'stream.failure.powerOff', label: t('streamPage.failure.retryPowerOff'), primary: true, disabled: operations.pending.powerOff === true })
+  }
+  else if (pageFailure.value?.error.kind === 'auth') {
+    list.push({ id: 'stream.failure.login', label: t(operations.pending.login ? 'streamPage.failure.loggingIn' : 'streamPage.failure.login'), primary: true, disabled: operations.pending.login === true })
+  }
+  else if (pageFailure.value?.error.retryable) {
+    list.push({ id: 'stream.failure.retry', label: t(operations.pending.retry ? 'streamPage.failure.reconnecting' : cleanupState.value === 'pending' ? 'streamPage.failure.retryCleanup' : 'streamPage.failure.reconnect'), primary: true, disabled: operations.pending.retry === true || cleanupState.value === 'running' })
+  }
+  list.push({ id: 'stream.failure.exit', label: t(operations.pending.exit ? 'streamPage.failure.returning' : streamRoute.targetType.value === 'home' ? 'streamPage.failure.backHome' : 'streamPage.failure.backCloud'), primary: list.length === 0, disabled: operations.pending.exit === true })
+  return list
+})
+const statusNotice = computed(() => {
+  if (pageHasError.value || !isConnected.value || showWarningSheet.value)
+    return ''
+  if (warningVisible.value)
+    return t(warningPhase.value === 'firstFrame' ? 'streamPage.failure.waitingTitle' : 'streamPage.failure.stallTitle')
+  if (execution.lifecyclePhase.value === 'recovering' || execution.diagnostics.value.isRecovering)
+    return t('streamPage.failure.recovering')
+  if (execution.diagnostics.value.isDisplaySupplyLimited)
+    return t('streamPage.experience.notices.displaySupplyLimited')
+  return ''
+})
+watch(warningVisible, (visible) => {
+  waitingSnapshot.value = visible ? captureStreamFailure({ error: { kind: 'unknown', code: warningPhase.value === 'firstFrame' ? 'firstFrameWait' : 'playbackStall', retryable: false, message: '' }, phase: warningPhase.value, targetType: streamRoute.targetType.value, stats: execution.performanceSnapshot.value }) : null
+}, { immediate: true })
+function invalidateLocalOperations(preservePowerOff = false): void {
+  for (const key of ['text', 'display', 'microphone', 'export', 'powerOff', 'fullscreen', 'superResolution'] as const) {
+    if (key !== 'powerOff' || !preservePowerOff)
+      operations.invalidate(key)
+  }
+}
+watch(pageHasError, (failed) => {
+  if (failed) {
+    invalidateLocalOperations()
+    exportSrComparisonError.value = ''
+    lastMenuAction.value = null
+  }
+}, { flush: 'sync' })
+watch(execution.sessionId, (id) => {
+  invalidateLocalOperations(id === '' && !hasError.value)
+  if (id)
+    localFailure.value = null
+})
+watch(() => [operations.errors.exit, operations.errors.powerOff], ([exitError, powerOffError]) => {
+  if (!isConnected.value && (exitError || powerOffError)) {
+    const powerOffFailed = powerOffError && operations.errorCodes.powerOff !== 'navigationFailed'
+    localFailure.value = captureStreamFailure({ error: { kind: powerOffFailed ? 'powerOffFailed' : 'navigationFailed', code: powerOffFailed ? 'powerOffRejected' : 'streamNavigationFailed', retryable: false, message: exitError || powerOffError || '' }, phase: warningPhase.value, targetType: streamRoute.targetType.value })
+  }
+})
+
+watch(failure, (next, previous) => {
+  if (!next && previous)
+    localFailure.value = null
+})
 
 const warningSheetActions = computed(() => [
   {
     id: 'stream.alert.warning.wait',
     label: t('streamPage.warning.keepWaiting'),
+    primary: true,
+    disabled: operations.pending.exit === true,
   },
   {
     id: 'stream.alert.warning.exit',
-    label: t('streamPage.actions.exit'),
-    danger: true,
+    label: t(operations.pending.exit ? 'streamPage.failure.returning' : 'streamPage.failure.endStream'),
+    disabled: operations.pending.exit === true,
   },
 ])
 
@@ -416,6 +494,7 @@ function openDiagnosticsMenu(): void {
 }
 
 function closeDiagnosticsMenu(): void {
+  operations.invalidate('export')
   closeSheet('diagnosticsMenu')
   void moveStreamSpatialNavFocusToPostOverlaySink()
 }
@@ -433,6 +512,9 @@ function openDisplaySheet(): void {
 }
 
 function closeDisplaySheet(): void {
+  if (operations.pending.display)
+    return
+  operations.invalidate('display')
   closeSheet('display')
   void moveStreamSpatialNavFocusToPostOverlaySink()
   if (displayOptions.value !== null) {
@@ -455,9 +537,7 @@ function openTextSheet(): void {
 }
 
 function closeTextSheet(): void {
-  if (sendingText.value) {
-    return
-  }
+  operations.invalidate('text')
   closeSheet('text')
   actions.setTextInputActive(false)
   void moveStreamSpatialNavFocusToPostOverlaySink()
@@ -467,35 +547,35 @@ async function disconnectStream(options?: { navigateBack?: boolean, reason?: str
   await actions.disconnectStream(options)
 }
 
-async function handleRetry(): Promise<void> {
+async function handleFailedSheetAction(id = 'stream.failure.exit'): Promise<void> {
   revealChrome()
-  await actions.handleRetry()
-}
-
-async function handleFailedSheetAction(): Promise<void> {
-  await disconnectStream({ navigateBack: true, reason: 'failedSheetExit' })
+  if (id === 'stream.failure.powerOff') {
+    await operations.run('powerOff', actions.powerOffAndDisconnect)
+    return
+  }
+  if (id === 'stream.failure.retry') {
+    await operations.run('retry', actions.handleRetry)
+    return
+  }
+  if (id === 'stream.failure.login') {
+    await operations.run('login', actions.relogin)
+    return
+  }
+  await operations.run('exit', () => disconnectStream({ navigateBack: true, reason: 'failedSheetExit' }))
 }
 
 async function handleWarningSheetAction(id: string): Promise<void> {
   if (id === 'stream.alert.warning.wait') {
-    actions.dismissWarning()
+    dismissWarning()
+    closeSheet('warning')
+    void moveStreamSpatialNavFocusToPostOverlaySink()
     return
   }
-
-  await disconnectStream({ navigateBack: true, reason: 'warningSheetExit' })
+  await operations.run('exit', () => disconnectStream({ navigateBack: true, reason: 'warningSheetExit' }))
 }
 
 async function handleSendText(text: string): Promise<void> {
-  sendingText.value = true
-  try {
-    const accepted = await actions.sendText(text)
-    if (accepted) {
-      closeTextSheet()
-    }
-  }
-  finally {
-    sendingText.value = false
-  }
+  await operations.run('text', () => actions.sendText(text), closeTextSheet)
 }
 
 function handleDisplayPreview(value: DisplayOptionsValue): void {
@@ -504,8 +584,7 @@ function handleDisplayPreview(value: DisplayOptionsValue): void {
 }
 
 async function handleDisplaySubmit(value: DisplayOptionsValue): Promise<void> {
-  await actions.saveDisplayOptions(value)
-  closeDisplaySheet()
+  await operations.run('display', () => actions.saveDisplayOptions(value), closeDisplaySheet)
 }
 
 async function captureFrameForSrExport(): Promise<HTMLCanvasElement> {
@@ -640,22 +719,30 @@ function resolveSrComparisonExportErrorMessage(error: unknown): string {
   return t('streamPage.errors.streamComparisonExportFailed')
 }
 
-async function exportSuperResolutionComparison(): Promise<void> {
-  if (exportingSrComparison.value) {
-    return
+async function performSuperResolutionExport(operationCurrent: () => boolean): Promise<void> {
+  if (exportInFlight.value)
+    throw new Error('streamExportInProgress')
+  exportInFlight.value = true
+  const sessionAtStart = execution.sessionId.value
+  const sessionCurrent = () => !pageDisposed && !pageHasError.value && execution.sessionId.value === sessionAtStart && isConnected.value
+  const current = () => sessionCurrent() && operationCurrent()
+  const assertCurrent = () => {
+    if (!current())
+      throw new Error('streamExportSuperseded')
   }
-  exportingSrComparison.value = true
-  exportSrComparisonError.value = ''
   const originalEnabled = execution.superResolutionExperimental.value
   const alternateEnabled = !originalEnabled
   try {
     await waitForAnimationFrames(2)
     const beforeFrame = await captureFrameForSrExport()
+    assertCurrent()
     await actions.setSuperResolutionExperimental(alternateEnabled)
+    assertCurrent()
     await waitForAnimationFrames(2)
     await waitForStreamCaptureSource()
     await waitForAnimationFrames(2)
     const afterFrame = await captureFrameForSrExport()
+    assertCurrent()
     const comparison = composeSrComparisonCanvas({
       before: beforeFrame,
       after: afterFrame,
@@ -666,7 +753,9 @@ async function exportSuperResolutionComparison(): Promise<void> {
     await saveCanvasAsPng(comparison, `stream-sr-ab-${stamp}.png`)
   }
   catch (error) {
-    exportSrComparisonError.value = resolveSrComparisonExportErrorMessage(error)
+    if (current()) {
+      exportSrComparisonError.value = resolveSrComparisonExportErrorMessage(error)
+    }
     void rpc.runtimeTrace.recordEvent({
       event: 'exportSuperResolutionComparisonFailed',
       sessionId: execution.sessionId.value !== '' ? execution.sessionId.value : null,
@@ -674,17 +763,18 @@ async function exportSuperResolutionComparison(): Promise<void> {
         source: 'stream-page',
         code: error instanceof Error ? error.message : String(error),
       },
-    })
+    }).catch(() => {})
+    throw error
   }
   finally {
     try {
-      if (execution.superResolutionExperimental.value !== originalEnabled) {
+      if (sessionCurrent() && execution.superResolutionExperimental.value !== originalEnabled) {
         await actions.setSuperResolutionExperimental(originalEnabled)
         await waitForAnimationFrames(2)
       }
     }
     finally {
-      exportingSrComparison.value = false
+      exportInFlight.value = false
     }
   }
 }
@@ -695,79 +785,82 @@ function handleAudioChange(value: number): void {
 }
 
 function dismissExportSrComparisonError(): void {
+  operations.invalidate('export')
   exportSrComparisonError.value = ''
+  closeSheet('exportError')
+  void moveStreamSpatialNavFocusToPostOverlaySink()
+}
+
+async function runSuperResolutionExport(): Promise<boolean> {
+  const succeeded = await operations.run('export', performSuperResolutionExport)
+  if (!succeeded && exportSrComparisonError.value && !pageHasError.value)
+    openSheet('exportError')
+  return succeeded
+}
+async function handleExportErrorAction(id: string): Promise<void> {
+  if (id === 'stream.export.retry') {
+    if (await runSuperResolutionExport())
+      dismissExportSrComparisonError()
+    return
+  }
+  dismissExportSrComparisonError()
 }
 
 async function handleStreamMenuAction(id: string): Promise<void> {
-  const handlers: Record<string, () => void | Promise<void>> = {
-    display: () => {
-      openDisplaySheet()
-    },
-    audio: () => {
-      openAudioSheet()
-    },
-    microphone: async () => {
-      revealChrome()
-      await actions.toggleMicrophone()
-    },
-    sendText: () => {
-      openTextSheet()
-    },
-    pressNexus: () => {
-      revealChrome()
-      actions.pressNexus()
-    },
-    longPressNexus: () => {
-      revealChrome()
-      actions.longPressNexus()
-    },
-    fullscreen: async () => {
-      await toggleFullscreen()
-    },
-    powerOffExit: async () => {
-      await powerOffAndDisconnect()
-    },
-    exit: async () => {
-      await disconnectStream({ navigateBack: true, reason: 'menuActionExit' })
-    },
+  if (id === 'retryOperation' && lastMenuAction.value) {
+    await handleStreamMenuAction(lastMenuAction.value)
+    return
   }
-
-  if (handlers[id]) {
-    await handlers[id]?.()
-
-    if (id === 'display' || id === 'audio' || id === 'sendText') {
-      return
-    }
-
+  const panels: Record<string, () => void> = { display: openDisplaySheet, audio: openAudioSheet, sendText: openTextSheet }
+  if (panels[id]) {
+    panels[id]()
+    return
+  }
+  if (id === 'pressNexus' || id === 'longPressNexus') {
+    if (id === 'pressNexus')
+      actions.pressNexus()
+    else
+      actions.longPressNexus()
     closeActionSheet()
+    return
+  }
+  const operationsByAction = {
+    microphone: { operation: 'microphone', perform: actions.toggleMicrophone },
+    fullscreen: { operation: 'fullscreen', perform: toggleFullscreen },
+    powerOffExit: { operation: 'powerOff', perform: powerOffAndDisconnect },
+    exit: { operation: 'exit', perform: () => disconnectStream({ navigateBack: true, reason: 'menuActionExit' }) },
+  } as const
+  const selected = operationsByAction[id as keyof typeof operationsByAction]
+  if (selected) {
+    lastMenuAction.value = id
+    const succeeded = await operations.run(selected.operation, selected.perform)
+    if (succeeded) {
+      lastMenuAction.value = null
+      closeActionSheet()
+    }
   }
 }
 
 async function handleDiagnosticsMenuAction(id: string): Promise<void> {
-  const handlers: Record<string, () => void | Promise<void>> = {
-    toggleExperience: () => {
-      revealChrome()
-      actions.toggleExperienceMetrics()
-    },
-    toggleBrowserDiagnostics: () => {
-      revealChrome()
-      actions.toggleBrowserDiagnostics()
-    },
-    toggleSuperResolution: async () => {
-      revealChrome()
-      await actions.toggleSuperResolutionExperimental()
-    },
-    exportSuperResolutionComparison: async () => {
-      revealChrome()
-      await exportSuperResolutionComparison()
-    },
-  }
-
-  if (handlers[id]) {
-    await handlers[id]?.()
-    if (id === 'toggleBrowserDiagnostics' && browserDiagnosticsVisible.value)
-      return
+  if (id === 'toggleExperience') {
+    actions.toggleExperienceMetrics()
     closeDiagnosticsMenu()
+    return
+  }
+  if (id === 'toggleBrowserDiagnostics') {
+    actions.toggleBrowserDiagnostics()
+    return
+  }
+  if (id === 'toggleSuperResolution') {
+    if (await operations.run('superResolution', async () => {
+      await actions.toggleSuperResolutionExperimental()
+    })) {
+      closeDiagnosticsMenu()
+    }
+  }
+  if (id === 'exportSuperResolutionComparison') {
+    if (await runSuperResolutionExport())
+      closeDiagnosticsMenu()
   }
 }
 </script>
@@ -775,7 +868,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
 <template>
   <FocusScope
     :id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-    :active="true"
+    :active="!hasInteractiveSheet"
     :restore-focus="true"
     :default-focus-id="defaultFocusId"
   >
@@ -795,6 +888,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         :visible="experienceMetricsVisible && (isConnected || experienceBinding.phase === 'mounted')"
         :mount="experienceBinding"
         :model="experienceMetricsViewModel"
+        :suppress-notice="Boolean(statusNotice)"
       />
       <StreamBrowserDiagnosticsPanel
         v-if="runtimeMode === 'webrtc-direct'"
@@ -805,6 +899,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         @group-change="diagnosticGroup = $event"
         @close="closeDiagnosticDetails"
       />
+      <StreamStatusNotice :text="statusNotice" :actionable="warningVisible" :action-label="t('streamPage.failure.inspect')" @inspect="openSheet('warning')" />
       <StreamMicrophoneStatus
         :mount="microphoneBinding"
         :microphone="microphone"
@@ -844,9 +939,9 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
 
       <!-- 沉浸式加载层 -->
       <Transition name="overlay-fade">
-        <div v-if="overlayState === 'loading'" class="stream-page__overlay stream-page__overlay--immersive stream-page__overlay--keep-chrome">
+        <div v-if="showBusyOverlay" class="stream-page__overlay stream-page__overlay--immersive stream-page__overlay--keep-chrome">
           <div class="stream-page__loading-stack">
-            <BrandedLoading size="xl" :label="statusText || t('streamPage.status.preparing')" />
+            <BrandedLoading size="xl" :label="busyStatusText" />
             <p v-if="hostRegistrationRetryingNotice" class="stream-page__loading-detail stream-page__loading-detail--notice">
               {{ hostRegistrationRetryingNotice }}
             </p>
@@ -864,72 +959,14 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         </div>
       </Transition>
 
-      <!-- 连接失败/断开层 -->
-      <Transition name="overlay-fade">
-        <div v-if="overlayState === 'error'" class="stream-page__overlay stream-page__overlay--immersive">
-          <div class="stream-page__error-panel">
-            <header class="stream-page__error-header">
-              <h2 class="stream-page__error-title">
-                {{ t('streamPage.errorTitle') }}
-              </h2>
-            </header>
-            <p class="stream-page__error-copy">
-              {{ errorText }}
-            </p>
-            <p v-if="errorDiagnosticText" class="stream-page__error-diagnostic">
-              {{ errorDiagnosticText }}
-            </p>
-            <div v-if="showHostRegistrationRetryHelp" class="stream-page__error-help">
-              {{ t('streamPage.errors.hostRegistrationRetryExhaustedHint') }}
-            </div>
-            <div class="stream-page__error-actions">
-              <Focusable
-                :id="SPATIAL_NAV_NODE_IDS.streamPage.retry"
-                as="button"
-                type="button"
-                class="stream-page__action stream-page__action--primary"
-                @click="handleRetry"
-              >
-                {{ t('streamPage.actions.retry') }}
-              </Focusable>
-              <Focusable
-                :id="SPATIAL_NAV_NODE_IDS.streamPage.back"
-                as="button"
-                type="button"
-                class="stream-page__action"
-                @click="disconnectStream({ navigateBack: true, reason: 'menuExit' })"
-              >
-                {{ t('streamPage.actions.back') }}
-              </Focusable>
-            </div>
-          </div>
-        </div>
-      </Transition>
-
-      <!-- 弱侵入连接中状态 -->
-      <Transition name="overlay-fade">
-        <div
-          v-if="overlayState === 'connecting'"
-          class="stream-page__overlay stream-page__overlay--subtle stream-page__overlay--keep-chrome"
-        >
-          <BrandedLoading size="lg" :label="statusText || t('streamPage.status.connecting')" />
-        </div>
-      </Transition>
-
-      <StreamTextSheet
-        :open="isTextSheetOpen"
-        scope-id="stream.text-sheet"
-        :loading="sendingText"
-        @close="closeTextSheet"
-        @submit="handleSendText"
-      />
       <StreamActionSheet
         :open="isMenuSheetOpen"
         data-theme="dark"
         scope-id="stream.action-sheet"
         :title="displayName"
         :eyebrow="eyebrow"
-        :items="streamMenuActions"
+        :items="streamMenuActions.map(item => ({ ...item, disabled: item.disabled || (item.id !== 'exit' && menuBusy) }))"
+        :error="menuError"
         @close="closeActionSheet"
         @select="handleStreamMenuAction"
       />
@@ -939,7 +976,8 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         scope-id="stream.diagnostics-menu-sheet"
         :title="t('streamPage.diagnosticsMenu.title')"
         :eyebrow="eyebrow"
-        :items="diagnosticsMenuActions"
+        :items="diagnosticsMenuActions.map(item => ({ ...item, disabled: item.disabled || menuBusy }))"
+        :error="menuError"
         @close="closeDiagnosticsMenu"
         @select="handleDiagnosticsMenuAction"
       />
@@ -949,10 +987,13 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         :title="t('streamPage.display.title')"
         :hint="t('streamPage.display.hint')"
         :current-value="displayOptions"
+        :loading="operations.pending.display"
+        :error="operations.errors.display"
         @close="closeDisplaySheet"
         @change="handleDisplayPreview"
         @submit="handleDisplaySubmit"
       />
+      <StreamTextSheet :open="isTextSheetOpen" scope-id="stream.text-sheet" :loading="sendingText" :error="operations.errors.text" @close="closeTextSheet" @submit="handleSendText" />
       <StreamAudioSheet
         :open="isAudioSheetOpen"
         scope-id="stream.audio-sheet"
@@ -963,8 +1004,16 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       <StreamAlertSheet
         :open="showFailedSheet"
         scope-id="stream.failed-sheet"
-        :title="t('streamPage.failed.title')"
-        :body="t('streamPage.failed.body')"
+        :title="pageFailure ? streamFailureTitle(pageFailure, t) : ''"
+        :body="pageFailure ? streamFailureBody(pageFailure, t) : ''"
+        :eyebrow="eyebrow"
+        :help="pageFailure?.error.retryable ? t(streamRoute.targetType.value === 'cloud' ? 'streamPage.failure.cloudRetryHelp' : 'streamPage.failure.retryHelp') : ''"
+        :feedback="failureFeedback"
+        :details="failureDetails"
+        :clipboard-text="failureClipboard"
+        :reset-key="pageFailure?.occurredAt"
+        :dismiss-on-backdrop="false"
+        :busy="menuBusy || cleanupState === 'running'"
         :actions="failedSheetActions"
         @close="handleFailedSheetAction"
         @select="handleFailedSheetAction"
@@ -972,20 +1021,26 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       <StreamAlertSheet
         :open="showWarningSheet"
         scope-id="stream.warning-sheet"
-        :title="t('streamPage.warning.title')"
-        :body="t('streamPage.warning.body')"
+        :title="t(warningPhase === 'firstFrame' ? 'streamPage.failure.waitingTitle' : 'streamPage.failure.stallTitle')"
+        :body="t(warningPhase === 'firstFrame' ? 'streamPage.failure.waitingBody' : 'streamPage.failure.stallBody')"
+        :feedback="operations.errors.exit"
+        :busy="operations.pending.exit"
+        :details="waitingSnapshot ? failureDiagnosticRows(waitingSnapshot, 'idle', t, appVersion) : []"
+        :clipboard-text="waitingSnapshot ? buildFailureClipboard(waitingSnapshot, 'idle', t, appVersion) : ''"
         :actions="warningSheetActions"
-        @close="dismissWarning"
+        @close="handleWarningSheetAction('stream.alert.warning.wait')"
         @select="handleWarningSheetAction"
       />
       <StreamAlertSheet
-        :open="exportSrComparisonError !== ''"
+        :open="isExportErrorSheetOpen && !pageHasError"
         scope-id="stream.export-sr-comparison-error-sheet"
         :title="t('streamPage.actions.exportSuperResolutionComparison')"
         :body="exportSrComparisonError"
+        :feedback="operations.errors.export"
+        :busy="exportingSrComparison"
         :actions="exportSrComparisonErrorActions"
         @close="dismissExportSrComparisonError"
-        @select="dismissExportSrComparisonError"
+        @select="handleExportErrorAction"
       />
 
       <svg id="stream-video-filters" class="stream-page__filters" aria-hidden="true">
@@ -1144,91 +1199,6 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   font-family: var(--ui-font-family-mono, monospace);
 }
 
-.stream-page__overlay--subtle {
-  background: var(--ui-scrim-bg);
-}
-
-.stream-page__error-panel {
-  width: min(calc(100vw - 48px), 480px);
-  padding: 32px;
-  background: var(--ui-surface-overlay);
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 16px;
-  color: var(--ui-page-text);
-  text-align: left;
-}
-
-.stream-page__error-header {
-  margin-bottom: 16px;
-}
-
-.stream-page__error-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.stream-page__error-copy {
-  margin: 0 0 12px;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--ui-page-text-soft);
-}
-
-.stream-page__error-diagnostic {
-  margin: 0 0 32px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ui-page-text-soft);
-  opacity: 0.88;
-}
-
-.stream-page__error-help {
-  margin: 0 0 20px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brand-primary) 18%, transparent);
-  color: var(--ui-page-text-soft);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.stream-page__chrome-btn--danger[data-focused='true'] {
-  background: var(--color-danger);
-  color: var(--brand-on-primary);
-}
-
-/* 覆盖层 Overlays */
-.stream-page__action {
-  flex: 1;
-  padding: 14px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--ui-surface-overlay);
-  color: var(--ui-page-text);
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all var(--ui-motion-fast);
-}
-
-.stream-page__action--primary {
-  background: var(--brand-primary);
-}
-
-.stream-page__action[data-focused='true'] {
-  transform: scale(1.02);
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-}
-
-.stream-page__action--primary[data-focused='true'] {
-  background: var(--brand-primary-strong);
-  color: var(--ui-focus-text);
-}
-
 .stream-page__filters {
   position: absolute;
   width: 0;
@@ -1246,9 +1216,5 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
 .overlay-fade-enter-from,
 .overlay-fade-leave-to {
   opacity: 0;
-}
-
-:global(html[data-ui-density='narrow']) .stream-page__error-actions {
-  flex-direction: column;
 }
 </style>
