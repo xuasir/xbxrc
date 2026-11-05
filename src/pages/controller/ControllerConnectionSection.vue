@@ -15,6 +15,10 @@ let sampleCount = 0
 let intervalStart = performance.now()
 const receive: Parameters<typeof inputController.subscribe>[0] = (next) => {
   snapshot.value = next
+  if (next.sampling?.pollingHz !== undefined) {
+    frequency.value = Math.round(next.sampling.pollingHz)
+    return
+  }
   if (next.sequence !== lastSequence) {
     ++sampleCount
     lastSequence = next.sequence

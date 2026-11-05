@@ -1,4 +1,6 @@
+import type { GpuFrameTimer } from './gpu-frame-timer'
 import type { ObservedVideoFrameMetadata } from './video-frame-source'
+import { LatencyWindow } from '../../../shared/latency-window'
 
 export interface RendererResources {
   gpuObjects: number
@@ -24,9 +26,11 @@ export interface RendererResources {
   outputHeight?: number
   gpuErrorChecks?: number
   latestOverwriteCount?: number
-  pacingWaitCount?: number
+  rateLimitDropCount?: number
   submitFailureCount?: number
   preparation?: RendererPreparationObservation
+  timing?: ReturnType<RenderObservation['snapshot']>['timing']
+  gpuTiming?: ReturnType<GpuFrameTimer['snapshot']>
 }
 
 interface RendererPreparationObservation {
@@ -65,6 +69,11 @@ export interface RendererObservationSnapshot {
 
 /** 每个 renderer 记录实际绘制；截图重绘单独计数。 */
 export class RenderObservation {
+  private readonly duration = new LatencyWindow()
+  private readonly upload = new LatencyWindow()
+  private readonly submit = new LatencyWindow()
+  private readonly interval = new LatencyWindow()
+  private previousDrawAtMs?: number
   private lastDrawSequence?: number
   private drawCount = 0
   private captureDrawCount = 0
@@ -78,10 +87,8 @@ export class RenderObservation {
   private uploadDurationMaxMs = 0
   private submitDurationMaxMs = 0
   private lastDrawAtMs?: number
-  private latestOverwriteCount = 0
-  private pacingWaitCount = 0
+  private rateLimitDropCount = 0
   private submitFailureCount = 0
-  private lastWaitingSequence?: number
   private readonly preparation: RendererPreparationObservation = {}
 
   beginPreparation(): void {
@@ -99,19 +106,17 @@ export class RenderObservation {
     }
   }
 
-  replaceLatest(): void {
-    this.latestOverwriteCount++
-  }
-
-  wait(frame: ObservedVideoFrameMetadata | undefined): void {
-    if (frame && frame.localSequence !== this.lastWaitingSequence) {
-      this.lastWaitingSequence = frame.localSequence
-      this.pacingWaitCount++
-    }
+  dropRateLimitedFrame(): void {
+    this.rateLimitDropCount++
   }
 
   fail(): void {
     this.submitFailureCount++
+  }
+
+  resetCadence(): void {
+    this.previousDrawAtMs = undefined
+    this.interval.reset()
   }
 
   record(frame: ObservedVideoFrameMetadata | undefined, capture: boolean, durationMs: number, uploadMs?: number, submitMs?: number, startedAtMs?: number): void {
@@ -120,6 +125,15 @@ export class RenderObservation {
       this.captureDrawCount++
     }
     else {
+      const atMs = performance.now()
+      this.duration.record(durationMs)
+      if (uploadMs !== undefined)
+        this.upload.record(uploadMs)
+      if (submitMs !== undefined)
+        this.submit.record(submitMs)
+      if (this.previousDrawAtMs !== undefined)
+        this.interval.record(atMs - this.previousDrawAtMs)
+      this.previousDrawAtMs = atMs
       this.realtimeDrawCount++
       this.drawDurationMaxMs = Math.max(this.drawDurationMaxMs, durationMs)
       this.drawDurationTotalMs += durationMs
@@ -143,6 +157,7 @@ export class RenderObservation {
   }
 
   snapshot() {
-    return { drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: this.latestOverwriteCount, pacingWaitCount: this.pacingWaitCount, submitFailureCount: this.submitFailureCount, preparation: { ...this.preparation } }
+    const timing = { duration: this.duration.snapshot(), upload: this.upload.snapshot(), submit: this.submit.snapshot(), interval: this.interval.snapshot() }
+    return { timing, drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: 0, rateLimitDropCount: this.rateLimitDropCount, submitFailureCount: this.submitFailureCount, preparation: { ...this.preparation } }
   }
 }

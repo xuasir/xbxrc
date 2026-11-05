@@ -1,29 +1,28 @@
-/** 累计截止时间保留显示槽位的余数；迟到时直接处理最新帧。 */
+/** 常规预算直接追逐最新候选，显式低帧率预算使用滚动准入时间。 */
 export class FramePacer {
-  private deadlineMs?: number
+  private nextAllowedAtMs?: number
   private targetFps = 60
 
   setTargetFps(fps: number): void {
     const next = Number.isFinite(fps) ? Math.max(0, fps) : 60
     if (next !== this.targetFps) {
       this.targetFps = next
-      this.deadlineMs = undefined
+      this.nextAllowedAtMs = undefined
     }
   }
 
   admit(atMs: number): boolean {
-    if (this.targetFps <= 0)
+    if (this.targetFps <= 0 || !Number.isFinite(atMs))
       return false
-    const intervalMs = 1000 / this.targetFps
-    if (this.deadlineMs === undefined || atMs - this.deadlineMs > intervalMs * 2) {
-      this.deadlineMs = atMs + intervalMs
+    // 源已完成身份去重；60fps常规供给的相位抖动直接交给即时绘制。
+    if (this.targetFps >= 60)
       return true
-    }
-    // WebView 毫秒时钟会把同一60Hz槽位取整；容差保持在累计deadline内。
-    const deadlineToleranceMs = Math.min(1, intervalMs * 0.06)
-    if (atMs + deadlineToleranceMs < this.deadlineMs)
+    const intervalMs = 1000 / this.targetFps
+    const nextAtMs = this.nextAllowedAtMs ?? atMs
+    if (atMs + 1 < nextAtMs)
       return false
-    this.deadlineMs += (Math.floor(Math.max(0, atMs - this.deadlineMs) / intervalMs) + 1) * intervalMs
+    // 保留周期内剩余额度以均匀限流，长间隔后只给当前候选一次新额度。
+    this.nextAllowedAtMs = (atMs - nextAtMs >= intervalMs ? atMs : nextAtMs) + intervalMs
     return true
   }
 }

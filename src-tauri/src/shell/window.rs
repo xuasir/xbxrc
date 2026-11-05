@@ -49,7 +49,9 @@ pub fn handle_macos_window_event(window: &tauri::Window, event: &tauri::WindowEv
 
     if window.label() == "main" {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            let app_state = window.app_handle().state::<AppState>();
+            let Some(app_state) = window.app_handle().try_state::<AppState>() else {
+                return;
+            };
             if !app_state.is_quitting.load(Ordering::Relaxed) {
                 // 对齐 Electron：macOS 关闭窗口时仅隐藏，不退出进程。
                 api.prevent_close();

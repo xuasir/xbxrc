@@ -4,7 +4,9 @@ import type { GamepadFrame, ProcessedVideoFrameMetadata } from '../../domain/inp
 import { inputController } from '@shared/gamepad/runtime'
 import { BUTTON_KEYS, clonePadState, neutralState, stateEquals } from '@shared/gamepad/state'
 import { rpc } from '../../../services/rpc'
+import { LatencyWindow } from '../../../shared/latency-window'
 import { InputPacketEncoder } from '../../protocol/input/InputPacketEncoder'
+import { INPUT_BUFFER_AGE_BUDGET_MS, InputBufferBudget } from './input-buffer-budget'
 import { RumbleService } from './RumbleService'
 
 const MAX_DECODE_TIME_MS = 10
@@ -69,6 +71,11 @@ export interface InputTransport {
 }
 
 export class InputService {
+  private readonly bufferBudget = new InputBufferBudget()
+  private readonly queueWait = new LatencyWindow()
+  private readonly observationToSend = new LatencyWindow()
+  private readonly physicalSampleAge = new LatencyWindow()
+  private lastDeliveryTraceAt = Number.NEGATIVE_INFINITY
   private inputSequenceNum = 0
   private frameMetadataQueue: Array<ProcessedVideoFrameMetadata> = []
   private currentInputTransport?: InputTransport
@@ -103,7 +110,8 @@ export class InputService {
     this.frameMetadataQueue = []
     this.currentInputTransport = inputTransport
     const generation = ++this.generation
-    this.disposeWritable = inputTransport.onWritable?.(MAX_INPUT_BUFFERED_BYTES / 2, () => {
+    // 年龄保护可在少量字节时阻挡发送，排空事件覆盖这类小积压。
+    this.disposeWritable = inputTransport.onWritable?.(0, () => {
       if (generation === this.generation && this.currentInputTransport === inputTransport)
         this.flush()
     })
@@ -119,6 +127,7 @@ export class InputService {
           this.enqueue(current)
       }
       this.flush()
+      this.traceDelivery()
     }, INPUT_RETRY_INTERVAL_MS)
   }
 
@@ -144,6 +153,11 @@ export class InputService {
     this.lastDeferredTraceAt = Number.NEGATIVE_INFINITY
     this.deferredAttempts = 0
     this.leftTriggerPeak = this.rightTriggerPeak = 0
+    this.bufferBudget.reset()
+    this.queueWait.reset()
+    this.observationToSend.reset()
+    this.physicalSampleAge.reset()
+    this.lastDeliveryTraceAt = Number.NEGATIVE_INFINITY
     this.rumbleService.destroy()
   }
 
@@ -205,6 +219,7 @@ export class InputService {
     this.flushing = true
     try {
       const now = performance.now()
+      this.bufferBudget.observe(transport.bufferedAmount(), now)
       const oldest = this.pendingInputs.find(pending => !pending.reset)
       if (oldest && now - (oldest.frame.observedAtMs ?? oldest.enqueuedAtMs) > MAX_INPUT_AGE_MS)
         this.resetInputs(this.pendingInputs.at(-1)!.frame, 'input-age-exhausted', now)
@@ -225,8 +240,17 @@ export class InputService {
           return
         // 释放前的按下保持顺序，在释放余量内共同排空；metadata 让出空间。
         const buffered = transport.bufferedAmount()
+        this.bufferBudget.observe(buffered, performance.now())
         const drainingRelease = !!frame && this.pendingInputs.some(input => input.release)
-        const limit = MAX_INPUT_BUFFERED_BYTES + (drainingRelease ? RELEASE_BUFFER_BYTES : 0)
+        const limit = drainingRelease ? MAX_INPUT_BUFFERED_BYTES + RELEASE_BUFFER_BYTES : this.bufferBudget.softLimitBytes
+        if (!drainingRelease && buffered > 0 && this.bufferBudget.oldestAgeMs(performance.now()) > INPUT_BUFFER_AGE_BUDGET_MS) {
+          this.traceDeferred({ reason: 'browser-buffer-aged', ...this.bufferBudget.snapshot(performance.now()) })
+          return
+        }
+        if (!drainingRelease) {
+          const packetOverhead = frame ? 39 : 15
+          metadataQueue = metadataQueue.slice(0, Math.max(0, Math.floor((limit - buffered - packetOverhead) / 28)))
+        }
         if (buffered >= MAX_INPUT_BUFFERED_BYTES)
           metadataQueue = []
         const packet = new InputPacketEncoder((this.inputSequenceNum + 1) >>> 0)
@@ -259,6 +283,10 @@ export class InputService {
   private traceSent(pending: PendingInput, bufferedBytes: number): void {
     const { frame } = pending
     const now = performance.now()
+    this.queueWait.record(now - pending.enqueuedAtMs)
+    this.observationToSend.record(now - (frame.observedAtMs ?? now))
+    if (frame.sampledAtMs !== undefined && !pending.reset)
+      this.physicalSampleAge.record(now - frame.sampledAtMs)
     this.leftTriggerPeak = Math.max(this.leftTriggerPeak, trigger(frame.state, 'left'))
     this.rightTriggerPeak = Math.max(this.rightTriggerPeak, trigger(frame.state, 'right'))
     if (!pending.reset && sameDigitalButtons(this.lastTraceState, frame.state) && now - this.lastTraceAt < INPUT_TRACE_INTERVAL_MS)
@@ -271,8 +299,10 @@ export class InputService {
 
   private trySend(transport: InputTransport, buffer: ArrayBuffer): boolean {
     try {
-      if (transport.send(buffer))
+      if (transport.send(buffer)) {
+        this.bufferBudget.accepted(buffer.byteLength, performance.now())
         return true
+      }
       this.traceDeferred({ reason: 'transport-rejected', bufferedBytes: transport.bufferedAmount() })
     }
     catch (error) {
@@ -289,6 +319,20 @@ export class InputService {
     recordInputTrace('gamepadInputSendDeferred', { ...payload, deferredAttempts: this.deferredAttempts })
     this.lastDeferredTraceAt = now
     this.deferredAttempts = 0
+  }
+
+  private traceDelivery(): void {
+    const now = performance.now()
+    if (now - this.lastDeliveryTraceAt < 1000)
+      return
+    this.lastDeliveryTraceAt = now
+    recordInputTrace('gamepadInputDeliveryObserved', {
+      ...this.bufferBudget.snapshot(now),
+      pendingInputs: this.pendingInputs.length,
+      queueWait: this.queueWait.snapshot(),
+      observationToSend: this.observationToSend.snapshot(),
+      physicalSampleAge: this.physicalSampleAge.snapshot(),
+    })
   }
 
   setGamepadState(frame: GamepadFrame): void {

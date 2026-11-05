@@ -22,7 +22,19 @@ async function bootstrap(): Promise<void> {
   installKeyboardFallbackBridge()
   void initializeGamepadInput().catch(error => devWarn('[gamepad] initialization failed:', error))
   let lastSignature = ''
+  let lastInputStatus: ReturnType<typeof inputController.getSnapshot> | undefined
+  let lastSampling: ReturnType<typeof inputController.getSnapshot>['sampling']
   inputController.subscribe((snapshot) => {
+    if (snapshot.sampling && snapshot.sampling !== lastSampling) {
+      lastSampling = snapshot.sampling
+      void rpc.runtimeTrace.recordEvent({ event: 'gamepadSamplingObserved', payload: snapshot.sampling }).catch(() => {})
+    }
+    if (lastInputStatus?.backend === snapshot.backend && lastInputStatus.owner === snapshot.owner
+      && lastInputStatus.activeDeviceId === snapshot.activeDeviceId && lastInputStatus.isBackground === snapshot.isBackground
+      && lastInputStatus.preferences.backgroundPolicy === snapshot.preferences.backgroundPolicy) {
+      return
+    }
+    lastInputStatus = snapshot
     const payload = { backend: snapshot.backend, owner: snapshot.owner, activeDeviceId: snapshot.activeDeviceId, backgroundPolicy: snapshot.preferences.backgroundPolicy, isBackground: snapshot.isBackground }
     const signature = JSON.stringify(payload)
     if (signature === lastSignature)

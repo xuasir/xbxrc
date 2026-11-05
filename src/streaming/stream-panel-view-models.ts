@@ -118,11 +118,14 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
     submitCost: formatPanelMs(short ? short.renderDrawDurationMsAvg : s?.renderDrawDurationMsAvg),
     uploadCost: formatPanelMs(short ? short.renderUploadDurationMsAvg : s?.renderUploadDurationMsAvg),
     glSubmitCost: formatPanelMs(short ? short.renderSubmitDurationMsAvg : s?.renderSubmitDurationMsAvg),
-    gpuCost: unavailable,
+    submitIntervalTail: `${formatPanelMs(s?.rendererTiming?.interval.p95Ms)} / ${formatPanelMs(s?.rendererTiming?.interval.p99Ms)}`,
+    uploadTail: `${formatPanelMs(s?.rendererTiming?.upload.p95Ms)} / ${formatPanelMs(s?.rendererTiming?.upload.p99Ms)}`,
+    gpuTail: s?.rendererGpuTiming?.duration.count ? `${formatPanelMs(s.rendererGpuTiming.duration.p95Ms)} / ${formatPanelMs(s.rendererGpuTiming.duration.p99Ms)}` : unavailable,
+    gpuCost: s?.rendererGpuTiming?.duration.count ? formatPanelMs(s.rendererGpuTiming.duration.meanMs) : unavailable,
     scanout: unavailable,
     renderCause: stringOrDash(s?.renderCause),
     renderEffect: stringOrDash(s?.renderActionEffect),
-    frameCauses: [s?.rendererLatestOverwriteCount, s?.rendererPacingWaitCount, s?.rendererSubmitFailureCount, s?.rendererCaptureFramesTotal].map(v => v ?? '--').join(' / '),
+    frameCauses: [s?.rendererLatestOverwriteCount, s?.rendererRateLimitDropCount, s?.rendererSubmitFailureCount, s?.rendererCaptureFramesTotal].map(v => v ?? '--').join(' / '),
     rttBaseline: formatPanelMs(s?.networkRttBaselineMs),
     rttDelta: formatPanelMs(s?.networkRttDeltaMs),
     qualityRequested: formatPanelKbps(s?.qualityRequestedBitrateKbps),
@@ -169,7 +172,7 @@ export type StreamDiagnosticGroup = typeof DIAGNOSTIC_GROUPS[number]
 
 const DIAGNOSTIC_KEYS: Record<StreamDiagnosticGroup, readonly (keyof StreamBrowserDiagnosticsViewModel)[]> = {
   network: ['rtt', 'rttBaseline', 'rttDelta', 'jitter', 'packetLoss', 'qualityObserved', 'totalBitrate', 'qualityRequested', 'qualityNegotiated', 'qualityEffect', 'bandwidthState', 'bandwidthAction', 'controlChannelState', 'controlChannelError', 'controlChannelOpenRatio', 'controlChannelBufferedTrend'],
-  display: ['receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'callbackDeliveryFps', 'sourceSize', 'outputSize', 'submitAge', 'submitCost', 'uploadCost', 'glSubmitCost', 'renderPipelineType', 'srRuntime', 'srSetting', 'renderProcessing', 'renderShaderPath', 'renderCause', 'renderEffect', 'frameCauses'],
+  display: ['receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'callbackDeliveryFps', 'sourceSize', 'outputSize', 'submitAge', 'submitCost', 'uploadCost', 'glSubmitCost', 'submitIntervalTail', 'uploadTail', 'gpuCost', 'gpuTail', 'renderPipelineType', 'srRuntime', 'srSetting', 'renderProcessing', 'renderShaderPath', 'renderCause', 'renderEffect', 'frameCauses'],
   recovery: ['presentationMilestone', 'recoveryCause', 'recoveryEffect', 'keyframeSuccessRate'],
   session: ['connectedElapsed', 'mediaReadyElapsed', 'transportState', 'transportPath', 'serverHost', 'frameWindow', 'observation', 'sampleAge', 'frontEndProfileBaseline', 'frontEndProfileDynamic', 'frontEndPolicyPreset', 'qualityLadderLevel', 'senderPolicyCause', 'decisionDigest'],
 }
@@ -177,6 +180,7 @@ const DIAGNOSTIC_KEYS: Record<StreamDiagnosticGroup, readonly (keyof StreamBrows
 export function diagnosticGroupRows(vm: StreamBrowserDiagnosticsViewModel, group: StreamDiagnosticGroup): StreamInternalDiagnosticsRow[] {
   const required = new Set(['rtt', 'jitter', 'packetLoss', 'qualityObserved', 'totalBitrate', 'controlChannelState', 'receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'sourceSize', 'outputSize', 'renderPipelineType', 'srRuntime', 'presentationMilestone', 'recoveryCause', 'recoveryEffect', 'keyframeSuccessRate', 'connectedElapsed', 'mediaReadyElapsed', 'frameWindow', 'observation', 'sampleAge'])
   return DIAGNOSTIC_KEYS[group].map(key => ({ key, value: vm[key] }))
+    .filter(row => !['gpuCost', 'gpuTail'].includes(row.key) || /^\d/.test(row.value))
     .filter(row => row.key !== 'controlChannelError' || !['--', 'none'].includes(row.value))
     .filter(row => required.has(row.key) || !/^--(?:\s*\/\s*--)*$/.test(row.value))
 }

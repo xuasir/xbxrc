@@ -1,4 +1,21 @@
+import type { LatencySummary } from '../../shared/latency-window'
 import type { BrowserStatsWindowSummary } from './stats'
+
+export interface RendererTiming {
+  duration: LatencySummary
+  upload: LatencySummary
+  submit: LatencySummary
+  interval: LatencySummary
+}
+
+export interface RendererGpuTiming {
+  source: 'EXT_disjoint_timer_query_webgl2'
+  state: 'unavailable' | 'ready' | 'pending' | 'disjoint' | 'failed'
+  sampledAtMs?: number
+  disjointCount: number
+  queryCount: number
+  duration: LatencySummary
+}
 
 export type VideoFit = 'Contain' | 'Stretch' | 'Zoom' | string
 
@@ -262,6 +279,8 @@ export interface BrowserPlaybackStats {
   renderDrawDurationMsAvg?: number
   renderUploadDurationMsAvg?: number
   renderSubmitDurationMsAvg?: number
+  rendererTiming?: RendererTiming
+  rendererGpuTiming?: RendererGpuTiming
   renderActualOutputWidth?: number
   renderActualOutputHeight?: number
   renderActualMode?: 'upscale' | 'passthrough'
@@ -272,7 +291,7 @@ export interface BrowserPlaybackStats {
   renderActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
   statsCollectionDurationMs?: number
   rendererLatestOverwriteCount?: number
-  rendererPacingWaitCount?: number
+  rendererRateLimitDropCount?: number
   rendererSubmitFailureCount?: number
   rendererDuplicateDrawCount?: number
   rendererGpuErrorChecks?: number

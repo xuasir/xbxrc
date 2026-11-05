@@ -4,10 +4,14 @@
 
 | 当前阅读入口 | 证据与待验项 |
 | --- | --- |
-| [SR冷准备与运行态补供帧修复](../../docs/reports/2026-11-03-sr-cold-preparation-and-runtime-supply-fix.md) | 前置准备、一次有界重试与56组回放通过；171ms/25ms冷成本之后运行态600张唯一图像/10秒，实机持续60fps待验 |
-| [SR GPU补供帧最新设备日志](2026-11-03-sr-gpu-supply-fresh-trace-analysis.md) | 首次CPU196ms超冷预算停用、补帧0；SR同窗51.39/46.97fps，冷启动与恢复资格待修 |
-| [GPU异步补供给实施验证](2026-11-02-gpu-drawable-supply-validation.md) | 40组受控回放通过；设备warm成本、有效像素配对及实际补帧待验 |
-| [像素读取成本分段](2026-11-02-video-pixel-read-cost-validation.md) | 当前代码验证；cold/warm 读取开销和有效 drawable 配对待新日志 |
+| [默认候选准入修复](../../docs/reports/2026-11-05-browser-frame-admission-fix.md) | 常规预算候选直通、低FPS滚动准入及SR恢复去重；60文件610项测试、12组节拍及19组设备入口回放通过，真实供给/GPU/present待新设备样本 |
+| [固定槽阶段设备日志](2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md) | 采样源码匹配；SR累计352候选→268提交+84限帧跳过，相位冲突由生产回放复现；网络/解码约60fps、输入184.75Hz、严格Browser门禁PASS；准入已按上方报告修复，源供给继续待验 |
+| [Browser最新帧调度简化](../../docs/reports/2026-11-05-browser-latest-frame-scheduling.md) | 主机/云游戏共用即时提交与直接跳帧；像素退为低频诊断，初版60文件591项测试与9组节拍回放通过；固定槽规则已由上方默认准入修复替换 |
+| [调度简化前渲染与输入设备日志](2026-11-05-render-input-fresh-trace-analysis.md) | 历史样本冷准备/输入发送/资源清理正常；健康SR候选47.79→提交47.46fps，233组像素配对变化0；该样本共享采样缺证，新样本已补齐 |
+| [SR冷准备与运行态补供帧历史修复](../../docs/reports/2026-11-03-sr-cold-preparation-and-runtime-supply-fix.md) | 历史前置准备、一次有界重试与56组回放；当前采用上方最新帧策略，像素作为低频诊断 |
+| [SR GPU补供帧历史设备日志](2026-11-03-sr-gpu-supply-fresh-trace-analysis.md) | 旧样本首次CPU196ms超冷预算停用、补帧0；保留修复前采样与源码身份 |
+| [GPU异步补供给历史验证](2026-11-02-gpu-drawable-supply-validation.md) | 保留40组受控回放的历史合同；当前交付资格由RVFC/播放计数统一推进 |
+| [像素读取成本分段](2026-11-02-video-pixel-read-cost-validation.md) | 历史cold/warm分段；当前诊断沿低频异步读取继续记录成本与像素差异 |
 | [SR60fps 瓶颈续查](2026-11-02-sr-60fps-bottleneck-analysis.md) | 同代际 RVFC/rAF、候选交付和回放；SR60fps/实际呈现待验 |
 | [最新网络与渲染分析](2026-11-02-network-render-fresh-trace-analysis.md) | 同窗网络、恢复、供帧、处理成本与长尾 |
 | [公共启动修复报告](../../docs/reports/2026-10-30-common-startup-fixes.md) | 当前正式回归入口和五项问题的修复行为 |

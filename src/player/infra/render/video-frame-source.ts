@@ -13,13 +13,6 @@ export interface ObservedVideoFrameMetadata extends Partial<VideoFrameCallbackMe
 }
 
 type FrameRequest = (atMs: number, metadata?: ObservedVideoFrameMetadata) => void
-interface FrameRequestOptions {
-  drawableTargetFps?: () => number
-}
-export interface VideoFramePreparation {
-  ready: Promise<void>
-  release: () => void
-}
 const sources = new WeakMap<HTMLVideoElement, VideoFrameSource>()
 let videoGeneration = 0
 const NATIVE_COUNTER_CREDIT_WINDOW_MS = 1000
@@ -72,8 +65,7 @@ function readVideoFrameCounter(video: HTMLVideoElement): VideoFrameCounter | und
 
 /** 同一 video 的原始 metadata 和最新帧轮询共用帧身份、消费者与取消代际。 */
 class VideoFrameSource {
-  private readonly pending = new Map<number, { callback: FrameRequest, options?: FrameRequestOptions }>()
-  private readonly preparing = new Set<number>()
+  private readonly pending = new Map<number, { callback: FrameRequest }>()
   private nextRequest = 0
   private frameSequence = 0
   private lastPresentedFrames?: number
@@ -92,7 +84,6 @@ class VideoFrameSource {
   private timeUpdateBound = false
   private nativeCallbackCount = 0
   private polledFrameCount = 0
-  private lastDeliveredAtMs = Number.NEGATIVE_INFINITY
   private readonly identityObservation = new VideoFrameIdentityObservation()
   private readonly pixelObservation: VideoFramePixelObservation
   private diagnosticRtpTimestamp?: number
@@ -104,7 +95,7 @@ class VideoFrameSource {
   }
 
   snapshotResources() {
-    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, framePreparationRequests: this.preparing.size, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
+    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, framePreparationRequests: 0, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
   }
 
   snapshotDiagnostics() {
@@ -112,52 +103,24 @@ class VideoFrameSource {
   }
 
   constructor(private readonly video: HTMLVideoElement) {
-    this.pixelObservation = new VideoFramePixelObservation(video, input => this.pixelIdentityCurrent(input), input => this.deliverPixelFrame(input))
+    this.pixelObservation = new VideoFramePixelObservation(video, input => this.pixelIdentityCurrent(input))
     this.counter = readVideoFrameCounter(video)
     this.counterSource = this.counter?.source
     if (typeof video.requestVideoFrameCallback !== 'function')
       this.lastMediaTime = video.currentTime
   }
 
-  request(callback: FrameRequest, options?: FrameRequestOptions): number {
+  request(callback: FrameRequest): number {
     const id = ++this.nextRequest
-    this.pending.set(id, { callback, options })
+    this.pending.set(id, { callback })
     this.schedule()
     return id
-  }
-
-  prepareDrawable(targetFps: number): VideoFramePreparation {
-    if (!Number.isFinite(targetFps) || targetFps <= 0)
-      return { ready: Promise.resolve(), release: () => {} }
-    const id = ++this.nextRequest
-    this.preparing.add(id)
-    return {
-      ready: this.pixelObservation.prepare(true),
-      release: () => {
-        if (!this.preparing.delete(id))
-          return
-        if (this.preparing.size === 0 && this.drawableTargetFps() === 0)
-          this.pixelObservation.reset()
-      },
-    }
   }
 
   cancel(id: number): void {
     this.pending.delete(id)
     if (this.pending.size === 0)
       this.cancelScheduled()
-    else if (this.preparing.size === 0 && this.drawableTargetFps() === 0)
-      this.pixelObservation.reset()
-  }
-
-  private drawableTargetFps(): number {
-    let target = 0
-    for (const request of this.pending.values()) {
-      const fps = request.options?.drawableTargetFps?.() ?? 0
-      if (Number.isFinite(fps))
-        target = Math.max(target, Math.min(120, fps))
-    }
-    return target
   }
 
   private pixelIdentityCurrent(input: PixelObservationInput): boolean {
@@ -165,21 +128,6 @@ class VideoFrameSource {
     return this.pending.size > 0 && input.epoch === this.epoch
       && input.localSequence === this.frameSequence && input.nativeCallbackCount === this.nativeCallbackCount
       && counter?.source === input.counterSource && counter?.frames === input.counterFrames
-  }
-
-  private deliverPixelFrame(input: PixelObservationInput): PixelObservationInput | undefined {
-    if (this.drawableTargetFps() <= 0 || !this.pixelIdentityCurrent(input))
-      return
-    const atMs = performance.now()
-    // 像素确认与轮询共用身份；两份额度分别吸收晚到native和播放计数。
-    this.polledFramesSinceNative++
-    if (this.counter && this.counterProgressAtMs !== undefined && atMs - this.counterProgressAtMs <= NATIVE_COUNTER_CREDIT_WINDOW_MS) {
-      this.uncountedNativeFrames++
-      this.nativeCreditStartedAtMs ??= atMs
-    }
-    this.polledFrameCount++
-    this.notify(atMs, { newFrame: true, presentedFramesDelta: 1, trackingSource: 'animationFrame', localSequence: ++this.frameSequence, videoGeneration: this.videoGeneration })
-    return { ...input, localSequence: this.frameSequence, enteredAtMs: atMs }
   }
 
   private cancelScheduled(): void {
@@ -196,8 +144,7 @@ class VideoFrameSource {
     this.uncountedNativeFrames = this.polledFramesSinceNative = 0
     this.nativeCreditStartedAtMs = this.counterProgressAtMs = undefined
     this.identityObservation.resetTimingBaseline()
-    if (this.preparing.size === 0)
-      this.pixelObservation.reset()
+    this.pixelObservation.reset()
     this.epoch++
   }
 
@@ -391,24 +338,27 @@ class VideoFrameSource {
       this.lastPresentedFrames = metadata.presentedFrames
     if (mediaTime !== undefined)
       this.lastMediaTime = mediaTime
-    const drawableTargetFps = this.drawableTargetFps()
-    if (drawableTargetFps > 0 || this.identityObservation.enabled)
-      this.pixelObservation.observe({ enteredAtMs: callbackEnteredAtMs ?? performance.now(), trackingSource, newFrame, localSequence: this.frameSequence + Number(newFrame), nativeCallbackCount: this.nativeCallbackCount, counterSource: counter?.source, counterFrames: counter?.frames, counterReset: counterReset || nativeReset, counterPaired: advance > 0 && credited === advance, epoch: this.epoch }, { drawableTargetFps, diagnostic: this.identityObservation.enabled, lastDeliveredAtMs: newFrame ? atMs : this.lastDeliveredAtMs })
-    else
-      this.pixelObservation.reset()
+    const pixelInput: PixelObservationInput | undefined = this.identityObservation.enabled
+      ? { enteredAtMs: callbackEnteredAtMs!, trackingSource, newFrame, localSequence: this.frameSequence + Number(newFrame), nativeCallbackCount: this.nativeCallbackCount, counterSource: counter?.source, counterFrames: counter?.frames, counterReset: counterReset || nativeReset, counterPaired: advance > 0 && credited === advance, epoch: this.epoch }
+      : undefined
     // 重复轮询保持等待；原始 RVFC metadata 继续交给协议与诊断消费者。
-    if (!newFrame && trackingSource !== 'videoFrameCallback')
+    if (!newFrame && trackingSource !== 'videoFrameCallback') {
+      if (pixelInput)
+        this.pixelObservation.observe(pixelInput)
       return
+    }
     if (newFrame && trackingSource === 'animationFrame')
       this.polledFrameCount++
     const observed: ObservedVideoFrameMetadata = { ...metadata, mediaTime, presentedFramesDelta, trackingSource, newFrame, localSequence: this.frameSequence += Number(newFrame), videoGeneration: this.videoGeneration }
     this.notify(atMs, observed)
+    // 先交付最新候选，再采集低频像素；消费者关闭后保持取消代际。
+    if (pixelInput && this.pending.size > 0 && pixelInput.epoch === this.epoch)
+      this.pixelObservation.observe(pixelInput)
   }
 
   private notify(atMs: number, observed: ObservedVideoFrameMetadata): void {
     if (observed.newFrame) {
       this.lastFrame = observed
-      this.lastDeliveredAtMs = atMs
     }
     for (const id of [...this.pending.keys()]) {
       const callback = this.pending.get(id)?.callback

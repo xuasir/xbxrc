@@ -228,6 +228,11 @@ onMounted(() => {
     void loadShellUserState()
   })
   disposeGamepadRuntimeSnapshot = inputController.subscribe((snapshot) => {
+    const previous = gamepadSnapshot.value
+    if (previous.owner === snapshot.owner && previous.exclusiveCapture === snapshot.exclusiveCapture
+      && previous.devices.length === snapshot.devices.length) {
+      return
+    }
     gamepadSnapshot.value = snapshot
   })
   window.addEventListener('keydown', handleEscapeKeydown)

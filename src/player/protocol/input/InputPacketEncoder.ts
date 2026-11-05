@@ -19,13 +19,16 @@ enum ReportTypes {
   Sensor = 256,
 }
 
+type EncodedPointerEvent = Pick<PointerEvent, 'type' | 'x' | 'y' | 'pressure' | 'twist'> & { target: Element }
+interface EncodedPointerFrame { events: EncodedPointerEvent[] }
+
 export class InputPacketEncoder {
   private reportType = ReportTypes.None
   private totalSize = -1
   private sequence = -1
   private metadataFrames: Array<ProcessedVideoFrameMetadata> = []
   private gamepadFrames: Array<GamepadFrame> = []
-  private pointerFrames: Array<PointerFrame> = []
+  private pointerFrames: EncodedPointerFrame[] = []
   private mouseFrames: Array<MouseFrame> = []
   private keyboardFrames: Array<KeyboardFrame> = []
   private maxTouchpoints = 0
@@ -47,6 +50,24 @@ export class InputPacketEncoder {
     mouseQueue: Array<MouseFrame>,
     keyboardQueue: Array<KeyboardFrame>,
   ): void {
+    // 在计算长度前形成有效事件快照，计数与后续报告偏移共用这一份事实。
+    const pointers: EncodedPointerFrame[] = pointerQueue.map(frame => ({
+      events: frame.events.flatMap((event) => {
+        if (typeof Element === 'undefined' || !(event.target instanceof Element))
+          return []
+        return [{ target: event.target, type: event.type, x: event.x, y: event.y, pressure: event.pressure, twist: event.twist }]
+      }),
+    })).filter(frame => frame.events.length > 0)
+    if ([metadataQueue, gamepadQueue, pointers, mouseQueue, keyboardQueue].some(queue => queue.length > 255)
+      || pointers.some(frame => frame.events.length > 255)) {
+      throw new RangeError('inputReportCountExceedsUint8')
+    }
+    this.reportType = ReportTypes.None
+    this.metadataFrames = []
+    this.gamepadFrames = []
+    this.pointerFrames = []
+    this.mouseFrames = []
+    this.keyboardFrames = []
     let size = 14
 
     if (metadataQueue.length > 0) {
@@ -61,13 +82,13 @@ export class InputPacketEncoder {
       this.gamepadFrames = gamepadQueue
     }
 
-    if (pointerQueue.length > 0) {
+    if (pointers.length > 0) {
       this.reportType |= ReportTypes.Pointer
       size += 1
-      for (const frame of pointerQueue) {
+      for (const frame of pointers) {
         size += 1 + frame.events.length * 20
       }
-      this.pointerFrames = pointerQueue
+      this.pointerFrames = pointers
     }
 
     if (mouseQueue.length > 0) {
@@ -207,7 +228,7 @@ export class InputPacketEncoder {
         true,
       )
       packet.setUint32(offset + 14, 0, true)
-      packet.setUint32(offset + 18, 0, false)
+      packet.setUint32(offset + 18, 0, true)
       offset += 22
     }
     return offset
@@ -219,47 +240,42 @@ export class InputPacketEncoder {
     return -value
   }
 
-  private writePointers(packet: DataView, offset: number, frames: Array<PointerFrame>): number {
-    packet.setUint8(offset, 1)
-    offset++
-    const frame = frames[0]
-    if (!frame) {
-      return offset
-    }
-    packet.setUint8(offset, frame.events.length)
+  private writePointers(packet: DataView, offset: number, frames: EncodedPointerFrame[]): number {
+    packet.setUint8(offset, frames.length)
     offset++
     const targetWidth = 1920
     const targetHeight = 1080
-    for (const pointerEvent of frame.events) {
-      const target = pointerEvent.target
-      if (!(target instanceof Element)) {
-        continue
+    for (const frame of frames) {
+      packet.setUint8(offset, frame.events.length)
+      offset++
+      for (const pointerEvent of frame.events) {
+        const target = pointerEvent.target
+        const rect = target.getBoundingClientRect()
+        const relativeX = (pointerEvent.x - rect.left) / rect.width
+        const relativeY = (pointerEvent.y - rect.top) / rect.height
+        let finalX = relativeX * targetWidth
+        let finalY = relativeY * targetHeight
+        let tiltX = 0.06575749909301447 * targetHeight
+        let tiltY = 0.06575749909301447 * targetWidth
+        if (pointerEvent.type === 'pointerup') {
+          tiltX = 0
+          tiltY = 0
+          finalX = 0
+          finalY = 0
+        }
+        packet.setUint16(offset, tiltX, true)
+        packet.setUint16(offset + 2, tiltY, true)
+        packet.setUint8(offset + 4, 255 * pointerEvent.pressure)
+        packet.setUint16(offset + 5, pointerEvent.twist, true)
+        packet.setUint32(offset + 7, 0, true)
+        packet.setUint32(offset + 11, finalX, true)
+        packet.setUint32(offset + 15, finalY, true)
+        packet.setUint8(
+          offset + 19,
+          pointerEvent.type === 'pointerdown' ? 1 : pointerEvent.type === 'pointerup' ? 2 : 3,
+        )
+        offset += 20
       }
-      const rect = target.getBoundingClientRect()
-      const relativeX = (pointerEvent.x - rect.left) / rect.width
-      const relativeY = (pointerEvent.y - rect.top) / rect.height
-      let finalX = relativeX * targetWidth
-      let finalY = relativeY * targetHeight
-      let tiltX = 0.06575749909301447 * targetHeight
-      let tiltY = 0.06575749909301447 * targetWidth
-      if (pointerEvent.type === 'pointerup') {
-        tiltX = 0
-        tiltY = 0
-        finalX = 0
-        finalY = 0
-      }
-      packet.setUint16(offset, tiltX, true)
-      packet.setUint16(offset + 2, tiltY, true)
-      packet.setUint8(offset + 4, 255 * pointerEvent.pressure)
-      packet.setUint16(offset + 5, pointerEvent.twist, true)
-      packet.setUint32(offset + 7, 0, true)
-      packet.setUint32(offset + 11, finalX, true)
-      packet.setUint32(offset + 15, finalY, true)
-      packet.setUint8(
-        offset + 19,
-        pointerEvent.type === 'pointerdown' ? 1 : pointerEvent.type === 'pointerup' ? 2 : 3,
-      )
-      offset += 20
     }
     return offset
   }

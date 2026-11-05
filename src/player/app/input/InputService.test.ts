@@ -141,6 +141,34 @@ function buttonMask(packet: DataView): number {
 }
 
 describe('input delivery under pressure', () => {
+  it('pauses ordinary input behind old browser bytes and immediately delivers an ordered release', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.fillBuffer()
+    f.queue(1, 0.1)
+    vi.advanceTimersByTime(60)
+    const before = f.sent.length
+    f.queue(1, 0.8)
+    expect(f.sent).toHaveLength(before)
+    f.queue(0)
+    expect(f.sent.slice(-2).map(buttonMask)).toEqual([16, 0])
+    expect(f.sent.at(-2)!.getInt16(18, true)).toBe(Math.trunc(0.8 * 32767))
+    expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'gamepadInputSendDeferred', payload: expect.objectContaining({ reason: 'browser-buffer-aged' }) }))
+  })
+
+  it('bounds accepted ordinary bytes and resumes fresh input on an empty-buffer event', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.fillBuffer()
+    for (let i = 1; i <= 30; i++) f.queue(1, i / 31)
+    expect(f.buffered()).toBeLessThanOrEqual(512)
+    expect(f.sent.length).toBeLessThan(15)
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.at(-1)!.getInt16(18, true)).toBe(Math.trunc(30 / 31 * 32767))
+    vi.advanceTimersByTime(50)
+    expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'gamepadInputDeliveryObserved', payload: expect.objectContaining({ source: 'browserBufferedAmount', queueWait: expect.objectContaining({ count: expect.any(Number) }) }) }))
+  })
   it('retries the client handshake before sending input', () => {
     const f = reliabilityFixture()
     f.accepting(false)
@@ -261,7 +289,7 @@ describe('input delivery under pressure', () => {
     f.buffer(0)
     f.writable()
     expect(buttonMask(f.sent.at(-1)!)).toBe(0)
-    expect(f.transport.onWritable).toHaveBeenCalledWith(8192, expect.any(Function))
+    expect(f.transport.onWritable).toHaveBeenCalledWith(0, expect.any(Function))
   })
 
   it('discards old clicks after 250ms and synchronizes only the fresh latest state', () => {

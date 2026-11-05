@@ -150,6 +150,10 @@ describe('buildStreamBrowserDiagnosticsViewModel', () => {
       frontEndProfileDynamic: 'steady',
       frontEndPolicyPreset: 'preset-a',
       renderSuperResolutionEnabled: false,
+      rendererLatestOverwriteCount: 0,
+      rendererRateLimitDropCount: 12,
+      rendererSubmitFailureCount: 1,
+      rendererCaptureFramesTotal: 2,
       bandwidthState: 'stable',
       bandwidthAction: 'none',
       controlChannelState: 'open',
@@ -171,6 +175,7 @@ describe('buildStreamBrowserDiagnosticsViewModel', () => {
     expect(vm.renderPipelineType).toBe('WebGL2')
     expect(vm.controlChannelOpenRatio).toBe('42%')
     expect(vm.keyframeSuccessRate).toBe('90%')
+    expect(vm.frameCauses).toBe('0 / 12 / 1 / 2')
   })
 
   it('shows the five stages, actual source/output and unavailable scanout independently', () => {
@@ -185,5 +190,19 @@ describe('buildStreamBrowserDiagnosticsViewModel', () => {
     expect([vm.submitCost, vm.uploadCost, vm.glSubmitCost]).toEqual(['2.0ms', '1.5ms', '0.5ms'])
     expect(vm.gpuCost).toBe('streamPage.diagnostics.values.unavailable')
     expect(vm.scanout).toBe(vm.gpuCost)
+  })
+
+  it('shows bounded renderer and GPU tails while keeping scanout evidence independent', () => {
+    const timing = { count: 100, retained: 100, capacity: 256, meanMs: 2, p95Ms: 3, p99Ms: 4 }
+    const vm = buildStreamBrowserDiagnosticsViewModel({
+      snapshot: { rendererTiming: { duration: timing, upload: timing, submit: timing, interval: { ...timing, p95Ms: 17, p99Ms: 32 } }, rendererGpuTiming: { source: 'EXT_disjoint_timer_query_webgl2', state: 'pending', disjointCount: 0, queryCount: 1, duration: timing } },
+      diagnostics: baseDiagnostics(),
+      i18n: createI18n(),
+    })
+    expect(vm.submitIntervalTail).toBe('17.0ms / 32.0ms')
+    expect(vm.uploadTail).toBe('3.0ms / 4.0ms')
+    expect(vm.gpuCost).toBe('2.0ms')
+    expect(vm.gpuTail).toBe('3.0ms / 4.0ms')
+    expect(vm.scanout).toBe('streamPage.diagnostics.values.unavailable')
   })
 })

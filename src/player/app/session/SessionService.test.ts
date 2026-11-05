@@ -126,7 +126,7 @@ describe('browser session replacement', () => {
     const peer = FakePeer.instances[0]
     peer.channels.get('message')!.handshake()
     const channel = peer.channels.get('input')!
-    expect(channel.bufferedAmountLowThreshold).toBe(8192)
+    expect(channel.bufferedAmountLowThreshold).toBe(0)
     channel.bufferedAmount = 18 * 1024
     const state = neutralState()
     state.buttons.south = 1

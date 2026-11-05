@@ -1,4 +1,4 @@
-import type { GamepadBackend, GamepadSnapshot, InputDevice, RumbleResult } from './backend'
+import type { GamepadBackend, GamepadSnapshot, InputDevice, InputSamplingObservation, RumbleResult } from './backend'
 import type { GamepadRumbleEffectDto, LogicalPadStateDto } from './contract'
 import type { GamepadPreferences, InputOwner } from './preferences'
 import { emptyGamepadSnapshot } from './backend'
@@ -22,6 +22,7 @@ export interface InputSnapshot {
   sequence: number
   observedAt: number
   error: string | null
+  sampling?: InputSamplingObservation
 }
 
 /** 设备源与媒体执行解耦；所有消费者读取同一次归属决策。 */
@@ -315,6 +316,7 @@ export class InputController {
       gameState,
       sequence: this.raw.sequence,
       observedAt: this.raw.observedAt,
+      sampling: this.raw.sampling,
       error: this.raw.error ?? this.initializationError,
     }
   }

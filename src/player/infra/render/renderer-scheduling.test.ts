@@ -18,7 +18,7 @@ const config: RendererRuntimeConfig = {
   saturation: 100,
 }
 
-async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRuntimeConfig> = {}, dualPass = false, counter: 'none' | 'playbackQuality' | 'webkit' = 'none', prepareProbe?: (video: HTMLVideoElement, spend: (ms: number) => void) => void) {
+async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRuntimeConfig> = {}, dualPass = false, counter: 'none' | 'playbackQuality' | 'webkit' = 'none', prepareProbe?: (video: HTMLVideoElement, spend: (ms: number) => void) => void, duringInit?: (renderer: WebGL2VideoRenderer | SuperResolutionWebGL2Renderer) => void) {
   let atMs = 0
   let presentedFrames = 0
   let droppedFrames = 0
@@ -129,7 +129,9 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
   const failure = vi.fn()
   const cfg = { ...config, superResolutionOutputWidth: video.videoWidth, superResolutionOutputHeight: video.videoHeight, ...options, rendererRuntimeFailureNotifier: failure }
   const renderer = kind === 'webgl2_sr' ? new SuperResolutionWebGL2Renderer(cfg) : new WebGL2VideoRenderer(cfg)
-  await renderer.attach(video as unknown as HTMLVideoElement)
+  const attaching = renderer.attach(video as unknown as HTMLVideoElement)
+  duringInit?.(renderer)
+  await attaching
   const supply = (sequence: number, dropped = 0) => {
     presentedFrames = sequence
     droppedFrames = dropped
@@ -200,43 +202,185 @@ afterEach(() => {
 })
 
 describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind) => {
-  it.each([
-    { sourceFps: 60, targetFps: 60, skipEvery: 6, static: false, expected: 600 },
-    { sourceFps: 60, targetFps: 60, skipEvery: 4, static: false, expected: 600 },
-    { sourceFps: 60, targetFps: 30, skipEvery: 6, static: false, expected: 300 },
-    { sourceFps: 30, targetFps: 60, skipEvery: 4, static: false, expected: 300 },
-    { sourceFps: 60, targetFps: 60, skipEvery: 6, static: true, expected: 500 },
-  ])('imports unique drawable frames for $sourceFps fps source / $targetFps fps target / skip $skipEvery / static $static', async (settings) => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    let p!: ReturnType<typeof gpuProbe>
-    const h = await harness(kind, { targetFps: settings.targetFps }, false, 'playbackQuality', (video) => {
-      p = gpuProbe(video)
-      return p
+  it('applies initialization-time FPS updates and repeated init through one request chain', async () => {
+    const h = await harness(kind, {}, false, 'none', undefined, (renderer) => {
+      const internal = renderer as unknown as { player?: { init: () => Promise<void> }, processor?: { init: () => Promise<void> } }
+      const processor = internal.player ?? internal.processor!
+      expect(processor.init()).toBe(processor.init())
+      expect(() => {
+        renderer.update({ targetFps: 0 })
+        renderer.update({ targetFps: 60 })
+        renderer.update({ brightness: 110 })
+      }).not.toThrow()
     })
-    const imported: number[] = []
-    let image = 0
-    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
-      if (args.at(-1) === h.video)
-        imported.push(image)
-    })
-    for (let slot = 0; slot < 600; slot++) {
-      const at = slot * 1000 / 60
-      image = Math.floor(slot * settings.sourceFps / 60) + 1
-      p.image(settings.static ? 20 : image % 255)
-      const counted = Math.max(1, Math.floor(Math.floor(slot / 15) * settings.sourceFps / 4))
-      h.supply(counted)
-      if ((slot + 1) % settings.skipEvery !== 0)
-        h.frame(at, image, 0, counted)
-      h.raf(at + 0.2)
-      // 用独立timer推进GPU完成；GL导入计数只读取生产renderer。
-      h.gl.spend(1)
-      vi.advanceTimersByTime(1)
+    const source = getVideoFrameSource(h.video as unknown as HTMLVideoElement)
+    expect(source.snapshotResources().frameRequests).toBe(1)
+    for (let i = 1; i <= 5; i++) {
+      h.frame(i * 20, i)
+      expect(source.snapshotResources().frameRequests).toBe(1)
     }
-    expect(new Set(imported).size).toBe(imported.length)
-    expect(imported.length).toBe(settings.expected)
-    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: settings.expected, duplicateDrawCount: 0, submitFailureCount: 0 })
     h.renderer.destroy()
-    expect(getVideoFrameSource(h.video as unknown as HTMLVideoElement).snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
+    expect(source.snapshotResources().frameRequests).toBe(0)
+    expect(h.frames.size).toBe(0)
+  })
+
+  it('ignores a canceled frame callback after pause and resume', async () => {
+    const h = await harness(kind)
+    const source = getVideoFrameSource(h.video as unknown as HTMLVideoElement)
+    const pending = (source as unknown as { pending: Map<number, { callback: (at: number) => void }> }).pending
+    const late = [...pending.values()][0]!.callback
+    h.renderer.update({ targetFps: 0 })
+    h.renderer.update({ targetFps: 60 })
+    const expected = [...pending.keys()]
+    late(10)
+    expect([...pending.keys()]).toEqual(expected)
+    expect(source.snapshotResources().frameRequests).toBe(1)
+    h.renderer.destroy()
+    expect(source.snapshotResources().frameRequests).toBe(0)
+  })
+
+  it('loses the context once after terminal cleanup and isolates extension errors', async () => {
+    const h = await harness(kind)
+    const loseContext = vi.fn(() => {
+      expect(h.renderer.snapshotResources()).toMatchObject({ frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, gpuObjects: 0 })
+      h.canvases[0]!.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
+      throw new Error('driverCleanupFailed')
+    })
+    Object.assign(h.gl, { getExtension: (name: string) => name === 'WEBGL_lose_context' ? { loseContext } : null })
+    expect(() => h.renderer.destroy()).not.toThrow()
+    expect(loseContext).toHaveBeenCalledTimes(1)
+    expect(h.failure).not.toHaveBeenCalled()
+    expect(h.canvases[0]).toMatchObject({ width: 1, height: 1, isConnected: false })
+    h.renderer.destroy()
+    expect(loseContext).toHaveBeenCalledTimes(1)
+  })
+
+  it('submits each jittering 60fps candidate immediately with one shared source callback', async () => {
+    const h = await harness(kind)
+    for (let frame = 0; frame < 600; frame++) {
+      const at = 100 + Math.round(frame * 1000 / 60) + [-3, 0, 3][frame % 3]!
+      h.frame(at, frame + 1)
+      expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: frame + 1, lastDrawSequence: frame + 1, animationCallbacks: 0 })
+      expect(h.rafs.size).toBe(1)
+      expect(h.frames.size).toBe(1)
+    }
+    expect(h.renderer.snapshotResources()).toMatchObject({ rateLimitDropCount: 0, duplicateDrawCount: 0 })
+    h.renderer.destroy()
+  })
+
+  it('immediately submits every fresh burst candidate and resumes with the latest frame after a stall', async () => {
+    const h = await harness(kind)
+    h.frame(0, 1)
+    h.frame(1, 2)
+    h.frame(2, 3)
+    h.raf(100)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 3, lastDrawSequence: 3, rateLimitDropCount: 0, animationCallbacks: 0 })
+    h.frame(2000, 4)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 4, lastDrawSequence: 4 })
+    h.raf(3000)
+    expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(4)
+    h.renderer.destroy()
+  })
+
+  it.each([53, 60])('submits every %ifps candidate through phase drift and quantized jitter', async (sourceFps) => {
+    const h = await harness(kind)
+    for (let frame = 0; frame < sourceFps * 10; frame++) {
+      const drift = frame >= sourceFps ? 7 + (frame % 2 ? 4 : -4) : 0
+      const at = Math.round(frame * 1000 / sourceFps + drift)
+      h.frame(at, frame + 1, 0)
+      expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: frame + 1, lastDrawSequence: frame + 1, rateLimitDropCount: 0, animationCallbacks: 0 })
+      expect(h.frames.size).toBe(1)
+    }
+    h.renderer.destroy()
+    expect(h.rafs.size + h.frames.size).toBe(0)
+  })
+
+  it('submits the adjacent native entry pairs from the device trace immediately', async () => {
+    const h = await harness(kind)
+    for (const [index, at] of [74675, 79416, 79432, 79916, 79932].entries()) {
+      h.frame(at, index + 1, 0)
+      expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: index + 1, lastDrawSequence: index + 1, rateLimitDropCount: 0 })
+    }
+    h.renderer.destroy()
+  })
+
+  it.each([30, 45])('maintains an explicit %ifps budget and submits the newest candidate after a stall', async (targetFps) => {
+    const h = await harness(kind, { targetFps })
+    for (let frame = 0; frame < 600; frame++)
+      h.frame(Math.round(frame * 1000 / 60), frame + 1, 0)
+    const count = h.renderer.snapshotResources()!.realtimeDrawCount!
+    expect(count).toBeGreaterThanOrEqual(targetFps * 10 - 1)
+    expect(count).toBeLessThanOrEqual(targetFps * 10 + 1)
+    expect(h.renderer.snapshotResources()).toMatchObject({ rateLimitDropCount: 600 - count, duplicateDrawCount: 0, animationCallbacks: 0 })
+    h.raf(20000)
+    expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(count)
+    h.frame(20001, 601, 0)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: count + 1, lastDrawSequence: 601 })
+    h.frame(20002, 602, 0)
+    expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(count + 1)
+    h.renderer.destroy()
+  })
+
+  it('records submit interval and upload percentiles independently of screenshot draws', async () => {
+    const h = await harness(kind)
+    h.gl.texImage2D.mockImplementation(() => h.gl.spend(2))
+    h.frame(0, 1)
+    h.frame(20, 2)
+    h.frame(45, 3)
+    expect(h.renderer.snapshotResources()?.timing).toMatchObject({ upload: { count: 3, p95Ms: 2 }, interval: { count: 2, p95Ms: 25 } })
+    expect(h.renderer.snapshotResources()?.gpuTiming?.state).toBe('unavailable')
+    h.renderer.update({ targetFps: 0 })
+    h.renderer.update({ targetFps: 60 })
+    h.frame(2000, 4)
+    h.raf(2001)
+    expect(h.renderer.snapshotResources()?.timing?.interval.count).toBe(0)
+    h.renderer.destroy()
+  })
+  it.each([false, true])('keeps sparse candidate delivery identical with diagnostic pixels / static %s', async (staticImage) => {
+    const results: number[][] = []
+    for (const diagnostic of [false, true]) {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      let p!: ReturnType<typeof gpuProbe>
+      const h = await harness(kind, {}, false, 'playbackQuality', (video) => {
+        p = gpuProbe(video)
+      })
+      const source = getVideoFrameSource(h.video as unknown as HTMLVideoElement)
+      expect(p.canvas.getContext).not.toHaveBeenCalled()
+      if (diagnostic)
+        source.snapshotDiagnostics()
+      const imported: number[] = []
+      let image = 0
+      h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+        if (args.at(-1) === h.video)
+          imported.push(image)
+      })
+      for (let slot = 0; slot < 600; slot++) {
+        const at = slot * 1000 / 60
+        image = slot + 1
+        p.image(staticImage ? 20 : image % 255)
+        const counted = Math.floor(slot / 15) * 15 + 1
+        h.supply(counted)
+        if ((slot + 1) % 4)
+          h.frame(at, image, 0, counted)
+        h.raf(at + 0.2)
+        await Promise.resolve()
+        h.gl.spend(1)
+        vi.advanceTimersByTime(1)
+      }
+      expect(new Set(imported).size).toBe(imported.length)
+      expect(h.renderer.snapshotResources()).toMatchObject({ animationCallbacks: 0, duplicateDrawCount: 0, submitFailureCount: 0 })
+      const pixels = source.snapshotDiagnostics().videoPixels
+      expect(pixels).toMatchObject({ supplyMode: 'diagnostic', deliveredFrameCount: 0 })
+      expect(pixels.readCount).toBeLessThanOrEqual(40)
+      if (diagnostic)
+        expect(pixels.readCount).toBeGreaterThan(0)
+      else
+        expect(p.canvas.getContext).not.toHaveBeenCalled()
+      results.push(imported)
+      h.renderer.destroy()
+      expect(source.snapshotResources()).toMatchObject({ frameRequests: 0, pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
+    }
+    expect(results[0]).toEqual(results[1])
   })
 
   it('separates completed preparation, first usable candidate and successful draw clocks', async () => {
@@ -256,76 +400,13 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     h.renderer.destroy()
   })
 
-  it.each([4, 6])('delivers 600 unique runtime images after 171ms preparation with sparse callbacks / skip %i', async (skipEvery) => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    let p!: ReturnType<typeof gpuProbe>
-    let coldImport = true
-    const h = await harness(kind, {}, false, 'playbackQuality', (video, spend) => {
-      p = gpuProbe(video)
-      p.canvas.getContext.mockImplementation(() => {
-        spend(171)
-        return p.gl
-      })
-      p.gl.texImage2D.mockImplementation((...args: unknown[]) => {
-        if (args.at(-1) === video && coldImport) {
-          spend(25)
-          coldImport = false
-        }
-      })
-    })
-    const source = getVideoFrameSource(h.video as unknown as HTMLVideoElement)
-    expect(source.snapshotResources()).toMatchObject({ framePreparationRequests: 0, pixelProbePreparations: 0, pixelProbeCanvases: 1 })
-    // 首导入独立预热，运行态窗口从后续连续运动图像开始结算。
-    p.image(1)
-    h.frame(200, 1, 0, 1)
-    h.gl.spend(1)
-    vi.advanceTimersByTime(1)
-    p.image(2)
-    h.frame(250, 2, 0, 2)
-    h.gl.spend(1)
-    vi.advanceTimersByTime(1)
-    const before = h.renderer.snapshotResources()!.realtimeDrawCount
-    const pixelBefore = source.snapshotDiagnostics().videoPixels.deliveredFrameCount
-    const imports: number[] = []
-    let image = 0
-    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
-      if (args.at(-1) === h.video)
-        imports.push(image)
-    })
-    for (let slot = 0; slot < 600; slot++) {
-      const at = 300 + slot * 1000 / 60
-      image = slot + 3
-      p.image(image % 255)
-      const counted = 2 + Math.floor(slot / 15) * 15
-      h.supply(counted)
-      if ((slot + 1) % skipEvery !== 0)
-        h.frame(at, image, 0, counted)
-      h.raf(at + 0.2)
-      h.gl.spend(1)
-      vi.advanceTimersByTime(1)
-    }
-    expect(imports).toHaveLength(600)
-    expect(new Set(imports).size).toBe(600)
-    expect(h.renderer.snapshotResources()!.realtimeDrawCount! - before!).toBe(600)
-    const pixels = source.snapshotDiagnostics().videoPixels
-    expect(pixels.deliveredFrameCount - pixelBefore).toBe(600 / skipEvery)
-    expect(pixels).toMatchObject({ disabledReason: undefined, preparationTiming: { count: 1, totalMs: 171 }, readTiming: { firstRead: { durationMs: 25, initializationMs: 0 } } })
-    h.renderer.destroy()
-    expect(source.snapshotResources()).toMatchObject({ frameRequests: 0, framePreparationRequests: 0, pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0, pixelProbePreparations: 0 })
-  })
-
-  it('releases a renderer cancelled while GPU preparation is queued', async () => {
+  it('cancels initialization through the renderer chain while pixel resources stay idle', async () => {
     let p!: ReturnType<typeof gpuProbe>
     const h = await harness(kind, {}, false, 'playbackQuality', (video) => {
       p = gpuProbe(video)
-      return p
-    })
-    h.renderer.destroy()
-    const attaching = h.renderer.attach(h.video as unknown as HTMLVideoElement)
-    h.renderer.destroy()
-    await attaching
-    expect(p.canvas.getContext).toHaveBeenCalledTimes(1)
-    expect(getVideoFrameSource(h.video as unknown as HTMLVideoElement).snapshotResources()).toMatchObject({ frameRequests: 0, framePreparationRequests: 0, pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0, pixelProbePreparations: 0 })
+    }, renderer => renderer.destroy())
+    expect(p.canvas.getContext).not.toHaveBeenCalled()
+    expect(getVideoFrameSource(h.video as unknown as HTMLVideoElement).snapshotResources()).toMatchObject({ frameRequests: 0, pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
   })
 
   it('preserves 60fps candidates with a millisecond callback clock', async () => {
@@ -413,7 +494,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     }
   })
 
-  it.each([32, 34])('delivers %ims source frames and eventually draws an early candidate', async (interval) => {
+  it.each([32, 34])('immediately submits every %ims source frame', async (interval) => {
     const h = await harness(kind)
     const offered = h.run(10000, interval, 144)
     expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(offered)
@@ -501,9 +582,10 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     h.frame(0, 1)
     h.canvases[0]?.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
     h.canvases[0]?.dispatchEvent(new Event('webglcontextrestored'))
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, duplicateDrawCount: 0, rateLimitDropCount: 0 })
     h.frame(34, 2)
     expect(h.failure.mock.calls).toEqual([[kind === 'webgl2_sr' ? 'srContextLost' : 'webgl2ContextLost']])
-    expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(2)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, duplicateDrawCount: 0, rateLimitDropCount: 0 })
     expect(h.canvases[0]?.style.opacity).toBe('1')
     expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
     h.renderer.destroy()
@@ -538,10 +620,10 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     h.raf(0)
     h.frame(10, 2)
     h.raf(10)
-    h.frame(15, 3)
-    h.raf(15)
     h.raf(34)
-    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, lastDrawSequence: 3, latestOverwriteCount: 1 })
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, lastDrawSequence: 1, rateLimitDropCount: 1 })
+    h.frame(40, 3)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, lastDrawSequence: 3, rateLimitDropCount: 1 })
     h.renderer.update({ targetFps: 0 })
     expect(h.frames.size + h.rafs.size).toBe(0)
     const capture = h.renderer.captureRenderedFrame()

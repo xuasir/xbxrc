@@ -30,6 +30,43 @@ function fixture() {
 afterEach(() => vi.useRealTimers())
 
 describe('browserGamepadBackend', () => {
+  it('reuses stable device/state records and separates 250Hz polls from ten Hz heartbeats', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const input = pad()
+    const snapshots: GamepadSnapshot[] = []
+    const backend = new BrowserGamepadBackend({ getGamepads: () => [input], requestFrame: () => 1, cancelFrame: () => {}, now: () => Date.now(), startTimer: (callback, ms) => setInterval(callback, ms), stopTimer: id => clearInterval(id) })
+    await backend.start(snapshot => snapshots.push(snapshot))
+    vi.advanceTimersByTime(1000)
+    expect(snapshots.at(-1)?.sampling).toMatchObject({ pollingHz: 250, publishedHz: 10, gap: { p95Ms: 4, p99Ms: 4 } })
+    expect(snapshots.at(-1)?.devices[0]).toBe(snapshots[0].devices[0])
+    expect(snapshots.at(-1)?.samples[0]).toBe(snapshots[0].samples[0])
+    input.buttons[0].value = 1
+    vi.advanceTimersByTime(4)
+    expect(snapshots.at(-1)?.samples[0].state.buttons.south).toBe(1)
+    expect(snapshots[0].samples[0].state.buttons.south).toBe(0)
+    expect(snapshots.at(-1)?.devices[0]).toBe(snapshots[0].devices[0])
+    await backend.stop()
+  })
+
+  it('records actual polling stalls independently of published state changes', async () => {
+    let now = 0
+    let tick!: () => void
+    const snapshots: GamepadSnapshot[] = []
+    const backend = new BrowserGamepadBackend({ getGamepads: () => [pad()], requestFrame: (callback) => {
+      tick = callback
+      return 1
+    }, cancelFrame: () => {}, now: () => now })
+    await backend.start(snapshot => snapshots.push(snapshot))
+    for (let i = 0; i < 99; i++) {
+      now += 4
+      tick()
+    }
+    now = 1200
+    tick()
+    expect(snapshots.at(-1)?.sampling?.gap).toMatchObject({ count: 100, p95Ms: 4, p99Ms: 4, maxMs: 804 })
+    await backend.stop()
+  })
   it('maps standard axes and analog triggers without changing Y or applying deadzone', () => {
     const input = pad()
     input.axes = [0.02, -0.7, 0.9, 0.4]

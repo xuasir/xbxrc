@@ -1,4 +1,17 @@
+import type { LatencySummary } from '../latency-window'
 import type { GamepadRumbleEffectDto, LogicalPadStateDto } from './contract'
+
+export interface InputSamplingObservation {
+  source: 'browserPoll'
+  sampledAtMs: number
+  pollCount: number
+  publishedCount: number
+  pollingHz?: number
+  publishedHz?: number
+  gap: LatencySummary
+  read: LatencySummary
+  dispatch: LatencySummary
+}
 
 export type GamepadBackendKind = 'browser' | 'native'
 export type RumbleResult = 'applied' | 'unsupported' | 'failed'
@@ -22,6 +35,7 @@ export interface GamepadSnapshot {
   sequence: number
   observedAt: number
   error: string | null
+  sampling?: InputSamplingObservation
 }
 
 export interface GamepadBackend {

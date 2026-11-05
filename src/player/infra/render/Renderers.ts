@@ -1,7 +1,7 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import type { RendererResources } from './render-observation'
 import type { RenderSurfaceObservation } from './render-surface-observation'
-import type { ObservedVideoFrameMetadata, VideoFramePreparation } from './video-frame-source'
+import type { ObservedVideoFrameMetadata } from './video-frame-source'
 import { FrameCaptureQueue } from './frame-capture-queue'
 import { FramePacer } from './frame-pacer'
 import { RenderObservation } from './render-observation'
@@ -18,7 +18,7 @@ import {
 } from './sharpening-tuning'
 import { getVideoFrameSource } from './video-frame-source'
 import { captureVideoElementToCanvas, readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
-import { WebglRuntimeGuard } from './webgl-runtime-guard'
+import { releaseWebglContext, WebglRuntimeGuard } from './webgl-runtime-guard'
 
 interface StreamPlayerOptions {
   processing: 'usm' | 'cas'
@@ -55,11 +55,9 @@ abstract class BaseCanvasVideoProcessor {
   protected animFrameId: number | null = null
   protected frameCallback: FrameCallbackScheduler
   private readonly framePacer = new FramePacer()
-  protected renderRafId: number | null = null
-  private hasFreshFrame = false
   protected readonly drawObservation = new RenderObservation()
-  private readonly boundDrawFrame: (atMs: number, metadata?: ObservedVideoFrameMetadata) => void
-  private framePreparation?: VideoFramePreparation
+  private initialized = false
+  private initialization?: Promise<void>
   protected onFailure?: (reason: string) => void
 
   constructor(video: HTMLVideoElement) {
@@ -73,62 +71,48 @@ abstract class BaseCanvasVideoProcessor {
     this.canvas.style.height = '100%'
     this.canvas.style.pointerEvents = 'none'
     video.insertAdjacentElement('afterend', this.canvas)
-    this.frameCallback = callback => getVideoFrameSource(video).request(callback, { drawableTargetFps: () => this.options.targetFps })
-    this.boundDrawFrame = this.drawFrame.bind(this)
+    this.frameCallback = callback => getVideoFrameSource(video).request(callback)
   }
 
-  async init(): Promise<void> {
+  init(): Promise<void> {
+    this.initialization ??= this.initialize()
+    return this.initialization
+  }
+
+  private async initialize(): Promise<void> {
     this.drawObservation.beginPreparation()
-    this.framePreparation = getVideoFrameSource(this.video).prepareDrawable(this.options.targetFps)
-    try {
-      await this.framePreparation.ready
-      if (this.isStopped)
-        return
-      await this.setup()
-      if (this.isStopped)
-        return
-      this.drawObservation.endPreparation()
-      if (this.options.targetFps > 0)
-        this.animFrameId = this.frameCallback(this.boundDrawFrame)
-    }
-    finally {
-      this.framePreparation?.release()
-      this.framePreparation = undefined
-    }
+    await this.setup()
+    if (this.isStopped)
+      return
+    this.initialized = true
+    this.drawObservation.endPreparation()
+    this.scheduleFrameRequest()
+    const latest = getVideoFrameSource(this.video).lastFrame
+    if (latest && this.options.targetFps > 0)
+      this.drawFrame(performance.now(), latest)
   }
 
   updateOptions(newOptions: Partial<StreamPlayerOptions>, refresh = false): void {
     const wasPaused = this.options.targetFps <= 0
+    if (newOptions.targetFps !== undefined && newOptions.targetFps !== this.options.targetFps)
+      this.drawObservation.resetCadence()
     this.options = { ...this.options, ...newOptions }
     this.framePacer.setTargetFps(this.options.targetFps)
     if (this.options.targetFps <= 0) {
       if (this.animFrameId !== null)
         getVideoFrameSource(this.video).cancel(this.animFrameId)
-      if (this.renderRafId !== null)
-        cancelAnimationFrame(this.renderRafId)
-      this.animFrameId = this.renderRafId = null
-      this.hasFreshFrame = false
+      this.animFrameId = null
     }
     else if (wasPaused && !this.isStopped) {
-      this.animFrameId = this.frameCallback(this.boundDrawFrame)
+      this.scheduleFrameRequest()
     }
-    if (refresh) {
+    if (refresh && this.initialized) {
       this.refresh()
     }
   }
 
   destroy(): void {
-    this.framePreparation?.release()
-    this.framePreparation = undefined
-    this.isStopped = true
-    if (this.renderRafId !== null) {
-      cancelAnimationFrame(this.renderRafId)
-      this.renderRafId = null
-    }
-    if (this.animFrameId !== null) {
-      getVideoFrameSource(this.video).cancel(this.animFrameId)
-      this.animFrameId = null
-    }
+    this.stopPresentationLoop()
     if (this.canvas.isConnected) {
       this.canvas.remove()
     }
@@ -136,43 +120,45 @@ abstract class BaseCanvasVideoProcessor {
     this.canvas.height = 1
   }
 
+  protected stopPresentationLoop(): void {
+    this.isStopped = true
+    this.initialized = false
+    if (this.animFrameId !== null) {
+      getVideoFrameSource(this.video).cancel(this.animFrameId)
+      this.animFrameId = null
+    }
+  }
+
   protected toFilterId(processing: 'usm' | 'cas'): number {
     return processing === 'cas' ? 2 : 1
   }
 
-  private drawFrame(_atMs: number, metadata?: ObservedVideoFrameMetadata): void {
-    if (this.isStopped) {
+  private scheduleFrameRequest(): void {
+    if (this.isStopped || !this.initialized || this.options.targetFps <= 0 || this.animFrameId !== null)
       return
-    }
-    this.animFrameId = this.frameCallback(this.boundDrawFrame)
-    if (metadata?.newFrame !== false)
-      this.drawObservation.candidate(metadata)
-    if (this.hasFreshFrame && metadata?.newFrame !== false)
-      this.drawObservation.replaceLatest()
-    this.hasFreshFrame ||= metadata?.newFrame !== false
-    this.drawLatestFrame()
+    const id = this.frameCallback((atMs, metadata) => {
+      if (this.animFrameId !== id)
+        return
+      this.animFrameId = null
+      this.drawFrame(atMs, metadata)
+    })
+    this.animFrameId = id
   }
 
-  private drawLatestFrame(): void {
-    if (this.isStopped || !this.hasFreshFrame)
+  private drawFrame(_atMs: number, metadata?: ObservedVideoFrameMetadata): void {
+    if (this.isStopped || !this.initialized || this.options.targetFps <= 0) {
       return
+    }
+    this.scheduleFrameRequest()
+    if (metadata?.newFrame === false)
+      return
+    this.drawObservation.candidate(metadata)
     if (!this.framePacer.admit(performance.now())) {
-      this.drawObservation.wait(getVideoFrameSource(this.video).lastFrame)
-      if (this.options.targetFps > 0 && this.renderRafId === null) {
-        this.renderRafId = requestAnimationFrame(() => {
-          this.renderRafId = null
-          this.drawLatestFrame()
-        })
-      }
+      this.drawObservation.dropRateLimitedFrame()
       return
     }
     try {
       this.renderFrame()
-      this.hasFreshFrame = false
-      if (this.renderRafId !== null) {
-        cancelAnimationFrame(this.renderRafId)
-        this.renderRafId = null
-      }
       this.onRenderFramePresented()
     }
     catch (error) {
@@ -321,7 +307,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private vertexBuffer: WebGLBuffer | null = null
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined) + Number(this.renderRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -601,7 +587,9 @@ void main() {
   }
 
   protected refresh(): void {
-    const gl = this.gl!
+    const gl = this.gl
+    if (!gl)
+      return
     const previous = this.uniformOptions
     const sourcePass = this.usesSharpenTarget()
     if (previous && this.uniformSourceWidth === this.currentSourceWidth && this.uniformSourceHeight === this.currentSourceHeight
@@ -708,21 +696,26 @@ void main() {
       this.textureAllocated = false
       this.refresh()
     }
+    this.guard?.timer.begin(startedAtMs)
+    let uploadFinishedAtMs: number
     const uploadStartedAtMs = performance.now()
-    if (this.videoTexture !== null)
-      gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
-    // video重用同一纹理对象；TexImage2D让WebKit尝试GPU帧拷贝。
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
-    if (!this.textureAllocated) {
-      this.guard?.check(performance.now(), true)
-      this.textureAllocated = true
+    try {
+      if (this.videoTexture !== null)
+        gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
+      // video重用同一纹理对象；TexImage2D让WebKit尝试GPU帧拷贝。
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
+      if (!this.textureAllocated) {
+        this.guard?.check(performance.now(), true)
+        this.textureAllocated = true
+      }
+      uploadFinishedAtMs = performance.now()
+      if (!this.drawThroughSharpenTarget(gl)) {
+        gl.bindFramebuffer?.(gl.FRAMEBUFFER, null)
+        gl.useProgram(this.program)
+        gl.drawArrays(gl.TRIANGLES, 0, 3)
+      }
     }
-    const uploadFinishedAtMs = performance.now()
-    if (!this.drawThroughSharpenTarget(gl)) {
-      gl.bindFramebuffer?.(gl.FRAMEBUFFER, null)
-      gl.useProgram(this.program)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
-    }
+    finally { this.guard?.timer.end() }
     this.guard?.check(startedAtMs)
     this.drewToScreenThisFrame = true
     const submittedAtMs = performance.now()
@@ -873,10 +866,12 @@ void main() {
     }
     this.shaders.length = 0
     this.vertexBuffer = this.videoTexture = this.program = this.presentProgram = this.gl = null
+    this.guard?.timer.dispose()
     this.guard = undefined
   }
 
   override destroy(): void {
+    this.stopPresentationLoop()
     this.frameCaptures.complete(() => null)
     this.cancelCaptureDraw()
     if (this.contextListenersBound) {
@@ -884,8 +879,14 @@ void main() {
       this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener)
       this.contextListenersBound = false
     }
-    this.releaseGl()
-    super.destroy()
+    const gl = this.gl
+    try {
+      this.releaseGl()
+    }
+    finally {
+      releaseWebglContext(gl)
+      super.destroy()
+    }
   }
 }
 

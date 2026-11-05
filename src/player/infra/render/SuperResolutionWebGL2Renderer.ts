@@ -13,7 +13,6 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import type { RendererResources } from './render-observation'
 import type { RenderSurfaceObservation } from './render-surface-observation'
-import type { VideoFramePreparation } from './video-frame-source'
 import { FrameCaptureQueue } from './frame-capture-queue'
 import { FramePacer } from './frame-pacer'
 import { computeFsrEasuCon, computeFsrRcasCon, rcasStopsToMobileFsrSharpness } from './fsr1-cpu'
@@ -23,7 +22,7 @@ import { observeRenderSurface } from './render-surface-observation'
 import { CAS_RING_BLEND, CAS_RING_PAD } from './sharpening-tuning'
 import { getVideoFrameSource } from './video-frame-source'
 import { readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
-import { WebglRuntimeGuard } from './webgl-runtime-guard'
+import { releaseWebglContext, WebglRuntimeGuard } from './webgl-runtime-guard'
 
 const FSR_RCAS_LIMIT = (0.25 - (1.0 / 16.0))
 
@@ -356,13 +355,12 @@ class SuperResolutionProcessor {
   private viewportWidthCss: number | null = null
   private viewportHeightCss: number | null = null
   private targetFps = 60
-  private framePreparation?: VideoFramePreparation
   private readonly framePacer = new FramePacer()
   private animRafId: number | null = null
   private videoFrameCbId: number | null = null
-  private hasFreshVideoFrame = false
   private stopped = false
-  private readonly boundDraw: () => void
+  private initialized = false
+  private initialization?: Promise<void>
   private contextListenersBound = false
   private brightness = 100.0
   private contrast = 100.0
@@ -372,7 +370,7 @@ class SuperResolutionProcessor {
   private readonly drawObservation = new RenderObservation()
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuObjects: [this.mobileOptProgram, this.easuProgram, this.rcasProgram, this.easuTex, this.midTex, this.midFbo, this.vbo].filter(Boolean).length, frameRequests: Number(this.videoFrameCbId !== null), animationCallbacks: Number(this.animRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.mobileOptProgram, this.easuProgram, this.rcasProgram, this.easuTex, this.midTex, this.midFbo, this.vbo].filter(Boolean).length, frameRequests: Number(this.videoFrameCbId !== null), animationCallbacks: Number(this.animRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -383,6 +381,7 @@ class SuperResolutionProcessor {
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault()
     this.teardownGl(false)
+    this.initialized = false
     this.canvas.style.opacity = '0'
     this.emitRuntimeDegradeOnce('srContextLost')
   }
@@ -396,7 +395,8 @@ class SuperResolutionProcessor {
     this.videoTexAllocH = 0
     try {
       this.setupGl()
-      this.startPresentationLoop()
+      this.initialized = true
+      this.startPresentationLoop(false)
     }
     catch (error) {
       this.emitRuntimeDegradeOnce(error instanceof Error ? error.message : 'srContextRestoreFailed')
@@ -423,7 +423,6 @@ class SuperResolutionProcessor {
     this.canvas.style.height = '100%'
     this.canvas.style.pointerEvents = 'none'
     video.insertAdjacentElement('afterend', this.canvas)
-    this.boundDraw = this.drawFrame.bind(this)
   }
 
   setOutputSize(width: number, height: number): void {
@@ -509,11 +508,11 @@ class SuperResolutionProcessor {
   setTargetFps(fps: number): void {
     if (fps === this.targetFps)
       return
+    this.drawObservation.resetCadence()
     const wasBudgetActive = this.targetFps <= 0
     this.targetFps = fps
     this.framePacer.setTargetFps(fps)
     if (fps <= 0) {
-      this.hasFreshVideoFrame = false
       if (this.videoFrameCbId !== null) {
         getVideoFrameSource(this.video).cancel(this.videoFrameCbId)
         this.videoFrameCbId = null
@@ -529,25 +528,23 @@ class SuperResolutionProcessor {
     }
   }
 
-  async init(): Promise<void> {
-    this.drawObservation.beginPreparation()
-    this.framePreparation = getVideoFrameSource(this.video).prepareDrawable(this.targetFps)
-    try {
-      await this.framePreparation.ready
-      if (this.stopped)
-        return
-      this.setupGl()
-      this.drawObservation.endPreparation()
-      this.startPresentationLoop()
-    }
-    finally {
-      this.framePreparation?.release()
-      this.framePreparation = undefined
-    }
+  init(): Promise<void> {
+    this.initialization ??= this.initialize()
+    return this.initialization
   }
 
-  private startPresentationLoop(): void {
-    if (this.stopped) {
+  private async initialize(): Promise<void> {
+    this.drawObservation.beginPreparation()
+    this.setupGl()
+    if (this.stopped)
+      return
+    this.initialized = true
+    this.drawObservation.endPreparation()
+    this.startPresentationLoop()
+  }
+
+  private startPresentationLoop(drawLatest = true): void {
+    if (this.stopped || !this.initialized) {
       return
     }
     if (this.animRafId !== null) {
@@ -559,50 +556,51 @@ class SuperResolutionProcessor {
       this.videoFrameCbId = null
     }
     if (this.targetFps > 0) {
-      this.hasFreshVideoFrame = getVideoFrameSource(this.video).lastFrame !== undefined
-      if (this.hasFreshVideoFrame)
-        this.drawObservation.candidate(getVideoFrameSource(this.video).lastFrame)
       this.scheduleVideoFrameMarker()
+      // 缓存首绘用于首次装配，context恢复沿订阅接收后续新候选。
+      const latest = drawLatest ? getVideoFrameSource(this.video).lastFrame : undefined
+      if (latest) {
+        this.drawObservation.candidate(latest)
+        this.drawFrame(true)
+      }
     }
-    else {
-      this.hasFreshVideoFrame = false
-    }
-    if (this.hasFreshVideoFrame)
-      this.scheduleDraw()
   }
 
   private scheduleDraw(): void {
-    if (!this.stopped && this.animRafId === null)
-      this.animRafId = requestAnimationFrame(this.boundDraw)
+    if (!this.stopped && this.initialized && this.animRafId === null) {
+      const id = requestAnimationFrame(() => {
+        if (this.animRafId === id)
+          this.drawFrame()
+      })
+      this.animRafId = id
+    }
   }
 
   private scheduleVideoFrameMarker(): void {
-    if (this.stopped || this.targetFps <= 0) {
+    if (this.stopped || !this.initialized || this.targetFps <= 0 || this.videoFrameCbId !== null) {
       return
     }
-    this.videoFrameCbId = getVideoFrameSource(this.video).request((_atMs, metadata) => {
+    const id = getVideoFrameSource(this.video).request((_atMs, metadata) => {
+      if (this.videoFrameCbId !== id)
+        return
       this.videoFrameCbId = null
-      if (metadata?.newFrame !== false)
-        this.drawObservation.candidate(metadata)
-      if (this.hasFreshVideoFrame && metadata?.newFrame !== false)
-        this.drawObservation.replaceLatest()
-      this.hasFreshVideoFrame ||= metadata?.newFrame !== false
       if (!this.stopped) {
         this.scheduleVideoFrameMarker()
-        if (this.hasFreshVideoFrame) {
+        if (metadata?.newFrame !== false) {
+          this.drawObservation.candidate(metadata)
           if (this.animRafId !== null)
             cancelAnimationFrame(this.animRafId)
-          this.drawFrame()
+          this.drawFrame(true)
         }
       }
-    }, { drawableTargetFps: () => this.targetFps })
+    })
+    this.videoFrameCbId = id
   }
 
   destroy(): void {
-    this.framePreparation?.release()
-    this.framePreparation = undefined
-    this.drainFrameCaptureWaiters(false)
     this.stopped = true
+    this.initialized = false
+    this.drainFrameCaptureWaiters(false)
     if (this.animRafId !== null) {
       cancelAnimationFrame(this.animRafId)
       this.animRafId = null
@@ -614,9 +612,15 @@ class SuperResolutionProcessor {
     if (this.canvas.isConnected) {
       this.canvas.remove()
     }
-    this.teardownGl()
-    this.canvas.width = 1
-    this.canvas.height = 1
+    const gl = this.gl
+    try {
+      this.teardownGl()
+    }
+    finally {
+      releaseWebglContext(gl)
+      this.canvas.width = 1
+      this.canvas.height = 1
+    }
   }
 
   private teardownGl(removeListeners = true): void {
@@ -650,6 +654,7 @@ class SuperResolutionProcessor {
       }
     }
     this.gl = null
+    this.guard?.timer.dispose()
     this.guard = undefined
     this.uniformsDirty = true
     this.easuProgram = null
@@ -882,10 +887,6 @@ class SuperResolutionProcessor {
     this.guard?.check(performance.now(), true)
   }
 
-  private shouldDraw(): boolean {
-    return this.framePacer.admit(performance.now())
-  }
-
   private uploadVideoSource(gl: WebGL2RenderingContext, vw: number, vh: number): void {
     gl.bindTexture(gl.TEXTURE_2D, this.easuTex!)
     // 完整video源、level0及RGB保留WebKit的GPU拷贝尝试入口。
@@ -971,11 +972,14 @@ class SuperResolutionProcessor {
     })
   }
 
-  private drawFrame(): void {
+  private drawFrame(realtime = false): void {
     this.animRafId = null
     const startedAtMs = performance.now()
     const capture = this.frameCaptures.size > 0
-    const realtime = this.targetFps > 0 && this.hasFreshVideoFrame && this.shouldDraw()
+    if (realtime && (this.targetFps <= 0 || !this.framePacer.admit(startedAtMs))) {
+      this.drawObservation.dropRateLimitedFrame()
+      realtime = false
+    }
     let presentedToDefault = false
     let uploadDurationMs: number | undefined
     let submitDurationMs: number | undefined
@@ -983,10 +987,6 @@ class SuperResolutionProcessor {
       if (this.stopped)
         return
       if (!realtime && !capture) {
-        if (this.hasFreshVideoFrame && this.targetFps > 0) {
-          this.drawObservation.wait(getVideoFrameSource(this.video).lastFrame)
-          this.scheduleDraw()
-        }
         return
       }
       const gl = this.gl
@@ -1002,6 +1002,7 @@ class SuperResolutionProcessor {
       if (this.runtimeDegradeEmitted)
         return
       this.preparePrograms(gl, vw, vh)
+      this.guard?.timer.begin(startedAtMs)
       const uploadStartedAtMs = performance.now()
       this.uploadVideoSource(gl, vw, vh)
       const uploadFinishedAtMs = performance.now()
@@ -1036,18 +1037,15 @@ class SuperResolutionProcessor {
       this.emitRuntimeDegradeOnce(error instanceof Error ? error.message : 'srDrawFailed')
     }
     finally {
+      this.guard?.timer.end()
       if (presentedToDefault && !this.stopped) {
         this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, !realtime, performance.now() - startedAtMs, uploadDurationMs, submitDurationMs, startedAtMs)
-        if (realtime)
-          this.hasFreshVideoFrame = false
         if (!this.frameReadyEmitted) {
           this.frameReadyEmitted = true
           this.onFrameReady?.()
         }
       }
       this.drainFrameCaptureWaiters(presentedToDefault)
-      if (capture && !realtime && this.hasFreshVideoFrame && this.targetFps > 0)
-        this.scheduleDraw()
     }
   }
 }

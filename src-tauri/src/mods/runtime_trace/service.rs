@@ -1,31 +1,22 @@
-use std::fs::{create_dir_all, File, OpenOptions};
-#[cfg(not(test))]
-use std::fs::{read_dir, remove_file};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::policy::{
-    default_trace_metadata, RuntimeTraceProfile, TraceDimension, TraceDimensionSet,
-    TraceFileBudget, TraceImportance, TraceMetadata,
+    default_trace_metadata, RuntimeTraceProfile, TraceDimensionSet, TraceFileBudget, TraceMetadata,
 };
+use super::runtime_state::{encode_row, DropReason};
+use super::writer::{OutputConfig, WriterHandle};
 
 pub type RuntimeTraceRecorderRef = Arc<RuntimeTraceRecorder>;
-
-const TRACE_SCHEMA_VERSION: u32 = 3;
+pub(super) const TRACE_SCHEMA_VERSION: u32 = 3;
 static TRACE_RECORDER_ID: AtomicU64 = AtomicU64::new(1);
-const WRITER_FLUSH_INTERVAL: Duration = Duration::from_millis(40);
-const WRITER_BATCH_LIMIT: usize = 256;
-const WRITER_PENDING_ROW_LIMIT: u64 = 8_192;
-const BUDGET_NOTICE_INTERVAL_MS: u128 = 60_000;
-static TRACE_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy, Debug)]
 pub enum RuntimeTraceCategory {
@@ -59,38 +50,37 @@ impl RuntimeTraceCategory {
     }
 }
 
+#[derive(Clone)]
 struct TraceInner {
     trace_mode: String,
     profile: RuntimeTraceProfile,
     dimensions: TraceDimensionSet,
-    budget: TraceFileBudget,
-    path: Option<PathBuf>,
-    bytes_written: u64,
+    generation: u64,
 }
 
-#[derive(Debug, Default)]
-struct TraceDropCounters {
-    debug_dropped: u64,
-    raw_dropped: u64,
-    last_notice_at_ms: u128,
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TraceRow<'a> {
+    schema_version: u32,
+    trace_run_id: &'a str,
+    ts_ms: u128,
+    trace_mode: &'a str,
+    trace_profile: &'a str,
+    dimension: &'a str,
+    importance: &'a str,
+    category: &'a str,
+    domain: &'a str,
+    event: &'a str,
+    session_id: Option<&'a str>,
+    payload: Value,
 }
 
-enum WriterCommand {
-    Write(Vec<u8>),
-    SwapFile(Option<File>),
-    Sync(Sender<()>),
-    Shutdown,
-}
-
-/// 开发期协助日志：独立写入项目目录，便于后续整体清理。
+/// 发布侧保留过滤与有界编码，文件生命周期由单一writer持有。
 pub struct RuntimeTraceRecorder {
     trace_run_id: String,
     inner: Mutex<TraceInner>,
-    writer_tx: Sender<WriterCommand>,
-    writer_thread: Mutex<Option<JoinHandle<()>>>,
-    sequence: AtomicU64,
-    queued_rows: Arc<AtomicU64>,
-    drop_counters: Mutex<TraceDropCounters>,
+    configuration: Mutex<()>,
+    writer: WriterHandle,
 }
 
 impl RuntimeTraceRecorder {
@@ -103,40 +93,28 @@ impl RuntimeTraceRecorder {
         trace_mode: &str,
         dimensions_expression: Option<&str>,
     ) -> std::io::Result<Self> {
-        let (writer_tx, writer_rx) = mpsc::channel();
-        let queued_rows = Arc::new(AtomicU64::new(0));
-        let writer_queued_rows = queued_rows.clone();
-        let writer_thread = thread::Builder::new()
-            .name("runtime-trace-writer".to_string())
-            .spawn(move || writer_loop(writer_rx, writer_queued_rows))
-            .map_err(|error| std::io::Error::other(error.to_string()))?;
         let profile = RuntimeTraceProfile::from_stored_mode(trace_mode);
         let dimensions = TraceDimensionSet::effective_for_profile(profile, dimensions_expression);
         let budget = profile.budget();
+        let trace_run_id = format!(
+            "{}-{}-{}",
+            now_ms(),
+            std::process::id(),
+            TRACE_RECORDER_ID.fetch_add(1, Ordering::Relaxed)
+        );
+        let writer = WriterHandle::new(trace_root_dir(), trace_run_id.clone())?;
         let recorder = Self {
-            trace_run_id: format!(
-                "{}-{}-{}",
-                now_ms(),
-                std::process::id(),
-                TRACE_RECORDER_ID.fetch_add(1, Ordering::Relaxed)
-            ),
+            trace_run_id,
             inner: Mutex::new(TraceInner {
                 trace_mode: profile.as_str().to_string(),
                 profile,
                 dimensions,
-                budget,
-                path: None,
-                bytes_written: 0,
+                generation: 0,
             }),
-            writer_tx,
-            writer_thread: Mutex::new(Some(writer_thread)),
-            sequence: AtomicU64::new(0),
-            queued_rows,
-            drop_counters: Mutex::new(TraceDropCounters::default()),
+            configuration: Mutex::new(()),
+            writer,
         };
-        if profile != RuntimeTraceProfile::Off {
-            recorder.open_trace_output(profile, dimensions, budget, "initial")?;
-        }
+        recorder.open_trace_output(profile, dimensions, budget, "initial")?;
         Ok(recorder)
     }
 
@@ -145,43 +123,53 @@ impl RuntimeTraceRecorder {
         profile: RuntimeTraceProfile,
         dimensions: TraceDimensionSet,
         budget: TraceFileBudget,
-        reason: &str,
+        reason: &'static str,
     ) -> std::io::Result<()> {
-        let root = trace_root_dir();
-        create_dir_all(&root)?;
-        let path = next_trace_path(&root);
-        let path_open_payload = path.display().to_string();
-        let file = OpenOptions::new().create(true).append(true).open(&path)?;
-        self.swap_writer_file(Some(file))?;
-        {
+        let _configuration = self
+            .configuration
+            .lock()
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let (previous, response) = {
             let mut inner = self
                 .inner
                 .lock()
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
-            inner.path = Some(path.clone());
-            inner.trace_mode = profile.as_str().to_string();
-            inner.profile = profile;
-            inner.dimensions = dimensions;
-            inner.budget = budget;
-            inner.bytes_written = 0;
-        }
-        prune_trace_files(&root, budget.max_files, &path);
-        self.record_state(
-            "trace",
-            "fileOpened",
-            None,
-            json!({
-                "path": path_open_payload,
-                "reason": reason,
-                "traceProfile": profile.as_str(),
-                "dimensions": dimensions.names(),
-                "budget": {
-                    "maxFileBytes": budget.max_file_bytes,
-                    "maxFiles": budget.max_files,
+            if reason == "traceConfigChanged"
+                && inner.profile == profile
+                && inner.dimensions == dimensions
+            {
+                return Ok(());
+            }
+            let previous = inner.clone();
+            let generation = inner.generation + 1;
+            let response = self.writer.configure(
+                OutputConfig {
+                    profile,
+                    dimensions,
+                    budget,
+                    generation,
                 },
-            }),
-        );
-        Ok(())
+                reason,
+            )?;
+            *inner = TraceInner {
+                trace_mode: profile.as_str().to_string(),
+                profile,
+                dimensions,
+                generation,
+            };
+            (previous, response)
+        };
+        // 启动/显式配置等待writer回执，发布锁在等待IO前已释放。
+        let result = response
+            .recv()
+            .map_err(|error| std::io::Error::other(error.to_string()))
+            .and_then(|result| result);
+        if result.is_err() {
+            if let Ok(mut inner) = self.inner.lock() {
+                *inner = previous;
+            }
+        }
+        result
     }
 
     /// 设置页修改 `runtime_trace_mode` 后立即应用：开关盘写入、更新当前模式字段。
@@ -197,36 +185,12 @@ impl RuntimeTraceRecorder {
         let profile = RuntimeTraceProfile::from_stored_mode(mode);
         let dimensions = TraceDimensionSet::effective_for_profile(profile, dimensions_expression);
         let budget = profile.budget();
-        {
-            let inner = self
-                .inner
-                .lock()
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
-            if inner.profile == profile && inner.dimensions == dimensions {
-                return Ok(());
-            }
-        }
-        if profile == RuntimeTraceProfile::Off {
-            self.swap_writer_file(None)?;
-            let mut inner = self
-                .inner
-                .lock()
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
-            inner.trace_mode = profile.as_str().to_string();
-            inner.profile = profile;
-            inner.dimensions = dimensions;
-            inner.budget = budget;
-            inner.path = None;
-            inner.bytes_written = 0;
-            return Ok(());
-        }
-
         self.open_trace_output(profile, dimensions, budget, "traceConfigChanged")
     }
 
     pub fn path(&self) -> Option<PathBuf> {
-        self.sync_writer();
-        self.inner.lock().ok().and_then(|g| g.path.clone())
+        self.writer.sync();
+        self.writer.path()
     }
 
     pub fn trace_mode(&self) -> String {
@@ -251,11 +215,7 @@ impl RuntimeTraceRecorder {
     }
 
     pub fn disk_enabled(&self) -> bool {
-        self.inner
-            .lock()
-            .ok()
-            .map(|g| g.path.is_some())
-            .unwrap_or(false)
+        self.writer.path().is_some()
     }
 
     pub fn record<T: Serialize>(
@@ -433,235 +393,49 @@ impl RuntimeTraceRecorder {
         metadata: TraceMetadata,
     ) {
         let now = now_ms();
-        let (trace_mode, profile, dimensions, budget, bytes_written) = match self.inner.lock() {
-            Ok(inner) => {
-                if inner.path.is_none() {
-                    return;
-                }
-                (
-                    inner.trace_mode.clone(),
-                    inner.profile,
-                    inner.dimensions,
-                    inner.budget,
-                    inner.bytes_written,
-                )
-            }
-            Err(_) => return,
-        };
-        if !super::policy::should_record_trace_event(
-            profile, dimensions, metadata, domain, event, now as f64,
-        ) {
+        let Ok(inner) = self.inner.lock() else {
             return;
-        }
-        if self.should_drop_for_queue_pressure(metadata) {
-            self.note_dropped_trace_row(metadata);
-            return;
-        }
-        let line = json!({
-            "schemaVersion": TRACE_SCHEMA_VERSION,
-            "traceRunId": self.trace_run_id,
-            "seq": self.sequence.fetch_add(1, Ordering::Relaxed) + 1,
-            "tsMs": now,
-            "traceMode": trace_mode,
-            "traceProfile": profile.as_str(),
-            "dimension": metadata.dimension.as_str(),
-            "importance": metadata.importance.as_str(),
-            "category": category.as_str(),
-            "domain": domain,
-            "event": event,
-            "sessionId": session_id,
-            "payload": payload,
-        });
-        let mut bytes = match serde_json::to_vec(&line) {
-            Ok(bytes) => bytes,
-            Err(_) => return,
         };
-        bytes.push(b'\n');
-        if budget.max_file_bytes > 0
-            && bytes_written > 0
-            && bytes_written.saturating_add(bytes.len() as u64) > budget.max_file_bytes
+        if inner.profile == RuntimeTraceProfile::Off
+            || !super::policy::should_record_trace_event(
+                inner.profile,
+                inner.dimensions,
+                metadata,
+                domain,
+                event,
+                now as f64,
+            )
         {
-            let _ = self.open_trace_output(profile, dimensions, budget, "budgetRotate");
-        }
-        self.enqueue_trace_bytes(bytes);
-    }
-
-    fn should_drop_for_queue_pressure(&self, metadata: TraceMetadata) -> bool {
-        if metadata.importance <= TraceImportance::Key {
-            return false;
-        }
-        self.queued_rows.load(Ordering::Relaxed) >= WRITER_PENDING_ROW_LIMIT
-    }
-
-    fn note_dropped_trace_row(&self, metadata: TraceMetadata) {
-        let mut should_emit_notice = None;
-        let now = now_ms();
-        if let Ok(mut counters) = self.drop_counters.lock() {
-            match metadata.importance {
-                TraceImportance::Raw => counters.raw_dropped += 1,
-                TraceImportance::Debug => counters.debug_dropped += 1,
-                _ => {}
-            }
-            if counters.last_notice_at_ms == 0 {
-                counters.last_notice_at_ms = now;
-            }
-            if now.saturating_sub(counters.last_notice_at_ms) >= BUDGET_NOTICE_INTERVAL_MS {
-                should_emit_notice = Some((counters.debug_dropped, counters.raw_dropped));
-                counters.debug_dropped = 0;
-                counters.raw_dropped = 0;
-                counters.last_notice_at_ms = now;
-            }
-        }
-        if let Some((debug_dropped, raw_dropped)) = should_emit_notice {
-            self.record_with_metadata(
-                RuntimeTraceCategory::State,
-                "trace",
-                "traceBudgetNotice",
-                None,
-                json!({
-                    "reason": "writerQueuePressure",
-                    "debugDropped": debug_dropped,
-                    "rawDropped": raw_dropped,
-                    "pendingRows": self.queued_rows.load(Ordering::Relaxed),
-                }),
-                TraceMetadata::new(TraceDimension::Core, TraceImportance::Essential),
-            );
-        }
-    }
-
-    fn enqueue_trace_bytes(&self, bytes: Vec<u8>) {
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.bytes_written = inner.bytes_written.saturating_add(bytes.len() as u64);
-        }
-        self.queued_rows.fetch_add(1, Ordering::Relaxed);
-        if self.writer_tx.send(WriterCommand::Write(bytes)).is_err() {
-            self.queued_rows.fetch_sub(1, Ordering::Relaxed);
-        }
-    }
-
-    fn swap_writer_file(&self, file: Option<File>) -> std::io::Result<()> {
-        self.writer_tx
-            .send(WriterCommand::SwapFile(file))
-            .map_err(|_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "runtime trace writer stopped",
-                )
-            })
-    }
-
-    fn sync_writer(&self) {
-        let (tx, rx) = mpsc::channel();
-        if self.writer_tx.send(WriterCommand::Sync(tx)).is_err() {
             return;
         }
-        let _ = rx.recv_timeout(Duration::from_secs(2));
-    }
-}
-
-impl Drop for RuntimeTraceRecorder {
-    fn drop(&mut self) {
-        let _ = self.writer_tx.send(WriterCommand::Shutdown);
-        if let Ok(mut handle) = self.writer_thread.lock() {
-            if let Some(handle) = handle.take() {
-                let _ = handle.join();
-            }
+        if self.writer.saturated(metadata.importance) {
+            self.writer
+                .note_drop(metadata.importance, DropReason::QueuePressure);
+            return;
+        }
+        let line = TraceRow {
+            schema_version: TRACE_SCHEMA_VERSION,
+            trace_run_id: &self.trace_run_id,
+            ts_ms: now,
+            trace_mode: &inner.trace_mode,
+            trace_profile: inner.profile.as_str(),
+            dimension: metadata.dimension.as_str(),
+            importance: metadata.importance.as_str(),
+            category: category.as_str(),
+            domain,
+            event,
+            session_id,
+            payload,
+        };
+        match encode_row(&line) {
+            Ok(bytes) => self
+                .writer
+                .try_write(bytes, inner.generation, metadata.importance),
+            Err(_) => self
+                .writer
+                .note_drop(metadata.importance, DropReason::Oversized),
         }
     }
-}
-
-fn writer_loop(rx: Receiver<WriterCommand>, queued_rows: Arc<AtomicU64>) {
-    let mut file: Option<File> = None;
-    let mut wrote_since_flush = false;
-    loop {
-        match rx.recv_timeout(WRITER_FLUSH_INTERVAL) {
-            Ok(command) => {
-                if !handle_writer_command(
-                    command,
-                    &rx,
-                    &mut file,
-                    &mut wrote_since_flush,
-                    &queued_rows,
-                ) {
-                    break;
-                }
-            }
-            Err(RecvTimeoutError::Timeout) => flush_writer(&mut file, &mut wrote_since_flush),
-            Err(RecvTimeoutError::Disconnected) => {
-                flush_writer(&mut file, &mut wrote_since_flush);
-                break;
-            }
-        }
-    }
-}
-
-fn handle_writer_command(
-    command: WriterCommand,
-    rx: &Receiver<WriterCommand>,
-    file: &mut Option<File>,
-    wrote_since_flush: &mut bool,
-    queued_rows: &AtomicU64,
-) -> bool {
-    match command {
-        WriterCommand::Write(bytes) => {
-            write_bytes(file, wrote_since_flush, &bytes);
-            queued_rows.fetch_sub(1, Ordering::Relaxed);
-            for _ in 0..WRITER_BATCH_LIMIT {
-                match rx.try_recv() {
-                    Ok(WriterCommand::Write(bytes)) => {
-                        write_bytes(file, wrote_since_flush, &bytes);
-                        queued_rows.fetch_sub(1, Ordering::Relaxed);
-                    }
-                    Ok(other) => {
-                        return handle_writer_command(
-                            other,
-                            rx,
-                            file,
-                            wrote_since_flush,
-                            queued_rows,
-                        )
-                    }
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => {
-                        flush_writer(file, wrote_since_flush);
-                        return false;
-                    }
-                }
-            }
-        }
-        WriterCommand::SwapFile(next_file) => {
-            flush_writer(file, wrote_since_flush);
-            *file = next_file;
-        }
-        WriterCommand::Sync(done) => {
-            flush_writer(file, wrote_since_flush);
-            let _ = done.send(());
-        }
-        WriterCommand::Shutdown => {
-            flush_writer(file, wrote_since_flush);
-            return false;
-        }
-    }
-    true
-}
-
-fn write_bytes(file: &mut Option<File>, wrote_since_flush: &mut bool, bytes: &[u8]) {
-    let Some(file) = file.as_mut() else {
-        return;
-    };
-    if file.write_all(bytes).is_ok() {
-        *wrote_since_flush = true;
-    }
-}
-
-fn flush_writer(file: &mut Option<File>, wrote_since_flush: &mut bool) {
-    if !*wrote_since_flush {
-        return;
-    }
-    if let Some(file) = file.as_mut() {
-        let _ = file.flush();
-    }
-    *wrote_since_flush = false;
 }
 
 /// 运行期 trace 根目录覆盖，由 shell 在启动时指向应用日志目录。
@@ -712,57 +486,11 @@ fn current_test_trace_run_dir() -> PathBuf {
 fn initialize_test_trace_run_dir(root: &Path) -> PathBuf {
     let _ = std::fs::remove_dir_all(root);
     let run_dir = root.join(format!("run-{}-pid{}", now_ms(), std::process::id()));
-    let _ = create_dir_all(&run_dir);
+    let _ = std::fs::create_dir_all(&run_dir);
     run_dir
 }
 
-fn next_trace_path(root: &Path) -> PathBuf {
-    let file_id = TRACE_FILE_ID.fetch_add(1, Ordering::Relaxed) + 1;
-    root.join(format!("runtime-trace-{}-{}.jsonl", now_ms(), file_id))
-}
-
-fn prune_trace_files(root: &Path, max_files: usize, active_path: &Path) {
-    #[cfg(test)]
-    {
-        let _ = (root, max_files, active_path);
-        return;
-    }
-    #[cfg(not(test))]
-    {
-        if max_files == 0 {
-            return;
-        }
-        let Ok(entries) = read_dir(root) else {
-            return;
-        };
-        let mut traces: Vec<(PathBuf, SystemTime)> = entries
-            .filter_map(Result::ok)
-            .filter_map(|entry| {
-                let path = entry.path();
-                let name = path.file_name()?.to_str()?;
-                if !name.starts_with("runtime-trace-") || !name.ends_with(".jsonl") {
-                    return None;
-                }
-                if path == active_path {
-                    return None;
-                }
-                let modified = entry.metadata().ok()?.modified().ok()?;
-                Some((path, modified))
-            })
-            .collect();
-        let inactive_keep = max_files.saturating_sub(1);
-        if traces.len() <= inactive_keep {
-            return;
-        }
-        traces.sort_by_key(|(_, modified)| *modified);
-        let remove_count = traces.len().saturating_sub(inactive_keep);
-        for (path, _) in traces.into_iter().take(remove_count) {
-            let _ = remove_file(path);
-        }
-    }
-}
-
-fn now_ms() -> u128 {
+pub(super) fn now_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_millis())
@@ -771,6 +499,7 @@ fn now_ms() -> u128 {
 
 #[cfg(test)]
 mod tests {
+    use super::super::policy::{TraceDimension, TraceImportance};
     use super::*;
     use std::fs;
 
@@ -826,6 +555,36 @@ mod tests {
     }
 
     #[test]
+    fn failed_configuration_restores_publisher_profile_dimensions_and_generation() {
+        let recorder = RuntimeTraceRecorder::new_with_mode("dev").unwrap();
+        let before = recorder.inner.lock().unwrap().clone();
+        let first_path = recorder.path().unwrap();
+        let profile = RuntimeTraceProfile::Production;
+        assert!(recorder
+            .open_trace_output(
+                profile,
+                TraceDimensionSet::default_for_profile(profile),
+                TraceFileBudget {
+                    max_file_bytes: 1,
+                    max_files: 1,
+                },
+                "traceConfigChanged",
+            )
+            .is_err());
+        assert_eq!(recorder.trace_profile(), before.profile);
+        assert_eq!(recorder.trace_dimensions(), before.dimensions);
+        assert_eq!(recorder.inner.lock().unwrap().generation, before.generation);
+        assert_eq!(recorder.path().unwrap(), first_path);
+        recorder.record_event("test", "afterConfigRollback", None, json!({}));
+        let entries = read_trace_lines(&recorder);
+        let row = entries
+            .iter()
+            .find(|row| row["event"] == "afterConfigRollback")
+            .unwrap();
+        assert_eq!(row["traceProfile"], "dev");
+    }
+
+    #[test]
     fn production_profile_filters_debug_rows() {
         let recorder = RuntimeTraceRecorder::new_with_mode("production").expect("trace recorder");
         recorder.record_with_metadata(
@@ -857,24 +616,56 @@ mod tests {
     #[test]
     fn file_budget_rotates_output_file() {
         let recorder = RuntimeTraceRecorder::new_with_mode("dev").expect("trace recorder");
+        let dimensions = recorder.trace_dimensions();
+        recorder
+            .open_trace_output(
+                RuntimeTraceProfile::Dev,
+                dimensions,
+                TraceFileBudget {
+                    max_file_bytes: 4096,
+                    max_files: 10,
+                },
+                "testBudget",
+            )
+            .unwrap();
         let first_path = recorder.path().expect("first path");
-        {
-            let mut inner = recorder.inner.lock().expect("trace inner");
-            inner.budget.max_file_bytes = 512;
+        for _ in 0..2 {
+            recorder.record_event(
+                "xbxengine",
+                "largeTraceRow",
+                None,
+                json!({ "blob": "x".repeat(2200) }),
+            );
         }
-
-        recorder.record_event(
-            "xbxengine",
-            "largeTraceRow",
-            None,
-            json!({ "blob": "x".repeat(1024) }),
-        );
-
         let second_path = recorder.path().expect("second path");
         assert_ne!(first_path, second_path);
         let second_contents = fs::read_to_string(&second_path).expect("second trace contents");
         assert!(second_contents.contains("budgetRotate"));
         assert!(second_contents.contains("largeTraceRow"));
+        assert!(fs::metadata(first_path).unwrap().len() <= 4096);
+        assert!(fs::metadata(second_path).unwrap().len() <= 4096);
+    }
+
+    #[test]
+    fn oversized_rows_leave_essential_drop_evidence() {
+        let recorder = RuntimeTraceRecorder::new_with_mode("dev").unwrap();
+        recorder.record_with_metadata(
+            RuntimeTraceCategory::Event,
+            "test",
+            "oversized",
+            None,
+            json!({ "blob": "x".repeat(super::super::runtime_state::MAX_ROW_BYTES) }),
+            TraceMetadata::new(TraceDimension::Core, TraceImportance::Essential),
+        );
+        let entries = read_trace_lines(&recorder);
+        assert!(!entries.iter().any(|entry| entry["event"] == "oversized"));
+        let notice = entries
+            .iter()
+            .find(|entry| entry["event"] == "traceBudgetNotice")
+            .unwrap();
+        assert_eq!(notice["payload"]["essentialDropped"], 1);
+        assert_eq!(notice["payload"]["oversizedDropped"], 1);
+        assert_eq!(recorder.writer.usage().bytes, 0);
     }
 
     #[test]

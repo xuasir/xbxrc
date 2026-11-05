@@ -134,6 +134,19 @@ fn install_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
+/// 服务装配失败时保留反馈，再请求事件循环按失败码退出；setup合同正常完成。
+fn finish_service_setup(
+    result: error::AppResult<()>,
+    report_failure: impl FnOnce(&str),
+    request_exit: impl FnOnce(i32),
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(error) = result {
+        report_failure(&error.to_string());
+        request_exit(1);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -161,12 +174,11 @@ pub fn run() {
             shell::handle_macos_window_event(window, event);
         })
         .setup(|app| {
-            // 将复杂的逻辑委托给 shell 模块
-            if let Err(e) = tauri::async_runtime::block_on(shell::init_services(app)) {
-                report_startup_failure(&e.to_string());
-                return Err(e.into());
-            }
-            Ok(())
+            finish_service_setup(
+                tauri::async_runtime::block_on(shell::init_services(app)),
+                report_startup_failure,
+                |code| app.handle().exit(code),
+            )
         })
         .invoke_handler(tauri::generate_handler![greet, shell::rpc::rpc_invoke])
         .build(tauri::generate_context!());
@@ -198,3 +210,7 @@ pub fn run() {
         }
     });
 }
+
+#[cfg(test)]
+#[path = "startup.test.rs"]
+mod startup_tests;

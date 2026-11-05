@@ -157,7 +157,7 @@ function startCapture(target: ButtonKey | GamepadKeyboardControlDto): void {
 }
 const dispose = inputController.subscribe((next) => {
   const before = previousPhysical
-  previousPhysical = clonePadState(next.physicalState)
+  previousPhysical = next.physicalState
   snapshot.value = next
   panel.updateDevice(next.activeDeviceId)
   if (next.sequence !== lastSequence) {
@@ -166,7 +166,7 @@ const dispose = inputController.subscribe((next) => {
   }
   const now = performance.now()
   if (now - measurementStart >= 1000) {
-    frequency.value = Math.round(sampleCount * 1000 / (now - measurementStart))
+    frequency.value = Math.round(next.sampling?.pollingHz ?? sampleCount * 1000 / (now - measurementStart))
     sampleCount = 0
     measurementStart = now
   }
