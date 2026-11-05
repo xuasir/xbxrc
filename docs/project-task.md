@@ -8,6 +8,7 @@
 
 | ID | Task | Status | Started On | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-11-05-release-test-workflow-env | 修复 release/test 工作流加载失败 | Validation Pending | 2026-11-05 | simple；[GitHub run 41809381243](https://github.com/xuasir/xbxrc/actions/runs/41809381243) 报 desktop-build.yml 的 NO_PROXY / no_proxy 重复定义，构建 job 为 0；保留 NO_PROXY。actionlint 1.7.12 复现原错误，修复后全部 4 个工作流通过；8 项发行合同、Browser/Native WIP 模拟产物流程与 diff check 通过。用户授权提交同步 main/release/test，远端 CI 跟踪验证中。 |
 | 2026-11-04-pc-focus-clipping-diagnostic | 修复焦点裁切并完善流动轮廓和诊断面板 | Done | 2026-11-04 | simple；页面 / 云游戏页头与弹层滚动区补齐安全留白，串流焦点取消放大；主题绿青渐变轮廓 8 秒流动，原生输入同步现有导航；诊断背景加深至 96%，选中底色与聚焦外环分离。lint / typecheck / build / diff check、580 项测试及真实组件隔离预览（深浅色、800×600 / 960×540、首尾滚动 / Tab 循环 / 输入焦点）通过。[证据](reports/2026-11-04-pc-controller-status-focus-motion.md)。 |
 | 2026-11-04-pc-focus-radius-cloud-refresh | 统一焦点轮廓圆角并调整云游戏刷新入口 | Done | 2026-11-04 | simple；一级导航复用 4px 控件圆角，焦点按外扩 4px 补偿圆角与边框，卡片 / 头像沿用自身半径；云游戏刷新改为搜索框右侧 36px 图标，搜索时保持可用，保留无障碍文案和刷新状态。lint / typecheck / build / diff check 及深浅色、800×600 / 960×540、搜索后刷新预览通过。[证据](reports/2026-11-04-pc-controller-status-focus-motion.md)。 |
 | 2026-11-04-pc-controller-status-focus-motion | 恢复手柄连接子页并完善 PC 焦点、材质与动效 | Done | 2026-11-04 | 手柄连接 / 设置子页、云游戏透明标题、底色区分选中、透明 Logo、淡雅主题渐变焦点、素雅主机毛玻璃与动效完成；一级绿线与新增勾选移除。修复子页动画返回空白；lint / typecheck / build、580 项测试及深浅色 / 960×540 / 800×600 / 保存 / 往返与滚动恢复预览通过。[RFC](rfcs/2026-11-04-pc-controller-status-focus-motion.md) · [Report](reports/2026-11-04-pc-controller-status-focus-motion.md)。 |

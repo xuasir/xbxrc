@@ -34,7 +34,6 @@ jobs:
       CARGO_INCREMENTAL: "0"
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/browser
       NO_PROXY: localhost,127.0.0.1,::1
-      no_proxy: localhost,127.0.0.1,::1
     steps:
       - uses: actions/checkout@v5
         with:
