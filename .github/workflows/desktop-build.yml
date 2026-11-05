@@ -72,6 +72,17 @@ jobs:
         uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
+      - name: Pin MSVC linker for Cargo
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # 固定 MSVC 链接器，Git Bash 的 PATH 可能优先解析到 usr/bin/link.exe。
+          $linker = Join-Path $env:VCToolsInstallDir 'bin/Hostx64/x64/link.exe'
+          if (!(Test-Path -LiteralPath $linker -PathType Leaf)) {
+            throw "MSVC linker missing: $linker"
+          }
+          Write-Host "Using MSVC linker: $linker"
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Validate frontend and release contracts
         shell: bash
         run: |

@@ -62,6 +62,7 @@
 
 # Execution Rules
 
+- `main` 分支的 GitHub Actions 开发构建保持暂停，push、PR 与手动触发入口保持关闭；恢复构建以用户明确指令为准。`release/test` beta 与 stable tag 发行沿用独立入口。
 - 优先可读性、可维护性和清晰模块边界
 - 新代码遵循现有架构，不引入平行模式
 - 实现意图不明显时写简短中文注释
