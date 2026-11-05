@@ -7,3 +7,6 @@ pub use host_service::HostService;
 pub use profile_service::ProfileService;
 pub use streaming_query_service::StreamingQueryService;
 pub use xcloud_service::XcloudService;
+
+pub mod media_save;
+pub mod personal_service;

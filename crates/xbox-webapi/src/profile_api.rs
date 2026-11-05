@@ -53,6 +53,18 @@ impl ProfileApi {
     }
 
     pub async fn get_current_user(&self) -> Result<Value, WebApiError> {
+        self.get_user("me").await
+    }
+
+    pub async fn get_user(&self, xuid: &str) -> Result<Value, WebApiError> {
+        let target = if xuid == "me" {
+            "me".to_string()
+        } else {
+            if xuid.is_empty() || !xuid.bytes().all(|v| v.is_ascii_digit()) {
+                return Err(WebApiError::parse("invalid xuid"));
+            }
+            format!("xuid({xuid})")
+        };
         let headers = HttpTransport::create_header_map(&[
             ("Authorization", &self.authorization_header()),
             ("Accept-Language", "en-US"),
@@ -64,7 +76,7 @@ impl ProfileApi {
         let response = self
             .transport
             .get(
-                "https://profile.xboxlive.com/users/me/profile/settings?settings=GameDisplayName,GameDisplayPicRaw,Gamerscore,Gamertag",
+                &format!("https://profile.xboxlive.com/users/{target}/profile/settings?settings=GameDisplayName,GameDisplayPicRaw,Gamerscore,Gamertag"),
                 Some(headers),
             )
             .await?;

@@ -29,10 +29,29 @@ impl TitleHubApi {
     }
 
     pub async fn get_title_history(&self, xuid: &str) -> Result<Value, WebApiError> {
-        let url = title_history_url(xuid)?;
+        self.get_title_history_page(xuid, None).await
+    }
+
+    pub async fn get_title_history_page(
+        &self,
+        xuid: &str,
+        continuation: Option<&str>,
+    ) -> Result<Value, WebApiError> {
+        let mut url = reqwest::Url::parse(&title_history_url(xuid)?)
+            .map_err(|e| WebApiError::parse(e.to_string()))?;
+        if let Some(token) = continuation {
+            url.query_pairs_mut()
+                .append_pair("continuationToken", token);
+        }
+        let url = url.to_string();
         self.transport.get(&url, Some(self.headers()?)).await
     }
 
+    pub async fn get_title_detail(&self, xuid: &str, title_id: &str) -> Result<Value, WebApiError> {
+        let xuid = numeric_id(xuid, "xuid")?;
+        let title_id = numeric_id(title_id, "title id")?;
+        self.transport.get(&format!("{TITLEHUB_BASE_URL}/users/xuid({xuid})/titles/titleid({title_id})/decoration/achievement,image,detail,scid,alternateTitleId"), Some(self.headers()?)).await
+    }
     fn headers(&self) -> Result<HeaderMap, WebApiError> {
         HttpTransport::create_header_map(&[
             ("Authorization", &self.authorization_header()),

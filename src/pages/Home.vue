@@ -11,6 +11,7 @@ import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
+import LibraryRefresh from './library/LibraryRefresh.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -134,7 +135,7 @@ const canStreamSelected = computed(() => {
     || (state === 'standby' && host.remoteManagementEnabled === true)
 })
 const primaryLabel = computed(() => !canStreamSelected.value
-  ? t('homePage.refresh')
+  ? t('homePage.hero.play')
   : t(resolvePowerState(selectedCard.value?.host.powerState) === 'standby' ? 'homePage.hero.wake' : 'homePage.hero.play'))
 useShellPageHints(() => ({ status: loadError.value || selectedCard.value?.description, error: !!loadError.value }))
 
@@ -223,9 +224,14 @@ onMounted(() => {
               <p class="home-page__description">
                 {{ selectedCard.description }}
               </p>
-              <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="home-page__primary ui-action-button ui-action-button--brand" :disabled="isLoading" @click="handlePrimaryAction">
-                {{ primaryLabel }}
-              </Focusable>
+              <div class="home-page__actions">
+                <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="home-page__primary ui-action-button ui-action-button--brand" :disabled="isLoading || !canStreamSelected" @click="handlePrimaryAction">
+                  {{ primaryLabel }}
+                </Focusable>
+                <Focusable v-if="selectedCard.host.id || selectedCard.host.deviceId" id="xhome.installed-games" as="button" type="button" class="home-page__library ui-action-button" @click="router.push({ name: 'console-games', params: { consoleKey: selectedCard.host.id || selectedCard.host.deviceId }, query: { from: '/xhome' } })">
+                  已安装游戏
+                </Focusable>
+              </div>
             </div>
             <img class="home-page__console-art" :src="selectedCard.imageSrc" :alt="selectedCard.consoleType">
           </section>
@@ -244,9 +250,7 @@ onMounted(() => {
       <p class="home-page__empty-copy" :role="loadError ? 'alert' : undefined">
         {{ loadError || t('homePage.empty') }}
       </p>
-      <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="ui-action-button ui-action-button--brand" @click="handleRefresh">
-        {{ t('homePage.refresh') }}
-      </Focusable>
+      <LibraryRefresh :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" :busy="isLoading" @refresh="handleRefresh" />
     </section>
   </section>
 </template>
@@ -268,7 +272,11 @@ onMounted(() => {
 .home-page__status::before { content: ''; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--color-text-tertiary); }
 .home-page__status[data-power='on']::before, .home-page__status[data-power='standby']::before { background: var(--ui-status-positive); }
 .home-page__description { margin-top: var(--space-4); color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
-.home-page__primary { min-width: 0; margin-top: var(--space-24); }
+.home-page__actions { display: flex; align-items: center; gap: var(--space-12); flex-wrap: wrap; margin-top: var(--space-24); }
+.home-page__library { min-width: 0; border: 0; background: color-mix(in srgb, var(--color-text-primary) 14%, var(--color-surface-1)); }
+.home-page__library:hover { background: color-mix(in srgb, var(--color-text-primary) 20%, var(--color-surface-1)); }
+.home-page__library[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
+.home-page__primary { min-width: 0; }
 .home-page__primary[data-focused='true'], .home-page__refresh[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
 .home-page__primary:hover { background: var(--btn-primary-bg-hover); }
 .home-page__refresh:hover { background: var(--ui-material-hover); }
@@ -279,7 +287,7 @@ onMounted(() => {
 .home-page__device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); }
 .home-page__loading, .home-page__empty-state { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-24); }
 .home-page__empty-copy { max-width: 440px; color: var(--color-text-secondary); text-align: center; font-size: 14px; line-height: 1.5; }
-@media(max-height:680px) { .home-page { gap: var(--space-16); } .home-page__primary { margin-top: var(--space-16); } .home-page__eyebrow { margin-bottom: var(--space-12); } }
+@media(max-height:680px) { .home-page { gap: var(--space-16); } .home-page__actions { margin-top: var(--space-16); } .home-page__eyebrow { margin-bottom: var(--space-12); } }
 @media(max-width:700px) { .home-page__header { flex-wrap: wrap; } .home-page__title { font-size: 24px; line-height: 32px; } .home-page__hero { grid-template-columns: 1fr .55fr; gap: var(--space-12); padding: var(--space-16); } .home-page__console-name { font-size: 24px; } .home-page__console-art { height: 160px; } .home-page__device-grid { grid-template-columns: minmax(0, 1fr); } }
 @media(max-width:370px) { .home-page__hero { grid-template-columns: minmax(0, 1fr) .35fr; gap: var(--space-8); padding: var(--space-12); } .home-page__console-name { font-size: 22px; } .home-page__console-art { height: 144px; } }
 </style>

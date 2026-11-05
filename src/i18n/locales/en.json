@@ -1736,7 +1736,9 @@
       "inactive": "UI input paused",
       "back": "Back"
     },
-    "account": "Account"
+    "account": "Account",
+    "my": "My",
+    "enterMy": "Open My profile"
   },
   "commonRail": {
     "previous": "Browse left",

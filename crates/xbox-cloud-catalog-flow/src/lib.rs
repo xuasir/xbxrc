@@ -109,19 +109,27 @@ impl XboxCloudCatalogFlow {
         scope: &CloudCatalogScope,
         product_ids: &[String],
     ) -> CloudCatalogHydrationLoad {
-        let mut load = CloudCatalogHydrationLoad::default();
-        for chunk in chunk_product_ids(product_ids, PRODUCT_HYDRATION_CHUNK_SIZE) {
-            match self
-                .gamepass_api
-                .get_products(&chunk, &scope.market, &scope.language)
-                .await
-            {
-                Ok(response) => load.entries.extend(extract_product_entries(&response)),
-                Err(_) => load.failed_chunk_count += 1,
-            }
-        }
-        load
+        hydrate_catalog_products(&self.gamepass_api, scope, product_ids).await
     }
+}
+
+// 商品资料同供云游戏与主机安装列表使用，共用分批和图片归一化。
+pub async fn hydrate_catalog_products(
+    api: &GamePassApi,
+    scope: &CloudCatalogScope,
+    product_ids: &[String],
+) -> CloudCatalogHydrationLoad {
+    let mut load = CloudCatalogHydrationLoad::default();
+    for chunk in chunk_product_ids(product_ids, PRODUCT_HYDRATION_CHUNK_SIZE) {
+        match api
+            .get_products(&chunk, &scope.market, &scope.language)
+            .await
+        {
+            Ok(response) => load.entries.extend(extract_product_entries(&response)),
+            Err(_) => load.failed_chunk_count += 1,
+        }
+    }
+    load
 }
 
 fn build_overlay_load(

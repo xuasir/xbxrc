@@ -38,11 +38,14 @@ const pages = [{ key: 'xhome', label: 'shell.home' }, { key: 'xcloud', label: 's
         </SpatialNavIconButton>
       </div>
       <div class="top-nav__group">
-        <SpatialNavIconButton :id="SPATIAL_NAV_NODE_IDS.topNav.setting" :label="t('shell.settings')" :active="props.activeNav === 'setting'" :aria-current="props.activeNav === 'setting' ? 'page' : undefined" @click="emit('select', 'setting')">
-          <img class="top-nav__icon" :src="props.icons.setting" alt=""><span>{{ t('shell.settings') }}</span>
+        <SpatialNavIconButton :id="SPATIAL_NAV_NODE_IDS.topNav.my" :label="t('shell.my')" :active="props.activeNav === 'my'" :aria-current="props.activeNav === 'my' ? 'page' : undefined" @click="emit('select', 'my')">
+          <img class="top-nav__icon" :src="props.icons.my" alt=""><span>{{ t('shell.my') }}</span>
         </SpatialNavIconButton>
         <SpatialNavIconButton v-if="props.showController" :id="SPATIAL_NAV_NODE_IDS.topNav.controller" :label="t('shell.controller')" :active="props.activeNav === 'controller'" :aria-current="props.activeNav === 'controller' ? 'page' : undefined" @click="emit('select', 'controller')">
           <img class="top-nav__icon" :src="props.icons.controller" alt=""><span>{{ t('shell.controller') }}</span><span v-if="props.controllerActive" class="top-nav__connected" aria-hidden="true" />
+        </SpatialNavIconButton>
+        <SpatialNavIconButton :id="SPATIAL_NAV_NODE_IDS.topNav.setting" :label="t('shell.settings')" :active="props.activeNav === 'setting'" :aria-current="props.activeNav === 'setting' ? 'page' : undefined" @click="emit('select', 'setting')">
+          <img class="top-nav__icon" :src="props.icons.setting" alt=""><span>{{ t('shell.settings') }}</span>
         </SpatialNavIconButton>
       </div>
     </nav>

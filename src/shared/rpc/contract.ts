@@ -1,4 +1,5 @@
 import type { RuntimeFeatureCapabilities } from '../config/runtime-features'
+import type { ConsoleLibrary, LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage, MediaKind, PersonalAccount, Playtime, QueryResult } from './library'
 import type {
   RuntimeTraceAckResult,
   RuntimeTraceRecordEventParams,
@@ -101,6 +102,16 @@ export interface XBoxRpcSchema {
     >
   }
   data: {
+    getLibraryGame: RpcMethod<{ targetXuid?: string, xboxTitleId: string }, QueryResult<LibraryGame | null>>
+    getPersonalAccount: RpcMethod<{ targetXuid?: string }, QueryResult<PersonalAccount>>
+    getGameHistory: RpcMethod<{ targetXuid?: string, continuation?: string }, QueryResult<LibraryPage<LibraryGame>>>
+    getAchievements: RpcMethod<{ targetXuid?: string, xboxTitleId: string, continuation?: string, language: string }, QueryResult<LibraryPage<LibraryAchievement>>>
+    getPlaytimes: RpcMethod<{ targetXuid?: string, xboxTitleIds: string[] }, QueryResult<Playtime[]>>
+    getConsoleLibrary: RpcMethod<{ consoleId: string }, QueryResult<ConsoleLibrary>>
+    getMedia: RpcMethod<{ kind: MediaKind, continuation?: string }, QueryResult<LibraryPage<LibraryMedia>>>
+    resolveMedia: RpcMethod<{ kind: MediaKind, id: string, continuation?: string }, QueryResult<LibraryMedia>>
+    saveMedia: RpcMethod<{ kind: MediaKind, id: string, continuation?: string }, { saved: boolean, canceled: boolean }>
+
     getUserProfile: RpcMethod<
       void,
       {

@@ -14,12 +14,14 @@ export const SPATIAL_NAV_NODE_IDS = {
     setting: 'top-nav.setting',
     controller: 'top-nav.controller',
     profile: 'top-nav.profile',
+    my: 'top-nav.my',
   },
   userMenu: {
     idle: 'user-menu.idle',
     info: 'user-menu.info',
     status: 'user-menu.status',
     logout: 'user-menu.logout',
+    my: 'user-menu.my',
   },
   settingTabs: {
     general: 'setting.tabs.general',
@@ -30,6 +32,7 @@ export const SPATIAL_NAV_NODE_IDS = {
   pagePrimary: {
     xhome: 'xhome.primary',
     xcloud: 'xcloud.primary',
+    my: 'library.tab.account',
     setting: 'setting.tabs.general',
     controller: 'controller.tabs.connection',
   },
@@ -54,10 +57,11 @@ export type TopNavNodeKey = keyof typeof SPATIAL_NAV_NODE_IDS.topNav
 export type SettingTabKey = keyof typeof SPATIAL_NAV_NODE_IDS.settingTabs
 export type AppPageRouteName = keyof typeof SPATIAL_NAV_NODE_IDS.pagePrimary
 
-export const APP_PAGE_NAV_ORDER: readonly AppPageRouteName[] = ['xhome', 'xcloud', 'setting', 'controller']
+export const APP_PAGE_NAV_ORDER: readonly AppPageRouteName[] = ['xhome', 'xcloud', 'my', 'controller', 'setting']
 export const APP_PAGE_LABEL_KEYS: Record<AppPageRouteName, string> = {
   xhome: 'shell.home',
   xcloud: 'shell.cloud',
   setting: 'shell.settings',
   controller: 'shell.controller',
+  my: 'shell.my',
 }

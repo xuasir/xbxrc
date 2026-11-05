@@ -15,6 +15,53 @@ use std::sync::Arc;
 
 #[async_trait]
 pub trait DataProvider: Send + Sync {
+    async fn get_library_game(
+        &self,
+        target: Option<String>,
+        title: String,
+    ) -> Result<DataQuery<Option<LibraryGame>>, String>;
+    async fn get_personal_account(
+        &self,
+        target: Option<String>,
+    ) -> Result<DataQuery<DataPersonalAccount>, String>;
+    async fn get_game_history(
+        &self,
+        target: Option<String>,
+        continuation: Option<String>,
+    ) -> Result<DataQuery<LibraryPage<LibraryGame>>, String>;
+    async fn get_achievements(
+        &self,
+        target: Option<String>,
+        title: String,
+        continuation: Option<String>,
+        language: String,
+    ) -> Result<DataQuery<LibraryPage<LibraryAchievement>>, String>;
+    async fn get_playtimes(
+        &self,
+        target: Option<String>,
+        ids: Vec<String>,
+    ) -> Result<DataQuery<Vec<DataPlaytime>>, String>;
+    async fn get_console_library(
+        &self,
+        id: String,
+    ) -> Result<DataQuery<DataConsoleLibrary>, String>;
+    async fn get_media(
+        &self,
+        kind: MediaKind,
+        continuation: Option<String>,
+    ) -> Result<DataQuery<LibraryPage<LibraryMedia>>, String>;
+    async fn resolve_media(
+        &self,
+        kind: MediaKind,
+        id: String,
+        continuation: Option<String>,
+    ) -> Result<DataQuery<LibraryMedia>, String>;
+    async fn save_media(
+        &self,
+        kind: MediaKind,
+        id: String,
+        continuation: Option<String>,
+    ) -> Result<DataMediaSaveResult, String>;
     async fn get_user_profile(&self) -> Result<DataUserProfile, String>;
     async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, String>;
     async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, String>;

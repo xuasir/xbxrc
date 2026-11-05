@@ -17,14 +17,17 @@ impl PeopleApi {
     }
 
     pub async fn get_friends_count(&self) -> Result<Option<u32>, WebApiError> {
-        let value = self
-            .transport
+        let value = self.get_friends().await?;
+        Ok(parse_friends_count(&value))
+    }
+
+    pub async fn get_friends(&self) -> Result<Value, WebApiError> {
+        self.transport
             .get(
                 "https://peoplehub.xboxlive.com/users/me/people/social/decoration/preferredcolor,detail,multiplayersummary,presencedetail",
                 Some(self.headers()?),
             )
-            .await?;
-        Ok(parse_friends_count(&value))
+            .await
     }
 
     fn headers(&self) -> Result<HeaderMap, WebApiError> {

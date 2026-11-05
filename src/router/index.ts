@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
       keepAlive: true,
     },
   },
+  { path: '/my', redirect: '/my/account' },
+  { path: '/my/:section(account|achievements|statistics|album)', name: 'my', component: () => import('../pages/My.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'my' } },
+  { path: '/my/account/friends/:targetXuid', name: 'my-friend', component: () => import('../pages/FriendDetail.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'my' } },
+  { path: '/my/achievements/:xboxTitleId', name: 'my-game', component: () => import('../pages/GameDetail.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'my' } },
+  { path: '/xhome/:consoleKey/games', name: 'console-games', component: () => import('../pages/ConsoleLibrary.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'xhome' } },
+  { path: '/xhome/:consoleKey/games/:installedItemKey', name: 'console-game', component: () => import('../pages/GameDetail.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'xhome' } },
   {
     path: '/setting',
     name: 'setting',

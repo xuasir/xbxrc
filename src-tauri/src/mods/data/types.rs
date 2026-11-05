@@ -147,3 +147,47 @@ pub struct XcloudCatalogCacheScope {
     pub language: String,
     pub market: String,
 }
+
+pub use xbox_webapi::{
+    ConsoleStorage, InstalledGame, LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage,
+    LibraryPerson, MediaKind,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataQuery<T> {
+    pub account_id: String,
+    pub target_id: String,
+    pub updated_at: u64,
+    pub data: T,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPersonalAccount {
+    pub profile: Option<LibraryPerson>,
+    pub friends: Option<Vec<LibraryPerson>>,
+    pub notices: Vec<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPlaytime {
+    pub xbox_title_id: String,
+    pub minutes: Option<u64>,
+    pub error: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataConsoleLibrary {
+    pub console_id: String,
+    pub games: Option<Vec<InstalledGame>>,
+    pub storage: Option<Vec<ConsoleStorage>>,
+    pub power_state: Option<String>,
+    pub notices: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataMediaSaveResult {
+    pub saved: bool,
+    pub canceled: bool,
+}

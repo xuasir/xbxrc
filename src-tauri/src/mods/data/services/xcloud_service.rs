@@ -30,6 +30,7 @@ impl XcloudService {
     ) -> Option<XcloudCatalogCacheScope> {
         let claims = resolve_web_token_claims(&session.web_token)?;
         let region = Self::resolve_xcloud_region(session)?;
+        let catalog_scope = Self::resolve_catalog_scope();
         let account_id = claims
             .xid
             .as_deref()
@@ -39,8 +40,8 @@ impl XcloudService {
         Some(XcloudCatalogCacheScope {
             account_id: account_id.to_string(),
             region_host: region.host,
-            language: Self::resolve_catalog_language(),
-            market: XCLOUD_CATALOG_DEFAULT_MARKET.to_string(),
+            language: catalog_scope.language,
+            market: catalog_scope.market,
         })
     }
 
@@ -190,6 +191,13 @@ impl XcloudService {
             host: host.to_string(),
             bearer_token: bearer_token.to_string(),
         })
+    }
+
+    pub(crate) fn resolve_catalog_scope() -> CloudCatalogScope {
+        CloudCatalogScope {
+            market: XCLOUD_CATALOG_DEFAULT_MARKET.to_string(),
+            language: Self::resolve_catalog_language(),
+        }
     }
 
     fn resolve_catalog_language() -> String {

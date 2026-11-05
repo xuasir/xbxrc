@@ -10,6 +10,7 @@ import { navigationEngine } from '@/navigation/core'
 import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
 import { FocusScope } from '@/navigation/core/vue'
 import controllerStatusIcon from '../../assets/nav/ctrl.svg'
+import myIcon from '../../assets/nav/my.svg'
 import settingIcon from '../../assets/nav/setting.svg'
 import xboxLogoIcon from '../../assets/nav/xbox-logo.svg'
 import xcloudIcon from '../../assets/nav/xcloud.svg'
@@ -41,6 +42,7 @@ provide(shellContextKey, shell)
 
 const topNavIcons = {
   brand: xboxLogoIcon,
+  my: myIcon,
   xhome: xhomeIcon,
   xcloud: xcloudIcon,
   setting: settingIcon,
@@ -59,7 +61,7 @@ const gamepadSnapshot = shallowRef<InputSnapshot>(inputController.getSnapshot())
 const PAGE_NAV_ORDER = APP_PAGE_NAV_ORDER
 let disposePageSwitch: (() => void) | undefined
 
-const activeNav = computed<AppPageRouteName>(() => PAGE_NAV_ORDER.includes(route.name as AppPageRouteName) ? route.name as AppPageRouteName : 'xhome')
+const activeNav = computed<AppPageRouteName>(() => PAGE_NAV_ORDER.includes((route.meta.navPage || route.name) as AppPageRouteName) ? (route.meta.navPage || route.name) as AppPageRouteName : 'xhome')
 
 const resolvedDisplayName = computed(() => {
   return (
@@ -110,7 +112,7 @@ function openProfileMenu(): void {
 const canGoBack = computed(() => {
   void route.fullPath
   const back = router.options.history.state.back
-  return typeof back === 'string' && back !== route.fullPath && PAGE_NAV_ORDER.some(name => back === `/${name}`)
+  return typeof back === 'string' && back !== route.fullPath && /^\/(?:xhome|xcloud|my|controller|setting)(?:\/|$)/.test(back) && !back.includes('/stream/')
 })
 
 function handleEscapeKeydown(event: KeyboardEvent): void {
@@ -166,6 +168,10 @@ function handleTopNavSelect(node: TopNavNodeKey): void {
     void router.push('/xcloud')
     return
   }
+  if (node === 'my') {
+    void router.push('/my/account')
+    return
+  }
   if (node === 'setting') {
     void router.push('/setting')
     return
@@ -206,11 +212,11 @@ function handleTouchEnd(e: TouchEvent): void {
 
     if (distance > 0 && currentIndex > 0) {
       // 向右划，回退到上一个标签
-      void router.push({ name: navOrder[currentIndex - 1] })
+      void router.push(navOrder[currentIndex - 1] === 'my' ? '/my/account' : { name: navOrder[currentIndex - 1] })
     }
     else if (distance < 0 && currentIndex < navOrder.length - 1) {
       // 向左划，前进到下一个标签
-      void router.push({ name: navOrder[currentIndex + 1] })
+      void router.push(navOrder[currentIndex + 1] === 'my' ? '/my/account' : { name: navOrder[currentIndex + 1] })
     }
   }
 }
@@ -247,7 +253,7 @@ onMounted(() => {
     if (nextIndex >= 0 && nextIndex < PAGE_NAV_ORDER.length) {
       playNavSound('move')
       triggerNavHaptic('move')
-      void router.push({ name: PAGE_NAV_ORDER[nextIndex] })
+      void router.push(PAGE_NAV_ORDER[nextIndex] === 'my' ? '/my/account' : { name: PAGE_NAV_ORDER[nextIndex] })
     }
     else {
       // 已到边界
@@ -321,6 +327,7 @@ onUnmounted(() => {
       :logging-out="isLoggingOut"
       @close="closeProfileMenu"
       @logout="() => void handleLogout()"
+      @my="handleTopNavSelect('my')"
     />
   </section>
 </template>

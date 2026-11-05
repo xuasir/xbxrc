@@ -37,3 +37,8 @@ pub use types::*;
 pub use userpresence_api::*;
 pub use userstats_api::*;
 pub use xcloud_api::*;
+
+pub mod library;
+pub mod media_api;
+pub use library::*;
+pub use media_api::*;

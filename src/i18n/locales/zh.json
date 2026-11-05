@@ -80,7 +80,7 @@
       "input": "输入方式"
     },
     "inputs": {
-      "controller": "手柄",
+      "controller": "控制器",
       "mouseKeyboard": "键盘和鼠标",
       "touch": "触控"
     },
@@ -1135,7 +1135,7 @@
         "connection": "连接"
       },
       "input": {
-        "controller": "手柄"
+        "controller": "控制器"
       }
     },
     "streaming": {
@@ -1722,7 +1722,7 @@
     "home": "主机",
     "cloud": "云游戏",
     "settings": "设置",
-    "controller": "手柄",
+    "controller": "控制器",
     "profile": "账户头像",
     "hints": {
       "label": "操作提示",
@@ -1736,7 +1736,9 @@
       "inactive": "界面输入暂停",
       "back": "返回"
     },
-    "account": "账户"
+    "account": "账户",
+    "my": "我的",
+    "enterMy": "进入我的"
   },
   "commonRail": {
     "previous": "向左浏览",

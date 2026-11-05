@@ -1,0 +1,62 @@
+.library-page { position: relative; min-height: 0; height: 100%; overflow: hidden; --color-focus-bg-strong: var(--ui-material-selected); }
+.library-layout { display: grid; grid-template-columns: var(--ui-settings-layout-columns); grid-template-rows: var(--ui-settings-layout-rows); height: 100%; min-height: 0; gap: var(--space-16); }
+.library-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.library-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); padding: var(--ui-space-lg) var(--ui-settings-side-padding); min-width: 0; }
+.library-header h1, .library-stack > .library-toolbar > h1 { margin: 0; color: var(--color-text-primary); font-size: var(--ui-text-title-md); line-height: var(--ui-line-height-default); font-weight: var(--ui-font-weight-medium); overflow-wrap: anywhere; }
+/* 阅读信息保持实体文字；层级由字号和留白区分，背景延续壳层环境光。 */
+.library-copy, .library-caption { color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text-primary)); font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); overflow-wrap: anywhere; }
+.library-copy { margin-top: var(--space-8); font-size: var(--ui-text-body-md); }
+.library-content { overflow: auto; min-width: 0; min-height: 0; padding: var(--ui-settings-focus-safe) var(--ui-settings-side-padding) var(--ui-settings-focus-tail); scroll-padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail); }
+.library-stack { display: flex; flex-direction: column; gap: var(--ui-settings-section-gap); min-width: 0; }
+.library-toolbar, .library-actions { display: flex; align-items: center; gap: var(--space-12); flex-wrap: wrap; min-width: 0; }
+.library-header > div:first-child { min-width: 0; }
+.library-header > .library-actions { flex-shrink: 0; }
+.library-heading { display: flex; align-items: flex-start; gap: var(--space-16); }
+.library-heading > .library-back { flex-shrink: 0; }
+.library-heading > div { min-width: 0; }
+.library-detail-heading { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-16); }
+.library-empty { flex: 1; display: grid; place-items: center; min-height: 0; padding: var(--space-24); color: var(--color-text-secondary); font-size: var(--ui-text-body-md); line-height: var(--ui-line-height-relaxed); text-align: center; }
+.library-actions .ui-action-button { min-width: 0; }
+.library-actions .ui-action-button:disabled { opacity: .5; cursor: default; }
+.library-actions .ui-action-button[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
+.library-toolbar .setting-input-control__field-shell { flex-basis: 160px; }
+.library-control { border: 1px solid transparent; border-radius: var(--ui-radius-md); padding: var(--ui-space-sm) var(--ui-settings-control-padding); min-height: 36px; max-width: 100%; background: var(--ui-settings-item-bg); color: var(--color-text-primary); font: inherit; font-size: var(--ui-text-body-sm); scroll-margin: var(--ui-settings-focus-safe); }
+.library-control--link { background: transparent; color: var(--color-text-primary); }
+.library-control--link::after { content: '›'; margin-left: var(--space-8); }
+.library-control:disabled { opacity: .5; cursor: default; }
+.library-row:hover, .library-control:hover { background: var(--ui-material-hover); }
+.library-row[data-focused='true'], .library-control[data-focused='true'] { background: var(--ui-material-selected); color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
+.library-state { color: var(--color-text-secondary); font-size: 14px; padding: var(--space-16) 0; line-height: 1.6; }
+.library-notice { margin: 0; padding: var(--ui-space-md) 0; background: transparent; color: var(--color-text-secondary); font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); }
+.library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(148px, 100%), 1fr)); gap: 16px; min-width: 0; }
+.library-grid .game-card { width: 100%; height: auto; aspect-ratio: 1; --ui-game-card-title-font-size: var(--ui-text-body-md); }
+.library-results { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
+.library-game { min-width: 0; }
+.library-game .library-caption { margin-top: 8px; }
+.library-list { display: flex; flex-direction: column; gap: 8px; }
+.library-row { display: flex; align-items: center; gap: var(--space-16); width: 100%; min-width: 0; padding: var(--space-12); border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-primary); text-align: left; font: inherit; cursor: pointer; scroll-margin: var(--ui-settings-focus-safe); }
+.library-row img, .library-thumb { width: 52px; height: 52px; object-fit: contain; border-radius: var(--ui-radius-md); flex-shrink: 0; }
+.library-row--person img { border-radius: 50%; }
+.library-row__body { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.library-row__body strong { display: block; font-weight: var(--ui-font-weight-medium); font-size: var(--ui-text-body-md); line-height: var(--ui-line-height-default); }
+.library-row__body > .library-caption { display: block; margin-top: var(--space-4); }
+.library-row__value { flex-shrink: 0; font-size: var(--ui-text-body-md); font-weight: var(--ui-font-weight-medium); line-height: var(--ui-line-height-relaxed); color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.library-profile { display: flex; gap: var(--space-24); align-items: center; padding: var(--space-16) 0 var(--space-24); border-bottom: 1px solid var(--ui-border-subtle); background: transparent; }
+.library-profile__avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: grid; place-items: center; background: var(--ui-material-selected); font-size: 24px; }
+.library-profile h2 { font-weight: var(--ui-font-weight-medium); font-size: var(--ui-text-body-lg); line-height: var(--ui-line-height-default); overflow-wrap: anywhere; }
+.library-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 16px; }
+.library-metric { min-width: 0; padding: var(--space-12) 0 var(--space-16); border-bottom: 1px solid var(--ui-border-subtle); background: transparent; }
+.library-metric strong { display: block; font-size: 20px; font-weight: 500; margin: 8px 0; }
+.library-metric__heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-12); flex-wrap: wrap; }
+.library-metric__heading strong { margin: 0; font-size: var(--ui-text-title-md); }
+.library-metric--storage > .library-caption { margin-top: var(--space-8); }
+.library-detail-hero { display: flex; gap: 24px; align-items: flex-start; }
+.library-detail-hero img { width: min(32%, 176px); aspect-ratio: 1; object-fit: contain; border-radius: var(--ui-game-card-radius); }
+.library-detail-hero h2 { font-size: var(--ui-text-body-lg); line-height: var(--ui-line-height-default); font-weight: var(--ui-font-weight-medium); overflow-wrap: anywhere; }
+.library-section-title { margin: 0; font-size: var(--ui-settings-section-title-size); line-height: var(--ui-line-height-relaxed); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-primary); }
+@media(max-width:700px) { .library-profile, .library-detail-hero { gap: 12px; } .library-header { flex-wrap: wrap; } .library-heading { flex-direction: column; gap: var(--space-4); } .library-profile__avatar { width: 48px; height: 48px; } .library-row { flex-wrap: wrap; gap: 12px; } .library-row__value { margin-left: auto; } }
+
+.library-metric progress { display: block; appearance: none; width: 100%; height: var(--space-4); margin-top: var(--space-12); border: 0; border-radius: var(--ui-radius-sm); overflow: hidden; background: var(--ui-material-selected); color: var(--ui-status-positive); }
+.library-metric progress::-webkit-progress-bar { background: var(--ui-material-selected); border-radius: inherit; }
+.library-metric progress::-webkit-progress-value { background: var(--ui-status-positive); border-radius: inherit; }
+.library-metric progress::-moz-progress-bar { background: var(--ui-status-positive); border-radius: inherit; }

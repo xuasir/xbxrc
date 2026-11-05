@@ -3,10 +3,15 @@ use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::mods::data::events;
 use crate::mods::data::runtime_state::{DataRuntimeState, XcloudCatalogRefreshJoin};
+use crate::mods::data::services::personal_service::{PersonalContext, PersonalService};
 use crate::mods::data::services::{
     HostService, ProfileService, StreamingQueryService, XcloudService,
 };
 use crate::mods::data::session_resolver::DataSessionResolver;
+use crate::mods::data::types::{
+    DataConsoleLibrary, DataMediaSaveResult, DataPersonalAccount, DataPlaytime, DataQuery,
+    LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage, MediaKind,
+};
 use crate::mods::data::types::{
     DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataStreamingTitleInputConfig,
     DataUserProfile, DataXcloudCatalogCacheState, DataXcloudCatalogPayload,
@@ -29,6 +34,15 @@ pub struct DataService {
 }
 
 impl DataService {
+    async fn personal_context(&self, target: Option<&str>) -> Result<PersonalContext, String> {
+        let session = self
+            .session_resolver
+            .ensure_authenticated_session()
+            .await?
+            .ok_or("请先登录 Xbox 账户")?;
+        PersonalService::context(&session, target).await
+    }
+
     pub fn new(
         app_handle: tauri::AppHandle,
         auth_provider: AuthProviderRef,
@@ -275,6 +289,92 @@ impl DataService {
 
 #[async_trait]
 impl DataProvider for DataService {
+    async fn get_library_game(
+        &self,
+        target: Option<String>,
+        title: String,
+    ) -> Result<DataQuery<Option<LibraryGame>>, String> {
+        let ctx = self.personal_context(target.as_deref()).await?;
+        Ok(ctx.wrap(PersonalService::game(&ctx, &title).await?))
+    }
+
+    async fn get_personal_account(
+        &self,
+        target: Option<String>,
+    ) -> Result<DataQuery<DataPersonalAccount>, String> {
+        let ctx = self.personal_context(target.as_deref()).await?;
+        Ok(ctx.wrap(PersonalService::account(&ctx).await))
+    }
+    async fn get_game_history(
+        &self,
+        target: Option<String>,
+        continuation: Option<String>,
+    ) -> Result<DataQuery<LibraryPage<LibraryGame>>, String> {
+        let ctx = self.personal_context(target.as_deref()).await?;
+        Ok(ctx.wrap(PersonalService::history(&ctx, continuation.as_deref()).await?))
+    }
+    async fn get_achievements(
+        &self,
+        target: Option<String>,
+        title: String,
+        continuation: Option<String>,
+        language: String,
+    ) -> Result<DataQuery<LibraryPage<LibraryAchievement>>, String> {
+        let ctx = self.personal_context(target.as_deref()).await?;
+        Ok(ctx.wrap(
+            PersonalService::achievements(&ctx, &title, continuation.as_deref(), &language).await?,
+        ))
+    }
+    async fn get_playtimes(
+        &self,
+        target: Option<String>,
+        ids: Vec<String>,
+    ) -> Result<DataQuery<Vec<DataPlaytime>>, String> {
+        let ctx = self.personal_context(target.as_deref()).await?;
+        Ok(ctx.wrap(PersonalService::playtimes(&ctx, ids).await?))
+    }
+    async fn get_console_library(
+        &self,
+        id: String,
+    ) -> Result<DataQuery<DataConsoleLibrary>, String> {
+        let ctx = self.personal_context(None).await?;
+        Ok(ctx.wrap(PersonalService::console(&ctx, &id).await?))
+    }
+    async fn get_media(
+        &self,
+        kind: MediaKind,
+        continuation: Option<String>,
+    ) -> Result<DataQuery<LibraryPage<LibraryMedia>>, String> {
+        let ctx = self.personal_context(None).await?;
+        Ok(ctx.wrap(PersonalService::media(&ctx, kind, continuation.as_deref()).await?))
+    }
+    async fn resolve_media(
+        &self,
+        kind: MediaKind,
+        id: String,
+        continuation: Option<String>,
+    ) -> Result<DataQuery<LibraryMedia>, String> {
+        let ctx = self.personal_context(None).await?;
+        let media = crate::mods::data::services::media_save::resolve(
+            &ctx,
+            kind,
+            &id,
+            continuation.as_deref(),
+        )
+        .await?;
+        Ok(ctx.wrap(media))
+    }
+    async fn save_media(
+        &self,
+        kind: MediaKind,
+        id: String,
+        continuation: Option<String>,
+    ) -> Result<DataMediaSaveResult, String> {
+        let ctx = self.personal_context(None).await?;
+        crate::mods::data::services::media_save::save(&ctx, kind, &id, continuation.as_deref())
+            .await
+    }
+
     async fn get_user_profile(&self) -> Result<DataUserProfile, String> {
         let session = self.session_resolver.ensure_authenticated_session().await?;
         let Some(session) = session else {

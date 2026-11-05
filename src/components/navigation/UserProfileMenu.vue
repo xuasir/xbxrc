@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<UserProfileMenuProps>(), {
 const emit = defineEmits<{
   (event: 'close'): void
   (event: 'logout'): void
+  (event: 'my'): void
 }>()
 
 const { t } = useI18n()
@@ -91,7 +92,7 @@ function emitLogout(): void {
             class="user-menu__panel"
             :aria-label="t('shell.profile')"
             :active="props.open"
-            :default-focus-id="SPATIAL_NAV_NODE_IDS.userMenu.logout"
+            :default-focus-id="SPATIAL_NAV_NODE_IDS.userMenu.my"
           >
             <section id="user-menu-panel" role="dialog" aria-modal="true" :aria-label="t('shell.profile')" :aria-busy="props.loggingOut">
               <Focusable
@@ -157,6 +158,9 @@ function emitLogout(): void {
               <div class="user-menu__divider" aria-hidden="true" />
 
               <div class="user-menu__actions">
+                <Focusable :id="SPATIAL_NAV_NODE_IDS.userMenu.my" as="button" type="button" class="user-menu__logout" :disabled="props.loggingOut" :on-back="emitClose" @click="emit('my')">
+                  {{ t('shell.enterMy') }}
+                </Focusable>
                 <Focusable
                   :id="SPATIAL_NAV_NODE_IDS.userMenu.logout"
                   as="button"
