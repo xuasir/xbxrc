@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import exitIcon from '../../assets/nav/exit.svg'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../../navigation/spatial-nav.constants'
@@ -41,15 +41,6 @@ function handleKeydown(event: KeyboardEvent) {
     event.stopImmediatePropagation()
     emitClose()
   }
-  else if (event.key === 'Tab') {
-    const nodes = [...(document.getElementById('user-menu-panel')?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
-    const current = nodes.indexOf(document.activeElement as HTMLElement)
-    const next = nodes[(current + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
-    if (next) {
-      event.preventDefault()
-      navigationEngine.focusElement(next, false)
-    }
-  }
 }
 watch(() => props.open, (open) => {
   window.removeEventListener('keydown', handleKeydown)
@@ -58,7 +49,6 @@ watch(() => props.open, (open) => {
   }
   else {
     logoutConfirm.value = false
-    navigationEngine.updateActiveScope(SPATIAL_NAV_SCOPE_IDS.userMenu, false)
   }
 }, { immediate: true })
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown))

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamTextSheetProps {
@@ -29,11 +29,14 @@ const cancelNodeId = computed(() => `${props.scopeId}.cancel`)
 const submitNodeId = computed(() => `${props.scopeId}.submit`)
 const defaultFocusId = computed(() => fieldNodeId.value)
 const isEmpty = computed(() => draftValue.value.trim() === '')
+let focusGeneration = 0
 
 async function focusInput(): Promise<void> {
+  const request = ++focusGeneration
   await nextTick()
-  inputRef.value?.focus()
-  inputRef.value?.select()
+  await nextTick()
+  if (request === focusGeneration && props.open && navigationEngine.isTopmostScope(props.scopeId) && navigationEngine.focusElement(inputRef.value, false))
+    inputRef.value?.select()
 }
 
 function handleClose(): void {
@@ -55,20 +58,12 @@ function handleKeydown(event: KeyboardEvent): void {
     event.stopImmediatePropagation()
     handleClose()
   }
-  if (event.key === 'Tab') {
-    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])].map(node => node.querySelector<HTMLInputElement>('input') ?? node)
-    const index = nodes.indexOf(document.activeElement as HTMLElement)
-    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
-    if (next) {
-      event.preventDefault()
-      navigationEngine.focusElement(next, false)
-    }
-  }
 }
 
 watch(
   () => props.open,
   (open) => {
+    focusGeneration++
     window.removeEventListener('keydown', handleKeydown, true)
     if (!open) {
       draftValue.value = ''
@@ -80,7 +75,10 @@ watch(
   },
   { immediate: true },
 )
-onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true))
+onBeforeUnmount(() => {
+  focusGeneration++
+  window.removeEventListener('keydown', handleKeydown, true)
+})
 </script>
 
 <template>

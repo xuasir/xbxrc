@@ -477,7 +477,10 @@ function openActionSheet(): void {
 }
 
 async function moveStreamSpatialNavFocusToPostOverlaySink(): Promise<void> {
+  const identity = route.fullPath
   await nextTick()
+  if (pageDisposed || route.fullPath !== identity || hasInteractiveSheet.value || !navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.streamPage))
+    return
   const sink = document.getElementById(SPATIAL_NAV_NODE_IDS.streamPage.focusSink)
   if (sink instanceof HTMLElement) {
     navigationEngine.focusElement(sink, false, false)
@@ -880,6 +883,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       <div
         :id="SPATIAL_NAV_NODE_IDS.streamPage.focusSink"
         class="stream-page__focus-sink"
+        data-nav-focus-sink="true"
         tabindex="-1"
         aria-hidden="true"
       />

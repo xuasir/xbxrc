@@ -2,12 +2,14 @@
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine } from '@/navigation/core'
+import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import ControllerConnectionSection from './controller/ControllerConnectionSection.vue'
 import SettingInputToolsSection from './settings/SettingInputToolsSection.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
 
+const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
 type ControllerTab = 'connection' | 'settings'
 const activeTab = ref<ControllerTab>('connection')
@@ -35,7 +37,10 @@ onMounted(() => {
       return
     const key: ControllerTab = direction === 'next' ? 'settings' : 'connection'
     changeTab(key)
-    void nextTick(() => navigationEngine.focusElement(document.getElementById(`controller.tabs.${key}`), false))
+    void nextTick(() => {
+      if (active && activeTab.value === key)
+        navigationEngine.focusElement(document.getElementById(`controller.tabs.${key}`), false)
+    })
   })
 })
 onActivated(() => {
@@ -45,10 +50,12 @@ onDeactivated(() => {
   active = false
 })
 onBeforeUnmount(() => disposeTabSwitch?.())
+
+usePageFocus(() => pageRef.value, () => activeTab.value, () => `controller.tabs.${activeTab.value}`)
 </script>
 
 <template>
-  <section class="controller-page ui-page-shell" :aria-label="t('shell.controller')">
+  <section ref="pageRef" class="controller-page ui-page-shell" :aria-label="t('shell.controller')">
     <SettingSidebar :title="t('shell.controller')" :tabs="tabs" :active-tab-key="activeTab" :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell" @tab-change="changeTab" />
     <section class="controller-page__panel" :aria-label="activeLabel">
       <header class="controller-page__header">

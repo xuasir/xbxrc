@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watch } from 'vue'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamActionItem {
@@ -42,16 +42,6 @@ function handleSelect(id: string): void {
 function handleEscapeKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented || !navigationEngine.isTopmostScope(props.scopeId))
     return
-  if (event.key === 'Tab') {
-    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
-    const index = nodes.indexOf(document.activeElement as HTMLElement)
-    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
-    if (next) {
-      event.preventDefault()
-      navigationEngine.focusElement(next, false)
-    }
-    return
-  }
   if (event.key !== 'Escape') {
     return
   }

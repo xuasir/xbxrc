@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamAlertAction {
@@ -71,15 +71,6 @@ function handleKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     event.stopImmediatePropagation()
     void handleClose()
-  }
-  if (event.key === 'Tab') {
-    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
-    const index = nodes.indexOf(document.activeElement as HTMLElement)
-    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
-    if (next) {
-      event.preventDefault()
-      navigationEngine.focusElement(next, false)
-    }
   }
 }
 watch(() => [props.open, props.resetKey] as const, ([open]) => {

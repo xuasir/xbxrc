@@ -1,7 +1,9 @@
 import type { GameProgress, LibraryAchievement, LibraryGame } from '@/shared/rpc/library'
 import { nextTick, onActivated, onDeactivated, onUnmounted, shallowReactive, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core'
+import { navigationEngine } from '@/navigation/core'
+import { isFocusTarget } from '@/navigation/core/focus-target'
+import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { SPATIAL_NAV_SCOPE_IDS } from '@/navigation/spatial-nav.constants'
 
 export const MY_SECTIONS = ['account', 'achievements', 'statistics', 'album'] as const
@@ -44,7 +46,7 @@ export function useLibraryFocusFallback(ids: () => string[]) {
     active = false
   })
   watch(ids, (next, previous) => {
-    const focused = document.querySelector<HTMLElement>('[data-focused="true"]')
+    const focused = navigationEngine.getCurrentFocus()
     if (!active || !focused)
       return
     const index = previous.indexOf(focused.id)
@@ -52,7 +54,7 @@ export function useLibraryFocusFallback(ids: () => string[]) {
       return
     // 列表刷新、筛选及末页移除入口前，把焦点交给邻近的有效项目。
     const candidate = next.map((id, order) => ({ element: document.getElementById(id), distance: Math.abs(order - index) }))
-      .filter(item => item.element?.matches(FOCUSABLE_SELECTOR))
+      .filter(item => isFocusTarget(item.element))
       .sort((a, b) => a.distance - b.distance)[0]
       ?.element
     if (candidate)
@@ -66,8 +68,13 @@ export function useLibraryNavigation(panel: () => HTMLElement | null, key: () =>
   let pendingTab = ''
   const routeName = route.name
   const positions = new Map<string, { scroll: number, focus: string }>()
+  const pageFocus = usePageFocus(() => panel()?.closest<HTMLElement>('.library-page') ?? null, key, () => {
+    const root = panel()?.closest<HTMLElement>('.library-page')
+    return root?.querySelector<HTMLElement>('[data-library-entry]')?.id ?? `library.tab.${active()}`
+  }, false)
   function save(id = key()) {
-    positions.set(id, { scroll: panel()?.scrollTop ?? 0, focus: document.querySelector<HTMLElement>('[data-focused="true"]')?.id ?? '' })
+    positions.set(id, { scroll: panel()?.scrollTop ?? 0, focus: navigationEngine.getCurrentFocus()?.id ?? '' })
+    pageFocus.save(id)
   }
   async function restore(preferredTab = '') {
     const restoredKey = key()
@@ -78,16 +85,12 @@ export function useLibraryNavigation(panel: () => HTMLElement | null, key: () =>
     const element = panel()
     if (element)
       element.scrollTop = position?.scroll ?? 0
-    const root = element?.closest('.library-page')
-    const activeTab = root?.querySelector<HTMLElement>('.setting-sidebar__tab[aria-current="page"]')
-    const focus = (preferredTab && activeTab?.id === preferredTab ? activeTab : null) ?? (position?.focus ? document.getElementById(position.focus) : null) ?? root?.querySelector<HTMLElement>('[data-library-entry]') ?? activeTab
-    if (focus)
-      navigationEngine.focusElement(focus, false)
+    await pageFocus.restore(preferredTab)
   }
   watch(key, (_next, old) => {
     if (pageActive && route.name === routeName) {
       const tabId = `library.tab.${active()}`
-      const focusedId = document.querySelector<HTMLElement>('[data-focused="true"]')?.id
+      const focusedId = navigationEngine.getCurrentFocus()?.id
       // 分类操作以当前侧栏为焦点，详情返回继续恢复内容来源。
       const preferredTab = pendingTab === tabId || focusedId === tabId ? tabId : ''
       pendingTab = ''

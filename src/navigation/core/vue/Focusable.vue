@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, useAttrs, watch } from 'vue'
+import { useAttrs } from 'vue'
 import { navigationEngine } from '../engine'
 
 interface Props {
@@ -20,15 +20,6 @@ const emit = defineEmits<{
 }>()
 
 const attrs = useAttrs()
-watch(() => props.disabled, async (disabled) => {
-  if (disabled || !props.id)
-    return
-  await nextTick()
-  const element = document.getElementById(props.id)
-  // 异步操作恢复可用后，让原焦点及其阴影回到可见区。
-  if (element?.dataset.focused === 'true')
-    navigationEngine.focusElement(element, false)
-})
 
 function handleClick(event: MouseEvent) {
   if (props.disabled) {
@@ -36,8 +27,10 @@ function handleClick(event: MouseEvent) {
     return
   }
   // 触屏和鼠标入口同步到几何导航，弹层可恢复到本次操作的来源行。
-  if (event.currentTarget instanceof HTMLElement)
-    navigationEngine.focusElement(event.currentTarget, false)
+  if (event.currentTarget instanceof HTMLElement && !navigationEngine.focusElement(event.currentTarget, false)) {
+    event.preventDefault()
+    return
+  }
   emit('click', event)
 }
 
@@ -52,6 +45,7 @@ function handleFocus(event: FocusEvent) {
     :is="props.as || 'div'"
     v-bind="attrs"
     :id="props.id"
+    :tabindex="props.disabled ? -1 : attrs.tabindex ?? 0"
     :data-focusable="!props.disabled ? 'true' : undefined"
     :aria-disabled="props.disabled"
     :disabled="['button', 'input', 'select', 'textarea'].includes(props.as ?? '') ? props.disabled : undefined"

@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core'
 import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
+import { requestPageFocus } from '@/navigation/core/usePageFocus'
 import { FocusScope } from '@/navigation/core/vue'
 import controllerStatusIcon from '../../assets/nav/ctrl.svg'
 import myIcon from '../../assets/nav/my.svg'
@@ -53,6 +54,7 @@ const authState = ref<AuthState | null>(null)
 const userProfile = ref<UserProfile | null>(null)
 const isProfileMenuOpen = ref(false)
 const isLoggingOut = ref(false)
+const actionHintsHeight = ref(72)
 let disposeAuthSessionReady: EventUnsubscribe | undefined
 let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
 const gamepadSnapshot = shallowRef<InputSnapshot>(inputController.getSnapshot())
@@ -130,6 +132,14 @@ function handleEscapeKeydown(event: KeyboardEvent): void {
 
 const footerStatus = computed(() => shell.overlay.value?.title || shell.page.value.status || t(APP_PAGE_LABEL_KEYS[activeNav.value]))
 
+watch(actionHintsHeight, () => {
+  if (window.matchMedia('(max-width:700px)').matches
+    && navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell)
+    && navigationEngine.getCurrentFocus()?.closest('.app-shell__content')) {
+    navigationEngine.revealCurrentFocus()
+  }
+}, { flush: 'post' })
+
 async function handleLogout(): Promise<void> {
   if (isLoggingOut.value) {
     return
@@ -138,6 +148,8 @@ async function handleLogout(): Promise<void> {
   isLoggingOut.value = true
   try {
     await rpc.auth.logout()
+    navigationEngine.forgetFocus('page:')
+    requestPageFocus(false)
     authState.value = {
       provider: authState.value?.provider ?? 'xal',
       isAuthenticating: false,
@@ -156,6 +168,7 @@ async function handleLogout(): Promise<void> {
 }
 
 function handleTopNavSelect(node: TopNavNodeKey): void {
+  requestPageFocus(false, SPATIAL_NAV_NODE_IDS.topNav[node])
   if (node !== 'profile') {
     closeProfileMenu()
   }
@@ -211,10 +224,12 @@ function handleTouchEnd(e: TouchEvent): void {
     const currentIndex = navOrder.indexOf(activeNav.value)
 
     if (distance > 0 && currentIndex > 0) {
+      requestPageFocus()
       // 向右划，回退到上一个标签
       void router.push(navOrder[currentIndex - 1] === 'my' ? '/my/account' : { name: navOrder[currentIndex - 1] })
     }
     else if (distance < 0 && currentIndex < navOrder.length - 1) {
+      requestPageFocus()
       // 向左划，前进到下一个标签
       void router.push(navOrder[currentIndex + 1] === 'my' ? '/my/account' : { name: navOrder[currentIndex + 1] })
     }
@@ -251,6 +266,7 @@ onMounted(() => {
     const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
 
     if (nextIndex >= 0 && nextIndex < PAGE_NAV_ORDER.length) {
+      requestPageFocus()
       playNavSound('move')
       triggerNavHaptic('move')
       void router.push(PAGE_NAV_ORDER[nextIndex] === 'my' ? '/my/account' : { name: PAGE_NAV_ORDER[nextIndex] })
@@ -281,7 +297,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="app-shell">
+  <section class="app-shell" :style="{ '--ui-shell-floating-hints-height': `${actionHintsHeight}px` }">
     <FocusScope
       :id="SPATIAL_NAV_SCOPE_IDS.appShell"
       :default-focus-id="SPATIAL_NAV_NODE_IDS.topNav.brand"
@@ -314,6 +330,7 @@ onUnmounted(() => {
         :busy="shell.overlay.value?.busy"
         :available="gamepadSnapshot.owner === 'ui'"
         :exclusive="gamepadSnapshot.exclusiveCapture"
+        @resize="actionHintsHeight = $event"
       />
     </FocusScope>
 
@@ -368,5 +385,19 @@ onUnmounted(() => {
 }
 
 @media(max-width:1100px), (max-height:680px) { .app-shell { --ui-shell-content-top: 16px; --ui-shell-gap: 24px; --ui-shell-edge-inset: 24px; --ui-console-hero-height: 224px; --ui-console-hero-padding: 24px; --ui-console-hero-image-height: 176px; --ui-console-hero-title-size: 24px; } .app-shell__content { padding-top: var(--space-16); } }
-@media(max-width:700px) { .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--ui-shell-header-height) auto minmax(0, 1fr) auto; padding-inline: var(--space-12); } .app-shell__content { grid-column: 1; grid-row: 3; padding: var(--space-16) var(--space-8); } }
+@media(max-width:700px) {
+  .app-shell {
+    --ui-shell-bottom-nav-height: calc(70px + env(safe-area-inset-bottom, 0px));
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--ui-shell-header-height) minmax(0, 1fr) var(--ui-shell-bottom-nav-height);
+    padding-inline: 0;
+  }
+  /* 正文延伸至毛玻璃导航后方，焦点为导航和提示留出完整空间。 */
+  .app-shell__content {
+    grid-column: 1;
+    grid-row: 2 / 4;
+    padding: var(--space-16) 20px calc(var(--ui-shell-bottom-nav-height) + var(--ui-shell-floating-hints-height) + var(--space-24));
+    scroll-padding-bottom: calc(var(--ui-shell-bottom-nav-height) + var(--ui-shell-floating-hints-height) + var(--space-24));
+  }
+}
 </style>

@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core'
 import { FOCUSABLE_SELECTOR } from '@/navigation/core/engine'
 import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
+import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
@@ -25,6 +26,7 @@ interface XcloudGridCardViewModel {
   imageUrl: string
 }
 
+const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
 const router = useRouter()
 
@@ -46,6 +48,7 @@ const loadMoreSentinelRef = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
 let disposeTabSwitch: (() => void) | undefined
 let disposeCatalogUpdated: (() => void) | undefined
+const pageFocus = usePageFocus(() => pageRef.value, () => 'catalog', () => SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud)
 
 // LT/RT 区域导航的 section 标识符
 const XCLOUD_SECTION_IDS = ['xcloud-recent', 'xcloud-new', 'xcloud-all'] as const
@@ -360,7 +363,7 @@ function registerTabSwitch(): void {
     return
 
   disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
-    if (isSearching.value || !navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell))
+    if (!pageFocus.isActive() || isSearching.value || !navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell))
       return
     // 动态构建当前可见的 section 列表
     const visibleSections = XCLOUD_SECTION_IDS
@@ -371,7 +374,7 @@ function registerTabSwitch(): void {
       return
 
     // 查找当前焦点所在 section 的索引
-    const focused = document.querySelector('[data-focused="true"]') as HTMLElement | null
+    const focused = navigationEngine.getCurrentFocus()
     let currentIndex = -1
     if (focused) {
       currentIndex = visibleSections.findIndex(s => s.contains(focused))
@@ -403,7 +406,7 @@ function unregisterTabSwitch(): void {
 </script>
 
 <template>
-  <section class="xcloud-page ui-page-shell" :aria-label="t('xcloudPage.ariaLabel')">
+  <section ref="pageRef" class="xcloud-page ui-page-shell" :aria-label="t('xcloudPage.ariaLabel')">
     <div v-if="showInitialLoading" class="xcloud-page__loading">
       <BrandedLoading :label="t('xcloudPage.loading')" />
     </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
@@ -38,6 +38,20 @@ function handleClose(): void {
   emit('close')
 }
 
+function handleKeydown(event: KeyboardEvent): void {
+  if (props.open && event.key === 'Escape' && !event.defaultPrevented && navigationEngine.isTopmostScope(props.scopeId)) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    handleClose()
+  }
+}
+watch(() => props.open, (open) => {
+  window.removeEventListener('keydown', handleKeydown, true)
+  if (open)
+    window.addEventListener('keydown', handleKeydown, true)
+}, { immediate: true })
+onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown, true))
+
 watch(
   () => [props.open, props.value] as const,
   () => {
@@ -59,6 +73,7 @@ watch(
         data-nav-scroll-container
         :active="props.open"
         :default-focus-id="decreaseNodeId"
+        role="dialog" aria-modal="true" :aria-label="t('streamPage.audio.title')"
       >
         <header class="stream-audio-sheet__header">
           <p class="stream-audio-sheet__eyebrow">

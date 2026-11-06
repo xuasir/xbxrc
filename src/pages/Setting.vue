@@ -7,6 +7,7 @@ import { CONFIG_FIELD_DEFINITIONS } from '@shared/config/domain-definition'
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
+import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
@@ -80,6 +81,7 @@ const DISPLAY_PRESET_VALUES = {
   },
 } as const satisfies Record<'standard' | 'clear' | 'soft', DisplayOptionsValue>
 
+const pageRef = ref<HTMLElement | null>(null)
 const { t, te } = useI18n()
 const activeTabKey = ref<SettingTabKey>('general')
 const groupState = ref<SettingGroupMap | null>(null)
@@ -370,10 +372,12 @@ onDeactivated(() => {
   closeEditors()
 })
 onUnmounted(() => disposeTabSwitch?.())
+
+usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey.value])
 </script>
 
 <template>
-  <section class="setting-page ui-page-shell">
+  <section ref="pageRef" class="setting-page ui-page-shell">
     <div class="setting-page__layout" :aria-busy="isLoading">
       <SettingSidebar :tabs="tabs" :active-tab-key="activeTabKey" :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell" @tab-change="handleTabChange" />
       <section class="setting-panel" :aria-label="t('setting.aria.panel', { group: activeLabel })">

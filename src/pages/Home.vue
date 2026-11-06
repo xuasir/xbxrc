@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import seriesSImage from '../assets/console/series-s-transparent.png'
 import seriesXImage from '../assets/console/series-x-transparent.png'
@@ -13,6 +14,7 @@ import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
 import LibraryRefresh from './library/LibraryRefresh.vue'
 
+const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
 const router = useRouter()
 
@@ -188,10 +190,12 @@ function handleRefresh(): void {
 onMounted(() => {
   void loadHosts()
 })
+
+usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV_NODE_IDS.pagePrimary.xhome, false)
 </script>
 
 <template>
-  <section class="home-page ui-page-shell" :aria-label="t('homePage.hero.title')">
+  <section ref="pageRef" class="home-page ui-page-shell" :aria-label="t('homePage.hero.title')">
     <header class="home-page__header">
       <div>
         <h1 class="home-page__title">

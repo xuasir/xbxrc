@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useNavigationButtonLabels } from '@shared/gamepad/navigation-hints'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{
@@ -12,12 +13,25 @@ defineProps<{
   busy?: boolean
   back?: boolean
 }>()
+const emit = defineEmits<{ resize: [height: number] }>()
 const { t } = useI18n()
 const buttons = useNavigationButtonLabels()
+const root = ref<HTMLElement | null>(null)
+let resizeObserver: ResizeObserver | undefined
+
+onMounted(() => {
+  if (!root.value)
+    return
+  const updateHeight = () => emit('resize', Math.ceil(root.value?.getBoundingClientRect().height ?? 0))
+  updateHeight()
+  resizeObserver = new ResizeObserver(updateHeight)
+  resizeObserver.observe(root.value)
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <template>
-  <footer class="shell-hints" :aria-label="t('shell.hints.label')">
+  <footer ref="root" class="shell-hints" :aria-label="t('shell.hints.label')">
     <div v-if="available && !exclusive && !busy" class="shell-hints__actions">
       <span class="shell-hints__action"><kbd>{{ buttons.south }}</kbd>{{ t('shell.hints.confirm') }}</span>
       <span v-if="overlay || back" class="shell-hints__action"><kbd>{{ buttons.east }}</kbd>{{ t(overlay ? 'shell.hints.close' : 'shell.hints.back') }}</span>
@@ -42,5 +56,27 @@ const buttons = useNavigationButtonLabels()
 .shell-hints kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 22px; padding: 1px var(--space-4); border: 1px solid var(--ui-border-hover); border-radius: 4px; background: var(--ui-keycap-bg); color: var(--ui-icon-text); font: inherit; font-size: 11px; line-height: 16px; box-shadow: inset 0 1px 0 var(--ui-material-edge); }
 .shell-hints__status { min-width: 0; max-width: 42%; overflow-wrap: anywhere; text-align: right; }
 .shell-hints__status--error { color: var(--color-danger); }
-@media(max-width:700px) { .shell-hints { grid-column: 1; grid-row: 4; padding: var(--space-12) var(--space-4) var(--space-16); flex-wrap: wrap; min-height: 64px; gap: var(--space-8); } .shell-hints__actions { gap: var(--space-12); } .shell-hints__status { max-width: 100%; text-align: left; } }
+@media(max-width:700px) {
+  .shell-hints {
+    grid-area: auto;
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--ui-shell-bottom-nav-height) + var(--space-12));
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 24px);
+    min-height: 0;
+    padding: var(--space-8) var(--space-12);
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-8) var(--space-16);
+    border: 1px solid var(--ui-border-subtle);
+    border-radius: var(--ui-radius-lg);
+    background: color-mix(in srgb, var(--ui-surface-overlay) 90%, transparent);
+    backdrop-filter: blur(24px) saturate(140%);
+    box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low);
+  }
+  .shell-hints__actions { justify-content: center; gap: var(--space-8) var(--space-16); }
+  .shell-hints__status { max-width: 100%; text-align: center; }
+}
 </style>

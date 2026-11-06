@@ -10,6 +10,7 @@ import { assignGameButton, BUTTON_LABELS, createGamepadCaptureReader } from '@sh
 import { BUTTON_KEYS, clonePadState } from '@shared/gamepad/state'
 import { computed, onBeforeUnmount, onDeactivated, ref, shallowRef, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable } from '@/navigation/core/vue'
 import SettingConfirmSheet from '../../components/settings/SettingConfirmSheet.vue'
 import SettingModalShell from '../../components/settings/SettingModalShell.vue'
@@ -37,7 +38,7 @@ const message = ref('')
 const saveError = ref(false)
 const discardOpen = ref(false)
 const initialDraft = ref('')
-const panel = useGamepadPanelSession(inputController, target => document.getElementById(`${paneScope}.${target}`)?.focus({ preventScroll: true }))
+const panel = useGamepadPanelSession(inputController, target => navigationEngine.focusElement(document.getElementById(`${paneScope}.${target}`), false))
 const { pane, capturing, captureCountdown, testCountdown, testNavigation } = panel
 const draftState = computed(() => JSON.stringify(pane.value === 'keyboard' ? { mapping: keyboardDraft.value, enabled: keyboardEnabled.value } : draft.value))
 const dirty = computed(() => ['layout', 'sticks', 'keyboard'].includes(pane.value ?? '') && draftState.value !== initialDraft.value)

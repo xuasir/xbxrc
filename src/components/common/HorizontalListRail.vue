@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { navigationEngine } from '@/navigation/core/engine'
 import { getFocusScrollDelta } from '@/navigation/core/focus-scroll'
 import { Focusable } from '@/navigation/core/vue'
 
@@ -14,6 +15,8 @@ const canNext = ref(false)
 const hasOverflow = ref(false)
 let focusObserver: MutationObserver | undefined
 let resizeObserver: ResizeObserver | undefined
+let active = true
+let generation = 0
 
 function updateScrollState() {
   const el = scrollerRef.value
@@ -31,8 +34,8 @@ function browse(direction: number) {
 }
 function scrollFocusedItemIntoView() {
   const el = scrollerRef.value
-  const focused = el?.querySelector<HTMLElement>('[data-focused="true"]')
-  if (!el || !focused)
+  const focused = navigationEngine.getCurrentFocus()
+  if (!el || !focused || !el.contains(focused))
     return
   // 轨道只负责横向显露，垂直滚动继续交给既有几何导航引擎。
   const padding = Number.parseFloat(getComputedStyle(el).scrollPaddingLeft) || 16
@@ -42,7 +45,10 @@ function scrollFocusedItemIntoView() {
   updateScrollState()
 }
 async function observe() {
+  const request = ++generation
   await nextTick()
+  if (!active || request !== generation)
+    return
   disconnect()
   if (!scrollerRef.value || !innerRef.value)
     return
@@ -60,10 +66,19 @@ function disconnect() {
   focusObserver?.disconnect()
   resizeObserver?.disconnect()
 }
-onMounted(observe)
-onActivated(observe)
-onDeactivated(disconnect)
-onBeforeUnmount(disconnect)
+function activate() {
+  active = true
+  void observe()
+}
+function deactivate() {
+  active = false
+  generation++
+  disconnect()
+}
+onMounted(activate)
+onActivated(activate)
+onDeactivated(deactivate)
+onBeforeUnmount(deactivate)
 </script>
 
 <template>

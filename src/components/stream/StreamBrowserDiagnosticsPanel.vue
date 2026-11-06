@@ -3,7 +3,7 @@ import type { StreamDiagnosticGroup } from '../../streaming/stream-panel-view-mo
 import type { StreamBrowserDiagnosticsViewModel, StreamEnhancementMountState } from '../../streaming/types'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { buildDiagnosticClipboardSnapshot, DIAGNOSTIC_GROUPS, diagnosticGroupRows } from '../../streaming/stream-panel-view-models'
 
@@ -26,16 +26,6 @@ const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 function handleEscape(event: KeyboardEvent): void {
   if (event.defaultPrevented || !navigationEngine.isTopmostScope(scopeId))
     return
-  if (event.key === 'Tab') {
-    const nodes = [...(document.getElementById(scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
-    const index = nodes.indexOf(document.activeElement as HTMLElement)
-    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
-    if (next) {
-      event.preventDefault()
-      navigationEngine.focusElement(next, false)
-    }
-    return
-  }
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()

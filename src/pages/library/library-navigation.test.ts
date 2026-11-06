@@ -5,6 +5,7 @@ import { useLibraryNavigation } from './library-view'
 const hooks = vi.hoisted(() => ({
   activated: [] as (() => void)[],
   focus: vi.fn(),
+  getFocus: vi.fn(),
   switchTab: undefined as ((direction: 'prev' | 'next') => void) | undefined,
   route: undefined as unknown,
 }))
@@ -13,11 +14,20 @@ vi.mock('vue', async original => ({
   onActivated: (callback: () => void) => hooks.activated.push(callback),
   onDeactivated: vi.fn(),
   onUnmounted: vi.fn(),
+  onMounted: vi.fn(),
+  onBeforeUnmount: vi.fn(),
 }))
 vi.mock('vue-router', () => ({ useRoute: () => hooks.route, useRouter: vi.fn(), onBeforeRouteLeave: vi.fn() }))
-vi.mock('@/navigation/core', () => ({
+vi.mock('@/navigation/core/engine', () => ({
   navigationEngine: {
     focusElement: hooks.focus,
+    getCurrentFocus: hooks.getFocus,
+    rememberFocus: vi.fn(),
+    getRememberedFocus: () => null,
+    getFocusableElements: () => [],
+    onFocusChange: () => vi.fn(),
+    onScopeChange: () => vi.fn(),
+    onTargetsChange: () => vi.fn(),
     isTopmostScope: () => true,
     onTabSwitch: (callback: typeof hooks.switchTab) => {
       hooks.switchTab = callback
@@ -34,13 +44,15 @@ function fixture() {
   const back = { id: 'game.back' }
   const tabs = Object.fromEntries(['overview', 'achievements', 'statistics'].map(key => [key, { id: `library.tab.${key}` }]))
   let focused: { id: string } = back
-  const root = { querySelector: (selector: string) => selector === '[data-library-entry]' ? back : tabs[active.value] }
+  const root = { setAttribute: vi.fn(), contains: (el: unknown) => [back, ...Object.values(tabs)].includes(el as typeof back), querySelector: (selector: string) => selector === '[data-library-entry]' ? back : tabs[active.value] }
   const panel = { scrollTop: 0, closest: () => root }
   vi.stubGlobal('document', {
     querySelector: () => focused,
     getElementById: (id: string) => [back, ...Object.values(tabs)].find(el => el.id === id),
+    contains: () => true,
   })
   hooks.focus.mockImplementation(el => focused = el)
+  hooks.getFocus.mockImplementation(() => focused)
   const select = (key: string) => {
     active.value = key
   }
@@ -75,22 +87,19 @@ describe('详情分类切换', () => {
     page.panel.scrollTop = 160
     page.focus('achievements')
     page.active.value = 'achievements'
-    await nextTick()
-    await nextTick()
+    for (let i = 0; i < 5; i++) await nextTick()
     expect(page.focused()).toBe(page.tabs.achievements)
     page.panel.scrollTop = 360
     page.focus('overview')
     page.active.value = 'overview'
-    await nextTick()
-    await nextTick()
+    for (let i = 0; i < 5; i++) await nextTick()
     expect(page.focused()).toBe(page.tabs.overview)
     expect(page.panel.scrollTop).toBe(160)
   })
   it('lT/RT 从内容区切换后聚焦目标分类', async () => {
     const page = fixture()
     hooks.switchTab?.('next')
-    await nextTick()
-    await nextTick()
+    for (let i = 0; i < 5; i++) await nextTick()
     expect(page.active.value).toBe('achievements')
     expect(page.focused()).toBe(page.tabs.achievements)
   })
@@ -101,8 +110,7 @@ describe('详情分类切换', () => {
     await nextTick()
     page.focus('statistics')
     page.active.value = 'statistics'
-    await nextTick()
-    await nextTick()
+    for (let i = 0; i < 5; i++) await nextTick()
     expect(page.focused()).toBe(page.tabs.statistics)
   })
 })

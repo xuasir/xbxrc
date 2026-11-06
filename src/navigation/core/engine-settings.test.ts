@@ -1,61 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NavigationEngine } from './engine'
+import { focusFixture as fixture } from './__tests__/focus-dom'
 import { inputDispatcher, NavigationIntent } from './input'
 
 vi.mock('./haptics', () => ({ playNavSound: vi.fn(), triggerNavHaptic: vi.fn() }))
 
-function fixture() {
-  const nodes = new Map<string, ReturnType<typeof node>>()
-  let active: unknown
-  function node(id: string, zone: string | null = null, focusable = true) {
-    const attrs = new Map<string, string>()
-    if (zone === id)
-      attrs.set('data-nav-zone', id)
-    const value = {
-      id,
-      connected: true,
-      disabled: false,
-      attrs,
-      classList: { add: vi.fn(), remove: vi.fn() },
-      setAttribute: (key: string, next: string) => attrs.set(key, next),
-      removeAttribute: (key: string) => attrs.delete(key),
-      getAttribute: (key: string) => attrs.get(key) ?? null,
-      matches: () => focusable && !value.disabled,
-      closest: (selector: string) => selector === '[data-nav-zone]' && zone ? nodes.get(zone) : null,
-      contains: (other: { id: string }) => nodes.get(other.id)?.getAttribute('zone') === id,
-      querySelector: (): object | null => [...nodes.values()].find(item => item.connected && item.getAttribute('zone') === id && item.matches()) ?? null,
-      getBoundingClientRect: () => ({ left: 250, right: 350, top: 250, bottom: 300 }),
-      focus: () => { active = value },
-      scrollIntoView: vi.fn(),
-      dispatchEvent: vi.fn((event: Event) => !event.defaultPrevented),
-      click: vi.fn(),
-    }
-    if (zone !== id && zone)
-      attrs.set('zone', zone)
-    nodes.set(id, value)
-    return value
-  }
-  const body = { querySelector: (): object | null => [...nodes.values()].find(item => item.connected && item.matches()) ?? null }
-  vi.stubGlobal('document', {
-    getElementById: (id: string) => nodes.get(id)?.connected ? nodes.get(id) : null,
-    contains: (item: { connected: boolean }) => item.connected,
-    get activeElement() { return active },
-    body,
-  })
-  vi.stubGlobal('window', { innerWidth: 1280, innerHeight: 720, dispatchEvent: vi.fn() })
-  vi.stubGlobal('MutationObserver', class { observe() {} disconnect() {} })
-  vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
-    callback()
-    return 1
-  })
-  return { engine: new NavigationEngine(), node }
-}
 afterEach(() => vi.unstubAllGlobals())
 
 describe('sticky header focus', () => {
   it.each([[false, 'smooth'], [true, 'auto']] as const)('uses reduced motion = %s when scrolling to focus', (matches, behavior) => {
     const { engine, node } = fixture()
-    vi.stubGlobal('window', { innerWidth: 1280, innerHeight: 720, matchMedia: () => ({ matches }) })
+    Object.assign(window, { matchMedia: () => ({ matches }) })
     const scrollTo = vi.fn()
     const container = {
       scrollTop: 0,

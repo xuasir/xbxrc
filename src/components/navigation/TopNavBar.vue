@@ -71,5 +71,29 @@ const pages = [{ key: 'xhome', label: 'shell.home' }, { key: 'xcloud', label: 's
 .top-nav :deep(.sn-icon-button--active) { background: var(--ui-material-selected); border-color: transparent; box-shadow: none; color: var(--color-text-primary); }
 .top-nav :deep(.sn-icon-button[data-focused='true']) { box-shadow: var(--shadow-xbox-focus); }
 .top-nav :deep(.top-nav__brand), .top-nav :deep(.top-nav__brand:hover), .top-nav :deep(.top-nav__brand[data-focused='true']) { background: transparent; }
-@media(max-width:700px) { .top-nav__header { grid-column: 1; padding-left: var(--space-4); gap: var(--space-12); } .top-nav__context { padding-left: var(--space-12); } .top-nav__dock { grid-column: 1; grid-row: 2; flex-direction: row; gap: var(--space-12); padding-top: 0; align-self: stretch; } .top-nav__group { flex: 1; flex-direction: row; padding: var(--space-4); gap: var(--space-4); } .top-nav__dock :deep(.sn-icon-button) { flex: 1; min-width: 44px; width: auto; min-height: 48px; } }
+@media(max-width:700px) {
+  .top-nav__header { grid-column: 1; padding-inline: var(--space-16); gap: var(--space-12); }
+  .top-nav__context { padding-left: var(--space-12); }
+  .top-nav__dock {
+    grid-column: 1;
+    grid-row: 3;
+    align-self: stretch;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    border: 1px solid var(--ui-border-subtle);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    background: color-mix(in srgb, var(--ui-surface-overlay) 90%, transparent);
+    backdrop-filter: blur(24px) saturate(140%);
+    box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low);
+  }
+  .top-nav__group { display: contents; }
+  .top-nav__dock :deep(.sn-icon-button) { flex: 1; min-width: 44px; max-width: 120px; width: 0; min-height: 52px; padding: 4px 2px; font-size: 11px; }
+  .top-nav__dock :deep(.sn-icon-button--active) { background: var(--ui-material-selected); }
+  .top-nav__connected { top: 7px; right: 10px; }
+}
 </style>

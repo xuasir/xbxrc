@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FOCUSABLE_SELECTOR, navigationEngine } from '@/navigation/core/engine'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { useShellOverlayHints } from '../layout/shell-context'
 
@@ -46,16 +46,6 @@ function handleClose(): void {
 function handleEscape(event: KeyboardEvent): void {
   if (event.defaultPrevented || !navigationEngine.isTopmostScope(props.scopeId))
     return
-  if (event.key === 'Tab' && props.trap) {
-    const nodes = [...(document.getElementById(props.scopeId)?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])]
-    const index = nodes.indexOf(document.activeElement as HTMLElement)
-    const next = nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]
-    if (next) {
-      event.preventDefault()
-      navigationEngine.focusElement(next, false)
-    }
-    return
-  }
   if (event.key !== 'Escape')
     return
   event.preventDefault()
@@ -64,8 +54,6 @@ function handleEscape(event: KeyboardEvent): void {
 }
 watch(() => props.open, (open) => {
   window.removeEventListener('keydown', handleEscape)
-  if (!open)
-    navigationEngine.updateActiveScope(props.scopeId, false)
   if (open)
     window.addEventListener('keydown', handleEscape)
 }, { immediate: true })
