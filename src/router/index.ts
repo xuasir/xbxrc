@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { createAuthTraceOperationId, recordAuthTrace } from '../services/auth-trace'
 import { rpc } from '../services/rpc'
 
 const routes: RouteRecordRaw[] = [
@@ -93,19 +94,28 @@ async function resolveAuthState(): Promise<Awaited<ReturnType<typeof rpc.auth.ge
   return await rpc.auth.getState()
 }
 
-router.beforeEach(async (to) => {
+const navigationTraces = new WeakMap<object, { operationId: string, startedAt: number }>()
+
+router.beforeEach(async (to, from) => {
+  const operationId = createAuthTraceOperationId()
+  navigationTraces.set(to, { operationId, startedAt: performance.now() })
+  const context = { operationId, source: 'router' as const, to, from }
+  recordAuthTrace('routeNavigationStarted', context)
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth === true)
   const guestOnly = to.matched.some(record => record.meta.guestOnly === true)
 
   if (!requiresAuth && !guestOnly) {
+    recordAuthTrace('routeGuardResolved', { ...context, outcome: 'allowed' })
     return true
   }
 
   let authState: Awaited<ReturnType<typeof rpc.auth.getState>>
   try {
     authState = await resolveAuthState()
+    recordAuthTrace('routeAuthStateObserved', { ...context, state: authState })
   }
-  catch {
+  catch (error) {
+    recordAuthTrace('routeGuardResolved', { ...context, error, outcome: requiresAuth ? 'redirect' : 'allowed' })
     if (requiresAuth) {
       return {
         name: 'login',
@@ -118,6 +128,7 @@ router.beforeEach(async (to) => {
   }
 
   if (requiresAuth && !authState.isAuthenticated) {
+    recordAuthTrace('routeGuardResolved', { ...context, outcome: 'redirect' })
     return {
       name: 'login',
       query: {
@@ -127,9 +138,23 @@ router.beforeEach(async (to) => {
   }
 
   if (guestOnly && authState.isAuthenticated) {
+    recordAuthTrace('routeGuardResolved', { ...context, outcome: 'redirect' })
     const redirectTarget = typeof to.query.redirect === 'string' ? to.query.redirect : '/xhome'
     return redirectTarget
   }
 
+  recordAuthTrace('routeGuardResolved', { ...context, outcome: 'allowed' })
   return true
+})
+
+router.afterEach((to, from, failure) => {
+  const operation = navigationTraces.get(to)
+  recordAuthTrace('routeNavigationCompleted', { source: 'router', to, from, operationId: operation?.operationId, durationMs: operation ? Math.round(performance.now() - operation.startedAt) : undefined, outcome: failure ? 'failed' : 'success', navigationFailureType: failure?.type })
+  navigationTraces.delete(to)
+})
+
+router.onError((error, to, from) => {
+  const operation = navigationTraces.get(to)
+  recordAuthTrace('routeNavigationFailed', { source: 'router', to, from, operationId: operation?.operationId, durationMs: operation ? Math.round(performance.now() - operation.startedAt) : undefined, error })
+  navigationTraces.delete(to)
 })

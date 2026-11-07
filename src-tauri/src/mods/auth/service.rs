@@ -1,13 +1,17 @@
 use crate::error::{AppError, AppResult};
 use crate::mods::auth::persistence_service::AuthPersistenceService;
 use crate::mods::auth::runtime_state::{AuthRuntimeState, BeginCheckOutcome};
+use crate::mods::auth::trace::{
+    flow_error_summary, record_auth_event, state_summary, token_summary, AuthOperationTrace,
+};
 use crate::mods::auth::types::{
     AuthSessionReadyEvent, AuthState, CheckAuthResponse, LoginResponse,
 };
 use crate::mods::auth::{events, AuthProvider};
 use crate::mods::config::ConfigProviderRef;
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use xbox_auth_flow::{
     AuthFlow, BuildDownstreamTokensInput, CompleteOAuthLoginInput, RefreshAndFinalizeInput,
@@ -23,19 +27,30 @@ pub struct AuthService {
     config_provider: ConfigProviderRef,
     persistence: AuthPersistenceService,
     runtime: AuthRuntimeState,
+    runtime_trace: RuntimeTraceRecorderRef,
 }
 
 impl AuthService {
-    pub fn new(app_handle: AppHandle, config_provider: ConfigProviderRef) -> Self {
+    pub fn new(
+        app_handle: AppHandle,
+        config_provider: ConfigProviderRef,
+        runtime_trace: RuntimeTraceRecorderRef,
+    ) -> Self {
         let persistence = AuthPersistenceService::new(app_handle.clone());
         let (is_authenticated, app_level) = persistence.initial_auth_status();
         let runtime = AuthRuntimeState::new("xal".to_string(), is_authenticated, app_level);
+        record_auth_event(
+            &runtime_trace,
+            "authInitialized",
+            state_summary(&runtime.current_state()),
+        );
 
         Self {
             app_handle,
             config_provider,
             persistence,
             runtime,
+            runtime_trace,
         }
     }
 
@@ -120,39 +135,57 @@ impl AuthService {
 
     async fn check_authentication_impl(&self) -> AppResult<CheckAuthResponse> {
         log::info!("Auth: 开始检查认证状态");
-        let now_ms = now_ms();
-        let previous_state = match self.runtime.begin_check(now_ms, CHECK_AUTH_COOLDOWN_MS)? {
-            BeginCheckOutcome::ShortCircuit(response) => return Ok(response),
-            BeginCheckOutcome::Proceed { previous_state } => previous_state,
-        };
-        self.sync_auth_state();
-
-        let result = self.check_authentication_internal(previous_state).await;
-        self.sync_auth_state();
+        let trace = AuthOperationTrace::new(&self.runtime_trace, "checkAuthentication");
+        let result = async {
+            let previous_state = match self.runtime.begin_check(now_ms(), CHECK_AUTH_COOLDOWN_MS)? {
+                BeginCheckOutcome::ShortCircuit(response) => {
+                    let state = self.runtime.current_state();
+                    trace.stage("checkSkipped", json!({ "reason": if state.is_authenticating { "inFlight" } else { "cooldown" }, "state": state_summary(&state) }));
+                    return Ok(response);
+                }
+                BeginCheckOutcome::Proceed { previous_state } => previous_state,
+            };
+            self.sync_auth_state_with_operation(Some(&trace));
+            let result = self.check_authentication_internal(previous_state, &trace).await;
+            self.sync_auth_state_with_operation(Some(&trace));
+            result
+        }.await;
+        trace.finish(&result, &self.runtime.current_state());
         result
     }
 
     async fn check_authentication_internal(
         &self,
         previous_state: AuthState,
+        trace: &AuthOperationTrace,
     ) -> AppResult<CheckAuthResponse> {
+        trace.stage("sessionSnapshotReadStarted", json!({}));
         if let Some(snapshot) = self.persistence.get_valid_session_snapshot()? {
+            trace.stage(
+                "sessionSnapshotAccepted",
+                json!({ "appLevel": snapshot.app_level }),
+            );
             log::info!("Auth: 发现有效的会话快照, 直接完成认证");
             return self.runtime.finish_check_from_snapshot(&snapshot);
         }
 
         let should_start_silent_flow = self.persistence.has_valid_auth_tokens()
             || self.persistence.get_user_token()?.is_some();
+        trace.stage(
+            "silentFlowPolicy",
+            json!({ "hasValidSessionSnapshot": false, "eligible": should_start_silent_flow }),
+        );
 
         if should_start_silent_flow {
             log::info!("Auth: 未发现有效会话快照, 但存在核心 Token, 尝试静默登录");
-            match self.start_silent_flow_impl().await {
+            match self.start_silent_flow_impl(trace).await {
                 Ok(()) => {
                     log::info!("Auth: 静默登录成功");
                     return self.runtime.finish_check_success(true);
                 }
                 Err(error) => {
                     if is_transient_auth_error(&error) {
+                        trace.stage("transientSessionFallbackStarted", json!({}));
                         log::warn!(
                             "Auth: 静默登录遇到可重试网络错误，保留现有会话并延后重试: {}",
                             error
@@ -169,12 +202,15 @@ impl AuthService {
                     }
 
                     log::error!("Auth: 静默登录失败, 清理所有 Token: {}", error);
+                    trace.stage("credentialsClearStarted", json!({}));
                     self.persistence.clear_all_tokens()?;
+                    trace.stage("credentialsCleared", json!({}));
                 }
             }
         }
 
         log::info!("Auth: 无有效 Token, 用户未登录");
+        trace.stage("unauthenticated", json!({}));
         self.runtime.finish_check_unauthenticated()
     }
 
@@ -244,8 +280,9 @@ impl AuthService {
         Ok(())
     }
 
-    async fn start_silent_flow_impl(&self) -> Result<(), String> {
+    async fn start_silent_flow_impl(&self, trace: &AuthOperationTrace) -> Result<(), String> {
         log::info!("Auth: 静默流程开始");
+        trace.stage("silentCacheReadStarted", json!({}));
         let stream_tokens = self
             .persistence
             .get_stream_tokens()
@@ -265,6 +302,11 @@ impl AuthService {
         let should_skip_core_refresh = has_any_cached_token
             && token_update_time > 0
             && now_ms.saturating_sub(token_update_time) < REFRESH_SKIP_WINDOW_MS;
+        trace.stage("refreshPolicy", json!({
+            "skipCoreRefresh": should_skip_core_refresh,
+            "hasCachedTokens": has_any_cached_token,
+            "tokenAgeMs": (token_update_time > 0).then(|| now_ms.saturating_sub(token_update_time)),
+        }));
 
         if !should_skip_core_refresh {
             log::info!("Auth: 核心 Token 需要刷新 (超过23小时或无缓存)");
@@ -280,6 +322,10 @@ impl AuthService {
             let force_region_ip = self.config_provider.get_force_region_ip();
 
             log::info!("Auth: 通过 xbox-auth-flow 执行静默刷新与下游令牌收口");
+            trace.stage(
+                "coreAndDownstreamRefreshStarted",
+                json!({ "forceRegionApplied": !force_region_ip.trim().is_empty() }),
+            );
             let output = AuthFlow::new()
                 .refresh_and_finalize(RefreshAndFinalizeInput {
                     refresh_token: user_token.refresh_token,
@@ -289,13 +335,22 @@ impl AuthService {
                 })
                 .await
                 .map_err(|error| {
+                    trace.stage("refreshFailed", flow_error_summary(&error));
                     log::error!("Auth: 静默刷新流程失败: {}", error);
                     error.to_string()
                 })?;
 
+            trace.stage(
+                "authBundlePersistStarted",
+                token_summary(&output.auth_bundle.stream_tokens),
+            );
             self.persistence
                 .persist_auth_bundle(&output.auth_bundle)
                 .map_err(|error| error.to_string())?;
+            trace.stage(
+                "authBundlePersistCompleted",
+                json!({ "appLevel": output.auth_bundle.app_level }),
+            );
             self.runtime
                 .mark_authenticated(output.auth_bundle.app_level)
                 .map_err(|error| error.to_string())?;
@@ -320,6 +375,10 @@ impl AuthService {
         let force_region_ip = self.config_provider.get_force_region_ip();
 
         log::info!("Auth: 通过 xbox-auth-flow 复用已有核心 token 获取下游令牌");
+        trace.stage(
+            "downstreamRefreshStarted",
+            json!({ "forceRegionApplied": !force_region_ip.trim().is_empty() }),
+        );
         let output = AuthFlow::new()
             .build_downstream_tokens(BuildDownstreamTokensInput {
                 user_token: serde_json::from_value(serde_json::to_value(user_token).unwrap())
@@ -330,13 +389,22 @@ impl AuthService {
             })
             .await
             .map_err(|error| {
+                trace.stage("refreshFailed", flow_error_summary(&error));
                 log::error!("Auth: 下游令牌收口失败: {}", error);
                 error.to_string()
             })?;
 
+        trace.stage(
+            "authBundlePersistStarted",
+            token_summary(&output.auth_bundle.stream_tokens),
+        );
         self.persistence
             .persist_auth_bundle(&output.auth_bundle)
             .map_err(|error| error.to_string())?;
+        trace.stage(
+            "authBundlePersistCompleted",
+            json!({ "appLevel": output.auth_bundle.app_level }),
+        );
         self.runtime
             .mark_authenticated(output.auth_bundle.app_level)
             .map_err(|error| error.to_string())?;
@@ -345,11 +413,37 @@ impl AuthService {
     }
 
     fn sync_auth_state(&self) {
+        self.sync_auth_state_with_operation(None);
+    }
+
+    fn sync_auth_state_with_operation(&self, operation: Option<&AuthOperationTrace>) {
         let state = self.get_state();
-        let _ = events::emit_auth_state_changed(&self.app_handle, &state);
+        let operation_id = operation.map(|trace| trace.id());
+        record_auth_event(
+            &self.runtime_trace,
+            "authStateEmissionStarted",
+            json!({ "operationId": operation_id, "state": state_summary(&state) }),
+        );
+        let result = events::emit_auth_state_changed(&self.app_handle, &state);
+        record_auth_event(
+            &self.runtime_trace,
+            "authStateEmitted",
+            json!({ "operationId": operation_id, "state": state_summary(&state), "emitSucceeded": result.is_ok() }),
+        );
 
         if state.is_authenticated {
-            let _ = events::emit_session_ready(&self.app_handle, &state.provider, state.app_level);
+            record_auth_event(
+                &self.runtime_trace,
+                "authSessionReadyEmissionStarted",
+                json!({ "operationId": operation_id, "appLevel": state.app_level }),
+            );
+            let result =
+                events::emit_session_ready(&self.app_handle, &state.provider, state.app_level);
+            record_auth_event(
+                &self.runtime_trace,
+                "authSessionReadyEmitted",
+                json!({ "operationId": operation_id, "appLevel": state.app_level, "emitSucceeded": result.is_ok() }),
+            );
         }
     }
 }

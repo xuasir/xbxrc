@@ -22,6 +22,13 @@ export function usePageFocus(root: () => HTMLElement | null, key: () => string, 
   let restoring = false
   const memoryKey = (id = key()) => `page:${routeName as string}:${id}`
 
+  function setPageActive(container: HTMLElement | null, isActive: boolean) {
+    const value = String(isActive)
+    // 页面恢复与观察器共用激活标记，按值变化写入，让等待中的恢复回调收敛。
+    if (container && container.getAttribute('data-nav-page-active') !== value)
+      container.setAttribute('data-nav-page-active', value)
+  }
+
   function save(id = key()) {
     const focus = navigationEngine.getCurrentFocus()
     if (focus && root()?.contains(focus))
@@ -40,7 +47,7 @@ export function usePageFocus(root: () => HTMLElement | null, key: () => string, 
     const container = root()
     if (!container || !document.contains(container))
       return
-    container.setAttribute('data-nav-page-active', 'true')
+    setPageActive(container, true)
     if (!navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell))
       return
     const focus = navigationEngine.getCurrentFocus()
@@ -67,7 +74,7 @@ export function usePageFocus(root: () => HTMLElement | null, key: () => string, 
 
   function activate() {
     active = true
-    root()?.setAttribute('data-nav-page-active', 'true')
+    setPageActive(root(), true)
     void restore()
   }
   function deactivate() {
@@ -78,7 +85,7 @@ export function usePageFocus(root: () => HTMLElement | null, key: () => string, 
     const container = root()
     if (container) {
       navigationEngine.clearFocus(container)
-      container.setAttribute('data-nav-page-active', 'false')
+      setPageActive(container, false)
     }
   }
   const disposeFocus = navigationEngine.onFocusChange((element) => {

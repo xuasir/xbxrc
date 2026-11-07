@@ -162,6 +162,7 @@ async fn build_services(
     let auth_service = Arc::new(mods::auth::AuthService::new(
         app_handle.clone(),
         config_provider.clone(),
+        runtime_trace.clone(),
     ));
     let auth_provider: mods::auth::AuthProviderRef = auth_service.clone();
 

@@ -5,6 +5,7 @@ pub mod runtime_state;
 pub mod service;
 pub mod storage_repository;
 pub mod token_policy;
+mod trace;
 pub mod types;
 
 pub use service::AuthService;

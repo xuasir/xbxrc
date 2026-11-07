@@ -31,6 +31,7 @@ vi.mock('./engine', async original => ({
 vi.mock('./haptics', () => ({ playNavSound: vi.fn(), triggerNavHaptic: vi.fn() }))
 
 const effects: ReturnType<typeof effectScope>[] = []
+const stopObservers: (() => void)[] = []
 async function flush() {
   for (let i = 0; i < 5; i++)
     await nextTick()
@@ -51,7 +52,39 @@ function fixture() {
   const page = effect.run(() => usePageFocus(() => root as unknown as HTMLElement, () => identity.value, () => `entry.${identity.value}`))!
   return { ...f, nav, root, identity, route, page }
 }
+function observePageMutations(f: ReturnType<typeof fixture>) {
+  let observing = true
+  let queued = false
+  let deliveries = 0
+  const setAttribute = f.root.setAttribute
+  const write = vi.spyOn(f.root, 'setAttribute').mockImplementation((key, value) => {
+    const result = setAttribute(key, value)
+    // 浏览器在同值写入时也投递属性变更；限制次数让旧代码的微任务循环可安全失败。
+    if (key === 'data-nav-page-active' && observing && !queued && deliveries < 20) {
+      queued = true
+      queueMicrotask(() => {
+        queued = false
+        if (observing) {
+          deliveries++
+          f.mutation()
+        }
+      })
+    }
+    return result
+  })
+  stopObservers.push(() => {
+    observing = false
+    write.mockRestore()
+  })
+  return {
+    async settle() {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      return deliveries
+    },
+  }
+}
 afterEach(() => {
+  stopObservers.splice(0).forEach(stop => stop())
   hooks.unmounted.forEach(fn => fn())
   effects.splice(0).forEach(effect => effect.stop())
   hooks.engine?.stop()
@@ -61,6 +94,33 @@ afterEach(() => {
 })
 
 describe('页面恢复事务', () => {
+  it('加载等待期间观察器回调收敛，数据到达后恢复主入口', async () => {
+    const f = fixture()
+    const mutations = observePageMutations(f)
+    hooks.mounted.forEach(fn => fn())
+    expect(await mutations.settle()).toBe(1)
+    expect(f.engine.getCurrentFocus()).toBe(f.nav)
+
+    const entry = f.node('entry.one', f.root)
+    f.mutation()
+    expect(await mutations.settle()).toBe(1)
+    expect(f.engine.getCurrentFocus()).toBe(entry)
+  })
+  it('等待上层弹层时观察器回调收敛，关闭后恢复页面入口', async () => {
+    const f = fixture()
+    const entry = f.node('entry.one', f.root)
+    const modal = f.zone('modal')
+    const action = f.node('action', modal)
+    f.engine.updateActiveScope('modal', true)
+    const mutations = observePageMutations(f)
+    hooks.mounted.forEach(fn => fn())
+    expect(await mutations.settle()).toBe(1)
+    expect(f.engine.getCurrentFocus()).toBe(action)
+
+    f.engine.updateActiveScope('modal', false)
+    expect(await mutations.settle()).toBe(1)
+    expect(f.engine.getCurrentFocus()).toBe(entry)
+  })
   it('空页面的数据到达后恢复主入口', async () => {
     const f = fixture()
     hooks.mounted.forEach(fn => fn())

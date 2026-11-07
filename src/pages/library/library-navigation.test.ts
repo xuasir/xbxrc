@@ -44,7 +44,8 @@ function fixture() {
   const back = { id: 'game.back' }
   const tabs = Object.fromEntries(['overview', 'achievements', 'statistics'].map(key => [key, { id: `library.tab.${key}` }]))
   let focused: { id: string } = back
-  const root = { setAttribute: vi.fn(), contains: (el: unknown) => [back, ...Object.values(tabs)].includes(el as typeof back), querySelector: (selector: string) => selector === '[data-library-entry]' ? back : tabs[active.value] }
+  const attributes = new Map<string, string>()
+  const root = { getAttribute: (key: string) => attributes.get(key) ?? null, setAttribute: vi.fn((key: string, value: string) => attributes.set(key, value)), contains: (el: unknown) => [back, ...Object.values(tabs)].includes(el as typeof back), querySelector: (selector: string) => selector === '[data-library-entry]' ? back : tabs[active.value] }
   const panel = { scrollTop: 0, closest: () => root }
   vi.stubGlobal('document', {
     querySelector: () => focused,

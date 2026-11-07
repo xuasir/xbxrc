@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import type { AuthTraceContext } from '../services/auth-trace'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { createAuthTraceOperationId, recordAuthTrace } from '../services/auth-trace'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 
@@ -15,6 +17,13 @@ const route = useRoute()
 type LoginViewState = 'checking' | 'idle' | 'submitting'
 
 const viewState = ref<LoginViewState>('checking')
+const loginTraceId = createAuthTraceOperationId()
+
+function trace(event: string, context: AuthTraceContext = {}): void {
+  recordAuthTrace(event, { operationId: loginTraceId, source: 'login-page', viewState: viewState.value, ...context })
+}
+
+watch(viewState, () => trace('loginViewStateChanged'), { flush: 'sync' })
 
 let disposeAuthSessionReady: (() => void) | undefined
 let disposeAuthStateChanged: (() => void) | undefined
@@ -44,13 +53,27 @@ const loginActionLabel = computed(() => {
   return t('login.signInSimple')
 })
 
-async function redirectIfAuthenticated(): Promise<boolean> {
-  const authState = await rpc.auth.getState()
-  if (authState.isAuthenticated) {
-    await router.replace(redirectTarget.value)
-    return true
+async function redirectIfAuthenticated(trigger: AuthTraceContext['trigger'] = 'bootstrap'): Promise<boolean> {
+  const startedAt = performance.now()
+  const operationId = createAuthTraceOperationId()
+  const context = { operationId, parentOperationId: loginTraceId, trigger }
+  const to = router.resolve(redirectTarget.value)
+  trace('loginRedirectStarted', { ...context, to })
+  try {
+    const authState = await rpc.auth.getState()
+    trace('loginAuthStateObserved', { ...context, state: authState })
+    if (authState.isAuthenticated) {
+      const failure = await router.replace(redirectTarget.value)
+      trace('loginRedirectCompleted', { ...context, to: router.currentRoute.value, durationMs: Math.round(performance.now() - startedAt), outcome: failure ? 'failed' : 'success', navigationFailureType: failure?.type })
+      return true
+    }
+    trace('loginRedirectCompleted', { ...context, to, durationMs: Math.round(performance.now() - startedAt), outcome: 'skipped' })
+    return false
   }
-  return false
+  catch (error) {
+    trace('loginRedirectFailed', { ...context, to, durationMs: Math.round(performance.now() - startedAt), error })
+    throw error
+  }
 }
 
 function applyAuthStateView(
@@ -75,33 +98,49 @@ function applyAuthStateView(
 }
 
 async function bootstrapLoginState(): Promise<void> {
-  const currentState = await rpc.auth.getState()
-  if (currentState.isAuthenticated) {
-    await redirectIfAuthenticated()
-    return
-  }
-
-  if (currentState.isAuthenticating) {
-    applyAuthStateView(currentState)
-    return
-  }
-
-  viewState.value = 'checking'
+  const startedAt = performance.now()
+  trace('loginRestoreStarted', { trigger: 'bootstrap' })
   try {
-    await rpc.auth.checkAuthentication()
-  }
-  catch {
-    viewState.value = 'idle'
-    return
-  }
+    const currentState = await rpc.auth.getState()
+    trace('loginAuthStateObserved', { trigger: 'bootstrap', state: currentState })
+    if (currentState.isAuthenticated) {
+      trace('loginRestoreCompleted', { state: currentState, outcome: 'success', durationMs: Math.round(performance.now() - startedAt) })
+      await redirectIfAuthenticated()
+      return
+    }
 
-  const nextState = await rpc.auth.getState()
-  if (nextState.isAuthenticated) {
-    await redirectIfAuthenticated()
-    return
-  }
+    if (currentState.isAuthenticating) {
+      applyAuthStateView(currentState)
+      trace('loginRestoreWaiting', { state: currentState, outcome: 'waiting', durationMs: Math.round(performance.now() - startedAt) })
+      return
+    }
 
-  applyAuthStateView(nextState)
+    viewState.value = 'checking'
+    trace('loginAuthCheckStarted')
+    try {
+      await rpc.auth.checkAuthentication()
+      trace('loginAuthCheckCompleted', { outcome: 'success' })
+    }
+    catch (error) {
+      viewState.value = 'idle'
+      trace('loginRestoreCompleted', { outcome: 'failed', error, durationMs: Math.round(performance.now() - startedAt) })
+      return
+    }
+
+    const nextState = await rpc.auth.getState()
+    trace('loginAuthStateObserved', { trigger: 'after-check', state: nextState })
+    trace('loginRestoreCompleted', { state: nextState, outcome: nextState.isAuthenticating ? 'waiting' : 'success', durationMs: Math.round(performance.now() - startedAt) })
+    if (nextState.isAuthenticated) {
+      await redirectIfAuthenticated('after-check')
+      return
+    }
+
+    applyAuthStateView(nextState)
+  }
+  catch (error) {
+    trace('loginRestoreFailed', { error, durationMs: Math.round(performance.now() - startedAt) })
+    throw error
+  }
 }
 
 async function handleSignIn(): Promise<void> {
@@ -121,11 +160,15 @@ async function handleSignIn(): Promise<void> {
   }
 
   viewState.value = 'submitting'
+  const startedAt = performance.now()
+  trace('loginSignInStarted', { trigger: 'sign-in' })
   try {
     await rpc.auth.login()
-    await redirectIfAuthenticated()
+    trace('loginSignInCompleted', { outcome: 'success', durationMs: Math.round(performance.now() - startedAt) })
+    await redirectIfAuthenticated('sign-in')
   }
-  catch {
+  catch (error) {
+    trace('loginSignInFailed', { error, durationMs: Math.round(performance.now() - startedAt) })
     viewState.value = 'idle'
   }
   finally {
@@ -139,15 +182,18 @@ async function handleSignIn(): Promise<void> {
 }
 
 onMounted(() => {
+  trace('loginMounted')
   void bootstrapLoginState()
 
   disposeAuthSessionReady = events.on('auth.sessionReady', () => {
-    void redirectIfAuthenticated()
+    trace('loginAuthEventReceived', { trigger: 'session-ready' })
+    void redirectIfAuthenticated('session-ready')
   })
 
   disposeAuthStateChanged = events.on('auth.stateChanged', (state) => {
+    trace('loginAuthEventReceived', { trigger: 'state-changed', state })
     if (state.isAuthenticated) {
-      void redirectIfAuthenticated()
+      void redirectIfAuthenticated('state-changed')
       return
     }
     applyAuthStateView(state as any, { preserveSubmitting: true })
@@ -155,6 +201,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  trace('loginUnmounted')
   if (disposeAuthSessionReady !== undefined) {
     disposeAuthSessionReady()
     disposeAuthSessionReady = undefined
