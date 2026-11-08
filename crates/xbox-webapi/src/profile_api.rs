@@ -34,7 +34,7 @@ pub struct ProfileApi {
 impl ProfileApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }

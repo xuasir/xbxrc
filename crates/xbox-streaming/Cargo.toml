@@ -20,5 +20,8 @@ log.workspace = true
 xbox-webapi = { path = "../xbox-webapi" }
 xbox-streaming-protocol = { path = "../xbox-streaming-protocol" }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [lib]
 path = "src/lib.rs"

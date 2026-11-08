@@ -17,7 +17,7 @@ pub struct UserPresenceApi {
 impl UserPresenceApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }
@@ -30,7 +30,11 @@ impl UserPresenceApi {
                 Some(self.headers()?),
             )
             .await?;
-        Ok(parse_user_presence(&value))
+        let presence = parse_user_presence(&value);
+        if presence.state.is_none() {
+            return Err(WebApiError::parse("invalid presence response"));
+        }
+        Ok(presence)
     }
     fn headers(&self) -> Result<HeaderMap, WebApiError> {
         HttpTransport::create_header_map(&[
@@ -50,14 +54,20 @@ fn parse_user_presence(value: &Value) -> UserPresence {
         .get("devices")
         .and_then(Value::as_array)
         .and_then(|devices| {
-            devices.iter().find_map(|device| {
-                let titles = device.get("titles")?.as_array()?;
-                let title = titles
-                    .iter()
-                    .find(|v| v.get("state").and_then(Value::as_str) == Some("Active"))
-                    .or_else(|| titles.first())?;
-                Some((device, title))
-            })
+            devices
+                .iter()
+                .find_map(|device| {
+                    let titles = device.get("titles")?.as_array()?;
+                    let title = titles
+                        .iter()
+                        .find(|v| v.get("state").and_then(Value::as_str) == Some("Active"))?;
+                    Some((device, title))
+                })
+                .or_else(|| {
+                    devices.iter().find_map(|device| {
+                        Some((device, device.get("titles")?.as_array()?.first()?))
+                    })
+                })
         });
     UserPresence {
         state: field(root, "state"),
@@ -89,5 +99,15 @@ mod tests {
         assert_eq!(v.device.as_deref(), Some("XboxOne"));
         assert_eq!(v.current_title_name.as_deref(), Some("Halo"));
         assert_eq!(v.rich_presence.as_deref(), Some("In Menus"));
+    }
+
+    #[test]
+    fn active_game_on_later_device_takes_priority_over_background_title() {
+        let value = parse_user_presence(&json!({"state":"Online", "devices":[
+            {"type":"WindowsOneCore", "titles":[{"name":"Home", "state":"Background"}]},
+            {"type":"XboxOne", "titles":[{"name":"Halo", "state":"Active"}]}
+        ]}));
+        assert_eq!(value.device.as_deref(), Some("XboxOne"));
+        assert_eq!(value.current_title_name.as_deref(), Some("Halo"));
     }
 }

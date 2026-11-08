@@ -18,8 +18,6 @@ async fn install_signaling_record(
     install_http_record(flow, url).await;
     let mut sessions = flow.inner.sessions.write().await;
     let mut record = sessions.get("session").unwrap();
-    record.plan.session.schedule.offer_exchange_timeout_ms = 5000;
-    record.plan.session.schedule.ice_exchange_timeout_ms = 5000;
     record.plan.session.schedule.offer_poll_interval_ms = 100;
     sessions.upsert_if_same("session".to_owned(), record);
 }
@@ -34,11 +32,11 @@ async fn restart_posts_preserve_snapshot_dedup_across_multiple_local_batches() {
             } else {
                 serde_json::json!({})
             },
-            0,
+            None,
         )
     })
     .await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     install_signaling_record(&flow, &server.base_url).await;
     assert_eq!(flow.poll_ice("session", false).await.unwrap().len(), 2);
     for port in [5001, 5002] {
@@ -78,10 +76,10 @@ async fn new_peer_and_restart_wait_for_current_sdp_and_filter_previous_ice() {
             } else {
                 serde_json::json!({})
             };
-            (200, body, 0)
+            (200, body, None)
         })
         .await;
-        let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+        let flow = http_test_flow(HttpTestProvider::default());
         install_signaling_record(&flow, &server.base_url).await;
         let first = flow
             .exchange_offer("session", None, "v=0\r\na=ice-ufrag:local-old\r\n", false)
@@ -135,10 +133,10 @@ async fn chat_and_quality_offers_preserve_the_media_ice_generation() {
         } else {
             serde_json::json!({})
         };
-        (200, body, 0)
+        (200, body, None)
     })
     .await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     install_signaling_record(&flow, &server.base_url).await;
     let offer = "v=0\r\na=ice-ufrag:local\r\na=ice-pwd:password\r\n";
     flow.exchange_offer("session", None, offer, false)
@@ -176,8 +174,8 @@ async fn chat_and_quality_offers_preserve_the_media_ice_generation() {
 #[tokio::test]
 async fn queued_ice_requests_cannot_consume_or_submit_into_a_new_negotiation() {
     for submit in [false, true] {
-        let server = TestServer::new(|_| (200, ice_response("old"), 0)).await;
-        let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+        let server = TestServer::new(|_| (200, ice_response("old"), None)).await;
+        let flow = http_test_flow(HttpTestProvider::default());
         install_signaling_record(&flow, &server.base_url).await;
         let mutation = flow
             .inner

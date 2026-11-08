@@ -1,8 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::time::Duration;
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, ResourceId};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
@@ -12,6 +13,7 @@ use crate::settings_store::SettingsStoreResolver;
 use super::channel::UpdateChannel;
 use super::endpoints;
 use super::events::UPDATER_PROGRESS_CHANNEL;
+use super::runtime_state::UpdaterRuntimeState;
 
 const UPDATE_CHANNEL_STORE_KEY: &str = "update_channel";
 
@@ -40,23 +42,20 @@ pub struct UpdaterCheckResult {
 
 pub struct UpdaterService {
     app_handle: AppHandle,
-    pending_update_rid: Arc<Mutex<Option<ResourceId>>>,
+    runtime: Arc<UpdaterRuntimeState>,
 }
 
 impl UpdaterService {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
             app_handle,
-            pending_update_rid: Arc::new(Mutex::new(None)),
+            runtime: Arc::new(UpdaterRuntimeState::default()),
         }
     }
 
     fn clear_pending_update(&self) {
-        let mut pending = self
-            .pending_update_rid
-            .lock()
-            .expect("updater pending_update_rid mutex poisoned");
-        if let Some(rid) = pending.take() {
+        let (_, rid) = self.runtime.invalidate();
+        if let Some(rid) = rid {
             let _ = self.app_handle.resources_table().close(rid);
         }
     }
@@ -87,24 +86,34 @@ impl UpdaterService {
     }
 
     pub async fn check(&self) -> Result<UpdaterCheckResult, String> {
+        let (generation, previous) = self.runtime.invalidate();
+        if let Some(rid) = previous {
+            let _ = self.app_handle.resources_table().close(rid);
+        }
         let channel = self.get_channel()?;
         let endpoint = endpoints::endpoint_for(channel);
         let current_version = self.app_handle.package_info().version.to_string();
-
-        self.clear_pending_update();
 
         let endpoint_url = Url::parse(&endpoint).map_err(|error| error.to_string())?;
         let updater = self
             .app_handle
             .updater_builder()
+            .timeout(Duration::from_secs(20))
             .endpoints(vec![endpoint_url])
             .map_err(|error| error.to_string())?
             .build()
             .map_err(|error| error.to_string())?;
 
-        let update = updater.check().await.map_err(|error| error.to_string())?;
+        let update = updater
+            .check()
+            .await
+            .map_err(|_| "更新检查失败，请检查网络后重试".to_string())?;
+        if !self.runtime.is_current(generation) {
+            return Err("更新检查结果已改变，请重试".into());
+        }
 
-        if let Some(update) = update {
+        if let Some(mut update) = update {
+            update.timeout = Some(Duration::from_secs(300));
             super::manifest::validate_update_manifest(
                 &update.raw_json,
                 channel.as_str(),
@@ -119,11 +128,10 @@ impl UpdaterService {
                 date: update.date.map(|value| value.to_string()),
             };
             let rid = self.app_handle.resources_table().add(update);
-            let mut pending = self
-                .pending_update_rid
-                .lock()
-                .expect("updater pending_update_rid mutex poisoned");
-            *pending = Some(rid);
+            if !self.runtime.publish(generation, rid) {
+                let _ = self.app_handle.resources_table().close(rid);
+                return Err("更新检查结果已改变，请重试".into());
+            }
             Ok(result)
         } else {
             Ok(UpdaterCheckResult {
@@ -137,15 +145,8 @@ impl UpdaterService {
     }
 
     pub async fn download_and_install(&self) -> Result<(), String> {
-        let rid = {
-            let mut pending = self
-                .pending_update_rid
-                .lock()
-                .expect("updater pending_update_rid mutex poisoned");
-            pending.take().ok_or_else(|| {
-                "No pending update. Call updater.check before downloadAndInstall.".to_string()
-            })?
-        };
+        let lease = self.runtime.begin_download()?;
+        let rid = lease.rid;
 
         let update = self
             .app_handle
@@ -158,8 +159,8 @@ impl UpdaterService {
         let mut started = false;
         let mut downloaded_total = 0usize;
 
-        update
-            .download_and_install(
+        let bytes = update
+            .download(
                 |chunk_length, content_length| {
                     if !started {
                         started = true;
@@ -180,16 +181,21 @@ impl UpdaterService {
                         },
                     );
                 },
-                || {
-                    let _ = event_bridge::emit(
-                        &app_handle,
-                        UPDATER_PROGRESS_CHANNEL,
-                        &UpdaterProgressEvent::Finished,
-                    );
-                },
+                || {},
             )
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|_| "更新下载或签名校验失败，请重试".to_string())?;
+        lease.install_if_current(|| {
+            update
+                .install(bytes)
+                .map_err(|_| "更新安装失败，请重试".to_string())
+        })?;
+        lease.complete();
+        let _ = event_bridge::emit(
+            &app_handle,
+            UPDATER_PROGRESS_CHANNEL,
+            &UpdaterProgressEvent::Finished,
+        );
 
         let _ = self.app_handle.resources_table().close(rid);
         Ok(())

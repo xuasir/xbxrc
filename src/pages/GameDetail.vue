@@ -2,6 +2,7 @@
 import type { GameSection } from './library/library-view'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import RemoteImage from '@/components/common/RemoteImage.vue'
 import { useShellPageHints } from '@/components/layout/shell-context'
 import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
@@ -64,7 +65,7 @@ async function refresh() {
             {{ notice }}
           </p>
           <div class="library-detail-hero">
-            <img v-if="game?.artworkUrl || installed?.artworkUrl" :src="game?.artworkUrl || installed?.artworkUrl || ''" alt=""><div>
+            <RemoteImage class="library-detail-art" :src="game?.artworkUrl || installed?.artworkUrl" /><div>
               <h2>{{ game?.name || installed?.name || 'Xbox 游戏' }}</h2><p class="library-copy">
                 {{ progressText(game?.progress) }}
               </p><p v-if="game?.lastPlayedAt" class="library-copy">
@@ -92,7 +93,7 @@ async function refresh() {
                 安装于 {{ formatDate(installed.installedAt) }}
               </p>
             </div><p v-if="titleId" class="library-copy">
-              累计游玩 {{ formatMinutes(time?.minutes) }}
+              累计游玩 {{ times.state.value.loading && !time ? '查询中…' : formatMinutes(time?.minutes) }}
             </p><p v-if="times.state.value.error || time?.error" class="library-notice" role="alert">
               {{ times.state.value.error || time?.error }}
             </p><div class="library-actions">
@@ -106,7 +107,7 @@ async function refresh() {
           <KeepAlive><AchievementsPanel v-if="active === 'achievements' && titleId" :key="`${target}:${titleId}`" :xbox-title-id="titleId" :target-xuid="target" /><AlbumPanel v-else-if="active === 'album' && titleId" :key="`album:${titleId}`" :xbox-title-id="titleId" /></KeepAlive>
           <template v-if="active === 'statistics' && titleId">
             <div class="library-metric">
-              <span class="library-caption">此游戏累计游玩</span><strong>{{ formatMinutes(time?.minutes) }}</strong><span class="library-caption">Xbox 累计游玩记录</span>
+              <span class="library-caption">此游戏累计游玩</span><strong>{{ times.state.value.loading && !time ? '查询中…' : formatMinutes(time?.minutes) }}</strong><span class="library-caption">Xbox 累计游玩记录</span>
             </div><p v-if="times.state.value.error || time?.error" class="library-notice" role="alert">
               {{ times.state.value.error || time?.error }}
             </p><p class="library-copy">

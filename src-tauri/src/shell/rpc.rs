@@ -40,7 +40,10 @@ impl RpcEnvelope {
             data: None,
             error: Some(RpcError {
                 code: error.code().to_string(),
-                message: error.to_string(),
+                message: match &error {
+                    crate::error::AppError::Data(message) => message.clone(),
+                    _ => error.to_string(),
+                },
                 details: error.details().cloned(),
             }),
         }
@@ -77,7 +80,12 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
         "data" => {
             mods::data::rpc::handle_rpc(payload.method.as_str(), payload.params, app_handle.clone())
                 .await
-                .map_err(Into::into)
+                .map_err(|error| match error {
+                    crate::error::AppError::Internal(message) => {
+                        crate::error::AppError::Data(message)
+                    }
+                    other => other,
+                })
         }
         "streaming" => mods::streaming::rpc::handle_rpc(
             payload.method.as_str(),
@@ -141,5 +149,36 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
             );
             RpcEnvelope::fail(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn data_error_preserves_user_message_without_internal_prefix() {
+        let envelope =
+            RpcEnvelope::fail(crate::error::AppError::Data("查询超时，请稍后刷新".into()));
+        let error = envelope.error.unwrap();
+        assert_eq!(error.code, "DATA_ERROR");
+        assert_eq!(error.message, "查询超时，请稍后刷新");
+    }
+
+    #[test]
+    fn streaming_details_and_other_error_codes_keep_their_contract() {
+        let details = serde_json::json!({"reason": "disconnected"});
+        let envelope = RpcEnvelope::fail(crate::error::AppError::streaming_detailed(
+            "连接中断",
+            details.clone(),
+        ));
+        let error = envelope.error.unwrap();
+        assert_eq!(error.code, "STREAMING_ERROR");
+        assert_eq!(error.message, "Streaming error: 连接中断");
+        assert_eq!(error.details, Some(details));
+        let invalid = RpcEnvelope::fail(crate::error::AppError::InvalidParams(
+            "missing parameter".into(),
+        ));
+        assert_eq!(invalid.error.unwrap().code, "APP_INVALID_PARAMS");
     }
 }

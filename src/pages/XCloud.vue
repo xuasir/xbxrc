@@ -11,11 +11,13 @@ import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import GameCard from '../components/common/GameCard.vue'
 import HorizontalListRail from '../components/common/HorizontalListRail.vue'
+import PageUnavailable from '../components/common/PageUnavailable.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
+import { CatalogRequestState } from './xcloud-catalog-state'
 
 type XcloudCatalogPayload = Awaited<ReturnType<typeof rpc.data.getXcloudTitles>>
 type XcloudTitle = XcloudCatalogPayload['titles'][number]
@@ -27,7 +29,7 @@ interface XcloudGridCardViewModel {
 }
 
 const pageRef = ref<HTMLElement | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const isLoading = ref(false)
@@ -37,6 +39,7 @@ const titles = ref<XcloudTitle[]>([])
 const cacheState = ref<XcloudCatalogPayload['cacheState']>('miss')
 const updatedAt = ref<number | undefined>(undefined)
 const loadError = ref('')
+const hasLoaded = ref(false)
 const searchKeyword = ref('')
 const contentRef = ref<HTMLElement | null>(null)
 const activeSection = ref('xcloud-recent')
@@ -48,6 +51,8 @@ const loadMoreSentinelRef = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
 let disposeTabSwitch: (() => void) | undefined
 let disposeCatalogUpdated: (() => void) | undefined
+let disposeAuthChanged: (() => void) | undefined
+const catalogRequests = new CatalogRequestState()
 const pageFocus = usePageFocus(() => pageRef.value, () => 'catalog', () => SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud)
 
 // LT/RT 区域导航的 section 标识符
@@ -57,7 +62,7 @@ const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowe
 const isSearching = computed(() => normalizedSearchKeyword.value !== '')
 const hasFullAccess = computed(() => appLevel.value >= 2)
 const uiDensity = computed(() => resolveUiDensity(viewportWidth.value))
-const showInitialLoading = computed(() => isLoading.value && titles.value.length === 0)
+const showInitialLoading = computed(() => isLoading.value && titles.value.length === 0 && !hasLoaded.value)
 const updatedAtLabel = computed(() => {
   if (updatedAt.value === undefined) {
     return ''
@@ -275,7 +280,25 @@ function applyCatalogPayload(payload: XcloudCatalogPayload): void {
   cacheState.value = payload.cacheState
   updatedAt.value = payload.updatedAt
   isRefreshing.value = payload.refreshing
+  hasLoaded.value = true
+  loadError.value = ''
 }
+
+function clearCatalog(): void {
+  catalogRequests.clear()
+  titles.value = []
+  cacheState.value = 'miss'
+  updatedAt.value = undefined
+  loadError.value = ''
+  hasLoaded.value = false
+  isLoading.value = false
+  isRefreshing.value = false
+}
+
+watch(locale, () => {
+  clearCatalog()
+  void loadTitles()
+})
 
 async function loadTitles(forceRefresh = false): Promise<void> {
   if (isLoading.value || (forceRefresh && isRefreshing.value)) {
@@ -290,22 +313,23 @@ async function loadTitles(forceRefresh = false): Promise<void> {
     isRefreshing.value = true
   }
 
-  loadError.value = ''
+  const generation = catalogRequests.capture()
   try {
-    const [authState, catalogPayload] = await Promise.allSettled([
-      rpc.auth.getState(),
-      forceRefresh ? rpc.data.refreshXcloudTitles() : rpc.data.getXcloudTitles(),
-    ])
-    if (authState.status === 'fulfilled')
-      appLevel.value = authState.value.appLevel
-    else throw authState.reason
-    if (catalogPayload.status === 'fulfilled')
+    const [catalogPayload] = await Promise.allSettled([forceRefresh ? rpc.data.refreshXcloudTitles() : rpc.data.getXcloudTitles()])
+    const authState = await rpc.auth.getState()
+    if (!catalogRequests.isCurrent(generation))
+      return
+    appLevel.value = authState.appLevel
+    if (catalogPayload.status === 'rejected')
+      throw catalogPayload.reason
+    if (catalogRequests.acceptResponse(generation, catalogPayload.value))
       applyCatalogPayload(catalogPayload.value)
-    else throw catalogPayload.reason
   }
   catch (error) {
+    if (!catalogRequests.isCurrent(generation))
+      return
     devWarn('[XCloud] load titles failed:', error)
-    loadError.value = t('xcloudPage.loadFailed')
+    loadError.value = error instanceof Error && error.message ? error.message : t('xcloudPage.loadFailed')
     if (titles.value.length === 0) {
       titles.value = []
       cacheState.value = 'miss'
@@ -314,7 +338,10 @@ async function loadTitles(forceRefresh = false): Promise<void> {
     isRefreshing.value = false
   }
   finally {
-    isLoading.value = false
+    if (catalogRequests.isCurrent(generation)) {
+      hasLoaded.value = true
+      isLoading.value = false
+    }
   }
 }
 
@@ -322,7 +349,15 @@ onMounted(() => {
   handleResize()
   window.addEventListener('resize', handleResize)
   disposeCatalogUpdated = events.on('data.xcloudCatalogUpdated', (payload) => {
-    applyCatalogPayload(payload)
+    if (catalogRequests.acceptEvent(payload))
+      applyCatalogPayload(payload)
+  })
+  disposeAuthChanged = events.on('auth.stateChanged', (state) => {
+    appLevel.value = state.appLevel
+    if (!state.isAuthenticated || state.isAuthenticating)
+      clearCatalog()
+    else
+      void loadTitles()
   })
   void loadTitles()
   void nextTick(setupLoadMoreObserver)
@@ -354,6 +389,7 @@ onBeforeUnmount(() => {
     disposeCatalogUpdated()
     disposeCatalogUpdated = undefined
   }
+  disposeAuthChanged?.()
   unregisterTabSwitch()
 })
 
@@ -411,29 +447,16 @@ function unregisterTabSwitch(): void {
       <BrandedLoading :label="t('xcloudPage.loading')" />
     </div>
 
-    <section
+    <PageUnavailable
       v-else-if="!hasFullAccess"
-      class="xcloud-page__state xcloud-page__state--logged-out"
-    >
-      <p class="ui-page-title">
-        {{ t('xcloudPage.limitedTitle') }}
-      </p>
-      <p class="ui-page-body">
-        {{ t('xcloudPage.limitedBody') }}
-      </p>
-
-      <Focusable
-        :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud"
-        as="button"
-        type="button"
-        class="xcloud-page__action-button ui-action-button ui-action-button--brand"
-        :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :aria-label="t('xcloudPage.actions.refresh')"
-        @click="handlePrimaryAction"
-      >
-        {{ t('xcloudPage.actions.refresh') }}
-      </Focusable>
-    </section>
+      :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud"
+      :title="t('xcloudPage.limitedTitle')"
+      :body="loadError || t('xcloudPage.limitedBody')"
+      :action-label="t('xcloudPage.actions.refresh')"
+      :busy="isLoading || isRefreshing"
+      :error="!!loadError"
+      @retry="handlePrimaryAction"
+    />
 
     <template v-else>
       <header class="xcloud-page__header">
@@ -463,7 +486,7 @@ function unregisterTabSwitch(): void {
                 @focus="navigationEngine.focusElement($event.target as HTMLInputElement, false)"
               >
             </label>
-            <Focusable id="xcloud.refresh" as="button" type="button" class="xcloud-page__refresh" :aria-label="t('xcloudPage.actions.refresh')" :title="t('xcloudPage.actions.refresh')" :aria-busy="isRefreshing" :disabled="isRefreshing" @click="loadTitles(true)">
+            <Focusable id="xcloud.refresh" as="button" type="button" class="xcloud-page__refresh" :aria-label="t('xcloudPage.actions.refresh')" :title="t('xcloudPage.actions.refresh')" :aria-busy="isRefreshing" @click="loadTitles(true)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" :class="{ 'xcloud-page__refresh-icon--spinning': isRefreshing }"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8" /></svg>
             </Focusable>
           </div>
@@ -493,11 +516,11 @@ function unregisterTabSwitch(): void {
           }}
         </p>
         <p class="ui-page-body">
-          {{
+          {{ loadError || (
             isSearching
               ? t('xcloudPage.emptySearchBody', { keyword: searchKeyword })
               : t('xcloudPage.emptyBody')
-          }}
+          ) }}
         </p>
 
         <Focusable
@@ -674,7 +697,7 @@ function unregisterTabSwitch(): void {
 .xcloud-page__refresh svg { width: 20px; height: 20px; }
 .xcloud-page__refresh:hover { background: var(--ui-material-hover); }
 .xcloud-page__refresh[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }
-.xcloud-page__refresh:disabled { opacity: .5; cursor: default; }
+.xcloud-page__refresh[aria-busy='true'] { opacity: .5; cursor: progress; }
 .xcloud-page__refresh-icon--spinning { animation: xcloud-refresh-spin 900ms linear infinite; }
 @keyframes xcloud-refresh-spin { to { transform: rotate(360deg); } }
 

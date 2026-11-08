@@ -111,7 +111,7 @@ pub struct AuthApi {
 impl AuthApi {
     pub fn new() -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_commands(),
         }
     }
 

@@ -17,7 +17,7 @@ pub struct SocialApi {
 impl SocialApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }
@@ -30,7 +30,11 @@ impl SocialApi {
                 Some(self.headers()?),
             )
             .await?;
-        Ok(parse_social_summary(&value))
+        let summary = parse_social_summary(&value);
+        if summary.followers_count.is_none() && summary.following_count.is_none() {
+            return Err(WebApiError::parse("invalid social summary response"));
+        }
+        Ok(summary)
     }
     fn headers(&self) -> Result<HeaderMap, WebApiError> {
         HttpTransport::create_header_map(&[
@@ -52,8 +56,10 @@ fn parse_social_summary(value: &Value) -> SocialSummary {
             .and_then(as_u32)
     };
     SocialSummary {
-        followers_count: count("followers"),
-        following_count: count("following"),
+        followers_count: count("followers")
+            .or_else(|| root.get("targetFollowerCount").and_then(as_u32)),
+        following_count: count("following")
+            .or_else(|| root.get("targetFollowingCount").and_then(as_u32)),
     }
 }
 fn as_u32(value: &Value) -> Option<u32> {
@@ -72,5 +78,14 @@ mod tests {
         let v = parse_social_summary(&json!({"peopleCount":{"followers":12,"following":"7"}}));
         assert_eq!(v.followers_count, Some(12));
         assert_eq!(v.following_count, Some(7));
+    }
+
+    #[test]
+    fn parses_target_summary_count_contract() {
+        let value = parse_social_summary(
+            &json!({"targetFollowerCount": 120, "targetFollowingCount": "80"}),
+        );
+        assert_eq!(value.followers_count, Some(120));
+        assert_eq!(value.following_count, Some(80));
     }
 }

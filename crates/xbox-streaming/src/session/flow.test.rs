@@ -900,6 +900,58 @@ fn home_server_registration_retry_exhausted_is_terminal_host_issue() {
 #[derive(Clone, Default)]
 struct HttpTestProvider {
     fail_access: Arc<std::sync::atomic::AtomicBool>,
+    events: Arc<(Mutex<Vec<String>>, tokio::sync::Notify)>,
+}
+
+const HTTP_TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const SIGNAL_TEST_TIMEOUT_MS: u64 = 10_000;
+
+async fn finish_test_future<T>(future: impl std::future::Future<Output = T>) -> T {
+    tokio::time::timeout(HTTP_TEST_TIMEOUT, future)
+        .await
+        .expect("test operation should finish after the expected event")
+}
+
+async fn assert_pending<F: std::future::Future>(mut future: std::pin::Pin<&mut F>) {
+    std::future::poll_fn(|context| {
+        assert!(future.as_mut().poll(context).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+}
+
+impl HttpTestProvider {
+    async fn wait_for_event(&self, event: &str) {
+        finish_test_future(async {
+            loop {
+                let changed = self.events.1.notified();
+                if self
+                    .events
+                    .0
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|item| item == event)
+                {
+                    return;
+                }
+                changed.await;
+            }
+        })
+        .await;
+    }
+}
+
+fn http_test_flow(provider: HttpTestProvider) -> SessionFlowService<Snapshot, HttpTestProvider> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(HTTP_TEST_TIMEOUT)
+        .build()
+        .expect("direct test client");
+    SessionFlowService::with_transport(
+        provider,
+        xbox_webapi::transport::HttpTransport::with_client(client),
+    )
 }
 #[async_trait::async_trait]
 impl SessionFlowProvider for HttpTestProvider {
@@ -912,11 +964,43 @@ impl SessionFlowProvider for HttpTestProvider {
     async fn transfer_token(&self) -> Result<String, SessionFlowError> {
         Ok("transfer".to_owned())
     }
+    fn on_session_lifecycle_event(&self, event: &str, _: Option<&str>, _: Value) {
+        self.events.0.lock().unwrap().push(event.to_owned());
+        self.events.1.notify_waiters();
+    }
+}
+
+#[derive(Clone)]
+struct ResponseGate {
+    released: tokio::sync::watch::Sender<bool>,
+}
+
+impl Default for ResponseGate {
+    fn default() -> Self {
+        Self {
+            released: tokio::sync::watch::channel(false).0,
+        }
+    }
+}
+
+impl ResponseGate {
+    async fn wait(&self) {
+        self.released
+            .subscribe()
+            .wait_for(|released| *released)
+            .await
+            .unwrap();
+    }
+
+    fn release(&self) {
+        self.released.send_replace(true);
+    }
 }
 
 struct TestServer {
     base_url: String,
     requests: Arc<Mutex<Vec<String>>>,
+    request_observed: Arc<tokio::sync::Notify>,
     task: tokio::task::JoinHandle<()>,
 }
 impl Drop for TestServer {
@@ -925,12 +1009,16 @@ impl Drop for TestServer {
     }
 }
 impl TestServer {
-    async fn new(handler: impl Fn(&str) -> (u16, Value, u64) + Send + Sync + 'static) -> Self {
+    async fn new(
+        handler: impl Fn(&str) -> (u16, Value, Option<ResponseGate>) + Send + Sync + 'static,
+    ) -> Self {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let requests = Arc::new(Mutex::new(Vec::new()));
         let observed = requests.clone();
+        let request_observed = Arc::new(tokio::sync::Notify::new());
+        let notification = request_observed.clone();
         let handler = Arc::new(handler);
         let task = tokio::spawn(async move {
             let mut workers = tokio::task::JoinSet::new();
@@ -940,6 +1028,7 @@ impl TestServer {
                         let (mut socket, _) = accepted.unwrap();
                         let handler = handler.clone();
                         let observed = observed.clone();
+                        let notification = notification.clone();
                         workers.spawn(async move {
                             let mut bytes = Vec::new();
                             loop {
@@ -953,8 +1042,9 @@ impl TestServer {
                                     if bytes.len() < end + 4 + length { continue; }
                                     let request = headers.lines().next().unwrap().to_owned();
                                     observed.lock().unwrap().push(request.clone());
-                                    let (status, body, delay_ms) = handler(&request);
-                                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                                    notification.notify_waiters();
+                                    let (status, body, gate) = handler(&request);
+                                    if let Some(gate) = gate { gate.wait().await; }
                                     let body = body.to_string();
                                     let response = format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                                     let _ = socket.write_all(response.as_bytes()).await;
@@ -970,26 +1060,24 @@ impl TestServer {
         Self {
             base_url,
             requests,
+            request_observed,
             task,
         }
     }
     async fn wait_for(&self, prefix: &str) {
-        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        self.wait_for_count(prefix, 1).await;
+    }
+    async fn wait_for_count(&self, prefix: &str, count: usize) {
+        finish_test_future(async {
             loop {
-                if self
-                    .requests
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|request| request.starts_with(prefix))
-                {
+                let changed = self.request_observed.notified();
+                if self.count(prefix) >= count {
                     return;
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                changed.await;
             }
         })
-        .await
-        .unwrap();
+        .await;
     }
     fn count(&self, prefix: &str) -> usize {
         self.requests
@@ -1009,8 +1097,8 @@ async fn install_http_record(
     plan.session.target = crate::policy::types::Target::Home;
     plan.session.base_url = base_url.to_owned();
     plan.session.target_id = "console".to_owned();
-    plan.session.schedule.offer_exchange_timeout_ms = 120;
-    plan.session.schedule.ice_exchange_timeout_ms = 120;
+    plan.session.schedule.offer_exchange_timeout_ms = SIGNAL_TEST_TIMEOUT_MS;
+    plan.session.schedule.ice_exchange_timeout_ms = SIGNAL_TEST_TIMEOUT_MS;
     let snapshot = Snapshot::new_pending(
         "session".to_owned(),
         "/v5/sessions/home/session".to_owned(),
@@ -1037,30 +1125,51 @@ async fn install_http_record(
 
 #[tokio::test]
 async fn pending_answer_has_a_total_deadline_and_keeps_the_session_available_for_cleanup() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let reads = AtomicUsize::new(0);
+    let server = TestServer::new(move |request| {
+        let gate = (request.starts_with("GET") && reads.fetch_add(1, Ordering::SeqCst) >= 1)
+            .then(|| held.clone());
+        (200, serde_json::json!({}), gate)
+    })
+    .await;
+    let flow = http_test_flow(HttpTestProvider::default());
     install_http_record(&flow, &server.base_url).await;
-    let error = flow
-        .exchange_offer("session", None, "offer", false)
-        .await
-        .unwrap_err();
+    let waiting = flow.clone();
+    let offer = tokio::spawn(async move {
+        waiting
+            .exchange_offer("session", None, "offer", false)
+            .await
+    });
+    server
+        .wait_for_count("GET /v5/sessions/home/session/sdp", 2)
+        .await;
+    // HTTP 握手完成后再推进虚拟时钟，保证期限验证由测试决定。
+    tokio::time::pause();
+    tokio::time::advance(std::time::Duration::from_millis(SIGNAL_TEST_TIMEOUT_MS)).await;
+    tokio::time::resume();
+    let error = finish_test_future(offer).await.unwrap().unwrap_err();
     assert_eq!(error.message, "operationTimeout:stage=exchangeOffer");
-    assert!(server.count("GET /v5/sessions/home/session/sdp") >= 1);
+    gate.release();
+    assert_eq!(server.count("GET /v5/sessions/home/session/sdp"), 2);
     assert!(flow.get_session("session").await.is_some());
     assert!(flow.close_session("session").await.is_ok());
 }
 
 #[tokio::test]
 async fn close_cancels_pending_sdp_and_does_not_wait_for_the_signal_lock() {
-    let server = TestServer::new(|request| {
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let server = TestServer::new(move |request| {
         (
             200,
             serde_json::json!({}),
-            if request.starts_with("GET") { 500 } else { 0 },
+            request.starts_with("GET").then(|| held.clone()),
         )
     })
     .await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     install_http_record(&flow, &server.base_url).await;
     let waiting = flow.clone();
     let offer = tokio::spawn(async move {
@@ -1069,27 +1178,25 @@ async fn close_cancels_pending_sdp_and_does_not_wait_for_the_signal_lock() {
             .await
     });
     server.wait_for("GET /v5/sessions/home/session/sdp").await;
-    assert!(tokio::time::timeout(
-        std::time::Duration::from_millis(100),
-        flow.close_session("session")
-    )
-    .await
-    .unwrap()
-    .is_ok());
-    assert!(offer
+    // GET 响应保持关闸，close 的完成证明撤销立即释放信令等待。
+    assert!(finish_test_future(flow.close_session("session"))
+        .await
+        .is_ok());
+    assert!(finish_test_future(offer)
         .await
         .unwrap()
         .unwrap_err()
         .message
         .starts_with("operationCancelled:"));
+    gate.release();
     assert!(flow.inner.signaling.read().await.is_empty());
 }
 
 #[tokio::test]
 async fn cleanup_revokes_local_resources_before_access_failure_and_can_retry_the_remote_stop() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
+    let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
     let provider = HttpTestProvider::default();
-    let flow = SessionFlowService::new(provider.clone());
+    let flow = http_test_flow(provider.clone());
     let cancelled = install_http_record(&flow, &server.base_url).await;
     flow.inner
         .signaling
@@ -1102,7 +1209,6 @@ async fn cleanup_revokes_local_resources_before_access_failure_and_can_retry_the
     assert!(flow.inner.sessions.read().await.keys().is_empty());
     assert!(flow.inner.signaling.read().await.is_empty());
     assert!(flow.inner.mutations.read().await.is_empty());
-    tokio::time::sleep(std::time::Duration::from_millis(1_010)).await;
     provider.fail_access.store(false, Ordering::SeqCst);
     assert!(flow.close_session("session").await.is_ok());
     assert_eq!(server.count("DELETE"), 1);
@@ -1111,28 +1217,37 @@ async fn cleanup_revokes_local_resources_before_access_failure_and_can_retry_the
 
 #[tokio::test]
 async fn concurrent_close_and_a_dropped_caller_share_one_independent_cleanup() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 50)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let server = TestServer::new(move |_| (200, serde_json::json!({}), Some(held.clone()))).await;
+    let flow = http_test_flow(HttpTestProvider::default());
     install_http_record(&flow, &server.base_url).await;
     let closing = flow.clone();
     let first = tokio::spawn(async move { closing.close_session("session").await });
     server.wait_for("DELETE").await;
     first.abort();
-    assert!(flow.close_session("session").await.is_ok());
+    let second = flow.close_session_inner("session", true);
+    tokio::pin!(second);
+    assert_pending(second.as_mut()).await;
+    gate.release();
+    assert!(finish_test_future(second).await.is_ok());
     assert_eq!(server.count("DELETE"), 1);
     assert!(flow.inner.cleanups.lock().await.is_empty());
 }
 
 #[tokio::test]
 async fn late_ice_from_a_replaced_session_cannot_write_signaling_state() {
-    let server = TestServer::new(|_| (200, serde_json::json!([{ "candidate": "candidate:1 1 UDP 1 127.0.0.1 5000 typ host", "sdpMid": "0", "sdpMLineIndex": 0 }]), 60)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let server = TestServer::new(move |_| (200, serde_json::json!([{ "candidate": "candidate:1 1 UDP 1 127.0.0.1 5000 typ host", "sdpMid": "0", "sdpMLineIndex": 0 }]), Some(held.clone()))).await;
+    let flow = http_test_flow(HttpTestProvider::default());
     let stale = install_http_record(&flow, &server.base_url).await;
     let polling = flow.clone();
     let response = tokio::spawn(async move { polling.poll_ice("session", false).await });
     server.wait_for("GET").await;
     let current = install_http_record(&flow, &server.base_url).await;
-    assert!(response.await.unwrap().is_err());
+    gate.release();
+    assert!(finish_test_future(response).await.unwrap().is_err());
     assert!(stale.is_cancelled());
     assert!(!current.is_cancelled());
     assert!(flow.inner.signaling.read().await.is_empty());
@@ -1146,9 +1261,9 @@ async fn ice_snapshot_dedup_preserves_new_end_markers_across_restart() {
     let server = TestServer::new(move |_| {
         let mut candidates = vec![serde_json::json!({"candidate":"candidate:1 1 UDP 1 127.0.0.1 5000 typ host", "sdpMid":"0", "sdpMLineIndex":0})];
         if counter.fetch_add(1, Ordering::SeqCst) >= 2 { candidates.push(serde_json::json!({"candidate":"end-of-candidates", "sdpMid":"0", "sdpMLineIndex":0})); }
-        (200, serde_json::json!({"exchangeResponse": serde_json::to_string(&candidates).unwrap()}), 0)
+        (200, serde_json::json!({"exchangeResponse": serde_json::to_string(&candidates).unwrap()}), None)
     }).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     install_http_record(&flow, &server.base_url).await;
     assert_eq!(flow.poll_ice("session", false).await.unwrap().len(), 1);
     assert!(flow.poll_ice("session", true).await.unwrap().is_empty());
@@ -1160,8 +1275,8 @@ async fn ice_snapshot_dedup_preserves_new_end_markers_across_restart() {
 
 #[tokio::test]
 async fn missing_create_result_blocks_a_new_post_for_the_same_target() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
+    let flow = http_test_flow(HttpTestProvider::default());
     let mut plan = Plan::default();
     plan.session.target = crate::policy::types::Target::Home;
     plan.session.base_url = server.base_url.clone();
@@ -1175,20 +1290,23 @@ async fn missing_create_result_blocks_a_new_post_for_the_same_target() {
 
 #[tokio::test]
 async fn cancelled_create_owns_its_late_response_and_closes_it_without_starting_loops() {
-    let server = TestServer::new(|request| {
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let server = TestServer::new(move |request| {
         if request.starts_with("POST") {
             (
                 200,
                 serde_json::json!({"sessionPath":"/v5/sessions/home/session"}),
-                60,
+                Some(held.clone()),
             )
         } else {
-            (200, serde_json::json!({}), 0)
+            (200, serde_json::json!({}), None)
         }
     })
     .await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     let scope = flow.begin_startup("attempt", "home", "console").unwrap();
+    let observed_scope = scope.clone();
     let mut plan = Plan::default();
     plan.session.target = crate::policy::types::Target::Home;
     plan.session.base_url = server.base_url.clone();
@@ -1200,8 +1318,18 @@ async fn cancelled_create_owns_its_late_response_and_closes_it_without_starting_
             .await
     });
     server.wait_for("POST").await;
-    flow.cancel_startup("attempt").await.unwrap();
-    assert!(request.await.unwrap().is_err());
+    let cancelling = flow.clone();
+    let cancellation = tokio::spawn(async move { cancelling.cancel_startup("attempt").await });
+    finish_test_future(observed_scope.run::<()>(
+        "cancellationObserved",
+        None,
+        std::future::pending(),
+    ))
+    .await
+    .unwrap_err();
+    gate.release();
+    finish_test_future(cancellation).await.unwrap().unwrap();
+    assert!(finish_test_future(request).await.unwrap().is_err());
     assert_eq!(server.count("DELETE"), 1);
     assert_eq!(server.count("GET"), 0);
     assert!(flow.inner.sessions.read().await.keys().is_empty());
@@ -1212,8 +1340,8 @@ async fn cancelled_create_owns_its_late_response_and_closes_it_without_starting_
 #[tokio::test]
 async fn playback_survives_180_seconds_of_remote_preparation_regression_then_closes_on_terminal_state(
 ) {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
+    let flow = http_test_flow(HttpTestProvider::default());
     let cancelled = install_http_record(&flow, &server.base_url).await;
     let mut record = flow.get_session_record("session").await.unwrap();
     for second in 0..=180 {
@@ -1267,8 +1395,8 @@ async fn playback_survives_180_seconds_of_remote_preparation_regression_then_clo
 async fn keepalive_status_classes_preserve_transient_failures_and_publish_real_terminal_facts() {
     for status in [400, 401, 404, 429, 500] {
         let server =
-            TestServer::new(move |_| (status, serde_json::json!({"code":"test"}), 0)).await;
-        let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+            TestServer::new(move |_| (status, serde_json::json!({"code":"test"}), None)).await;
+        let flow = http_test_flow(HttpTestProvider::default());
         let cancelled = install_http_record(&flow, &server.base_url).await;
         let mut record = flow.get_session_record("session").await.unwrap();
         record.snapshot.runtime.player_state = "started".to_owned();
@@ -1312,17 +1440,17 @@ async fn fifty_create_close_cycles_leave_remote_and_local_resources_empty() {
             (
                 200,
                 serde_json::json!({"sessionPath":"/v5/sessions/home/session"}),
-                0,
+                None,
             )
         } else if request.starts_with("DELETE") {
             assert_eq!(active.fetch_sub(1, Ordering::SeqCst), 1);
-            (200, serde_json::json!({}), 0)
+            (200, serde_json::json!({}), None)
         } else {
-            (200, serde_json::json!({"state":"Provisioned"}), 0)
+            (200, serde_json::json!({"state":"Provisioned"}), None)
         }
     })
     .await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     let mut plan = Plan::default();
     plan.session.target = crate::policy::types::Target::Home;
     plan.session.target_id = "console".to_owned();
@@ -1346,8 +1474,8 @@ async fn fifty_create_close_cycles_leave_remote_and_local_resources_empty() {
 
 #[tokio::test]
 async fn automatic_recreate_cleanup_preserves_startup_but_user_close_revokes_it() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
+    let flow = http_test_flow(HttpTestProvider::default());
     let scope = flow.begin_startup("attempt", "home", "console").unwrap();
     let cancelled = install_http_record(&flow, &server.base_url).await;
     scope.set_owned("session".to_owned(), cancelled);
@@ -1370,40 +1498,43 @@ async fn automatic_recreate_cleanup_preserves_startup_but_user_close_revokes_it(
 
 #[tokio::test]
 async fn failed_cleanup_is_reclaimed_after_access_recovers_without_user_retry() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
+    let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
     let provider = HttpTestProvider::default();
-    let flow = SessionFlowService::<Snapshot, _>::new(provider.clone());
+    let flow = http_test_flow(provider.clone());
     install_http_record(&flow, &server.base_url).await;
     provider.fail_access.store(true, Ordering::SeqCst);
     assert!(flow.close_session("session").await.is_err());
+    tokio::time::pause();
+    // 先让退避任务注册计时，再显式触发一秒后的首次重试。
+    tokio::task::yield_now().await;
     provider.fail_access.store(false, Ordering::SeqCst);
-    tokio::time::timeout(std::time::Duration::from_secs(4), async {
-        while !flow.inner.cleanups.lock().await.is_empty() {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
+    tokio::time::advance(std::time::Duration::from_secs(1)).await;
+    tokio::time::resume();
+    provider.wait_for_event("cleanupFinished").await;
+    assert!(flow.inner.cleanups.lock().await.is_empty());
     assert_eq!(server.count("DELETE"), 1);
     assert!(flow.inner.sessions.read().await.keys().is_empty());
 }
 
 #[tokio::test]
 async fn shutdown_waits_for_a_late_create_and_closes_its_remote_resource() {
-    let server = TestServer::new(|request| {
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let server = TestServer::new(move |request| {
         if request.starts_with("POST") {
             (
                 200,
                 serde_json::json!({"sessionPath":"/v5/sessions/home/session"}),
-                80,
+                Some(held.clone()),
             )
         } else {
-            (200, serde_json::json!({}), 0)
+            (200, serde_json::json!({}), None)
         }
     })
     .await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let flow = http_test_flow(HttpTestProvider::default());
     let scope = SessionStartupScope::default();
+    let observed_scope = scope.clone();
     let mut plan = Plan::default();
     plan.session.target = crate::policy::types::Target::Home;
     plan.session.base_url = server.base_url.clone();
@@ -1415,8 +1546,15 @@ async fn shutdown_waits_for_a_late_create_and_closes_its_remote_resource() {
             .await
     });
     server.wait_for("POST").await;
-    flow.shutdown().await;
-    assert!(request.await.unwrap().is_err());
+    let closing = flow.clone();
+    let shutdown = tokio::spawn(async move { closing.shutdown().await });
+    finish_test_future(observed_scope.run::<()>("shutdownObserved", None, std::future::pending()))
+        .await
+        .unwrap_err();
+    assert!(!shutdown.is_finished());
+    gate.release();
+    finish_test_future(shutdown).await.unwrap();
+    assert!(finish_test_future(request).await.unwrap().is_err());
     assert_eq!(server.count("DELETE"), 1);
     assert_eq!(server.count("GET"), 0);
     assert!(flow.inner.sessions.read().await.keys().is_empty());
@@ -1428,9 +1566,9 @@ async fn shutdown_waits_for_a_late_create_and_closes_its_remote_resource() {
 
 #[tokio::test]
 async fn cleanup_retry_task_releases_the_service_while_waiting_for_connectivity() {
-    let server = TestServer::new(|_| (200, serde_json::json!({}), 0)).await;
+    let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
     let provider = HttpTestProvider::default();
-    let flow = SessionFlowService::<Snapshot, _>::new(provider.clone());
+    let flow = http_test_flow(provider.clone());
     install_http_record(&flow, &server.base_url).await;
     let weak = Arc::downgrade(&flow.inner);
     provider.fail_access.store(true, Ordering::SeqCst);
@@ -1441,15 +1579,27 @@ async fn cleanup_retry_task_releases_the_service_while_waiting_for_connectivity(
 
 #[tokio::test]
 async fn concurrent_failed_closes_share_one_result_and_a_later_retry_uses_fresh_access() {
-    let server = TestServer::new(|_| (500, serde_json::json!({"message":"temporary"}), 60)).await;
-    let flow = SessionFlowService::<Snapshot, _>::new(HttpTestProvider::default());
+    let gate = ResponseGate::default();
+    let held = gate.clone();
+    let server = TestServer::new(move |_| {
+        (
+            500,
+            serde_json::json!({"message":"temporary"}),
+            Some(held.clone()),
+        )
+    })
+    .await;
+    let flow = http_test_flow(HttpTestProvider::default());
     install_http_record(&flow, &server.base_url).await;
     let closing = flow.clone();
     let first = tokio::spawn(async move { closing.close_session("session").await });
     server.wait_for("DELETE").await;
-    let second = flow.close_session("session").await;
-    assert!(first.await.unwrap().is_err());
-    assert!(second.is_err());
+    let second = flow.close_session_inner("session", true);
+    tokio::pin!(second);
+    assert_pending(second.as_mut()).await;
+    gate.release();
+    assert!(finish_test_future(second).await.is_err());
+    assert!(finish_test_future(first).await.unwrap().is_err());
     assert_eq!(server.count("DELETE"), 1);
     assert!(flow.close_session("session").await.is_err());
     assert_eq!(server.count("DELETE"), 2);

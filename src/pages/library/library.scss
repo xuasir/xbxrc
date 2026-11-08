@@ -35,8 +35,8 @@
 .library-game .library-caption { margin-top: 8px; }
 .library-list { display: flex; flex-direction: column; gap: 8px; }
 .library-row { display: flex; align-items: center; gap: var(--space-16); width: 100%; min-width: 0; padding: var(--space-12); border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-primary); text-align: left; font: inherit; cursor: pointer; scroll-margin: var(--ui-settings-focus-safe); }
-.library-row img, .library-thumb { width: 52px; height: 52px; object-fit: contain; border-radius: var(--ui-radius-md); flex-shrink: 0; }
-.library-row--person img { border-radius: 50%; }
+.library-row > img, .library-thumb { width: 52px; height: 52px; object-fit: contain; border-radius: var(--ui-radius-md); flex-shrink: 0; }
+.library-row--person > img, .library-row--person > .remote-image { border-radius: 50%; }
 .library-row__body { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .library-row__body strong { display: block; font-weight: var(--ui-font-weight-medium); font-size: var(--ui-text-body-md); line-height: var(--ui-line-height-default); }
 .library-row__body > .library-caption { display: block; margin-top: var(--space-4); }
@@ -51,7 +51,7 @@
 .library-metric__heading strong { margin: 0; font-size: var(--ui-text-title-md); }
 .library-metric--storage > .library-caption { margin-top: var(--space-8); }
 .library-detail-hero { display: flex; gap: 24px; align-items: flex-start; }
-.library-detail-hero img { width: min(32%, 176px); aspect-ratio: 1; object-fit: contain; border-radius: var(--ui-game-card-radius); }
+.library-detail-art { width: min(32%, 176px); aspect-ratio: 1; flex-shrink: 0; object-fit: contain; border-radius: var(--ui-game-card-radius); }
 .library-detail-hero h2 { font-size: var(--ui-text-body-lg); line-height: var(--ui-line-height-default); font-weight: var(--ui-font-weight-medium); overflow-wrap: anywhere; }
 .library-section-title { margin: 0; font-size: var(--ui-settings-section-title-size); line-height: var(--ui-line-height-relaxed); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-primary); }
 @media(max-width:700px) { .library-profile, .library-detail-hero { gap: 12px; } .library-header { flex-wrap: wrap; } .library-heading { flex-direction: column; gap: var(--space-4); } .library-profile__avatar { width: 48px; height: 48px; } .library-row { flex-wrap: wrap; gap: 12px; } .library-row__value { margin-left: auto; } }

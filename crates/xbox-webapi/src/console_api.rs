@@ -33,7 +33,7 @@ pub struct ConsoleApi {
 impl ConsoleApi {
     pub fn new(uhs: String, user_token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_commands(),
             uhs,
             user_token,
         }
@@ -70,6 +70,10 @@ impl ConsoleApi {
         command: &str,
         parameters: Option<serde_json::Value>,
     ) -> Result<ConsoleCommandResponse, WebApiError> {
+        let console_id = console_id.trim();
+        if console_id.is_empty() {
+            return Err(WebApiError::parse("missing console identity"));
+        }
         let headers = self.create_headers()?;
 
         let body = json!({
@@ -82,29 +86,29 @@ impl ConsoleApi {
             "linkedXboxId": console_id
         });
 
-        let _response = self
+        let response = self
             .transport
-            .post("https://xccs.xboxlive.com/commands", body, Some(headers))
+            .post_command("https://xccs.xboxlive.com/commands", body, Some(headers))
             .await?;
 
-        Ok(ConsoleCommandResponse { accepted: true })
+        parse_command_response(&response)
     }
 
     pub async fn power_on(&self, console_id: &str) -> Result<ConsolePowerResponse, WebApiError> {
         self.send_command(console_id, "Power", "WakeUp", None)
             .await
-            .map(|_| ConsolePowerResponse {
+            .map(|response| ConsolePowerResponse {
                 console_id: console_id.to_string(),
-                accepted: true,
+                accepted: response.accepted,
             })
     }
 
     pub async fn power_off(&self, console_id: &str) -> Result<ConsolePowerResponse, WebApiError> {
         self.send_command(console_id, "Power", "TurnOff", None)
             .await
-            .map(|_| ConsolePowerResponse {
+            .map(|response| ConsolePowerResponse {
                 console_id: console_id.to_string(),
-                accepted: true,
+                accepted: response.accepted,
             })
     }
 
@@ -119,9 +123,74 @@ impl ConsoleApi {
 
         self.send_command(console_id, "Shell", "InjectString", Some(parameters))
             .await
-            .map(|_| ConsoleTextResponse {
+            .map(|response| ConsoleTextResponse {
                 console_id: console_id.to_string(),
-                accepted: true,
+                accepted: response.accepted,
             })
+    }
+}
+
+fn parse_command_response(
+    response: &serde_json::Value,
+) -> Result<ConsoleCommandResponse, WebApiError> {
+    crate::smartglass_api::validate_remote_management_response(response)?;
+    if response.is_null() {
+        return Ok(ConsoleCommandResponse { accepted: true });
+    }
+    let object = response
+        .as_object()
+        .ok_or_else(|| WebApiError::parse("invalid console command response"))?;
+    let value = match object.get("accepted") {
+        Some(value) => Some(value),
+        None => match object.get("data") {
+            Some(value) => value
+                .as_object()
+                .ok_or_else(|| WebApiError::parse("invalid console command response data"))?
+                .get("accepted"),
+            None => None,
+        },
+    };
+    let accepted = value
+        .map(|value| {
+            value
+                .as_bool()
+                .ok_or_else(|| WebApiError::parse("invalid console command acceptance"))
+        })
+        .transpose()?
+        .unwrap_or(true);
+    Ok(ConsoleCommandResponse { accepted })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_command_response;
+    use serde_json::json;
+
+    #[test]
+    fn preserves_command_acceptance_and_bodyless_success() {
+        for response in [json!(null), json!({}), json!({"accepted": true})] {
+            assert!(parse_command_response(&response).unwrap().accepted);
+        }
+        for response in [
+            json!({"accepted": false}),
+            json!({"data": {"accepted": false}}),
+        ] {
+            assert!(!parse_command_response(&response).unwrap().accepted);
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_command_responses() {
+        for response in [
+            json!([]),
+            json!(true),
+            json!({"accepted": null}),
+            json!({"accepted": "false"}),
+            json!({"data": {"accepted": 1}}),
+            json!({"data": []}),
+            json!({"accepted": true, "status": {"errorCode": "Forbidden"}}),
+        ] {
+            assert!(parse_command_response(&response).is_err());
+        }
     }
 }

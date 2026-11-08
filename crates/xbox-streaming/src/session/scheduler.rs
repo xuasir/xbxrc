@@ -369,7 +369,11 @@ where
         let token = StreamingToken::parse(&token_value)
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
-        Ok(WebApiSessionGateway::new(plan.clone(), token))
+        Ok(WebApiSessionGateway::with_transport(
+            self.inner.transport.clone(),
+            plan.clone(),
+            token,
+        ))
     }
 }
 

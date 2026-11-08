@@ -69,6 +69,22 @@ pub struct DataCacheRepository {
     memory_overlay_cache: Mutex<HashMap<String, CachedXcloudCatalogOverlaySnapshot>>,
 }
 
+fn scoped_profile_settings(value: &Value, account_scope: Option<&str>) -> HashMap<String, String> {
+    let Some(scope) = account_scope.filter(|scope| !scope.is_empty()) else {
+        return HashMap::new();
+    };
+    if value.get("accountScope").and_then(Value::as_str) != Some(scope) {
+        return HashMap::new();
+    }
+    value
+        .get("settings")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_string())))
+        .collect()
+}
+
 impl DataCacheRepository {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
@@ -78,16 +94,21 @@ impl DataCacheRepository {
         }
     }
 
-    pub fn save_cached_profile(&self, profile: &DataUserProfile) -> Result<(), String> {
+    pub fn save_cached_profile(
+        &self,
+        account_scope: &str,
+        profile: &DataUserProfile,
+    ) -> Result<(), String> {
         let mut profile_patch = Map::new();
         for (key, value) in &profile.settings {
             profile_patch.insert(key.clone(), Value::String(value.clone()));
         }
 
         let store = self.settings_store.open_write()?;
-        store
-            .store()
-            .set(PROFILE_CACHE_KEY, Value::Object(profile_patch));
+        store.store().set(
+            PROFILE_CACHE_KEY,
+            json!({ "accountScope": account_scope, "settings": profile_patch }),
+        );
         store.save()
     }
 
@@ -97,19 +118,15 @@ impl DataCacheRepository {
         store.save()
     }
 
-    pub fn get_cached_profile(&self, app_level: u32) -> Result<DataUserProfile, String> {
+    pub fn get_cached_profile(
+        &self,
+        account_scope: Option<&str>,
+        app_level: u32,
+    ) -> Result<DataUserProfile, String> {
         let store = self.settings_store.open_read()?;
 
         let settings_value = store.store().get(PROFILE_CACHE_KEY).unwrap_or(Value::Null);
-        let mut settings = HashMap::new();
-
-        if let Some(object) = settings_value.as_object() {
-            for (key, value) in object {
-                if let Some(value_str) = value.as_str() {
-                    settings.insert(key.to_string(), value_str.to_string());
-                }
-            }
-        }
+        let settings = scoped_profile_settings(&settings_value, account_scope);
 
         let gamertag = settings.get("Gamertag").cloned().unwrap_or_default();
 
@@ -398,21 +415,18 @@ impl DataCacheRepository {
         Option<CachedXcloudCatalogBaseSnapshot>,
         Option<CachedXcloudCatalogOverlaySnapshot>,
     )> {
-        let suffix = Self::compatible_scope_suffix(scope);
+        let expected_stem = Self::scoped_cache_key(scope);
         let entries = store.store().entries();
-        let (stem, overlay_snapshot, base_snapshot) =
-            Self::select_compatible_catalog_pair_from_entries(&entries, &suffix)?;
+        let (_stem, overlay_snapshot, base_snapshot) =
+            Self::select_compatible_catalog_pair_from_entries(&entries, &expected_stem)?;
 
-        log::info!(
-            "[Data][xcloud] using compatible catalog cache fallback stem={}",
-            stem
-        );
+        log::info!("[Data][xcloud] using scoped catalog cache fallback");
         Some((base_snapshot, Some(overlay_snapshot)))
     }
 
     fn select_compatible_catalog_pair_from_entries(
         entries: &[(String, Value)],
-        suffix: &str,
+        expected_stem: &str,
     ) -> Option<(
         String,
         CachedXcloudCatalogOverlaySnapshot,
@@ -428,7 +442,8 @@ impl DataCacheRepository {
             let Some(stem) = key.strip_suffix(".overlay") else {
                 continue;
             };
-            if !stem.starts_with(XCLOUD_CATALOG_CACHE_PREFIX) || !stem.ends_with(&suffix) {
+            // 最近游玩与资格 overlay 按完整账户范围匹配；商品基础资料继续复用独立缓存。
+            if stem != expected_stem {
                 continue;
             }
 
@@ -637,8 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn compatible_catalog_fallback_selects_latest_renderable_overlay() {
-        let suffix = ".wus-core-gssv-play-prod-xboxlive-com.en-US.US";
+    fn catalog_overlay_fallback_preserves_account_and_region_scope() {
         let old_stem =
             "data.xcloudCatalog.v2.old-user.wus-core-gssv-play-prod-xboxlive-com.en-US.US";
         let new_stem =
@@ -717,7 +731,7 @@ mod tests {
         ];
 
         let (stem, overlay, base) =
-            DataCacheRepository::select_compatible_catalog_pair_from_entries(&entries, suffix)
+            DataCacheRepository::select_compatible_catalog_pair_from_entries(&entries, new_stem)
                 .expect("compatible overlay should be selected");
 
         assert_eq!(stem, new_stem);
@@ -728,6 +742,13 @@ mod tests {
                 .get("NEW")
                 .map(|entry| entry.name.as_str()),
             Some("Newest")
+        );
+        assert!(
+            DataCacheRepository::select_compatible_catalog_pair_from_entries(
+                &entries,
+                "data.xcloudCatalog.v2.missing-user.wus-core-gssv-play-prod-xboxlive-com.en-US.US",
+            )
+            .is_none()
         );
     }
 
@@ -743,5 +764,21 @@ mod tests {
         let scoped_key = DataCacheRepository::scoped_cache_key(&scope);
         assert!(scoped_key.contains("user-1"));
         assert!(scoped_key.contains("eastus-xbox-com"));
+    }
+
+    #[test]
+    fn profile_cache_requires_matching_account_and_ignores_legacy_unscoped_data() {
+        let cached = json!({"accountScope":"account-a", "settings":{"Gamertag":"Alpha"}});
+        assert_eq!(
+            scoped_profile_settings(&cached, Some("account-a"))
+                .get("Gamertag")
+                .map(String::as_str),
+            Some("Alpha")
+        );
+        assert!(scoped_profile_settings(&cached, Some("account-b")).is_empty());
+        assert!(scoped_profile_settings(&cached, None).is_empty());
+        assert!(
+            scoped_profile_settings(&json!({"Gamertag":"Legacy"}), Some("account-a")).is_empty()
+        );
     }
 }

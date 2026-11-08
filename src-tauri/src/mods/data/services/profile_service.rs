@@ -2,7 +2,7 @@ use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::types::{DataSessionContext, DataUserProfile};
 use serde_json::Value;
 use std::collections::HashMap;
-use xbox_webapi::ProfileApi;
+use xbox_webapi::{library_image_url, ProfileApi, WebApiError};
 
 pub struct ProfileService;
 
@@ -14,16 +14,13 @@ impl ProfileService {
     pub async fn fetch_profile(
         &self,
         session: &DataSessionContext,
-    ) -> Result<DataUserProfile, String> {
+    ) -> Result<DataUserProfile, WebApiError> {
         let Some(claims) = resolve_web_token_claims(&session.web_token) else {
-            return Err("Missing web token claims".to_string());
+            return Err(WebApiError::auth("登录信息暂不可用，请重新登录"));
         };
         let profile_api = ProfileApi::new(claims.uhs, claims.user_token);
 
-        let response = profile_api
-            .get_current_user()
-            .await
-            .map_err(|e| e.to_string())?;
+        let response = profile_api.get_current_user().await?;
         let settings = extract_profile_settings(&response).unwrap_or_default();
 
         let mut settings_map = HashMap::new();
@@ -39,7 +36,9 @@ impl ProfileService {
 
         // 防御：若响应结构异常，不覆盖已有缓存，避免把已登录态资料写空。
         if settings_map.is_empty() {
-            return Err("Invalid profile response: empty settings".to_string());
+            return Err(WebApiError::parse(
+                "invalid profile response: empty settings",
+            ));
         }
 
         Ok(DataUserProfile {
@@ -50,7 +49,7 @@ impl ProfileService {
                 .unwrap_or_default(),
             game_display_pic_raw: settings_map
                 .get("GameDisplayPicRaw")
-                .cloned()
+                .and_then(|url| library_image_url(Some(&Value::String(url.clone()))))
                 .unwrap_or_default(),
             gamertag: settings_map.get("Gamertag").cloned().unwrap_or_default(),
             gamerscore: settings_map.get("Gamerscore").cloned().unwrap_or_default(),

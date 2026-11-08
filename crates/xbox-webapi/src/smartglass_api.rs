@@ -19,7 +19,7 @@ pub struct SmartglassApi {
 impl SmartglassApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }
@@ -63,18 +63,7 @@ impl SmartglassApi {
         console_id: &str,
         query: bool,
     ) -> Result<serde_json::Value, WebApiError> {
-        if console_id.trim().is_empty() {
-            return Err(WebApiError::parse("missing console identity"));
-        }
-        let mut url = reqwest::Url::parse(&format!("https://xccs.xboxlive.com/{path}"))
-            .map_err(|e| WebApiError::parse(e.to_string()))?;
-        if query {
-            url.query_pairs_mut().append_pair("deviceId", console_id);
-        } else {
-            url.path_segments_mut()
-                .map_err(|_| WebApiError::parse("invalid console URL"))?
-                .push(console_id);
-        }
+        let url = console_query_url(path, console_id, query)?;
         let headers = HttpTransport::create_header_map(&[
             ("Authorization", &self.authorization_header()),
             ("Accept", "application/json"),
@@ -82,7 +71,9 @@ impl SmartglassApi {
             ("x-xbl-contract-version", "4"),
             ("skillplatform", "RemoteManagement"),
         ])?;
-        self.transport.get(url.as_str(), Some(headers)).await
+        let response = self.transport.get(url.as_str(), Some(headers)).await?;
+        validate_remote_management_response(&response)?;
+        Ok(response)
     }
 
     pub async fn get_consoles_list(&self) -> Result<serde_json::Value, WebApiError> {
@@ -103,6 +94,87 @@ impl SmartglassApi {
             )
             .await?;
 
+        validate_remote_management_response(&response)?;
         Ok(response)
     }
 }
+
+fn console_query_url(
+    path: &str,
+    console_id: &str,
+    query: bool,
+) -> Result<reqwest::Url, WebApiError> {
+    let console_id = console_id.trim();
+    if console_id.is_empty() {
+        return Err(WebApiError::parse("missing console identity"));
+    }
+    let mut url = reqwest::Url::parse(&format!("https://xccs.xboxlive.com/{path}"))
+        .map_err(|_| WebApiError::parse("invalid console URL"))?;
+    if query {
+        url.query_pairs_mut().append_pair("deviceId", console_id);
+    } else {
+        url.path_segments_mut()
+            .map_err(|_| WebApiError::parse("invalid console URL"))?
+            .push(console_id);
+    }
+    Ok(url)
+}
+
+pub(crate) fn validate_remote_management_response(
+    response: &serde_json::Value,
+) -> Result<(), WebApiError> {
+    let root = response.get("data").unwrap_or(response);
+    let Some(status) = root.get("status") else {
+        return Ok(());
+    };
+    let code = status
+        .get("errorCode")
+        .and_then(|value| match value {
+            serde_json::Value::String(value) => Some(value.trim().to_string()),
+            serde_json::Value::Number(value) => Some(value.to_string()),
+            _ => None,
+        })
+        .ok_or_else(|| WebApiError::parse("invalid remote management status"))?;
+    // XCCS 的实际成功响应使用 OK，历史版本也返回 0 / Success。
+    if code == "0" || code.eq_ignore_ascii_case("success") || code.eq_ignore_ascii_case("ok") {
+        return Ok(());
+    }
+    let service_code = crate::error::sanitize_service_code(&code);
+    let http_status = code
+        .parse::<u16>()
+        .ok()
+        .filter(|status| (400..=599).contains(status))
+        .or_else(|| match service_code.as_deref() {
+            Some(
+                "Unauthorized"
+                | "InvalidToken"
+                | "TokenExpired"
+                | "ExpiredToken"
+                | "InvalidAuthenticationToken",
+            ) => Some(401),
+            Some(
+                "Forbidden"
+                | "OfferingAccessDenied"
+                | "UnsupportedCountry"
+                | "UnsupportedRegion"
+                | "SubscriptionRequired",
+            ) => Some(403),
+            Some("NotFound") => Some(404),
+            Some("TooManyRequests") => Some(429),
+            Some("ServiceUnavailable") => Some(503),
+            _ => None,
+        });
+    match (http_status, service_code) {
+        (Some(status), Some(code)) => Err(WebApiError::http_with_code(
+            status,
+            code,
+            "remote management rejected",
+        )),
+        (Some(status), None) => Err(WebApiError::http(status, "remote management rejected")),
+        _ => Err(WebApiError::parse("主机远程管理查询暂不可用")),
+    }
+}
+
+#[cfg(test)]
+#[path = "smartglass_api.test.rs"]
+mod tests;

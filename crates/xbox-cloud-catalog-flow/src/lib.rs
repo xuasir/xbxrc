@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
+use tokio::time::{timeout_at, Instant};
 use xbox_webapi::{GamePassApi, WebApiError, XcloudApi};
 
 pub const GAME_PASS_NEWEST_SIGL_ID: &str = "f13cf6b4-57e6-4459-89df-6aec18cf0538";
@@ -52,12 +54,27 @@ pub struct CloudCatalogOverlayLoad {
     pub entries: Vec<CloudCatalogOverlayEntry>,
     pub recent_source_available: bool,
     pub newest_source_available: bool,
+    pub source_failures: Vec<CloudCatalogSourceFailure>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CloudCatalogHydrationLoad {
     pub entries: HashMap<String, CloudCatalogBaseEntry>,
     pub failed_chunk_count: usize,
+    pub source_failures: Vec<CloudCatalogSourceFailure>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloudCatalogSourceFailure {
+    pub source: &'static str,
+    pub error: Value,
+}
+
+fn source_failure(source: &'static str, error: &WebApiError) -> CloudCatalogSourceFailure {
+    CloudCatalogSourceFailure {
+        source,
+        error: error.safe_summary(),
+    }
 }
 
 pub struct XboxCloudCatalogFlow {
@@ -78,30 +95,46 @@ impl XboxCloudCatalogFlow {
         scope: &CloudCatalogScope,
     ) -> Result<CloudCatalogOverlayLoad, CloudCatalogFlowError> {
         let streaming_titles_response = self.xcloud_api.get_titles().await?;
-        let (recent_titles_response, recent_source_available) = match self
-            .xcloud_api
-            .get_recent_titles(DEFAULT_RECENT_TITLE_LIMIT)
-            .await
-        {
-            Ok(response) => (response, true),
-            Err(_) => (json!({ "results": [] }), false),
-        };
-        let (newest_titles_response, newest_source_available) = match self
-            .gamepass_api
-            .get_sigl(GAME_PASS_NEWEST_SIGL_ID, &scope.market, &scope.language)
-            .await
-        {
-            Ok(response) => (response, true),
-            Err(_) => (json!([]), false),
-        };
-
-        Ok(build_overlay_load(
+        extract_streaming_titles(&streaming_titles_response)?;
+        let (recent, newest) = tokio::join!(
+            self.xcloud_api
+                .get_recent_titles(DEFAULT_RECENT_TITLE_LIMIT),
+            self.gamepass_api
+                .get_sigl(GAME_PASS_NEWEST_SIGL_ID, &scope.market, &scope.language),
+        );
+        let mut failures = Vec::new();
+        let recent = recent.and_then(|value| {
+            if value.get("results").is_some_and(Value::is_array) {
+                Ok(value)
+            } else {
+                Err(WebApiError::parse("invalid recent titles response"))
+            }
+        });
+        let newest = newest.and_then(|value| {
+            if value.is_array() {
+                Ok(value)
+            } else {
+                Err(WebApiError::parse("invalid Game Pass SIGL response"))
+            }
+        });
+        if let Err(error) = &recent {
+            failures.push(source_failure("recentTitles", error));
+        }
+        if let Err(error) = &newest {
+            failures.push(source_failure("newestSigl", error));
+        }
+        let mut load = build_overlay_load(
             &streaming_titles_response,
-            &recent_titles_response,
-            &newest_titles_response,
-            recent_source_available,
-            newest_source_available,
-        ))
+            &recent
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|_| json!({ "results": [] })),
+            &newest.as_ref().cloned().unwrap_or_else(|_| json!([])),
+            recent.is_ok(),
+            newest.is_ok(),
+        )?;
+        load.source_failures = failures;
+        Ok(load)
     }
 
     pub async fn hydrate_products(
@@ -119,14 +152,92 @@ pub async fn hydrate_catalog_products(
     scope: &CloudCatalogScope,
     product_ids: &[String],
 ) -> CloudCatalogHydrationLoad {
+    hydrate_catalog_products_with_budget(api, scope, product_ids, Duration::from_secs(30)).await
+}
+
+/// 预算耗尽时保留已经完成的商品批次，供主机封面等可选资料渐进显示。
+pub async fn hydrate_catalog_products_with_budget(
+    api: &GamePassApi,
+    scope: &CloudCatalogScope,
+    product_ids: &[String],
+    budget: Duration,
+) -> CloudCatalogHydrationLoad {
+    let api = api.clone();
+    let scope = scope.clone();
+    hydrate_product_chunks_with_budget(product_ids, budget, move |chunk| {
+        let api = api.clone();
+        let scope = scope.clone();
+        async move {
+            api.get_products(&chunk, &scope.market, &scope.language)
+                .await
+        }
+    })
+    .await
+}
+
+async fn hydrate_product_chunks_with_budget<F, Fut>(
+    product_ids: &[String],
+    budget: Duration,
+    mut query: F,
+) -> CloudCatalogHydrationLoad
+where
+    F: FnMut(Vec<String>) -> Fut,
+    Fut: std::future::Future<Output = Result<Value, WebApiError>> + Send + 'static,
+{
     let mut load = CloudCatalogHydrationLoad::default();
-    for chunk in chunk_product_ids(product_ids, PRODUCT_HYDRATION_CHUNK_SIZE) {
-        match api
-            .get_products(&chunk, &scope.market, &scope.language)
-            .await
-        {
-            Ok(response) => load.entries.extend(extract_product_entries(&response)),
-            Err(_) => load.failed_chunk_count += 1,
+    let ids = unique_strings(
+        product_ids
+            .iter()
+            .filter_map(|id| normalize_product_id(Some(id)))
+            .collect(),
+    );
+    let chunks = chunk_product_ids(&ids, PRODUCT_HYDRATION_CHUNK_SIZE);
+    let deadline = Instant::now() + budget;
+    let mut completed = 0;
+    let mut next = chunks.into_iter();
+    let total = next.len();
+    let mut tasks = tokio::task::JoinSet::new();
+    loop {
+        while tasks.len() < 4 {
+            let Some(chunk) = next.next() else {
+                break;
+            };
+            let response = query(chunk);
+            tasks.spawn(async move {
+                let response = response.await?;
+                if !response
+                    .get("Products")
+                    .is_some_and(|value| value.is_array() || value.is_object())
+                {
+                    return Err(WebApiError::parse("invalid Game Pass products response"));
+                }
+                Ok(extract_product_entries(&response))
+            });
+        }
+        if tasks.is_empty() {
+            break;
+        }
+        let result = match timeout_at(deadline, tasks.join_next()).await {
+            Ok(Some(result)) => result,
+            _ => {
+                load.failed_chunk_count += total - completed;
+                load.source_failures.push(source_failure(
+                    "products",
+                    &WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Timeout),
+                ));
+                break;
+            }
+        };
+        completed += 1;
+        match result.unwrap_or_else(|_| Err(WebApiError::network("product query canceled"))) {
+            Ok(entries) => load.entries.extend(entries),
+            Err(error) => {
+                load.failed_chunk_count += 1;
+                if load.source_failures.len() < 8 {
+                    load.source_failures
+                        .push(source_failure("products", &error));
+                }
+            }
         }
     }
     load
@@ -138,8 +249,8 @@ fn build_overlay_load(
     newest_response: &Value,
     recent_source_available: bool,
     newest_source_available: bool,
-) -> CloudCatalogOverlayLoad {
-    let streaming_titles = extract_streaming_titles(streaming_response);
+) -> Result<CloudCatalogOverlayLoad, WebApiError> {
+    let streaming_titles = extract_streaming_titles(streaming_response)?;
     let product_ids = unique_strings(
         streaming_titles
             .iter()
@@ -169,20 +280,21 @@ fn build_overlay_load(
         .filter(|entry| !entry.stream_title_id.is_empty())
         .collect();
 
-    CloudCatalogOverlayLoad {
+    Ok(CloudCatalogOverlayLoad {
         product_ids,
         entries,
         recent_source_available,
         newest_source_available,
-    }
+        source_failures: Vec::new(),
+    })
 }
 
-fn extract_streaming_titles(raw_response: &Value) -> Vec<Value> {
-    raw_response
+fn extract_streaming_titles(raw_response: &Value) -> Result<Vec<Value>, WebApiError> {
+    Ok(raw_response
         .get("results")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
+        .ok_or_else(|| WebApiError::parse("invalid cloud catalog titles response"))?
+        .clone()
         .into_iter()
         .filter(|item| {
             normalize_product_id(
@@ -192,7 +304,7 @@ fn extract_streaming_titles(raw_response: &Value) -> Vec<Value> {
             )
             .is_some()
         })
-        .collect()
+        .collect())
 }
 
 fn build_live_title_map(streaming_titles: &[Value]) -> HashMap<String, Value> {
@@ -472,7 +584,7 @@ mod tests {
         let recent = json!({ "results": [{ "details": { "productId": "9AbC" } }] });
         let newest = json!([{ "id": "9def" }]);
 
-        let load = build_overlay_load(&streaming, &recent, &newest, true, true);
+        let load = build_overlay_load(&streaming, &recent, &newest, true, true).unwrap();
 
         assert_eq!(load.product_ids, vec!["9ABC", "9DEF", "9DROP"]);
         assert_eq!(load.entries.len(), 2);
@@ -537,3 +649,7 @@ mod tests {
         assert_eq!(chunks[1].len(), 1);
     }
 }
+
+#[cfg(test)]
+#[path = "hydration.test.rs"]
+mod hydration_tests;

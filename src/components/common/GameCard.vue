@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Direction } from '@/navigation/core'
-import { ref, watch } from 'vue'
 import { Focusable } from '@/navigation/core/vue'
+import RemoteImage from './RemoteImage.vue'
 
 type SpatialNavNeighbors = Partial<Record<Direction, string>>
 
@@ -33,10 +33,6 @@ const props = withDefaults(defineProps<GameCardProps>(), {
 const emit = defineEmits<{
   (event: 'select'): void
 }>()
-const imageFailed = ref(false)
-watch(() => props.imageUrl, () => {
-  imageFailed.value = false
-})
 
 // 统一收敛点击和确认事件，页面层只处理一次选择回调。
 function handleSelect(): void {
@@ -56,16 +52,10 @@ function handleSelect(): void {
     @click="handleSelect"
   >
     <span class="game-card__image-shell">
-      <img
-        v-if="props.imageUrl && !imageFailed"
+      <RemoteImage
         class="game-card__image"
-        :src="props.imageUrl || undefined"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        aria-hidden="true"
-        @error="imageFailed = true"
-      >
+        :src="props.imageUrl"
+      />
       <span class="game-card__title-overlay">
         <span class="game-card__title-text">{{ props.title }}</span>
       </span>

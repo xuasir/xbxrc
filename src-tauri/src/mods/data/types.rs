@@ -124,8 +124,11 @@ pub enum DataXcloudCatalogCacheState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudCatalogPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope_key: Option<String>,
     pub titles: Vec<DataXcloudTitleSummary>,
     pub cache_state: DataXcloudCatalogCacheState,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<u64>,
     pub refreshing: bool,
 }
@@ -133,8 +136,10 @@ pub struct DataXcloudCatalogPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudCatalogUpdatedEvent {
+    pub scope_key: String,
     pub titles: Vec<DataXcloudTitleSummary>,
     pub cache_state: DataXcloudCatalogCacheState,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<u64>,
     pub refreshing: bool,
     pub reason: String,

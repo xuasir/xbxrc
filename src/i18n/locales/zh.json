@@ -2,6 +2,7 @@
   "hello": "你好",
   "home": "首页",
   "homePage": {
+    "errorTitle": "主机暂时无法加载",
     "loading": "正在获取主机列表...",
     "railTitle": "我的主机",
     "railHint": "共发现 {count} 台主机",

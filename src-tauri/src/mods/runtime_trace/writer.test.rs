@@ -1,11 +1,12 @@
 use super::*;
 
-fn root() -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "xbxrc-trace-writer-{}-{}",
-        std::process::id(),
-        TRACE_FILE_ID.fetch_add(1, Ordering::Relaxed)
-    ))
+fn root() -> (tempfile::TempDir, PathBuf) {
+    let directory = tempfile::Builder::new()
+        .prefix("xbxrc-trace-writer-")
+        .tempdir()
+        .unwrap();
+    let root = directory.path().join("writer");
+    (directory, root)
 }
 
 fn config(generation: u64, max_file_bytes: u64) -> OutputConfig {
@@ -74,7 +75,7 @@ fn stalled_writer_admission_preserves_priority_reserves_and_never_exceeds_hard_b
 
 #[test]
 fn concurrent_rows_rotate_in_writer_order_and_shutdown_flushes_every_accepted_row() {
-    let root = root();
+    let (_directory, root) = root();
     let writer = Arc::new(WriterHandle::new(root.clone(), "concurrent-test".to_string()).unwrap());
     assert!(!root.exists());
     writer
@@ -114,12 +115,11 @@ fn concurrent_rows_rotate_in_writer_order_and_shutdown_flushes_every_accepted_ro
     for entry in read_dir(&root).unwrap().flatten() {
         assert!(entry.metadata().unwrap().len() <= 4096);
     }
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn failed_configuration_keeps_old_output_and_reports_mismatched_generation() {
-    let root = root();
+    let (_directory, root) = root();
     let writer = WriterHandle::new(root.clone(), "config-test".to_string()).unwrap();
     writer
         .configure(config(1, 4096), "initial")
@@ -158,12 +158,11 @@ fn failed_configuration_keeps_old_output_and_reports_mismatched_generation() {
     assert_eq!(notice["payload"]["essentialDropped"], 1);
     assert_eq!(notice["payload"]["configurationDropped"], 1);
     drop(writer);
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn failed_write_conservatively_charges_the_entire_row_to_file_budget() {
-    let root = root();
+    let (_directory, root) = root();
     create_dir_all(&root).unwrap();
     let path = root.join("readonly.jsonl");
     std::fs::write(&path, "").unwrap();
@@ -186,12 +185,11 @@ fn failed_write_conservatively_charges_the_entire_row_to_file_budget() {
     assert_eq!(writer.bytes_written, attempted);
     assert!(writer.bytes_written <= 4096);
     drop(writer);
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
 fn prune_retains_active_file_and_ignores_unrelated_files() {
-    let root = root();
+    let (_directory, root) = root();
     create_dir_all(&root).unwrap();
     for index in 0..6 {
         std::fs::write(root.join(format!("runtime-trace-1-{index}.jsonl")), "{}\n").unwrap();
@@ -202,5 +200,4 @@ fn prune_retains_active_file_and_ignores_unrelated_files() {
     assert!(active.exists());
     assert!(root.join("unrelated.txt").exists());
     assert_eq!(read_dir(&root).unwrap().count(), 3);
-    std::fs::remove_dir_all(root).unwrap();
 }

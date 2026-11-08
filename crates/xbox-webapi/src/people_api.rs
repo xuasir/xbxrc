@@ -10,7 +10,7 @@ pub struct PeopleApi {
 impl PeopleApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }
@@ -38,6 +38,9 @@ impl PeopleApi {
             ),
             ("Accept", "application/json"),
             ("Content-Type", "application/json"),
+            // PeopleHub 明确要求合同版本，当前服务版本为 7。
+            ("x-xbl-contract-version", "7"),
+            ("Accept-Language", "en-US"),
         ])
     }
 }
@@ -61,5 +64,14 @@ mod tests {
     #[test]
     fn counts_people() {
         assert_eq!(parse_friends_count(&json!({"people":[{},{}]})), Some(2));
+    }
+
+    #[test]
+    fn friends_request_supplies_current_contract_and_language() {
+        let headers = PeopleApi::new("hash".into(), "token".into())
+            .headers()
+            .unwrap();
+        assert_eq!(headers["x-xbl-contract-version"], "7");
+        assert_eq!(headers["accept-language"], "en-US");
     }
 }

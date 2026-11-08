@@ -2,6 +2,7 @@
 import type { LibraryMedia, LibraryPage, MediaKind, QueryResult } from '@/shared/rpc/library'
 import { computed, onDeactivated, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingModalShell from '@/components/settings/SettingModalShell.vue'
 import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
@@ -166,7 +167,7 @@ function openGame() {
     </div>
     <div class="album-grid">
       <Focusable v-for="item in visible" :id="`album.${item.kind}.${item.id}`" :key="`${item.kind}:${item.id}`" as="button" type="button" class="album-card" :aria-label="`${item.titleName} ${item.kind === 'clip' ? '录像' : '截图'}`" @click="open(item)">
-        <span class="album-card__media"><img v-if="item.thumbnailUrl" :src="item.thumbnailUrl" alt="" loading="lazy"><span v-else class="album-card__placeholder">{{ item.titleName }}</span><span v-if="item.kind === 'clip'" class="album-card__duration">▶ {{ item.durationSeconds ?? '—' }} 秒</span></span><strong>{{ item.titleName }}</strong><span class="library-caption">{{ formatDate(item.capturedAt) }}</span>
+        <span class="album-card__media"><RemoteImage class="album-card__art" :src="item.thumbnailUrl" /><span v-if="item.kind === 'clip'" class="album-card__duration">▶ {{ item.durationSeconds ?? '—' }} 秒</span></span><strong>{{ item.titleName }}</strong><span class="library-caption">{{ formatDate(item.capturedAt) }}</span>
       </Focusable>
     </div>
     <p v-if="busy" class="library-state" role="status">
@@ -206,8 +207,7 @@ function openGame() {
 .album-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr)); gap:16px; }
 .album-card { padding:0; min-width:0; background:transparent; border:1px solid transparent; border-radius:var(--ui-radius-md); text-align:left; color:var(--color-text-primary); cursor:pointer; }
 .album-card__media { display:block; position:relative; aspect-ratio:16/9; overflow:hidden; border-radius:var(--ui-radius-md); background:var(--ui-material-glass); }
-.album-card__media img { width:100%; height:100%; object-fit:contain; }
-.album-card__placeholder { display:grid; place-items:center; width:100%; height:100%; color:var(--color-text-secondary); }
+.album-card__art { width:100%; height:100%; }
 .album-card__duration { position:absolute; right:8px; bottom:8px; color:var(--color-text-on-media); background:color-mix(in srgb,var(--neutral-0) 88%,transparent); padding:4px 8px; border-radius:var(--ui-radius-md); font-size:var(--ui-text-body-sm); line-height:var(--ui-line-height-default); font-weight:var(--ui-font-weight-medium); }
 .album-card strong { display:block; font-size:var(--ui-text-body-md); line-height:var(--ui-line-height-default); font-weight:var(--ui-font-weight-medium); margin:8px 0 4px; overflow-wrap:anywhere; }
 .album-card[data-focused='true'] { box-shadow:var(--shadow-xbox-focus); }

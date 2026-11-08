@@ -1,6 +1,4 @@
-use crate::{
-    parse_media_page, HttpTransport, LibraryMedia, LibraryPage, MediaKind, RetryMode, WebApiError,
-};
+use crate::{parse_media_page, HttpTransport, LibraryMedia, LibraryPage, MediaKind, WebApiError};
 use serde_json::json;
 
 pub struct MediaApi {
@@ -11,7 +9,7 @@ pub struct MediaApi {
 impl MediaApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::with_retry_mode(RetryMode::Always),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }
@@ -32,7 +30,10 @@ impl MediaApi {
             ("Content-Type", "application/json"),
             ("x-xbl-contract-version", "3"),
         ])?;
-        let response = self.transport.post(&url, body, Some(headers)).await?;
+        let response = self
+            .transport
+            .post_paginated(&url, body, Some(headers))
+            .await?;
         parse_media_page(&response, kind)
     }
 }

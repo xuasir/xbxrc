@@ -33,7 +33,6 @@ jobs:
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/browser
-      NO_PROXY: localhost,127.0.0.1,::1
     steps:
       - uses: actions/checkout@v5
         with:
@@ -89,6 +88,7 @@ jobs:
           pnpm lint
           pnpm typecheck
           pnpm test
+          pnpm test:tools
           pnpm release:verify-pipeline
       - uses: actions/setup-python@v6
         with:

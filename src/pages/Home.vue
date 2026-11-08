@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { usePageFocus } from '@/navigation/core/usePageFocus'
@@ -8,11 +8,12 @@ import seriesSImage from '../assets/console/series-s-transparent.png'
 import seriesXImage from '../assets/console/series-x-transparent.png'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import ConsoleStatusCard from '../components/common/ConsoleStatusCard.vue'
+import PageUnavailable from '../components/common/PageUnavailable.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
-import LibraryRefresh from './library/LibraryRefresh.vue'
 
 const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
@@ -36,6 +37,10 @@ const isLoading = ref(false)
 const hosts = ref<HostSummary[]>([])
 const selectedHostKey = ref('')
 const loadError = ref('')
+const hasLoaded = ref(false)
+let loadGeneration = 0
+let pageActive = true
+const disposers: (() => void)[] = []
 
 function resolveHostId(host: HostSummary, index: number): string {
   return host.serverId ?? host.id ?? host.deviceId ?? `host-${index}`
@@ -154,17 +159,24 @@ async function loadHosts(): Promise<void> {
   }
 
   isLoading.value = true
-  loadError.value = ''
+  const generation = ++loadGeneration
   try {
     const result = await rpc.data.getHosts()
+    if (generation !== loadGeneration || !pageActive)
+      return
     hosts.value = Array.isArray(result) ? result : []
+    loadError.value = ''
   }
   catch (error) {
     devWarn('[Home] load hosts failed:', error)
-    loadError.value = t('homePage.hero.error')
+    if (generation === loadGeneration && pageActive)
+      loadError.value = error instanceof Error && error.message ? error.message : t('homePage.hero.error')
   }
   finally {
-    isLoading.value = false
+    if (generation === loadGeneration && pageActive) {
+      hasLoaded.value = true
+      isLoading.value = false
+    }
   }
 }
 
@@ -188,7 +200,37 @@ function handleRefresh(): void {
 }
 
 onMounted(() => {
+  const clearHosts = () => {
+    loadGeneration++
+    hosts.value = []
+    selectedHostKey.value = ''
+    loadError.value = ''
+    hasLoaded.value = false
+    isLoading.value = false
+  }
+  disposers.push(events.on('auth.sessionReady', () => {
+    clearHosts()
+    if (pageActive)
+      void loadHosts()
+  }), events.on('auth.stateChanged', (state) => {
+    if (!state.isAuthenticated)
+      clearHosts()
+  }))
   void loadHosts()
+})
+onActivated(() => {
+  pageActive = true
+  void loadHosts()
+})
+onDeactivated(() => {
+  pageActive = false
+  loadGeneration++
+  isLoading.value = false
+})
+onBeforeUnmount(() => {
+  pageActive = false
+  loadGeneration++
+  for (const dispose of disposers) dispose()
 })
 
 usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV_NODE_IDS.pagePrimary.xhome, false)
@@ -196,7 +238,7 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
 
 <template>
   <section ref="pageRef" class="home-page ui-page-shell" :aria-label="t('homePage.hero.title')">
-    <header class="home-page__header">
+    <header v-if="selectedCard" class="home-page__header">
       <div>
         <h1 class="home-page__title">
           {{ t('homePage.hero.title') }}
@@ -204,11 +246,12 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
           {{ t('homePage.hero.hint') }}
         </p>
       </div>
-      <Focusable id="xhome.refresh" as="button" type="button" class="home-page__refresh" :aria-label="t('homePage.refresh')" :title="t('homePage.refresh')" :disabled="isLoading" @click="handleRefresh">
+      <Focusable id="xhome.refresh" as="button" type="button" class="home-page__refresh" :aria-label="t('homePage.refresh')" :title="t('homePage.refresh')" :aria-busy="isLoading" @click="handleRefresh">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8" /></svg>
       </Focusable>
     </header>
-    <div v-if="isLoading && !selectedCard" class="home-page__loading">
+    <!-- 刷新保留原状态入口，使请求前后的焦点保持连续。 -->
+    <div v-if="isLoading && !selectedCard && !hasLoaded" class="home-page__loading">
       <BrandedLoading :label="t('homePage.loading')" />
     </div>
     <template v-else-if="selectedCard">
@@ -250,23 +293,18 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
         </div>
       </section>
     </template>
-    <section v-else class="home-page__empty-state" :aria-label="t('homePage.empty')">
-      <p class="home-page__empty-copy" :role="loadError ? 'alert' : undefined">
-        {{ loadError || t('homePage.empty') }}
-      </p>
-      <LibraryRefresh :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" :busy="isLoading" @refresh="handleRefresh" />
-    </section>
+    <PageUnavailable v-else :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" :title="loadError ? t('homePage.errorTitle') : t('homePage.hero.title')" :body="loadError || t('homePage.empty')" :action-label="t('homePage.refresh')" :busy="isLoading" :error="!!loadError" @retry="handleRefresh" />
   </section>
 </template>
 
 <style scoped>
-.home-page { display: flex; flex-direction: column; gap: var(--space-24); min-height: 100%; }
+.home-page { display: flex; flex-direction: column; gap: var(--space-24); height: 100%; min-height: 0; overflow: auto; }
 .home-page__header, .home-page__devices-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); }
 .home-page__title { font-size: 24px; line-height: 32px; font-weight: 500; letter-spacing: -.02em; }
 .home-page__hint { margin-top: var(--space-8); color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
 .home-page__refresh { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 8px; border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
 .home-page__refresh svg { width: 20px; height: 20px; }
-.home-page__refresh:disabled { opacity: .5; cursor: default; }
+.home-page__refresh[aria-busy='true'] { opacity: .5; cursor: progress; }
 .home-page__hero-edge { min-height: var(--ui-console-hero-height); border-radius: var(--ui-radius-panel); }
 .home-page__hero { display: grid; grid-template-columns: 1.15fr 1fr; align-items: center; gap: var(--space-24); min-height: var(--ui-console-hero-height); padding: var(--ui-console-hero-padding); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); background: var(--ui-console-hero-bg); backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low); }
 .home-page__hero-copy { min-width: 0; }
@@ -289,8 +327,7 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
 .home-page__devices-header h2 { font-size: 18px; line-height: 24px; font-weight: 500; }
 .home-page__devices-header span { color: var(--color-text-secondary); font-size: 12px; line-height: 18px; }
 .home-page__device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); }
-.home-page__loading, .home-page__empty-state { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-24); }
-.home-page__empty-copy { max-width: 440px; color: var(--color-text-secondary); text-align: center; font-size: 14px; line-height: 1.5; }
+.home-page__loading { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 @media(max-height:680px) { .home-page { gap: var(--space-16); } .home-page__actions { margin-top: var(--space-16); } .home-page__eyebrow { margin-bottom: var(--space-12); } }
 @media(max-width:700px) { .home-page__header { flex-wrap: wrap; } .home-page__title { font-size: 24px; line-height: 32px; } .home-page__hero { grid-template-columns: 1fr .55fr; gap: var(--space-12); padding: var(--space-16); } .home-page__console-name { font-size: 24px; } .home-page__console-art { height: 160px; } .home-page__device-grid { grid-template-columns: minmax(0, 1fr); } }
 @media(max-width:370px) { .home-page__hero { grid-template-columns: minmax(0, 1fr) .35fr; gap: var(--space-8); padding: var(--space-12); } .home-page__console-name { font-size: 22px; } .home-page__console-art { height: 144px; } }

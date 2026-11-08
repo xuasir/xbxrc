@@ -1,6 +1,7 @@
 export const DATA_XCLOUD_CATALOG_UPDATED_CHANNEL = 'xbxrc:data:xcloud-catalog-updated'
 
 export interface DataXcloudCatalogUpdatedRendererEvent {
+  scopeKey: string
   titles: Array<{
     id: string
     name: string

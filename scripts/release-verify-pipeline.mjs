@@ -3,12 +3,16 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { EDITION_POLICIES, repositoryRoot } from './release-edition.mjs'
+import { join, resolve } from 'node:path'
+import { fixtureGitEnvironment } from './fixture-git.mjs'
+import { EDITION_POLICIES } from './release-edition.mjs'
 
+const repositoryRoot = resolve(import.meta.dirname, '..')
 const scripts = join(repositoryRoot, 'scripts')
 const tmp = mkdtempSync(join(tmpdir(), 'xbxrc-release-pipeline-'))
 try {
+  const gitEnvironment = fixtureGitEnvironment(join(tmp, 'git'))
+  const git = args => execFileSync('git', args, { encoding: 'utf8', env: gitEnvironment, stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   for (const [edition, policy] of Object.entries(EDITION_POLICIES)) {
     const root = join(tmp, edition)
     mkdirSync(join(root, 'src-tauri'), { recursive: true })
@@ -21,10 +25,10 @@ try {
     config.productName = policy.productName
     config.plugins.updater.endpoints = [edition === 'browser' ? 'https://github.com/xuasir/xbxrc/releases/latest/download/latest.json' : 'https://github.com/xuasir/xbxrc/releases/download/native-wip/latest.json']
     writeFileSync(join(root, 'src-tauri/tauri.conf.json'), JSON.stringify(config))
-    execFileSync('git', ['init', '--quiet', root])
-    execFileSync('git', ['-C', root, 'add', '.'])
-    execFileSync('git', ['-C', root, '-c', 'user.name=Release fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'fixture'])
-    const commit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    git(['init', '--quiet', root])
+    git(['-C', root, 'add', '.'])
+    git(['-C', root, 'commit', '--quiet', '-m', 'fixture'])
+    const commit = git(['-C', root, 'rev-parse', 'HEAD'])
     const bundle = join(root, 'bundle')
     for (const subdir of ['macos', 'dmg', 'nsis'])
       mkdirSync(join(bundle, subdir), { recursive: true })
@@ -35,7 +39,7 @@ try {
       [`nsis/${policy.productName}_${version}_x64-setup.exe`, 'installer'],
       [`nsis/${policy.productName}_${version}_x64-setup.exe.sig`, 'sig-win'],
     ]) writeFileSync(join(bundle, path), contents)
-    const env = { ...process.env, RELEASE_REPO_ROOT: root, RELEASE_BUNDLE_ROOT: bundle, GITHUB_SHA: commit }
+    const env = { ...gitEnvironment, RELEASE_REPO_ROOT: root, RELEASE_BUNDLE_ROOT: bundle, GITHUB_SHA: commit }
     const run = (script, args = [], success = true) => {
       const result = spawnSync(process.execPath, [join(scripts, script), ...args], { encoding: 'utf8', env })
       if (success && result.status !== 0)

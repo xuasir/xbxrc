@@ -9,6 +9,7 @@ use crate::mods::data::types::{
 use xbox_cloud_catalog_flow::{
     CloudCatalogBaseEntry, CloudCatalogOverlayEntry, CloudCatalogScope, XboxCloudCatalogFlow,
 };
+use xbox_webapi::WebApiError;
 
 const XCLOUD_CATALOG_DEFAULT_MARKET: &str = "US";
 
@@ -27,10 +28,10 @@ impl XcloudService {
     pub fn resolve_cache_scope(
         &self,
         session: &DataSessionContext,
+        catalog_scope: &CloudCatalogScope,
     ) -> Option<XcloudCatalogCacheScope> {
         let claims = resolve_web_token_claims(&session.web_token)?;
         let region = Self::resolve_xcloud_region(session)?;
-        let catalog_scope = Self::resolve_catalog_scope();
         let account_id = claims
             .xid
             .as_deref()
@@ -40,9 +41,59 @@ impl XcloudService {
         Some(XcloudCatalogCacheScope {
             account_id: account_id.to_string(),
             region_host: region.host,
-            language: catalog_scope.language,
-            market: catalog_scope.market,
+            language: catalog_scope.language.clone(),
+            market: catalog_scope.market.clone(),
         })
+    }
+
+    pub(crate) fn unavailable_error(session: &DataSessionContext) -> Option<WebApiError> {
+        // 优先报告最终回退请求的结果，保留可恢复的网络故障。
+        for offering in ["xgpuwebf2p", "xgpuweb"] {
+            let diagnostic = &session.streaming_tokens["_diagnostics"]["xCloudToken"][offering];
+            if let Some(kind) =
+                diagnostic["networkErrorKind"]
+                    .as_str()
+                    .and_then(|kind| match kind {
+                        "dns" => Some(xbox_webapi::NetworkErrorKind::Dns),
+                        "connect" => Some(xbox_webapi::NetworkErrorKind::Connect),
+                        "tls" => Some(xbox_webapi::NetworkErrorKind::Tls),
+                        "timeout" => Some(xbox_webapi::NetworkErrorKind::Timeout),
+                        "body" => Some(xbox_webapi::NetworkErrorKind::Body),
+                        "request" => Some(xbox_webapi::NetworkErrorKind::Request),
+                        _ => None,
+                    })
+            {
+                return Some(WebApiError::network_kind(kind));
+            }
+            let Some(status) = diagnostic["statusCode"]
+                .as_u64()
+                .filter(|status| (400..=599).contains(status))
+            else {
+                continue;
+            };
+            let code = diagnostic["serviceCode"]
+                .as_str()
+                .and_then(xbox_webapi::sanitize_service_code);
+            return Some(match code {
+                Some(code) => {
+                    WebApiError::http_with_code(status as u16, code, "cloud access unavailable")
+                }
+                None => WebApiError::http(status as u16, "cloud access unavailable"),
+            });
+        }
+        None
+    }
+
+    pub(crate) fn catalog_error(error: &WebApiError) -> String {
+        if error.to_status_code() == Some(403)
+            && matches!(
+                error.safe_service_code().as_deref(),
+                None | Some("Forbidden" | "AuthorizationFailed" | "NotAuthorized")
+            )
+        {
+            return "云游戏服务拒绝访问，请检查服务支持的地区和账户资格".into();
+        }
+        super::personal_service::user_error(error)
     }
 
     pub(crate) async fn refresh_catalog(
@@ -51,10 +102,11 @@ impl XcloudService {
         scope: &XcloudCatalogCacheScope,
         cache_repository: &DataCacheRepository,
         _force_refresh: bool,
-    ) -> Result<XcloudCatalogRefreshOutcome, String> {
+    ) -> Result<XcloudCatalogRefreshOutcome, WebApiError> {
         let Some(region) = Self::resolve_xcloud_region(session) else {
             return Ok(XcloudCatalogRefreshOutcome {
                 payload: DataXcloudCatalogPayload {
+                    scope_key: Some(DataCacheRepository::scoped_cache_key(scope)),
                     titles: Vec::new(),
                     cache_state: DataXcloudCatalogCacheState::Miss,
                     updated_at: None,
@@ -72,8 +124,17 @@ impl XcloudService {
         let overlay_load = catalog_flow
             .load_overlay(&catalog_scope)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| match error {
+                xbox_cloud_catalog_flow::CloudCatalogFlowError::WebApi(error) => error,
+            })?;
 
+        for failure in &overlay_load.source_failures {
+            log::warn!(
+                "[Data][xcloud] source={} error={}",
+                failure.source,
+                failure.error
+            );
+        }
         if !overlay_load.recent_source_available {
             log::warn!("[Data][xcloud] recent titles source unavailable; continuing without MRU");
         }
@@ -82,7 +143,8 @@ impl XcloudService {
         }
 
         let cached_base_snapshot = cache_repository
-            .get_xcloud_catalog_base_snapshot(scope)?
+            .get_xcloud_catalog_base_snapshot(scope)
+            .map_err(|_| WebApiError::parse("目录缓存读取失败，请重试"))?
             .filter(|snapshot| !snapshot.entries.is_empty())
             .unwrap_or_default();
         let missing_product_ids = if cached_base_snapshot.entries.is_empty() {
@@ -99,6 +161,13 @@ impl XcloudService {
         let hydration_load = catalog_flow
             .hydrate_products(&catalog_scope, &missing_product_ids)
             .await;
+        for failure in &hydration_load.source_failures {
+            log::warn!(
+                "[Data][xcloud] source={} error={}",
+                failure.source,
+                failure.error
+            );
+        }
         if hydration_load.failed_chunk_count > 0 {
             log::warn!(
                 "[Data][xcloud] Game Pass products hydration failed chunks={}",
@@ -119,12 +188,19 @@ impl XcloudService {
             .map(Self::to_cached_overlay_entry)
             .collect();
 
-        cache_repository.save_xcloud_catalog_base(scope, merged_base_entries)?;
-        cache_repository.save_xcloud_catalog_overlay(scope, overlay_entries)?;
+        cache_repository
+            .save_xcloud_catalog_base(scope, merged_base_entries)
+            .map_err(|_| WebApiError::parse("目录缓存写入失败，请检查存储空间"))?;
+        cache_repository
+            .save_xcloud_catalog_overlay(scope, overlay_entries)
+            .map_err(|_| WebApiError::parse("目录缓存写入失败，请检查存储空间"))?;
 
-        let loaded_snapshot = cache_repository.load_xcloud_catalog(scope)?;
+        let loaded_snapshot = cache_repository
+            .load_xcloud_catalog(scope)
+            .map_err(|_| WebApiError::parse("目录缓存读取失败，请重试"))?;
         Ok(XcloudCatalogRefreshOutcome {
             payload: DataXcloudCatalogPayload {
+                scope_key: Some(DataCacheRepository::scoped_cache_key(scope)),
                 titles: loaded_snapshot.titles,
                 cache_state: loaded_snapshot.cache_state,
                 updated_at: loaded_snapshot.updated_at,
@@ -193,17 +269,15 @@ impl XcloudService {
         })
     }
 
-    pub(crate) fn resolve_catalog_scope() -> CloudCatalogScope {
+    pub(crate) fn resolve_catalog_scope(locale: &str) -> CloudCatalogScope {
         CloudCatalogScope {
             market: XCLOUD_CATALOG_DEFAULT_MARKET.to_string(),
-            language: Self::resolve_catalog_language(),
-        }
-    }
-
-    fn resolve_catalog_language() -> String {
-        match std::env::var("LANG") {
-            Ok(lang) if lang.to_lowercase().starts_with("zh") => "zh-TW".to_string(),
-            _ => "en-US".to_string(),
+            language: if locale.trim().to_ascii_lowercase().starts_with("zh") {
+                "zh-TW"
+            } else {
+                "en-US"
+            }
+            .to_string(),
         }
     }
 }
@@ -220,7 +294,51 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn cache_scope_uses_stable_xid_when_available() {
+    fn cloud_errors_preserve_network_failures_and_use_cloud_access_guidance() {
+        let session = DataSessionContext {
+            provider: "xbox".into(),
+            app_level: 1,
+            web_token: json!({}),
+            streaming_tokens: json!({"_diagnostics": {"xCloudToken": {
+                "xgpuweb": {"statusCode": 403, "serviceCode": "OfferingAccessDenied"},
+                "xgpuwebf2p": {"networkErrorKind": "timeout", "message": "secret-body"}
+            }}}),
+        };
+        let error = XcloudService::unavailable_error(&session).unwrap();
+        assert_eq!(
+            error.network_error_kind(),
+            Some(xbox_webapi::NetworkErrorKind::Timeout)
+        );
+        assert!(XcloudService::catalog_error(&error).contains("超时"));
+        let message = XcloudService::catalog_error(&WebApiError::http(403, "secret-body"));
+        assert!(message.contains("地区和账户资格"));
+        assert!(!message.contains("secret"));
+        assert!(XcloudService::catalog_error(&WebApiError::http_with_code(
+            403,
+            "UnsupportedCountry",
+            "secret-body"
+        ))
+        .contains("地区"));
+    }
+
+    #[test]
+    fn catalog_scope_uses_application_locale() {
+        for (locale, language) in [
+            ("zh", "zh-TW"),
+            ("zh-CN", "zh-TW"),
+            (" ZH_tw ", "zh-TW"),
+            ("en", "en-US"),
+            ("en-GB", "en-US"),
+            ("", "en-US"),
+        ] {
+            let scope = XcloudService::resolve_catalog_scope(locale);
+            assert_eq!(scope.language, language);
+            assert_eq!(scope.market, "US");
+        }
+    }
+
+    #[test]
+    fn cache_scope_uses_stable_xid_and_application_catalog_language() {
         let session = DataSessionContext {
             provider: "xbox".to_string(),
             app_level: 2,
@@ -251,12 +369,22 @@ mod tests {
         };
 
         let scope = XcloudService::new()
-            .resolve_cache_scope(&session)
+            .resolve_cache_scope(&session, &XcloudService::resolve_catalog_scope("en"))
             .expect("xcloud scope should resolve");
 
         assert_eq!(scope.account_id, "stable-xid");
         assert_eq!(scope.region_host, "wus.core.gssv-play-prod.xboxlive.com");
         assert_eq!(scope.market, "US");
+        assert_eq!(scope.language, "en-US");
+        let chinese_scope = XcloudService::new()
+            .resolve_cache_scope(&session, &XcloudService::resolve_catalog_scope("zh"))
+            .unwrap();
+        assert_eq!(chinese_scope.account_id, scope.account_id);
+        assert_eq!(chinese_scope.language, "zh-TW");
+        assert_ne!(
+            DataCacheRepository::scoped_cache_key(&scope),
+            DataCacheRepository::scoped_cache_key(&chinese_scope)
+        );
     }
 
     #[test]

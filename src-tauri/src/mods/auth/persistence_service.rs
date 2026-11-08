@@ -1,6 +1,8 @@
 use crate::error::{AppError, AppResult};
 use crate::mods::auth::storage_repository::AuthStorageRepository;
-use crate::mods::auth::token_policy::{AuthTokenPolicy, ValidSessionSnapshot};
+use crate::mods::auth::token_policy::{
+    can_reuse_sisu_user_token, resolve_valid_web_api_tokens, AuthTokenPolicy, ValidSessionSnapshot,
+};
 use crate::mods::auth::types::{SisuTokenData, UserTokenData};
 use serde_json::Value;
 use tauri::AppHandle;
@@ -111,6 +113,17 @@ impl AuthPersistenceService {
         self.storage_repository.get_token_update_time()
     }
 
+    pub fn can_reuse_sisu_user_token(&self) -> AppResult<bool> {
+        Ok(self
+            .storage_repository
+            .get_sisu_token()
+            .map_err(AppError::Data)?
+            .as_ref()
+            .is_some_and(|token| {
+                can_reuse_sisu_user_token(token, chrono::Utc::now().timestamp_millis())
+            }))
+    }
+
     pub fn get_stream_tokens(&self) -> AppResult<Option<Value>> {
         self.token_policy
             .get_stream_tokens()
@@ -158,23 +171,9 @@ impl AuthPersistenceService {
             return Ok(None);
         };
 
-        let data = web_token.get("data").unwrap_or_else(|| {
-            log::warn!("Web token missing 'data' field, using full token");
-            &web_token
-        });
-        let uhs = data
-            .get("DisplayClaims")
-            .and_then(|value| value.get("xui"))
-            .and_then(|value| value.as_array())
-            .and_then(|xui| xui.first())
-            .and_then(|first| first.get("uhs"))
-            .and_then(|value| value.as_str());
-        let token = data.get("Token").and_then(|value| value.as_str());
-
-        if let (Some(uhs), Some(token)) = (uhs, token) {
-            return Ok(Some((uhs.to_string(), token.to_string())));
-        }
-
-        Ok(None)
+        Ok(resolve_valid_web_api_tokens(
+            &web_token,
+            chrono::Utc::now().timestamp_millis(),
+        ))
     }
 }

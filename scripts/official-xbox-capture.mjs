@@ -6,10 +6,7 @@ import { createWriteStream } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
-
-const DEFAULT_URL = 'https://www.xbox.com/play'
-const DEFAULT_PORT = 9222
-const DEFAULT_SAMPLE_INTERVAL_MS = 2000
+import { CAPTURE_HELP, captureProfileDirectory, parseCaptureArgs, validateBrowserPath } from './official-xbox-capture-options.mjs'
 
 const networkRequests = new Map()
 let args
@@ -26,37 +23,8 @@ let cdp
 let chrome
 let sampleTimer
 
-function parseArgs(values) {
-  const parsed = {}
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]
-    if (!value.startsWith('--')) {
-      continue
-    }
-    const key = value.slice(2)
-    if (key === 'no-launch') {
-      parsed.noLaunch = true
-      continue
-    }
-    const next = values[index + 1]
-    index += 1
-    if (key === 'out')
-      parsed.out = next
-    else if (key === 'port')
-      parsed.port = next
-    else if (key === 'profile')
-      parsed.profile = next
-    else if (key === 'url')
-      parsed.url = next
-    else if (key === 'sample-interval-ms')
-      parsed.sampleIntervalMs = next
-  }
-  return parsed
-}
-
-function launchChrome({ port, profileDir }) {
-  const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-  return spawn(chromePath, [
+async function launchChrome({ browserPath, port, profileDir }) {
+  const child = spawn(browserPath, [
     `--remote-debugging-port=${port}`,
     '--remote-allow-origins=*',
     `--user-data-dir=${profileDir}`,
@@ -69,6 +37,11 @@ function launchChrome({ port, profileDir }) {
     detached: false,
     stdio: 'ignore',
   })
+  await new Promise((resolve, reject) => {
+    child.once('spawn', resolve)
+    child.once('error', reject)
+  })
+  return child
 }
 
 async function waitForChrome(port) {
@@ -950,14 +923,19 @@ const WEBRTC_HOOK_SOURCE = `(() => {
 })()`
 
 async function main() {
-  args = parseArgs(process.argv.slice(2))
+  args = parseCaptureArgs(process.argv.slice(2))
+  if (args.help) {
+    console.log(CAPTURE_HELP)
+    return
+  }
+  await validateBrowserPath(args)
   startedAt = new Date()
   const stamp = startedAt.toISOString().replaceAll(/[:.]/g, '-')
   outDir = args.out ?? `runtime-logs/official-xbox-capture-${stamp}`
-  port = Number(args.port ?? DEFAULT_PORT)
-  sampleIntervalMs = Number(args.sampleIntervalMs ?? DEFAULT_SAMPLE_INTERVAL_MS)
-  profileDir = args.profile ?? `/private/tmp/xbxrc-official-xbox-chrome-profile-${port}`
-  targetUrl = args.url ?? DEFAULT_URL
+  port = args.port
+  sampleIntervalMs = args.sampleIntervalMs
+  profileDir = await captureProfileDirectory(args)
+  targetUrl = args.url
 
   await mkdir(outDir, { recursive: true })
   eventStream = createWriteStream(`${outDir}/events.jsonl`, { flags: 'a' })
@@ -973,11 +951,12 @@ async function main() {
     url: targetUrl,
     port,
     profileDir,
+    browserPath: args.browserPath ?? null,
     sampleIntervalMs,
   }, null, 2)}\n`)
 
   if (!args.noLaunch) {
-    chrome = launchChrome({ port, profileDir })
+    chrome = await launchChrome({ browserPath: args.browserPath, port, profileDir })
     console.log(`[capture] launched Chrome pid=${chrome.pid} profile=${profileDir}`)
   }
 

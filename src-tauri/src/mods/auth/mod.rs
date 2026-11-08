@@ -25,7 +25,9 @@ pub trait AuthProvider: Send + Sync {
     async fn login(&self) -> AppResult<LoginResponse>;
     async fn get_transfer_token(&self) -> AppResult<String>;
     fn get_web_api_tokens(&self) -> AppResult<Option<(String, String)>>;
+    fn get_web_api_token_snapshot(&self) -> AppResult<Option<serde_json::Value>>;
     async fn check_authentication(&self) -> AppResult<CheckAuthResponse>;
+    async fn recover_web_api_session(&self, rejected_token: &str) -> AppResult<()>;
     async fn clear_auth_cache(&self, scope: &str) -> AppResult<()>;
     async fn logout(&self) -> AppResult<()>;
     async fn handle_oauth_callback(&self, callback_url: &str) -> AppResult<()>;

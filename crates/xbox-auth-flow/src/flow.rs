@@ -323,7 +323,6 @@ impl AuthFlow {
             }
             Err(xgpuweb_error) => {
                 let xgpuweb_diagnostics = streaming_token_error_diagnostics(&xgpuweb_error);
-                let xgpuweb_error = xgpuweb_error.to_string();
                 match self
                     .auth_api
                     .get_streaming_token(&gssv_token, "xgpuwebf2p", force_region_ip)
@@ -332,7 +331,7 @@ impl AuthFlow {
                     Ok(token) => {
                         log::warn!(
                             "Auth: xgpuweb token failed, using xgpuwebf2p fallback: {}",
-                            xgpuweb_error
+                            xgpuweb_diagnostics
                         );
                         stream_tokens.insert(
                             "xCloudToken".to_string(),
@@ -345,11 +344,10 @@ impl AuthFlow {
                     Err(xgpuwebf2p_error) => {
                         let xgpuwebf2p_diagnostics =
                             streaming_token_error_diagnostics(&xgpuwebf2p_error);
-                        let xgpuwebf2p_error = xgpuwebf2p_error.to_string();
                         log::warn!(
                             "Auth: xCloud token unavailable, xgpuweb={}, xgpuwebf2p={}",
-                            xgpuweb_error,
-                            xgpuwebf2p_error
+                            xgpuweb_diagnostics,
+                            xgpuwebf2p_diagnostics
                         );
                         let force_region_ip = force_region_ip.trim();
                         stream_tokens.insert(
@@ -372,12 +370,6 @@ impl AuthFlow {
 }
 
 fn streaming_token_error_diagnostics(error: &xbox_webapi::WebApiError) -> Value {
-    let error_kind = match error {
-        xbox_webapi::WebApiError::Network { .. } => "network",
-        xbox_webapi::WebApiError::Http { .. } => "http",
-        xbox_webapi::WebApiError::Parse { .. } => "parse",
-        xbox_webapi::WebApiError::Auth { .. } => "auth",
-    };
     let timeout = match error {
         xbox_webapi::WebApiError::Network { message, .. } => {
             let message = message.to_ascii_lowercase();
@@ -387,12 +379,9 @@ fn streaming_token_error_diagnostics(error: &xbox_webapi::WebApiError) -> Value 
         _ => false,
     };
 
-    json!({
-        "errorKind": error_kind,
-        "statusCode": error.to_status_code(),
-        "timeout": timeout,
-        "retriable": error.is_retriable(),
-    })
+    let mut summary = error.safe_summary();
+    summary["timeout"] = json!(timeout);
+    summary
 }
 
 impl Default for AuthFlow {

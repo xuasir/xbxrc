@@ -1,4 +1,4 @@
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::mods::auth::types::AuthState;
 use crate::mods::runtime_trace::{
     RuntimeTraceCategory, RuntimeTraceRecorderRef, TraceDimension, TraceImportance, TraceMetadata,
@@ -34,11 +34,26 @@ pub(super) fn token_summary(tokens: &Value) -> Value {
     for offering in ["xgpuweb", "xgpuwebf2p"] {
         let error = &tokens["_diagnostics"]["xCloudToken"][offering];
         if error.is_object() {
-            diagnostics.insert(offering.to_string(), json!({
+            let mut summary = json!({
                 "statusCode": error["statusCode"].as_u64().filter(|status| (100..=599).contains(status)),
                 "timeout": error["timeout"].as_bool(),
                 "retriable": error["retriable"].as_bool(),
-            }));
+            });
+            if let Some(code) = error["serviceCode"]
+                .as_str()
+                .and_then(xbox_webapi::sanitize_service_code)
+            {
+                summary["serviceCode"] = json!(code);
+            }
+            if let Some(kind) = error["networkErrorKind"].as_str().filter(|kind| {
+                matches!(
+                    *kind,
+                    "dns" | "connect" | "tls" | "timeout" | "body" | "request"
+                )
+            }) {
+                summary["networkErrorKind"] = json!(kind);
+            }
+            diagnostics.insert(offering.to_string(), summary);
         }
     }
     json!({
@@ -49,20 +64,20 @@ pub(super) fn token_summary(tokens: &Value) -> Value {
 }
 
 pub(super) fn flow_error_summary(error: &AuthFlowError) -> Value {
-    let (kind, status) = match error {
-        AuthFlowError::Upstream(upstream) => {
-            let kind = match upstream {
-                xbox_webapi::WebApiError::Network { .. } => "network",
-                xbox_webapi::WebApiError::Http { .. } => "http",
-                xbox_webapi::WebApiError::Parse { .. } => "parse",
-                xbox_webapi::WebApiError::Auth { .. } => "auth",
-            };
-            (kind, upstream.to_status_code())
-        }
-        _ => ("protocol", None),
-    };
     // 错误正文可能携带请求URL或服务端身份，只记录固定分类与状态码。
-    json!({ "errorKind": kind, "statusCode": status, "retriable": error.is_retriable() })
+    match error {
+        AuthFlowError::Upstream(error) => error.safe_summary(),
+        _ => {
+            json!({ "errorKind": "protocol", "statusCode": null, "retriable": error.is_retriable() })
+        }
+    }
+}
+
+pub(super) fn app_error_summary(error: &AppError) -> Value {
+    match error {
+        AppError::WebApi(error) => error.safe_summary(),
+        _ => json!({ "errorCode": error.code() }),
+    }
 }
 
 pub(super) struct AuthOperationTrace {

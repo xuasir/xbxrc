@@ -201,6 +201,7 @@ export interface XBoxRpcSchema {
           isRecentlyPlayed: boolean
           isNew: boolean
         }>
+        scopeKey?: string
         cacheState: 'miss' | 'fresh' | 'stale'
         updatedAt?: number
         refreshing: boolean
@@ -225,6 +226,7 @@ export interface XBoxRpcSchema {
           isRecentlyPlayed: boolean
           isNew: boolean
         }>
+        scopeKey?: string
         cacheState: 'miss' | 'fresh' | 'stale'
         updatedAt?: number
         refreshing: boolean

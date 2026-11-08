@@ -1,5 +1,6 @@
 use crate::mods::data::types::DataXcloudCatalogPayload;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::oneshot;
 
 struct XcloudCatalogRefreshFlight {
@@ -7,8 +8,30 @@ struct XcloudCatalogRefreshFlight {
 }
 
 pub enum XcloudCatalogRefreshJoin {
-    Leader(oneshot::Receiver<Result<DataXcloudCatalogPayload, String>>),
+    Leader(XcloudCatalogRefreshLease),
     Follower(oneshot::Receiver<Result<DataXcloudCatalogPayload, String>>),
+}
+
+pub struct XcloudCatalogRefreshLease {
+    state: Arc<DataRuntimeState>,
+    cache_key: String,
+    finished: bool,
+}
+
+impl XcloudCatalogRefreshLease {
+    pub fn finish(mut self, result: Result<DataXcloudCatalogPayload, String>) {
+        self.finished = true;
+        self.state.finish_xcloud_refresh(&self.cache_key, result);
+    }
+}
+
+impl Drop for XcloudCatalogRefreshLease {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.state
+                .finish_xcloud_refresh(&self.cache_key, Err("目录刷新已中断，请重试".into()));
+        }
+    }
 }
 
 pub struct DataRuntimeState {
@@ -22,7 +45,7 @@ impl DataRuntimeState {
         }
     }
 
-    pub fn begin_xcloud_refresh(&self, cache_key: &str) -> XcloudCatalogRefreshJoin {
+    pub fn begin_xcloud_refresh(self: &Arc<Self>, cache_key: &str) -> XcloudCatalogRefreshJoin {
         let (tx, rx) = oneshot::channel();
         let mut flights = self
             .xcloud_refresh_flights
@@ -38,7 +61,11 @@ impl DataRuntimeState {
             cache_key.to_string(),
             XcloudCatalogRefreshFlight { waiters: vec![tx] },
         );
-        XcloudCatalogRefreshJoin::Leader(rx)
+        XcloudCatalogRefreshJoin::Leader(XcloudCatalogRefreshLease {
+            state: self.clone(),
+            cache_key: cache_key.to_string(),
+            finished: false,
+        })
     }
 
     pub fn finish_xcloud_refresh(
@@ -64,5 +91,30 @@ impl DataRuntimeState {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .contains_key(cache_key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cancelling_catalog_leader_releases_waiters_and_allows_retry() {
+        let state = Arc::new(DataRuntimeState::new());
+        let XcloudCatalogRefreshJoin::Leader(lease) = state.begin_xcloud_refresh("scope") else {
+            panic!("leader");
+        };
+        let XcloudCatalogRefreshJoin::Follower(receiver) = state.begin_xcloud_refresh("scope")
+        else {
+            panic!("follower");
+        };
+        assert!(state.is_xcloud_refreshing("scope"));
+        drop(lease);
+        assert!(receiver.await.unwrap().is_err());
+        assert!(!state.is_xcloud_refreshing("scope"));
+        assert!(matches!(
+            state.begin_xcloud_refresh("scope"),
+            XcloudCatalogRefreshJoin::Leader(_)
+        ));
     }
 }

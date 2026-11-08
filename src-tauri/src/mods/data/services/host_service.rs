@@ -1,7 +1,7 @@
 use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::types::{DataHostStorageDeviceSummary, DataHostSummary, DataSessionContext};
 use serde_json::Value;
-use xbox_webapi::SmartglassApi;
+use xbox_webapi::{library_u64, SmartglassApi, WebApiError};
 
 pub struct HostService;
 
@@ -10,40 +10,22 @@ impl HostService {
         Self
     }
 
-    // 与 Electron 语义一致：主机列表来自 smartglass provider。
+    // 主机管理列表复用 Smartglass 协议。
     pub async fn get_hosts(
         &self,
         session: &DataSessionContext,
-    ) -> Result<Vec<DataHostSummary>, String> {
+    ) -> Result<Vec<DataHostSummary>, WebApiError> {
         let Some(claims) = resolve_web_token_claims(&session.web_token) else {
-            return Ok(Vec::new());
+            return Err(WebApiError::auth("登录信息暂不可用，请重新登录"));
         };
         let smartglass = SmartglassApi::new(claims.uhs, claims.user_token);
 
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(8),
-            smartglass.get_consoles_list(),
-        )
-        .await
-        {
-            Ok(Ok(payload)) => Ok(extract_consoles(&payload)),
-            Ok(Err(error)) => {
-                // 与迁移前 JS 行为保持一致：网络波动时降级为空数组，避免把 hosts 查询变成致命错误。
-                log::warn!(
-                    "[Data] load hosts failed, fallback to empty list: {}",
-                    error
-                );
-                Ok(Vec::new())
-            }
-            Err(_) => {
-                log::warn!("[Data] load hosts timeout, fallback to empty list");
-                Ok(Vec::new())
-            }
-        }
+        let payload = smartglass.get_consoles_list().await?;
+        extract_consoles(&payload)
     }
 }
 
-fn extract_consoles(raw: &Value) -> Vec<DataHostSummary> {
+fn extract_consoles(raw: &Value) -> Result<Vec<DataHostSummary>, WebApiError> {
     let mut visited = std::collections::HashSet::new();
 
     fn visit(
@@ -63,7 +45,7 @@ fn extract_consoles(raw: &Value) -> Vec<DataHostSummary> {
 
         if let Some(array) = value.as_array() {
             let consoles = array.iter().filter_map(to_host_summary).collect::<Vec<_>>();
-            if !consoles.is_empty() {
+            if array.is_empty() || !consoles.is_empty() {
                 return Some(consoles);
             }
             return None;
@@ -88,32 +70,27 @@ fn extract_consoles(raw: &Value) -> Vec<DataHostSummary> {
         None
     }
 
-    let consoles = visit(raw, 0, &mut visited).unwrap_or_default();
-    consoles
+    visit(raw, 0, &mut visited).ok_or_else(|| WebApiError::parse("invalid console list response"))
 }
 
 fn to_host_summary(value: &Value) -> Option<DataHostSummary> {
     let object = value.as_object()?;
 
-    let id = object.get("id").and_then(Value::as_str).map(str::to_string);
-    let device_id = object
-        .get("deviceId")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let server_id = object
-        .get("serverId")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let name = object
-        .get("name")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let device_name = object
-        .get("deviceName")
-        .and_then(Value::as_str)
-        .map(str::to_string);
+    let identity = |key| {
+        object
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
+    let id = identity("id");
+    let device_id = identity("deviceId");
+    let server_id = identity("serverId");
+    let name = identity("name");
+    let device_name = identity("deviceName");
 
-    // 对齐 Electron：只要存在 console identity 字段之一即保留。
+    // 兼容服务端各版本的主机身份字段。
     let has_identity = id.is_some()
         || device_id.is_some()
         || server_id.is_some()
@@ -142,10 +119,10 @@ fn to_host_summary(value: &Value) -> Option<DataHostSummary> {
                             .map(str::to_string),
                         id: o.get("id").and_then(Value::as_str).map(str::to_string),
                         name: o.get("name").and_then(Value::as_str).map(str::to_string),
-                        free_space_bytes: o.get("freeSpaceBytes").and_then(Value::as_u64),
-                        free_bytes: o.get("freeBytes").and_then(Value::as_u64),
-                        total_space_bytes: o.get("totalSpaceBytes").and_then(Value::as_u64),
-                        total_bytes: o.get("totalBytes").and_then(Value::as_u64),
+                        free_space_bytes: library_u64(o.get("freeSpaceBytes")),
+                        free_bytes: library_u64(o.get("freeBytes")),
+                        total_space_bytes: library_u64(o.get("totalSpaceBytes")),
+                        total_bytes: library_u64(o.get("totalBytes")),
                     })
                 })
                 .collect::<Vec<_>>()
@@ -189,3 +166,7 @@ fn to_host_summary(value: &Value) -> Option<DataHostSummary> {
         console_addrs: None,
     })
 }
+
+#[cfg(test)]
+#[path = "host_service.test.rs"]
+mod tests;

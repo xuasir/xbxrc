@@ -11,6 +11,7 @@
     "lint": "eslint src",
     "typecheck": "vue-tsc --noEmit",
     "test:lifecycle": "python3 -B tests/runtime-trace/test_streaming_session_lifecycle_gate.py",
+    "test:tools": "node --test tests/tools/official-xbox-capture.test.mjs",
     "lint:fix": "eslint src --fix",
     "skills:verify": "node scripts/sync-skills.mjs verify",
     "skills:lock": "node scripts/sync-skills.mjs lock",
@@ -23,7 +24,7 @@
     "release:check-bundle": "node scripts/release-check-bundle.mjs",
     "release:check-macos-runtime": "node scripts/check-macos-runtime.mjs",
     "release:check-collected": "node scripts/release-check-collected.mjs",
-    "release:verify-pipeline": "node --test tests/build/release-edition.test.mjs && node scripts/release-verify-pipeline.mjs",
+    "release:verify-pipeline": "node --test tests/build/release-edition.test.mjs tests/build/fixture-git.test.mjs && node scripts/release-verify-pipeline.mjs",
     "release:check-edition": "node scripts/check-release-edition.mjs"
   },
   "dependencies": {

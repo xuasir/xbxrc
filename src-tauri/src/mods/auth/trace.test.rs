@@ -38,6 +38,36 @@ fn projects_http_failure_without_upstream_body() {
 }
 
 #[test]
+fn keeps_whitelisted_access_and_network_codes_and_discards_untrusted_diagnostics() {
+    let summary = token_summary(&json!({"_diagnostics": {"xCloudToken": {
+        "xgpuweb": {"statusCode": 403, "serviceCode": "UnsupportedCountry", "networkErrorKind": "tls"},
+        "xgpuwebf2p": {"statusCode": 403, "serviceCode": "secret-account", "networkErrorKind": "https://secret.example/"}
+    }}}));
+    assert_eq!(
+        summary["cloudDiagnostics"]["xgpuweb"]["serviceCode"],
+        "UnsupportedCountry"
+    );
+    assert_eq!(
+        summary["cloudDiagnostics"]["xgpuweb"]["networkErrorKind"],
+        "tls"
+    );
+    assert!(summary["cloudDiagnostics"]["xgpuwebf2p"]["serviceCode"].is_null());
+    assert!(summary["cloudDiagnostics"]["xgpuwebf2p"]["networkErrorKind"].is_null());
+    assert!(!summary.to_string().contains("secret"));
+    assert_eq!(
+        flow_error_summary(
+            &xbox_webapi::WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Dns).into()
+        )["networkErrorKind"],
+        "dns"
+    );
+    let error = AppError::Data("secret-token".into());
+    assert_eq!(
+        app_error_summary(&error),
+        json!({"errorCode": "DATA_ERROR"})
+    );
+}
+
+#[test]
 fn production_and_dev_keep_correlated_auth_stages_and_terminal_error() {
     for profile in ["production", "dev"] {
         let recorder = Arc::new(RuntimeTraceRecorder::new_with_mode(profile).unwrap());

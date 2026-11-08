@@ -1,3 +1,4 @@
+use xbox_webapi::transport::HttpTransport;
 use xbox_webapi::{
     IceCandidate as WebApiIceCandidate, SignalingApi as CrateSignalingApi, WebApiError,
 };
@@ -22,10 +23,15 @@ pub struct WebApiSignalingGateway {
 impl WebApiSignalingGateway {
     /// RFC: 凭证属于执行层，结合 Plan 策略构建 Gateway。
     pub fn new(plan: Plan, token: StreamingToken) -> Self {
+        Self::with_transport(HttpTransport::new(), plan, token)
+    }
+
+    pub fn with_transport(transport: HttpTransport, plan: Plan, token: StreamingToken) -> Self {
         let target_type = plan.session.target.as_str();
 
         let session_base_path = format!("{}/v5/sessions/{target_type}", plan.session.base_url);
-        let signaling_api = CrateSignalingApi::new(session_base_path, token.gs_token);
+        let signaling_api =
+            CrateSignalingApi::with_transport(transport, session_base_path, token.gs_token);
         let enable_teredo_derivation = plan.session.target.is_home();
 
         Self {

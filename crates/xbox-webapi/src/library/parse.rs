@@ -14,15 +14,46 @@ pub fn library_string(v: Option<&Value>) -> Option<String> {
     }
     .filter(|s| !s.is_empty())
 }
-fn number(v: Option<&Value>) -> Option<u64> {
+pub fn library_u64(v: Option<&Value>) -> Option<u64> {
     match v? {
-        Value::Number(n) => n.as_u64(),
-        Value::String(s) => s.parse().ok(),
+        Value::Number(n) => n.as_u64().or_else(|| whole_u64(n.as_f64()?)),
+        Value::String(s) => s
+            .trim()
+            .parse()
+            .ok()
+            .or_else(|| whole_u64(s.trim().parse().ok()?)),
         _ => None,
     }
 }
+
+fn whole_u64(value: f64) -> Option<u64> {
+    (value.is_finite() && value >= 0.0 && value.fract() == 0.0 && value < u64::MAX as f64)
+        .then_some(value as u64)
+}
+
+pub fn library_image_url(v: Option<&Value>) -> Option<String> {
+    let value = library_string(v)?;
+    let value = if value.starts_with("//") {
+        format!("https:{value}")
+    } else {
+        value
+    };
+    let mut url = reqwest::Url::parse(&value).ok()?;
+    let host = url.host_str()?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return None;
+    }
+    // Xbox 的历史封面仍返回 HTTP，已验证第一方图片服务支持相同 HTTPS 地址。
+    if url.scheme() == "http"
+        && (host.ends_with(".xboxlive.com") || host.ends_with(".s-microsoft.com"))
+    {
+        url.set_scheme("https").ok()?;
+    }
+    (url.scheme() == "https").then(|| url.to_string())
+}
+
 fn count(v: Option<&Value>) -> Option<u32> {
-    number(v).and_then(|n| n.try_into().ok())
+    library_u64(v).and_then(|n| n.try_into().ok())
 }
 fn rows<'a>(v: &'a Value, key: &str) -> Result<&'a Vec<Value>, WebApiError> {
     library_root(v)
@@ -65,10 +96,10 @@ pub fn parse_game_history(v: &Value) -> Result<LibraryPage<LibraryGame>, WebApiE
                                         .and_then(Value::as_str)
                                         .is_some_and(|s| s.eq_ignore_ascii_case(kind))
                                 })
-                                .and_then(|i| library_string(i.get("url")))
+                                .and_then(|i| library_image_url(i.get("url")))
                         })
                 })
-                .or_else(|| library_string(g.get("displayImage")));
+                .or_else(|| library_image_url(g.get("displayImage")));
             Some(LibraryGame {
                 description: library_string(g.get("detail").and_then(|d| d.get("description"))),
                 xbox_title_id: id,
@@ -82,6 +113,18 @@ pub fn parse_game_history(v: &Value) -> Result<LibraryPage<LibraryGame>, WebApiE
                 progress: g
                     .get("achievement")
                     .filter(|a| a.is_object())
+                    .filter(|a| {
+                        // sourceVersion=0 的全零装饰表示服务未提供汇总。
+                        count(a.get("sourceVersion")) != Some(0)
+                            || [
+                                "currentAchievements",
+                                "totalAchievements",
+                                "currentGamerscore",
+                                "totalGamerscore",
+                            ]
+                            .iter()
+                            .any(|key| count(a.get(*key)) != Some(0))
+                    })
                     .map(|a| GameProgress {
                         unlocked_count: count(a.get("currentAchievements")),
                         total_count: count(a.get("totalAchievements")),
@@ -155,7 +198,7 @@ pub fn parse_achievement_page(v: &Value) -> Result<LibraryPage<LibraryAchievemen
                             .find(|m| m.get("type").and_then(Value::as_str) == Some("Icon"))
                             .or_else(|| m.first())
                     })
-                    .and_then(|m| library_string(m.get("url"))),
+                    .and_then(|m| library_image_url(m.get("url"))),
                 is_secret: a.get("isSecret").and_then(Value::as_bool).unwrap_or(false),
                 is_unlocked,
                 gamerscore: a
@@ -194,13 +237,16 @@ pub fn parse_people(v: &Value) -> Result<Vec<LibraryPerson>, WebApiError> {
                             && d.get("State").and_then(Value::as_str) == Some("Active")
                     })
                 });
+            let gamertag = library_string(p.get("gamertag"))
+                .or_else(|| library_string(p.get("uniqueModernGamertag")))
+                .or_else(|| library_string(p.get("modernGamertag")))
+                .unwrap_or_default();
             Some(LibraryPerson {
                 xuid: library_string(p.get("xuid"))?,
-                gamertag: library_string(p.get("gamertag")).unwrap_or_default(),
                 display_name: library_string(p.get("displayName"))
-                    .or_else(|| library_string(p.get("gamertag")))
-                    .unwrap_or_default(),
-                avatar_url: library_string(p.get("displayPicRaw")),
+                    .unwrap_or_else(|| gamertag.clone()),
+                gamertag,
+                avatar_url: library_image_url(p.get("displayPicRaw")),
                 gamerscore: library_string(p.get("gamerScore")),
                 presence_state: library_string(p.get("presenceState")),
                 presence_text: library_string(p.get("presenceText")),
@@ -212,12 +258,7 @@ pub fn parse_people(v: &Value) -> Result<Vec<LibraryPerson>, WebApiError> {
         .collect())
 }
 fn console_rows(v: &Value) -> Result<&Vec<Value>, WebApiError> {
-    let root = library_root(v);
-    if let Some(code) = library_string(root.get("status").and_then(|s| s.get("errorCode"))) {
-        if code != "0" && !code.eq_ignore_ascii_case("success") {
-            return Err(WebApiError::parse("主机远程管理查询暂不可用"));
-        }
-    }
+    crate::smartglass_api::validate_remote_management_response(v)?;
     rows(v, "result")
 }
 pub fn parse_installed_games(v: &Value) -> Result<Vec<InstalledGame>, WebApiError> {
@@ -245,7 +286,7 @@ pub fn parse_installed_games(v: &Value) -> Result<Vec<InstalledGame>, WebApiErro
                 name: library_string(g.get("name"))?,
                 artwork_url: None,
                 storage_device_id: library_string(g.get("storageDeviceId")),
-                size_bytes: number(g.get("sizeInBytes")),
+                size_bytes: library_u64(g.get("sizeInBytes")),
                 installed_at: library_string(g.get("installTime")),
                 last_played_at: library_string(g.get("lastActiveTime")),
             })
@@ -253,18 +294,42 @@ pub fn parse_installed_games(v: &Value) -> Result<Vec<InstalledGame>, WebApiErro
         .collect())
 }
 pub fn parse_console_storage(v: &Value) -> Result<Vec<ConsoleStorage>, WebApiError> {
-    Ok(console_rows(v)?
+    parse_storage_items(console_rows(v)?)
+}
+
+pub fn parse_console_storage_for_device(
+    v: &Value,
+    console_id: &str,
+) -> Result<Vec<ConsoleStorage>, WebApiError> {
+    let device = console_rows(v)?
         .iter()
-        .filter_map(|s| {
-            Some(ConsoleStorage {
-                id: library_string(s.get("storageDeviceId"))?,
-                name: library_string(s.get("storageDeviceName"))
+        .find(|device| {
+            ["id", "deviceId", "serverId"]
+                .iter()
+                .any(|key| library_string(device.get(key)).as_deref() == Some(console_id.trim()))
+        })
+        .ok_or_else(|| WebApiError::parse("invalid console storage identity"))?;
+    let items = device
+        .get("storageDevices")
+        .and_then(Value::as_array)
+        .ok_or_else(|| WebApiError::parse("missing storageDevices array"))?;
+    parse_storage_items(items)
+}
+
+fn parse_storage_items(items: &[Value]) -> Result<Vec<ConsoleStorage>, WebApiError> {
+    items
+        .iter()
+        .map(|s| {
+            Ok(ConsoleStorage {
+                id: library_string(s.get("storageDeviceId").or_else(|| s.get("id")))
+                    .ok_or_else(|| WebApiError::parse("invalid console storage response"))?,
+                name: library_string(s.get("storageDeviceName").or_else(|| s.get("name")))
                     .unwrap_or_else(|| "Xbox 存储".into()),
-                free_bytes: number(s.get("freeSpaceBytes")),
-                total_bytes: number(s.get("totalSpaceBytes")),
+                free_bytes: library_u64(s.get("freeSpaceBytes").or_else(|| s.get("freeBytes"))),
+                total_bytes: library_u64(s.get("totalSpaceBytes").or_else(|| s.get("totalBytes"))),
             })
         })
-        .collect())
+        .collect()
 }
 pub fn parse_media_page(
     v: &Value,
@@ -286,7 +351,7 @@ pub fn parse_media_page(
                         .is_some_and(|s| !s.to_lowercase().contains("thumbnail"))
                 })
             });
-            let url = original.and_then(|l| library_string(l.get("uri")));
+            let url = original.and_then(|l| library_image_url(l.get("uri")));
             Some(LibraryMedia {
                 id: library_string(m.get("contentId"))?,
                 kind,
@@ -297,9 +362,9 @@ pub fn parse_media_page(
                         .or_else(|| m.get("uploadDate"))
                         .or_else(|| m.get("dateUploaded")),
                 ),
-                duration_seconds: number(m.get("durationInSeconds")),
+                duration_seconds: library_u64(m.get("durationInSeconds")),
                 thumbnail_url: thumbnail
-                    .and_then(|l| library_string(l.get("uri")))
+                    .and_then(|l| library_image_url(l.get("uri")))
                     .or_else(|| {
                         if kind == MediaKind::Screenshot {
                             url.clone()
@@ -319,22 +384,45 @@ pub fn parse_media_page(
         continuation: library_continuation(v),
     })
 }
+pub fn validate_minutes_played_response(v: &Value) -> Result<(), WebApiError> {
+    fn valid_collections(v: &Value, depth: u8) -> bool {
+        if depth > 8 || !v.is_object() {
+            return false;
+        }
+        ["groups", "statlistscollection", "stats"]
+            .iter()
+            .all(|key| match v.get(key) {
+                None => true,
+                Some(Value::Array(items)) => {
+                    items.iter().all(|item| valid_collections(item, depth + 1))
+                }
+                Some(_) => false,
+            })
+    }
+    let root = library_root(v);
+    let has_collection = ["groups", "statlistscollection", "stats"]
+        .iter()
+        .any(|key| root.get(key).is_some());
+    if has_collection && valid_collections(root, 0) {
+        Ok(())
+    } else {
+        Err(WebApiError::parse("invalid statistics response"))
+    }
+}
+
 pub fn parse_minutes_played(v: &Value, title_id: &str) -> Option<u64> {
     fn visit(v: &Value, title: &str, inherited: Option<&str>, depth: u8) -> Option<u64> {
         if depth > 8 {
             return None;
         }
-        let id = v
-            .get("titleId")
-            .or_else(|| v.get("titleid"))
-            .and_then(Value::as_str)
-            .or(inherited);
+        let own_id = library_string(v.get("titleId").or_else(|| v.get("titleid")));
+        let id = own_id.as_deref().or(inherited);
         if v.get("name")
             .and_then(Value::as_str)
             .is_some_and(|s| s.eq_ignore_ascii_case("MinutesPlayed"))
-            && id.is_none_or(|id| id == title)
+            && id == Some(title)
         {
-            return number(v.get("value"));
+            return library_u64(v.get("value"));
         }
         for key in ["groups", "statlistscollection", "stats"] {
             if let Some(items) = v.get(key).and_then(Value::as_array) {
@@ -352,6 +440,152 @@ pub fn parse_minutes_played(v: &Value, title_id: &str) -> Option<u64> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn numeric_values_accept_integral_service_floats_and_reject_invalid_capacity() {
+        for value in [json!(42), json!(42.0), json!("42"), json!(" 42.0 ")] {
+            assert_eq!(library_u64(Some(&value)), Some(42));
+        }
+        for value in [
+            json!(-1),
+            json!(1.5),
+            json!("NaN"),
+            json!("inf"),
+            json!("18446744073709551616"),
+            json!(null),
+        ] {
+            assert_eq!(library_u64(Some(&value)), None);
+        }
+        assert_eq!(library_u64(Some(&json!(u64::MAX))), Some(u64::MAX));
+        assert_eq!(
+            library_u64(Some(&json!(u64::MAX.to_string()))),
+            Some(u64::MAX)
+        );
+        let storage = parse_console_storage(&json!({"status":{"errorCode":"OK"},"result":[{
+            "storageDeviceId":"disk", "freeSpaceBytes":42.0, "totalSpaceBytes":100.0
+        }]}))
+        .unwrap();
+        assert_eq!(storage[0].free_bytes, Some(42));
+        assert_eq!(storage[0].total_bytes, Some(100));
+    }
+
+    #[test]
+    fn embedded_console_storage_matches_identity_and_preserves_capacity() {
+        let payload = json!({"data":{"status":{"errorCode":"OK"},"result":[
+            {"id":"other","storageDevices":[{"storageDeviceId":"wrong-disk"}]},
+            {"id":"target","storageDevices":[{"storageDeviceId":"disk","storageDeviceName":"Internal","freeSpaceBytes":42.0,"totalSpaceBytes":100.0}]}
+        ]}});
+        let storage = parse_console_storage_for_device(&payload, " target ").unwrap();
+        assert_eq!(storage.len(), 1);
+        assert_eq!(storage[0].id, "disk");
+        assert_eq!(storage[0].free_bytes, Some(42));
+        assert_eq!(storage[0].total_bytes, Some(100));
+        assert!(parse_console_storage_for_device(&payload, "missing").is_err());
+        assert!(
+            parse_console_storage_for_device(&json!({"result":[{"id":"target"}]}), "target")
+                .is_err()
+        );
+        assert!(parse_console_storage_for_device(
+            &json!({"result":[{"deviceId":"target","storageDevices":[]}]}),
+            "target"
+        )
+        .unwrap()
+        .is_empty());
+        assert!(parse_console_storage(&json!({"result":[{"freeSpaceBytes":42}]})).is_err());
+    }
+
+    #[test]
+    fn statistics_schema_preserves_empty_data_and_rejects_invalid_responses() {
+        for payload in [
+            json!({"statlistscollection":[]}),
+            json!({"groups":[{"titleId":"1","statlistscollection":[{"stats":[]}]}]}),
+            json!({"data":{"statlistscollection":[{"stats":[{"name":"MinutesPlayed","titleid":"1","value":"42"}]}]}}),
+        ] {
+            assert!(validate_minutes_played_response(&payload).is_ok());
+        }
+        for payload in [
+            json!({}),
+            json!({"stats":null}),
+            json!({"stats":[null]}),
+            json!({"statlistscollection":[{"stats":"invalid"}]}),
+        ] {
+            assert_eq!(
+                validate_minutes_played_response(&payload)
+                    .unwrap_err()
+                    .safe_summary()["protocolErrorCode"],
+                "invalidStatistics"
+            );
+        }
+    }
+
+    #[test]
+    fn first_party_http_artwork_uses_verified_https_and_safe_urls() {
+        for (source, expected) in [
+            (
+                "http://images-eds-ssl.xboxlive.com/image?x=1",
+                "https://images-eds-ssl.xboxlive.com/image?x=1",
+            ),
+            (
+                "http://store-images.s-microsoft.com/image/apps.1",
+                "https://store-images.s-microsoft.com/image/apps.1",
+            ),
+            (
+                "//store-images.s-microsoft.com/image/apps.1",
+                "https://store-images.s-microsoft.com/image/apps.1",
+            ),
+            (
+                "https://example.com/signed.jpg?sig=opaque%2Fvalue",
+                "https://example.com/signed.jpg?sig=opaque%2Fvalue",
+            ),
+        ] {
+            assert_eq!(
+                library_image_url(Some(&json!(source))).as_deref(),
+                Some(expected)
+            );
+        }
+        for source in [
+            "http://example.com/image",
+            "http://evil-xboxlive.com/image",
+            "https://user:password@example.com/image",
+            "data:text/html,content",
+            "invalid",
+        ] {
+            assert!(library_image_url(Some(&json!(source))).is_none());
+        }
+        let page = parse_game_history(&json!({"titles":[{"titleId":"1","name":"Game","images":[{"type":"Tile","url":"http://images-eds-ssl.xboxlive.com/tile"}]}]})).unwrap();
+        assert_eq!(
+            page.items[0].artwork_url.as_deref(),
+            Some("https://images-eds-ssl.xboxlive.com/tile")
+        );
+    }
+
+    #[test]
+    fn history_distinguishes_unplayed_achievement_summary_from_missing_source() {
+        let page = parse_game_history(&json!({"titles":[
+            {"titleId":"1","name":"Available","achievement":{"sourceVersion":3,"currentAchievements":0,"totalAchievements":46,"currentGamerscore":0,"totalGamerscore":1180}},
+            {"titleId":"2","name":"Missing","achievement":{"sourceVersion":0,"currentAchievements":0,"totalAchievements":0,"currentGamerscore":0,"totalGamerscore":0}}
+        ]})).unwrap();
+        assert_eq!(
+            page.items[0].progress.as_ref().unwrap().total_count,
+            Some(46)
+        );
+        assert_eq!(
+            page.items[0].progress.as_ref().unwrap().unlocked_count,
+            Some(0)
+        );
+        assert!(page.items[1].progress.is_none());
+    }
+
+    #[test]
+    fn playtime_batch_matches_decimal_title_ids_and_keeps_missing_values() {
+        let payload = json!({"statlistscollection":[{"stats":[
+            {"titleid":"4294967295","name":"MinutesPlayed","value":"79"},
+            {"titleid":1292135258,"name":"MinutesPlayed","value":"0"},
+            {"name":"MinutesPlayed","value":"999"}
+        ]}]});
+        assert_eq!(parse_minutes_played(&payload, "4294967295"), Some(79));
+        assert_eq!(parse_minutes_played(&payload, "1292135258"), Some(0));
+        assert_eq!(parse_minutes_played(&payload, "100"), None);
+    }
     #[test]
     fn history_preserves_missing_progress_and_large_title_id() {
         let page = parse_game_history(&json!({"titles":[{"titleId":4294967295u64,"name":"Game","type":"Game","achievement":{"currentAchievements":0}}, {"titleId":4294967295u64,"name":"Duplicate"},{"titleId":"1","name":"Video","type":"App"}],"pagingInfo":{"continuationToken":"next/+"}})).unwrap();
@@ -394,6 +628,9 @@ mod tests {
         assert_eq!(people[0].current_title_id.as_deref(), Some("2"));
         assert_eq!(people[0].is_following_caller, Some(false));
         assert_eq!(people[0].is_followed_by_caller, None);
+        let modern = parse_people(&json!({"people":[{"xuid":"1","uniqueModernGamertag":"Player#1234","modernGamertag":"Player"}]})).unwrap();
+        assert_eq!(modern[0].gamertag, "Player#1234");
+        assert_eq!(modern[0].display_name, "Player#1234");
     }
     #[test]
     fn media_preserves_original_thumbnail_and_expiry() {

@@ -10,3 +10,4 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 xbox-webapi = { path = "../xbox-webapi" }
+tokio = { version = "1", features = [ "macros", "rt", "time" ] }

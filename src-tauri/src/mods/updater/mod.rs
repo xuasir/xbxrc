@@ -3,6 +3,7 @@ pub mod endpoints;
 pub mod events;
 mod manifest;
 pub mod rpc;
+mod runtime_state;
 pub mod service;
 
 pub use channel::UpdateChannel;

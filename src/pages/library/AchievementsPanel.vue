@@ -2,6 +2,7 @@
 import type { LibraryAchievement } from '@/shared/rpc/library'
 import { computed, onDeactivated, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingInputControl from '@/components/settings/SettingInputControl.vue'
 import SettingModalShell from '@/components/settings/SettingModalShell.vue'
 import { Focusable } from '@/navigation/core/vue'
@@ -75,13 +76,13 @@ async function more() {
     </p>
     <div class="library-list">
       <Focusable v-for="item in rows" :id="`achievement.${achievementKey(item)}`" :key="achievementKey(item)" as="button" class="library-row achievement-row" @click="detail = ownMap.get(achievementKey(item)) || item">
-        <img v-if="item.imageUrl && !secret(item)" :src="item.imageUrl" alt="" loading="lazy"><span class="library-row__body"><strong>{{ name(item) }}</strong><span class="library-caption">{{ secret(item) ? '打开详情可主动揭示' : item.isUnlocked ? item.description : item.lockedDescription || item.description }}</span><span class="library-caption"> · {{ item.gamerscore ?? '—' }} G</span></span><span class="achievement-status"><span class="library-caption">我的</span><strong>{{ status(ownMap.get(achievementKey(item))) }}</strong></span><span v-if="targetXuid" class="achievement-status"><span class="library-caption">好友</span><strong>{{ status(friendMap.get(achievementKey(item))) }}</strong></span>
+        <RemoteImage v-if="!secret(item)" class="library-thumb" :src="item.imageUrl" /><span class="library-row__body"><strong>{{ name(item) }}</strong><span class="library-caption">{{ secret(item) ? '打开详情可主动揭示' : item.isUnlocked ? item.description : item.lockedDescription || item.description }}</span><span class="library-caption"> · {{ item.gamerscore ?? '—' }} G</span></span><span class="achievement-status"><span class="library-caption">我的</span><strong>{{ status(ownMap.get(achievementKey(item))) }}</strong></span><span v-if="targetXuid" class="achievement-status"><span class="library-caption">好友</span><strong>{{ status(friendMap.get(achievementKey(item))) }}</strong></span>
       </Focusable>
     </div>
     <p v-if="own.state.value.loading || (targetXuid && friend.state.value.loading)" class="library-state" role="status">
       正在读取成就…
-    </p><p v-else-if="!rows.length" class="library-state">
-      当前可见成就列表为空
+    </p><p v-else-if="!rows.length && !own.state.value.error && !(targetXuid && friend.state.value.error)" class="library-state">
+      {{ search || filter !== 'all' ? '当前筛选结果为空' : 'Xbox 服务暂未提供此游戏的成就列表' }}
     </p>
     <Focusable v-if="own.state.value.value?.continuation || (targetXuid && friend.state.value.value?.continuation)" id="game.achievements.more" as="button" class="library-control" :disabled="own.state.value.loading || friend.state.value.loading" @click="more">
       加载更多成就

@@ -14,7 +14,7 @@ pub struct TitleHubApi {
 impl TitleHubApi {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
         }
@@ -44,7 +44,9 @@ impl TitleHubApi {
                 .append_pair("continuationToken", token);
         }
         let url = url.to_string();
-        self.transport.get(&url, Some(self.headers()?)).await
+        self.transport
+            .get_paginated(&url, Some(self.headers()?))
+            .await
     }
 
     pub async fn get_title_detail(&self, xuid: &str, title_id: &str) -> Result<Value, WebApiError> {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import RemoteImage from '@/components/common/RemoteImage.vue'
 import { useShellPageHints } from '@/components/layout/shell-context'
 import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
@@ -44,7 +45,7 @@ async function refresh() {
           </p><p v-for="notice in query.state.value.value?.notices" :key="notice" class="library-notice" role="status">
             {{ notice }}
           </p><div v-if="profile || presence" class="library-profile">
-            <img v-if="profile?.avatarUrl || presence?.avatarUrl" :src="profile?.avatarUrl || presence?.avatarUrl || ''" alt="" class="library-profile__avatar"><div>
+            <RemoteImage :src="profile?.avatarUrl || presence?.avatarUrl" :fallback="(profile?.gamertag || presence?.gamertag || '').slice(0, 1)" class="library-profile__avatar" /><div>
               <h2>{{ profile?.gamertag || presence?.gamertag }}</h2><p class="library-copy">
                 {{ profile?.gamerscore || presence?.gamerscore || '—' }} G
               </p><p v-if="presence" class="library-copy">

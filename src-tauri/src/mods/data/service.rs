@@ -3,7 +3,7 @@ use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::mods::data::events;
 use crate::mods::data::runtime_state::{DataRuntimeState, XcloudCatalogRefreshJoin};
-use crate::mods::data::services::personal_service::{PersonalContext, PersonalService};
+use crate::mods::data::services::personal_service::{user_error, PersonalContext, PersonalService};
 use crate::mods::data::services::{
     HostService, ProfileService, StreamingQueryService, XcloudService,
 };
@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 pub struct DataService {
     app_handle: tauri::AppHandle,
+    config_provider: ConfigProviderRef,
     session_resolver: DataSessionResolver,
     cache_repository: Arc<DataCacheRepository>,
     runtime_state: Arc<DataRuntimeState>,
@@ -31,16 +32,52 @@ pub struct DataService {
     profile_service: ProfileService,
     streaming_query_service: StreamingQueryService,
     xcloud_service: Arc<XcloudService>,
+    runtime_trace: RuntimeTraceRecorderRef,
+}
+
+struct XcloudRefreshContext {
+    app_handle: tauri::AppHandle,
+    xcloud_service: Arc<XcloudService>,
+    cache_repository: Arc<DataCacheRepository>,
+    session_resolver: DataSessionResolver,
+    config_provider: ConfigProviderRef,
+    runtime_trace: RuntimeTraceRecorderRef,
 }
 
 impl DataService {
-    async fn personal_context(&self, target: Option<&str>) -> Result<PersonalContext, String> {
-        let session = self
+    async fn personal_query<T, F, Fut>(
+        &self,
+        operation: &'static str,
+        target: Option<&str>,
+        request: F,
+    ) -> Result<DataQuery<T>, String>
+    where
+        T: Send,
+        F: Fn(PersonalContext) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = Result<T, xbox_webapi::WebApiError>> + Send,
+    {
+        let started = std::time::Instant::now();
+        let request = &request;
+        let result = self
             .session_resolver
-            .ensure_authenticated_session()
-            .await?
-            .ok_or("请先登录 Xbox 账户")?;
-        PersonalService::context(&session, target).await
+            .run_query(|session| async move {
+                let ctx =
+                    PersonalService::context(&session, target, self.runtime_trace.clone()).await?;
+                let data = request(ctx.clone()).await?;
+                Ok(ctx.wrap(data))
+            })
+            .await;
+        self.record_http_result(operation, started, result.as_ref().err());
+        result.map_err(|error| user_error(&error))
+    }
+
+    fn record_http_result(
+        &self,
+        operation: &'static str,
+        started: std::time::Instant,
+        error: Option<&xbox_webapi::WebApiError>,
+    ) {
+        record_data_http_result(&self.runtime_trace, operation, started, error);
     }
 
     pub fn new(
@@ -52,14 +89,34 @@ impl DataService {
         let cache_repository = Arc::new(DataCacheRepository::new(app_handle.clone()));
         Self {
             app_handle,
+            config_provider: config_provider.clone(),
             session_resolver: DataSessionResolver::new(auth_provider),
             cache_repository,
             runtime_state: Arc::new(DataRuntimeState::new()),
             host_service: HostService::new(),
             profile_service: ProfileService::new(),
-            streaming_query_service: StreamingQueryService::new(config_provider, runtime_trace),
+            streaming_query_service: StreamingQueryService::new(
+                config_provider,
+                runtime_trace.clone(),
+            ),
             xcloud_service: Arc::new(XcloudService::new()),
+            runtime_trace,
         }
+    }
+
+    fn catalog_scope(&self) -> Result<xbox_cloud_catalog_flow::CloudCatalogScope, String> {
+        Self::catalog_scope_for(&self.config_provider)
+    }
+
+    fn catalog_scope_for(
+        config_provider: &ConfigProviderRef,
+    ) -> Result<xbox_cloud_catalog_flow::CloudCatalogScope, String> {
+        let config = config_provider.get_by_keys(&["locale".to_owned()])?;
+        let locale = config
+            .get("locale")
+            .and_then(|value| value.as_str())
+            .unwrap_or("en");
+        Ok(XcloudService::resolve_catalog_scope(locale))
     }
 
     async fn resolve_xcloud_catalog_context(
@@ -71,12 +128,36 @@ impl DataService {
         )>,
         String,
     > {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
+        let started = std::time::Instant::now();
+        let result = self.resolve_xcloud_catalog_context_inner().await;
+        self.record_http_result("xcloudAccess", started, result.as_ref().err());
+        result.map_err(|error| XcloudService::catalog_error(&error))
+    }
+
+    async fn resolve_xcloud_catalog_context_inner(
+        &self,
+    ) -> Result<
+        Option<(
+            crate::mods::data::types::DataSessionContext,
+            XcloudCatalogCacheScope,
+        )>,
+        xbox_webapi::WebApiError,
+    > {
+        let session = self.session_resolver.ensure_session().await?;
         let Some(session) = session else {
             return Ok(None);
         };
 
-        let Some(scope) = self.xcloud_service.resolve_cache_scope(&session) else {
+        let catalog_scope = self
+            .catalog_scope()
+            .map_err(|_| xbox_webapi::WebApiError::parse("invalid catalog configuration"))?;
+        let Some(scope) = self
+            .xcloud_service
+            .resolve_cache_scope(&session, &catalog_scope)
+        else {
+            if let Some(error) = XcloudService::unavailable_error(&session) {
+                return Err(error);
+            }
             return Ok(None);
         };
 
@@ -113,6 +194,7 @@ impl DataService {
             }
             DataXcloudCatalogCacheState::Fresh | DataXcloudCatalogCacheState::Stale => {
                 let payload = DataXcloudCatalogPayload {
+                    scope_key: Some(cache_key.clone()),
                     titles: loaded_snapshot.titles.clone(),
                     cache_state: loaded_snapshot.cache_state.clone(),
                     updated_at: loaded_snapshot.updated_at,
@@ -174,17 +256,32 @@ impl DataService {
     ) -> Result<DataXcloudCatalogPayload, String> {
         let cache_key = DataCacheRepository::scoped_cache_key(&scope);
         match self.runtime_state.begin_xcloud_refresh(&cache_key) {
-            XcloudCatalogRefreshJoin::Leader(_) => {
-                let result = self
-                    .perform_xcloud_refresh(session, scope, reason.to_string(), force_refresh)
-                    .await;
-                self.runtime_state
-                    .finish_xcloud_refresh(&cache_key, result.clone());
+            XcloudCatalogRefreshJoin::Leader(lease) => {
+                let result = Self::perform_xcloud_refresh_task(
+                    self.xcloud_refresh_context(),
+                    session,
+                    scope,
+                    reason.to_string(),
+                    force_refresh,
+                )
+                .await;
+                lease.finish(result.clone());
                 result
             }
             XcloudCatalogRefreshJoin::Follower(receiver) => receiver
                 .await
-                .map_err(|_| "xcloud catalog refresh task canceled".to_string())?,
+                .map_err(|_| "目录刷新已中断，请重试".to_string())?,
+        }
+    }
+
+    fn xcloud_refresh_context(&self) -> XcloudRefreshContext {
+        XcloudRefreshContext {
+            app_handle: self.app_handle.clone(),
+            xcloud_service: self.xcloud_service.clone(),
+            cache_repository: self.cache_repository.clone(),
+            session_resolver: self.session_resolver.clone(),
+            config_provider: self.config_provider.clone(),
+            runtime_trace: self.runtime_trace.clone(),
         }
     }
 
@@ -196,89 +293,108 @@ impl DataService {
         force_refresh: bool,
     ) {
         let cache_key = DataCacheRepository::scoped_cache_key(&scope);
-        match self.runtime_state.begin_xcloud_refresh(&cache_key) {
-            XcloudCatalogRefreshJoin::Leader(_) => {
-                let runtime_state = self.runtime_state.clone();
-                let cache_repository = self.cache_repository.clone();
-                let xcloud_service = self.xcloud_service.clone();
-                let app_handle = self.app_handle.clone();
-
-                tauri::async_runtime::spawn(async move {
-                    let result = DataService::perform_xcloud_refresh_task(
-                        app_handle,
-                        xcloud_service,
-                        cache_repository,
-                        session,
-                        scope,
-                        reason,
-                        force_refresh,
-                    )
-                    .await;
-                    runtime_state.finish_xcloud_refresh(&cache_key, result);
-                });
-            }
-            XcloudCatalogRefreshJoin::Follower(_) => {}
+        if let XcloudCatalogRefreshJoin::Leader(lease) =
+            self.runtime_state.begin_xcloud_refresh(&cache_key)
+        {
+            let context = self.xcloud_refresh_context();
+            tauri::async_runtime::spawn(async move {
+                let result = Self::perform_xcloud_refresh_task(
+                    context,
+                    session,
+                    scope,
+                    reason,
+                    force_refresh,
+                )
+                .await;
+                lease.finish(result);
+            });
         }
     }
 
-    async fn perform_xcloud_refresh(
-        &self,
-        session: crate::mods::data::types::DataSessionContext,
-        scope: XcloudCatalogCacheScope,
-        reason: String,
-        force_refresh: bool,
-    ) -> Result<DataXcloudCatalogPayload, String> {
-        Self::perform_xcloud_refresh_task(
-            self.app_handle.clone(),
-            self.xcloud_service.clone(),
-            self.cache_repository.clone(),
-            session,
-            scope,
-            reason,
-            force_refresh,
-        )
-        .await
-    }
-
     async fn perform_xcloud_refresh_task(
-        app_handle: tauri::AppHandle,
-        xcloud_service: Arc<XcloudService>,
-        cache_repository: Arc<DataCacheRepository>,
-        session: crate::mods::data::types::DataSessionContext,
+        context: XcloudRefreshContext,
+        _session: crate::mods::data::types::DataSessionContext,
         scope: XcloudCatalogCacheScope,
         reason: String,
         force_refresh: bool,
     ) -> Result<DataXcloudCatalogPayload, String> {
         let started_at = std::time::Instant::now();
-        let outcome = xcloud_service
-            .refresh_catalog(&session, &scope, &cache_repository, force_refresh)
-            .await?;
-        let elapsed_ms = started_at.elapsed().as_millis();
-
+        let catalog_scope = Self::catalog_scope_for(&context.config_provider)?;
+        let query_context = &context;
+        let expected_scope = &scope;
+        let requested_catalog = &catalog_scope;
+        let result = context
+            .session_resolver
+            .run_query(|session| async move {
+                let active_scope = query_context
+                    .xcloud_service
+                    .resolve_cache_scope(&session, requested_catalog)
+                    .ok_or_else(|| {
+                        XcloudService::unavailable_error(&session).unwrap_or_else(|| {
+                            xbox_webapi::WebApiError::auth("云游戏访问凭据暂不可用，请重新登录")
+                        })
+                    })?;
+                if active_scope != *expected_scope {
+                    return Err(xbox_webapi::WebApiError::auth(
+                        "登录或目录设置已更新，请刷新",
+                    ));
+                }
+                query_context
+                    .xcloud_service
+                    .refresh_catalog(
+                        &session,
+                        expected_scope,
+                        &query_context.cache_repository,
+                        force_refresh,
+                    )
+                    .await
+            })
+            .await;
+        record_data_http_result(
+            &context.runtime_trace,
+            "cloudCatalog",
+            started_at,
+            result.as_ref().err(),
+        );
+        let outcome = result.map_err(|error| XcloudService::catalog_error(&error))?;
+        let current = context
+            .session_resolver
+            .current_session()
+            .map_err(|error| user_error(&error))?
+            .ok_or("登录状态已更新，请刷新")?;
+        let current_scope = Self::catalog_scope_for(&context.config_provider)?;
+        if context
+            .xcloud_service
+            .resolve_cache_scope(&current, &current_scope)
+            .as_ref()
+            != Some(&scope)
+        {
+            return Err("登录或目录设置已更新，请刷新".into());
+        }
         log::info!(
-            "[Data][xcloud] refresh reason={} duration={}ms titles={} missingProductCount={}",
-            reason,
-            elapsed_ms,
+            "[Data][xcloud] refresh duration={}ms titles={} missingProductCount={}",
+            started_at.elapsed().as_millis(),
             outcome.payload.titles.len(),
             outcome.missing_product_count
         );
-
         let event_payload = DataXcloudCatalogUpdatedEvent {
+            scope_key: DataCacheRepository::scoped_cache_key(&scope),
             titles: outcome.payload.titles.clone(),
             cache_state: outcome.payload.cache_state.clone(),
             updated_at: outcome.payload.updated_at,
             refreshing: false,
             reason,
         };
-        if let Err(error) = events::emit_xcloud_catalog_updated(&app_handle, &event_payload) {
+        if let Err(error) = events::emit_xcloud_catalog_updated(&context.app_handle, &event_payload)
+        {
             log::warn!("[Data][xcloud] emit catalog updated failed: {}", error);
         }
-
         Ok(outcome.payload)
     }
 
     fn empty_catalog_payload(cache_state: DataXcloudCatalogCacheState) -> DataXcloudCatalogPayload {
         DataXcloudCatalogPayload {
+            scope_key: None,
             titles: Vec::new(),
             cache_state,
             updated_at: None,
@@ -294,24 +410,32 @@ impl DataProvider for DataService {
         target: Option<String>,
         title: String,
     ) -> Result<DataQuery<Option<LibraryGame>>, String> {
-        let ctx = self.personal_context(target.as_deref()).await?;
-        Ok(ctx.wrap(PersonalService::game(&ctx, &title).await?))
+        self.personal_query("titleDetail", target.as_deref(), |ctx| {
+            let title = title.clone();
+            async move { PersonalService::game(&ctx, &title).await }
+        })
+        .await
     }
 
     async fn get_personal_account(
         &self,
         target: Option<String>,
     ) -> Result<DataQuery<DataPersonalAccount>, String> {
-        let ctx = self.personal_context(target.as_deref()).await?;
-        Ok(ctx.wrap(PersonalService::account(&ctx).await))
+        self.personal_query("personalAccount", target.as_deref(), |ctx| async move {
+            PersonalService::account(&ctx).await
+        })
+        .await
     }
     async fn get_game_history(
         &self,
         target: Option<String>,
         continuation: Option<String>,
     ) -> Result<DataQuery<LibraryPage<LibraryGame>>, String> {
-        let ctx = self.personal_context(target.as_deref()).await?;
-        Ok(ctx.wrap(PersonalService::history(&ctx, continuation.as_deref()).await?))
+        self.personal_query("titleHistory", target.as_deref(), |ctx| {
+            let continuation = continuation.clone();
+            async move { PersonalService::history(&ctx, continuation.as_deref()).await }
+        })
+        .await
     }
     async fn get_achievements(
         &self,
@@ -320,33 +444,48 @@ impl DataProvider for DataService {
         continuation: Option<String>,
         language: String,
     ) -> Result<DataQuery<LibraryPage<LibraryAchievement>>, String> {
-        let ctx = self.personal_context(target.as_deref()).await?;
-        Ok(ctx.wrap(
-            PersonalService::achievements(&ctx, &title, continuation.as_deref(), &language).await?,
-        ))
+        self.personal_query("achievements", target.as_deref(), |ctx| {
+            let (title, continuation, language) =
+                (title.clone(), continuation.clone(), language.clone());
+            async move {
+                PersonalService::achievements(&ctx, &title, continuation.as_deref(), &language)
+                    .await
+            }
+        })
+        .await
     }
     async fn get_playtimes(
         &self,
         target: Option<String>,
         ids: Vec<String>,
     ) -> Result<DataQuery<Vec<DataPlaytime>>, String> {
-        let ctx = self.personal_context(target.as_deref()).await?;
-        Ok(ctx.wrap(PersonalService::playtimes(&ctx, ids).await?))
+        self.personal_query("playtimes", target.as_deref(), |ctx| {
+            let ids = ids.clone();
+            async move { PersonalService::playtimes(&ctx, ids).await }
+        })
+        .await
     }
     async fn get_console_library(
         &self,
         id: String,
     ) -> Result<DataQuery<DataConsoleLibrary>, String> {
-        let ctx = self.personal_context(None).await?;
-        Ok(ctx.wrap(PersonalService::console(&ctx, &id).await?))
+        let scope = self.catalog_scope()?;
+        self.personal_query("consoleLibrary", None, |ctx| {
+            let (id, scope) = (id.clone(), scope.clone());
+            async move { PersonalService::console(&ctx, &id, &scope).await }
+        })
+        .await
     }
     async fn get_media(
         &self,
         kind: MediaKind,
         continuation: Option<String>,
     ) -> Result<DataQuery<LibraryPage<LibraryMedia>>, String> {
-        let ctx = self.personal_context(None).await?;
-        Ok(ctx.wrap(PersonalService::media(&ctx, kind, continuation.as_deref()).await?))
+        self.personal_query("mediaSearch", None, |ctx| {
+            let continuation = continuation.clone();
+            async move { PersonalService::media(&ctx, kind, continuation.as_deref()).await }
+        })
+        .await
     }
     async fn resolve_media(
         &self,
@@ -354,15 +493,19 @@ impl DataProvider for DataService {
         id: String,
         continuation: Option<String>,
     ) -> Result<DataQuery<LibraryMedia>, String> {
-        let ctx = self.personal_context(None).await?;
-        let media = crate::mods::data::services::media_save::resolve(
-            &ctx,
-            kind,
-            &id,
-            continuation.as_deref(),
-        )
-        .await?;
-        Ok(ctx.wrap(media))
+        self.personal_query("mediaResolve", None, |ctx| {
+            let (id, continuation) = (id.clone(), continuation.clone());
+            async move {
+                crate::mods::data::services::media_save::resolve(
+                    &ctx,
+                    kind,
+                    &id,
+                    continuation.as_deref(),
+                )
+                .await
+            }
+        })
+        .await
     }
     async fn save_media(
         &self,
@@ -370,51 +513,65 @@ impl DataProvider for DataService {
         id: String,
         continuation: Option<String>,
     ) -> Result<DataMediaSaveResult, String> {
-        let ctx = self.personal_context(None).await?;
-        crate::mods::data::services::media_save::save(&ctx, kind, &id, continuation.as_deref())
-            .await
+        crate::mods::data::services::media_save::save(
+            &self.session_resolver,
+            &self.runtime_trace,
+            kind,
+            &id,
+            continuation.as_deref(),
+        )
+        .await
     }
 
     async fn get_user_profile(&self) -> Result<DataUserProfile, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            self.cache_repository.clear_cached_profile()?;
-            return self.cache_repository.get_cached_profile(0);
-        };
-
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(6),
-            self.profile_service.fetch_profile(&session),
-        )
-        .await
-        {
-            Ok(Ok(profile)) => {
-                if let Err(error) = self.cache_repository.save_cached_profile(&profile) {
-                    log::warn!("[Data] save profile cache failed: {}", error);
+        let started = std::time::Instant::now();
+        let result = self
+            .session_resolver
+            .run_query(|session| async move {
+                let profile = self.profile_service.fetch_profile(&session).await?;
+                Ok((session, profile))
+            })
+            .await;
+        self.record_http_result("profile", started, result.as_ref().err());
+        match result {
+            Ok((session, profile)) => {
+                if let Some(claims) = crate::mods::data::session_resolver::resolve_web_token_claims(
+                    &session.web_token,
+                ) {
+                    if let Err(error) = self
+                        .cache_repository
+                        .save_cached_profile(claims.account_scope(), &profile)
+                    {
+                        log::warn!("[Data] save profile cache failed: {}", error);
+                    }
                 }
             }
-            Ok(Err(error)) => {
-                log::warn!(
-                    "[Data] refresh profile failed, fallback to cached profile: {}",
-                    error
-                );
-            }
-            Err(_) => {
-                log::warn!("[Data] refresh profile timeout, fallback to cached profile");
-            }
+            Err(error) => log::warn!("[Data] refresh profile failed: {}", error.safe_summary()),
         }
-
-        self.cache_repository.get_cached_profile(session.app_level)
+        let current = self
+            .session_resolver
+            .current_session()
+            .map_err(|error| user_error(&error))?;
+        let Some(current) = current else {
+            self.cache_repository.clear_cached_profile()?;
+            return self.cache_repository.get_cached_profile(None, 0);
+        };
+        let claims =
+            crate::mods::data::session_resolver::resolve_web_token_claims(&current.web_token);
+        self.cache_repository.get_cached_profile(
+            claims.as_ref().map(|claims| claims.account_scope()),
+            current.app_level,
+        )
     }
 
     async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            return Ok(Vec::new());
-        };
-
-        let hosts = self.host_service.get_hosts(&session).await?;
-        Ok(hosts)
+        let started = std::time::Instant::now();
+        let result = self
+            .session_resolver
+            .run_query(|session| async move { self.host_service.get_hosts(&session).await })
+            .await;
+        self.record_http_result("hosts", started, result.as_ref().err());
+        result.map_err(|error| user_error(&error))
     }
 
     async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, String> {
@@ -503,3 +660,26 @@ impl DataProvider for DataService {
         self.prime_xcloud_catalog_impl("startupWarmup").await
     }
 }
+
+fn record_data_http_result(
+    recorder: &RuntimeTraceRecorderRef,
+    operation: &'static str,
+    started: std::time::Instant,
+    error: Option<&xbox_webapi::WebApiError>,
+) {
+    recorder.record_event(
+        "data",
+        "httpQueryFinished",
+        None,
+        serde_json::json!({
+            "operation": operation,
+            "elapsedMs": started.elapsed().as_millis(),
+            "outcome": if error.is_some() { "failed" } else { "success" },
+            "error": error.map(xbox_webapi::WebApiError::safe_summary),
+        }),
+    );
+}
+
+#[cfg(test)]
+#[path = "service.test.rs"]
+mod tests;

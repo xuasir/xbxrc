@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingInputControl from '@/components/settings/SettingInputControl.vue'
 import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
@@ -34,8 +35,7 @@ useLibraryFocusFallback(() => ['my.friends.filter', ...friends.value.map(p => `m
       {{ notice }}
     </p>
     <div v-if="profile" class="library-profile">
-      <img v-if="profile.avatarUrl" class="library-profile__avatar" :src="profile.avatarUrl" alt="">
-      <span v-else class="library-profile__avatar" aria-hidden="true">{{ (profile.displayName || profile.gamertag).slice(0, 1) }}</span>
+      <RemoteImage class="library-profile__avatar" :src="profile.avatarUrl" :fallback="(profile.displayName || profile.gamertag).slice(0, 1)" />
       <div>
         <h2>{{ profile.displayName || profile.gamertag }}</h2><p class="library-copy">
           {{ profile.gamertag }} · {{ profile.gamerscore ?? '—' }} G
@@ -55,11 +55,11 @@ useLibraryFocusFallback(() => ['my.friends.filter', ...friends.value.map(p => `m
           游戏中
         </option>
       </Focusable>
-      <span class="library-caption">已加载 {{ state.value?.friends?.length ?? 0 }} 位好友</span>
+      <span class="library-caption">{{ state.value?.friends ? `已加载 ${state.value.friends.length} 位好友` : state.loading ? '正在查询好友…' : '好友数据暂缺' }}</span>
     </div>
     <div class="library-list">
       <Focusable v-for="person in friends" :id="`my.friend.${person.xuid}`" :key="person.xuid" as="button" type="button" class="library-row library-row--person" @click="router.push({ name: 'my-friend', params: { targetXuid: person.xuid }, query: { from: route.fullPath } })">
-        <img v-if="person.avatarUrl" :src="person.avatarUrl" alt="" loading="lazy">
+        <RemoteImage class="library-thumb" :src="person.avatarUrl" :fallback="(person.gamertag || person.displayName).slice(0, 1)" />
         <span class="library-row__body"><strong>{{ person.gamertag || person.displayName }}</strong><span class="library-caption">{{ person.presenceState === 'Online' ? '在线' : person.presenceState === 'Offline' ? '离线' : '状态暂缺' }}<span v-if="person.presenceText"> · {{ person.presenceText }}</span></span></span><span class="library-row__value">{{ person.gamerscore ?? '—' }} G</span>
       </Focusable>
     </div>

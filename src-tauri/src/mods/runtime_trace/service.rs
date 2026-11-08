@@ -1,5 +1,3 @@
-#[cfg(test)]
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -81,6 +79,9 @@ pub struct RuntimeTraceRecorder {
     inner: Mutex<TraceInner>,
     configuration: Mutex<()>,
     writer: WriterHandle,
+    // 放在 writer 后，先完成写线程退出与句柄释放，再清理本测试目录。
+    #[cfg(test)]
+    test_root: tempfile::TempDir,
 }
 
 impl RuntimeTraceRecorder {
@@ -102,7 +103,15 @@ impl RuntimeTraceRecorder {
             std::process::id(),
             TRACE_RECORDER_ID.fetch_add(1, Ordering::Relaxed)
         );
-        let writer = WriterHandle::new(trace_root_dir(), trace_run_id.clone())?;
+        #[cfg(test)]
+        let test_root = tempfile::Builder::new()
+            .prefix("xbxrc-trace-test-")
+            .tempdir()?;
+        #[cfg(test)]
+        let root = test_root.path().join("runtime-logs");
+        #[cfg(not(test))]
+        let root = trace_root_dir();
+        let writer = WriterHandle::new(root, trace_run_id.clone())?;
         let recorder = Self {
             trace_run_id,
             inner: Mutex::new(TraceInner {
@@ -113,6 +122,8 @@ impl RuntimeTraceRecorder {
             }),
             configuration: Mutex::new(()),
             writer,
+            #[cfg(test)]
+            test_root,
         };
         recorder.open_trace_output(profile, dimensions, budget, "initial")?;
         Ok(recorder)
@@ -450,44 +461,11 @@ pub fn set_trace_root_dir(root: PathBuf) {
     let _ = TRACE_ROOT_OVERRIDE.set(root);
 }
 
-#[cfg(test)]
-fn project_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")))
-        .to_path_buf()
-}
-
 pub fn trace_root_dir() -> PathBuf {
-    #[cfg(test)]
-    {
-        current_test_trace_run_dir()
-    }
-    #[cfg(not(test))]
-    {
-        TRACE_ROOT_OVERRIDE
-            .get()
-            .cloned()
-            .unwrap_or_else(|| std::env::temp_dir().join("xbxrc").join("runtime-logs"))
-    }
-}
-
-#[cfg(test)]
-fn current_test_trace_run_dir() -> PathBuf {
-    static TEST_TRACE_RUN_DIR: OnceLock<PathBuf> = OnceLock::new();
-    TEST_TRACE_RUN_DIR
-        .get_or_init(|| {
-            initialize_test_trace_run_dir(&project_root().join("target/runtime-logs-tests"))
-        })
-        .clone()
-}
-
-#[cfg(test)]
-fn initialize_test_trace_run_dir(root: &Path) -> PathBuf {
-    let _ = std::fs::remove_dir_all(root);
-    let run_dir = root.join(format!("run-{}-pid{}", now_ms(), std::process::id()));
-    let _ = std::fs::create_dir_all(&run_dir);
-    run_dir
+    TRACE_ROOT_OVERRIDE
+        .get()
+        .cloned()
+        .unwrap_or_else(|| std::env::temp_dir().join("xbxrc").join("runtime-logs"))
 }
 
 pub(super) fn now_ms() -> u128 {
@@ -678,16 +656,22 @@ mod tests {
     }
 
     #[test]
-    fn initializes_new_test_run_by_clearing_previous_output() {
-        let root = project_root().join("target/runtime-logs-tests-reset-check");
-        fs::create_dir_all(root.join("old-run")).expect("create old run dir");
-        fs::write(root.join("old-run/stale.jsonl"), "{}\n").expect("seed stale trace");
-
-        let run_dir = initialize_test_trace_run_dir(&root);
-
-        let stale_path = root.join("old-run/stale.jsonl");
-        assert!(!stale_path.exists());
-        assert!(run_dir.exists());
-        assert_eq!(run_dir.parent(), Some(root.as_path()));
+    fn independent_recorders_preserve_live_output_and_clean_up_their_own_directory() {
+        let first = RuntimeTraceRecorder::new_with_mode("dev").unwrap();
+        first.record_event("test", "retained", None, json!({}));
+        first.writer.sync();
+        let first_path = first.path().unwrap();
+        let first_root = first.test_root.path().to_path_buf();
+        let second = RuntimeTraceRecorder::new_with_mode("dev").unwrap();
+        let second_root = second.test_root.path().to_path_buf();
+        assert_ne!(first_root, second_root);
+        assert!(fs::read_to_string(&first_path)
+            .unwrap()
+            .contains("retained"));
+        drop(second);
+        assert!(!second_root.exists());
+        assert!(first_path.exists());
+        drop(first);
+        assert!(!first_root.exists());
     }
 }

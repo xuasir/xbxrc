@@ -115,12 +115,12 @@ pub(crate) struct StartupRegistry {
 }
 
 impl StartupRegistry {
-    fn prune(&mut self) {
+    fn prune(&mut self, now: Instant) {
         self.entries.retain(|_, entry| {
             !entry.finished
                 || entry.scope.inner.creating.load(Ordering::Acquire)
                 || entry.scope.owned().is_some()
-                || entry.updated.elapsed() < Duration::from_secs(300)
+                || now.saturating_duration_since(entry.updated) < Duration::from_secs(300)
         });
     }
 
@@ -133,7 +133,7 @@ impl StartupRegistry {
         if self.shutting_down {
             return Err(cancelled_error("shutdown"));
         }
-        self.prune();
+        self.prune(Instant::now());
         if let Some(entry) = self.entries.get(id) {
             return Err(if entry.scope.is_cancelled() {
                 cancelled_error("startup")
@@ -168,7 +168,7 @@ impl StartupRegistry {
     }
 
     pub fn cancel(&mut self, id: &str) -> Result<SessionStartupScope, SessionFlowError> {
-        self.prune();
+        self.prune(Instant::now());
         if !self.entries.contains_key(id) {
             if self.entries.len() >= 256 {
                 return Err(SessionFlowError::message("startupRegistryAtCapacity"));
@@ -334,10 +334,11 @@ impl PreparationBudget {
 
 /// 同一单调时钟供启动、monitor 与恢复等待共享；墙钟由 trace 单独记录。
 pub(crate) fn now_ms() -> u64 {
-    static ORIGIN: std::sync::OnceLock<tokio::time::Instant> = std::sync::OnceLock::new();
-    ORIGIN
-        .get_or_init(tokio::time::Instant::now)
-        .elapsed()
+    // 固定真实单调原点，各 Tokio runtime 的虚拟时间只影响本次 elapsed。
+    static ORIGIN: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    let origin = *ORIGIN.get_or_init(Instant::now);
+    tokio::time::Instant::now()
+        .saturating_duration_since(tokio::time::Instant::from_std(origin))
         .as_millis() as u64
 }
 
@@ -455,15 +456,20 @@ mod tests {
         let token = SessionCancelToken::default();
         retained.set_owned("session".to_owned(), token.clone());
         state.finish("retained");
-        state.entries.get_mut("retained").unwrap().updated =
-            Instant::now() - Duration::from_secs(301);
         for i in 0..255 {
             let id = format!("completed-{i}");
             state.begin(&id, "cloud", &id).unwrap();
             state.finish(&id);
-            state.entries.get_mut(&id).unwrap().updated = Instant::now() - Duration::from_secs(301);
         }
-        state.prune();
+        // 向未来推进检查时间，兼容刚启动的 Windows runner 单调时钟。
+        let completed_at = Instant::now();
+        for entry in state.entries.values_mut() {
+            entry.updated = completed_at;
+        }
+        state.prune(completed_at + Duration::from_secs(299));
+        assert_eq!(state.entries.len(), 256);
+        state.prune(completed_at + Duration::from_secs(300));
+        assert_eq!(state.entries.len(), 1);
         assert!(state.entries.contains_key("retained"));
         assert!(state.begin("same-target", "home", "console").is_err());
         state.release_session("session", &token);
@@ -481,17 +487,42 @@ mod tests {
         assert!(budget.observe(271_000, false, 90_000));
     }
 
-    #[tokio::test]
+    #[test]
+    fn virtual_time_progress_is_independent_across_runtime_instances() {
+        // 先在真实时钟初始化原点，再分别验证暂停 runtime 的时间推进。
+        let _ = now_ms();
+        for advance_ms in [60_000, 1_000] {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_time()
+                .start_paused(true)
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let before = now_ms();
+                    tokio::time::advance(Duration::from_millis(advance_ms)).await;
+                    assert_eq!(now_ms() - before, advance_ms);
+                });
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn startup_deadline_revokes_the_scope_and_absorbs_late_work() {
         let scope = SessionStartupScope::default();
-        let error = scope
-            .run::<()>(
-                "context",
-                Some(Duration::from_millis(1)),
-                std::future::pending(),
-            )
-            .await
-            .unwrap_err();
+        let waiting = scope.clone();
+        let (started, observed) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            waiting
+                .run::<()>("context", Some(Duration::from_secs(15)), async {
+                    started.send(()).unwrap();
+                    std::future::pending().await
+                })
+                .await
+        });
+        observed.await.unwrap();
+        tokio::time::advance(Duration::from_millis(14_999)).await;
+        assert!(!task.is_finished());
+        tokio::time::advance(Duration::from_millis(1)).await;
+        let error = task.await.unwrap().unwrap_err();
         assert_eq!(error.message, "operationTimeout:stage=context");
         assert!(scope.is_cancelled());
         assert!(scope.run("late", None, async { Ok(()) }).await.is_err());

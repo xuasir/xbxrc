@@ -11,7 +11,7 @@
 | `pnpm skills:verify` / `skills:lock` / `skills:sync` | 本地技能哈希、锁文件与同步 |
 | [browser_runtime_stability_report.py](browser_runtime_stability_report.py) | 浏览器共享观测、资源上限和退出清理报告 |
 | [measure-browser-runtime.mjs](measure-browser-runtime.mjs) | 对固定基线计算 TypeScript AST 复杂度 |
-| [official-xbox-capture.mjs](official-xbox-capture.mjs) | 官方 Xbox 网页的手动对照采样；需要本机 Chrome 与手动登录 |
+| [official-xbox-capture.mjs](official-xbox-capture.mjs) | 官方 Xbox 网页的手动对照采样；显式传入 Chromium 浏览器路径并手动登录 |
 
 `release-bundle-lib.mjs`、`release-collect-assets.mjs`、`release-set-version.mjs` 和 `release-write-latest-json.mjs` 是发布内部工具，随上述入口及 CI 使用。
 
@@ -19,6 +19,11 @@
 python3 -B scripts/browser_runtime_stability_report.py TRACE
 node scripts/measure-browser-runtime.mjs dev-docs/validation/browser-runtime-optimization-baseline.json
 python3 -B -m unittest discover -s tests/runtime-trace -p 'test_*.py'
+node scripts/official-xbox-capture.mjs --browser-path /absolute/path/to/browser
+node scripts/official-xbox-capture.mjs --no-launch --port 9222
+pnpm test:tools
 ```
+
+采集脚本的 `--help` 提供完整参数说明。默认 profile 每次创建独立系统临时目录；通过 `--profile DIR` 复用明确指定的登录态。
 
 专项样本回放及输入说明见 [validation/](../dev-docs/validation/README.md)；常规运行日志分析见 [本地验收手册](../dev-docs/streaming-reliability-local-validation.md)。

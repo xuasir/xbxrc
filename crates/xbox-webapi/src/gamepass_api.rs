@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 const GAMEPASS_CATALOG_BASE_URL: &str = "https://catalog.gamepass.com";
 const DEFAULT_PRODUCTS_HYDRATION: &str = "RemoteLowJade0";
 
+#[derive(Clone)]
 pub struct GamePassApi {
     transport: HttpTransport,
 }
@@ -12,7 +13,7 @@ pub struct GamePassApi {
 impl GamePassApi {
     pub fn new() -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
         }
     }
 
@@ -49,7 +50,7 @@ impl GamePassApi {
     ) -> Result<Value, WebApiError> {
         let url = products_url(market, language, hydration)?;
         self.transport
-            .post(
+            .post_query(
                 &url,
                 json!({ "Products": product_ids }),
                 Some(catalog_headers()?),
@@ -65,24 +66,24 @@ impl Default for GamePassApi {
 }
 
 fn sigl_url(sigl_id: &str, market: &str, language: &str) -> Result<String, WebApiError> {
-    validate_query_value(sigl_id, "sigl id")?;
-    validate_query_value(market, "market")?;
-    validate_query_value(language, "language")?;
+    let sigl_id = normalized_query_value(sigl_id, "sigl id")?;
+    let market = normalized_query_value(market, "market")?;
+    let language = normalized_query_value(language, "language")?;
     Ok(format!(
         "{GAMEPASS_CATALOG_BASE_URL}/sigls/v2?id={sigl_id}&market={market}&language={language}"
     ))
 }
 
 fn products_url(market: &str, language: &str, hydration: &str) -> Result<String, WebApiError> {
-    validate_query_value(market, "market")?;
-    validate_query_value(language, "language")?;
-    validate_query_value(hydration, "hydration")?;
+    let market = normalized_query_value(market, "market")?;
+    let language = normalized_query_value(language, "language")?;
+    let hydration = normalized_query_value(hydration, "hydration")?;
     Ok(format!(
         "{GAMEPASS_CATALOG_BASE_URL}/v3/products?market={market}&language={language}&hydration={hydration}"
     ))
 }
 
-fn validate_query_value(value: &str, label: &str) -> Result<(), WebApiError> {
+fn normalized_query_value<'a>(value: &'a str, label: &str) -> Result<&'a str, WebApiError> {
     let value = value.trim();
     if value.is_empty()
         || !value
@@ -91,14 +92,14 @@ fn validate_query_value(value: &str, label: &str) -> Result<(), WebApiError> {
     {
         return Err(WebApiError::parse(format!("invalid {label}")));
     }
-    Ok(())
+    Ok(value)
 }
 
 fn catalog_headers() -> Result<reqwest::header::HeaderMap, WebApiError> {
     HttpTransport::create_header_map(&[
         ("Accept", "application/json"),
         ("Content-Type", "application/json"),
-        ("ms-cv", "0"),
+        ("ms-cv", "1.0"),
         ("calling-app-name", "Xbox Cloud Gaming Web"),
         ("calling-app-version", "24.17.63"),
     ])
@@ -129,5 +130,16 @@ mod tests {
     fn rejects_unsafe_query_values() {
         assert!(sigl_url("id&market=CN", "US", "en-US").is_err());
         assert!(products_url("US", "en-US?x=1", "RemoteLowJade0").is_err());
+    }
+
+    #[test]
+    fn normalizes_query_whitespace_and_sets_catalog_contract() {
+        assert_eq!(
+            sigl_url(" id ", " US ", " en-US ").unwrap(),
+            "https://catalog.gamepass.com/sigls/v2?id=id&market=US&language=en-US"
+        );
+        assert_eq!(products_url(" US ", " en-US ", " RemoteLowJade0 ").unwrap(),
+            "https://catalog.gamepass.com/v3/products?market=US&language=en-US&hydration=RemoteLowJade0");
+        assert_eq!(super::catalog_headers().unwrap()["ms-cv"], "1.0");
     }
 }

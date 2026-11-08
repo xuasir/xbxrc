@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use xbox_webapi::transport::HttpTransport;
 use xbox_webapi::{SessionApi as CrateSessionApi, WebApiError};
 
 use crate::policy::Plan;
@@ -16,9 +17,14 @@ impl WebApiSessionGateway {
     /// RFC: 凭证属于执行层，结合 Plan 策略构建 Gateway。
     /// 执行层不再自行推导设备画像，统一消费编译产出的 headers。
     pub fn new(plan: Plan, token: StreamingToken) -> Self {
+        Self::with_transport(HttpTransport::new(), plan, token)
+    }
+
+    pub fn with_transport(transport: HttpTransport, plan: Plan, token: StreamingToken) -> Self {
         let target_type = plan.session.target.as_str();
 
-        let session_api = CrateSessionApi::new(
+        let session_api = CrateSessionApi::with_transport(
+            transport,
             target_type.to_string(),
             plan.session.base_url.clone(),
             token.gs_token,

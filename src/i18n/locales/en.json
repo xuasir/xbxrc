@@ -2,6 +2,7 @@
   "hello": "Hello",
   "home": "Home",
   "homePage": {
+    "errorTitle": "Consoles are temporarily unavailable",
     "loading": "Loading consoles...",
     "railTitle": "My Consoles",
     "railHint": "{count} consoles found",

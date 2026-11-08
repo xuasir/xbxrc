@@ -5,22 +5,17 @@ use crate::mods::data::types::{
     DataStreamingTitleInputConfig,
 };
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
-use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::net::IpAddr;
-use uuid::Uuid;
 use xbox_streaming::{
     compile as compile_plan, parse_session_access_context, CompilerInput as DomainCompilerInput,
     Config as DomainStreamingConfig, Context as DomainContext, Target as DomainTarget,
     WebApiSessionGateway,
 };
-
-const XBOX_CLIENT_VERSION: &str = "39.39.22001.0";
+use xbox_webapi::ConsoleApi;
 
 pub struct StreamingQueryService {
-    client: Client,
     config_provider: ConfigProviderRef,
     runtime_trace: RuntimeTraceRecorderRef,
 }
@@ -28,7 +23,6 @@ pub struct StreamingQueryService {
 impl StreamingQueryService {
     pub fn new(config_provider: ConfigProviderRef, runtime_trace: RuntimeTraceRecorderRef) -> Self {
         Self {
-            client: Client::new(),
             config_provider,
             runtime_trace,
         }
@@ -181,58 +175,14 @@ impl StreamingQueryService {
             return Ok(false);
         };
 
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&format!("XBL3.0 x={};{}", claims.uhs, claims.user_token))
-                .map_err(|error| error.to_string())?,
-        );
-        headers.insert("Accept-Language", HeaderValue::from_static("en-US"));
-        headers.insert(
-            "skillplatform",
-            HeaderValue::from_static("RemoteManagement"),
-        );
-        headers.insert("x-xbl-contract-version", HeaderValue::from_static("4"));
-        headers.insert("x-xbl-client-name", HeaderValue::from_static("XboxApp"));
-        headers.insert("x-xbl-client-type", HeaderValue::from_static("UWA"));
-        headers.insert(
-            "x-xbl-client-version",
-            HeaderValue::from_static(XBOX_CLIENT_VERSION),
-        );
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-
-        let body = json!({
-            "destination": "Xbox",
-            "type": command_type,
-            "command": command,
-            "sessionId": Uuid::new_v4().to_string(),
-            "sourceId": "com.microsoft.smartglass",
-            "parameters": parameters.unwrap_or_else(|| json!([])),
-            "linkedXboxId": console_id
-        });
-
-        let response = self
-            .client
-            .post("https://xccs.xboxlive.com/commands")
-            .headers(headers)
-            .json(&body)
-            .send()
+        ConsoleApi::new(claims.uhs, claims.user_token)
+            .send_command(console_id, command_type, command, parameters)
             .await
-            .map_err(|error| error.to_string())?;
-
-        let status = response.status();
-        if status.is_success() {
-            return Ok(true);
-        }
-
-        // 保留 XCCS 原始响应体，避免把关键业务错误吞成简单的 accepted=false。
-        let body = response.text().await.map_err(|error| error.to_string())?;
-        let body = body.trim();
-        if body.is_empty() {
-            Err(format!("XCCS command failed: HTTP {}", status.as_u16()))
-        } else {
-            Err(body.to_string())
-        }
+            .map(|response| response.accepted)
+            .map_err(|error| {
+                log::warn!("[Data][consoleCommand] failed: {}", error.safe_summary());
+                super::personal_service::user_error(&error)
+            })
     }
 
     async fn create_home_session_api(

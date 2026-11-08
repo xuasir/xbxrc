@@ -16,7 +16,7 @@ pub struct AchievementsApi {
 impl AchievementsApi {
     pub fn new(uhs: String, token: String, accept_language: String) -> Self {
         Self {
-            transport: HttpTransport::new(),
+            transport: HttpTransport::for_queries(),
             uhs,
             token,
             accept_language: normalize_accept_language(&accept_language),
@@ -45,7 +45,9 @@ impl AchievementsApi {
         max_items: Option<u32>,
     ) -> Result<Value, WebApiError> {
         let url = title_achievements_url(xuid, title_id, continuation_token, max_items)?;
-        self.transport.get(&url, Some(self.headers()?)).await
+        self.transport
+            .get_paginated(&url, Some(self.headers()?))
+            .await
     }
 
     fn headers(&self) -> Result<HeaderMap, WebApiError> {

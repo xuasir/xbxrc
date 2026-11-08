@@ -354,6 +354,7 @@ where
     S: SessionFlowSnapshot,
     P: SessionFlowProvider,
 {
+    pub(crate) transport: xbox_webapi::transport::HttpTransport,
     pub(crate) provider: P,
     pub(crate) sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
     pub(crate) signaling: tokio::sync::RwLock<HashMap<String, SessionSignalingState>>,
@@ -409,8 +410,14 @@ where
     P: SessionFlowProvider,
 {
     pub fn new(provider: P) -> Self {
+        Self::with_transport(provider, xbox_webapi::transport::HttpTransport::new())
+    }
+
+    /// HTTP 客户端由会话服务统一装配，回环测试可显式注入直连客户端。
+    pub fn with_transport(provider: P, transport: xbox_webapi::transport::HttpTransport) -> Self {
         Self {
             inner: Arc::new(SessionFlowServiceInner {
+                transport,
                 provider,
                 sessions: tokio::sync::RwLock::new(SessionRuntimeStore::default()),
                 signaling: tokio::sync::RwLock::new(HashMap::new()),
@@ -516,7 +523,11 @@ where
         let token = StreamingToken::parse(&token_value)
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
-        Ok(WebApiSessionGateway::new(plan.clone(), token))
+        Ok(WebApiSessionGateway::with_transport(
+            self.inner.transport.clone(),
+            plan.clone(),
+            token,
+        ))
     }
 
     async fn create_signaling_api(
@@ -528,7 +539,11 @@ where
         let token = StreamingToken::parse(&token_value)
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
-        Ok(WebApiSignalingGateway::new(plan.clone(), token))
+        Ok(WebApiSignalingGateway::with_transport(
+            self.inner.transport.clone(),
+            plan.clone(),
+            token,
+        ))
     }
 }
 

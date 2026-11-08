@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::mods::auth::storage_repository::AuthStorageRepository;
+use crate::mods::auth::types::SisuTokenData;
 
 const TOKEN_EXPIRY_SKEW_MS: i64 = 60 * 1000;
 
@@ -82,33 +83,9 @@ impl AuthTokenPolicy {
     }
 
     pub fn is_web_token_valid(&self, token: Option<&Value>) -> bool {
-        let Some(token) = token else {
-            return false;
-        };
-
-        let not_after = token
-            .get("data")
-            .and_then(|data| data.get("NotAfter"))
-            .and_then(|value| value.as_str())
-            .or_else(|| token.get("NotAfter").and_then(|value| value.as_str()))
-            .or_else(|| {
-                token
-                    .get("data")
-                    .and_then(|data| data.get("not_after"))
-                    .and_then(|value| value.as_str())
-            })
-            .or_else(|| token.get("not_after").and_then(|value| value.as_str()));
-
-        let Some(not_after) = not_after else {
-            return false;
-        };
-
-        let Some(expires_at_ms) = parse_datetime_to_timestamp_millis(not_after) else {
-            return false;
-        };
-
-        let now = chrono::Utc::now().timestamp_millis();
-        expires_at_ms - now > TOKEN_EXPIRY_SKEW_MS
+        token.is_some_and(|token| {
+            resolve_valid_web_api_tokens(token, chrono::Utc::now().timestamp_millis()).is_some()
+        })
     }
 
     pub fn get_valid_session_snapshot(&self) -> Result<Option<ValidSessionSnapshot>, String> {
@@ -217,3 +194,49 @@ fn parse_datetime_to_timestamp_millis(input: &str) -> Option<i64> {
 
     None
 }
+
+pub(super) fn resolve_valid_web_api_tokens(token: &Value, now_ms: i64) -> Option<(String, String)> {
+    let data = token.get("data").unwrap_or(token);
+    let expires_at = data
+        .get("NotAfter")
+        .or_else(|| data.get("not_after"))
+        .or_else(|| token.get("NotAfter"))
+        .or_else(|| token.get("not_after"))
+        .and_then(Value::as_str)
+        .and_then(parse_datetime_to_timestamp_millis)?;
+    // 给请求与重试预留同一份有效期余量，过期快照进入既有恢复流程。
+    if expires_at.saturating_sub(now_ms) <= TOKEN_EXPIRY_SKEW_MS {
+        return None;
+    }
+    let token = data.get("Token")?.as_str()?.trim();
+    let uhs = data
+        .get("DisplayClaims")?
+        .get("xui")?
+        .as_array()?
+        .first()?
+        .get("uhs")?
+        .as_str()?
+        .trim();
+    if token.is_empty() || uhs.is_empty() {
+        return None;
+    }
+    Some((uhs.to_string(), token.to_string()))
+}
+
+pub(super) fn can_reuse_sisu_user_token(token: &SisuTokenData, now_ms: i64) -> bool {
+    token
+        .user_token
+        .token
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        && token
+            .user_token
+            .not_after
+            .as_deref()
+            .and_then(parse_datetime_to_timestamp_millis)
+            .is_some_and(|expiry| expiry.saturating_sub(now_ms) > TOKEN_EXPIRY_SKEW_MS)
+}
+
+#[cfg(test)]
+#[path = "token_policy.test.rs"]
+mod tests;

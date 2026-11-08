@@ -69,24 +69,24 @@ async function refresh() {
       </div>
     </header>
     <div ref="panel" class="library-content library-stack" data-nav-scroll-container>
+      <p v-if="state.error" class="library-notice" role="alert">
+        {{ state.error }}
+      </p><p v-for="notice in state.value?.notices" :key="notice" class="library-notice" role="status">
+        {{ notice }}
+      </p>
+      <div v-if="storage.length" class="library-metrics">
+        <div v-for="device in storage" :key="device.id" class="library-metric library-metric--storage">
+          <div class="library-metric__heading">
+            <span class="library-caption">{{ device.name }}</span><strong>{{ formatBytes(device.freeBytes) }} 可用</strong>
+          </div><p class="library-caption">
+            总容量 {{ formatBytes(device.totalBytes) }}
+          </p><progress v-if="device.totalBytes && device.freeBytes != null" :value="device.totalBytes - device.freeBytes" :max="device.totalBytes" :aria-label="`${device.name} 已用空间`" />
+        </div>
+      </div>
       <div v-if="!games.length" class="library-empty" role="status">
-        {{ state.loading && !state.value ? '正在读取此主机的安装游戏…' : '暂无数据' }}
+        {{ state.loading && !state.value ? '正在读取此主机的安装游戏…' : state.value?.games ? '此主机尚无已安装游戏' : '安装游戏数据暂缺，请刷新后重试' }}
       </div>
       <template v-else>
-        <p v-if="state.error" class="library-notice" role="alert">
-          {{ state.error }}
-        </p><p v-for="notice in state.value?.notices" :key="notice" class="library-notice" role="status">
-          {{ notice }}
-        </p>
-        <div v-if="storage.length" class="library-metrics">
-          <div v-for="device in storage" :key="device.id" class="library-metric library-metric--storage">
-            <div class="library-metric__heading">
-              <span class="library-caption">{{ device.name }}</span><strong>{{ formatBytes(device.freeBytes) }} 可用</strong>
-            </div><p class="library-caption">
-              总容量 {{ formatBytes(device.totalBytes) }}
-            </p><progress v-if="device.totalBytes && device.freeBytes != null" :value="device.totalBytes - device.freeBytes" :max="device.totalBytes" :aria-label="`${device.name} 已用空间`" />
-          </div>
-        </div>
         <div class="library-toolbar">
           <SettingInputControl id="console.games.search" v-model="search" scope-id="app.shell" label="搜索已安装游戏" placeholder="搜索游戏" /><Focusable id="console.games.storage" as="select" :value="storageFilter" class="library-control" aria-label="存储位置" @change="storageFilter = ($event.target as HTMLSelectElement).value">
             <option value="">
