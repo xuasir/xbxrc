@@ -1,3 +1,4 @@
+import type { RuntimeTraceAckResult } from '@shared/rpc/runtimeTrace'
 import type {
   StreamingStartupEvent,
 } from '@shared/rpc/streaming'
@@ -140,18 +141,20 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   let cleanupAllowsRetry = true
   let pendingCleanupSessionId = ''
   let pendingCleanupAttemptId = ''
+  const pendingTraceRecords = new Set<Promise<unknown>>()
 
   async function recordExecutionTraceEvent(
     event: string,
     payload: Record<string, unknown>,
     traceSessionId: string | null = sessionId.value !== '' ? sessionId.value : null,
-  ): Promise<void> {
+  ): Promise<RuntimeTraceAckResult | undefined> {
     try {
-      await rpc.runtimeTrace.recordEvent({
-        event,
-        sessionId: traceSessionId,
-        payload,
-      })
+      if (pendingTraceRecords.size >= 32)
+        return undefined
+      const recording = rpc.runtimeTrace.recordEvent({ event, sessionId: traceSessionId, payload })
+      pendingTraceRecords.add(recording)
+      void recording.then(() => pendingTraceRecords.delete(recording), () => pendingTraceRecords.delete(recording))
+      return await withOperationTimeout(recording, 750, 'traceRecordTimeout')
     }
     catch {
       // trace 失败不能影响执行层关闭路径
@@ -367,17 +370,19 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   function applyResolvedError(error: unknown): void {
     if (closing.value || disposed || failure.value)
       return
+    const resolved = resolveStreamError({ error, t: options.t })
     void recordExecutionTraceEvent('executionFailed', {
       generation: executionGeneration,
+      attemptId: startupAttemptId.value,
       stage: viewState.value.lifecyclePhase,
       sessionUiPhase: viewState.value.sessionUiPhase,
+      errorKind: resolved.kind,
+      errorCode: resolved.code,
+      startupPhase: resolved.phase,
+      retryable: resolved.retryable,
       error: error instanceof Error
         ? { name: error.name, message: error.message, stack: error.stack }
         : String(error),
-    })
-    const resolved = resolveStreamError({
-      error,
-      t: options.t,
     })
     selectFailure(resolved)
     void closeExecution({ reason: 'executionFailed' })
@@ -571,11 +576,11 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     void recordExecutionTraceEvent('cleanupStarted', { operationId, stage, generation: cleanupGeneration, deadlineMs: 15_000 }, traceSessionId)
     try {
       await withOperationTimeout(action(), 15_000, `${stage}Timeout`)
-      void recordExecutionTraceEvent('cleanupFinished', { operationId, stage, generation: cleanupGeneration, result: 'success', elapsedMs: monotonicNowMs() - startedAt }, traceSessionId)
+      await recordExecutionTraceEvent('cleanupFinished', { operationId, stage, generation: cleanupGeneration, result: 'success', elapsedMs: monotonicNowMs() - startedAt }, traceSessionId)
       return true
     }
     catch (error) {
-      void recordExecutionTraceEvent('cleanupPending', {
+      await recordExecutionTraceEvent('cleanupPending', {
         operationId,
         stage,
         generation: cleanupGeneration,
@@ -620,6 +625,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       reason: input?.reason ?? 'unspecified',
     })
     closePromise = (async () => {
+      const startedAtMs = monotonicNowMs()
       const cancellation = stoppedAttemptId === ''
         ? Promise.resolve(true)
         : settleCleanup('cancelStartup', () => cancelRemoteStreamStartup(stoppedAttemptId), stoppedSessionId || null)
@@ -635,6 +641,27 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       pendingCleanupSessionId = remoteClosed ? '' : stoppedSessionId
       pendingCleanupAttemptId = startupCancelled ? '' : stoppedAttemptId
       cleanupAllowsRetry = inputReleased && runtimeStopped && remoteClosed && startupCancelled
+      let producerStatus = 'flushed'
+      try {
+        await withOperationTimeout(Promise.allSettled([...pendingTraceRecords]), 750, 'traceRecordTimeout')
+      }
+      catch { producerStatus = 'timeout' }
+      await recordExecutionTraceEvent('executionCleanupObserved', {
+        productionContractVersion: 1,
+        reason: input?.reason ?? 'sessionEnded',
+        cleanupState: cleanupAllowsRetry ? 'completed' : 'pending',
+        durationMs: monotonicNowMs() - startedAtMs,
+        results: { inputReleased, runtimeStopped, remoteClosed, startupCancelled },
+        producerStatus,
+      }, stoppedSessionId || null)
+      try {
+        const result = await withOperationTimeout(rpc.runtimeTrace.flush(), 2500, 'traceFlushTimeout')
+        if (!['flushed', 'off'].includes(result.status))
+          await recordExecutionTraceEvent('traceProducerDrainObserved', { stage: 'execution', status: result.status }, stoppedSessionId || null)
+      }
+      catch {
+        await recordExecutionTraceEvent('traceProducerDrainObserved', { stage: 'execution', status: 'timeout' }, stoppedSessionId || null)
+      }
       dispatchViewAction({ type: 'cleanupChanged', state: cleanupAllowsRetry ? 'completed' : 'pending' })
       sessionId.value = ''
       sessionExecution.value = null

@@ -264,6 +264,12 @@ export interface BrowserPlaybackStats {
   jitterBufferMs?: number
   statsCandidatePairId?: string
   videoPresentFps?: number
+  videoPresentFramesTotal?: number
+  videoCallbacksTotal?: number
+  callbackGapCountTotal?: number
+  presentedFramesJumpCountTotal?: number
+  maxCallbackIntervalMs?: number
+  maxPresentedFramesDelta?: number
   videoPresentAgeMs?: number
   callbackFps?: number
   rendererSubmitFps?: number

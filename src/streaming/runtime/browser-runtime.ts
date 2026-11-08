@@ -5,6 +5,7 @@ import type {
   StreamStats,
   TransportRuntimeConfig,
 } from '../../player'
+import type { BrowserWebRtcStatsSample } from '../../player/domain/stats'
 import type { RuntimeLaunchSpec } from '../types'
 import type { BrowserRecoveryProbe } from './browser-recovery-policy'
 import type { BrowserRenderCause } from './browser-render-health'
@@ -23,13 +24,16 @@ import type {
   StreamRuntimePhase,
   StreamRuntimeReconnectReason,
 } from './runtime-contract'
+import { inputUiTrace } from '../../navigation/core/input-trace'
 import { PlayerClient as BrowserPlayerClient } from '../../player'
 import { rpc } from '../../services/rpc'
+import { inputController } from '../../shared/gamepad/runtime'
 import { monotonicNowMs } from '../clock'
 import { withOperationTimeout } from '../execution/async-operation'
 import { normalizeDisplayOptions } from '../utils'
 import { createBrowserNegotiation } from './browser-negotiation'
 import { BrowserNetworkPolicy } from './browser-network-policy'
+import { createBrowserPlaybackTrace } from './browser-playback-trace'
 import { BrowserSoftRecoveryGate, createBrowserRecoveryProbe, evaluateBrowserRecoveryProbe } from './browser-recovery-policy'
 import { BrowserRenderHealth, resolveBrowserRenderCause } from './browser-render-health'
 import {
@@ -279,6 +283,7 @@ export function createBrowserRuntime(options: {
   let runtimePhase: StreamRuntimePhase = 'binding'
   let connectedAt: number | null = null
   let lastMediaActivityAt: number | null = null
+  let latestWebRtcSample: BrowserWebRtcStatsSample | undefined
   let frameIntervalEstimateMs: number | null = null
   let lastReconnectReason: StreamRuntimeReconnectReason | undefined
   let lastStallReason: string | undefined
@@ -291,6 +296,7 @@ export function createBrowserRuntime(options: {
   const supervision = createBrowserSupervision({
     check: checkMediaStalled,
     onError: error => emit({ type: 'error', error }),
+    onTick: tickTraceObservations,
   })
   const negotiation = createBrowserNegotiation({
     getClient: assertClient,
@@ -423,12 +429,104 @@ export function createBrowserRuntime(options: {
     write: params => rpc.runtimeTrace.recordEvent(params),
     context: () => ({ sessionId: currentSpec?.sessionId ?? null, runtimeGeneration: resourceGeneration, clientGeneration }),
   })
+  let backendTraceState: Record<string, unknown> | undefined
+  let backendTraceObservedAtMs = 0
+  let tracePolicyGeneration: number | undefined
+  let traceRefreshAtMs = 0
+  let traceRefreshPending = false
   let latestPolicyStats: StreamStats | undefined
   let expectedContentFpsResolved = 60
   let frontEndUpshiftBlockedReason: string | undefined
   let frontEndPolicyInputReason: FrontEndPolicyInputReason = 'healthy'
   let latestTransportPath: string | undefined
   let srState: BrowserSuperResolutionState = defaultBrowserSuperResolutionState()
+  let latestTraceStats: StreamStats | undefined
+  let disposeInputTrace: (() => void) | undefined
+  const playbackTrace = createBrowserPlaybackTrace({
+    enabled: () => runtimeTrace.snapshot().profile === 'production',
+    write: (event, payload, options) => runtimeTrace.record(event, payload, options),
+    trace: () => ({ ...runtimeTrace.snapshot(), backend: backendTraceState, backendSampleAgeMs: backendTraceState ? Math.round(monotonicNowMs() - backendTraceObservedAtMs) : undefined }),
+    facts: () => {
+      const stats = latestTraceStats
+      const plan = lastBrowserRendererPlan
+      const display = currentDisplayState?.displayOptions
+      return {
+        lifecyclePhase: runtimePhase,
+        expectedFps: expectedContentFpsResolved,
+        networkState: networkPolicy.state,
+        recoveryCause: recoveryCause ?? 'unknown',
+        firstFrameStage,
+        presentationMilestone,
+        controlChannelState: client?.getControlChannelHealthSnapshot().state ?? 'unavailable',
+        actionPending: pendingActionEffectProbe !== undefined,
+        configuration: {
+          requestedFps: currentSpec?.render.initialTargetFps ?? 60,
+          expectedFps: expectedContentFpsResolved,
+          requestedWidth: currentSpec?.runtime.targetVideoWidth,
+          requestedHeight: currentSpec?.runtime.targetVideoHeight,
+          rendererTargetFps: stats?.rendererTargetFps ?? plan?.targetFps,
+          sourceWidth: stats?.renderSourceWidth,
+          sourceHeight: stats?.renderSourceHeight,
+          outputWidth: stats?.renderActualOutputWidth,
+          outputHeight: stats?.renderActualOutputHeight,
+          rendererKind: stats?.rendererKind ?? plan?.kind,
+          pipelineType: plan?.kind,
+          processing: plan ? projectRenderProcessingFromPlan(plan) : undefined,
+          processingMode: plan?.sharpening.processingMode,
+          shaderPreset: plan?.sharpening.preset,
+          sharpness: display?.sharpness,
+          brightness: display?.brightness,
+          contrast: display?.contrast,
+          saturation: display?.saturation,
+          superResolution: resolveSuperResolutionIntent(),
+          bitrateCapKbps: qualityControl.qualityRequestedBitrateKbps,
+          negotiatedBitrateKbps: qualityControl.qualityNegotiatedBitrateKbps,
+          displayRefreshHz: resolveDisplayRefreshHz(),
+          displayRefreshSource: typeof (window.screen as { frameRate?: unknown } | undefined)?.frameRate === 'number' ? 'screenFrameRate' : estimatedDisplayRefreshHz ? 'rafEstimate' : 'unavailable',
+        },
+        capabilities: {
+          mediaBackend: 'browser',
+          physicalPresent: 'unavailable',
+          nativeRecoveryGate: 'unsupported',
+          gpuTiming: stats?.rendererGpuTiming?.state ?? 'unavailable',
+          decoderImplementation: latestWebRtcSample?.inboundVideo?.decoderImplementation,
+          powerEfficientDecoder: latestWebRtcSample?.inboundVideo?.powerEfficientDecoder,
+          trackingSource: frameObservation.renderFrameTrackingSource ?? 'unavailable',
+        },
+        visibility: document.visibilityState,
+      }
+    },
+  })
+
+  function refreshTracePolicyAndStatus(): void {
+    if (traceRefreshPending || monotonicNowMs() < traceRefreshAtMs)
+      return
+    traceRefreshPending = true
+    traceRefreshAtMs = monotonicNowMs() + 30000
+    const generation = resourceGeneration
+    void Promise.all([rpc.runtimeTrace.getPolicy(), rpc.runtimeTrace.getStatus()]).then(([policy, status]) => {
+      if (resourceGeneration !== generation)
+        return
+      backendTraceState = status.backend
+      backendTraceObservedAtMs = monotonicNowMs()
+      if (tracePolicyGeneration !== policy.generation) {
+        tracePolicyGeneration = policy.generation
+        const profileChanged = runtimeTrace.snapshot().profile !== policy.profile
+        if (profileChanged)
+          playbackTrace.end('profileChanged')
+        runtimeTrace.configurePolicy(policy)
+        if (profileChanged && currentSpec)
+          playbackTrace.begin()
+        playbackTrace.manifest('configurationChanged')
+      }
+    }).catch(() => {}).finally(() => { traceRefreshPending = false })
+  }
+
+  function tickTraceObservations(): void {
+    playbackTrace.tick()
+    inputUiTrace.tick()
+    refreshTracePolicyAndStatus()
+  }
 
   function resolveRendererPipelineOverride(): 'video' | 'webgl2' | 'auto' {
     const render = currentDisplayState?.render ?? currentSpec?.render
@@ -1261,6 +1359,12 @@ export function createBrowserRuntime(options: {
   function bindClientEvents(nextClient: PlayerClient): void {
     const eventBus = nextClient.events()
     clientCleanups.push(
+      eventBus.on('stats.browserObservation', (observation) => {
+        latestTraceStats = observation.stats
+        latestWebRtcSample = observation.sample
+        playbackTrace.observe(observation)
+      }),
+      eventBus.on('stats.collectionState', state => playbackTrace.collectionState(state)),
       eventBus.on('media.resourcesObserved', payload => recordRuntimeTraceEvent('browserMediaResourcesObserved', () => ({ ...payload }))),
       eventBus.on('transport.connectionState', ({ state }) => {
         handleTransportStateChanged(state)
@@ -1286,6 +1390,7 @@ export function createBrowserRuntime(options: {
         }
       }),
       eventBus.on('stats.browserWebRtc', (sample) => {
+        latestWebRtcSample = sample
         // 主机侧可能中途降档（1440p → 720p）。SR 只在 videoReady 冻结一次，
         // 不跟随源尺寸变化就会一直按旧档位输出，面板与渲染器因此各说各话。
         const width = sample.inboundVideo?.frameWidth
@@ -1299,7 +1404,7 @@ export function createBrowserRuntime(options: {
         void recordRuntimeTraceEvent('browserWebRtcStatsObserved', () => ({ ...sample }))
       }),
       eventBus.on('stats.observationUnavailable', ({ peerGeneration, error }) => {
-        recordRuntimeTraceEvent('mediaObservationUnavailable', () => ({ peerGeneration, error: error instanceof Error ? error.message : String(error) }))
+        recordRuntimeTraceEvent('mediaObservationUnavailable', () => ({ peerGeneration, reason: 'samplingUnavailable', errorKind: 'collectionFailed', error: error instanceof Error ? error.message : String(error) }))
       }),
       eventBus.on('stats.browserWebRtcTimeline', (event) => {
         void recordRuntimeTraceEvent('browserWebRtcTimelineObserved', () => ({ ...event }))
@@ -1823,7 +1928,7 @@ export function createBrowserRuntime(options: {
     }
     catch (error) {
       if (generation === resourceGeneration)
-        recordRuntimeTraceEvent('mediaObservationUnavailable', () => ({ error: error instanceof Error ? error.message : String(error) }))
+        recordRuntimeTraceEvent('mediaObservationUnavailable', () => ({ reason: 'samplingUnavailable', errorKind: 'collectionFailed', error: error instanceof Error ? error.message : String(error) }))
       return
     }
     if (generation !== resourceGeneration || currentSpec !== spec)
@@ -1978,6 +2083,7 @@ export function createBrowserRuntime(options: {
     runtimePhase = 'binding'
     connectedAt = null
     lastMediaActivityAt = null
+    latestWebRtcSample = undefined
     frameIntervalEstimateMs = null
     supervision.resetEpisode()
     lastReconnectReason = undefined
@@ -2040,16 +2146,25 @@ export function createBrowserRuntime(options: {
       reconnectPromise = null
       resetRuntimeState(resolveDefaultVideoBitrateKbps(spec))
 
+      let traceConfigurationState = 'configured'
       try {
-        const config = await withOperationTimeout(Promise.resolve(rpc.config?.get({ keys: ['runtime_trace_mode'] })), 1500, 'traceConfigurationTimeout', runtimeAbort.signal) as Record<string, unknown> | undefined
+        const policy = await withOperationTimeout(rpc.runtimeTrace.getPolicy(), 1500, 'traceConfigurationTimeout', runtimeAbort.signal)
         if (generation !== resourceGeneration || currentSpec !== spec)
           return
-        if (config)
-          runtimeTrace.configure(config.runtime_trace_mode)
+        runtimeTrace.configurePolicy(policy)
+        tracePolicyGeneration = policy.generation
       }
       catch {
-        runtimeTrace.configure('off')
+        runtimeTrace.configure('production')
+        traceConfigurationState = 'fallback'
       }
+      if (generation !== resourceGeneration || currentSpec !== spec)
+        return
+      recordRuntimeTraceEvent('traceProducerConfigurationObserved', () => ({
+        profile: runtimeTrace.snapshot().profile,
+        source: traceConfigurationState === 'configured' ? 'backend' : 'fallback',
+        state: traceConfigurationState,
+      }))
       const capability = detectWebgl2Capability()
       rendererCapabilityReason = capability.reason
       webgl2Supported = capability.supported
@@ -2062,6 +2177,18 @@ export function createBrowserRuntime(options: {
       if (generation !== resourceGeneration || currentSpec !== spec)
         return
       prepareFreshClient(spec)
+      latestTraceStats = undefined
+      playbackTrace.begin()
+      traceRefreshAtMs = 0
+      refreshTracePolicyAndStatus()
+      disposeInputTrace?.()
+      const traceClientGeneration = clientGeneration
+      disposeInputTrace = inputUiTrace.attach({
+        enabled: () => runtimeTrace.snapshot().profile !== 'off',
+        write: (event, payload, essential) => runtimeTrace.record(event, { runtimeGeneration: generation, clientGeneration: traceClientGeneration, ...payload }, { sessionId: spec.sessionId, intervalManaged: true, importance: essential ? 'essential' : undefined }),
+        input: () => inputController.getSnapshot(),
+        anomaly: reason => playbackTrace.trigger(reason),
+      })
       bindVisibilityGovernor()
       bindDisplayGeometryObserver()
       startMediaStallMonitoring()
@@ -2071,8 +2198,12 @@ export function createBrowserRuntime(options: {
         return
       applyCurrentDisplayState()
     },
-    async stop(_reason?: string) {
+    async stop(reason = 'sessionEnded') {
       const closingSessionId = currentSpec?.sessionId
+      playbackTrace.end(reason)
+      inputUiTrace.tick()
+      disposeInputTrace?.()
+      disposeInputTrace = undefined
       resourceGeneration += 1
       runtimeAbort.abort()
       if (options.connectionRecovery === undefined)
@@ -2088,6 +2219,18 @@ export function createBrowserRuntime(options: {
       estimatedDisplayRefreshHz = undefined
 
       destroyClient(closingSessionId)
+      const producerFlushed = await runtimeTrace.flush(2000)
+      runtimeTrace.record('traceProducerDrainObserved', { stage: 'runtime', status: producerFlushed ? 'flushed' : 'timeout', trace: runtimeTrace.snapshot() }, { sessionId: closingSessionId, importance: 'essential' })
+      await runtimeTrace.flush(500)
+      try {
+        const result = await withOperationTimeout(rpc.runtimeTrace.flush(), 2500, 'traceFlushTimeout')
+        if (!['flushed', 'off'].includes(result.status)) {
+          runtimeTrace.record('traceProducerDrainObserved', { stage: 'runtime', status: result.status, trace: runtimeTrace.snapshot() }, { sessionId: closingSessionId, importance: 'essential' })
+        }
+      }
+      catch {
+        runtimeTrace.record('traceProducerDrainObserved', { stage: 'runtime', status: 'timeout', trace: runtimeTrace.snapshot() }, { sessionId: closingSessionId, importance: 'essential' })
+      }
     },
     async requestReconnect(reason: StreamRuntimeReconnectReason, operation) {
       const spec = assertSpec()

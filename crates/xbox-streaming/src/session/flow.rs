@@ -258,6 +258,7 @@ pub trait SessionFlowProvider: Send + Sync + 'static {
     async fn get_remote_consoles(&self) -> Result<Vec<RemoteConsoleSnapshot>, SessionFlowError> {
         Ok(Vec::new())
     }
+    fn on_session_state_poll_started(&self, _session_id: &str) {}
     /// 诊断钩子：记录 session state 轮询结果，默认 no-op，避免 core 层绑定具体日志设施。
     fn on_session_state_polled(
         &self,

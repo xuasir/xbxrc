@@ -60,7 +60,7 @@ impl StreamingService {
             .get_streaming_token(target_type.as_str())
             .map_err(|error| AppError::Streaming(error.to_string()))?
             .ok_or_else(|| {
-                AppError::Streaming(format!(
+                AppError::Auth(format!(
                     "Streaming token is unavailable for {}",
                     target_type.as_str()
                 ))

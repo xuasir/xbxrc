@@ -9,7 +9,9 @@ use serde_json::{json, Value};
 use super::policy::{
     default_trace_metadata, RuntimeTraceProfile, TraceDimensionSet, TraceFileBudget, TraceMetadata,
 };
-use super::runtime_state::{encode_row, DropReason};
+use super::runtime_state::{encode_row_with_limit, DropReason, MAX_ROW_BYTES};
+use super::trace_contract;
+use super::types::{TraceFlushStatus, TraceRecordDisposition};
 use super::writer::{OutputConfig, WriterHandle};
 
 pub type RuntimeTraceRecorderRef = Arc<RuntimeTraceRecorder>;
@@ -200,7 +202,7 @@ impl RuntimeTraceRecorder {
     }
 
     pub fn path(&self) -> Option<PathBuf> {
-        self.writer.sync();
+        self.writer.sync_quiet();
         self.writer.path()
     }
 
@@ -403,10 +405,46 @@ impl RuntimeTraceRecorder {
         payload: Value,
         metadata: TraceMetadata,
     ) {
+        let _ = self
+            .try_record_value_with_metadata(category, domain, event, session_id, payload, metadata);
+    }
+
+    pub fn producer_policy(&self) -> Value {
+        let mut policy = trace_contract::producer_policy(self.trace_profile());
+        policy["generation"] = json!(self.inner.lock().map(|inner| inner.generation).unwrap_or(0));
+        policy
+    }
+
+    pub fn status(&self) -> Value {
+        json!({"traceRunId": self.trace_run_id, "backend": self.writer.snapshot()})
+    }
+
+    pub fn export_bundle(&self) -> std::io::Result<Value> {
+        let status = self.writer.sync();
+        let cutoff = self.writer.snapshot()["flushedSequence"]
+            .as_u64()
+            .unwrap_or(0);
+        super::export::export_bundle(&self.trace_run_id, self.writer.segments(), cutoff, status)
+    }
+
+    pub fn flush(&self) -> TraceFlushStatus {
+        self.writer.sync()
+    }
+
+    pub fn try_record_value_with_metadata(
+        &self,
+        category: RuntimeTraceCategory,
+        domain: &str,
+        event: &str,
+        session_id: Option<&str>,
+        payload: Value,
+        metadata: TraceMetadata,
+    ) -> TraceRecordDisposition {
         let now = now_ms();
         let Ok(inner) = self.inner.lock() else {
-            return;
+            return TraceRecordDisposition::WriterUnavailable;
         };
+        let metadata = trace_contract::metadata(event, &payload).unwrap_or(metadata);
         if inner.profile == RuntimeTraceProfile::Off
             || !super::policy::should_record_trace_event(
                 inner.profile,
@@ -417,13 +455,23 @@ impl RuntimeTraceRecorder {
                 now as f64,
             )
         {
-            return;
+            return TraceRecordDisposition::Filtered;
         }
         if self.writer.saturated(metadata.importance) {
             self.writer
                 .note_drop(metadata.importance, DropReason::QueuePressure);
-            return;
+            return TraceRecordDisposition::QueueFull;
         }
+        let contract = trace_contract::contract(event)
+            .filter(|_| inner.profile == RuntimeTraceProfile::Production);
+        let category = contract
+            .and_then(|contract| RuntimeTraceCategory::parse(contract.category))
+            .unwrap_or(category);
+        let payload = if contract.is_some() {
+            trace_contract::project_payload(event, &payload)
+        } else {
+            payload
+        };
         let line = TraceRow {
             schema_version: TRACE_SCHEMA_VERSION,
             trace_run_id: &self.trace_run_id,
@@ -438,13 +486,18 @@ impl RuntimeTraceRecorder {
             session_id,
             payload,
         };
-        match encode_row(&line) {
+        match encode_row_with_limit(
+            &line,
+            contract.map_or(MAX_ROW_BYTES, |contract| contract.max_row_bytes),
+        ) {
             Ok(bytes) => self
                 .writer
                 .try_write(bytes, inner.generation, metadata.importance),
-            Err(_) => self
-                .writer
-                .note_drop(metadata.importance, DropReason::Oversized),
+            Err(_) => {
+                self.writer
+                    .note_drop(metadata.importance, DropReason::Oversized);
+                TraceRecordDisposition::RowOversized
+            }
         }
     }
 }

@@ -12,6 +12,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
 from browser_runtime_stability_report import build_stability_report
+from production_trace_health_report import build_health_report, browser_stats_projection
 
 
 DEFAULT_RUNTIME_LOG_DIR = Path("runtime-logs")
@@ -140,7 +141,7 @@ def compact_sdp_observation(row: dict[str, Any]) -> dict[str, Any]:
         "hasVideo": payload.get("hasVideo"),
         "hasApplication": payload.get("hasApplication"),
         "videoHeaderExtensionCount": len(payload.get("videoHeaderExtensions") or []),
-        "videoSsrcCount": len(payload.get("videoSsrcs") or []),
+        "videoSsrcCount": int_field(payload, "ssrcCount") if int_field(payload, "ssrcCount") is not None else len(payload.get("videoSsrcs") or []),
         "h264Payloads": compact_payloads,
         "preferredH264Payload": compact_payloads[0] if compact_payloads else None,
     }
@@ -306,6 +307,9 @@ def compact_stats_sample(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def browser_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    production = browser_stats_projection(rows)
+    if production:
+        return production
     samples = [
         compact_stats_sample(row)
         for row in rows
@@ -459,7 +463,8 @@ def build_report(
     selected_answer = selected_remote_answer_from_timeline(rows) or selected_remote_answer_from_sdp(sdp)
     latencies = first_frame_latencies(timeline)
     failures = missing_browser_evidence(sdp, timeline, stats, require_presented)
-    stability = build_stability_report(rows)
+    production_health = build_health_report(rows) if any(event_name(row) == "browserPlaybackHealthObserved" for row in rows) else None
+    stability = production_health or build_stability_report(rows)
     if require_stability and stability["gate"] != "PASS":
         failures.append("browser runtime stability evidence is " + stability["gate"])
     freshness = trace_freshness_report(trace, max_age_seconds)
@@ -469,6 +474,7 @@ def build_report(
         "trace": str(trace),
         "browserWebRtcBehaviorGate": "FAIL" if failures else "PASS",
         "browserRuntimeStability": stability,
+        "productionPlaybackHealth": production_health,
         "failures": failures,
         "freshness": freshness,
         "selectedRemoteAnswer": selected_answer,

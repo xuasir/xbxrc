@@ -6,6 +6,12 @@ const REPEAT_DELAY = 450
 const REPEAT_RATE = 140
 const ONCE = new Set([NavigationIntent.Action, NavigationIntent.Back, NavigationIntent.View, NavigationIntent.Menu])
 
+function inputSource(snapshot: InputSnapshot): 'gamepad' | 'keyboard' {
+  const state = snapshot.physicalState
+  const physicalActive = Object.values(state.buttons).some(value => value > 0.5) || Math.abs(state.leftStick.x) > 0.5 || Math.abs(state.leftStick.y) > 0.5
+  return snapshot.preferences.controlSource === 'keyboard' && !physicalActive ? 'keyboard' : 'gamepad'
+}
+
 class GamepadUIListener {
   private dispose: (() => void) | undefined
   private pressed = new Set<NavigationIntent>()
@@ -52,7 +58,7 @@ class GamepadUIListener {
         return
       if (active && !this.pressed.has(intent)) {
         this.pressed.add(intent)
-        inputDispatcher.dispatch(intent)
+        inputDispatcher.dispatch(intent, undefined, inputSource(snapshot))
         if (inputController.getSnapshot() !== snapshot)
           return
         if (!ONCE.has(intent))
@@ -71,7 +77,7 @@ class GamepadUIListener {
       const snapshot = inputController.getSnapshot()
       if (!this.pressed.has(intent) || snapshot.owner !== 'ui' || snapshot.exclusiveCapture)
         return
-      inputDispatcher.dispatch(intent)
+      inputDispatcher.dispatch(intent, undefined, inputSource(snapshot))
       if (this.pressed.has(intent) && inputController.getSnapshot() === snapshot)
         this.repeat(intent, REPEAT_RATE)
     }, delay))

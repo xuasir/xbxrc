@@ -19,12 +19,14 @@ import StreamExperiencePanel from '../components/stream/StreamExperiencePanel.vu
 import StreamMicrophoneStatus from '../components/stream/StreamMicrophoneStatus.vue'
 import StreamStatusNotice from '../components/stream/StreamStatusNotice.vue'
 import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
+import { inputUiTrace } from '../navigation/core/input-trace'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 import { resolveEnhancementBinding } from '../streaming/enhancements'
 import { buildFailureClipboard, captureStreamFailure, failureDiagnosticRows, streamFailureBody, streamFailureTitle } from '../streaming/stream-errors'
 import { useStreamPageOperations } from '../streaming/stream-page-operations'
 import { initialDiagnosticGroup } from '../streaming/stream-panel-view-models'
+import { exportStreamRuntimeTrace } from '../streaming/trace-export'
 import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
 import { streamInputRouteController } from './stream/stream-input-route-controller'
@@ -81,7 +83,7 @@ const lastMenuAction = ref<string | null>(null)
 const appVersion = ref('')
 let pageDisposed = false
 const waitingSnapshot = ref<ReturnType<typeof captureStreamFailure> | null>(null)
-const menuError = computed(() => ['microphone', 'powerOff', 'fullscreen', 'superResolution', 'export'].map(key => operations.errors[key as keyof typeof operations.errors]).find(Boolean) ?? '')
+const menuError = computed(() => ['microphone', 'powerOff', 'fullscreen', 'superResolution', 'export', 'traceExport'].map(key => operations.errors[key as keyof typeof operations.errors]).find(Boolean) ?? '')
 const menuBusy = computed(() => exportInFlight.value || Object.values(operations.pending).some(Boolean))
 const localFailure = ref<ReturnType<typeof captureStreamFailure> | null>(null)
 const pageFailure = computed(() => failure.value ?? localFailure.value)
@@ -372,12 +374,13 @@ const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
       disabled: exportingSrComparison.value,
     })
   }
+  items.push({ id: 'exportRuntimeTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), disabled: operations.pending.traceExport === true })
   return items
 })
 
 const failureDetails = computed(() => pageFailure.value ? failureDiagnosticRows(pageFailure.value, cleanupState.value, t, appVersion.value) : [])
 const failureClipboard = computed(() => pageFailure.value ? buildFailureClipboard(pageFailure.value, cleanupState.value, t, appVersion.value) : '')
-const failureFeedback = computed(() => operations.errors.retry || operations.errors.login || operations.errors.exit || operations.errors.powerOff || (cleanupState.value === 'running' || cleanupState.value === 'pending' ? t(`streamPage.failure.cleanup.${cleanupState.value}`) : ''))
+const failureFeedback = computed(() => operations.errors.retry || operations.errors.login || operations.errors.exit || operations.errors.powerOff || operations.errors.traceExport || (cleanupState.value === 'running' || cleanupState.value === 'pending' ? t(`streamPage.failure.cleanup.${cleanupState.value}`) : ''))
 const failedSheetActions = computed(() => {
   const list: Array<{ id: string, label: string, primary?: boolean, disabled?: boolean }> = []
   if (pageFailure.value?.error.kind === 'powerOffFailed') {
@@ -390,6 +393,7 @@ const failedSheetActions = computed(() => {
     list.push({ id: 'stream.failure.retry', label: t(operations.pending.retry ? 'streamPage.failure.reconnecting' : cleanupState.value === 'pending' ? 'streamPage.failure.retryCleanup' : 'streamPage.failure.reconnect'), primary: true, disabled: operations.pending.retry === true || cleanupState.value === 'running' })
   }
   list.push({ id: 'stream.failure.exit', label: t(operations.pending.exit ? 'streamPage.failure.returning' : streamRoute.targetType.value === 'home' ? 'streamPage.failure.backHome' : 'streamPage.failure.backCloud'), primary: list.length === 0, disabled: operations.pending.exit === true })
+  list.push({ id: 'stream.failure.exportTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), disabled: operations.pending.traceExport === true || cleanupState.value === 'running' })
   return list
 })
 const statusNotice = computed(() => {
@@ -498,6 +502,7 @@ function openDiagnosticsMenu(): void {
 
 function closeDiagnosticsMenu(): void {
   operations.invalidate('export')
+  operations.invalidate('traceExport')
   closeSheet('diagnosticsMenu')
   void moveStreamSpatialNavFocusToPostOverlaySink()
 }
@@ -552,6 +557,10 @@ async function disconnectStream(options?: { navigateBack?: boolean, reason?: str
 
 async function handleFailedSheetAction(id = 'stream.failure.exit'): Promise<void> {
   revealChrome()
+  if (id === 'stream.failure.exportTrace') {
+    await operations.run('traceExport', current => exportStreamRuntimeTrace(() => !pageDisposed && current()))
+    return
+  }
   if (id === 'stream.failure.powerOff') {
     await operations.run('powerOff', actions.powerOffAndDisconnect)
     return
@@ -817,6 +826,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   const panels: Record<string, () => void> = { display: openDisplaySheet, audio: openAudioSheet, sendText: openTextSheet }
   if (panels[id]) {
     panels[id]()
+    inputUiTrace.result('operationCompleted')
     return
   }
   if (id === 'pressNexus' || id === 'longPressNexus') {
@@ -825,6 +835,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
     else
       actions.longPressNexus()
     closeActionSheet()
+    inputUiTrace.result('operationCompleted')
     return
   }
   const operationsByAction = {
@@ -845,13 +856,19 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 async function handleDiagnosticsMenuAction(id: string): Promise<void> {
+  if (id === 'exportRuntimeTrace') {
+    await operations.run('traceExport', current => exportStreamRuntimeTrace(() => !pageDisposed && current()))
+    return
+  }
   if (id === 'toggleExperience') {
     actions.toggleExperienceMetrics()
+    inputUiTrace.result('operationCompleted')
     closeDiagnosticsMenu()
     return
   }
   if (id === 'toggleBrowserDiagnostics') {
     actions.toggleBrowserDiagnostics()
+    inputUiTrace.result('operationCompleted')
     return
   }
   if (id === 'toggleSuperResolution') {
@@ -869,9 +886,9 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
 </script>
 
 <template>
+  <!-- 父域保持可用，最上层弹层 Scope 负责焦点隔离及恢复。 -->
   <FocusScope
     :id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-    :active="!hasInteractiveSheet"
     :restore-focus="true"
     :default-focus-id="defaultFocusId"
   >

@@ -161,7 +161,7 @@ export class StatsService {
   private generation = 0
   private sampleSequence = 0
   private disposed = false
-  private flight?: { peer: RTCPeerConnection, promise: Promise<StreamStats> }
+  private flight?: { peer: RTCPeerConnection, promise: Promise<StreamStats>, startedAtMs: number }
   private lastSample: BrowserWebRtcStatsSample | null = null
   private latest = emptyStats()
   private projection = new BrowserStatsProjection()
@@ -170,7 +170,7 @@ export class StatsService {
   private fpsCounts: FpsStats = { video: 0, input: 0, metadata: 0 }
   private fpsStartedAt = 0
   private readonly unsubscribeFns: Array<() => void>
-  private presentation = { videoGeneration: undefined as number | undefined, localSequence: undefined as number | undefined, frames: 0, callbacks: 0, sampledFrames: 0, sampledCallbacks: 0, sampledAtMs: undefined as number | undefined, lastFrameAtMs: undefined as number | undefined }
+  private presentation = { videoGeneration: undefined as number | undefined, localSequence: undefined as number | undefined, frames: 0, callbacks: 0, sampledFrames: 0, sampledCallbacks: 0, sampledAtMs: undefined as number | undefined, lastFrameAtMs: undefined as number | undefined, gaps: 0, jumps: 0, maxGap: 0, maxJump: 0 }
   private lastRendererObservation?: RendererObservationSnapshot
   private videoDimensions?: { width: number, height: number }
 
@@ -238,7 +238,7 @@ export class StatsService {
     this.projection = new BrowserStatsProjection()
     this.connectedAtMs = undefined
     this.milestones.clear()
-    this.presentation = { videoGeneration: undefined, localSequence: undefined, frames: 0, callbacks: 0, sampledFrames: 0, sampledCallbacks: 0, sampledAtMs: undefined, lastFrameAtMs: undefined }
+    this.presentation = { videoGeneration: undefined, localSequence: undefined, frames: 0, callbacks: 0, sampledFrames: 0, sampledCallbacks: 0, sampledAtMs: undefined, lastFrameAtMs: undefined, gaps: 0, jumps: 0, maxGap: 0, maxJump: 0 }
     this.lastRendererObservation = undefined
     this.videoDimensions = undefined
   }
@@ -256,6 +256,7 @@ export class StatsService {
       p.lastFrameAtMs = undefined
       p.videoGeneration = frame.videoGeneration
       p.localSequence = undefined
+      p.gaps = p.jumps = p.maxGap = p.maxJump = 0
     }
     if (frame.localSequence !== undefined && p.localSequence !== undefined && frame.localSequence <= p.localSequence)
       return
@@ -263,6 +264,12 @@ export class StatsService {
     if (frame.newFrame === false)
       return
     p.callbacks++
+    if ((frame.callbackIntervalMs ?? 0) > 100)
+      p.gaps++
+    if ((frame.presentedFramesDelta ?? 0) > 1)
+      p.jumps++
+    p.maxGap = Math.max(p.maxGap, frame.callbackIntervalMs ?? 0)
+    p.maxJump = Math.max(p.maxJump, frame.presentedFramesDelta ?? 1)
     p.frames += frame.presentedFramesDelta !== undefined ? Math.max(0, frame.presentedFramesDelta) : 1
     p.lastFrameAtMs = frame.observedAtMs ?? performance.now()
   }
@@ -306,10 +313,13 @@ export class StatsService {
     const peer = this.currentPeer()
     if (!peer)
       return this.snapshot()
-    if (this.flight?.peer === peer)
+    if (this.flight?.peer === peer) {
+      this.emitObservation('stats.collectionState', { peerGeneration: this.generation, pending: true, startedAtMs: this.flight.startedAtMs })
       return this.flight.promise
+    }
     const generation = this.generation
     const startedAtMs = performance.now()
+    this.emitObservation('stats.collectionState', { peerGeneration: generation, pending: true, startedAtMs })
     const current = () => !this.disposed && generation === this.generation && peer === this.getPeer()
     let raw: Promise<RTCStatsReport>
     try {
@@ -363,6 +373,12 @@ export class StatsService {
         renderActualOutputWidth: renderer?.resources.outputWidth,
         renderActualOutputHeight: renderer?.resources.outputHeight,
         videoPresentFps,
+        videoPresentFramesTotal: p.videoGeneration === undefined ? undefined : p.frames,
+        videoCallbacksTotal: p.videoGeneration === undefined ? undefined : p.callbacks,
+        callbackGapCountTotal: p.gaps,
+        presentedFramesJumpCountTotal: p.jumps,
+        maxCallbackIntervalMs: p.maxGap,
+        maxPresentedFramesDelta: p.maxJump,
         videoPresentAgeMs,
         callbackFps: elapsed > 0 && p.callbacks > 0 ? (p.callbacks - p.sampledCallbacks) * 1000 / elapsed : undefined,
         rendererSubmitFps,
@@ -409,6 +425,8 @@ export class StatsService {
         statsObservationState: sample.inboundVideo === undefined ? 'unavailable' : sample.collectionDurationMs > 1000 ? 'stale' : 'fresh',
       }
       this.lastSample = sample
+      p.maxGap = p.maxJump = 0
+      this.emitObservation('stats.browserObservation', { sample, stats: this.latest })
       this.recordMilestones(sample)
       if (sample.inboundVideo || sample.selectedCodec)
         this.emitter.emit('stats.browserWebRtc', sample)
@@ -422,9 +440,18 @@ export class StatsService {
     }).finally(() => {
       if (this.flight?.promise === promise)
         this.flight = undefined
+      if (current())
+        this.emitObservation('stats.collectionState', { peerGeneration: generation, pending: false, startedAtMs })
     })
-    this.flight = { peer, promise }
+    this.flight = { peer, promise, startedAtMs }
     return promise
+  }
+
+  private emitObservation<K extends 'stats.browserObservation' | 'stats.collectionState'>(event: K, payload: PlayerEvents[K]): void {
+    try {
+      this.emitter.emit(event, payload)
+    }
+    catch { /* 诊断消费者异常保持采集和媒体状态独立。 */ }
   }
 
   private recordMilestones(sample: BrowserWebRtcStatsSample): void {

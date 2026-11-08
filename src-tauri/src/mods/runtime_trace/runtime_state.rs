@@ -2,6 +2,8 @@ use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
+use serde_json::Value;
+use std::path::PathBuf;
 
 use super::policy::TraceImportance;
 
@@ -10,6 +12,30 @@ pub(super) const QUEUE_MAX_BYTES: usize = 8 * 1024 * 1024;
 pub(super) const MAX_ROW_BYTES: usize = 64 * 1024;
 pub(super) const CONTROL_CAPACITY: usize = 16;
 const SEQUENCE_OVERHEAD: usize = 32;
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct TraceSegment {
+    pub file_name: String,
+    pub file_sequence: u64,
+    pub first_sequence: u64,
+    pub last_sequence: u64,
+    pub written_bytes: u64,
+    #[serde(skip)]
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Default)]
+pub(super) struct WriterProgress {
+    pub written_rows: u64,
+    pub written_bytes: u64,
+    pub sequence: u64,
+    pub flushed_sequence: u64,
+    pub io_failures: u64,
+    pub file_sequence: u64,
+    pub files: Vec<TraceSegment>,
+    pub checkpoint: Option<Value>,
+}
 
 #[derive(Clone, Copy, Default, Debug)]
 pub(super) struct QueueUsage {
@@ -95,9 +121,10 @@ pub(super) enum DropReason {
 #[derive(Default)]
 pub(super) struct DropCounters {
     snapshot: Mutex<DropSnapshot>,
+    cumulative: Mutex<DropSnapshot>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub(super) struct DropSnapshot {
     pub essential: u64,
     pub key: u64,
@@ -119,21 +146,17 @@ impl DropCounters {
         let Ok(mut snapshot) = self.snapshot.lock() else {
             return;
         };
-        // 等级与原因在同一事务累计，writer提取时保留完整丢弃证据。
-        let counter = match importance {
-            TraceImportance::Essential => &mut snapshot.essential,
-            TraceImportance::Key => &mut snapshot.key,
-            TraceImportance::Debug => &mut snapshot.debug,
-            TraceImportance::Raw => &mut snapshot.raw,
-        };
-        *counter += 1;
-        let reason_counter = match reason {
-            DropReason::QueuePressure => return,
-            DropReason::Oversized => &mut snapshot.oversized,
-            DropReason::Configuration => &mut snapshot.configuration,
-            DropReason::Io => &mut snapshot.io,
-        };
-        *reason_counter += 1;
+        if let Ok(mut total) = self.cumulative.lock() {
+            total.add(importance, reason);
+        }
+        snapshot.add(importance, reason);
+    }
+
+    pub fn cumulative(&self) -> DropSnapshot {
+        self.cumulative
+            .lock()
+            .map(|snapshot| *snapshot)
+            .unwrap_or_default()
     }
 
     pub fn take(&self) -> DropSnapshot {
@@ -156,19 +179,47 @@ impl DropCounters {
     }
 }
 
-struct LimitedRow(Vec<u8>);
+impl DropSnapshot {
+    fn add(&mut self, importance: TraceImportance, reason: DropReason) {
+        // 等级与原因在同一事务累计，writer提取时保留完整丢弃证据。
+        let counter = match importance {
+            TraceImportance::Essential => &mut self.essential,
+            TraceImportance::Key => &mut self.key,
+            TraceImportance::Debug => &mut self.debug,
+            TraceImportance::Raw => &mut self.raw,
+        };
+        *counter += 1;
+        let reason_counter = match reason {
+            DropReason::QueuePressure => return,
+            DropReason::Oversized => &mut self.oversized,
+            DropReason::Configuration => &mut self.configuration,
+            DropReason::Io => &mut self.io,
+        };
+        *reason_counter += 1;
+    }
+}
+
+struct LimitedRow {
+    bytes: Vec<u8>,
+    limit: usize,
+}
 
 impl Write for LimitedRow {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        if bytes.len() > (MAX_ROW_BYTES - SEQUENCE_OVERHEAD - 1).saturating_sub(self.0.len()) {
+        if bytes.len()
+            > self
+                .limit
+                .saturating_sub(SEQUENCE_OVERHEAD + 1)
+                .saturating_sub(self.bytes.len())
+        {
             return Err(io::Error::other("runtime trace row exceeds byte budget"));
         }
-        let required = self.0.len() + bytes.len();
-        if required > self.0.capacity() {
-            let capacity = required.max(self.0.capacity() * 2).min(MAX_ROW_BYTES);
-            self.0.reserve_exact(capacity - self.0.len());
+        let required = self.bytes.len() + bytes.len();
+        if required > self.bytes.capacity() {
+            let capacity = required.max(self.bytes.capacity() * 2).min(self.limit);
+            self.bytes.reserve_exact(capacity - self.bytes.len());
         }
-        self.0.extend_from_slice(bytes);
+        self.bytes.extend_from_slice(bytes);
         Ok(bytes.len())
     }
 
@@ -178,10 +229,17 @@ impl Write for LimitedRow {
 }
 
 pub(super) fn encode_row(row: &impl Serialize) -> io::Result<Vec<u8>> {
-    let mut output = LimitedRow(Vec::with_capacity(512));
+    encode_row_with_limit(row, MAX_ROW_BYTES)
+}
+
+pub(super) fn encode_row_with_limit(row: &impl Serialize, limit: usize) -> io::Result<Vec<u8>> {
+    let mut output = LimitedRow {
+        bytes: Vec::with_capacity(512.min(limit)),
+        limit: limit.min(MAX_ROW_BYTES),
+    };
     serde_json::to_writer(&mut output, row).map_err(io::Error::other)?;
-    output.0.push(b'\n');
-    Ok(output.0)
+    output.bytes.push(b'\n');
+    Ok(output.bytes)
 }
 
 #[cfg(test)]

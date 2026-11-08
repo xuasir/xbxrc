@@ -19,4 +19,31 @@ export interface RuntimeTraceRecordEventParams {
 
 export interface RuntimeTraceAckResult {
   accepted: boolean
+  disposition: 'enqueued' | 'filtered' | 'queueFull' | 'rowOversized' | 'writerUnavailable'
 }
+
+export interface RuntimeTraceEventDescriptor {
+  event: string
+  category: NonNullable<RuntimeTraceRecordEventParams['category']>
+  dimension: NonNullable<RuntimeTraceRecordEventParams['dimension']>
+  importance: NonNullable<RuntimeTraceRecordEventParams['importance']>
+  intervalMs: number
+  maxRowBytes: number
+}
+
+export interface RuntimeTraceProducerPolicy {
+  profile: 'off' | 'production' | 'dev'
+  productionContractVersion: number
+  generation?: number
+  budget: { maxInFlight: number, maxPendingRows: number, maxPendingBytes: number, normalBytesPerMinute: number, inputBytesPerMinute: number, anomalyBytesPerMinute: number }
+  events: RuntimeTraceEventDescriptor[]
+}
+
+export interface RuntimeTraceFlushResult {
+  status: 'flushed' | 'off' | 'timeout' | 'ioError' | 'queueFull' | 'writerUnavailable'
+  backend?: Record<string, unknown>
+}
+
+export interface RuntimeTraceStatus { traceRunId: string, backend: Record<string, unknown> }
+
+export interface RuntimeTraceExport { suggestedName: string, dataBase64: string, manifest: Record<string, unknown> }

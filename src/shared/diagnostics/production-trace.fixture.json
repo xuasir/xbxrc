@@ -1,0 +1,186 @@
+[
+  {
+    "event": "browserPlaybackHealthObserved",
+    "input": {
+      "healthSequence": 7,
+      "observationEpoch": 2,
+      "sampleId": "3:9",
+      "visibility": "visible",
+      "url": "https://private.example/token=secret",
+      "collection": {
+        "state": "pending",
+        "ageMs": 1800,
+        "error": "private"
+      },
+      "coverage": {
+        "ratio": 0.75,
+        "validMs": 750,
+        "counterMs": {
+          "received": 750,
+          "decoded": 500
+        },
+        "account": "private"
+      },
+      "frameSupply": {
+        "receivedFps": 60,
+        "decodeFps": 0,
+        "delta": {
+          "received": 60,
+          "decoded": 0
+        }
+      },
+      "renderer": {
+        "timingScope": "retainedSamples",
+        "timing": {
+          "upload": {
+            "count": 256,
+            "p95Ms": 23.5,
+            "p99Ms": 27,
+            "maxMs": 31,
+            "message": "secret"
+          }
+        }
+      },
+      "recovery": {
+        "decoderImplementation": "private[D3D11VideoDecoder] device secret",
+        "nativeRecoveryGate": "unsupported"
+      }
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "healthSequence": 7,
+      "observationEpoch": 2,
+      "sampleId": "3:9",
+      "visibility": "visible",
+      "collection": {
+        "state": "pending",
+        "ageMs": 1800
+      },
+      "coverage": {
+        "ratio": 0.75,
+        "validMs": 750,
+        "counterMs": {
+          "received": 750,
+          "decoded": 500
+        }
+      },
+      "frameSupply": {
+        "receivedFps": 60,
+        "decodeFps": 0,
+        "delta": {
+          "received": 60,
+          "decoded": 0
+        }
+      },
+      "renderer": {
+        "timingScope": "retainedSamples",
+        "timing": {
+          "upload": {
+            "count": 256,
+            "p95Ms": 23.5,
+            "p99Ms": 27,
+            "maxMs": 31
+          }
+        }
+      },
+      "recovery": {
+        "decoderImplementation": "D3D11VideoDecoder",
+        "nativeRecoveryGate": "unsupported"
+      }
+    }
+  },
+  {
+    "event": "inputUiInteractionObserved",
+    "input": {
+      "operationId": "12:4",
+      "source": "touch",
+      "scope": "actionMenu",
+      "action": "exportRuntimeTrace",
+      "outcome": "blocked",
+      "reason": "inactiveAncestorScope",
+      "target": "player-private-name",
+      "durationMs": 0,
+      "owner": "ui",
+      "uiText": "secret"
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "operationId": "12:4",
+      "source": "touch",
+      "scope": "actionMenu",
+      "action": "exportRuntimeTrace",
+      "outcome": "blocked",
+      "reason": "inactiveAncestorScope",
+      "durationMs": 0,
+      "owner": "ui"
+    }
+  },
+  {
+    "event": "browserWebRtcTimelineObserved",
+    "input": {
+      "kind": "firstDecoded",
+      "selectedCodec": {
+        "payloadType": 102,
+        "mimeType": "video/H264",
+        "profileLevelId": "4D0033",
+        "packetizationMode": "1",
+        "sdpFmtpLine": "profile-level-id=4D0033;password=secret"
+      },
+      "inboundVideo": {
+        "framesDecoded": 1,
+        "accountId": "private"
+      },
+      "address": "192.168.1.1",
+      "selectedPayloadType": "102",
+      "selectedProfileLevelId": "4D0033",
+      "selectedMimeType": "video/H264",
+      "elapsedSinceBindMs": 300
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "kind": "firstDecoded",
+      "selectedCodec": {
+        "payloadType": 102,
+        "mimeType": "video/H264",
+        "profileLevelId": "4d0033",
+        "packetizationMode": "1"
+      },
+      "inboundVideo": {
+        "framesDecoded": 1
+      },
+      "selectedPayloadType": "102",
+      "selectedProfileLevelId": "4d0033",
+      "selectedMimeType": "video/H264",
+      "elapsedSinceBindMs": 300
+    }
+  },
+  {
+    "event": "executionCleanupObserved",
+    "input": {
+      "cleanupState": "completed",
+      "reason": "menuActionExit",
+      "durationMs": 42,
+      "producerStatus": "flushed",
+      "results": {
+        "inputReleased": true,
+        "runtimeStopped": true,
+        "remoteClosed": true,
+        "startupCancelled": true,
+        "token": "secret"
+      }
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "cleanupState": "completed",
+      "reason": "menuActionExit",
+      "durationMs": 42,
+      "producerStatus": "flushed",
+      "results": {
+        "inputReleased": true,
+        "runtimeStopped": true,
+        "remoteClosed": true,
+        "startupCancelled": true
+      }
+    }
+  }
+]

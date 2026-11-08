@@ -1,16 +1,22 @@
+mod export;
 pub mod policy;
 pub mod rpc;
 mod runtime_state;
+mod sdp_summary;
 pub mod service;
+mod trace_contract;
+mod types;
 mod writer;
 
 pub use policy::{
     should_record_trace_event, stats_snapshot_interval, trace_observation_tick_interval,
     RuntimeTraceProfile, TraceDimension, TraceDimensionSet, TraceImportance, TraceMetadata,
 };
+pub use sdp_summary::summarize_sdp;
 pub use service::{
     set_trace_root_dir, RuntimeTraceCategory, RuntimeTraceRecorder, RuntimeTraceRecorderRef,
 };
+pub use types::{TraceFlushStatus, TraceRecordDisposition};
 
 /// 新配置或未写入磁盘时的默认 `runtime_trace_mode`（与 `defaults::default_config_map` 对齐）。
 pub fn default_stored_trace_mode() -> String {

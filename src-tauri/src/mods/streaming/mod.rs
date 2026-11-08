@@ -1,5 +1,6 @@
 pub mod events;
 pub mod rpc;
+mod runtime_state;
 pub mod service;
 pub mod types;
 

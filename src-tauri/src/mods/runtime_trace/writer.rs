@@ -2,7 +2,7 @@ use std::fs::{create_dir_all, read_dir, remove_file, File, OpenOptions};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
@@ -11,10 +11,11 @@ use serde_json::json;
 
 use super::policy::{RuntimeTraceProfile, TraceDimensionSet, TraceFileBudget, TraceImportance};
 use super::runtime_state::{
-    encode_row, DropCounters, DropReason, QueueBudget, RowReservation, CONTROL_CAPACITY,
-    MAX_ROW_BYTES, QUEUE_MAX_BYTES, QUEUE_MAX_ROWS,
+    encode_row, DropCounters, DropReason, QueueBudget, RowReservation, TraceSegment,
+    WriterProgress, CONTROL_CAPACITY, MAX_ROW_BYTES, QUEUE_MAX_BYTES, QUEUE_MAX_ROWS,
 };
 use super::service::{now_ms, TRACE_SCHEMA_VERSION};
+use super::types::{TraceFlushStatus, TraceRecordDisposition};
 
 const FLUSH_INTERVAL: Duration = Duration::from_millis(40);
 const BATCH_LIMIT: usize = 256;
@@ -39,7 +40,7 @@ struct QueuedRow {
 enum WriterCommand {
     Write(QueuedRow),
     Configure(OutputConfig, &'static str, Sender<io::Result<()>>),
-    Sync(Sender<()>),
+    Sync(bool, Sender<io::Result<()>>),
     Shutdown,
 }
 
@@ -49,6 +50,7 @@ pub(super) struct WriterHandle {
     queue: Arc<QueueBudget>,
     drops: Arc<DropCounters>,
     path: Arc<Mutex<Option<PathBuf>>>,
+    progress: Arc<Mutex<WriterProgress>>,
 }
 
 impl WriterHandle {
@@ -58,12 +60,14 @@ impl WriterHandle {
         let queue = Arc::new(QueueBudget::default());
         let drops = Arc::new(DropCounters::default());
         let path = Arc::new(Mutex::new(None));
+        let progress = Arc::new(Mutex::new(WriterProgress::default()));
         let mut writer = TraceWriter {
             root,
             trace_run_id,
             queue: queue.clone(),
             drops: drops.clone(),
             path: path.clone(),
+            progress: progress.clone(),
             config: None,
             file: None,
             bytes_written: 0,
@@ -79,6 +83,7 @@ impl WriterHandle {
             queue,
             drops,
             path,
+            progress,
         })
     }
 
@@ -90,10 +95,15 @@ impl WriterHandle {
         self.drops.note(importance, reason);
     }
 
-    pub fn try_write(&self, bytes: Vec<u8>, generation: u64, importance: TraceImportance) {
+    pub fn try_write(
+        &self,
+        bytes: Vec<u8>,
+        generation: u64,
+        importance: TraceImportance,
+    ) -> TraceRecordDisposition {
         let Some(reservation) = self.queue.reserve(bytes.capacity(), importance) else {
             self.note_drop(importance, DropReason::QueuePressure);
-            return;
+            return TraceRecordDisposition::QueueFull;
         };
         let row = QueuedRow {
             bytes,
@@ -101,8 +111,16 @@ impl WriterHandle {
             importance,
             _reservation: reservation,
         };
-        if self.tx.try_send(WriterCommand::Write(row)).is_err() {
-            self.note_drop(importance, DropReason::QueuePressure);
+        match self.tx.try_send(WriterCommand::Write(row)) {
+            Ok(()) => TraceRecordDisposition::Enqueued,
+            Err(TrySendError::Full(_)) => {
+                self.note_drop(importance, DropReason::QueuePressure);
+                TraceRecordDisposition::QueueFull
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                self.note_drop(importance, DropReason::Io);
+                TraceRecordDisposition::WriterUnavailable
+            }
         }
     }
 
@@ -118,11 +136,48 @@ impl WriterHandle {
         Ok(response)
     }
 
-    pub fn sync(&self) {
+    pub fn sync(&self) -> TraceFlushStatus {
+        self.sync_with_evidence(true)
+    }
+
+    pub fn sync_quiet(&self) -> TraceFlushStatus {
+        self.sync_with_evidence(false)
+    }
+
+    fn sync_with_evidence(&self, evidence: bool) -> TraceFlushStatus {
         let (done, response) = mpsc::channel();
-        if self.tx.try_send(WriterCommand::Sync(done)).is_ok() {
-            let _ = response.recv_timeout(Duration::from_secs(2));
+        match self.tx.try_send(WriterCommand::Sync(evidence, done)) {
+            Ok(()) => match response.recv_timeout(Duration::from_secs(2)) {
+                Ok(Ok(())) => {
+                    if self.path().is_some() {
+                        TraceFlushStatus::Flushed
+                    } else {
+                        TraceFlushStatus::Off
+                    }
+                }
+                Ok(Err(_)) => TraceFlushStatus::IoError,
+                Err(RecvTimeoutError::Timeout) => TraceFlushStatus::Timeout,
+                Err(RecvTimeoutError::Disconnected) => TraceFlushStatus::WriterUnavailable,
+            },
+            Err(TrySendError::Full(_)) => TraceFlushStatus::QueueFull,
+            Err(TrySendError::Disconnected(_)) => TraceFlushStatus::WriterUnavailable,
         }
+    }
+
+    pub fn snapshot(&self) -> serde_json::Value {
+        let progress = self
+            .progress
+            .lock()
+            .map(|value| value.clone())
+            .unwrap_or_default();
+        progress_snapshot(&progress, &self.queue, &self.drops)
+    }
+
+    pub fn segments(&self) -> Vec<TraceSegment> {
+        self.progress
+            .lock()
+            .map(|value| value.files.clone())
+            .unwrap_or_default()
     }
 
     pub fn path(&self) -> Option<PathBuf> {
@@ -152,6 +207,7 @@ struct TraceWriter {
     queue: Arc<QueueBudget>,
     drops: Arc<DropCounters>,
     path: Arc<Mutex<Option<PathBuf>>>,
+    progress: Arc<Mutex<WriterProgress>>,
     config: Option<OutputConfig>,
     file: Option<BufWriter<File>>,
     bytes_written: u64,
@@ -209,6 +265,9 @@ impl TraceWriter {
                     };
                     self.drops.note(row.importance, reason);
                     if !matches!(reason, DropReason::Oversized) {
+                        if let Ok(mut progress) = self.progress.lock() {
+                            progress.io_failures += 1;
+                        }
                         log::warn!("Runtime trace write failed: {error}");
                     }
                 }
@@ -218,14 +277,17 @@ impl TraceWriter {
                 let result = self.configure(config, reason);
                 let _ = done.send(result);
             }
-            WriterCommand::Sync(done) => {
+            WriterCommand::Sync(evidence, done) => {
                 self.emit_notice(true);
-                let _ = self.flush();
-                let _ = done.send(());
+                let _ = done.send(if evidence {
+                    self.flush_checkpoint("sync")
+                } else {
+                    self.flush()
+                });
             }
             WriterCommand::Shutdown => {
                 self.emit_notice(true);
-                let _ = self.flush();
+                let _ = self.flush_checkpoint("shutdown");
                 return false;
             }
         }
@@ -234,9 +296,7 @@ impl TraceWriter {
 
     fn configure(&mut self, config: OutputConfig, reason: &str) -> io::Result<()> {
         if config.profile == RuntimeTraceProfile::Off {
-            if let Err(error) = self.flush() {
-                log::warn!("Runtime trace closing flush failed: {error}");
-            }
+            self.flush_checkpoint("traceConfigChanged")?;
             self.file = None;
             self.config = Some(config);
             self.bytes_written = 0;
@@ -252,12 +312,18 @@ impl TraceWriter {
         let path = self
             .root
             .join(format!("runtime-trace-{}-{}.jsonl", now_ms(), file_id));
+        let progress = self
+            .progress
+            .lock()
+            .map(|value| value.clone())
+            .unwrap_or_default();
         let header = encode_row(&json!({
             "schemaVersion": TRACE_SCHEMA_VERSION, "traceRunId": self.trace_run_id, "tsMs": now_ms(),
             "traceMode": config.profile.as_str(), "traceProfile": config.profile.as_str(),
             "dimension": "core", "importance": "essential", "category": "state", "domain": "trace",
             "event": "fileOpened", "sessionId": null,
-            "payload": { "path": path.display().to_string(), "reason": reason, "writerThread": thread::current().name(),
+            "payload": { "fileName": path.file_name().and_then(|name| name.to_str()), "fileSequence": progress.file_sequence + 1, "previousSequence": self.sequence,
+                "productionContractVersion": 1, "checkpoint": progress.checkpoint, "reason": reason, "writerThread": thread::current().name(),
                 "traceProfile": config.profile.as_str(), "dimensions": config.dimensions.names(),
                 "budget": { "maxFileBytes": config.budget.max_file_bytes, "maxFiles": config.budget.max_files,
                     "maxPendingRows": QUEUE_MAX_ROWS, "maxPendingBytes": QUEUE_MAX_BYTES, "maxRowBytes": MAX_ROW_BYTES } },
@@ -283,6 +349,24 @@ impl TraceWriter {
         self.bytes_written = (prefix.len() + header.len() - 1) as u64;
         self.file = Some(next);
         self.config = Some(config);
+        if let Ok(mut progress) = self.progress.lock() {
+            progress.file_sequence += 1;
+            progress.written_rows += 1;
+            progress.written_bytes += self.bytes_written;
+            progress.flushed_sequence = self.sequence;
+            let file_sequence = progress.file_sequence;
+            progress.files.push(TraceSegment {
+                file_name: path.file_name().unwrap().to_string_lossy().into_owned(),
+                file_sequence,
+                first_sequence: self.sequence,
+                last_sequence: self.sequence,
+                written_bytes: self.bytes_written,
+                path: path.clone(),
+            });
+            if config.budget.max_files > 0 && progress.files.len() > config.budget.max_files {
+                progress.files.remove(0);
+            }
+        }
         self.publish_path(Some(path.clone()));
         // 测试共享运行目录保留并发recorder；裁剪算法以独立目录单测验证。
         #[cfg(not(test))]
@@ -323,11 +407,32 @@ impl TraceWriter {
             .ok_or_else(|| io::Error::other("runtime trace output is unavailable"))?;
         file.write_all(prefix.as_bytes())?;
         file.write_all(&bytes[1..])?;
+        if let Ok(mut progress) = self.progress.lock() {
+            progress.written_rows += 1;
+            progress.written_bytes += (prefix.len() + bytes.len() - 1) as u64;
+            if let Some(segment) = progress.files.last_mut() {
+                segment.last_sequence = self.sequence;
+                segment.written_bytes = self.bytes_written;
+            }
+            if bytes
+                .windows(b"playbackSessionSummary".len())
+                .any(|part| part == b"playbackSessionSummary")
+            {
+                if let Ok(row) = serde_json::from_slice::<serde_json::Value>(bytes) {
+                    progress.checkpoint = Some(
+                        json!({"sequence": self.sequence, "sessionId": row["sessionId"], "payload": row["payload"]}),
+                    );
+                }
+            }
+        }
         Ok(())
     }
 
     fn sequence_prefix(&mut self) -> String {
         self.sequence += 1;
+        if let Ok(mut progress) = self.progress.lock() {
+            progress.sequence = self.sequence;
+        }
         format!("{{\"seq\":{},", self.sequence)
     }
 
@@ -336,10 +441,38 @@ impl TraceWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if let Some(file) = self.file.as_mut() {
-            file.flush()?;
+        let result = self.file.as_mut().map_or(Ok(()), |file| file.flush());
+        if let Ok(mut progress) = self.progress.lock() {
+            if result.is_ok() {
+                progress.flushed_sequence = self.sequence;
+            } else {
+                progress.io_failures += 1;
+            }
         }
-        Ok(())
+        result
+    }
+
+    fn flush_checkpoint(&mut self, reason: &str) -> io::Result<()> {
+        if self.file.is_none() {
+            return Ok(());
+        }
+        self.flush()?;
+        let config = self.config.unwrap();
+        let progress = self
+            .progress
+            .lock()
+            .map(|value| value.clone())
+            .unwrap_or_default();
+        let row = encode_row(&json!({
+            "schemaVersion": TRACE_SCHEMA_VERSION, "traceRunId": self.trace_run_id, "tsMs": now_ms(),
+            "traceMode": config.profile.as_str(), "traceProfile": config.profile.as_str(),
+            "dimension": "core", "importance": "essential", "category": "state", "domain": "trace",
+            "event": "traceFlushObserved", "sessionId": null,
+            "payload": { "productionContractVersion": 1, "status": "flushed", "flushKind": "bufWriter", "reason": reason,
+                "flushedSequence": self.sequence, "backend": progress_snapshot(&progress, &self.queue, &self.drops) },
+        }))?;
+        self.append(&row)?;
+        self.flush()
     }
 
     fn publish_path(&self, next: Option<PathBuf>) {
@@ -368,7 +501,8 @@ impl TraceWriter {
                 "oversizedDropped": dropped.oversized, "configurationDropped": dropped.configuration, "ioDropped": dropped.io,
                 "pendingRows": usage.rows, "pendingBytes": usage.bytes,
                 "peakPendingRows": usage.peak_rows, "peakPendingBytes": usage.peak_bytes,
-                "maxPendingRows": QUEUE_MAX_ROWS, "maxPendingBytes": QUEUE_MAX_BYTES, "maxRowBytes": MAX_ROW_BYTES },
+                "maxPendingRows": QUEUE_MAX_ROWS, "maxPendingBytes": QUEUE_MAX_BYTES, "maxRowBytes": MAX_ROW_BYTES,
+                "backend": progress_snapshot(&self.progress.lock().map(|value| value.clone()).unwrap_or_default(), &self.queue, &self.drops) },
         }));
         // notice由writer直接提交，满队列时也能保留丢弃证据。
         if notice.and_then(|bytes| self.append(&bytes)).is_err() {
@@ -377,6 +511,21 @@ impl TraceWriter {
             self.last_notice = Instant::now();
         }
     }
+}
+
+fn progress_snapshot(
+    progress: &WriterProgress,
+    queue: &QueueBudget,
+    drops: &DropCounters,
+) -> serde_json::Value {
+    let usage = queue.snapshot();
+    let dropped = drops.cumulative();
+    json!({ "writtenRows": progress.written_rows, "writtenBytes": progress.written_bytes,
+        "sequence": progress.sequence, "flushedSequence": progress.flushed_sequence, "ioFailures": progress.io_failures,
+        "pendingRows": usage.rows, "pendingBytes": usage.bytes, "peakPendingRows": usage.peak_rows, "peakPendingBytes": usage.peak_bytes,
+        "essentialDropped": dropped.essential, "keyDropped": dropped.key, "debugDropped": dropped.debug, "rawDropped": dropped.raw,
+        "oversizedDropped": dropped.oversized, "configurationDropped": dropped.configuration, "ioDropped": dropped.io,
+        "files": progress.files })
 }
 
 fn prune_files(root: &Path, max_files: usize, active_path: &Path) {

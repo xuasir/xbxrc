@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useAttrs, watch } from 'vue'
 import { navigationEngine } from '../engine'
+import { inputUiTrace } from '../input-trace'
 
 interface Props {
   as?: string
@@ -32,6 +33,7 @@ function release() {
   generation++
   root.value?.setAttribute('data-nav-zone-active', 'false')
   navigationEngine.updateActiveScope(effectiveId, false, { owner })
+  inputUiTrace.scope(effectiveId, false, !mounted)
 }
 async function activate() {
   const request = ++generation
@@ -44,6 +46,7 @@ async function activate() {
       trap: props.trap,
       restoreFocus: props.restoreFocus,
     })
+    inputUiTrace.scope(effectiveId, true)
   }
 }
 watch(() => [props.active, props.trap, props.restoreFocus], () => props.active ? void activate() : release())

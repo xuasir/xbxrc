@@ -313,7 +313,10 @@ pub(super) fn classify_startup_error_kind_fallback(
     if normalized.contains("target missing") {
         return StreamingStartupErrorKind::Target;
     }
-    if normalized.contains("auth") || normalized.contains("token missing") {
+    if normalized.contains("auth")
+        || normalized.contains("token missing")
+        || normalized.contains("streaming token is unavailable")
+    {
         return StreamingStartupErrorKind::Auth;
     }
     if normalized.contains("network error") {

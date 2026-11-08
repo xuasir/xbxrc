@@ -1,0 +1,123 @@
+{
+  "productionContractVersion": 1,
+  "gate": "INSUFFICIENT_EVIDENCE",
+  "acceptanceGate": "INSUFFICIENT_EVIDENCE",
+  "sections": {
+    "networkHealth": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 0,
+      "samples": 0,
+      "validMs": 0
+    },
+    "recoveryChainHealth": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 0,
+      "samples": 0,
+      "validMs": 0
+    },
+    "mediaSupply": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 0,
+      "samples": 0,
+      "validMs": 0
+    },
+    "steadySupply": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 0,
+      "samples": 0,
+      "validMs": 0
+    },
+    "submitPresentTail": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 0,
+      "samples": 0,
+      "validMs": 0
+    },
+    "frameSupplyDelta": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 0,
+      "samples": 0,
+      "validMs": 0
+    }
+  },
+  "steadyDurationMs": 0,
+  "thresholds": {
+    "minSteadySeconds": 60,
+    "publicationRatio": 0.95,
+    "maxPublicationGapMs": 3000,
+    "mediaValidRatio": 0.9,
+    "supplyRatio": 0.9,
+    "sustainedMs": 3000
+  },
+  "rowCount": 377,
+  "healthRecords": 0,
+  "devIntervals": 0,
+  "unsupportedContractRecords": 0,
+  "segments": [],
+  "input": {
+    "status": "UNSUPPORTED",
+    "interactionRows": 0,
+    "healthRows": 0,
+    "failures": [],
+    "expectedBlocks": [],
+    "pairedOperations": [],
+    "incompleteOperations": [],
+    "outcomes": {}
+  },
+  "traceLoss": {
+    "status": "PASS",
+    "producerMaxCounters": {
+      "dropped": 0,
+      "droppedEssential": 0,
+      "ipcFailed": 0,
+      "ipcTimedOut": 0,
+      "producerRowOversized": 0,
+      "payloadFailed": 0,
+      "ackMissing": 0,
+      "coalesced": 0,
+      "profileFiltered": 0,
+      "queueFull": 0,
+      "rowOversized": 0,
+      "writerUnavailable": 0
+    },
+    "backendMaxCounters": {
+      "essentialDropped": 0,
+      "keyDropped": 0,
+      "debugDropped": 0,
+      "rawDropped": 0,
+      "ioDropped": 0,
+      "ioFailures": 0,
+      "oversizedDropped": 0
+    },
+    "counterScope": "maxObservedCumulativeWithinRun"
+  },
+  "export": {
+    "status": "PASS",
+    "bundles": []
+  },
+  "ending": {
+    "status": "INSUFFICIENT_EVIDENCE",
+    "partialEnding": true,
+    "sessions": []
+  },
+  "anomalies": [],
+  "capabilities": {
+    "browserPhysicalScanout": "UNSUPPORTED",
+    "browserNativeReferenceChain": "UNSUPPORTED"
+  },
+  "loading": {
+    "files": [
+      {
+        "fileName": "runtime-trace-1794116093651-1.jsonl",
+        "bytes": 270080,
+        "sha256": "680fcdf75f307908d588a7b46996c633ffb41012d2f317af99404e8debb8fc4d"
+      }
+    ],
+    "malformedRows": 0,
+    "duplicateRows": 0
+  },
+  "freshness": {
+    "ageSeconds": 23558.909,
+    "status": "PASS"
+  }
+}

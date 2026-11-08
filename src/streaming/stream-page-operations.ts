@@ -1,6 +1,8 @@
 import { reactive } from 'vue'
+import { inputUiTrace } from '../navigation/core/input-trace'
 
-export type StreamPageOperation = 'retry' | 'login' | 'exit' | 'text' | 'display' | 'microphone' | 'export' | 'powerOff' | 'fullscreen' | 'superResolution'
+export type StreamPageOperation = 'retry' | 'login' | 'exit' | 'text' | 'display' | 'microphone' | 'export' | 'traceExport' | 'powerOff' | 'fullscreen' | 'superResolution'
+export const STREAM_OPERATION_CANCELLED = Symbol('cancelled')
 
 /** 临时操作反馈归页面所有；关闭面板和更换会话会撤销迟到回写资格。 */
 export function useStreamPageOperations(t: (key: string) => string) {
@@ -20,8 +22,11 @@ export function useStreamPageOperations(t: (key: string) => string) {
   }
 
   async function run(operation: StreamPageOperation, perform: (isCurrent: () => boolean) => Promise<unknown>, onSuccess?: () => void): Promise<boolean> {
-    if (pending[operation])
+    const recordResult = inputUiTrace.beginOperation(operation)
+    if (pending[operation]) {
+      recordResult('blocked', 'disabled')
       return false
+    }
     const token = Symbol(operation)
     tokens.set(operation, token)
     pending[operation] = true
@@ -29,15 +34,23 @@ export function useStreamPageOperations(t: (key: string) => string) {
     delete errorCodes[operation]
     try {
       const result = await perform(() => tokens.get(operation) === token)
-      if (tokens.get(operation) !== token)
+      if (tokens.get(operation) !== token) {
+        recordResult('cancelled', 'cancelled')
         return false
+      }
+      if (result === STREAM_OPERATION_CANCELLED) {
+        recordResult('cancelled', 'cancelled')
+        return false
+      }
       if (result === false)
         throw new Error('operationRejected')
       pending[operation] = false
       onSuccess?.()
+      recordResult('operationCompleted')
       return true
     }
     catch (error) {
+      recordResult('failed', 'handlerFailed')
       if (tokens.get(operation) === token) {
         const navigationFailed = error instanceof Error && error.message === 'streamNavigationFailed'
         if (navigationFailed)

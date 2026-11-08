@@ -210,11 +210,13 @@ impl AppStateProvider for AppStateService {
             .decode(data_base64)
             .map_err(|error| format!("Failed to decode file payload: {}", error))?;
 
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG Image", &["png"])
-            .set_file_name(suggested_name)
-            .save_file()
-        else {
+        let dialog = rfd::FileDialog::new().set_file_name(suggested_name);
+        let dialog = if suggested_name.ends_with(".jsonl") {
+            dialog.add_filter("Runtime Trace", &["jsonl"])
+        } else {
+            dialog.add_filter("PNG Image", &["png"])
+        };
+        let Some(path) = dialog.save_file() else {
             return Ok(SaveBinaryFileResult {
                 saved: false,
                 canceled: true,

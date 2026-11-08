@@ -439,16 +439,27 @@ const float CAS_CHROMA_BLEND = ${CAS_CHROMA_BLEND.toFixed(4)};
 const float USM_GAIN_SCALE = ${USM_GAIN_SCALE.toFixed(4)};
 vec3 usmBoost(vec2 uv, vec3 center) {
   vec2 texel = 1.0 / sourceResolution.xy;
-  vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
-  vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
-  vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
-  vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
-  vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
-  vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
-  vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
-  vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
-  vec3 blur = (a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0;
-  blur /= 16.0;
+  vec3 blur;
+  if (all(equal(outputResolution, sourceResolution))) {
+    // 1:1 像素中心上，四个半像素双线性采样等价于 3x3 高斯核 [1,2,1]²/16。
+    vec2 halfTexel = texel * 0.5;
+    vec3 a = texture(data, uv + halfTexel * vec2(-1.0, 1.0)).rgb;
+    vec3 c = texture(data, uv + halfTexel * vec2(1.0, 1.0)).rgb;
+    vec3 g = texture(data, uv + halfTexel * vec2(-1.0, -1.0)).rgb;
+    vec3 i = texture(data, uv + halfTexel * vec2(1.0, -1.0)).rgb;
+    blur = (a + c + g + i) * 0.25;
+  } else {
+    // 非 1:1 映射保留原核，维持亚像素位置的锐化结果。
+    vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
+    vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
+    vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
+    vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
+    vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
+    vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
+    vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
+    vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
+    blur = ((a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0) / 16.0;
+  }
   return clamp(center + (center - blur) * (clamp(sharpenFactor, 0.0, 1.0) * USM_GAIN_SCALE), 0.0, 1.0);
 }
 // CAS 风格锐化：显式增益 + luma 噪声门限 + 邻域钳制。

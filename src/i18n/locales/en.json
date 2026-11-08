@@ -159,7 +159,9 @@
       "showExperience": "Show runtime metrics",
       "hideExperience": "Hide runtime metrics",
       "showBrowserDiagnostics": "Show diagnostics",
-      "hideBrowserDiagnostics": "Hide diagnostics"
+      "hideBrowserDiagnostics": "Hide diagnostics",
+      "exportRuntimeTrace": "Export runtime trace",
+      "exportingRuntimeTrace": "Exporting runtime trace…"
     },
     "experience": {
       "title": "Runtime metrics",
@@ -771,7 +773,8 @@
       "export": "The screenshot could not be exported. Streaming continues. Try again.",
       "powerOff": "Streaming has ended, and the console shutdown request failed. Check remote features and try again.",
       "fullscreen": "Fullscreen could not be changed. Streaming continues. Try again.",
-      "superResolution": "Super-resolution settings could not be saved. The previous setting is restored. Try again."
+      "superResolution": "Super-resolution settings could not be saved. The previous setting is restored. Try again.",
+      "traceExport": "Runtime trace export failed. Please try again."
     }
   },
   "login": {

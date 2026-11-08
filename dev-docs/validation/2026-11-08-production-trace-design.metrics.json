@@ -1,0 +1,159 @@
+{
+  "date": "2026-11-08",
+  "trace": {
+    "fileName": "runtime-trace-1794116093651-1.jsonl",
+    "sha256": "680fcdf75f307908d588a7b46996c633ffb41012d2f317af99404e8debb8fc4d",
+    "bytes": 270080,
+    "rows": 377,
+    "durationSeconds": 205.477,
+    "profileCounts": {
+      "production": 377
+    },
+    "maxFileBytes": 16777216,
+    "fileBudgetUtilizationPercent": 1.61,
+    "traceBudgetNotices": 0,
+    "lastEvent": "cleanupStarted"
+  },
+  "controlPolling": {
+    "rows": 212,
+    "rowPercent": 56.23,
+    "bytes": 120820,
+    "bytePercent": 44.73,
+    "rowsWithPayloadSessionIdAndEmptyEnvelope": 212
+  },
+  "topEventsByBytes": [
+    {
+      "event": "sessionMonitorSnapshot",
+      "rows": 106,
+      "bytes": 71746
+    },
+    {
+      "event": "sessionStatePolled",
+      "rows": 106,
+      "bytes": 49074
+    },
+    {
+      "event": "browserWebRtcTimelineObserved",
+      "rows": 20,
+      "bytes": 42606
+    },
+    {
+      "event": "browserWebRtcSdpObserved",
+      "rows": 3,
+      "bytes": 12082
+    },
+    {
+      "event": "exchangeOfferRequested",
+      "rows": 1,
+      "bytes": 9054
+    },
+    {
+      "event": "browserMediaResourcesObserved",
+      "rows": 4,
+      "bytes": 7949
+    },
+    {
+      "event": "exchangeOfferResult",
+      "rows": 1,
+      "bytes": 6114
+    },
+    {
+      "event": "httpResponseParsed",
+      "rows": 16,
+      "bytes": 6057
+    },
+    {
+      "event": "httpSourceFinished",
+      "rows": 16,
+      "bytes": 5547
+    },
+    {
+      "event": "routeAuthStateObserved",
+      "rows": 11,
+      "bytes": 5014
+    },
+    {
+      "event": "routeNavigationCompleted",
+      "rows": 11,
+      "bytes": 4652
+    },
+    {
+      "event": "routeGuardResolved",
+      "rows": 11,
+      "bytes": 4409
+    },
+    {
+      "event": "httpQueryFinished",
+      "rows": 12,
+      "bytes": 4265
+    },
+    {
+      "event": "routeNavigationStarted",
+      "rows": 11,
+      "bytes": 4233
+    },
+    {
+      "event": "startupPhase",
+      "rows": 8,
+      "bytes": 4105
+    }
+  ],
+  "periodicEvidence": {
+    "browserWebRtcStatsObserved": 0,
+    "renderTelemetryObserved": 0,
+    "browserPlaybackHealthObserved": 0
+  },
+  "controlCompactionProposal": {
+    "kind": "proposal-replay-of-existing-control-state",
+    "measurementBoundary": "Replay models first/state-change/15s heartbeat/final boundary retention. Production emitters remain unchanged.",
+    "heartbeatMs": 15000,
+    "sessionGroups": 1,
+    "originalPollingRows": 212,
+    "polledAndMonitorPairs": 106,
+    "polledAndMonitorStateMismatches": 0,
+    "semanticMonitorTransitions": 2,
+    "projectedCombinedControlRows": 11,
+    "projectedPollingRowsRemoved": 201,
+    "projectedPollingRowReductionPercent": 94.81,
+    "retainedMonitorSeqs": [
+      106,
+      126,
+      159,
+      215,
+      239,
+      263,
+      287,
+      311,
+      336,
+      361,
+      375
+    ],
+    "finalBoundaryAssumption": "Final boundary is a design replay assumption; the supplied file ends at cleanupStarted."
+  },
+  "proposedBudgets": {
+    "measurementBoundary": "Design targets; producer and writer implementation validation is pending.",
+    "steadySummaryIntervalMs": 1000,
+    "steadySummaryMaxRowBytes": 4096,
+    "steadySummaryMaxBytesPerMinute": 245760,
+    "normalSteadyTotalTargetBytesPerMinute": 327680,
+    "inputAdditionalMaxBytesPerMinute": 65536,
+    "anomalyAdditionalMaxBytesPerMinute": 131072,
+    "anomalyRingSamples": 60,
+    "anomalyRingMaxPayloadBytes": 61440,
+    "anomalySampleMaxRowBytes": 2048,
+    "anomalyWindowBeforeMs": 5000,
+    "anomalyWindowAfterMs": 10000,
+    "anomalyMinEpisodeIntervalMs": 60000,
+    "productionFileBytes": 16777216,
+    "productionFileCount": 5
+  },
+  "sourceSha256": {
+    "src/streaming/runtime/browser-runtime-trace.ts": "ffedc3b478855724be5fea65eaf1438c8304659b23f366b767545f16e0469e08",
+    "src/streaming/runtime/browser-runtime.ts": "27a96dad106637a055eda558568cf12a0b67144e8dc10424aff479ee2363867a",
+    "src/player/app/stats/StatsService.ts": "570a85d08fa87fcdde4fbb8782f184d65b97ea2acfbc6b8fa2a2e7833f3dda0f",
+    "src-tauri/src/mods/runtime_trace/policy.rs": "eaa16502b2b936e5f46bfdd0c865c2b222db439947309f22bd3d5eadbe6e0946",
+    "src-tauri/src/mods/runtime_trace/rpc.rs": "b1c35f04258c942fa1d223f564d25f3fbccad0511992b1eb4ecd6d85d531b004",
+    "src-tauri/src/mods/streaming/service.rs": "17f97c5b5035e436cac02740995714dd98dca2c18b7758bb9f23bd045d21a4c9",
+    "src/navigation/core/vue/Focusable.vue": "34b902f432ba55faa52f992933caffb4d67a0fb3f106bfd543d110be1fb4720c"
+  }
+}

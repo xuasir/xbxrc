@@ -117,6 +117,9 @@ where
             Err(_) => return true,
         };
 
+        self.inner
+            .provider
+            .on_session_state_poll_started(session_id);
         let state_response = api.get_stream_state(session_id).await;
         let (state, error_details) = match state_response {
             Ok(value) => {

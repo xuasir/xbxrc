@@ -205,3 +205,19 @@ Script-level recovery aggregates (from `scripts/summarize_runtime_trace.py`):
 7. For browser-direct render investigations, add this local render order:
    `renderTelemetryObserved` -> `renderFrameDropped` -> `renderBackpressureChanged`
    -> `renderCauseClassified` -> `renderPolicyApplied`.
+
+
+## Production Evidence Contract v1
+
+- Schema stays v3; payload `productionContractVersion=1` uses the shared JSON field / enum allowlist. `observationEpoch`, runtime/client/peer/video/renderer generations, monotonic and wall-clock anchors separate observation epochs.
+- `playbackObservationManifest` describes requested / actual configuration, source and renderer targets, decoder/GPU capabilities, visibility and 250ms / 1s / 30s cadence.
+- `browserPlaybackHealthObserved` closes a non-overlapping bucket with `healthSequence`, true start/end/elapsed, sample IDs, sample age and collection state. `coverage.validMs` and per-stage `counterMs` preserve unavailable and measured zero separately.
+- Five `frameSupply` rates and deltas use the bucket elapsed time. 3s/15s windows encode common equal coverage as `coverageMs`, otherwise per-stage `counterMs`. Full cumulative counters and trace status persist in 30s / final `playbackSessionSummary`; per-second rows carry relevant frame totals and loss counters.
+- CPU/GPU `count` means retained samples for reported P95/P99/max. `timingScope=retainedSamples` qualifies the distributions; report maxima of these window percentiles separately from global percentiles. GPU state explains pending/disjoint/unavailable.
+- Health JSONL <=4KiB; menu health <=1KiB; anomaly sample <=2KiB. Anomaly ring <=60 samples, pre/post 5s/10s, one detail episode/minute, extra <=128KiB/min. State summaries track sustained symptoms through detail cooldown.
+- `inputUiHealthObserved` / `inputUiInteractionObserved` use input/key descriptors and static action/scope keys. Handler invocation, async operation start and terminal results pair by operationId. `noCandidate`, `disabled` and `outsideTopScope` describe normal geometric / protective boundaries; `inactiveAncestorScope`, `focusUnavailable` and `handlerFailed` identify failed interaction branches.
+- `sessionControlStateObserved` replaces repeated production polls with first/change/failure/15s heartbeat/final summaries; raw per-poll rows remain dev. Envelope sessionId aligns across layers.
+- `runtimeTrace.recordEvent` returns `accepted` plus `enqueued/filtered/queueFull/rowOversized/writerUnavailable`. Enqueued means admitted to the writer queue. Producer IPC timeouts retain their real in-flight slot until RPC completion.
+- `traceProducerDrainObserved` records bounded producer drain / backend flush failures. `executionCleanupObserved` follows specific cleanup results; `traceFlushObserved` confirms BufWriter flush and flushedSequence. Physical disk durability is outside this flush contract.
+- `runtimeTrace.exportBundle` flushes and concatenates ordered retained run segments through cutoffSequence. Leading `traceExportManifest` lists fileName/fileSequence/firstSequence/lastSequence, missingFiles/truncatedRows, flushStatus and partialBeginning. `fileOpened` retains previousSequence and latest session checkpoint; partial beginnings / endings stay explicit.
+- Browser `videoPresent` is playback/RVFC evidence. Physical scanout and Native ReferenceChain require their corresponding capability / dedicated gate.

@@ -2,7 +2,11 @@ import type { RuntimeFeatureCapabilities } from '../config/runtime-features'
 import type { ConsoleLibrary, LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage, MediaKind, PersonalAccount, Playtime, QueryResult } from './library'
 import type {
   RuntimeTraceAckResult,
+  RuntimeTraceExport,
+  RuntimeTraceFlushResult,
+  RuntimeTraceProducerPolicy,
   RuntimeTraceRecordEventParams,
+  RuntimeTraceStatus,
 } from './runtimeTrace'
 import type {
   StreamingCancelStartupParams,
@@ -253,6 +257,10 @@ export interface XBoxRpcSchema {
   }
   runtimeTrace: {
     recordEvent: RpcMethod<RuntimeTraceRecordEventParams, RuntimeTraceAckResult>
+    getPolicy: RpcMethod<void, RuntimeTraceProducerPolicy>
+    flush: RpcMethod<void, RuntimeTraceFlushResult>
+    getStatus: RpcMethod<void, RuntimeTraceStatus>
+    exportBundle: RpcMethod<void, RuntimeTraceExport>
   }
   system: {
     openExternal: RpcMethod<{ url: string }, void>

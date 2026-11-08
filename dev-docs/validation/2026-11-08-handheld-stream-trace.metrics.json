@@ -1,0 +1,367 @@
+{
+  "trace": {
+    "fileName": "runtime-trace-1794116093651-1.jsonl",
+    "sha256": "680fcdf75f307908d588a7b46996c633ffb41012d2f317af99404e8debb8fc4d",
+    "bytes": 270080,
+    "rows": 377,
+    "durationSeconds": 205.477,
+    "start": "2026-11-08T13:34:53.651000+08:00",
+    "end": "2026-11-08T13:38:19.128000+08:00",
+    "profileCounts": {
+      "production": 377
+    },
+    "dimensionCounts": {
+      "core": 60,
+      "lifecycle": 222,
+      "frontend": 89,
+      "network": 6
+    },
+    "importanceCounts": {
+      "essential": 45,
+      "key": 332
+    },
+    "eventCounts": {
+      "fileOpened": 1,
+      "runtimeBuildInfo": 2,
+      "authInitialized": 1,
+      "routeNavigationStarted": 11,
+      "routeAuthStateObserved": 11,
+      "routeGuardResolved": 11,
+      "httpQueryFinished": 12,
+      "routeNavigationCompleted": 11,
+      "httpSourceFinished": 16,
+      "httpResponseParsed": 16,
+      "operationStarted": 1,
+      "startupPhase": 8,
+      "configSnapshot": 1,
+      "remoteConsoleCapabilitySnapshot": 1,
+      "contextSnapshot": 1,
+      "compiledPlan": 1,
+      "sessionCreated": 1,
+      "sessionResourceCreated": 1,
+      "sessionStatePolled": 106,
+      "sessionMonitorSnapshot": 106,
+      "sessionExecutionStarted": 1,
+      "sessionProgress": 1,
+      "operationFinished": 1,
+      "launchRuntimeAttempt": 1,
+      "runtimeLaunchReadyToInvoke": 1,
+      "runtimeLaunchPortBound": 1,
+      "rendererCapabilityDetected": 1,
+      "browserWebRtcTimelineObserved": 20,
+      "exchangeOfferRequested": 1,
+      "browserWebRtcSdpObserved": 3,
+      "renderPipelineSwitched": 1,
+      "renderFpsBudgetChanged": 1,
+      "renderPolicyApplied": 2,
+      "offerPatchApplied": 1,
+      "exchangeOfferResult": 1,
+      "browserMediaResourcesObserved": 4,
+      "submitIceRequested": 1,
+      "submitIceResult": 1,
+      "pollIceRequested": 2,
+      "pollIceResult": 2,
+      "icePolicyEvaluated": 1,
+      "icePolicyApplied": 1,
+      "warmupProfileApplied": 1,
+      "firstFrameStageChanged": 3,
+      "bandwidthStateChanged": 3,
+      "terminateRequested": 1,
+      "cleanupStarted": 1
+    }
+  },
+  "build": {
+    "buildTimestampUnixMs": "1794113236457",
+    "cargoProfile": "release",
+    "edition": "browser",
+    "gitCommitShort": "21fd04f",
+    "sourceFingerprintSha256": "f2c2fa171e9d3f589a2959e61a363a092191d88b714050f39847e904fdd81617",
+    "workspaceDirty": true
+  },
+  "sourceBeforeEdits": {
+    "gitCommitShort": "21fd04f0",
+    "sourceFingerprintSha256": "aae88d0c11110abc4428ee5ce2658f687df4fcc4a26ed722d6ef35e13f7658c8",
+    "matchesTraceSourceFingerprint": false
+  },
+  "configuration": {
+    "resolution": 1440,
+    "xhome_resolution": 1440,
+    "display_options": {
+      "brightness": 100,
+      "contrast": 105,
+      "saturation": 105,
+      "sharpness": 3
+    },
+    "polling_rate": 250,
+    "super_resolution_experimental": false,
+    "xhome_bitrate": 100,
+    "xhome_bitrate_mode": "Custom"
+  },
+  "startupVideo": {
+    "seq": 192,
+    "fields": {
+      "frameWidth": 2560,
+      "frameHeight": 1440,
+      "framesPerSecond": 53,
+      "packetsReceived": 574,
+      "packetsLost": 0,
+      "framesReceived": 6,
+      "framesDecoded": 6,
+      "keyFramesDecoded": 3,
+      "framesDropped": 0,
+      "freezeCount": 0,
+      "pliCount": 0,
+      "firCount": 0,
+      "nackCount": 0,
+      "jitter": 0.004,
+      "totalDecodeTime": 0.06849899999999999
+    },
+    "meanDecodeMs": 11.4165,
+    "connectedToFirstPresentedMs": 313.30000001192093,
+    "trackingSource": "videoFrameCallback",
+    "expectedDisplayLeadMs": -1.5
+  },
+  "startupRenderer": {
+    "seq": 191,
+    "fields": {
+      "drawCount": 1,
+      "realtimeDrawCount": 1,
+      "drawDurationMaxMs": 21.5,
+      "uploadDurationMaxMs": 20.5,
+      "submitDurationMaxMs": 0.5,
+      "rateLimitDropCount": 0,
+      "latestOverwriteCount": 0,
+      "submitFailureCount": 0,
+      "outputWidth": 2560,
+      "outputHeight": 1440
+    },
+    "timing": {
+      "duration": {
+        "capacity": 256,
+        "count": 1,
+        "maxMs": 21.5,
+        "maxObservedMs": 21.5,
+        "meanMs": 21.5,
+        "p50Ms": 21.5,
+        "p95Ms": 21.5,
+        "p99Ms": 21.5,
+        "retained": 1
+      },
+      "interval": {
+        "capacity": 256,
+        "count": 0,
+        "retained": 0
+      },
+      "submit": {
+        "capacity": 256,
+        "count": 1,
+        "maxMs": 0.5,
+        "maxObservedMs": 0.5,
+        "meanMs": 0.5,
+        "p50Ms": 0.5,
+        "p95Ms": 0.5,
+        "p99Ms": 0.5,
+        "retained": 1
+      },
+      "upload": {
+        "capacity": 256,
+        "count": 1,
+        "maxMs": 20.5,
+        "maxObservedMs": 20.5,
+        "meanMs": 20.5,
+        "p50Ms": 20.5,
+        "p95Ms": 20.5,
+        "p99Ms": 20.5,
+        "retained": 1
+      }
+    },
+    "gpuTiming": {
+      "disjointCount": 0,
+      "duration": {
+        "capacity": 256,
+        "count": 0,
+        "retained": 0
+      },
+      "queryCount": 1,
+      "source": "EXT_disjoint_timer_query_webgl2",
+      "state": "pending"
+    }
+  },
+  "networkStates": [
+    {
+      "seq": 201,
+      "tsMs": 1794116189356,
+      "next": "stable",
+      "previous": "unknown",
+      "reason": "pathStable",
+      "rttBaselineMs": 8.336200000007947,
+      "rttDeltaMs": 0
+    },
+    {
+      "seq": 332,
+      "tsMs": 1794116272357,
+      "next": "unknown",
+      "previous": "stable",
+      "reason": "networkEvidenceIncomplete",
+      "rttBaselineMs": null,
+      "rttDeltaMs": null
+    },
+    {
+      "seq": 341,
+      "tsMs": 1794116276352,
+      "next": "stable",
+      "previous": "unknown",
+      "reason": "pathStable",
+      "rttBaselineMs": 5.50163333333532,
+      "rttDeltaMs": 0
+    }
+  ],
+  "timeline": [
+    {
+      "seq": 94,
+      "tsMs": 1794116155583,
+      "event": "startupPhase"
+    },
+    {
+      "seq": 98,
+      "tsMs": 1794116159419,
+      "event": "compiledPlan"
+    },
+    {
+      "seq": 127,
+      "tsMs": 1794116177785,
+      "event": "startupPhase"
+    },
+    {
+      "seq": 133,
+      "tsMs": 1794116177803,
+      "event": "launchRuntimeAttempt"
+    },
+    {
+      "seq": 171,
+      "tsMs": 1794116183506,
+      "event": "browserWebRtcTimelineObserved"
+    },
+    {
+      "seq": 187,
+      "tsMs": 1794116185447,
+      "event": "browserWebRtcTimelineObserved"
+    },
+    {
+      "seq": 190,
+      "tsMs": 1794116185755,
+      "event": "browserWebRtcTimelineObserved"
+    },
+    {
+      "seq": 191,
+      "tsMs": 1794116185782,
+      "event": "browserMediaResourcesObserved"
+    },
+    {
+      "seq": 192,
+      "tsMs": 1794116185859,
+      "event": "browserWebRtcTimelineObserved"
+    },
+    {
+      "seq": 201,
+      "tsMs": 1794116189356,
+      "event": "bandwidthStateChanged"
+    },
+    {
+      "seq": 332,
+      "tsMs": 1794116272357,
+      "event": "bandwidthStateChanged"
+    },
+    {
+      "seq": 341,
+      "tsMs": 1794116276352,
+      "event": "bandwidthStateChanged"
+    },
+    {
+      "seq": 376,
+      "tsMs": 1794116299128,
+      "event": "terminateRequested"
+    },
+    {
+      "seq": 377,
+      "tsMs": 1794116299128,
+      "event": "cleanupStarted"
+    }
+  ],
+  "evidenceLimits": {
+    "steadyGetStatsSamples": 0,
+    "renderTelemetrySamples": 0,
+    "traceBudgetNotices": 0,
+    "physicalPresentEvidence": "unavailable",
+    "terminalEvent": "cleanupStarted"
+  },
+  "validation": {
+    "regressionBeforeFix": {
+      "tests": 2,
+      "failed": 2
+    },
+    "focusedNavigationAfterFix": {
+      "tests": 44,
+      "passed": 44
+    },
+    "frontendFinal": {
+      "files": 72,
+      "tests": 688,
+      "passed": 688
+    },
+    "pointerRegressionReplay": {
+      "tests": 4,
+      "failed": 4,
+      "touchEventPrevented": true
+    },
+    "realMenuEventsAfterFix": {
+      "tests": 2,
+      "passed": 2,
+      "inputs": [
+        "touch",
+        "mouse",
+        "gamepadAction"
+      ]
+    },
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "diffCheck": "PASS",
+    "reportLinks": "PASS",
+    "traceIdentity": "PASS",
+    "usmPixelComparison": {
+      "pixelGate": "PASS",
+      "caseCount": 88,
+      "passedCases": 88,
+      "maxDifference": 1,
+      "comparedComponents": 29693856
+    },
+    "rendererRegression": {
+      "files": 5,
+      "tests": 163,
+      "passed": 163
+    }
+  },
+  "handheldFollowup": {
+    "source": "user-reported-device-comparison",
+    "scope": "persistent-playback",
+    "resolution": "2560x1440",
+    "targetFps": 60,
+    "superResolution": false,
+    "baselineSharpness": 3,
+    "comparisonSharpness": 0,
+    "result": "明显缓解",
+    "followupTraceAvailable": false
+  },
+  "renderOptimization": {
+    "name": "USM half-texel bilinear Gaussian sampling",
+    "scope": "every sharpened frame at 1:1 pixel mapping",
+    "shaderTextureCallsPerPixel": {
+      "baseline": 9,
+      "optimizedAtPixelCenters": 5,
+      "unalignedFallback": 9
+    },
+    "evidence": "2026-11-08-usm-sampling.metrics.json",
+    "deviceFrameRateValidation": "pending"
+  }
+}

@@ -1,6 +1,7 @@
 import type { PresentedVideoFrameMetadata } from '../../player/domain/media'
 import type { RuntimeLaunchSpec } from '../types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { productionTraceEvents } from '../../shared/diagnostics/production-trace-contract'
 import { createBrowserRuntime } from './browser-runtime'
 import { createConnectionRecoveryCoordinator } from './connection-recovery'
 import { resolveSuperResolutionTierPlan } from './super-resolution-ladder'
@@ -170,7 +171,13 @@ const testState = vi.hoisted(() => {
       gamepad: {
       },
       runtimeTrace: {
-        recordEvent: vi.fn(async (_entry: { event?: string, payload?: unknown }) => {}),
+        recordEvent: vi.fn(async (_entry: { event?: string, payload?: unknown }) => ({ accepted: true, disposition: 'enqueued' })),
+        getPolicy: vi.fn(async () => {
+          const config = await testState.rpc.config.get()
+          return { profile: config.runtime_trace_mode, generation: 1, productionContractVersion: 1, budget: { maxInFlight: 4, maxPendingRows: 32, maxPendingBytes: 262144, normalBytesPerMinute: 327680, inputBytesPerMinute: 65536, anomalyBytesPerMinute: 131072 }, events: productionTraceEvents }
+        }),
+        getStatus: vi.fn(async () => ({ backend: {} })),
+        flush: vi.fn(async () => ({ status: 'flushed', backend: {} })),
       },
     },
     applyBrowserVideoDisplay: vi.fn(),
@@ -271,6 +278,7 @@ describe('browser-runtime super resolution state', () => {
   const originalResizeObserver = globalThis.ResizeObserver
 
   beforeEach(() => {
+    testState.rpc.config.get.mockResolvedValue({ runtime_trace_mode: 'dev' })
     testState.MockPlayerClient.instances.length = 0
     testState.frameTrackingHandler = undefined
     vi.clearAllMocks()
@@ -1514,7 +1522,7 @@ describe('browser-runtime super resolution state', () => {
     vi.useFakeTimers()
     try {
       const run = async (profile: 'off' | 'production' | 'dev') => {
-        testState.rpc.config.get.mockResolvedValueOnce({ runtime_trace_mode: profile })
+        testState.rpc.config.get.mockResolvedValue({ runtime_trace_mode: profile })
         testState.rpc.runtimeTrace.recordEvent.mockClear()
         const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
         try {
@@ -1523,9 +1531,15 @@ describe('browser-runtime super resolution state', () => {
           const healthy = { inboundVideoFps: 60, decodeFps: 60, presentFps: 60, presentAgeMs: 0, packetAgeMs: 0, rtt: '900ms', networkRttMs: 900, networkPacketLossRatio: 0, inboundVideoBitrateKbps: 500 }
           client.statsController.snapshot.mockResolvedValue(healthy)
           client.eventBus.emit('transport.connectionState', { state: 'connected' })
+          const publishSample = (index: number) => client.eventBus.emit('stats.browserObservation', {
+            sample: { sampleId: `1:${index}`, peerGeneration: 1, sampledAtMs: performance.now(), connectionState: 'connected', inboundVideo: { id: 'video', framesReceived: index * 60, framesDecoded: index * 60, packetsReceived: index * 1000 }, delta: { packetsLostDelta: 0 } },
+            stats: { ...healthy, statsSampleId: `1:${index}`, statsObservationState: 'fresh', statsVideoGeneration: 1, rendererGeneration: 1, rendererKind: 'webgl2', rendererSubmittedFramesTotal: index * 60, videoPresentFramesTotal: index * 60, videoCallbacksTotal: index * 60 },
+          })
+          publishSample(0)
           for (let i = 0; i < 20; i++) {
             client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
             await vi.advanceTimersByTimeAsync(1000)
+            publishSample(i + 1)
           }
           expect(client.updateTransportConfig).not.toHaveBeenCalled()
           client.statsController.snapshot.mockResolvedValue({ ...healthy, videoPresentFps: 60, callbackFps: 60, rendererSubmitFps: 0, rendererSubmitAgeMs: 1000, rendererLatestVideoSequence: 10, rendererSubmittedVideoSequence: 1 })
@@ -1538,6 +1552,9 @@ describe('browser-runtime super resolution state', () => {
             controls: { renderer: client.rendererState, rendererUpdates: client.updateRenderer.mock.calls, transportUpdates: client.updateTransportConfig.mock.calls },
             traceCount: testState.rpc.runtimeTrace.recordEvent.mock.calls.length,
             diagnosticsCount: client.snapshotMediaDiagnostics.mock.calls.length,
+            healthSamples: testState.rpc.runtimeTrace.recordEvent.mock.calls
+              .map(([entry]) => entry)
+              .filter(entry => entry.event === 'browserPlaybackHealthObserved'),
           }
         }
         finally {
@@ -1554,6 +1571,58 @@ describe('browser-runtime super resolution state', () => {
       expect(off.diagnosticsCount).toBe(0)
       expect(production.diagnosticsCount).toBe(0)
       expect(dev.diagnosticsCount).toBeGreaterThan(0)
+      expect(production.healthSamples.length).toBeGreaterThan(0)
+      expect(production.healthSamples[0]).toMatchObject({
+        importance: 'key',
+        payload: {
+          network: { rttMs: 900, packetLossRatio: 0 },
+          frameSupply: { receivedFps: 60, decodeFps: 60, rendererSubmitFps: 60, rateScope: 'bucket' },
+          renderer: { screenPresentState: 'unavailable' },
+        },
+      })
+      expect(production.healthSamples.some(entry => 'mediaDiagnostics' in (entry.payload as Record<string, unknown>))).toBe(false)
+      expect(dev.healthSamples).toHaveLength(0)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('records production counters from the matching shared sample and leaves mismatched counters unavailable', async () => {
+    vi.useFakeTimers()
+    try {
+      testState.rpc.config.get.mockResolvedValue({ runtime_trace_mode: 'production' })
+      const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+      await runtime.launch(createLaunchSpec({ targetWidth: 1920, targetHeight: 1080 }))
+      const client = getClient()
+      const facts = { statsSampleId: 'current-sample', inboundVideoFps: 60, decodeFps: 60, videoPresentFps: 60, callbackFps: 60, rendererSubmitFps: 40, rendererSubmitAgeMs: 10, networkRttMs: 8, networkPacketLossRatio: 0 }
+      client.statsController.snapshot.mockResolvedValue(facts)
+      const publish = (at: number, matched = true) => client.eventBus.emit('stats.browserObservation', {
+        sample: { sampleId: `1:${at}`, peerGeneration: 1, sampledAtMs: at, connectionState: 'connected', inboundVideo: { id: 'test-track', framesReceived: 60 + at * 0.06, framesDecoded: 58 + at * 0.06, framesDropped: 2, keyFramesDecoded: 1, freezeCount: 1, nackCount: 3 }, privateUrl: 'https://example.invalid/trace-private' },
+        stats: { ...facts, statsSampleId: matched ? `1:${at}` : 'other', statsObservationState: 'fresh', statsVideoGeneration: 1, rendererGeneration: 1, rendererKind: 'webgl2', rendererSubmittedFramesTotal: at * 0.04, videoPresentFramesTotal: at * 0.06, videoCallbacksTotal: at * 0.06 },
+      })
+      publish(0)
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoFramePresented', { newFrame: true, presentedFramesDelta: 1, droppedLike: false })
+      await vi.advanceTimersByTimeAsync(1000)
+      publish(1000)
+      const samples = () => testState.rpc.runtimeTrace.recordEvent.mock.calls
+        .map(([entry]) => entry)
+        .filter(entry => entry.event === 'browserPlaybackHealthObserved')
+      expect(samples().at(-1)).toMatchObject({
+        payload: {
+          counterObservationState: 'matched',
+          frameSupply: { receivedFps: 60, decodeFps: 60, rendererSubmitFps: 40, totals: { received: 120, decoded: 118, framesDropped: 2, keyframes: 1, freezeCount: 1, nack: 3 } },
+        },
+      })
+      expect(JSON.stringify(samples())).not.toContain('trace-private')
+      client.statsController.snapshot.mockResolvedValue({ ...facts, statsSampleId: 'next-sample' })
+      await vi.advanceTimersByTimeAsync(1000)
+      publish(2000, false)
+      expect(samples().at(-1)).toMatchObject({ payload: { counterObservationState: 'unavailable' } })
+      expect((samples().at(-1)?.payload as any).frameSupply.receivedFps).toBeUndefined()
+      expect(client.snapshotMediaDiagnostics).not.toHaveBeenCalled()
+      await runtime.stop()
     }
     finally {
       vi.useRealTimers()

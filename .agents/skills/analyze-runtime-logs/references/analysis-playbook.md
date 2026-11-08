@@ -261,8 +261,19 @@ Use this template unless the user asks for something else:
 - `nackSent` / `nackRecovered` / `nackSkipped` / `nackExpired` already encode terminal NACK outcome classes; pair them with `nackDisposition` and `frameUnrecoverableReason`.
 - `cleanAnchorCommitted` is the media gate; `DisplayStable` is the display gate; `stableServingSettled` is the event name / close reason for `DisplayStable`.
 - repairability score may appear as `repairabilityScore` / `repairability_score` / `repairability` / `repairabilityIndex`; persistence should be judged from continuity, not single-point value.
-- `renderTelemetryObserved` is the canonical browser-direct render sample summary. Prefer it over guessing from sparse `fps/presentFps` snapshots.
+- For dev, `renderTelemetryObserved` is the canonical browser-direct render sample summary. For production contract v1, use `browserPlaybackHealthObserved`, its manifest, checkpoints and ending flush. Prefer it over guessing from sparse `fps/presentFps` snapshots.
 - `trackingSource=videoFrameCallback` supports finer render cadence judgement than `timeupdate`.
 - `callbackGapCountSinceLastSample` separates callback sparsity from aggregate dropped-like counts.
 - `presentedFramesJumpCountSinceLastSample` separates `presentedFrames` coalescing from callback cadence issues.
 - `renderFrameDropped` reports dropped-like cadence evidence. Read it with `callbackGap`, `presentedFramesJump`, `presentedFramesDelta`, and `renderBackpressure`, then decide whether the issue is local draw pressure, callback batching, or source-side cadence drift.
+
+
+## Production Health Acceptance
+
+Run `python3 -B scripts/trace_production_health_report.py <export.jsonl> --fail-on-gate --require-clean-ending` from this skill directory, or the repository `scripts/production_trace_health_report.py` entry point. `--latest --max-age-seconds` supports fresh capture selection.
+
+Review six sections in order: network health, public recovery facts, media supply, steady supply, submit/present tails, frame supply deltas. Each segment carries samples, valid duration, source and target identity. Compare renderer FPS with the effective source / user cap; sparse callback counts can accompany normal videoPresent advancement. Native ReferenceChain and physical scanout retain UNSUPPORTED for Browser.
+
+Publication coverage >=95% and longest gap <=3s qualify recording continuity; valid media coverage >=90% qualifies performance conclusions. Foreground steady evidence across segments totals >=60s. Missing or newer contracts yield INSUFFICIENT_EVIDENCE / UNSUPPORTED. The ending gate separately requires terminal summary, concrete cleanup result and later flush/cutoff; partial captures preserve their performance evidence and partialEnding.
+
+Input failures report source, scope, action, result and operation pairing. Geometric `noCandidate` and disabled/outsideTopScope guards are expected boundary observations. Inspect unexpected ancestor/focus/handler failures with anomaly context. Audit layered loss before trusting a PASS; essential/key writer loss reduces evidence sufficiency.

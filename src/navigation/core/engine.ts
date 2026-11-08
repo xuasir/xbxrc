@@ -1,9 +1,11 @@
 import type { IntentHandler } from './input'
+import type { FocusFailure } from './input-trace'
 import type { Direction } from './pathfinding'
 import { getFocusScrollDelta } from './focus-scroll'
-import { FOCUSABLE_SELECTOR, isFocusScopeAvailable, isFocusSink, isFocusTarget } from './focus-target'
+import { FOCUSABLE_SELECTOR, focusTargetFailure, isFocusScopeAvailable, isFocusSink, isFocusTarget } from './focus-target'
 import { playNavSound, triggerNavHaptic } from './haptics'
 import { inputDispatcher, NavigationIntent } from './input'
+import { inputUiTrace } from './input-trace'
 import { findNextFocusable } from './pathfinding'
 
 export { FOCUSABLE_SELECTOR } from './focus-target'
@@ -46,6 +48,7 @@ export class NavigationEngine {
   private prunedSource: FocusReference | null = null
   private focusPage: HTMLElement | null = null
   private pendingRecovery: FocusReference | null = null
+  private lastFocusFailure: FocusFailure | undefined
 
   start(): void {
     if (this.unsubscribeInput)
@@ -217,7 +220,9 @@ export class NavigationEngine {
   }
 
   focusElement(element: HTMLElement | null, soundAndHaptic = true, isRapid = false): boolean {
-    if (!this.isAvailable(element)) {
+    this.lastFocusFailure = focusTargetFailure(element, this.getTopmostActiveScope())
+    inputUiTrace.navigationState(this.scopeStack.at(-1)?.id, this.lastFocusFailure)
+    if (this.lastFocusFailure || !element) {
       // 原生 Tab 或外部恢复跨域时，把实际焦点留在当前有效节点。
       if (this.isAvailable(this.currentFocus) && document.activeElement !== this.currentFocus)
         this.currentFocus.focus({ preventScroll: true })
@@ -250,6 +255,10 @@ export class NavigationEngine {
       triggerNavHaptic('move')
     }
     return true
+  }
+
+  getLastFocusFailure(): FocusFailure | undefined {
+    return this.lastFocusFailure
   }
 
   private reference(element: HTMLElement | null): FocusReference | null {
@@ -440,6 +449,10 @@ export class NavigationEngine {
     if (handled && event) {
       event.preventDefault()
       event.stopPropagation()
+    }
+    if (intent !== NavigationIntent.Menu && intent !== NavigationIntent.View) {
+      const observedHandled = handled && (this.currentFocus !== null || intent === NavigationIntent.Back || intent === NavigationIntent.PageNext || intent === NavigationIntent.PagePrev)
+      inputUiTrace.navigationResult(intent, observedHandled, observedHandled ? undefined : this.lastFocusFailure ?? (this.currentFocus ? 'noCandidate' : 'focusUnavailable'))
     }
   }
 

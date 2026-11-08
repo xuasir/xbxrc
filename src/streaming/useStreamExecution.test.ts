@@ -22,7 +22,8 @@ const harness = vi.hoisted(() => ({
   closeRuntime: vi.fn(),
   startRuntime: vi.fn(),
   resetInput: vi.fn(),
-  trace: vi.fn(async () => {}),
+  trace: vi.fn(async (_params: unknown) => {}),
+  traceFlush: vi.fn(async () => ({ status: 'flushed' })),
 }))
 
 vi.mock('vue', async (original) => {
@@ -45,7 +46,7 @@ vi.mock('../services/rpc', () => ({
       closeSession: harness.closeSession,
       getSessionProgress: harness.progress,
     },
-    runtimeTrace: { recordEvent: harness.trace },
+    runtimeTrace: { recordEvent: harness.trace, flush: harness.traceFlush },
   },
 }))
 vi.mock('../pages/stream/stream-input-route-controller', () => ({
@@ -105,7 +106,7 @@ function setup(router = { push: vi.fn(async () => {}) }) {
 }
 
 async function flush() {
-  for (let i = 0; i < 20; i++) await Promise.resolve()
+  for (let i = 0; i < 60; i++) await Promise.resolve()
   await nextTick()
 }
 
@@ -136,6 +137,18 @@ afterEach(() => {
 })
 
 describe('stream execution resource lifecycle', () => {
+  it('waits for each cleanup result and the final execution record before flushing the writer', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    await vm.actions.disconnectStream({ reason: 'menuActionExit' })
+    const finalRecord = harness.trace.mock.calls.findIndex(([params]) => (params as any).event === 'executionCleanupObserved')
+    const cleanupRecords = harness.trace.mock.calls.filter(([params]) => (params as any).event === 'cleanupFinished')
+    expect(cleanupRecords).toHaveLength(4)
+    expect(finalRecord).toBeGreaterThan(0)
+    expect(harness.trace.mock.calls[finalRecord]?.[0]).toMatchObject({ sessionId: 'session-1', payload: { cleanupState: 'completed', results: { inputReleased: true, runtimeStopped: true, remoteClosed: true, startupCancelled: true } } })
+    expect(harness.traceFlush.mock.invocationCallOrder[0]).toBeGreaterThan(harness.trace.mock.invocationCallOrder[finalRecord]!)
+  })
   it('records the original runtime failure before teardown clears the session', async () => {
     const vm = setup()
     harness.mount[0]()
@@ -277,6 +290,40 @@ describe('stream execution resource lifecycle', () => {
     expect(harness.logout).toHaveBeenCalledTimes(1)
     expect(router.push).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/xhome/stream/console-1' } })
     expect(harness.closeRuntime.mock.invocationCallOrder[0]).toBeLessThan(harness.logout.mock.invocationCallOrder[0])
+  })
+
+  it('retains the classified first startup failure and offers sign-in before any media session exists', async () => {
+    const router = { push: vi.fn(async () => {}) }
+    const vm = setup(router)
+    const error = Object.assign(new Error('Streaming token is unavailable for home'), {
+      code: 'STREAMING_ERROR',
+      details: { errorKind: 'auth', retryable: false, phase: 'resolvingContext', rawMessage: 'Streaming token is unavailable for home' },
+    })
+    harness.startSession.mockRejectedValue(error)
+    harness.mount[0]()
+    await flush()
+    expect(vm.execution.failure.value).toMatchObject({
+      phase: 'startup',
+      observation: 'unavailable',
+      error: { kind: 'auth', code: 'auth', message: 'streamPage.errors.authFailed', retryable: false, phase: 'resolvingContext' },
+    })
+    const firstError = harness.trace.mock.calls.find(([params]) => (params as any).event === 'executionFailed')?.[0]
+    expect(firstError).toMatchObject({
+      sessionId: null,
+      payload: {
+        attemptId: expect.any(String),
+        errorKind: 'auth',
+        errorCode: 'auth',
+        startupPhase: 'resolvingContext',
+        retryable: false,
+        error: { message: error.message },
+      },
+    })
+    expect(harness.startRuntime).not.toHaveBeenCalled()
+    expect(harness.trace.mock.calls.filter(([params]) => (params as any).event === 'executionFailed')).toHaveLength(1)
+    await vm.actions.relogin()
+    expect(router.push).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/xhome/stream/console-1' } })
+    expect(harness.startSession).toHaveBeenCalledTimes(1)
   })
 
   it('keeps an older sign-in request from navigating after an explicit return', async () => {

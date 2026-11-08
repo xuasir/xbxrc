@@ -45,9 +45,12 @@ use projection::*;
 mod config_policy;
 #[path = "context.rs"]
 mod context;
+use super::runtime_state::SessionControlTraces;
+use crate::mods::runtime_trace::RuntimeTraceProfile;
 use config_policy::*;
 
 const CONSOLE_READY_SMARTGLASS_CACHE_MS: u64 = 2_000;
+static SDP_TRACE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[derive(Clone)]
 pub struct StreamingService {
@@ -72,6 +75,7 @@ struct TauriSessionFlowProvider {
     data_provider: DataProviderRef,
     runtime_trace: RuntimeTraceRecorderRef,
     console_ready_smartglass_cache: Arc<tokio::sync::Mutex<Option<CachedHostSnapshot>>>,
+    control_trace: Arc<Mutex<SessionControlTraces>>,
 }
 
 #[derive(Clone)]
@@ -202,6 +206,40 @@ impl StartupAttemptRecorder {
             bounded_retry,
         }
     }
+
+    fn fail(&self, error: &SessionFlowError, operation_id: &str) -> AppError {
+        let startup_error = self.build_startup_error(error);
+        // 准备上下文阶段也先记录结构化首错，再通知页面和进入清理。
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionStartFailed",
+            None,
+            serde_json::json!({
+                "operationId": operation_id,
+                "attemptId": self.attempt_id,
+                "targetType": self.target_type,
+                "targetId": self.target_id,
+                "stage": startup_error.phase,
+                "errorKind": startup_error.error_kind,
+                "startupError": startup_error,
+                "error": {
+                    "message": error.message,
+                    "status": error.status,
+                    "body": error.body,
+                },
+            }),
+        );
+        self.emit(
+            StreamingStartupPhase::Failed,
+            StreamingStartupPhaseStatus::Failed,
+            startup_error.diagnostic_summary.clone(),
+            Some(startup_error.raw_message.clone()),
+        );
+        AppError::streaming_detailed(
+            error.to_string(),
+            serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
+        )
+    }
 }
 
 impl TauriSessionFlowProvider {
@@ -271,6 +309,25 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
     ) {
         self.runtime_trace
             .record_event("streaming", event, session_id, payload);
+        if event == "cleanupFinished" {
+            if let Some(id) = session_id {
+                let final_state = self
+                    .control_trace
+                    .lock()
+                    .ok()
+                    .and_then(|mut trace| trace.finish(id, now_ms()));
+                if let Some(final_state) = final_state {
+                    self.runtime_trace.record_snapshot(
+                        "streaming",
+                        "sessionControlStateObserved",
+                        Some(id),
+                        final_state,
+                    );
+                }
+            }
+            let trace = self.runtime_trace.clone();
+            tokio::task::spawn_blocking(move || trace.flush());
+        }
     }
 
     async fn get_streaming_token(
@@ -350,6 +407,12 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
         Ok(smartglass_ready_consoles)
     }
 
+    fn on_session_state_poll_started(&self, session_id: &str) {
+        if let Ok(mut trace) = self.control_trace.lock() {
+            trace.poll_started(session_id);
+        }
+    }
+
     fn on_session_state_polled(
         &self,
         session_id: &str,
@@ -359,10 +422,16 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
         error_code: Option<&serde_json::Value>,
         error_message: Option<&str>,
     ) {
+        if let Ok(mut trace) = self.control_trace.lock() {
+            trace.poll_finished(session_id, state, false, None, now_ms());
+        }
+        if self.runtime_trace.trace_profile() != RuntimeTraceProfile::Dev {
+            return;
+        }
         self.runtime_trace.record_event(
             "streaming",
             "sessionStatePolled",
-            None,
+            Some(session_id),
             serde_json::json!({
                 "sessionId": session_id,
                 "targetType": target_type,
@@ -382,10 +451,24 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
         target_id: &str,
         error: &SessionFlowError,
     ) {
+        let summary = self.control_trace.lock().ok().and_then(|mut trace| {
+            trace.poll_finished(session_id, None, true, error.status, now_ms())
+        });
+        if let Some(summary) = summary {
+            self.runtime_trace.record_snapshot(
+                "streaming",
+                "sessionControlStateObserved",
+                Some(session_id),
+                summary,
+            );
+        }
+        if self.runtime_trace.trace_profile() != RuntimeTraceProfile::Dev {
+            return;
+        }
         self.runtime_trace.record_event(
             "streaming",
             "sessionStatePollFailed",
-            None,
+            Some(session_id),
             serde_json::json!({
                 "sessionId": session_id,
                 "targetType": target_type,
@@ -409,10 +492,30 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
         should_continue: bool,
         should_send_connect_token: bool,
     ) {
+        if self.runtime_trace.trace_profile() == RuntimeTraceProfile::Production {
+            let facts = serde_json::json!({ "phase": progress.phase, "runtimeLaunchState": progress.runtime_launch_state,
+                "statusTextKey": progress.status_text_key, "streamState": stream_state, "playerState": player_state,
+                "queueSeconds": progress.queue_seconds, "errorCode": progress.error_code,
+                "shouldContinue": should_continue, "shouldSendConnectToken": should_send_connect_token });
+            let summary = self
+                .control_trace
+                .lock()
+                .ok()
+                .and_then(|mut trace| trace.observe(session_id, facts, now_ms()));
+            if let Some(summary) = summary {
+                self.runtime_trace.record_snapshot(
+                    "streaming",
+                    "sessionControlStateObserved",
+                    Some(session_id),
+                    summary,
+                );
+            }
+            return;
+        }
         self.runtime_trace.record_snapshot(
             "streaming",
             "sessionMonitorSnapshot",
-            None,
+            Some(session_id),
             serde_json::json!({
                 "sessionId": session_id,
                 "targetType": target_type,
@@ -549,6 +652,7 @@ impl StreamingService {
             data_provider: data_provider.clone(),
             runtime_trace: runtime_trace.clone(),
             console_ready_smartglass_cache: Arc::new(tokio::sync::Mutex::new(None)),
+            control_trace: Arc::new(Mutex::new(SessionControlTraces::default())),
         };
 
         Self {
@@ -617,20 +721,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
                     },
                 )
                 .await
-                .map_err(|error| {
-                    let flow_error = SessionFlowError::message(error.to_string());
-                    let startup_error = startup.build_startup_error(&flow_error);
-                    startup.emit(
-                        StreamingStartupPhase::Failed,
-                        StreamingStartupPhaseStatus::Failed,
-                        startup_error.diagnostic_summary.clone(),
-                        Some(startup_error.raw_message.clone()),
-                    );
-                    AppError::streaming_detailed(
-                        error.to_string(),
-                        serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
-                    )
-                })?;
+                .map_err(|error| startup.fail(&error, &operation_id))?;
             startup.emit(
                 StreamingStartupPhase::ResolvingContext,
                 StreamingStartupPhaseStatus::Succeeded,
@@ -659,33 +750,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             {
                 Ok(execution) => execution,
                 Err(error) => {
-                    let startup_error = startup.build_startup_error(&error);
-                    startup.emit(
-                        StreamingStartupPhase::Failed,
-                        StreamingStartupPhaseStatus::Failed,
-                        startup_error.diagnostic_summary.clone(),
-                        Some(startup_error.raw_message.clone()),
-                    );
-                    self.runtime_trace.record_event(
-                        "streaming",
-                        "sessionStartFailed",
-                        None,
-                        serde_json::json!({
-                            "attemptId": params.attempt_id,
-                            "targetType": params.target_type,
-                            "targetId": params.target_id,
-                            "startupError": startup_error,
-                            "error": {
-                                "message": error.message,
-                                "status": error.status,
-                                "body": error.body,
-                            },
-                        }),
-                    );
-                    return Err(AppError::streaming_detailed(
-                        error.to_string(),
-                        serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
-                    ));
+                    return Err(startup.fail(&error, &operation_id));
                 }
             };
             startup.emit(
@@ -849,13 +914,31 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingExchangeOfferParams,
     ) -> AppResult<StreamingExchangeOfferResult> {
-        self.runtime_trace.record_event(
-            "streaming",
-            "exchangeOfferRequested",
-            Some(&params.session_id),
-            &params,
+        let production = self.runtime_trace.trace_profile() == RuntimeTraceProfile::Production;
+        let started_at = std::time::Instant::now();
+        let operation_id = format!(
+            "{}:{}",
+            now_ms(),
+            SDP_TRACE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         );
-        let answer = self
+        let channel = if params.channel.as_deref() == Some("chat") {
+            "chat"
+        } else {
+            "media"
+        };
+        if production {
+            self.runtime_trace.record_event("streaming", "exchangeOfferRequested", Some(&params.session_id),
+                serde_json::json!({ "operationId": operation_id, "channel": channel, "restart": params.restart,
+                    "summary": crate::mods::runtime_trace::summarize_sdp(&params.sdp) }));
+        } else {
+            self.runtime_trace.record_event(
+                "streaming",
+                "exchangeOfferRequested",
+                Some(&params.session_id),
+                &params,
+            );
+        }
+        let result = self
             .inner
             .flow
             .exchange_offer(
@@ -864,22 +947,29 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
                 &params.sdp,
                 params.restart,
             )
-            .await
-            .map_err(map_flow_error)?;
-        self.runtime_trace.record_event(
-            "streaming",
-            "exchangeOfferResult",
-            Some(&params.session_id),
-            serde_json::json!({
-                "channel": params.channel,
-                "restart": params.restart,
-                "answer": from_domain_answer_payload(answer.clone()),
-            }),
-        );
-
-        Ok(StreamingExchangeOfferResult {
-            answer: from_domain_answer_payload(answer),
-        })
+            .await;
+        match result {
+            Ok(answer) => {
+                if production {
+                    self.runtime_trace.record_event("streaming", "exchangeOfferResult", Some(&params.session_id),
+                        serde_json::json!({ "operationId": operation_id, "channel": channel, "restart": params.restart,
+                            "result": "answerReceived", "durationMs": started_at.elapsed().as_millis(),
+                            "summary": crate::mods::runtime_trace::summarize_sdp(&answer.sdp) }));
+                } else {
+                    self.runtime_trace.record_event("streaming", "exchangeOfferResult", Some(&params.session_id),
+                        serde_json::json!({ "channel": params.channel, "restart": params.restart, "answer": from_domain_answer_payload(answer.clone()) }));
+                }
+                Ok(StreamingExchangeOfferResult {
+                    answer: from_domain_answer_payload(answer),
+                })
+            }
+            Err(error) => {
+                self.runtime_trace.record_event("streaming", "exchangeOfferResult", Some(&params.session_id),
+                    serde_json::json!({ "operationId": operation_id, "channel": channel, "restart": params.restart,
+                        "result": "failed", "durationMs": started_at.elapsed().as_millis(), "status": error.status, "errorKind": "httpError" }));
+                Err(map_flow_error(error))
+            }
+        }
     }
 
     async fn submit_ice(

@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { UiInputSource } from '../input-trace'
 import { useAttrs } from 'vue'
 import { navigationEngine } from '../engine'
+import { inputUiTrace } from '../input-trace'
 
 interface Props {
   as?: string
@@ -20,18 +22,25 @@ const emit = defineEmits<{
 }>()
 
 const attrs = useAttrs()
+let pointerSource: UiInputSource = 'mouse'
+function handlePointerDown(event: PointerEvent): void {
+  pointerSource = event.pointerType === 'touch' ? 'touch' : 'mouse'
+}
 
 function handleClick(event: MouseEvent) {
+  const source = (event as PointerEvent).pointerType === 'touch' ? 'touch' : pointerSource
   if (props.disabled) {
     event.preventDefault()
+    inputUiTrace.activation(source, props.id, 'disabled', () => {})
     return
   }
   // 触屏和鼠标入口同步到几何导航，弹层可恢复到本次操作的来源行。
   if (event.currentTarget instanceof HTMLElement && !navigationEngine.focusElement(event.currentTarget, false)) {
     event.preventDefault()
+    inputUiTrace.activation(source, props.id, navigationEngine.getLastFocusFailure() ?? 'focusUnavailable', () => {})
     return
   }
-  emit('click', event)
+  inputUiTrace.activation(source, props.id, undefined, () => emit('click', event))
 }
 
 function handleFocus(event: FocusEvent) {
@@ -51,6 +60,7 @@ function handleFocus(event: FocusEvent) {
     :disabled="['button', 'input', 'select', 'textarea'].includes(props.as ?? '') ? props.disabled : undefined"
     :style="!props.as ? { display: 'contents' } : undefined"
     @click="handleClick"
+    @pointerdown="handlePointerDown"
     @focus="handleFocus"
     @nav-action="emit('navAction', $event)"
     @nav-back="emit('navBack', $event)"

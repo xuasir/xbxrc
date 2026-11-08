@@ -159,7 +159,9 @@
       "showExperience": "显示运行指标",
       "hideExperience": "隐藏运行指标",
       "showBrowserDiagnostics": "显示诊断指标",
-      "hideBrowserDiagnostics": "隐藏诊断指标"
+      "hideBrowserDiagnostics": "隐藏诊断指标",
+      "exportRuntimeTrace": "导出运行日志",
+      "exportingRuntimeTrace": "正在导出运行日志…"
     },
     "experience": {
       "title": "运行指标",
@@ -771,7 +773,8 @@
       "export": "截图导出失败，串流继续运行。请重新尝试。",
       "powerOff": "串流已结束，主机关机请求未能完成。请确认主机远程功能后重试。",
       "fullscreen": "全屏切换失败，串流继续运行。请重新尝试。",
-      "superResolution": "超分设置保存失败，已恢复原设置。请重新尝试。"
+      "superResolution": "超分设置保存失败，已恢复原设置。请重新尝试。",
+      "traceExport": "运行日志导出失败，请重新尝试。"
     }
   },
   "login": {

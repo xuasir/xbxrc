@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { navigationEngine } from '@/navigation/core/engine'
+import { inputUiTrace } from '@/navigation/core/input-trace'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamActionItem {
@@ -37,6 +38,7 @@ function handleClose(): void {
 function handleSelect(id: string): void {
   if (props.items.find(item => item.id === id && !item.disabled))
     emit('select', id)
+  else inputUiTrace.result('blocked', 'disabled')
 }
 
 function handleEscapeKeydown(event: KeyboardEvent): void {

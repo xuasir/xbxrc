@@ -21,6 +21,25 @@ use xbox_streaming::{
 };
 
 #[test]
+fn unavailable_streaming_token_maps_to_authentication_failure() {
+    for message in [
+        "Streaming token is unavailable for home",
+        "Streaming error: Streaming error: Streaming token is unavailable for home",
+        "Streaming token is unavailable for cloud",
+    ] {
+        let error = SessionFlowError::message(message);
+        let kind =
+            classify_startup_error_kind_fallback(&StreamingStartupPhase::ResolvingContext, &error);
+        assert_eq!(kind, StreamingStartupErrorKind::Auth);
+        assert_eq!(
+            startup_error_message_key(&kind),
+            "streamPage.errors.authFailed"
+        );
+        assert!(!is_startup_error_retryable_fallback(&kind, &error));
+    }
+}
+
+#[test]
 fn maps_http_error_with_status_and_body() {
     let error = SessionFlowError::http(503, "HTTP 503: error", Some("body".to_string()));
     assert_eq!(error.status, Some(503));

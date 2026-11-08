@@ -172,6 +172,7 @@ impl TraceDimensionSet {
                 TraceDimension::Recovery,
                 TraceDimension::MediaSupply,
                 TraceDimension::Presentation,
+                TraceDimension::Input,
                 TraceDimension::Frontend,
                 TraceDimension::NativeVideo,
             ]),
@@ -352,6 +353,9 @@ pub fn default_trace_metadata(
     event: &str,
     payload: &Value,
 ) -> TraceMetadata {
+    if let Some(metadata) = super::trace_contract::metadata(event, payload) {
+        return metadata;
+    }
     if category == "log" {
         return trace_log_metadata(domain, payload);
     }
@@ -494,6 +498,11 @@ pub fn should_record_trace_event(
     }
     match profile {
         RuntimeTraceProfile::Production => {
+            if metadata.dimension == TraceDimension::Input
+                && super::trace_contract::contract(event).is_none()
+            {
+                return false;
+            }
             if metadata.importance > TraceImportance::Key {
                 return false;
             }
@@ -562,7 +571,7 @@ mod tests {
         let dimensions =
             TraceDimensionSet::effective_for_profile(RuntimeTraceProfile::Production, Some("all"));
         assert!(dimensions.contains(TraceDimension::Recovery));
-        assert!(!dimensions.contains(TraceDimension::Input));
+        assert!(dimensions.contains(TraceDimension::Input));
         assert!(!dimensions.contains(TraceDimension::EngineLog));
     }
 

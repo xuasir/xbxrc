@@ -49,6 +49,7 @@ fn stalled_writer_admission_preserves_priority_reserves_and_never_exceeds_hard_b
         queue: Arc::new(QueueBudget::default()),
         drops: Arc::new(DropCounters::default()),
         path: Arc::new(Mutex::new(None)),
+        progress: Arc::new(Mutex::new(WriterProgress::default())),
     };
     for _ in 0..6_144 {
         writer.try_write(b"{}\n".to_vec(), 1, TraceImportance::Raw);
@@ -173,6 +174,7 @@ fn failed_write_conservatively_charges_the_entire_row_to_file_budget() {
         queue: Arc::new(QueueBudget::default()),
         drops: Arc::new(DropCounters::default()),
         path: Arc::new(Mutex::new(Some(path))),
+        progress: Arc::new(Mutex::new(WriterProgress::default())),
         config: Some(config(1, 4096)),
         file: Some(BufWriter::with_capacity(1, file)),
         bytes_written: 0,
@@ -200,4 +202,77 @@ fn prune_retains_active_file_and_ignores_unrelated_files() {
     assert!(active.exists());
     assert!(root.join("unrelated.txt").exists());
     assert_eq!(read_dir(&root).unwrap().count(), 3);
+}
+
+#[test]
+fn rotation_export_keeps_order_cutoff_and_checkpoint_evidence() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let (_directory, root) = root();
+    let run = "rotation-export-test";
+    let writer = WriterHandle::new(root.clone(), run.into()).unwrap();
+    writer
+        .configure(config(1, 4096), "initial")
+        .unwrap()
+        .recv()
+        .unwrap()
+        .unwrap();
+    for index in 0..25 {
+        assert_eq!(writer.try_write(encode_row(&json!({ "traceRunId": run, "event": "payload", "payload": { "index": index, "padding": "x".repeat(500) } })).unwrap(), 1, TraceImportance::Key), TraceRecordDisposition::Enqueued);
+    }
+    writer.try_write(encode_row(&json!({"traceRunId": run, "event": "playbackSessionSummary", "sessionId": "session", "payload": {"ended": true, "totals": {"received": 1500}}})).unwrap(), 1, TraceImportance::Essential);
+    assert_eq!(writer.sync(), TraceFlushStatus::Flushed);
+    let cutoff = writer.snapshot()["flushedSequence"].as_u64().unwrap();
+    let exported = super::super::export::export_bundle(
+        run,
+        writer.segments(),
+        cutoff,
+        TraceFlushStatus::Flushed,
+    )
+    .unwrap();
+    let bytes = STANDARD
+        .decode(exported["dataBase64"].as_str().unwrap())
+        .unwrap();
+    let rows: Vec<serde_json::Value> = String::from_utf8(bytes)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows[0]["event"], "traceExportManifest");
+    assert!(rows[0]["payload"]["files"].as_array().unwrap().len() > 1);
+    assert_eq!(
+        rows.iter().filter(|row| row["event"] == "payload").count(),
+        25
+    );
+    let sequence: Vec<_> = rows[1..]
+        .iter()
+        .map(|row| row["seq"].as_u64().unwrap())
+        .collect();
+    assert!(sequence.windows(2).all(|pair| pair[0] + 1 == pair[1]));
+    assert!(sequence.iter().all(|seq| *seq <= cutoff));
+    assert!(rows.iter().any(|row| row["event"] == "traceFlushObserved"));
+    assert_eq!(exported["manifest"]["missingFiles"], 0);
+}
+
+#[test]
+fn closed_writer_returns_unavailable_and_releases_reservation() {
+    let (tx, rx) = mpsc::sync_channel(1);
+    drop(rx);
+    let writer = WriterHandle {
+        tx,
+        thread: Mutex::new(None),
+        queue: Arc::new(QueueBudget::default()),
+        drops: Arc::new(DropCounters::default()),
+        path: Arc::new(Mutex::new(None)),
+        progress: Arc::new(Mutex::new(WriterProgress::default())),
+    };
+    assert_eq!(
+        writer.try_write(
+            encode_row(&json!({"event": "test"})).unwrap(),
+            1,
+            TraceImportance::Essential
+        ),
+        TraceRecordDisposition::WriterUnavailable
+    );
+    assert_eq!(writer.usage().rows, 0);
+    assert_eq!(writer.sync(), TraceFlushStatus::WriterUnavailable);
 }

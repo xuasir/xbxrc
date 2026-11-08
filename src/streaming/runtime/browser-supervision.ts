@@ -14,6 +14,7 @@ export interface StallEvidenceSnapshot {
 export function createBrowserSupervision(input: {
   check: () => Promise<void>
   onError: (error: unknown) => void
+  onTick?: () => void
 }) {
   let generation = 0
   let guardSequence = 0
@@ -50,6 +51,7 @@ export function createBrowserSupervision(input: {
     stopMonitoring()
     const epoch = generation
     monitor = setInterval(() => {
+      input.onTick?.()
       if (probe !== undefined)
         return
       const running = Promise.resolve().then(() => {

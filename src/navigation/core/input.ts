@@ -1,3 +1,6 @@
+import type { UiInputSource } from './input-trace'
+import { inputUiTrace } from './input-trace'
+
 export enum NavigationIntent {
   Up = 'up',
   Down = 'down',
@@ -41,13 +44,14 @@ export class InputDispatcher {
     }
   }
 
-  dispatch(intent: NavigationIntent, event?: Event): void {
-    if (!this.isEnabled)
+  dispatch(intent: NavigationIntent, event?: Event, source: UiInputSource = event ? 'keyboard' : 'gamepad'): void {
+    if (!this.isEnabled) {
+      inputUiTrace.withIntent(intent, source, () => inputUiTrace.result('blocked', 'routingPaused'))
       return
-
-    for (const handler of this.handlers) {
-      handler(intent, event)
     }
+    inputUiTrace.withIntent(intent, source, () => {
+      for (const handler of this.handlers) handler(intent, event)
+    })
   }
 }
 

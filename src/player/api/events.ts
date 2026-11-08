@@ -19,6 +19,9 @@ export interface PlayerEvents {
   'stats.updated': StreamStats
   'stats.fps': FpsStats
   'stats.browserWebRtc': BrowserWebRtcStatsSample
+  /** 已提交采样的原始计数与同一窗口投影；生产 trace 复用这条观测。 */
+  'stats.browserObservation': { sample: BrowserWebRtcStatsSample, stats: StreamStats }
+  'stats.collectionState': { peerGeneration: number, pending: boolean, startedAtMs: number }
   'stats.observationUnavailable': { peerGeneration: number, error: unknown }
   'stats.browserWebRtcTimeline': BrowserWebRtcTimelineEvent
   'transport.sdpObserved': BrowserWebRtcSdpObservation
