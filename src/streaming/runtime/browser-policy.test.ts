@@ -195,6 +195,16 @@ describe('transport-owned quality policy', () => {
 })
 
 describe('local render ownership', () => {
+  it.each(['main-thread', 'worker'] as const)('accepts direct %s delivery with sparse presentation callbacks', (rendererFrameSource) => {
+    const health = new BrowserRenderHealth()
+    for (let at = 3000; at <= 22000; at += 1000) {
+      const stats = facts(at, { rendererFrameSource, callbackFps: 44, rendererSubmitFps: 60 })
+      expect(resolveBrowserRenderCause(stats)).toBe('renderStable')
+      expect(health.observe(stats, at)).toBeUndefined()
+    }
+    expect(health.fallback).toBe(false)
+  })
+
   it.each(['webgl2', 'webgl2_sr'] as const)('detects persistent 50.4/60 and 40/60 output loss in %s independently of mean CPU cost', (rendererKind) => {
     for (const rendererSubmitFps of [50.4, 40]) {
       expect(resolveBrowserRenderCause(facts(4000, { rendererKind, rendererSubmitFps, renderDrawDurationMsAvg: 4 }))).toBe('renderStarvation')

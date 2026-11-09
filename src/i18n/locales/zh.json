@@ -671,6 +671,7 @@
       "streamComparisonSaveFailed": "A/B 对比截图未能保存。",
       "streamFrameCaptureFailed": "当前画面无法完成截图。",
       "streamComparisonExportFailed": "导出超分 A/B 对比截图失败。",
+      "streamComparisonRenderModeUnavailable": "目标渲染模式暂时不可用，无法完成对比截图。",
       "cleanupPending": "上一轮连接仍在清理资源，请稍候。"
     },
     "failure": {
@@ -778,6 +779,11 @@
     }
   },
   "login": {
+    "retryRestore": "重试恢复登录",
+    "restoreRetryHelp": "登录恢复暂时失败，已保留登录凭据，请重试。",
+    "restoreLoginHelp": "登录续期凭据已失效，请选择重新登录。",
+    "reauthenticateHelp": "登录状态需要重新验证，可选择重新登录。",
+    "reauthenticateFailed": "进入重新登录失败，请重试。",
     "playLine": "登录以游玩主机上安装的游戏与云游戏",
     "checkingStatusLine": "正在恢复登录状态，请稍候",
     "signingStatusLine": "正在登录，请稍候",
@@ -944,6 +950,29 @@
   },
   "setting": {
     "title": "设置",
+    "renderControls": {
+      "title": "渲染与画面",
+      "defaultRendering": "默认渲染",
+      "useDefaultRendering": "使用默认渲染",
+      "selected": "所选：{mode}",
+      "sr": "SR（实验性）",
+      "srHint": "提升画面细节，可能增加渲染负载。开启后独立锐化关闭。",
+      "sharpening": "锐化",
+      "sharpeningHint": "清晰增强轮廓，柔和轻度增强；关闭时使用默认渲染。",
+      "srSharpeningHint": "SR 已包含细节增强，独立锐化保持关闭。",
+      "choices": { "off": "关闭", "clear": "清晰", "soft": "柔和" },
+      "colors": { "title": "色彩风格", "standard": "标准", "clear": "鲜明", "soft": "柔和" },
+      "defaultHint": "保存为全局默认，下次开始串流时生效。",
+      "sessionHint": "调整只作用于本次串流；保存为默认可用于后续串流。",
+      "sources": { "default": "当前沿用全局默认。", "session": "当前使用本次调整。" },
+      "restoreDefaults": "恢复默认",
+      "applySession": "应用本次",
+      "saveDefault": "保存默认",
+      "saveDefaultAndApply": "保存为默认并应用",
+      "preparing": "准备中",
+      "switching": "切换中",
+      "fallback": { "performance": "帧率保护", "unsupported": "设备限制", "failed": "增强失败" }
+    },
     "aria": {
       "groups": "设置分组",
       "panel": "{group} 设置",
@@ -1477,10 +1506,11 @@
       },
       "super_resolution_experimental": {
         "label": "超分辨率（实验）",
-        "description": "浏览器端 FSR1 空间放大；可能增加 GPU 占用，失败时回退到常规锐化。"
+        "description": "提升画面细节，可能增加渲染负载；失败时使用默认渲染。"
       },
       "display_options": {
-        "label": "画面风格",
+        "label": "渲染与画面",
+        "description": "设置新串流的默认渲染模式与画面。",
         "options": {
           "standard": {
             "label": "标准"

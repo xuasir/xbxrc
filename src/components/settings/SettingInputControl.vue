@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { inputController } from '@shared/gamepad/runtime'
-import { computed, onUnmounted, ref, shallowRef, useAttrs } from 'vue'
+import { computed, onDeactivated, onUnmounted, ref, shallowRef, useAttrs, watch } from 'vue'
 import { Focusable } from '@/navigation/core/vue'
 import SettingKeyboardSheet from './SettingKeyboardSheet.vue'
 
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ id: string, scopeId: string, label: string, modelValue: string, type?: 'text' | 'password' | 'number', disabled?: boolean, selectOnFocus?: boolean }>()
+const props = withDefaults(defineProps<{ id: string, scopeId: string, label: string, modelValue: string, type?: 'text' | 'password' | 'number' | 'search', disabled?: boolean, busy?: boolean, active?: boolean, selectOnFocus?: boolean }>(), { active: true })
 const emit = defineEmits<{ 'update:modelValue': [value: string], 'submit': [] }>()
 const attrs = useAttrs()
 const source = shallowRef(inputController.getSnapshot().preferences.controlSource)
@@ -13,7 +13,18 @@ const dispose = inputController.subscribe(snapshot => source.value = snapshot.pr
 onUnmounted(dispose)
 const keyboardOpen = ref(false)
 const directEditing = ref(false)
-const readOnly = computed(() => source.value === 'keyboard' && !directEditing.value)
+const unavailable = computed(() => props.disabled || props.busy || props.active === false)
+const readOnly = computed(() => unavailable.value || (source.value === 'keyboard' && !directEditing.value))
+function closeKeyboard() {
+  keyboardOpen.value = false
+  directEditing.value = false
+}
+watch(unavailable, (blocked) => {
+  if (blocked)
+    closeKeyboard()
+})
+onDeactivated(closeKeyboard)
+watch(() => props.id, closeKeyboard)
 let selectOnFocus = props.selectOnFocus
 function focus(event: FocusEvent) {
   if (selectOnFocus && event.target instanceof HTMLInputElement) {
@@ -23,7 +34,7 @@ function focus(event: FocusEvent) {
 }
 function openKeyboard(event: Event) {
   event.preventDefault()
-  if (!props.disabled) {
+  if (!unavailable.value) {
     directEditing.value = false
     keyboardOpen.value = true
   }
@@ -36,20 +47,27 @@ function finishDirectEditing(event: Event) {
   }
 }
 function submit(event: KeyboardEvent) {
+  if (unavailable.value)
+    return
   if (readOnly.value)
     openKeyboard(event)
   else emit('submit')
 }
 function apply(value: string) {
-  emit('update:modelValue', value)
+  if (!unavailable.value && keyboardOpen.value)
+    emit('update:modelValue', value)
   keyboardOpen.value = false
+}
+function input(event: Event) {
+  if (!unavailable.value)
+    emit('update:modelValue', (event.target as HTMLInputElement).value)
 }
 </script>
 
 <template>
   <div class="setting-input-control">
     <div class="setting-input-control__field-shell ui-focus-outline">
-      <Focusable v-bind="attrs" :id="props.id" as="input" :scope-id="props.scopeId" class="setting-input-control__field" :type="props.type ?? 'text'" :disabled="props.disabled" :readonly="readOnly" :value="props.modelValue" :aria-label="props.label" @focus="focus" @pointerdown="directEditing = true" @blur="directEditing = false" @nav-action="openKeyboard" @nav-back="finishDirectEditing" @keydown.esc="finishDirectEditing" @keydown.enter.prevent="submit" @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)" />
+      <Focusable v-bind="attrs" :id="props.id" as="input" :scope-id="props.scopeId" class="setting-input-control__field" :type="props.type ?? 'text'" :disabled="props.disabled" :busy="props.busy" :readonly="readOnly" :value="props.modelValue" :aria-label="props.label" @focus="focus" @pointerdown="directEditing = !unavailable" @blur="directEditing = false" @nav-action="openKeyboard" @nav-back="finishDirectEditing" @keydown.esc="finishDirectEditing" @keydown.enter.prevent="submit" @input="input" />
     </div>
     <SettingKeyboardSheet :open="keyboardOpen" :scope-id="`${props.id}.keyboard`" :title="props.label" :value="props.modelValue" :mode="props.type === 'number' ? 'number' : 'text'" :sensitive="props.type === 'password'" @close="keyboardOpen = false" @submit="apply" />
   </div>

@@ -44,6 +44,7 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   xhome_resolution: 'streaming',
   video_format: 'streaming',
   display_options: 'streaming',
+  render_mode: 'streaming',
   enable_audio_control: 'streaming',
   xhome_bitrate_mode: 'streaming',
   xhome_bitrate: 'streaming',
@@ -109,7 +110,6 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
   { key: 'picture', labelKey: 'setting.experience.sections.picture', items: [
     { kind: 'field', fieldKey: 'video_format' },
     { kind: 'field', fieldKey: 'display_options' },
-    { kind: 'field', fieldKey: 'super_resolution_experimental' },
   ] },
   { key: 'sound', labelKey: 'setting.experience.sections.sound', items: [
     { kind: 'field', fieldKey: 'enable_audio_control' },

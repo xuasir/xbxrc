@@ -46,7 +46,7 @@ describe('browser display intent', () => {
     expect(resolveSuperResolutionUserIntent({ clientExperimentalSuperResolution: true })).toBe(true)
     expect(resolveSuperResolutionUserIntent({ clientExperimentalSuperResolution: true, displaySuperResolutionExperimental: false })).toBe(false)
     expect(resolveSuperResolutionUserIntent({ superResolutionPreference: 'off', displaySuperResolutionExperimental: true })).toBe(true)
-    expect(resolveSuperResolutionUserIntent({ superResolutionPreference: 'fsr1Experimental', displaySuperResolutionExperimental: false })).toBe(true)
+    expect(resolveSuperResolutionUserIntent({ superResolutionPreference: 'fsr1Experimental', displaySuperResolutionExperimental: false })).toBe(false)
   })
 
   it('keeps explicit frame limits and suspends hidden rendering', () => {
@@ -88,7 +88,7 @@ describe('deterministic renderer plan', () => {
     expect(projectRenderShaderPathFromPlan(plan)).toBe('usm')
     expect(planToRendererRuntimeConfigPatch(plan)).toMatchObject({ processing: 'usm', processingMode: 'quality', sharpness: 4, sharpenStrength: 80, targetFps: 60 })
     const fallback = resolveBrowserRendererPlan(baseInput({ localFallback: true, superResolutionUserIntent: true }))
-    expect(fallback).toMatchObject({ kind: 'video', source: 'localFallback', sharpness: 4, display: plan.display })
+    expect(fallback).toMatchObject({ kind: 'video', source: 'localFallback', sharpness: 0, display: plan.display })
     expect(projectRenderProcessingFromPlan(fallback)).toBeUndefined()
     expect(projectRenderShaderPathFromPlan(fallback)).toBe('none')
   })
@@ -96,7 +96,7 @@ describe('deterministic renderer plan', () => {
   it('handles user, capability and hard SR failure independently', () => {
     expect(resolveBrowserRendererPlan(baseInput({ pipelineOverride: 'video', superResolutionUserIntent: true }))).toMatchObject({ kind: 'video', source: 'userOverride' })
     expect(resolveBrowserRendererPlan(baseInput({ webgl2Supported: false, superResolutionUserIntent: true }))).toMatchObject({ kind: 'video', source: 'capabilityFallback' })
-    expect(resolveBrowserRendererPlan(baseInput({ superResolutionAttachFailed: true, superResolutionUserIntent: true }))).toMatchObject({ kind: 'webgl2', source: 'srFallback' })
+    expect(resolveBrowserRendererPlan(baseInput({ superResolutionAttachFailed: true, superResolutionUserIntent: true }))).toMatchObject({ kind: 'video', source: 'srFallback', sharpness: 0 })
     const sr = resolveBrowserRendererPlan(baseInput({ superResolutionUserIntent: true }))
     expect(sr.kind).toBe('webgl2_sr')
     expect(planToRendererAttachSpec(sr).sr).toEqual({ outputWidth: sr.sr?.outputWidth, outputHeight: sr.sr?.outputHeight, rcasStops: 0.88 })

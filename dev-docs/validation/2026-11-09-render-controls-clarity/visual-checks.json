@@ -1,0 +1,70 @@
+{
+  "sampleKind": "component-preview",
+  "simulated": [
+    "metrics",
+    "renderer-commit-state",
+    "persistence"
+  ],
+  "observations": [
+    {
+      "scenario": "narrow-fallback",
+      "bar": {
+        "height": 41.59375,
+        "text": "默认渲染 · 帧率保护2560 × 144059.9FPS20.0 MbpsRTT16 ms丢包0.0%",
+        "width": 328,
+        "x": 16,
+        "y": 0
+      },
+      "height": 640,
+      "pageOverflow": false,
+      "width": 360
+    },
+    {
+      "scenario": "wide-fallback",
+      "bar": {
+        "height": 32,
+        "text": "默认渲染 · 帧率保护2560 × 144059.9FPS20.0 MbpsRTT16 ms丢包0.0%",
+        "width": 526.234375,
+        "x": 376.8828125,
+        "y": 0
+      },
+      "height": 800,
+      "pageOverflow": false,
+      "width": 1280
+    },
+    {
+      "scenario": "default-controls-light",
+      "body": {
+        "content": 444,
+        "height": 444
+      },
+      "focus": "preview.render.sr",
+      "height": 800,
+      "pageOverflow": false,
+      "panel": {
+        "height": 642.6953125,
+        "width": 640,
+        "x": 320,
+        "y": 42.6484375
+      },
+      "width": 1280
+    },
+    {
+      "scenario": "session-controls-dark",
+      "body": {
+        "content": 551,
+        "height": 481
+      },
+      "focus": "preview.render.sr",
+      "height": 800,
+      "pageOverflow": false,
+      "panel": {
+        "height": 680,
+        "width": 640,
+        "x": 320,
+        "y": 24
+      },
+      "width": 1280
+    }
+  ]
+}

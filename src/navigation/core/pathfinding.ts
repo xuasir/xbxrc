@@ -83,15 +83,15 @@ function calculateScore(source: Rect, target: Rect, direction: Direction): numbe
     case 'left':
     case 'right':
       primaryDist = dx
-      secondaryDist = dy
+      secondaryDist = Math.max(0, dy - Math.abs(source.height - target.height) / 2)
       break
     case 'up':
     case 'down':
       primaryDist = dy
-      secondaryDist = dx
+      secondaryDist = Math.max(0, dx - Math.abs(source.width - target.width) / 2)
       break
   }
 
-  // 极大权重化垂直对齐度（secondaryDist），确保在列表中移动时不会因为左右偏移过大跳行
+  // 宽行 / 高列覆盖当前控件时视为对齐；等尺寸控件保持原有行列权重，避免跨过整行操作。
   return primaryDist * 1.0 + secondaryDist * 10.0
 }

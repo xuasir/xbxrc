@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
 import SettingInputControl from './SettingInputControl.vue'
 
-const props = defineProps<{ id: string, scopeId: string, label: string, modelValue: string, sensitive?: boolean, disabled?: boolean, placeholder?: string }>()
+const props = defineProps<{ id: string, scopeId: string, label: string, modelValue: string, sensitive?: boolean, disabled?: boolean, busy?: boolean, placeholder?: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const visible = ref(false)
 const { t } = useI18n()
@@ -14,8 +14,8 @@ const { t } = useI18n()
   <div class="setting-text-field">
     <label :for="props.id" class="setting-text-field__label">{{ props.label }}</label>
     <div class="setting-text-field__controls">
-      <SettingInputControl :id="props.id" :scope-id="props.scopeId" :label="props.label" :type="props.sensitive && !visible ? 'password' : 'text'" :disabled="props.disabled" :model-value="props.modelValue" :placeholder="props.placeholder" autocomplete="off" spellcheck="false" @update:model-value="emit('update:modelValue', $event)" />
-      <Focusable v-if="props.sensitive" :id="`${props.id}.visibility`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--short" :disabled="props.disabled" :aria-pressed="visible" @click="visible = !visible">
+      <SettingInputControl :id="props.id" :scope-id="props.scopeId" :label="props.label" :type="props.sensitive && !visible ? 'password' : 'text'" :disabled="props.disabled" :busy="props.busy" :model-value="props.modelValue" :placeholder="props.placeholder" autocomplete="off" spellcheck="false" @update:model-value="emit('update:modelValue', $event)" />
+      <Focusable v-if="props.sensitive" :id="`${props.id}.visibility`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--short" :disabled="props.disabled" :busy="props.busy" :aria-pressed="visible" @click="visible = !visible">
         {{ t(visible ? 'setting.experience.hide' : 'setting.experience.show') }}
       </Focusable>
     </div>

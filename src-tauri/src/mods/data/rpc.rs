@@ -147,17 +147,11 @@ pub async fn handle_rpc(
         } => Ok(serde_json::to_value(
             data.save_media(kind, id, continuation).await?,
         )?),
-        DataCommand::GetUserProfile => Ok(serde_json::to_value(
-            data.get_user_profile().await.map_err(|e| e.to_string())?,
-        )?),
-        DataCommand::GetHosts => Ok(serde_json::to_value(
-            data.get_hosts().await.map_err(|e| e.to_string())?,
-        )?),
-        DataCommand::GetRemoteConsoles => Ok(serde_json::to_value(
-            data.get_remote_consoles()
-                .await
-                .map_err(|e| e.to_string())?,
-        )?),
+        DataCommand::GetUserProfile => Ok(serde_json::to_value(data.get_user_profile().await?)?),
+        DataCommand::GetHosts => Ok(serde_json::to_value(data.get_hosts().await?)?),
+        DataCommand::GetRemoteConsoles => {
+            Ok(serde_json::to_value(data.get_remote_consoles().await?)?)
+        }
         DataCommand::GetStreamingTitleInputConfig { xbox_title_id } => {
             if xbox_title_id.trim().is_empty() {
                 return Err(crate::error::AppError::Internal(
@@ -166,8 +160,7 @@ pub async fn handle_rpc(
             }
             Ok(serde_json::to_value(
                 data.get_streaming_title_input_config(&xbox_title_id)
-                    .await
-                    .map_err(|e| e.to_string())?,
+                    .await?,
             )?)
         }
         DataCommand::PowerOnConsole { console_id } => {
@@ -177,9 +170,7 @@ pub async fn handle_rpc(
                 ));
             }
             Ok(serde_json::to_value(
-                data.power_on_console(&console_id)
-                    .await
-                    .map_err(|e| e.to_string())?,
+                data.power_on_console(&console_id).await?,
             )?)
         }
         DataCommand::PowerOffConsole { console_id } => {
@@ -189,9 +180,7 @@ pub async fn handle_rpc(
                 ));
             }
             Ok(serde_json::to_value(
-                data.power_off_console(&console_id)
-                    .await
-                    .map_err(|e| e.to_string())?,
+                data.power_off_console(&console_id).await?,
             )?)
         }
         DataCommand::SendTextToConsole { console_id, text } => {
@@ -201,23 +190,15 @@ pub async fn handle_rpc(
                 ));
             }
             Ok(serde_json::to_value(
-                data.send_text_to_console(&console_id, &text)
-                    .await
-                    .map_err(|e| e.to_string())?,
+                data.send_text_to_console(&console_id, &text).await?,
             )?)
         }
-        DataCommand::GetXcloudTitles => Ok(serde_json::to_value(
-            data.get_xcloud_titles().await.map_err(|e| e.to_string())?,
-        )?),
-        DataCommand::RefreshXcloudTitles => Ok(serde_json::to_value(
-            data.refresh_xcloud_titles()
-                .await
-                .map_err(|e| e.to_string())?,
-        )?),
-        DataCommand::PrimeXcloudTitles => Ok(serde_json::to_value(
-            data.prime_xcloud_titles()
-                .await
-                .map_err(|e| e.to_string())?,
-        )?),
+        DataCommand::GetXcloudTitles => Ok(serde_json::to_value(data.get_xcloud_titles().await?)?),
+        DataCommand::RefreshXcloudTitles => {
+            Ok(serde_json::to_value(data.refresh_xcloud_titles().await?)?)
+        }
+        DataCommand::PrimeXcloudTitles => {
+            Ok(serde_json::to_value(data.prime_xcloud_titles().await?)?)
+        }
     }
 }

@@ -50,11 +50,12 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 </template>
 
 <style scoped>
-.shell-hints { grid-column: 2; grid-row: 3; position: relative; z-index: calc(var(--z-modal) + 1); display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); min-width: 0; min-height: var(--ui-shell-hint-area); padding: var(--space-12) var(--space-16) var(--space-16); color: var(--color-text-secondary); background: transparent; pointer-events: none; font-size: 12px; line-height: 18px; }
-.shell-hints__actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-24); }
+.shell-hints { grid-column: 2; grid-row: 3; position: relative; z-index: calc(var(--z-modal) + 1); display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); min-width: 0; min-height: var(--ui-shell-hint-area); padding: var(--space-8) var(--space-8) var(--space-12); color: var(--color-text-secondary); background: transparent; pointer-events: none; font-size: 12px; line-height: 18px; }
+.shell-hints__actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-16); }
 .shell-hints__action { display: inline-flex; align-items: center; gap: var(--space-8); white-space: nowrap; }
-.shell-hints kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 22px; padding: 1px var(--space-4); border: 1px solid var(--ui-border-hover); border-radius: 4px; background: var(--ui-keycap-bg); color: var(--ui-icon-text); font: inherit; font-size: 11px; line-height: 16px; box-shadow: inset 0 1px 0 var(--ui-material-edge); }
-.shell-hints__status { min-width: 0; max-width: 42%; overflow-wrap: anywhere; text-align: right; }
+.shell-hints kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 22px; padding: 1px var(--space-4); border: 1px solid var(--ui-border-hover); border-radius: var(--ui-radius-md); background: var(--ui-keycap-bg); color: var(--ui-icon-text); font: inherit; font-size: 11px; line-height: 16px; box-shadow: inset 0 1px 0 var(--ui-material-edge); }
+/* 暂时隐藏重复的视觉提示，继续通过 status / alert 提供辅助技术反馈。 */
+.shell-hints__status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .shell-hints__status--error { color: var(--color-danger); }
 @media(max-width:700px) {
   .shell-hints {
@@ -66,7 +67,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
     width: max-content;
     max-width: calc(100% - 24px);
     min-height: 0;
-    padding: var(--space-8) var(--space-12);
+    padding: 6px 10px;
     flex-wrap: wrap;
     justify-content: center;
     gap: var(--space-8) var(--space-16);
@@ -77,6 +78,10 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
     box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low);
   }
   .shell-hints__actions { justify-content: center; gap: var(--space-8) var(--space-16); }
-  .shell-hints__status { max-width: 100%; text-align: center; }
+}
+@media(max-width:600px) {
+  /* 隐藏悬浮面板并释放布局空间，状态提示继续供辅助技术读取。 */
+  .shell-hints { display: contents; }
+  .shell-hints__actions, .shell-hints__ownership { display: none; }
 }
 </style>

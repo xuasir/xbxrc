@@ -1,3 +1,4 @@
+import type { DecodedFrameFallback, DecodedFrameMode } from './decoded-video-frame-reader'
 import type { GpuFrameTimer } from './gpu-frame-timer'
 import type { ObservedVideoFrameMetadata } from './video-frame-source'
 import { LatencyWindow } from '../../../shared/latency-window'
@@ -21,6 +22,9 @@ export interface RendererResources {
   uploadDurationMaxMs?: number
   submitDurationMaxMs?: number
   videoUploadMethod?: 'texImage2D'
+  renderFrameSource?: DecodedFrameMode
+  renderFrameFallbackReason?: DecodedFrameFallback
+  decodedFramesReceived?: number
   lastDrawAtMs?: number
   outputWidth?: number
   outputHeight?: number

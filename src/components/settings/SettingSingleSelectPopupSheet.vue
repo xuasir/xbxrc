@@ -68,7 +68,7 @@ function handleClose(): void {
         }"
         :scope-id="props.scopeId"
         :aria-label="option.label"
-        role="radio" :aria-checked="props.currentValue === option.value" :disabled="props.busy"
+        role="radio" :aria-checked="props.currentValue === option.value" :busy="props.busy"
         :on-back="handleClose"
         @click="emit('select', option.value)"
       >

@@ -1,6 +1,7 @@
 import type { RuntimeLaunchSpec } from '../types'
 import type { RuntimeEvent } from './runtime-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeRenderControls } from '../../shared/config/render-controls'
 import { INITIAL_CONNECTION_TIMEOUT_MS, useStreamRuntimeHost } from './runtime-host'
 
 const harness = vi.hoisted(() => ({ factory: vi.fn(), trace: vi.fn(), recovery: vi.fn() }))
@@ -36,7 +37,7 @@ function spec(id = 'session'): RuntimeLaunchSpec {
   } as RuntimeLaunchSpec
 }
 function host(overrides: Partial<Parameters<typeof useStreamRuntimeHost>[0]> = {}) {
-  return useStreamRuntimeHost({ playerElementId: 'player', getSuperResolutionExperimental: () => false, onConnectionStateChange: vi.fn(), onPresentationMilestoneChange: vi.fn(), onRuntimeError: vi.fn(), onRuntimePhaseChange: vi.fn(), onFrameReady: vi.fn(), ...overrides })
+  return useStreamRuntimeHost({ playerElementId: 'player', getRenderControls: () => normalizeRenderControls({}), onConnectionStateChange: vi.fn(), onPresentationMilestoneChange: vi.fn(), onRuntimeError: vi.fn(), onRuntimePhaseChange: vi.fn(), onFrameReady: vi.fn(), ...overrides })
 }
 beforeEach(() => {
   vi.useFakeTimers()
@@ -52,6 +53,27 @@ afterEach(() => {
 })
 
 describe('runtime host lifecycle', () => {
+  it('uses rendering choices made during the launch delay for the first renderer', async () => {
+    const runtime = port()
+    harness.factory.mockReturnValue(runtime)
+    let controls = normalizeRenderControls({ render_mode: 'sr' })
+    const vm = host({ getRenderControls: () => controls })
+    const launch = vm.startRuntime(spec())
+    await vi.advanceTimersByTimeAsync(100)
+    controls = normalizeRenderControls({ render_mode: 'sharpen', display_options: { sharpness: 1 } })
+    await vi.advanceTimersByTimeAsync(400)
+    await launch
+    expect(runtime.launch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      clientExperimentalSuperResolution: false,
+      render: expect.objectContaining({
+        pipelinePreference: 'webgl2',
+        superResolutionPreference: 'off',
+        displayOptions: expect.objectContaining({ sharpness: 1 }),
+      }),
+    }), undefined)
+    await vm.closeRuntime()
+  })
+
   it.each(['resolved', 'rejected'] as const)('absorbs a late %s panel read after polling restarts', async (outcome) => {
     const reading = deferred<{ presentFps: number }>()
     const snapshotStats = vi.fn().mockResolvedValue({ presentFps: 60, statsObservationState: 'fresh' })

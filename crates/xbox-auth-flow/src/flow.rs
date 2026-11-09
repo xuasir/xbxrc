@@ -1,9 +1,9 @@
 use crate::error::AuthFlowError;
 use crate::types::{
     AuthBundle, AuthFlowSeed, BuildDownstreamTokensInput, BuildDownstreamTokensOutput,
-    CompleteOAuthLoginInput, CompleteOAuthLoginOutput, FlowSisuTokenData, FlowTokenDetails,
-    PendingOAuthLogin, RefreshAndFinalizeInput, RefreshAndFinalizeOutput, StartOAuthLoginInput,
-    StartOAuthLoginOutput,
+    CompleteOAuthLoginInput, CompleteOAuthLoginOutput, DownstreamTokenScope, FlowSisuTokenData,
+    FlowTokenDetails, PendingOAuthLogin, RefreshAndFinalizeInput, RefreshAndFinalizeOutput,
+    StartOAuthLoginInput, StartOAuthLoginOutput,
 };
 use serde_json::{json, Map, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -118,7 +118,11 @@ impl AuthFlow {
                 &user_token,
                 &input.seed.private_jwk,
                 &input.force_region_ip,
-                input.include_streaming_tokens,
+                if input.include_streaming_tokens {
+                    DownstreamTokenScope::All
+                } else {
+                    DownstreamTokenScope::Web
+                },
             )
             .await?;
 
@@ -129,16 +133,17 @@ impl AuthFlow {
         &self,
         input: RefreshAndFinalizeInput,
     ) -> Result<RefreshAndFinalizeOutput, AuthFlowError> {
-        let refreshed_user_token = self
-            .auth_api
-            .refresh_user_token(&input.refresh_token)
-            .await?;
+        let refreshed_user_token = self.refresh_user_token(&input.refresh_token).await?;
         let auth_bundle = self
             .finalize_login(
                 &refreshed_user_token,
                 &input.seed.private_jwk,
                 &input.force_region_ip,
-                input.include_streaming_tokens,
+                if input.include_streaming_tokens {
+                    DownstreamTokenScope::All
+                } else {
+                    DownstreamTokenScope::Web
+                },
             )
             .await?;
 
@@ -152,29 +157,66 @@ impl AuthFlow {
         &self,
         input: BuildDownstreamTokensInput,
     ) -> Result<BuildDownstreamTokensOutput, AuthFlowError> {
+        self.build_downstream_tokens_for(input, DownstreamTokenScope::All)
+            .await
+    }
+
+    pub async fn build_downstream_tokens_for(
+        &self,
+        input: BuildDownstreamTokensInput,
+        scope: DownstreamTokenScope,
+    ) -> Result<BuildDownstreamTokensOutput, AuthFlowError> {
         let auth_bundle = self
             .build_auth_bundle(
                 &input.user_token,
                 input.sisu_token,
                 &input.seed.private_jwk,
                 &input.force_region_ip,
-                true,
+                scope,
             )
             .await?;
 
         Ok(BuildDownstreamTokensOutput { auth_bundle })
     }
 
+    /// 核心续期结果单独返回，宿主可以先保存轮换凭据，再继续下游协议。
+    pub async fn refresh_user_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<xbox_webapi::OAuthTokenResponse, AuthFlowError> {
+        let token = self
+            .auth_api
+            .refresh_user_token(refresh_token)
+            .await
+            .map_err(AuthFlowError::RefreshGrant)?;
+        Ok(preserve_refresh_token(token, refresh_token))
+    }
+
+    pub async fn finalize_user_token_for(
+        &self,
+        user_token: &xbox_webapi::OAuthTokenResponse,
+        seed: &AuthFlowSeed,
+        force_region_ip: &str,
+        scope: DownstreamTokenScope,
+    ) -> Result<AuthBundle, AuthFlowError> {
+        self.finalize_login(user_token, &seed.private_jwk, force_region_ip, scope)
+            .await
+    }
+
     pub async fn transfer_token(
         &self,
         input: crate::types::TransferTokenInput,
     ) -> Result<crate::types::TransferTokenOutput, AuthFlowError> {
-        let transfer_token = self
+        let response = self
             .auth_api
-            .get_cloud_transfer_token(&input.refresh_token)
-            .await?;
+            .get_cloud_transfer_token_response(&input.refresh_token)
+            .await
+            .map_err(AuthFlowError::RefreshGrant)?;
 
-        Ok(crate::types::TransferTokenOutput { transfer_token })
+        Ok(crate::types::TransferTokenOutput {
+            transfer_token: response.transfer_token,
+            refresh_token: response.refresh_token,
+        })
     }
 
     // 这里把 user token 之后的协议链路整合起来，方便回调链路和后续 refresh 复用。
@@ -183,7 +225,7 @@ impl AuthFlow {
         user_token: &xbox_webapi::OAuthTokenResponse,
         private_jwk: &Value,
         force_region_ip: &str,
-        include_streaming_tokens: bool,
+        scope: DownstreamTokenScope,
     ) -> Result<AuthBundle, AuthFlowError> {
         let device_uuid = uuid::Uuid::new_v4().to_string();
         let serial_number = uuid::Uuid::new_v4().to_string();
@@ -224,14 +266,8 @@ impl AuthFlow {
             authorization_token: convert_token_details(authorization_token)?,
         };
 
-        self.build_auth_bundle(
-            user_token,
-            sisu_token,
-            private_jwk,
-            force_region_ip,
-            include_streaming_tokens,
-        )
-        .await
+        self.build_auth_bundle(user_token, sisu_token, private_jwk, force_region_ip, scope)
+            .await
     }
 
     // 这里统一收敛 XSTS/Web/streaming token 生成，供 refresh 与 skip-refresh 复用。
@@ -241,7 +277,7 @@ impl AuthFlow {
         sisu_token: FlowSisuTokenData,
         private_jwk: &Value,
         force_region_ip: &str,
-        include_streaming_tokens: bool,
+        scope: DownstreamTokenScope,
     ) -> Result<AuthBundle, AuthFlowError> {
         let user_token_str = sisu_token.user_token.token.as_deref().ok_or_else(|| {
             AuthFlowError::Protocol("Sisu response missing user token string".to_string())
@@ -252,14 +288,9 @@ impl AuthFlow {
             .xsts_authorize(user_token_str, "http://xboxlive.com", private_jwk)
             .await?;
         let token_update_time = now_ms();
-        let stream_tokens = if include_streaming_tokens {
-            self.build_stream_tokens(
-                user_token_str,
-                private_jwk,
-                force_region_ip,
-                token_update_time,
-            )
-            .await?
+        let stream_tokens = if scope != DownstreamTokenScope::Web {
+            self.build_stream_tokens(user_token_str, private_jwk, force_region_ip, scope)
+                .await?
         } else {
             Map::new()
         };
@@ -269,12 +300,12 @@ impl AuthFlow {
             sisu_token,
             web_token: json!({ "data": web_token_resp }),
             stream_tokens: Value::Object(stream_tokens.clone()),
-            app_level: if !include_streaming_tokens {
-                0
-            } else if has_xcloud_token(&stream_tokens) {
+            app_level: if has_xcloud_token(&stream_tokens) {
                 2
-            } else {
+            } else if stream_tokens.contains_key("xHomeToken") {
                 1
+            } else {
+                0
             },
             token_update_time,
         })
@@ -285,7 +316,7 @@ impl AuthFlow {
         user_token_str: &str,
         private_jwk: &Value,
         force_region_ip: &str,
-        token_update_time: u64,
+        scope: DownstreamTokenScope,
     ) -> Result<Map<String, Value>, AuthFlowError> {
         let gssv_token = self
             .auth_api
@@ -293,19 +324,23 @@ impl AuthFlow {
             .await?
             .Token;
 
-        // xHome 会受区域 IP 影响，这里继续保留桌面端既有语义。
-        let xhome_token = self
-            .auth_api
-            .get_streaming_token(&gssv_token, "xhome", force_region_ip)
-            .await?;
         let mut stream_tokens = Map::new();
-        stream_tokens.insert(
-            "xHomeToken".to_string(),
-            json!({
-                "_objectCreateTime": token_update_time as i64,
-                "data": xhome_token.data
-            }),
-        );
+        if scope.includes_home() {
+            let xhome_token = self
+                .auth_api
+                .get_streaming_token(&gssv_token, "xhome", force_region_ip)
+                .await?;
+            stream_tokens.insert(
+                "xHomeToken".to_string(),
+                json!({
+                    "_objectCreateTime": xhome_token.object_create_time,
+                    "data": xhome_token.data,
+                }),
+            );
+        }
+        if !scope.includes_cloud() {
+            return Ok(stream_tokens);
+        }
 
         let xgpuweb_result = self
             .auth_api
@@ -316,7 +351,7 @@ impl AuthFlow {
                 stream_tokens.insert(
                     "xCloudToken".to_string(),
                     json!({
-                        "_objectCreateTime": token_update_time as i64,
+                        "_objectCreateTime": token.object_create_time,
                         "data": token.data
                     }),
                 );
@@ -336,7 +371,7 @@ impl AuthFlow {
                         stream_tokens.insert(
                             "xCloudToken".to_string(),
                             json!({
-                                "_objectCreateTime": token_update_time as i64,
+                                "_objectCreateTime": token.object_create_time,
                                 "data": token.data
                             }),
                         );
@@ -384,6 +419,16 @@ fn streaming_token_error_diagnostics(error: &xbox_webapi::WebApiError) -> Value 
     summary
 }
 
+fn preserve_refresh_token(
+    mut token: xbox_webapi::OAuthTokenResponse,
+    previous: &str,
+) -> xbox_webapi::OAuthTokenResponse {
+    if token.refresh_token.trim().is_empty() {
+        token.refresh_token = previous.to_string();
+    }
+    token
+}
+
 impl Default for AuthFlow {
     fn default() -> Self {
         Self::new()
@@ -417,3 +462,7 @@ fn now_ms() -> u64 {
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+#[path = "flow.test.rs"]
+mod tests;

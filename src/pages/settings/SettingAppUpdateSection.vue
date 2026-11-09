@@ -19,7 +19,8 @@ const channelOptions = computed(() => [
   { value: 'stable', label: t('setting.pages.general.appUpdate.channelStable') },
   { value: 'beta', label: t('setting.pages.general.appUpdate.channelBeta') },
 ])
-const locked = computed(() => updater.busy.value || updater.channelSaving.value || updater.channelLoading.value || !updater.channelReady.value || updater.state.value === 'installed')
+const busy = computed(() => updater.busy.value || updater.channelSaving.value || updater.channelLoading.value || restarting.value)
+const locked = computed(() => busy.value || !updater.channelReady.value || updater.state.value === 'installed')
 const primaryLabel = computed(() => {
   if (updater.state.value === 'error')
     return t(updater.targetVersion.value ? 'setting.experience.update.retryDownload' : 'setting.experience.retry')
@@ -56,6 +57,8 @@ async function changeChannel(value: string | number) {
   catch { /* 通道错误保留在卡片中。 */ }
 }
 async function primary() {
+  if (busy.value || !updater.channelReady.value)
+    return
   if (updater.state.value === 'installed') {
     confirm.value = 'restart'
     return
@@ -65,6 +68,8 @@ async function primary() {
   else await updater.checkForUpdate()
 }
 async function confirmed() {
+  if (updater.channelSaving.value || restarting.value)
+    return
   if (confirm.value === 'channel') {
     try {
       await updater.setChannel('stable')
@@ -97,11 +102,11 @@ async function confirmed() {
         {{ t('setting.experience.update.target', { version: updater.targetVersion.value }) }}
       </p>
       <div class="setting-app-update__channel">
-        <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="`${props.navNodeBaseId}.channel`" :label="t('setting.pages.general.appUpdate.channelLabel')" :options="channelOptions" :current-value="updater.channel.value" :disabled="locked" @select="changeChannel" />
+        <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="`${props.navNodeBaseId}.channel`" :label="t('setting.pages.general.appUpdate.channelLabel')" :options="channelOptions" :current-value="updater.channel.value" :busy="busy" :disabled="!updater.channelReady.value || updater.state.value === 'installed'" @select="changeChannel" />
         <p class="setting-panel__status">
           {{ t('setting.experience.update.channelHelp') }}
         </p>
-        <Focusable v-if="updater.channelError.value" :id="`${props.navNodeBaseId}.retryChannel`" as="button" :scope-id="props.scopeId" class="setting-panel__action" :disabled="updater.busy.value || updater.channelLoading.value" @click="updater.loadChannel">
+        <Focusable v-if="updater.channelError.value" :id="`${props.navNodeBaseId}.retryChannel`" as="button" :scope-id="props.scopeId" class="setting-panel__action" :busy="busy" @click="updater.loadChannel">
           {{ t('setting.experience.update.retryChannel') }}
         </Focusable>
         <p v-if="updater.channelError.value" role="alert" class="setting-panel__status setting-panel__status--error">
@@ -139,7 +144,7 @@ async function confirmed() {
           </div>
         </div>
         <div class="setting-panel__actions">
-          <Focusable :id="`${props.navNodeBaseId}.primary`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--primary" :disabled="updater.busy.value || updater.channelSaving.value || updater.channelLoading.value || !updater.channelReady.value || restarting" @click="primary">
+          <Focusable :id="`${props.navNodeBaseId}.primary`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--primary" :busy="busy" :disabled="!updater.channelReady.value" @click="primary">
             {{ primaryLabel }}
           </Focusable>
           <span v-if="updater.state.value === 'installed'" class="setting-app-update__meta">{{ t('setting.experience.update.later') }}</span>

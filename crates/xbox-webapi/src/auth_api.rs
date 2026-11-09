@@ -35,6 +35,7 @@ pub struct OAuthTokenResponse {
     pub expires_in: u64,
     pub scope: String,
     pub access_token: String,
+    #[serde(default)]
     pub refresh_token: String,
     pub user_id: Option<String>,
     pub expires_on: Option<String>,
@@ -99,6 +100,12 @@ pub struct StreamingTokenResponse {
     #[serde(rename = "_objectCreateTime")]
     pub object_create_time: i64,
     pub data: Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct CloudTransferTokenResponse {
+    pub transfer_token: String,
+    pub refresh_token: Option<String>,
 }
 
 pub type UserTokenResponse = OAuthTokenResponse;
@@ -312,6 +319,15 @@ impl AuthApi {
         &self,
         refresh_token: &str,
     ) -> Result<String, WebApiError> {
+        self.get_cloud_transfer_token_response(refresh_token)
+            .await
+            .map(|response| response.transfer_token)
+    }
+
+    pub async fn get_cloud_transfer_token_response(
+        &self,
+        refresh_token: &str,
+    ) -> Result<CloudTransferTokenResponse, WebApiError> {
         let body = reqwest::Url::parse_with_params(
             "https://login.live.com/oauth20_token.srf",
             &[
@@ -343,19 +359,7 @@ impl AuthApi {
             )
             .await?;
 
-        response
-            .get("access_token")
-            .and_then(|value| value.as_str())
-            .filter(|value| !value.is_empty())
-            .map(str::to_string)
-            .or_else(|| {
-                response
-                    .get("lpt")
-                    .and_then(|value| value.as_str())
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-            })
-            .ok_or_else(|| WebApiError::parse("Cloud transfer token response is invalid."))
+        parse_cloud_transfer_response(&response)
     }
 
     pub async fn sisu_authorize(
@@ -567,3 +571,34 @@ impl Default for AuthApi {
         Self::new()
     }
 }
+
+fn parse_cloud_transfer_response(
+    response: &Value,
+) -> Result<CloudTransferTokenResponse, WebApiError> {
+    let transfer_token = response
+        .get("access_token")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            response
+                .get("lpt")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.trim().is_empty())
+                .map(str::to_string)
+        })
+        .ok_or_else(|| WebApiError::parse("Cloud transfer token response is invalid."))?;
+    Ok(CloudTransferTokenResponse {
+        transfer_token,
+        refresh_token: response
+            .get("refresh_token")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_string),
+    })
+}
+
+#[cfg(test)]
+#[path = "auth_api.test.rs"]
+mod tests;

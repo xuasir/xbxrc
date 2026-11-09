@@ -90,8 +90,8 @@ function callbackTiming() {
 export class VideoFrameIdentityObservation {
   enabled = false
   private startedAtMs?: number
-  private readonly observed = { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0 }
-  private readonly accepted = { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0 }
+  private readonly observed = { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0, decodedFrame: 0 }
+  private readonly accepted = { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0, decodedFrame: 0 }
   private readonly reasons: Partial<Record<FrameIdentityReason, number>> = {}
   private readonly samples: FrameIdentityEvidence[] = []
   private nextAcceptedAtMs = 0
@@ -99,8 +99,8 @@ export class VideoFrameIdentityObservation {
   private sampledCount = 0
   private nativeUnchangedWithMediaAdvanceCount = 0
   private readonly lastCallback = new Map<VideoFrameTrackingSource, { atMs: number, enteredAtMs: number }>()
-  private readonly timing = { videoFrameCallback: callbackTiming(), animationFrame: callbackTiming(), timeupdate: callbackTiming() }
-  private readonly counterCadence = { updateCount: 0, advanceTotal: 0, deltaMax: 0, intervalCount: 0, intervalTotalMs: 0, intervalMaxMs: 0, resetCount: 0, updatesBySource: { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0 } }
+  private readonly timing = { videoFrameCallback: callbackTiming(), animationFrame: callbackTiming(), timeupdate: callbackTiming(), decodedFrame: callbackTiming() }
+  private readonly counterCadence = { updateCount: 0, advanceTotal: 0, deltaMax: 0, intervalCount: 0, intervalTotalMs: 0, intervalMaxMs: 0, resetCount: 0, updatesBySource: { videoFrameCallback: 0, animationFrame: 0, timeupdate: 0, decodedFrame: 0 } }
   private previousCounterPair?: PairedCounterEvidence
 
   resetTimingBaseline(): void {

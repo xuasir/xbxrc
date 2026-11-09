@@ -9,6 +9,7 @@ import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
 import { achievementKey, formatDate, useLibraryFocusFallback } from './library-view'
 import LibraryRefresh from './LibraryRefresh.vue'
+import LibrarySelectControl from './LibrarySelectControl.vue'
 import { libraryEpoch, useLibraryPage } from './use-library-query'
 
 const props = withDefaults(defineProps<{ xboxTitleId: string, targetXuid?: string }>(), { targetXuid: '' })
@@ -61,15 +62,7 @@ async function more() {
       好友：{{ friend.state.value.error }}
     </p>
     <div class="library-toolbar">
-      <SettingInputControl id="game.achievements.search" v-model="search" scope-id="app.shell" label="搜索成就" placeholder="搜索成就" /><Focusable id="game.achievements.filter" as="select" :value="filter" class="library-control" aria-label="成就状态" @change="filter = ($event.target as HTMLSelectElement).value">
-        <option value="all">
-          全部
-        </option><option value="locked">
-          待解锁
-        </option><option value="unlocked">
-          已解锁
-        </option>
-      </Focusable>
+      <SettingInputControl id="game.achievements.search" v-model="search" scope-id="app.shell" label="搜索成就" placeholder="搜索成就" /><LibrarySelectControl id="game.achievements.filter" v-model="filter" label="成就状态" :options="[{ value: 'all', label: '全部' }, { value: 'locked', label: '待解锁' }, { value: 'unlocked', label: '已解锁' }]" />
     </div>
     <p v-if="targetXuid" class="library-caption">
       按同一成就对比双方的解锁状态与进度。
@@ -84,7 +77,7 @@ async function more() {
     </p><p v-else-if="!rows.length && !own.state.value.error && !(targetXuid && friend.state.value.error)" class="library-state">
       {{ search || filter !== 'all' ? '当前筛选结果为空' : 'Xbox 服务暂未提供此游戏的成就列表' }}
     </p>
-    <Focusable v-if="own.state.value.value?.continuation || (targetXuid && friend.state.value.value?.continuation)" id="game.achievements.more" as="button" class="library-control" :disabled="own.state.value.loading || friend.state.value.loading" @click="more">
+    <Focusable v-if="own.state.value.value?.continuation || (targetXuid && friend.state.value.value?.continuation)" id="game.achievements.more" as="button" class="library-control" :busy="own.state.value.loading || friend.state.value.loading" @click="more">
       加载更多成就
     </Focusable>
     <SettingModalShell :open="!!detail" scope-id="achievement.detail" :title="detail ? name(detail) : '成就详情'" eyebrow="成就详情" @close="detail = null">

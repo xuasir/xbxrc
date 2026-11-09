@@ -2,7 +2,7 @@ import type { LogicalButtonDto } from '@shared/gamepad/contract'
 import type { InputDriverLike } from '../app/input/InputService'
 import type { PlayerClientOptions } from '../domain/config'
 import type { GamepadFrame, InputRuntimeConfig } from '../domain/input'
-import type { AudioRuntimeConfig, RendererAttachSpec, RendererRuntimeConfig, StreamStats } from '../domain/media'
+import type { AudioRuntimeConfig, MediaDiagnosticsOptions, RendererAttachSpec, RendererRuntimeConfig, StreamStats } from '../domain/media'
 import type {
   ConnectParams,
   ControlChannelHealthSnapshot,
@@ -298,8 +298,8 @@ export class PlayerClient {
     return { ...this.mediaService.snapshotResources(), captureRequests: this.captures.size, buttonReleaseTimers: this.buttonReleases.size }
   }
 
-  snapshotMediaDiagnostics() {
-    return this.mediaService.snapshotDiagnostics()
+  snapshotMediaDiagnostics(options?: MediaDiagnosticsOptions) {
+    return this.mediaService.snapshotDiagnostics(options)
   }
 
   reset(): void {

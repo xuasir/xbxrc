@@ -24,8 +24,9 @@ export function resolveSuperResolutionUserIntent(input: {
   clientExperimentalSuperResolution?: boolean
   displaySuperResolutionExperimental?: boolean
 }): boolean {
-  return input.superResolutionPreference === 'fsr1Experimental'
-    || (input.displaySuperResolutionExperimental ?? input.clientExperimentalSuperResolution) === true
+  return input.displaySuperResolutionExperimental
+    ?? input.clientExperimentalSuperResolution
+    ?? input.superResolutionPreference === 'fsr1Experimental'
 }
 
 export type BrowserRendererPolicySource = 'auto' | 'userOverride' | 'capabilityFallback' | 'srFallback' | 'localFallback'
@@ -127,14 +128,15 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
   // 中性auto直接复用浏览器呈现，显式增强和管线选择继续按用户意图装配。
   const wantsWebgl = input.pipelineOverride !== 'video'
     && !(input.pipelineOverride === 'auto' && neutralDisplay && !input.superResolutionUserIntent)
-  const webgl = wantsWebgl && input.webgl2Supported && !input.localFallback
+  const srFailed = input.superResolutionUserIntent && input.superResolutionAttachFailed
+  const webgl = wantsWebgl && input.webgl2Supported && !input.localFallback && !srFailed
   const srActive = webgl && input.superResolutionUserIntent && !input.superResolutionAttachFailed
   const kind: BrowserRendererKind = srActive ? 'webgl2_sr' : webgl ? 'webgl2' : 'video'
   const source: BrowserRendererPolicySource = input.localFallback
     ? 'localFallback'
     : wantsWebgl && !input.webgl2Supported
       ? 'capabilityFallback'
-      : webgl && input.superResolutionUserIntent && input.superResolutionAttachFailed
+      : wantsWebgl && srFailed
         ? 'srFallback'
         : input.pipelineOverride === 'auto' ? 'auto' : 'userOverride'
   const rcasStops = Math.max(0.6, Math.min(1.1, input.superResolutionRcasStopsBase))
@@ -142,7 +144,7 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
     kind,
     source,
     targetFps: resolveRendererPresentTargetFps(input),
-    sharpness,
+    sharpness: kind === 'webgl2' ? sharpness : 0,
     display: {
       format: input.format,
       brightness: input.displayOptions.brightness,
@@ -151,7 +153,7 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
     },
     sharpening: {
       mode: kind === 'webgl2' ? input.processing : 'none',
-      strength: Math.min(100, sharpness * 20),
+      strength: kind === 'webgl2' ? Math.min(100, sharpness * 20) : 0,
       processingMode: 'quality',
     },
     superResolutionRcasStopsForPatch: srActive ? rcasStops : undefined,
@@ -221,6 +223,7 @@ export function planToRendererRuntimeConfigPatch(plan: BrowserRendererPlan): Par
   const standardProcessing = projectRenderProcessingFromPlan(plan)
 
   const patch: Partial<RendererRuntimeConfig> = {
+    renderFallbackReason: plan.source === 'localFallback' ? 'performance' : plan.source === 'capabilityFallback' ? 'unsupported' : plan.source === 'srFallback' ? 'failed' : undefined,
     pipelineType,
     mode,
     processing: standardProcessing ?? 'cas',

@@ -8,6 +8,7 @@ import { rpc } from '@/services/rpc'
 import { mergePersonalAccount } from './library-merge'
 import { formatDate, useLibraryFocusFallback } from './library-view'
 import LibraryRefresh from './LibraryRefresh.vue'
+import LibrarySelectControl from './LibrarySelectControl.vue'
 import { useLibraryQuery } from './use-library-query'
 
 const route = useRoute()
@@ -46,15 +47,7 @@ useLibraryFocusFallback(() => ['my.friends.filter', ...friends.value.map(p => `m
     </div>
     <div class="library-toolbar">
       <SettingInputControl id="my.friends.search" v-model="search" scope-id="app.shell" label="搜索好友" placeholder="搜索好友" />
-      <Focusable id="my.friends.filter" :value="filter" as="select" class="library-control" aria-label="好友状态" @change="filter = ($event.target as HTMLSelectElement).value">
-        <option value="all">
-          全部
-        </option><option value="online">
-          在线
-        </option><option value="playing">
-          游戏中
-        </option>
-      </Focusable>
+      <LibrarySelectControl id="my.friends.filter" v-model="filter" label="好友状态" :options="[{ value: 'all', label: '全部' }, { value: 'online', label: '在线' }, { value: 'playing', label: '游戏中' }]" />
       <span class="library-caption">{{ state.value?.friends ? `已加载 ${state.value.friends.length} 位好友` : state.loading ? '正在查询好友…' : '好友数据暂缺' }}</span>
     </div>
     <div class="library-list">

@@ -6,8 +6,10 @@ import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingModalShell from '@/components/settings/SettingModalShell.vue'
 import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
+import AlbumVideoPlayer from './AlbumVideoPlayer.vue'
 import { formatDate, useLibraryFocusFallback } from './library-view'
 import LibraryRefresh from './LibraryRefresh.vue'
+import LibrarySelectControl from './LibrarySelectControl.vue'
 import { coveredMediaRange } from './media-range'
 import { libraryAccountId, libraryEpoch, useLibraryPage } from './use-library-query'
 
@@ -24,14 +26,13 @@ const clips = useLibraryPage(() => 'media:clip', token => load('clip', token), m
 const filter = ref('all')
 const gameFilter = ref('')
 const preview = ref<MediaView | null>(null)
-const video = ref<HTMLVideoElement | null>(null)
-const playing = ref(false)
 const previewError = ref('')
 const previewBusy = ref(false)
 const saveBusy = ref(false)
 const saveMessage = ref('')
 const items = computed(() => coveredMediaRange([...(filter.value !== 'clip' ? [{ page: screenshots.state.value.value, failed: !!screenshots.state.value.error }] : []), ...(filter.value !== 'screenshot' ? [{ page: clips.state.value.value, failed: !!clips.state.value.error }] : [])]))
 const games = computed(() => [...new Map(items.value.filter(m => m.xboxTitleId).map(m => [m.xboxTitleId!, m.titleName])).entries()])
+const gameOptions = computed(() => [{ value: '', label: '全部游戏' }, ...games.value.map(([value, label]) => ({ value, label }))])
 const visible = computed(() => items.value.filter(m => (filter.value === 'all' || m.kind === filter.value) && (!props.xboxTitleId || m.xboxTitleId === props.xboxTitleId) && (!gameFilter.value || m.xboxTitleId === gameFilter.value)))
 const busy = computed(() => screenshots.state.value.loading || clips.state.value.loading)
 const moreAvailable = computed(() => screenshots.state.value.value?.continuation || clips.state.value.value?.continuation)
@@ -43,6 +44,8 @@ async function more() {
   await Promise.allSettled([screenshots.more(), clips.more()])
 }
 let renewal = 0
+let previewRevision = 0
+let saveRevision = 0
 let automaticRetried = false
 async function renew() {
   const current = preview.value
@@ -76,6 +79,10 @@ function failed() {
   }
 }
 function open(item: MediaView) {
+  previewRevision++
+  renewal++
+  saveRevision++
+  previewBusy.value = saveBusy.value = false
   preview.value = item
   previewError.value = ''
   saveMessage.value = ''
@@ -84,35 +91,24 @@ function open(item: MediaView) {
     void renew()
 }
 function close() {
-  video.value?.pause()
-  playing.value = false
+  previewRevision++
+  saveRevision++
   preview.value = null
   renewal++
   previewBusy.value = false
+  saveBusy.value = false
 }
 onDeactivated(close)
 watch(libraryEpoch, close)
 watch(() => route.fullPath, close)
-async function togglePlayback() {
-  const element = video.value
-  if (!element)
-    return
-  if (element.paused) {
-    try {
-      await element.play()
-    }
-    catch { previewError.value = '录像暂时无法播放，请刷新资源后重试' }
-  }
-  else {
-    element.pause()
-  }
-}
 async function save() {
   const current = preview.value
   if (!current || saveBusy.value)
     return
   const epoch = libraryEpoch.value
-  const currentPreview = () => epoch === libraryEpoch.value && preview.value?.id === current.id && preview.value?.kind === current.kind
+  const session = previewRevision
+  const request = ++saveRevision
+  const currentPreview = () => request === saveRevision && session === previewRevision && epoch === libraryEpoch.value && preview.value?.id === current.id && preview.value?.kind === current.kind
   saveBusy.value = true
   saveMessage.value = ''
   try {
@@ -125,7 +121,10 @@ async function save() {
     if (currentPreview())
       saveMessage.value = error instanceof Error ? error.message : '保存失败'
   }
-  finally { saveBusy.value = false }
+  finally {
+    if (request === saveRevision)
+      saveBusy.value = false
+  }
 }
 function openGame() {
   const current = preview.value
@@ -149,21 +148,7 @@ function openGame() {
       </p>
     </template>
     <div class="library-toolbar">
-      <Focusable id="album.filter" as="select" :value="filter" class="library-control" aria-label="媒体类型" @change="filter = ($event.target as HTMLSelectElement).value">
-        <option value="all">
-          全部
-        </option><option value="screenshot">
-          截图
-        </option><option value="clip">
-          录像
-        </option>
-      </Focusable><Focusable v-if="!xboxTitleId" id="album.game-filter" as="select" :value="gameFilter" class="library-control" aria-label="相册游戏" @change="gameFilter = ($event.target as HTMLSelectElement).value">
-        <option value="">
-          全部游戏
-        </option><option v-for="[id, name] in games" :key="id" :value="id">
-          {{ name }}
-        </option>
-      </Focusable><span class="library-caption">当前时间区间 {{ items.length }} 项 · 按拍摄/上传时间排列</span>
+      <LibrarySelectControl id="album.filter" v-model="filter" label="媒体类型" :options="[{ value: 'all', label: '全部' }, { value: 'screenshot', label: '截图' }, { value: 'clip', label: '录像' }]" /><LibrarySelectControl v-if="!xboxTitleId" id="album.game-filter" v-model="gameFilter" label="相册游戏" :options="gameOptions" /><span class="library-caption">当前时间区间 {{ items.length }} 项 · 按拍摄/上传时间排列</span>
     </div>
     <div class="album-grid">
       <Focusable v-for="item in visible" :id="`album.${item.kind}.${item.id}`" :key="`${item.kind}:${item.id}`" as="button" type="button" class="album-card" :aria-label="`${item.titleName} ${item.kind === 'clip' ? '录像' : '截图'}`" @click="open(item)">
@@ -175,12 +160,12 @@ function openGame() {
     </p><p v-else-if="!visible.length" class="library-state">
       {{ items.length ? '当前筛选结果为空' : '当前可见的 Xbox 网络相册为空' }}
     </p>
-    <Focusable v-if="moreAvailable" id="album.more" as="button" class="library-control" :disabled="busy" @click="more">
+    <Focusable v-if="moreAvailable" id="album.more" as="button" class="library-control" :busy="busy" @click="more">
       加载更多
     </Focusable>
     <SettingModalShell :open="!!preview" scope-id="album.preview" :title="preview?.titleName ?? '相册预览'" eyebrow="Xbox 相册" width="min(100%, 1000px)" default-focus-id="album.preview.close" :busy="saveBusy" @close="close">
       <template v-if="preview">
-        <video v-if="preview.kind === 'clip' && preview.url" :key="preview.url" ref="video" class="album-preview" :src="preview.url" controls playsinline preload="metadata" @play="playing = true" @pause="playing = false" @ended="playing = false" @error="failed" /><img v-else-if="preview.url" :key="preview.url" class="album-preview" :src="preview.url" :alt="preview.titleName" @error="failed"><p class="library-copy">
+        <AlbumVideoPlayer v-if="preview.kind === 'clip' && preview.url" :src="preview.url" :busy="previewBusy || saveBusy" @error="failed" @operation-error="previewError = $event" /><img v-else-if="preview.url" :key="preview.url" class="album-preview" :src="preview.url" :alt="preview.titleName" @error="failed"><p class="library-copy">
           {{ preview.kind === 'clip' ? '录像' : '截图' }} · {{ formatDate(preview.capturedAt) }}
         </p><p v-if="previewError" class="library-notice" role="alert">
           {{ previewError }}
@@ -190,11 +175,9 @@ function openGame() {
       </template>
       <template #footer>
         <div class="library-actions">
-          <Focusable v-if="preview?.kind === 'clip' && preview.url" id="album.preview.play" as="button" class="library-control" :disabled="previewBusy" @click="togglePlayback">
-            {{ playing ? '暂停录像' : '播放录像' }}
-          </Focusable><LibraryRefresh id="album.preview.refresh" :busy="previewBusy || saveBusy" @refresh="renew" /><Focusable id="album.preview.save" as="button" class="library-control" :disabled="saveBusy || previewBusy" @click="save">
+          <LibraryRefresh id="album.preview.refresh" :busy="previewBusy || saveBusy" @refresh="renew" /><Focusable id="album.preview.save" as="button" class="library-control" :busy="saveBusy || previewBusy" @click="save">
             {{ saveBusy ? '正在保存…' : '保存到本机' }}
-          </Focusable><Focusable v-if="preview?.xboxTitleId && !xboxTitleId" id="album.preview.game" as="button" class="library-control" :disabled="saveBusy" @click="openGame">
+          </Focusable><Focusable v-if="preview?.xboxTitleId && !xboxTitleId" id="album.preview.game" as="button" class="library-control" :busy="saveBusy" @click="openGame">
             查看游戏
           </Focusable>
         </div>

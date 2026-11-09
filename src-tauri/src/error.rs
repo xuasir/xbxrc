@@ -21,6 +21,12 @@ pub enum AppError {
     #[error("Data error: {0}")]
     Data(String),
 
+    #[error("Data error: {message}")]
+    DataDetailed {
+        message: String,
+        details: serde_json::Value,
+    },
+
     #[error("Streaming error: {0}")]
     Streaming(String),
 
@@ -58,6 +64,7 @@ impl AppError {
             AppError::Auth(_) => "AUTH_ERROR",
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Data(_) => "DATA_ERROR",
+            AppError::DataDetailed { .. } => "DATA_ERROR",
             AppError::Streaming(_) => "STREAMING_ERROR",
             AppError::StreamingDetailed { .. } => "STREAMING_ERROR",
             AppError::Gamepad(_) => "GAMEPAD_ERROR",
@@ -73,7 +80,8 @@ impl AppError {
 impl AppError {
     pub fn details(&self) -> Option<&serde_json::Value> {
         match self {
-            AppError::StreamingDetailed { details, .. } => Some(details),
+            AppError::StreamingDetailed { details, .. }
+            | AppError::DataDetailed { details, .. } => Some(details),
             _ => None,
         }
     }

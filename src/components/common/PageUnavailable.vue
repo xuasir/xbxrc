@@ -19,7 +19,7 @@ function retry(): void {
     <p class="ui-page-body" :role="error ? 'alert' : 'status'">
       {{ body }}
     </p>
-    <Focusable :id="id" as="button" type="button" scope-id="app.shell" class="page-unavailable__action ui-action-button ui-action-button--brand" :aria-busy="busy" @click="retry">
+    <Focusable :id="id" as="button" type="button" scope-id="app.shell" class="page-unavailable__action ui-action-button ui-action-button--brand" :busy="busy" @click="retry">
       {{ actionLabel }}
     </Focusable>
   </section>

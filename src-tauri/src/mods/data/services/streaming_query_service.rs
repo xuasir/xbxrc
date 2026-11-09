@@ -13,7 +13,7 @@ use xbox_streaming::{
     Config as DomainStreamingConfig, Context as DomainContext, Target as DomainTarget,
     WebApiSessionGateway,
 };
-use xbox_webapi::ConsoleApi;
+use xbox_webapi::{ConsoleApi, WebApiError};
 
 pub struct StreamingQueryService {
     config_provider: ConfigProviderRef,
@@ -31,15 +31,12 @@ impl StreamingQueryService {
     pub async fn get_remote_consoles(
         &self,
         session: &DataSessionContext,
-    ) -> Result<Vec<DataHostSummary>, String> {
+    ) -> Result<Vec<DataHostSummary>, WebApiError> {
         let Some(api) = self.create_home_session_api(session).await? else {
             return Ok(Vec::new());
         };
 
-        let consoles = api
-            .get_remote_consoles()
-            .await
-            .map_err(|error| error.to_string())?;
+        let consoles = api.get_remote_consoles().await?;
 
         let mut summaries = Vec::new();
         for console in consoles {
@@ -84,7 +81,7 @@ impl StreamingQueryService {
         &self,
         session: &DataSessionContext,
         xbox_title_id: &str,
-    ) -> Result<DataStreamingTitleInputConfig, String> {
+    ) -> Result<DataStreamingTitleInputConfig, WebApiError> {
         let Some(api) = self.create_home_session_api(session).await? else {
             return Ok(DataStreamingTitleInputConfig {
                 xbox_title_id: xbox_title_id.to_string(),
@@ -92,10 +89,7 @@ impl StreamingQueryService {
             });
         };
 
-        let config = api
-            .input_configs(xbox_title_id)
-            .await
-            .map_err(|error| error.to_string())?;
+        let config = api.input_configs(xbox_title_id).await?;
 
         Ok(DataStreamingTitleInputConfig {
             xbox_title_id: xbox_title_id.to_string(),
@@ -107,7 +101,7 @@ impl StreamingQueryService {
         &self,
         session: &DataSessionContext,
         console_id: &str,
-    ) -> Result<DataConsolePowerResult, String> {
+    ) -> Result<DataConsolePowerResult, WebApiError> {
         self.send_console_power_command(session, console_id, "WakeUp")
             .await
     }
@@ -116,7 +110,7 @@ impl StreamingQueryService {
         &self,
         session: &DataSessionContext,
         console_id: &str,
-    ) -> Result<DataConsolePowerResult, String> {
+    ) -> Result<DataConsolePowerResult, WebApiError> {
         self.send_console_power_command(session, console_id, "TurnOff")
             .await
     }
@@ -126,7 +120,7 @@ impl StreamingQueryService {
         session: &DataSessionContext,
         console_id: &str,
         text: &str,
-    ) -> Result<DataSendTextResult, String> {
+    ) -> Result<DataSendTextResult, WebApiError> {
         let accepted = self
             .send_console_command(
                 session,
@@ -152,7 +146,7 @@ impl StreamingQueryService {
         session: &DataSessionContext,
         console_id: &str,
         command: &str,
-    ) -> Result<DataConsolePowerResult, String> {
+    ) -> Result<DataConsolePowerResult, WebApiError> {
         let accepted = self
             .send_console_command(session, console_id, "Power", command, None)
             .await?;
@@ -170,7 +164,7 @@ impl StreamingQueryService {
         command_type: &str,
         command: &str,
         parameters: Option<Value>,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, WebApiError> {
         let Some(claims) = resolve_web_token_claims(&session.web_token) else {
             return Ok(false);
         };
@@ -181,20 +175,21 @@ impl StreamingQueryService {
             .map(|response| response.accepted)
             .map_err(|error| {
                 log::warn!("[Data][consoleCommand] failed: {}", error.safe_summary());
-                super::personal_service::user_error(&error)
+                error
             })
     }
 
     async fn create_home_session_api(
         &self,
         session: &DataSessionContext,
-    ) -> Result<Option<WebApiSessionGateway>, String> {
+    ) -> Result<Option<WebApiSessionGateway>, WebApiError> {
         // RFC: 拆除横向依赖。mods/data 直接扁平依赖 crate，不横向依赖 mods/streaming。
         let Some(token) = resolve_xhome_token(session) else {
             return Ok(None);
         };
 
-        let access_context = parse_session_access_context(token).map_err(|e| e.to_string())?;
+        let access_context = parse_session_access_context(token)
+            .map_err(|_| WebApiError::parse("主机串流凭据响应暂不可用，请重试"))?;
         let config_snapshot = self.config_provider.get_streaming_config();
         let domain_config = DomainStreamingConfig::new_home_config(
             config_snapshot.preferred_game_language.clone(),
@@ -213,7 +208,7 @@ impl StreamingQueryService {
             config: domain_config,
             context,
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| WebApiError::parse("主机串流配置暂不可用，请检查设置"))?;
 
         log::info!(
             "xhome query gateway resolved: device_profile={:?} resolution={}x{} os={}",
@@ -224,7 +219,7 @@ impl StreamingQueryService {
         );
 
         let streaming_token = xbox_streaming::session::access::StreamingToken::parse(token)
-            .map_err(|e| e.to_string())?;
+            .map_err(|_| WebApiError::parse("主机串流凭据响应暂不可用，请重试"))?;
 
         // 既然已经有 token 了，直接使用 new 构造。
         Ok(Some(WebApiSessionGateway::new(

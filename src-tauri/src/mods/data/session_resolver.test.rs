@@ -19,6 +19,9 @@ struct TestAuth {
     check_error: Mutex<Option<WebApiError>>,
     checks: AtomicUsize,
     recoveries: AtomicUsize,
+    stream_tokens: Mutex<Value>,
+    stream_checks: Mutex<Vec<String>>,
+    stream_recoveries: Mutex<Vec<(String, String)>>,
 }
 impl TestAuth {
     fn new() -> Arc<Self> {
@@ -27,6 +30,9 @@ impl TestAuth {
             check_error: Mutex::new(None),
             checks: AtomicUsize::new(0),
             recoveries: AtomicUsize::new(0),
+            stream_tokens: Mutex::new(json!({})),
+            stream_checks: Mutex::new(Vec::new()),
+            stream_recoveries: Mutex::new(Vec::new()),
         })
     }
 }
@@ -42,7 +48,16 @@ impl AuthProvider for TestAuth {
         }
     }
     fn get_active_session(&self) -> AppResult<Option<AuthSessionReadyEvent>> {
-        Ok(None)
+        let token = self.token.lock().unwrap().clone();
+        let streams = self.stream_tokens.lock().unwrap().clone();
+        Ok(token
+            .filter(|_| streams.as_object().is_some_and(|tokens| !tokens.is_empty()))
+            .map(|web_token| AuthSessionReadyEvent {
+                provider: "xal".into(),
+                app_level: 1,
+                web_token,
+                streaming_tokens: streams,
+            }))
     }
     fn get_web_api_tokens(&self) -> AppResult<Option<(String, String)>> {
         Ok(self
@@ -69,11 +84,39 @@ impl AuthProvider for TestAuth {
     }
     async fn recover_web_api_session(&self, _: &str) -> AppResult<()> {
         self.recoveries.fetch_add(1, Ordering::SeqCst);
+        if let Some(error) = self.check_error.lock().unwrap().clone() {
+            return Err(crate::error::AppError::WebApi(error));
+        }
         *self.token.lock().unwrap() = Some(snapshot("recovered", "1"));
         Ok(())
     }
-    fn get_streaming_token(&self, _: &str) -> AppResult<Option<Value>> {
-        unimplemented!()
+    async fn get_streaming_token(&self, target: &str) -> AppResult<Option<Value>> {
+        self.stream_checks.lock().unwrap().push(target.to_string());
+        if let Some(error) = self.check_error.lock().unwrap().clone() {
+            return Err(crate::error::AppError::WebApi(error));
+        }
+        let token = json!({"data":{"gsToken":format!("{target}-checked")}});
+        self.stream_tokens.lock().unwrap()
+            [AuthTokenScope::from_target(target).stream_key().unwrap()] = token.clone();
+        Ok(Some(token))
+    }
+    async fn recover_streaming_token(
+        &self,
+        target: &str,
+        rejected: &str,
+        _credential_generation: Option<u64>,
+    ) -> AppResult<Option<Value>> {
+        self.stream_recoveries
+            .lock()
+            .unwrap()
+            .push((target.to_string(), rejected.to_string()));
+        if let Some(error) = self.check_error.lock().unwrap().clone() {
+            return Err(crate::error::AppError::WebApi(error));
+        }
+        let token = json!({"data":{"gsToken":format!("{target}-recovered")}});
+        self.stream_tokens.lock().unwrap()
+            [AuthTokenScope::from_target(target).stream_key().unwrap()] = token.clone();
+        Ok(Some(token))
     }
     async fn login(&self) -> AppResult<LoginResponse> {
         unimplemented!()
@@ -208,7 +251,7 @@ async fn late_result_is_discarded_after_account_switch_or_logout() {
                 async { Ok("old-account-result") }
             })
             .await;
-        assert!(matches!(result, Err(WebApiError::Auth { .. })));
+        assert!(matches!(result, Err(WebApiError::Parse { .. })));
     }
 }
 
@@ -227,4 +270,72 @@ async fn failed_credential_recovery_preserves_the_original_network_category() {
         result.unwrap_err().network_error_kind(),
         Some(xbox_webapi::NetworkErrorKind::Dns)
     );
+}
+
+#[tokio::test]
+async fn streaming_queries_ensure_and_recover_the_target_even_with_valid_web_credentials() {
+    for scope in [AuthTokenScope::Home, AuthTokenScope::Cloud] {
+        let auth = TestAuth::new();
+        let other_key = if scope == AuthTokenScope::Home {
+            "xCloudToken"
+        } else {
+            "xHomeToken"
+        };
+        auth.stream_tokens.lock().unwrap()[other_key] = json!({"gsToken": "other-target"});
+        let resolver = DataSessionResolver::new(auth.clone());
+        let attempts = AtomicUsize::new(0);
+        let key = scope.stream_key().unwrap();
+        let result = resolver
+            .run_scoped_query(scope, |session| {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    assert_eq!(
+                        session.streaming_tokens[other_key]["gsToken"],
+                        "other-target"
+                    );
+                    let token = session.streaming_tokens[key]["data"]["gsToken"]
+                        .as_str()
+                        .unwrap()
+                        .to_string();
+                    if token.ends_with("checked") {
+                        Err(WebApiError::http(401, "rejected"))
+                    } else {
+                        Ok(token)
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        assert_eq!(result, format!("{}-recovered", scope.as_str()));
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(&*auth.stream_checks.lock().unwrap(), &[scope.as_str()]);
+        assert_eq!(
+            &*auth.stream_recoveries.lock().unwrap(),
+            &[(
+                scope.as_str().to_string(),
+                format!("{}-checked", scope.as_str())
+            )]
+        );
+        assert_eq!(auth.recoveries.load(Ordering::SeqCst), 0);
+        assert_eq!(auth.checks.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn cloud_query_stops_after_one_recovery_and_keeps_temporary_errors_typed() {
+    let auth = TestAuth::new();
+    let resolver = DataSessionResolver::new(auth.clone());
+    let result: Result<(), _> = resolver
+        .run_scoped_query(AuthTokenScope::Cloud, |_| async {
+            Err(WebApiError::http(401, "rejected"))
+        })
+        .await;
+    assert_eq!(result.unwrap_err().to_status_code(), Some(401));
+    assert_eq!(auth.stream_recoveries.lock().unwrap().len(), 1);
+    let error = WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Timeout);
+    *auth.check_error.lock().unwrap() = Some(error.clone());
+    let result: Result<(), _> = resolver
+        .run_scoped_query(AuthTokenScope::Cloud, |_| async { Ok(()) })
+        .await;
+    assert_eq!(result.unwrap_err().safe_summary(), error.safe_summary());
 }

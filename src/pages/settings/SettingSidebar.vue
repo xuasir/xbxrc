@@ -55,7 +55,7 @@ const { t } = useI18n()
   background: transparent;
 
 }
-.setting-sidebar__header { display: var(--ui-settings-sidebar-header-display); padding: var(--ui-space-md) var(--ui-settings-focus-safe); }
+.setting-sidebar__header { display: var(--ui-settings-sidebar-header-display); padding: var(--ui-space-sm) var(--ui-settings-focus-safe); }
 .setting-sidebar__title { margin: 0; font-size: var(--ui-text-title-md); font-weight: 500; color: var(--color-text-primary); }
 .setting-sidebar__nav {
   min-width: 0;
@@ -72,7 +72,7 @@ const { t } = useI18n()
   flex: 0 0 auto;
   min-height: var(--ui-settings-row-min-height);
   width: var(--ui-settings-sidebar-tab-width);
-  padding: var(--ui-space-md) var(--ui-space-lg);
+  padding: var(--ui-settings-row-padding);
   border: 1px solid transparent;
   border-radius: var(--ui-radius-md);
   background: transparent;
@@ -84,9 +84,23 @@ const { t } = useI18n()
 }
 .setting-sidebar__tab:hover { background: var(--ui-material-hover); }
 .setting-sidebar__tab--active { background: var(--ui-choice-selected-bg); color: var(--color-text-primary); }
-.setting-sidebar__tab--active::after { content: ''; position: absolute; left: 0; top: 25%; bottom: 25%; width: 3px; border-radius: 2px; background: var(--ui-status-positive); }
+.setting-sidebar__tab--active::after { content: ''; position: absolute; left: 0; top: 25%; bottom: 25%; width: 3px; border-radius: var(--ui-radius-sm); background: var(--ui-status-positive); }
 .setting-sidebar__tab[data-focused='true'] { border-color: transparent; color: var(--ui-focus-text); box-shadow: var(--shadow-xbox-focus); z-index: 10; }
 .setting-sidebar__tab--active:hover { background: var(--ui-choice-selected-bg); }
 .setting-sidebar__tab-label { font-size: var(--ui-settings-row-label-size); line-height: var(--ui-line-height-default); font-weight: 400; }
 .setting-sidebar__tab[data-focused='true'] .setting-sidebar__tab-label { color: var(--ui-focus-text); }
+@media(max-width:600px) {
+  .setting-sidebar__nav {
+    padding-bottom: var(--ui-settings-focus-safe);
+    scroll-padding-bottom: var(--ui-settings-focus-safe);
+  }
+  .setting-sidebar__tab--active::after {
+    left: var(--ui-space-lg);
+    right: var(--ui-space-lg);
+    top: auto;
+    bottom: 0;
+    width: auto;
+    height: 3px;
+  }
+}
 </style>

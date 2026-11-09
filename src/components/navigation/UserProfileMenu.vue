@@ -91,7 +91,7 @@ function emitLogout(): void {
                 type="button"
                 class="user-menu__close"
                 :on-back="emitClose"
-                :disabled="props.loggingOut"
+                :busy="props.loggingOut"
                 :aria-label="t('userMenu.close')"
                 @click="emitClose"
               >
@@ -148,7 +148,7 @@ function emitLogout(): void {
               <div class="user-menu__divider" aria-hidden="true" />
 
               <div class="user-menu__actions">
-                <Focusable :id="SPATIAL_NAV_NODE_IDS.userMenu.my" as="button" type="button" class="user-menu__logout" :disabled="props.loggingOut" :on-back="emitClose" @click="emit('my')">
+                <Focusable :id="SPATIAL_NAV_NODE_IDS.userMenu.my" as="button" type="button" class="user-menu__logout" :busy="props.loggingOut" :on-back="emitClose" @click="emit('my')">
                   {{ t('shell.enterMy') }}
                 </Focusable>
                 <Focusable
@@ -156,7 +156,7 @@ function emitLogout(): void {
                   as="button"
                   type="button"
                   class="user-menu__logout"
-                  :disabled="props.loggingOut"
+                  :busy="props.loggingOut"
                   :on-back="emitClose"
                   @click="logoutConfirm = true"
                 >
@@ -178,7 +178,7 @@ function emitLogout(): void {
 .user-menu-layer { position: fixed; inset: 0; z-index: var(--z-overlay); }
 .user-menu-layer__backdrop { position: absolute; inset: 0; border: 0; background: color-mix(in srgb, var(--ui-page-bg) 30%, transparent); cursor: default; }
 .user-menu-anchor { position: absolute; top: calc(var(--ui-shell-header-height) + 8px); right: var(--ui-shell-edge-inset); pointer-events: none; }
-.user-menu__panel { width: min(calc(100vw - 32px), 320px); max-height: calc(100dvh - var(--ui-shell-header-height) - var(--ui-shell-hint-area) - 24px); overflow: auto; padding: var(--space-24); position: relative; pointer-events: auto; border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); background: var(--ui-material-overlay); backdrop-filter: blur(24px) saturate(125%); box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-material); color: var(--ui-page-text); }
+.user-menu__panel { width: min(calc(100vw - 32px), 320px); max-height: calc(100dvh - var(--ui-shell-header-height) - var(--ui-shell-hint-area) - 24px); overflow: auto; padding: var(--space-16); position: relative; pointer-events: auto; border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); background: var(--ui-material-overlay); backdrop-filter: blur(24px) saturate(125%); box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-material); color: var(--ui-page-text); }
 .user-menu__close { position: absolute; top: var(--space-12); right: var(--space-12); width: 32px; height: 32px; border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
 .user-menu__close-line { position: absolute; width: 14px; height: 1px; background: currentColor; }
 .user-menu__close-line--first { transform: rotate(45deg); }

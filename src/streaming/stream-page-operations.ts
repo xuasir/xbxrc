@@ -24,7 +24,7 @@ export function useStreamPageOperations(t: (key: string) => string) {
   async function run(operation: StreamPageOperation, perform: (isCurrent: () => boolean) => Promise<unknown>, onSuccess?: () => void): Promise<boolean> {
     const recordResult = inputUiTrace.beginOperation(operation)
     if (pending[operation]) {
-      recordResult('blocked', 'disabled')
+      recordResult('blocked', 'busy')
       return false
     }
     const token = Symbol(operation)

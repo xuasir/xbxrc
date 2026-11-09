@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-09",
+  "scope": "方案与独立示意",
+  "source": "/Users/guo.xu/.codex/visualizations/2026/11/09/01a1bf8e-6ca7-7920-bc74-82b2817ee6ee/xbx-motion-vitality.html",
+  "bytes": 33613,
+  "sha256": "2ffb973110e6a7022ada0c7e635d22d6ab1fa30b0d56b9300bbf91c97ac9b4cd",
+  "browser": {
+    "total": 21,
+    "passed": 21,
+    "errors": 0
+  },
+  "staticChecks": {
+    "javascriptSyntax": "passed",
+    "staticDomDereferences": "passed",
+    "literalImports": "passed"
+  },
+  "cleanup": {
+    "browserTab": "closed",
+    "viewportOverride": "reset",
+    "port8949": "closed"
+  },
+  "implementationValidationPending": [
+    "Vue routing / KeepAlive / FocusScope",
+    "实体手柄与窗口生命周期",
+    "WebView 合成与媒体供帧成本"
+  ]
+}

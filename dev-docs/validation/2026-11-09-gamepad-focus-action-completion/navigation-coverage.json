@@ -1,0 +1,1329 @@
+{
+  "vueFiles": 62,
+  "interactiveSites": 173,
+  "focusableSites": 108,
+  "supportedSites": 173,
+  "violations": [],
+  "sites": [
+    {
+      "file": "src/components/common/ConsoleStatusCard.vue",
+      "line": 47,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/common/GameCard.vue",
+      "line": 44,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/common/HorizontalListRail.vue",
+      "line": 96,
+      "tag": "Focusable",
+      "id": "`${railId}.previous`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/common/HorizontalListRail.vue",
+      "line": 99,
+      "tag": "Focusable",
+      "id": "`${railId}.next`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/common/PageUnavailable.vue",
+      "line": 22,
+      "tag": "Focusable",
+      "id": "id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/layout/AppShellLayout.vue",
+      "line": 313,
+      "tag": "TopNavBar",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/layout/AppShellLayout.vue",
+      "line": 323,
+      "tag": "main",
+      "navigation": "LB/RB 切页与顶栏入口"
+    },
+    {
+      "file": "src/components/navigation/ControllerDeviceList.vue",
+      "line": 13,
+      "tag": "Focusable",
+      "id": "`${props.navNodeBaseId}.device.${device.id}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/navigation/SpatialNavIconButton.vue",
+      "line": 24,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/navigation/SpatialNavTabs.vue",
+      "line": 52,
+      "tag": "Focusable",
+      "id": "tab.nodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/navigation/TopNavBar.vue",
+      "line": 25,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.topNav.brand",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/navigation/TopNavBar.vue",
+      "line": 29,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.topNav.profile",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/navigation/TopNavBar.vue",
+      "line": 36,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.topNav[page.key]",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/navigation/TopNavBar.vue",
+      "line": 41,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.topNav.my",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/navigation/TopNavBar.vue",
+      "line": 44,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.topNav.controller",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/navigation/TopNavBar.vue",
+      "line": 47,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.topNav.setting",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 70,
+      "tag": "button",
+      "navigation": "B 返回与显式关闭入口",
+      "targets": [
+        "user-menu.close",
+        "SPATIAL_NAV_NODE_IDS.userMenu.my",
+        "SPATIAL_NAV_NODE_IDS.userMenu.logout"
+      ]
+    },
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 88,
+      "tag": "Focusable",
+      "id": "user-menu.close",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 151,
+      "tag": "Focusable",
+      "id": "SPATIAL_NAV_NODE_IDS.userMenu.my",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 154,
+      "tag": "Focusable",
+      "id": "SPATIAL_NAV_NODE_IDS.userMenu.logout",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingConfirmSheet.vue",
+      "line": 18,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.cancel`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingConfirmSheet.vue",
+      "line": 21,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.confirm`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 147,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.sharpening.${choice}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 167,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.video`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 185,
+      "tag": "Focusable",
+      "id": "createPresetNodeId(presetKey)",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 208,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.restore`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 227,
+      "tag": "Focusable",
+      "id": "cancelNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 240,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.save-default`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingDisplayOptionsSheet.vue",
+      "line": 253,
+      "tag": "Focusable",
+      "id": "submitNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingInlineSingleSelect.vue",
+      "line": 41,
+      "tag": "Focusable",
+      "id": "optionNodeId(index)",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingInputControl.vue",
+      "line": 70,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "input",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingInputControl.vue",
+      "line": 72,
+      "tag": "SettingKeyboardSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 50,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.key.${rowIndex}.${keyIndex}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 57,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.shift`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 60,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.symbols`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 63,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.space`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 67,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.backspace`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 70,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.visibility`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 77,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.cancel`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 80,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.clear`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingKeyboardSheet.vue",
+      "line": 83,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.done`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingModalShell.vue",
+      "line": 67,
+      "tag": "div",
+      "navigation": "B 返回与显式关闭入口",
+      "targets": [
+        "closeNodeId"
+      ]
+    },
+    {
+      "file": "src/components/settings/SettingModalShell.vue",
+      "line": 104,
+      "tag": "Focusable",
+      "id": "closeNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingRow.vue",
+      "line": 20,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingSingleSelectPopupSheet.vue",
+      "line": 59,
+      "tag": "Focusable",
+      "id": "optionNodeId(index)",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingTextField.vue",
+      "line": 18,
+      "tag": "Focusable",
+      "id": "`${props.id}.visibility`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingToggleRow.vue",
+      "line": 37,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingValueSheet.vue",
+      "line": 53,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.decrease`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingValueSheet.vue",
+      "line": 56,
+      "tag": "SettingInputControl",
+      "id": "fieldId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingValueSheet.vue",
+      "line": 57,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.increase`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingValueSheet.vue",
+      "line": 73,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.cancel`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/settings/SettingValueSheet.vue",
+      "line": 76,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.submit`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamActionSheet.vue",
+      "line": 77,
+      "tag": "div",
+      "navigation": "B 返回与显式关闭入口",
+      "targets": [
+        "item.id"
+      ]
+    },
+    {
+      "file": "src/components/stream/StreamActionSheet.vue",
+      "line": 101,
+      "tag": "Focusable",
+      "id": "item.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamAlertSheet.vue",
+      "line": 94,
+      "tag": "div",
+      "navigation": "B 返回与显式关闭入口",
+      "targets": [
+        "action.id",
+        "detailsId",
+        "`${scopeId}.copy`"
+      ]
+    },
+    {
+      "file": "src/components/stream/StreamAlertSheet.vue",
+      "line": 112,
+      "tag": "Focusable",
+      "id": "action.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamAlertSheet.vue",
+      "line": 120,
+      "tag": "Focusable",
+      "id": "detailsId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamAlertSheet.vue",
+      "line": 130,
+      "tag": "Focusable",
+      "id": "`${scopeId}.copy`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 68,
+      "tag": "div",
+      "navigation": "B 返回与显式关闭入口",
+      "targets": [
+        "decreaseNodeId",
+        "increaseNodeId",
+        "closeNodeId"
+      ]
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 89,
+      "tag": "Focusable",
+      "id": "decreaseNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 120,
+      "tag": "Focusable",
+      "id": "increaseNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 133,
+      "tag": "Focusable",
+      "id": "closeNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamBrowserDiagnosticsPanel.vue",
+      "line": 85,
+      "tag": "Focusable",
+      "id": "`${scopeId}.close`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamBrowserDiagnosticsPanel.vue",
+      "line": 90,
+      "tag": "Focusable",
+      "id": "`${scopeId}.${tab}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamBrowserDiagnosticsPanel.vue",
+      "line": 107,
+      "tag": "Focusable",
+      "id": "`${scopeId}.row.${row.key}`",
+      "as": "div",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamBrowserDiagnosticsPanel.vue",
+      "line": 124,
+      "tag": "Focusable",
+      "id": "`${scopeId}.copy`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamStatusNotice.vue",
+      "line": 11,
+      "tag": "Focusable",
+      "id": "stream.warning.inspect",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 75,
+      "tag": "div",
+      "navigation": "B 返回与显式关闭入口",
+      "targets": [
+        "cancelNodeId",
+        "submitNodeId"
+      ]
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 98,
+      "tag": "SettingInputControl",
+      "id": "fieldNodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 117,
+      "tag": "Focusable",
+      "id": "cancelNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 128,
+      "tag": "Focusable",
+      "id": "submitNodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/navigation/core/vue/Focusable.vue",
+      "line": 71,
+      "tag": "component",
+      "id": "props.id",
+      "navigation": "共享导航节点"
+    },
+    {
+      "file": "src/pages/ConsoleLibrary.vue",
+      "line": 60,
+      "tag": "LibraryBack",
+      "id": "console.games.back",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/ConsoleLibrary.vue",
+      "line": 68,
+      "tag": "Focusable",
+      "id": "console.games.stream",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/ConsoleLibrary.vue",
+      "line": 70,
+      "tag": "LibraryRefresh",
+      "id": "console.games.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/ConsoleLibrary.vue",
+      "line": 101,
+      "tag": "GameCard",
+      "id": "`console.game.${game.id}`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/FriendDetail.vue",
+      "line": 41,
+      "tag": "LibraryBack",
+      "id": "friend.back",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/FriendDetail.vue",
+      "line": 41,
+      "tag": "LibraryRefresh",
+      "id": "friend.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/FriendDetail.vue",
+      "line": 53,
+      "tag": "Focusable",
+      "id": "friend.current-game",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/GameDetail.vue",
+      "line": 52,
+      "tag": "LibraryBack",
+      "id": "game.back",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/GameDetail.vue",
+      "line": 55,
+      "tag": "LibraryRefresh",
+      "id": "game.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/GameDetail.vue",
+      "line": 76,
+      "tag": "Focusable",
+      "id": "game.stream",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/GameDetail.vue",
+      "line": 100,
+      "tag": "Focusable",
+      "id": "game.open-achievements",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/GameDetail.vue",
+      "line": 102,
+      "tag": "Focusable",
+      "id": "game.open-album",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Home.vue",
+      "line": 249,
+      "tag": "Focusable",
+      "id": "xhome.refresh",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Home.vue",
+      "line": 275,
+      "tag": "Focusable",
+      "id": "SPATIAL_NAV_NODE_IDS.pagePrimary.xhome",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Home.vue",
+      "line": 278,
+      "tag": "Focusable",
+      "id": "xhome.installed-games",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Home.vue",
+      "line": 292,
+      "tag": "ConsoleStatusCard",
+      "id": "card.nodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Login.vue",
+      "line": 257,
+      "tag": "Focusable",
+      "id": "SPATIAL_NAV_NODE_IDS.login.signIn",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Setting.vue",
+      "line": 374,
+      "tag": "Focusable",
+      "id": "setting.retry",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Setting.vue",
+      "line": 380,
+      "tag": "Focusable",
+      "id": "setting.restart",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/Setting.vue",
+      "line": 393,
+      "tag": "SettingValueSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Setting.vue",
+      "line": 394,
+      "tag": "SettingDisplayOptionsSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Setting.vue",
+      "line": 395,
+      "tag": "SettingSingleSelectPopupSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 950,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.streamPage.menu",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 966,
+      "tag": "SpatialNavIconButton",
+      "id": "SPATIAL_NAV_NODE_IDS.streamPage.diagnostics",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 999,
+      "tag": "StreamActionSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1010,
+      "tag": "StreamActionSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1021,
+      "tag": "SettingDisplayOptionsSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1036,
+      "tag": "StreamTextSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1037,
+      "tag": "StreamAudioSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1044,
+      "tag": "StreamAlertSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1061,
+      "tag": "StreamAlertSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/Stream.vue",
+      "line": 1074,
+      "tag": "StreamAlertSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 490,
+      "tag": "Focusable",
+      "id": "xcloud.refresh",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 496,
+      "tag": "Focusable",
+      "id": "xcloud.jump.recent",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 499,
+      "tag": "Focusable",
+      "id": "xcloud.jump.new",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 502,
+      "tag": "Focusable",
+      "id": "xcloud.jump.all",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 527,
+      "tag": "Focusable",
+      "id": "SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 559,
+      "tag": "GameCard",
+      "id": "card.nodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 580,
+      "tag": "GameCard",
+      "id": "card.nodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 609,
+      "tag": "GameCard",
+      "id": "card.nodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/AccountPanel.vue",
+      "line": 30,
+      "tag": "LibraryRefresh",
+      "id": "my.account.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/AccountPanel.vue",
+      "line": 54,
+      "tag": "Focusable",
+      "id": "`my.friend.${person.xuid}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AchievementsPanel.vue",
+      "line": 57,
+      "tag": "LibraryRefresh",
+      "id": "game.achievements.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/AchievementsPanel.vue",
+      "line": 71,
+      "tag": "Focusable",
+      "id": "`achievement.${achievementKey(item)}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AchievementsPanel.vue",
+      "line": 80,
+      "tag": "Focusable",
+      "id": "game.achievements.more",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AchievementsPanel.vue",
+      "line": 87,
+      "tag": "Focusable",
+      "id": "achievement.reveal",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 143,
+      "tag": "LibraryRefresh",
+      "id": "album.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 147,
+      "tag": "LibraryRefresh",
+      "id": "`album.retry.${index}`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 154,
+      "tag": "Focusable",
+      "id": "`album.${item.kind}.${item.id}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 163,
+      "tag": "Focusable",
+      "id": "album.more",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 178,
+      "tag": "LibraryRefresh",
+      "id": "album.preview.refresh",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 178,
+      "tag": "Focusable",
+      "id": "album.preview.save",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 180,
+      "tag": "Focusable",
+      "id": "album.preview.game",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 242,
+      "tag": "Focusable",
+      "id": "album.preview.play",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 245,
+      "tag": "Focusable",
+      "id": "album.preview.rewind",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 248,
+      "tag": "Focusable",
+      "id": "album.preview.forward",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 251,
+      "tag": "Focusable",
+      "id": "album.preview.volume-down",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 254,
+      "tag": "Focusable",
+      "id": "album.preview.volume-up",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 257,
+      "tag": "Focusable",
+      "id": "album.preview.mute",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/AlbumVideoPlayer.vue",
+      "line": 260,
+      "tag": "Focusable",
+      "id": "album.preview.fullscreen",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/GameHistoryPanel.vue",
+      "line": 55,
+      "tag": "LibraryRefresh",
+      "id": "`my.${mode}.refresh`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/GameHistoryPanel.vue",
+      "line": 79,
+      "tag": "Focusable",
+      "id": "`my.statistics.game.${game.xboxTitleId}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/GameHistoryPanel.vue",
+      "line": 85,
+      "tag": "GameCard",
+      "id": "`my.${mode}.game.${game.xboxTitleId}`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/library/GameHistoryPanel.vue",
+      "line": 95,
+      "tag": "Focusable",
+      "id": "`statistics.completed.${game.xboxTitleId}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/GameHistoryPanel.vue",
+      "line": 106,
+      "tag": "Focusable",
+      "id": "`my.${mode}.more`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/LibraryBack.vue",
+      "line": 9,
+      "tag": "Focusable",
+      "id": "id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/LibraryRefresh.vue",
+      "line": 9,
+      "tag": "Focusable",
+      "id": "id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/LibrarySelectControl.vue",
+      "line": 32,
+      "tag": "Focusable",
+      "id": "props.id",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/library/LibrarySelectControl.vue",
+      "line": 35,
+      "tag": "SettingSingleSelectPopupSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingAppUpdateSection.vue",
+      "line": 105,
+      "tag": "SettingInlineSingleSelect",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingAppUpdateSection.vue",
+      "line": 109,
+      "tag": "Focusable",
+      "id": "`${props.navNodeBaseId}.retryChannel`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingAppUpdateSection.vue",
+      "line": 147,
+      "tag": "Focusable",
+      "id": "`${props.navNodeBaseId}.primary`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingCustomTurnSheet.vue",
+      "line": 94,
+      "tag": "Focusable",
+      "id": "`${scope}.reset`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingCustomTurnSheet.vue",
+      "line": 100,
+      "tag": "Focusable",
+      "id": "`${scope}.cancel`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingCustomTurnSheet.vue",
+      "line": 103,
+      "tag": "Focusable",
+      "id": "`${scope}.apply`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 324,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.background`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 336,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.layout`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 339,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.sticks`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 342,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.keyboard`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 358,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.strength`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 371,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.test`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 372,
+      "tag": "SettingRow",
+      "id": "`${props.navNodeBaseId}.advanced`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 385,
+      "tag": "Focusable",
+      "id": "`${paneScope}.cancelCapture`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 390,
+      "tag": "SettingRow",
+      "id": "`${paneScope}.${key}`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 395,
+      "tag": "SettingRow",
+      "id": "`${paneScope}.${key}`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 410,
+      "tag": "SettingRow",
+      "id": "`${paneScope}.${key}`",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 417,
+      "tag": "Focusable",
+      "id": "`${paneScope}.resumeTest`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 436,
+      "tag": "Focusable",
+      "id": "`${paneScope}.rumbleTest`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 439,
+      "tag": "Focusable",
+      "id": "`${paneScope}.finishTest`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 446,
+      "tag": "Focusable",
+      "id": "`${paneScope}.export`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 449,
+      "tag": "Focusable",
+      "id": "`${paneScope}.reset`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 455,
+      "tag": "Focusable",
+      "id": "`${paneScope}.confirmReset`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 462,
+      "tag": "Focusable",
+      "id": "`${paneScope}.cancel`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 465,
+      "tag": "Focusable",
+      "id": "`${paneScope}.defaults`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 468,
+      "tag": "Focusable",
+      "id": "`${paneScope}.apply`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingInputToolsSection.vue",
+      "line": 474,
+      "tag": "SettingSingleSelectPopupSheet",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingSectionList.vue",
+      "line": 27,
+      "tag": "Focusable",
+      "id": "`${props.scopeId}.section.${section.key}`",
+      "as": "button",
+      "navigation": "Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingSectionList.vue",
+      "line": 49,
+      "tag": "SettingInlineSingleSelect",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingSectionList.vue",
+      "line": 51,
+      "tag": "SettingRow",
+      "id": "entry.row.nodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingSectionList.vue",
+      "line": 53,
+      "tag": "SettingRow",
+      "id": "entry.nodeId",
+      "navigation": "组件内 Focusable"
+    },
+    {
+      "file": "src/pages/settings/SettingSidebar.vue",
+      "line": 28,
+      "tag": "Focusable",
+      "id": "tab.nodeId",
+      "as": "button",
+      "navigation": "Focusable"
+    }
+  ]
+}

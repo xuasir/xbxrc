@@ -12,6 +12,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test:lifecycle": "python3 -B tests/runtime-trace/test_streaming_session_lifecycle_gate.py",
     "test:trace-production": "node scripts/validate-production-trace.mjs",
+    "test:navigation-coverage": "node scripts/validate-navigation-coverage.mjs",
     "test:tools": "node --test tests/tools/official-xbox-capture.test.mjs",
     "lint:fix": "eslint src --fix",
     "skills:verify": "node scripts/sync-skills.mjs verify",

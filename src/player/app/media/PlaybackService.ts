@@ -1,5 +1,5 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { PresentedVideoFrameMetadata, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
+import type { MediaDiagnosticsOptions, PresentedVideoFrameMetadata, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
 import type { RendererLifecycleObservation, RendererObservationSnapshot } from '../../infra/render/render-observation'
 import type { VideoRenderer } from '../../infra/render/Renderers'
 import type { ObservedVideoFrameMetadata } from '../../infra/render/video-frame-source'
@@ -17,6 +17,7 @@ interface RendererResource {
   ready: boolean
   lifecycle: RendererLifecycleObservation
   fallbackReason?: string
+  fallbackFrom?: RendererAttachSpec['kind']
   readyTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -61,11 +62,17 @@ export class PlaybackService {
     const target = this.pending ?? this.current
     const nextConfig = mergeRendererConfigWithAttachSpec(this.rendererConfig, effective)
     if (target?.renderer.kind === effective.kind) {
-      if (Object.keys(nextConfig).some(key => nextConfig[key as keyof RendererRuntimeConfig] !== target.config[key as keyof RendererRuntimeConfig])) {
+      const fallbackCleared = target.fallbackReason !== undefined && !this.fallbackKind && nextConfig.renderFallbackReason === undefined
+      if (fallbackCleared) {
+        target.fallbackReason = undefined
+        target.fallbackFrom = undefined
+      }
+      if (fallbackCleared || Object.keys(nextConfig).some(key => nextConfig[key as keyof RendererRuntimeConfig] !== target.config[key as keyof RendererRuntimeConfig])) {
         target.config = nextConfig
         try {
           target.renderer.update(nextConfig)
           this.armReadyDeadline(target)
+          this.reportResources('rendererUpdated')
         }
         catch (error) {
           this.failRenderer(target, error instanceof Error ? error.message : 'rendererUpdateFailed')
@@ -153,6 +160,12 @@ export class PlaybackService {
       nativeFrameCallbacks: frameSource?.nativeFrameCallbacks ?? 0,
       animationCallbacks: frameSource?.animationCallbacks ?? 0,
       frameCounterSource: frameSource?.frameCounterSource,
+      renderFrameSource: frameSource?.renderFrameSource ?? 'presentation',
+      renderFrameFallbackReason: frameSource?.renderFrameFallbackReason,
+      decodedFramesReceived: frameSource?.decodedFramesReceived ?? 0,
+      decodedFrameReaders: frameSource?.decodedFrameReaders ?? 0,
+      retainedDecodedFrames: frameSource?.retainedDecodedFrames ?? 0,
+      renderFrameTimestampUs: frameSource?.renderFrameTimestampUs,
       nativeCallbackCount: frameSource?.nativeCallbackCount ?? 0,
       polledFrameCount: frameSource?.polledFrameCount ?? 0,
       uncountedNativeFrames: frameSource?.uncountedNativeFrames ?? 0,
@@ -171,6 +184,9 @@ export class PlaybackService {
       actualProcessing: this.current?.config.processing,
       actualProcessingMode: this.current?.config.processingMode,
       actualTargetFps: this.current?.config.targetFps,
+      actualSharpness: this.current?.config.sharpness,
+      actualFallbackReason: this.current?.config.renderFallbackReason ?? (this.current?.fallbackReason ? 'failed' : undefined),
+      rendererGeneration: this.current?.generation,
       rendererObservation: this.snapshotRendererObservation(),
       renderers: [this.current, this.pending].filter((r): r is RendererResource => r !== undefined).map(r => ({ generation: r.generation, kind: r.renderer.kind, ready: r.ready, lifecycle: { ...r.lifecycle }, ...r.renderer.snapshotResources() ?? { gpuObjects: 0, frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, domNodes: 0 } })),
     }
@@ -185,7 +201,7 @@ export class PlaybackService {
       generation: resource.generation,
       kind: resource.renderer.kind,
       targetFps: resource.config.targetFps,
-      latestVideoSequence: this.videoElement ? getVideoFrameSource(this.videoElement).lastFrame?.localSequence : undefined,
+      latestVideoSequence: this.videoElement ? getVideoFrameSource(this.videoElement).lastRenderFrame?.localSequence : undefined,
       sourceWidth: resource.video.videoWidth || undefined,
       sourceHeight: resource.video.videoHeight || undefined,
       lifecycle: { ...resource.lifecycle },
@@ -194,12 +210,12 @@ export class PlaybackService {
   }
 
   /** 由dev trace的惰性payload读取，250ms统计采集继续只读数值资源。 */
-  snapshotDiagnostics() {
+  snapshotDiagnostics(options?: MediaDiagnosticsOptions) {
     const current = this.current
     const pending = this.pending
     return {
       observedAtMs: performance.now(),
-      frameIdentity: this.videoElement ? getVideoFrameSource(this.videoElement).snapshotDiagnostics() : undefined,
+      frameIdentity: this.videoElement ? getVideoFrameSource(this.videoElement).snapshotDiagnostics(options) : undefined,
       rendererGeneration: current?.generation,
       rendererKind: current?.renderer.kind,
       submittedFramesTotal: current?.renderer.snapshotResources()?.realtimeDrawCount,
@@ -252,11 +268,11 @@ export class PlaybackService {
     const spec = this.rendererAttach
     if (!this.fallbackKind || spec.kind === 'video')
       return spec
-    return { ...spec, kind: this.fallbackKind, sr: undefined, processing: this.rendererConfig.superResolutionFallbackProcessing ?? 'cas' }
+    return { ...spec, kind: this.fallbackKind, sr: undefined, sharpenStrength: 0 }
   }
 
   /** 待提交资源归属具体 video/renderer；首帧交接后统一释放旧管线。 */
-  private beginRenderer(video: HTMLVideoElement, spec: RendererAttachSpec, fallbackReason?: string): void {
+  private beginRenderer(video: HTMLVideoElement, spec: RendererAttachSpec, fallbackReason?: string, fallbackFrom?: RendererAttachSpec['kind']): void {
     const requestedAtMs = performance.now()
     this.releaseRenderer(this.pending)
     this.pending = undefined
@@ -274,7 +290,7 @@ export class PlaybackService {
     const renderer = spec.kind === 'webgl2_sr'
       ? new SuperResolutionWebGL2Renderer(ownedConfig)
       : spec.kind === 'webgl2' ? new WebGL2VideoRenderer(ownedConfig) : new NativeVideoRenderer(ownedConfig)
-    resource = { generation: ++this.rendererGeneration, renderer, video, config, attached: false, ready: spec.kind === 'video', fallbackReason, lifecycle: { requestedAtMs, sourceWidth: video.videoWidth, sourceHeight: video.videoHeight, sourceSequenceAtRequest: getVideoFrameSource(video).lastFrame?.localSequence } }
+    resource = { generation: ++this.rendererGeneration, renderer, video, config, attached: false, ready: spec.kind === 'video', fallbackReason, fallbackFrom, lifecycle: { requestedAtMs, sourceWidth: video.videoWidth, sourceHeight: video.videoHeight, sourceSequenceAtRequest: getVideoFrameSource(video).lastFrame?.localSequence } }
     this.pending = resource
     this.armReadyDeadline(resource)
     this.reportResources('rendererPending')
@@ -309,7 +325,7 @@ export class PlaybackService {
     resource.lifecycle.previousReleasedAtMs = previous ? performance.now() : undefined
     resource.lifecycle.committedAtMs = performance.now()
     this.reportResources('rendererCommitted')
-    if (resource.fallbackReason)
+    if (resource.fallbackReason && resource.fallbackFrom === 'webgl2_sr')
       this.emitter.emit('media.superResolutionFallback', { reason: resource.fallbackReason })
   }
 
@@ -331,8 +347,8 @@ export class PlaybackService {
       this.emitter.emit('error', { error: new Error(reason) })
       return
     }
-    this.fallbackKind = resource.renderer.kind === 'webgl2_sr' && !reason.includes('GpuLimit') && !reason.includes('BackingBelow') ? 'webgl2' : 'video'
-    this.beginRenderer(resource.video, this.effectiveSpec(), resource.renderer.kind === 'webgl2_sr' ? reason : resource.fallbackReason)
+    this.fallbackKind = 'video'
+    this.beginRenderer(resource.video, this.effectiveSpec(), reason, resource.renderer.kind)
   }
 
   private clearReadyDeadline(resource: RendererResource): void {

@@ -24,6 +24,7 @@ const attrs = useAttrs()
 // 确保每个 Scope 都有一个唯一的 ID，如果未提供则随机生成或通过逻辑确定
 const effectiveId = props.id || `nav-scope-${Math.random().toString(36).slice(2, 9)}`
 const root = ref<HTMLElement | null>(null)
+const scopeReady = ref(false)
 const owner = Symbol(effectiveId)
 let mounted = false
 let pageActive = true
@@ -31,6 +32,7 @@ let generation = 0
 
 function release() {
   generation++
+  scopeReady.value = false
   root.value?.setAttribute('data-nav-zone-active', 'false')
   navigationEngine.updateActiveScope(effectiveId, false, { owner })
   inputUiTrace.scope(effectiveId, false, !mounted)
@@ -39,6 +41,8 @@ async function activate() {
   const request = ++generation
   await nextTick()
   if (request === generation && mounted && pageActive && props.active) {
+    // DOM 挂载与 Scope 注册一起开放，默认焦点由本次 Scope 决定。
+    scopeReady.value = true
     root.value?.setAttribute('data-nav-zone-active', 'true')
     navigationEngine.updateActiveScope(effectiveId, true, {
       owner,
@@ -75,7 +79,7 @@ onBeforeUnmount(() => {
     :id="effectiveId"
     ref="root"
     :data-nav-zone="effectiveId"
-    :data-nav-zone-active="props.active ? 'true' : 'false'"
+    :data-nav-zone-active="props.active && scopeReady ? 'true' : 'false'"
     :data-nav-default-focus="props.defaultFocusId"
     :style="!props.as ? { display: 'contents' } : undefined"
   >

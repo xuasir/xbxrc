@@ -29,8 +29,10 @@ import { rpc } from '../../services/rpc'
 import { devWarn } from '../../shared/dev-log'
 import TopNavBar from '../navigation/TopNavBar.vue'
 import UserProfileMenu from '../navigation/UserProfileMenu.vue'
+import SettingConfirmSheet from '../settings/SettingConfirmSheet.vue'
 import { createShellContext, shellContextKey } from './shell-context'
 import ShellActionHints from './ShellActionHints.vue'
+import { useAuthRecovery } from './use-auth-recovery'
 
 type AuthState = Awaited<ReturnType<typeof rpc.auth.getState>>
 type UserProfile = Awaited<ReturnType<typeof rpc.data.getUserProfile>>
@@ -38,6 +40,7 @@ type UserProfile = Awaited<ReturnType<typeof rpc.data.getUserProfile>>
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
+const authRecovery = useAuthRecovery({ route, router, t })
 const shell = createShellContext()
 provide(shellContextKey, shell)
 
@@ -121,7 +124,7 @@ function handleEscapeKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || event.defaultPrevented) {
     return
   }
-  if (isProfileMenuOpen.value) {
+  if (isProfileMenuOpen.value || authRecovery.open.value) {
     return // 账户弹窗的焦点与返回由弹窗自身处理。
   }
   if (!shell.overlay.value && canGoBack.value) {
@@ -243,6 +246,11 @@ watch(
   },
 )
 
+watch(authRecovery.open, (open) => {
+  if (open)
+    closeProfileMenu()
+})
+
 onMounted(() => {
   void loadShellUserState()
   disposeAuthSessionReady = events.on('auth.sessionReady', () => {
@@ -346,6 +354,16 @@ onUnmounted(() => {
       @logout="() => void handleLogout()"
       @my="handleTopNavSelect('my')"
     />
+    <SettingConfirmSheet
+      :open="authRecovery.open.value"
+      scope-id="auth.recovery"
+      :title="t('streamPage.failure.login')"
+      :message="authRecovery.message.value"
+      :confirm-label="t('streamPage.failure.login')"
+      :busy="authRecovery.busy.value"
+      @close="authRecovery.cancel"
+      @confirm="authRecovery.confirm"
+    />
   </section>
 </template>
 
@@ -361,7 +379,7 @@ onUnmounted(() => {
   height: 100dvh;
   color: var(--ui-page-text);
   font-family: var(--ui-font-family);
-  --ui-shell-content-top: 24px;
+  --ui-shell-content-top: 16px;
   background-color: var(--ui-page-bg);
   padding: 0 var(--ui-shell-edge-inset) 0 var(--space-12);
   overflow: hidden;
@@ -378,13 +396,13 @@ onUnmounted(() => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--ui-shell-content-top) var(--space-8) var(--space-16);
-  scroll-padding: var(--space-16) var(--space-8) var(--space-24);
+  padding: var(--ui-shell-content-top) var(--ui-focus-safe-inset) var(--space-8);
+  scroll-padding: var(--ui-focus-safe-inset) var(--ui-focus-safe-inset) var(--space-16);
   /* 横向游戏轨道与页面纵向滚动共用浏览器原生触摸滚动。 */
   touch-action: pan-x pan-y;
 }
 
-@media(max-width:1100px), (max-height:680px) { .app-shell { --ui-shell-content-top: 16px; --ui-shell-gap: 24px; --ui-shell-edge-inset: 24px; --ui-console-hero-height: 224px; --ui-console-hero-padding: 24px; --ui-console-hero-image-height: 176px; --ui-console-hero-title-size: 24px; } .app-shell__content { padding-top: var(--space-16); } }
+@media(max-width:1100px), (max-height:680px) { .app-shell { --ui-shell-content-top: 12px; --ui-shell-gap: 16px; --ui-shell-edge-inset: 16px; --ui-console-hero-height: 208px; --ui-console-hero-padding: 16px; --ui-console-hero-image-height: 160px; --ui-console-hero-title-size: 24px; } }
 @media(max-width:700px) {
   .app-shell {
     --ui-shell-bottom-nav-height: calc(70px + env(safe-area-inset-bottom, 0px));
@@ -396,8 +414,25 @@ onUnmounted(() => {
   .app-shell__content {
     grid-column: 1;
     grid-row: 2 / 4;
-    padding: var(--space-16) 20px calc(var(--ui-shell-bottom-nav-height) + var(--ui-shell-floating-hints-height) + var(--space-24));
-    scroll-padding-bottom: calc(var(--ui-shell-bottom-nav-height) + var(--ui-shell-floating-hints-height) + var(--space-24));
+    padding: var(--space-12) var(--space-12) calc(var(--ui-shell-bottom-nav-height) + var(--ui-shell-floating-hints-height) + var(--space-16));
+    scroll-padding-bottom: calc(var(--ui-shell-bottom-nav-height) + var(--ui-shell-floating-hints-height) + var(--space-16));
+  }
+}
+@media(max-width:600px) {
+  /* 二级菜单与内容上下分栏，共用这套骨架的设置、控制器和资料页一起适配。 */
+  .app-shell {
+    --ui-settings-layout-columns: minmax(0, 1fr);
+    --ui-settings-layout-rows: auto minmax(0, 1fr);
+    --ui-settings-sidebar-header-display: none;
+    --ui-settings-sidebar-nav-direction: row;
+    --ui-settings-sidebar-tab-width: auto;
+    --ui-settings-sidebar-gap: 0px;
+    --ui-settings-side-padding: var(--space-12);
+  }
+  .app-shell__content {
+    padding-inline: var(--space-12);
+    padding-bottom: calc(var(--ui-shell-bottom-nav-height) + var(--space-16));
+    scroll-padding-bottom: calc(var(--ui-shell-bottom-nav-height) + var(--space-16));
   }
 }
 </style>

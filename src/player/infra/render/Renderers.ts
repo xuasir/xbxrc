@@ -71,7 +71,7 @@ abstract class BaseCanvasVideoProcessor {
     this.canvas.style.height = '100%'
     this.canvas.style.pointerEvents = 'none'
     video.insertAdjacentElement('afterend', this.canvas)
-    this.frameCallback = callback => getVideoFrameSource(video).request(callback)
+    this.frameCallback = callback => getVideoFrameSource(video).requestRender(callback)
   }
 
   init(): Promise<void> {
@@ -87,7 +87,7 @@ abstract class BaseCanvasVideoProcessor {
     this.initialized = true
     this.drawObservation.endPreparation()
     this.scheduleFrameRequest()
-    const latest = getVideoFrameSource(this.video).lastFrame
+    const latest = getVideoFrameSource(this.video).lastRenderFrame
     if (latest && this.options.targetFps > 0)
       this.drawFrame(performance.now(), latest)
   }
@@ -307,7 +307,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private vertexBuffer: WebGLBuffer | null = null
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -685,16 +685,17 @@ void main() {
   protected renderFrame(capture = false): void {
     const startedAtMs = performance.now()
     this.drewToScreenThisFrame = false
-    if (this.video.videoWidth <= 0 || this.video.videoHeight <= 0)
+    const frameSource = getVideoFrameSource(this.video)
+    const { width: sourceWidth, height: sourceHeight } = frameSource.renderSize
+    if (sourceWidth <= 0 || sourceHeight <= 0)
       return
     const gl = this.gl
     if (gl === null || this.program === null) {
       return
     }
-    if (this.video.videoWidth > 0 && this.video.videoHeight > 0
-      && (this.video.videoWidth !== this.currentSourceWidth || this.video.videoHeight !== this.currentSourceHeight)) {
-      this.currentSourceWidth = this.video.videoWidth
-      this.currentSourceHeight = this.video.videoHeight
+    if (sourceWidth !== this.currentSourceWidth || sourceHeight !== this.currentSourceHeight) {
+      this.currentSourceWidth = sourceWidth
+      this.currentSourceHeight = sourceHeight
       this.guard!.assertSize(this.currentSourceWidth, this.currentSourceHeight, Math.max(this.currentOutputWidth, this.currentSourceWidth), Math.max(this.currentOutputHeight, this.currentSourceHeight))
       if (!this.explicitPresentTarget || this.currentOutputWidth < this.currentSourceWidth || this.currentOutputHeight < this.currentSourceHeight) {
         this.currentOutputWidth = Math.max(this.currentOutputWidth, this.currentSourceWidth)
@@ -713,8 +714,8 @@ void main() {
     try {
       if (this.videoTexture !== null)
         gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
-      // video重用同一纹理对象；TexImage2D让WebKit尝试GPU帧拷贝。
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.video)
+      // 解码供给上传对应VideoFrame，兼容入口使用video；两者复用同一纹理。
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameSource.renderSource)
       if (!this.textureAllocated) {
         this.guard?.check(performance.now(), true)
         this.textureAllocated = true
@@ -730,7 +731,7 @@ void main() {
     this.guard?.check(startedAtMs)
     this.drewToScreenThisFrame = true
     const submittedAtMs = performance.now()
-    this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs, startedAtMs)
+    this.drawObservation.record(getVideoFrameSource(this.video).lastRenderFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs, startedAtMs)
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true
       this.canvas.style.opacity = '1'
@@ -918,8 +919,6 @@ export class NativeVideoRenderer implements VideoRenderer {
   private readonly filterId = `xbx-filter-${++filterSequence}`
   private config: RendererRuntimeConfig
   private styleElement: HTMLStyleElement | null = null
-  private svgElement: SVGSVGElement | null = null
-  private matrixElement: SVGFEConvolveMatrixElement | null = null
   private videoElement: HTMLVideoElement | null = null
 
   constructor(config: RendererRuntimeConfig) {
@@ -927,7 +926,7 @@ export class NativeVideoRenderer implements VideoRenderer {
   }
 
   snapshotResources(): RendererResources {
-    return { outputWidth: this.videoElement?.videoWidth, outputHeight: this.videoElement?.videoHeight, gpuObjects: 0, frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, domNodes: Number(this.styleElement !== null) + Number(this.svgElement !== null) }
+    return { outputWidth: this.videoElement?.videoWidth, outputHeight: this.videoElement?.videoHeight, gpuObjects: 0, frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, domNodes: Number(this.styleElement !== null) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation | undefined {
@@ -961,9 +960,6 @@ export class NativeVideoRenderer implements VideoRenderer {
     this.videoElement = null
     this.styleElement?.remove()
     this.styleElement = null
-    this.svgElement?.remove()
-    this.svgElement = null
-    this.matrixElement = null
   }
 
   private ensureFilterNodes(): void {
@@ -972,21 +968,6 @@ export class NativeVideoRenderer implements VideoRenderer {
       this.styleElement.id = `${this.filterId}-css`
       document.documentElement.appendChild(this.styleElement)
     }
-    if (!this.matrixElement) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      this.svgElement = svg
-      svg.id = `${this.filterId}-svg`
-      svg.style.display = 'none'
-      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
-      const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter')
-      filter.setAttribute('id', this.filterId)
-      this.matrixElement = document.createElementNS('http://www.w3.org/2000/svg', 'feConvolveMatrix')
-      this.matrixElement.setAttribute('order', '3')
-      filter.appendChild(this.matrixElement)
-      defs.appendChild(filter)
-      svg.appendChild(defs)
-      document.documentElement.appendChild(svg)
-    }
   }
 
   private refreshVideoFilterStyle(): void {
@@ -994,11 +975,6 @@ export class NativeVideoRenderer implements VideoRenderer {
       return
     }
     const filters: string[] = []
-    if (this.config.processing === 'usm' && this.config.sharpness > 0) {
-      const level = (7 - (this.config.sharpness / 2 - 1) * 0.5).toFixed(1)
-      this.matrixElement?.setAttribute('kernelMatrix', `0 -1 0 -1 ${level} -1 0 -1 0`)
-      filters.push(`url(#${this.filterId})`)
-    }
     if (this.config.saturation !== 100) {
       filters.push(`saturate(${this.config.saturation}%)`)
     }
@@ -1008,7 +984,7 @@ export class NativeVideoRenderer implements VideoRenderer {
     if (this.config.brightness !== 100) {
       filters.push(`brightness(${this.config.brightness}%)`)
     }
-    this.styleElement.textContent = filters.length > 0 ? `#game-stream video[data-render-filter="${this.filterId}"] { filter: ${filters.join(' ')} !important; }` : ''
+    this.styleElement.textContent = filters.length > 0 ? `video[data-render-filter="${this.filterId}"] { filter: ${filters.join(' ')} !important; }` : ''
   }
 }
 

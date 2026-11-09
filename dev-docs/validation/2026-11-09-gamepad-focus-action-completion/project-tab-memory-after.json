@@ -1,0 +1,1137 @@
+{
+  "check": {
+    "name": "390×844 设置四分类连续两轮 A 往返保持已选菜单",
+    "passed": true,
+    "evidence": {
+      "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+      "steps": [
+        {
+          "cycle": 0,
+          "key": "streamingExperience",
+          "expected": "setting.tabs.streamingExperience",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.streamingExperience",
+            "marked": [
+              "setting.tabs.streamingExperience"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 0,
+          "key": "connectionHost",
+          "expected": "setting.tabs.connectionHost",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.connectionHost",
+            "marked": [
+              "setting.tabs.connectionHost"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 0,
+          "key": "advancedDiagnostics",
+          "expected": "setting.tabs.advancedDiagnostics",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.advancedDiagnostics",
+            "marked": [
+              "setting.tabs.advancedDiagnostics"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 0,
+          "key": "connectionHost",
+          "expected": "setting.tabs.connectionHost",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.connectionHost",
+            "marked": [
+              "setting.tabs.connectionHost"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 0,
+          "key": "streamingExperience",
+          "expected": "setting.tabs.streamingExperience",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.streamingExperience",
+            "marked": [
+              "setting.tabs.streamingExperience"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 0,
+          "key": "general",
+          "expected": "setting.tabs.general",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.general",
+            "marked": [
+              "setting.tabs.general"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 1,
+          "key": "streamingExperience",
+          "expected": "setting.tabs.streamingExperience",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.streamingExperience",
+            "marked": [
+              "setting.tabs.streamingExperience"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 1,
+          "key": "connectionHost",
+          "expected": "setting.tabs.connectionHost",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.connectionHost",
+            "marked": [
+              "setting.tabs.connectionHost"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 1,
+          "key": "advancedDiagnostics",
+          "expected": "setting.tabs.advancedDiagnostics",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.advancedDiagnostics",
+            "marked": [
+              "setting.tabs.advancedDiagnostics"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 1,
+          "key": "connectionHost",
+          "expected": "setting.tabs.connectionHost",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.connectionHost",
+            "marked": [
+              "setting.tabs.connectionHost"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 1,
+          "key": "streamingExperience",
+          "expected": "setting.tabs.streamingExperience",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.streamingExperience",
+            "marked": [
+              "setting.tabs.streamingExperience"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        },
+        {
+          "cycle": 1,
+          "key": "general",
+          "expected": "setting.tabs.general",
+          "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+          "current": {
+            "route": "#/setting",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "native": "setting.tabs.general",
+            "marked": [
+              "setting.tabs.general"
+            ],
+            "busy": [],
+            "pending": []
+          }
+        }
+      ],
+      "current": {
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    }
+  },
+  "state": {
+    "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 3,
+      "data.primeXcloudTitles": 1,
+      "config.getGroups": 1,
+      "data.getUserProfile": 1,
+      "app.getVersion": 1,
+      "updater.getChannel": 1
+    },
+    "keys": [
+      {
+        "key": "ArrowRight",
+        "atMs": 51606
+      },
+      {
+        "key": "j",
+        "atMs": 51639
+      },
+      {
+        "key": "ArrowRight",
+        "atMs": 51719
+      },
+      {
+        "key": "j",
+        "atMs": 51739
+      },
+      {
+        "key": "ArrowRight",
+        "atMs": 51799
+      },
+      {
+        "key": "j",
+        "atMs": 51814
+      },
+      {
+        "key": "ArrowLeft",
+        "atMs": 51854
+      },
+      {
+        "key": "j",
+        "atMs": 51868
+      },
+      {
+        "key": "ArrowLeft",
+        "atMs": 51909
+      },
+      {
+        "key": "j",
+        "atMs": 51925
+      },
+      {
+        "key": "ArrowLeft",
+        "atMs": 51987
+      },
+      {
+        "key": "j",
+        "atMs": 52004
+      },
+      {
+        "key": "ArrowRight",
+        "atMs": 52056
+      },
+      {
+        "key": "j",
+        "atMs": 52072
+      },
+      {
+        "key": "ArrowRight",
+        "atMs": 52134
+      },
+      {
+        "key": "j",
+        "atMs": 52148
+      },
+      {
+        "key": "ArrowRight",
+        "atMs": 52193
+      },
+      {
+        "key": "j",
+        "atMs": 52206
+      },
+      {
+        "key": "ArrowLeft",
+        "atMs": 52245
+      },
+      {
+        "key": "j",
+        "atMs": 52259
+      },
+      {
+        "key": "ArrowLeft",
+        "atMs": 52300
+      },
+      {
+        "key": "j",
+        "atMs": 52316
+      },
+      {
+        "key": "ArrowLeft",
+        "atMs": 52373
+      },
+      {
+        "key": "j",
+        "atMs": 52395
+      }
+    ],
+    "timeline": [
+      {
+        "atMs": 75,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 126,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "config.get"
+        ]
+      },
+      {
+        "atMs": 126,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "config.get",
+          "auth.getState"
+        ]
+      },
+      {
+        "atMs": 148,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "auth.getState"
+        ]
+      },
+      {
+        "atMs": 150,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 168,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles"
+        ]
+      },
+      {
+        "atMs": 189,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles",
+          "config.getGroups"
+        ]
+      },
+      {
+        "atMs": 191,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles",
+          "config.getGroups",
+          "auth.getState"
+        ]
+      },
+      {
+        "atMs": 191,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles",
+          "config.getGroups",
+          "auth.getState",
+          "data.getUserProfile"
+        ]
+      },
+      {
+        "atMs": 194,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "top-nav.brand"
+        ],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles",
+          "config.getGroups",
+          "auth.getState",
+          "data.getUserProfile"
+        ]
+      },
+      {
+        "atMs": 197,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles",
+          "config.getGroups",
+          "auth.getState",
+          "data.getUserProfile"
+        ]
+      },
+      {
+        "atMs": 198,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": [
+          "data.primeXcloudTitles",
+          "config.getGroups",
+          "auth.getState",
+          "data.getUserProfile"
+        ]
+      },
+      {
+        "atMs": 201,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": [
+          "config.getGroups",
+          "auth.getState",
+          "data.getUserProfile"
+        ]
+      },
+      {
+        "atMs": 210,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile"
+        ]
+      },
+      {
+        "atMs": 214,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "app.getVersion"
+        ]
+      },
+      {
+        "atMs": 215,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "app.getVersion",
+          "updater.getChannel"
+        ]
+      },
+      {
+        "atMs": 218,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "app.getVersion",
+          "updater.getChannel"
+        ]
+      },
+      {
+        "atMs": 221,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "pending": [
+          "data.getUserProfile",
+          "app.getVersion",
+          "updater.getChannel"
+        ]
+      },
+      {
+        "atMs": 222,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "pending": [
+          "app.getVersion",
+          "updater.getChannel"
+        ]
+      },
+      {
+        "atMs": 236,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "pending": [
+          "updater.getChannel"
+        ]
+      },
+      {
+        "atMs": 238,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "pending": []
+      },
+      {
+        "atMs": 239,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51605,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51607,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.streamingExperience",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51717,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51719,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.connectionHost",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51799,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.advancedDiagnostics"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51803,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.advancedDiagnostics",
+        "marked": [
+          "setting.tabs.advancedDiagnostics"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51854,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51855,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.connectionHost",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51909,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51912,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.streamingExperience",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51986,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 51987,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52055,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52060,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.streamingExperience",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52133,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52136,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.connectionHost",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52192,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.advancedDiagnostics"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52195,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.advancedDiagnostics",
+        "marked": [
+          "setting.tabs.advancedDiagnostics"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52244,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52245,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.connectionHost",
+        "marked": [
+          "setting.tabs.connectionHost"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52299,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52303,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.streamingExperience",
+        "marked": [
+          "setting.tabs.streamingExperience"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52372,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": []
+      },
+      {
+        "atMs": 52377,
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.tabs.general",
+        "marked": [
+          "setting.tabs.general"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    ],
+    "current": {
+      "route": "#/setting",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": []
+    },
+    "graph": {
+      "scope": "app.shell",
+      "nodes": [
+        "top-nav.brand",
+        "top-nav.profile",
+        "top-nav.xhome",
+        "top-nav.xcloud",
+        "top-nav.my",
+        "top-nav.controller",
+        "top-nav.setting",
+        "setting.tabs.general",
+        "setting.tabs.streamingExperience",
+        "setting.tabs.connectionHost",
+        "setting.tabs.advancedDiagnostics",
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "setting.items.general.fullscreen",
+        "setting.items.general.ui_audio",
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "reachable": [
+        "setting.tabs.general",
+        "setting.tabs.streamingExperience",
+        "setting.tabs.connectionHost",
+        "setting.tabs.advancedDiagnostics",
+        "top-nav.setting",
+        "top-nav.controller",
+        "top-nav.my",
+        "top-nav.xcloud",
+        "top-nav.xhome",
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary",
+        "setting.items.general.ui_audio",
+        "setting.items.general.fullscreen",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+        "top-nav.profile",
+        "top-nav.brand"
+      ],
+      "unreachable": []
+    }
+  }
+}

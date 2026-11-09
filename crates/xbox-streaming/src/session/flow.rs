@@ -251,6 +251,17 @@ pub trait SessionFlowProvider: Send + Sync + 'static {
     fn on_session_lifecycle_event(&self, _event: &str, _session_id: Option<&str>, _payload: Value) {
     }
     async fn get_streaming_token(&self, target_type: &str) -> Result<Value, SessionFlowError>;
+    async fn recover_streaming_token(
+        &self,
+        _target_type: &str,
+        _rejected_token: &str,
+        _credential_generation: Option<u64>,
+    ) -> Result<Value, xbox_webapi::WebApiError> {
+        Err(xbox_webapi::WebApiError::http(
+            401,
+            "streaming credentials require renewal",
+        ))
+    }
     async fn transfer_token(&self) -> Result<String, SessionFlowError>;
     async fn power_on_console(&self, _console_id: &str) -> Result<bool, SessionFlowError> {
         Ok(false)
@@ -356,7 +367,7 @@ where
     P: SessionFlowProvider,
 {
     pub(crate) transport: xbox_webapi::transport::HttpTransport,
-    pub(crate) provider: P,
+    pub(crate) provider: Arc<P>,
     pub(crate) sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
     pub(crate) signaling: tokio::sync::RwLock<HashMap<String, SessionSignalingState>>,
     pub(crate) mutations: tokio::sync::RwLock<HashMap<String, Arc<SessionMutationEntry>>>,
@@ -419,7 +430,7 @@ where
         Self {
             inner: Arc::new(SessionFlowServiceInner {
                 transport,
-                provider,
+                provider: Arc::new(provider),
                 sessions: tokio::sync::RwLock::new(SessionRuntimeStore::default()),
                 signaling: tokio::sync::RwLock::new(HashMap::new()),
                 mutations: tokio::sync::RwLock::new(HashMap::new()),
@@ -525,7 +536,12 @@ where
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
         Ok(WebApiSessionGateway::with_transport(
-            self.inner.transport.clone(),
+            crate::session::api::token_recovery::with_token_recovery(
+                self.inner.transport.clone(),
+                self.inner.provider.clone(),
+                target_type,
+                token_value.get("_authGeneration").and_then(Value::as_u64),
+            ),
             plan.clone(),
             token,
         ))
@@ -541,7 +557,12 @@ where
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
         Ok(WebApiSignalingGateway::with_transport(
-            self.inner.transport.clone(),
+            crate::session::api::token_recovery::with_token_recovery(
+                self.inner.transport.clone(),
+                self.inner.provider.clone(),
+                target_type,
+                token_value.get("_authGeneration").and_then(Value::as_u64),
+            ),
             plan.clone(),
             token,
         ))
@@ -580,12 +601,43 @@ pub(crate) fn missing_session_error(session_id: &str) -> SessionFlowError {
 }
 
 pub(crate) fn map_webapi_error(error: xbox_webapi::WebApiError) -> SessionFlowError {
-    use xbox_webapi::WebApiError;
-    match error {
-        WebApiError::Http {
-            status, message, ..
-        } => SessionFlowError::http(status, format!("HTTP {status}: {message}"), Some(message)),
-        other => SessionFlowError::message(other.to_string()),
+    error.into()
+}
+
+impl From<xbox_webapi::WebApiError> for SessionFlowError {
+    fn from(error: xbox_webapi::WebApiError) -> Self {
+        use xbox_webapi::WebApiError;
+        let kind = match &error {
+            WebApiError::Auth { .. } | WebApiError::Http { status: 401, .. } => {
+                Some(SessionFlowStartupErrorKind::Auth)
+            }
+            WebApiError::Http { status: 403, .. } => Some(SessionFlowStartupErrorKind::Target),
+            WebApiError::Network { .. } => Some(SessionFlowStartupErrorKind::Network),
+            WebApiError::Http { .. } if error.is_retriable() => {
+                Some(SessionFlowStartupErrorKind::Network)
+            }
+            WebApiError::Parse { .. } => Some(SessionFlowStartupErrorKind::Unknown),
+            _ => None,
+        };
+        let summary = error.safe_summary().to_string();
+        let mut flow_error = match error {
+            WebApiError::Http {
+                status, message, ..
+            } => Self::http(status, format!("HTTP {status}: {message}"), Some(message)),
+            other => Self::message(other.to_string()),
+        };
+        if let Some(kind) = kind {
+            let retryable = !matches!(
+                kind,
+                SessionFlowStartupErrorKind::Auth | SessionFlowStartupErrorKind::Target
+            );
+            flow_error = flow_error.with_startup_hint(SessionFlowStartupErrorHint {
+                kind,
+                retryable,
+                diagnostic_summary: summary,
+            });
+        }
+        flow_error
     }
 }
 
@@ -682,7 +734,7 @@ fn build_session_progress_error_hint(
     let primary_signal = error_message
         .filter(|value| !value.trim().is_empty())
         .or_else(|| error_code.filter(|value| !value.trim().is_empty()))?;
-    let kind = if error_code == Some("401") {
+    let kind = if matches!(error_code, Some("401" | "AuthRenewalRequired")) {
         SessionFlowStartupErrorKind::Auth
     } else {
         classify_session_progress_error_kind(phase, primary_signal)

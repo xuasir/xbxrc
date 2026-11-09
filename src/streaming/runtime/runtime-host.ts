@@ -1,6 +1,6 @@
 import type { StreamStats } from '../../player'
+import type { RenderControlsValue } from '../../shared/config/render-controls'
 import type {
-  DisplayOptionsValue,
   RuntimeLaunchSpec,
   StreamMicrophoneActivationSource,
   StreamMicrophoneSnapshot,
@@ -8,11 +8,12 @@ import type {
   StreamRenderProjection,
 } from '../types'
 import type { ConnectionRecoveryOperation } from './connection-recovery'
-import type { RuntimePort, StreamRuntimePhase } from './runtime-contract'
+import type { RuntimePort, StreamRenderState, StreamRuntimePhase } from './runtime-contract'
 import { computed, nextTick, ref, shallowRef } from 'vue'
 import { rpc } from '../../services/rpc'
+import { projectRenderControls } from '../../shared/config/render-controls'
 import { monotonicNowMs } from '../clock'
-import { DEFAULT_DISPLAY_OPTIONS, normalizeDisplayOptions, sleep } from '../utils'
+import { sleep } from '../utils'
 import { createBrowserRuntime } from './browser-runtime'
 import { createConnectionRecoveryCoordinator } from './connection-recovery'
 import {
@@ -32,8 +33,8 @@ function debugLog(..._args: Array<unknown>): void {}
 
 interface UseStreamRuntimeHostOptions {
   playerElementId: string
-  /** 从 streamConfig 读取实验性超分开关。 */
-  getSuperResolutionExperimental: () => boolean
+  /** 每次启动、重连与更新都读取当前会话的完整显示意图。 */
+  getRenderControls: () => RenderControlsValue
   onConnectionStateChange: (state: RTCPeerConnectionState) => void
   onPresentationMilestoneChange: (input: {
     milestone: StreamPresentationMilestone
@@ -62,7 +63,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const experienceMetricsEnabled = ref(false)
   const browserDiagnosticsEnabled = ref(false)
   const performanceSnapshot = ref<StreamStats | null>(null)
-  const displayOptions = ref<DisplayOptionsValue>({ ...DEFAULT_DISPLAY_OPTIONS })
+  const renderState = shallowRef<StreamRenderState>({ mode: null, pending: false })
   const renderProjection = shallowRef<StreamRenderProjection | null>(null)
   const lastFrameAt = ref<number | null>(null)
   let runtimeCleanup: (() => void) | null = null
@@ -196,6 +197,11 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         lastFrameAt.value = monotonicNowMs()
         connectionRecovery.observeFrame()
         options.onFrameReady()
+        return
+      }
+
+      if (event.type === 'renderStateChanged') {
+        renderState.value = event.state
         return
       }
 
@@ -376,6 +382,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     performanceSnapshot.value = null
     lastFrameAt.value = null
     renderProjection.value = null
+    renderState.value = { mode: null, pending: false }
     if (!input?.preserveLaunchContext) {
       activeSessionId = null
       activeMode = null
@@ -422,14 +429,14 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
     if (generation !== launchGeneration || (operation && !operation.isCurrent()))
       return false
-    const launchSpec = buildRuntimeAttemptSpec(input, attempt.useFallbackTurn)
+    const attemptSpec = buildRuntimeAttemptSpec(input, attempt.useFallbackTurn)
     debugLog(
-      `[streaming][runtime-host] launching runtime target=${input.targetType} mode=${input.runtime.mode} turn=${launchSpec.runtime.turnServer === null ? 'direct' : 'fallback'}`,
+      `[streaming][runtime-host] launching runtime target=${input.targetType} mode=${input.runtime.mode} turn=${attemptSpec.runtime.turnServer === null ? 'direct' : 'fallback'}`,
     )
     void recordRuntimeTraceEvent('launchRuntimeAttempt', {
       targetType: input.targetType,
       mode: input.runtime.mode,
-      turnMode: launchSpec.runtime.turnServer === null ? 'direct' : 'fallback',
+      turnMode: attemptSpec.runtime.turnServer === null ? 'direct' : 'fallback',
       directFirstEligible: shouldUseDirectFirstFallback(input),
       useFallbackTurn: attempt.useFallbackTurn,
     }, input.sessionId)
@@ -442,6 +449,13 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     await sleep(launchDelayMs)
     if (generation !== launchGeneration || (operation && !operation.isCurrent()))
       return false
+    // 启动等待期间的调整也进入首次装配，重连继续读取本次最新选择。
+    const controls = options.getRenderControls()
+    const launchSpec = {
+      ...attemptSpec,
+      render: projectRenderControls(attemptSpec.render, controls),
+      clientExperimentalSuperResolution: controls.mode === 'sr',
+    }
     void recordRuntimeTraceEvent('runtimeLaunchReadyToInvoke', {
       targetType: input.targetType,
       mode: input.runtime.mode,
@@ -455,7 +469,6 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     activeLaunchSpec = input
     activeSessionId = input.sessionId
     renderProjection.value = input.render
-    displayOptions.value = normalizeDisplayOptions(input.render.displayOptions)
     microphoneState.value = createIdleMicrophoneState(input.runtime.microphone)
     microphoneState.value.startWithSession = input.runtime.microphoneStartWithSession
     activeConnected = false
@@ -486,11 +499,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       return false
     }
     watchInitialConnection(token)
-    nextRuntime.applyDisplayState({
-      displayOptions: displayOptions.value,
-      render: input.render,
-      superResolutionExperimental: options.getSuperResolutionExperimental(),
-    })
+    syncRenderControls()
     nextRuntime.setAudioVolume(audioVolume.value)
     if (input.runtime.microphoneStartWithSession) {
       applyMicrophoneIntent(true, 'policy')
@@ -507,6 +516,18 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       })
     }
     return true
+  }
+
+  function syncRenderControls(): void {
+    if (runtime.value === null || renderProjection.value === null)
+      return
+    const controls = options.getRenderControls()
+    const render = projectRenderControls(renderProjection.value, controls)
+    runtime.value.applyDisplayState({
+      displayOptions: render.displayOptions,
+      render,
+      superResolutionExperimental: controls.mode === 'sr',
+    })
   }
 
   async function startRuntime(input: RuntimeLaunchSpec): Promise<void> {
@@ -573,6 +594,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     microphoneOpen: computed(() => microphoneState.value.open),
     microphoneState,
     performanceSnapshot,
+    renderState,
     lastFrameAt,
     closeRuntime,
     startRuntime,
@@ -584,27 +606,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       browserDiagnosticsEnabled.value = enabled
       refreshStatsPolling()
     },
-    applyDisplayOptions(nextValue: DisplayOptionsValue) {
-      if (renderProjection.value === null) {
-        return
-      }
-      displayOptions.value = normalizeDisplayOptions(nextValue)
-      runtime.value?.applyDisplayState({
-        displayOptions: displayOptions.value,
-        render: renderProjection.value,
-        superResolutionExperimental: options.getSuperResolutionExperimental(),
-      })
-    },
-    syncSuperResolutionFromStreamConfig() {
-      if (runtime.value === null || renderProjection.value === null) {
-        return
-      }
-      runtime.value.applyDisplayState({
-        displayOptions: displayOptions.value,
-        render: renderProjection.value,
-        superResolutionExperimental: options.getSuperResolutionExperimental(),
-      })
-    },
+    syncRenderControls,
     setAudioVolume(value: number) {
       audioVolume.value = value
       runtime.value?.setAudioVolume(value)

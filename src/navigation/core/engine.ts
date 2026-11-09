@@ -124,6 +124,11 @@ export class NavigationEngine {
       this.scrollToFocus(focus, true)
   }
 
+  /** 用户发起新操作后，以本次位置为准；原生 focus 同步保留恢复事务。 */
+  cancelPendingRecovery(): void {
+    this.pendingRecovery = null
+  }
+
   rememberFocus(key: string, element: HTMLElement): void {
     if (element.id)
       this.zoneMemory.set(key, { element, id: element.id })
@@ -228,7 +233,6 @@ export class NavigationEngine {
         this.currentFocus.focus({ preventScroll: true })
       return false
     }
-    this.pendingRecovery = null
     if (element === this.currentFocus) {
       this.scrollToFocus(element, isRapid)
       if (document.activeElement !== element)
@@ -379,6 +383,7 @@ export class NavigationEngine {
   private handleTab = (event: KeyboardEvent): void => {
     if (event.key !== 'Tab' || event.defaultPrevented)
       return
+    this.cancelPendingRecovery()
     this.pruneScopes()
     const scope = this.scopeStack.at(-1)
     if (!scope?.trap)
@@ -410,7 +415,7 @@ export class NavigationEngine {
 
   private handleIntent: IntentHandler = (intent, event) => {
     // 恢复期间收到用户输入，后续以用户选中的位置为准。
-    this.pendingRecovery = null
+    this.cancelPendingRecovery()
     const now = Date.now()
     const isRapid = now - this.lastMoveTime < 150
     this.lastMoveTime = now
@@ -462,11 +467,18 @@ export class NavigationEngine {
     const candidates = this.getFocusableElements(this.getTopmostActiveScope() ?? document)
       .filter(element => element === this.currentFocus || !element.contains(this.currentFocus))
     const currentZoneId = this.getZoneId(this.currentFocus)
-    const next = findNextFocusable(this.currentFocus, candidates, direction) as HTMLElement | null
+    const scrollContainer = direction === 'up' || direction === 'down'
+      ? this.currentFocus.closest<HTMLElement>('[data-nav-scroll-container]')
+      : null
+    // 纵向先完成滚动区内的几何移动，区内边界再交给标题与底部操作。
+    const next = (
+      scrollContainer && findNextFocusable(this.currentFocus, candidates.filter(element => scrollContainer.contains(element)), direction)
+    ) || findNextFocusable(this.currentFocus, candidates, direction)
     if (next) {
-      const nextZoneId = this.getZoneId(next)
+      const nextElement = next as HTMLElement
+      const nextZoneId = this.getZoneId(nextElement)
       const remembered = nextZoneId && nextZoneId !== currentZoneId ? this.resolveReference(this.zoneMemory.get(nextZoneId), this.getTopmostActiveScope()) : null
-      this.focusElement(remembered && candidates.includes(remembered) ? remembered : next, true, isRapid)
+      this.focusElement(remembered && candidates.includes(remembered) ? remembered : nextElement, true, isRapid)
       return true
     }
     playNavSound('boundary')
@@ -478,6 +490,10 @@ export class NavigationEngine {
     if (!this.isAvailable(this.currentFocus) || isFocusSink(this.currentFocus))
       return true
     const target = this.currentFocus
+    if (target.getAttribute('data-nav-busy') === 'true') {
+      inputUiTrace.activation(inputUiTrace.context()?.source ?? 'gamepad', target.id, 'busy', () => {})
+      return true
+    }
     playNavSound('action')
     triggerNavHaptic('action')
     if (!target.dispatchEvent(new Event('nav-action', { bubbles: true, cancelable: true })))

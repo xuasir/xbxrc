@@ -1,0 +1,5728 @@
+{
+  "source": "http://127.0.0.1:1420",
+  "entry": "project.html",
+  "narrowEntry": "project-narrow.html",
+  "input": "Production InputController with J=A, K=B, Arrow=Dpad, 1/2=LB/RB, 3/4=LT/RT",
+  "data": "Offline RPC fixture; production src/main.ts, App, router, BrowserGamepadBackend and geometric navigation",
+  "summary": {
+    "total": 114,
+    "passed": 114,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "name": "完整首页 A 刷新与重复确认",
+      "passed": true,
+      "evidence": {
+        "instanceId": "d10f5096-7141-482c-870d-8a5bd2b54896",
+        "during": {
+          "route": "#/xhome",
+          "native": "xhome.refresh",
+          "marked": [
+            "xhome.refresh"
+          ],
+          "busy": [
+            "xhome.refresh",
+            "xhome.primary"
+          ],
+          "pending": [
+            "config.getGroups",
+            "data.getHosts"
+          ]
+        },
+        "after": {
+          "route": "#/xhome",
+          "native": "xhome.refresh",
+          "marked": [
+            "xhome.refresh"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "requestDelta": 1
+      }
+    },
+    {
+      "name": "完整首页刷新期间方向移动",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/xhome",
+          "native": "xhome.host.fixture-console-s",
+          "marked": [
+            "xhome.host.fixture-console-s"
+          ],
+          "busy": [
+            "xhome.refresh",
+            "xhome.primary"
+          ],
+          "pending": [
+            "data.getHosts"
+          ]
+        },
+        "after": {
+          "route": "#/xhome",
+          "native": "xhome.host.fixture-console-s",
+          "marked": [
+            "xhome.host.fixture-console-s"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整首页 12 个导航目标几何可达",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "xhome.refresh",
+          "xhome.primary",
+          "xhome.installed-games",
+          "xhome.host.fixture-console",
+          "xhome.host.fixture-console-s"
+        ],
+        "reachable": [
+          "xhome.host.fixture-console-s",
+          "xhome.refresh",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.brand",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "xhome.primary",
+          "xhome.installed-games",
+          "xhome.host.fixture-console",
+          "top-nav.setting",
+          "top-nav.controller"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整设置页主题向下到达宽行开关",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "native": "setting.items.general.fullscreen",
+          "marked": [
+            "setting.items.general.fullscreen"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "reachable": [
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "setting.tabs.general",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.tabs.advancedDiagnostics",
+            "top-nav.setting",
+            "top-nav.controller",
+            "setting.tabs.connectionHost",
+            "setting.tabs.streamingExperience",
+            "top-nav.my",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整设置保存期间 A 去重与焦点保持",
+      "passed": true,
+      "evidence": {
+        "instanceId": "2577d3b1-0aea-4931-8172-e51586c4870d",
+        "during": {
+          "route": "#/setting",
+          "native": "setting.items.general.fullscreen",
+          "marked": [
+            "setting.items.general.fullscreen"
+          ],
+          "busy": [
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio"
+          ],
+          "pending": [
+            "config.set"
+          ]
+        },
+        "after": {
+          "route": "#/setting",
+          "native": "setting.items.general.fullscreen",
+          "marked": [
+            "setting.items.general.fullscreen"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "requests": 1
+      }
+    },
+    {
+      "name": "完整设置宽行开关双向导航",
+      "passed": true,
+      "evidence": {
+        "down": {
+          "route": "#/setting",
+          "native": "setting.items.general.ui_audio",
+          "marked": [
+            "setting.items.general.ui_audio"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "up": {
+          "route": "#/setting",
+          "native": "setting.items.general.fullscreen",
+          "marked": [
+            "setting.items.general.fullscreen"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "reachable": [
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary",
+            "top-nav.profile",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "setting.tabs.general",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.tabs.streamingExperience",
+            "top-nav.my",
+            "top-nav.controller",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "top-nav.setting",
+            "top-nav.brand",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整设置保存期间主动移动保持新位置",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/setting",
+          "native": "setting.items.general.ui_audio",
+          "marked": [
+            "setting.items.general.ui_audio"
+          ],
+          "busy": [
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio"
+          ],
+          "pending": [
+            "config.set"
+          ]
+        },
+        "after": {
+          "route": "#/setting",
+          "native": "setting.items.general.ui_audio",
+          "marked": [
+            "setting.items.general.ui_audio"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整设置检查更新期间焦点稳定与 A 去重",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/setting",
+          "native": "setting.update.primary",
+          "marked": [
+            "setting.update.primary"
+          ],
+          "busy": [
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "pending": [
+            "updater.check"
+          ]
+        },
+        "after": {
+          "route": "#/setting",
+          "native": "setting.update.primary",
+          "marked": [
+            "setting.update.primary"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整串流体验设置的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "setting.tabs.general",
+          "setting.tabs.streamingExperience",
+          "setting.tabs.connectionHost",
+          "setting.tabs.advancedDiagnostics",
+          "setting.restart",
+          "setting.items.streamingExperience.xhome_resolution",
+          "setting.items.streamingExperience.resolution",
+          "setting.items.streamingExperience.video_format",
+          "setting.items.streamingExperience.display_options",
+          "setting.items.streamingExperience.enable_audio_control",
+          "setting.items.streamingExperience.codec",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1"
+        ],
+        "reachable": [
+          "setting.tabs.streamingExperience",
+          "setting.restart",
+          "setting.items.streamingExperience.xhome_resolution",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "setting.tabs.general",
+          "top-nav.my",
+          "top-nav.controller",
+          "setting.tabs.connectionHost",
+          "setting.tabs.advancedDiagnostics",
+          "setting.items.streamingExperience.resolution",
+          "setting.items.streamingExperience.video_format",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+          "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+          "setting.items.streamingExperience.codec",
+          "setting.items.streamingExperience.enable_audio_control",
+          "setting.items.streamingExperience.display_options",
+          "top-nav.setting"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整设置分辨率单选弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "scope": "setting.single-select",
+        "nodes": [
+          "setting.single-select.close",
+          "setting.single-select.option.0",
+          "setting.single-select.option.1",
+          "setting.single-select.option.2",
+          "setting.single-select.option.3"
+        ],
+        "reachable": [
+          "setting.single-select.option.0",
+          "setting.single-select.close",
+          "setting.single-select.option.1",
+          "setting.single-select.option.2",
+          "setting.single-select.option.3"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整设置分辨率提交与来源恢复",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/setting",
+          "native": "setting.single-select.option.1",
+          "marked": [
+            "setting.single-select.option.1"
+          ],
+          "busy": [
+            "setting.restart",
+            "setting.items.streamingExperience.xhome_resolution",
+            "setting.items.streamingExperience.resolution",
+            "setting.items.streamingExperience.video_format",
+            "setting.items.streamingExperience.display_options",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+            "setting.single-select.close",
+            "setting.single-select.option.0",
+            "setting.single-select.option.1",
+            "setting.single-select.option.2",
+            "setting.single-select.option.3"
+          ],
+          "pending": [
+            "config.set"
+          ]
+        },
+        "after": {
+          "route": "#/setting",
+          "native": "setting.items.streamingExperience.xhome_resolution",
+          "marked": [
+            "setting.items.streamingExperience.xhome_resolution"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整设置画面弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "scope": "setting.render-sheet",
+        "nodes": [
+          "setting.render-sheet.close",
+          "setting.render-sheet.sr",
+          "setting.render-sheet.sharpening.off",
+          "setting.render-sheet.sharpening.clear",
+          "setting.render-sheet.sharpening.soft",
+          "setting.render-sheet.video",
+          "setting.render-sheet.preset.standard",
+          "setting.render-sheet.preset.clear",
+          "setting.render-sheet.preset.soft",
+          "setting.render-sheet.cancel",
+          "setting.render-sheet.submit"
+        ],
+        "reachable": [
+          "setting.render-sheet.sr",
+          "setting.render-sheet.sharpening.soft",
+          "setting.render-sheet.submit",
+          "setting.render-sheet.close",
+          "setting.render-sheet.cancel",
+          "setting.render-sheet.preset.clear",
+          "setting.render-sheet.preset.soft",
+          "setting.render-sheet.video",
+          "setting.render-sheet.sharpening.clear",
+          "setting.render-sheet.sharpening.off",
+          "setting.render-sheet.preset.standard"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整设置画面弹层方向导航与 B 返回",
+      "passed": true,
+      "evidence": {
+        "moved": {
+          "route": "#/setting",
+          "native": "setting.render-sheet.sharpening.off",
+          "marked": [
+            "setting.render-sheet.sharpening.off"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "closed": {
+          "route": "#/setting",
+          "native": "setting.items.streamingExperience.display_options",
+          "marked": [
+            "setting.items.streamingExperience.display_options"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整设置数字编辑弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "scope": "setting.editor.xhome_bitrate",
+        "nodes": [
+          "setting.editor.xhome_bitrate.close",
+          "setting.editor.xhome_bitrate.decrease",
+          "setting.editor.xhome_bitrate.field",
+          "setting.editor.xhome_bitrate.increase",
+          "setting.editor.xhome_bitrate.cancel",
+          "setting.editor.xhome_bitrate.submit"
+        ],
+        "reachable": [
+          "setting.editor.xhome_bitrate.field",
+          "setting.editor.xhome_bitrate.increase",
+          "setting.editor.xhome_bitrate.submit",
+          "setting.editor.xhome_bitrate.cancel",
+          "setting.editor.xhome_bitrate.close",
+          "setting.editor.xhome_bitrate.decrease"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整设置数字编辑 B 返回来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/setting",
+        "native": "setting.items.streamingExperience.xhome_bitrate",
+        "marked": [
+          "setting.items.streamingExperience.xhome_bitrate"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "完整连接与主机设置的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "setting.tabs.general",
+          "setting.tabs.streamingExperience",
+          "setting.tabs.connectionHost",
+          "setting.tabs.advancedDiagnostics",
+          "setting.restart",
+          "setting.items.connectionHost.force_region_ip",
+          "setting.items.connectionHost.preferred_game_language",
+          "setting.items.connectionHost.ipv6",
+          "setting.items.connectionHost.xhome_turn_fallback",
+          "setting.content.connectionHost.section.advanced"
+        ],
+        "reachable": [
+          "setting.tabs.connectionHost",
+          "setting.items.connectionHost.force_region_ip",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "setting.tabs.general",
+          "setting.restart",
+          "setting.tabs.streamingExperience",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "setting.tabs.advancedDiagnostics",
+          "setting.items.connectionHost.preferred_game_language",
+          "setting.items.connectionHost.ipv6",
+          "setting.items.connectionHost.xhome_turn_fallback",
+          "setting.content.connectionHost.section.advanced"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整连接设置展开自定义中继的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "setting.tabs.general",
+          "setting.tabs.streamingExperience",
+          "setting.tabs.connectionHost",
+          "setting.tabs.advancedDiagnostics",
+          "setting.restart",
+          "setting.items.connectionHost.force_region_ip",
+          "setting.items.connectionHost.preferred_game_language",
+          "setting.items.connectionHost.ipv6",
+          "setting.items.connectionHost.xhome_turn_fallback",
+          "setting.content.connectionHost.section.advanced",
+          "setting.actions.connectionHost.customTurn"
+        ],
+        "reachable": [
+          "setting.content.connectionHost.section.advanced",
+          "setting.actions.connectionHost.customTurn",
+          "top-nav.profile",
+          "top-nav.brand",
+          "setting.restart",
+          "setting.items.connectionHost.force_region_ip",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "setting.tabs.general",
+          "setting.items.connectionHost.preferred_game_language",
+          "setting.items.connectionHost.ipv6",
+          "setting.tabs.advancedDiagnostics",
+          "top-nav.setting",
+          "top-nav.controller",
+          "setting.tabs.connectionHost",
+          "setting.tabs.streamingExperience",
+          "top-nav.my",
+          "setting.items.connectionHost.xhome_turn_fallback"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整高级与诊断设置的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "setting.tabs.general",
+          "setting.tabs.streamingExperience",
+          "setting.tabs.connectionHost",
+          "setting.tabs.advancedDiagnostics",
+          "setting.restart",
+          "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.0",
+          "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.1",
+          "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+          "setting.items.advancedDiagnostics.debug"
+        ],
+        "reachable": [
+          "setting.tabs.advancedDiagnostics",
+          "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.0",
+          "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.1",
+          "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "setting.tabs.general",
+          "setting.restart",
+          "setting.items.advancedDiagnostics.debug",
+          "setting.tabs.streamingExperience",
+          "top-nav.my",
+          "top-nav.controller",
+          "setting.tabs.connectionHost",
+          "top-nav.setting"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整云游戏页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "xcloud.search",
+          "xcloud.refresh",
+          "xcloud.jump.recent",
+          "xcloud.jump.new",
+          "xcloud.jump.all",
+          "xcloud.rail.recent.0.product-1",
+          "xcloud.rail.recent.1.product-2",
+          "xcloud.rail.recent.2.product-3",
+          "xcloud.rail.recent.3.product-4",
+          "xcloud.rail.new.0.product-5",
+          "xcloud.rail.new.1.product-6",
+          "xcloud.rail.new.2.product-7",
+          "xcloud.rail.new.3.product-8",
+          "xcloud.grid.all.0.product-1",
+          "xcloud.grid.all.1.product-2",
+          "xcloud.grid.all.2.product-3",
+          "xcloud.grid.all.3.product-4",
+          "xcloud.grid.all.4.product-5",
+          "xcloud.grid.all.5.product-6",
+          "xcloud.grid.all.6.product-7",
+          "xcloud.grid.all.7.product-8",
+          "xcloud.grid.all.8.product-9",
+          "xcloud.grid.all.9.product-10",
+          "xcloud.grid.all.10.product-11",
+          "xcloud.grid.all.11.product-12"
+        ],
+        "reachable": [
+          "top-nav.xcloud",
+          "xcloud.jump.recent",
+          "xcloud.jump.new",
+          "xcloud.jump.all",
+          "xcloud.search",
+          "xcloud.refresh",
+          "top-nav.profile",
+          "xcloud.grid.all.4.product-5",
+          "xcloud.grid.all.3.product-4",
+          "xcloud.grid.all.2.product-3",
+          "xcloud.grid.all.1.product-2",
+          "xcloud.grid.all.0.product-1",
+          "xcloud.rail.new.0.product-5",
+          "xcloud.rail.new.1.product-6",
+          "xcloud.rail.new.2.product-7",
+          "xcloud.rail.new.3.product-8",
+          "xcloud.rail.recent.3.product-4",
+          "xcloud.rail.recent.2.product-3",
+          "xcloud.rail.recent.1.product-2",
+          "xcloud.rail.recent.0.product-1",
+          "top-nav.controller",
+          "top-nav.setting",
+          "top-nav.my",
+          "xcloud.grid.all.5.product-6",
+          "xcloud.grid.all.6.product-7",
+          "xcloud.grid.all.7.product-8",
+          "xcloud.grid.all.8.product-9",
+          "xcloud.grid.all.9.product-10",
+          "xcloud.grid.all.11.product-12",
+          "xcloud.grid.all.10.product-11",
+          "top-nav.xhome",
+          "top-nav.brand"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整云游戏搜索 A 打开键盘及几何可达",
+      "passed": true,
+      "evidence": {
+        "scope": "xcloud.search.keyboard",
+        "nodes": [
+          "xcloud.search.keyboard.close",
+          "xcloud.search.keyboard.key.0.0",
+          "xcloud.search.keyboard.key.0.1",
+          "xcloud.search.keyboard.key.0.2",
+          "xcloud.search.keyboard.key.0.3",
+          "xcloud.search.keyboard.key.0.4",
+          "xcloud.search.keyboard.key.0.5",
+          "xcloud.search.keyboard.key.0.6",
+          "xcloud.search.keyboard.key.0.7",
+          "xcloud.search.keyboard.key.0.8",
+          "xcloud.search.keyboard.key.0.9",
+          "xcloud.search.keyboard.key.1.0",
+          "xcloud.search.keyboard.key.1.1",
+          "xcloud.search.keyboard.key.1.2",
+          "xcloud.search.keyboard.key.1.3",
+          "xcloud.search.keyboard.key.1.4",
+          "xcloud.search.keyboard.key.1.5",
+          "xcloud.search.keyboard.key.1.6",
+          "xcloud.search.keyboard.key.1.7",
+          "xcloud.search.keyboard.key.1.8",
+          "xcloud.search.keyboard.key.1.9",
+          "xcloud.search.keyboard.key.2.0",
+          "xcloud.search.keyboard.key.2.1",
+          "xcloud.search.keyboard.key.2.2",
+          "xcloud.search.keyboard.key.2.3",
+          "xcloud.search.keyboard.key.2.4",
+          "xcloud.search.keyboard.key.2.5",
+          "xcloud.search.keyboard.key.2.6",
+          "xcloud.search.keyboard.key.2.7",
+          "xcloud.search.keyboard.key.2.8",
+          "xcloud.search.keyboard.key.2.9",
+          "xcloud.search.keyboard.key.3.0",
+          "xcloud.search.keyboard.key.3.1",
+          "xcloud.search.keyboard.key.3.2",
+          "xcloud.search.keyboard.key.3.3",
+          "xcloud.search.keyboard.key.3.4",
+          "xcloud.search.keyboard.key.3.5",
+          "xcloud.search.keyboard.key.3.6",
+          "xcloud.search.keyboard.key.3.7",
+          "xcloud.search.keyboard.key.3.8",
+          "xcloud.search.keyboard.key.3.9",
+          "xcloud.search.keyboard.shift",
+          "xcloud.search.keyboard.symbols",
+          "xcloud.search.keyboard.space",
+          "xcloud.search.keyboard.backspace",
+          "xcloud.search.keyboard.cancel",
+          "xcloud.search.keyboard.clear",
+          "xcloud.search.keyboard.done"
+        ],
+        "reachable": [
+          "xcloud.search.keyboard.key.0.0",
+          "xcloud.search.keyboard.key.0.1",
+          "xcloud.search.keyboard.key.0.2",
+          "xcloud.search.keyboard.key.0.3",
+          "xcloud.search.keyboard.key.0.4",
+          "xcloud.search.keyboard.key.0.5",
+          "xcloud.search.keyboard.key.0.6",
+          "xcloud.search.keyboard.key.0.7",
+          "xcloud.search.keyboard.key.0.8",
+          "xcloud.search.keyboard.key.0.9",
+          "xcloud.search.keyboard.close",
+          "xcloud.search.keyboard.key.1.9",
+          "xcloud.search.keyboard.key.1.8",
+          "xcloud.search.keyboard.key.1.7",
+          "xcloud.search.keyboard.key.1.6",
+          "xcloud.search.keyboard.key.1.5",
+          "xcloud.search.keyboard.key.1.4",
+          "xcloud.search.keyboard.key.1.3",
+          "xcloud.search.keyboard.key.1.2",
+          "xcloud.search.keyboard.key.1.1",
+          "xcloud.search.keyboard.key.1.0",
+          "xcloud.search.keyboard.key.2.0",
+          "xcloud.search.keyboard.key.2.1",
+          "xcloud.search.keyboard.key.2.2",
+          "xcloud.search.keyboard.key.2.3",
+          "xcloud.search.keyboard.key.2.4",
+          "xcloud.search.keyboard.key.2.5",
+          "xcloud.search.keyboard.key.2.6",
+          "xcloud.search.keyboard.key.2.7",
+          "xcloud.search.keyboard.key.2.8",
+          "xcloud.search.keyboard.key.2.9",
+          "xcloud.search.keyboard.key.3.9",
+          "xcloud.search.keyboard.key.3.8",
+          "xcloud.search.keyboard.key.3.7",
+          "xcloud.search.keyboard.key.3.6",
+          "xcloud.search.keyboard.key.3.5",
+          "xcloud.search.keyboard.key.3.4",
+          "xcloud.search.keyboard.key.3.3",
+          "xcloud.search.keyboard.key.3.2",
+          "xcloud.search.keyboard.key.3.1",
+          "xcloud.search.keyboard.key.3.0",
+          "xcloud.search.keyboard.shift",
+          "xcloud.search.keyboard.symbols",
+          "xcloud.search.keyboard.space",
+          "xcloud.search.keyboard.backspace",
+          "xcloud.search.keyboard.cancel",
+          "xcloud.search.keyboard.clear",
+          "xcloud.search.keyboard.done"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整云游戏搜索 A 输入完成并恢复来源",
+      "passed": true,
+      "evidence": {
+        "input": {
+          "readOnly": true,
+          "value": "1"
+        },
+        "current": {
+          "route": "#/xcloud",
+          "native": "xcloud.search",
+          "marked": [
+            "xcloud.search"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "xcloud.search",
+            "xcloud.refresh",
+            "xcloud.grid.all.0.product-1",
+            "xcloud.grid.all.1.product-10",
+            "xcloud.grid.all.2.product-11",
+            "xcloud.grid.all.3.product-12"
+          ],
+          "reachable": [
+            "xcloud.search",
+            "xcloud.refresh",
+            "top-nav.profile",
+            "xcloud.grid.all.3.product-12",
+            "xcloud.grid.all.2.product-11",
+            "xcloud.grid.all.1.product-10",
+            "xcloud.grid.all.0.product-1",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "top-nav.xcloud",
+            "top-nav.xhome",
+            "top-nav.brand"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整云游戏搜索 B 取消保留原草稿",
+      "passed": true,
+      "evidence": {
+        "value": "1",
+        "current": {
+          "route": "#/xcloud",
+          "native": "xcloud.search",
+          "marked": [
+            "xcloud.search"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整云游戏刷新 A 去重与焦点保持",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/xcloud",
+          "native": "xcloud.refresh",
+          "marked": [
+            "xcloud.refresh"
+          ],
+          "busy": [
+            "xcloud.refresh"
+          ],
+          "pending": [
+            "data.refreshXcloudTitles"
+          ]
+        },
+        "after": {
+          "route": "#/xcloud",
+          "native": "xcloud.refresh",
+          "marked": [
+            "xcloud.refresh"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整账户与好友页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.account",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "my.account.refresh",
+          "my.friends.search",
+          "my.friends.filter",
+          "my.friend.fixture-friend-1",
+          "my.friend.fixture-friend-3",
+          "my.friend.fixture-friend-2"
+        ],
+        "reachable": [
+          "top-nav.my",
+          "library.tab.achievements",
+          "my.friends.search",
+          "my.friends.filter",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "my.account.refresh",
+          "top-nav.xcloud",
+          "library.tab.account",
+          "my.friend.fixture-friend-1",
+          "library.tab.album",
+          "top-nav.setting",
+          "top-nav.controller",
+          "library.tab.statistics",
+          "my.friend.fixture-friend-3",
+          "my.friend.fixture-friend-2"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整好友筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "好友状态：全部",
+        "afterLabel": "好友状态：在线",
+        "cancelLabel": "好友状态：在线",
+        "graph": {
+          "scope": "my.friends.filter.options",
+          "nodes": [
+            "my.friends.filter.options.close",
+            "my.friends.filter.options.option.0",
+            "my.friends.filter.options.option.1",
+            "my.friends.filter.options.option.2"
+          ],
+          "reachable": [
+            "my.friends.filter.options.option.0",
+            "my.friends.filter.options.close",
+            "my.friends.filter.options.option.1",
+            "my.friends.filter.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/my/account",
+          "native": "my.friends.filter.options.option.1",
+          "marked": [
+            "my.friends.filter.options.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/my/account",
+          "native": "my.friends.filter",
+          "marked": [
+            "my.friends.filter"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/my/account",
+          "native": "my.friends.filter",
+          "marked": [
+            "my.friends.filter"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整好友详情页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.account",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "friend.back",
+          "friend.refresh",
+          "friend.current-game",
+          "my.achievements.refresh",
+          "my.achievements.search",
+          "my.achievements.filter"
+        ],
+        "reachable": [
+          "friend.back",
+          "friend.refresh",
+          "top-nav.profile",
+          "my.achievements.filter",
+          "my.achievements.search",
+          "library.tab.album",
+          "my.achievements.refresh",
+          "library.tab.statistics",
+          "top-nav.controller",
+          "top-nav.setting",
+          "top-nav.my",
+          "library.tab.achievements",
+          "friend.current-game",
+          "library.tab.account",
+          "top-nav.xcloud",
+          "top-nav.xhome",
+          "top-nav.brand"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整好友详情返回恢复列表来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/my/account",
+        "native": "my.friend.fixture-friend-1",
+        "marked": [
+          "my.friend.fixture-friend-1"
+        ],
+        "busy": [],
+        "pending": [
+          "data.getPersonalAccount"
+        ]
+      }
+    },
+    {
+      "name": "完整成就游戏列表页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.account",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "my.achievements.refresh",
+          "my.achievements.search",
+          "my.achievements.filter",
+          "my.achievements.game.game-2",
+          "my.achievements.more"
+        ],
+        "reachable": [
+          "my.achievements.filter",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "my.achievements.refresh",
+          "my.achievements.search",
+          "library.tab.account",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "library.tab.achievements",
+          "my.achievements.game.game-2",
+          "library.tab.statistics",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.album",
+          "my.achievements.more"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整成就进度筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "成就进度：全部",
+        "afterLabel": "成就进度：进行中",
+        "cancelLabel": "成就进度：进行中",
+        "graph": {
+          "scope": "my.achievements.filter.options",
+          "nodes": [
+            "my.achievements.filter.options.close",
+            "my.achievements.filter.options.option.0",
+            "my.achievements.filter.options.option.1",
+            "my.achievements.filter.options.option.2"
+          ],
+          "reachable": [
+            "my.achievements.filter.options.option.0",
+            "my.achievements.filter.options.close",
+            "my.achievements.filter.options.option.1",
+            "my.achievements.filter.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/my/achievements",
+          "native": "my.achievements.filter.options.option.1",
+          "marked": [
+            "my.achievements.filter.options.option.1"
+          ],
+          "busy": [
+            "my.achievements.refresh"
+          ],
+          "pending": [
+            "data.getPersonalAccount",
+            "data.getGameHistory"
+          ]
+        },
+        "committed": {
+          "route": "#/my/achievements",
+          "native": "my.achievements.filter",
+          "marked": [
+            "my.achievements.filter"
+          ],
+          "busy": [
+            "my.achievements.refresh"
+          ],
+          "pending": [
+            "data.getGameHistory"
+          ]
+        },
+        "canceled": {
+          "route": "#/my/achievements",
+          "native": "my.achievements.filter",
+          "marked": [
+            "my.achievements.filter"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整游戏成就筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "成就状态：全部",
+        "afterLabel": "成就状态：待解锁",
+        "cancelLabel": "成就状态：待解锁",
+        "graph": {
+          "scope": "game.achievements.filter.options",
+          "nodes": [
+            "game.achievements.filter.options.close",
+            "game.achievements.filter.options.option.0",
+            "game.achievements.filter.options.option.1",
+            "game.achievements.filter.options.option.2"
+          ],
+          "reachable": [
+            "game.achievements.filter.options.option.0",
+            "game.achievements.filter.options.close",
+            "game.achievements.filter.options.option.1",
+            "game.achievements.filter.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/my/achievements/game-2?from=/my/achievements&tab=achievements",
+          "native": "game.achievements.filter.options.option.1",
+          "marked": [
+            "game.achievements.filter.options.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/my/achievements/game-2?from=/my/achievements&tab=achievements",
+          "native": "game.achievements.filter",
+          "marked": [
+            "game.achievements.filter"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/my/achievements/game-2?from=/my/achievements&tab=achievements",
+          "native": "game.achievements.filter",
+          "marked": [
+            "game.achievements.filter"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整游戏成就详情页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.overview",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "game.back",
+          "game.refresh",
+          "game.achievements.refresh",
+          "game.achievements.search",
+          "game.achievements.filter",
+          "achievement.:achievement-2",
+          "game.achievements.more"
+        ],
+        "reachable": [
+          "game.achievements.filter",
+          "game.refresh",
+          "top-nav.profile",
+          "game.back",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "library.tab.overview",
+          "library.tab.achievements",
+          "game.achievements.refresh",
+          "game.achievements.search",
+          "achievement.:achievement-2",
+          "game.achievements.more",
+          "library.tab.album",
+          "top-nav.setting",
+          "top-nav.controller",
+          "library.tab.statistics",
+          "top-nav.my",
+          "top-nav.brand"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整成就详情弹层的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "achievement.detail",
+        "nodes": [
+          "achievement.detail.close"
+        ],
+        "reachable": [
+          "achievement.detail.close"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整成就详情 B 返回来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/my/achievements/game-2?from=/my/achievements&tab=achievements",
+        "native": "achievement.:achievement-2",
+        "marked": [
+          "achievement.:achievement-2"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "完整游戏概览页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.overview",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "game.back",
+          "game.refresh",
+          "game.open-achievements",
+          "game.open-album"
+        ],
+        "reachable": [
+          "library.tab.overview",
+          "game.back",
+          "game.refresh",
+          "top-nav.profile",
+          "game.open-album",
+          "game.open-achievements",
+          "library.tab.album",
+          "top-nav.setting",
+          "top-nav.controller",
+          "library.tab.statistics",
+          "library.tab.achievements",
+          "top-nav.my",
+          "top-nav.xcloud",
+          "top-nav.xhome",
+          "top-nav.brand"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整游戏详情返回恢复游戏来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/my/achievements",
+        "native": "my.achievements.game.game-2",
+        "marked": [
+          "my.achievements.game.game-2"
+        ],
+        "busy": [],
+        "pending": [
+          "data.getPersonalAccount"
+        ]
+      }
+    },
+    {
+      "name": "完整累计统计页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.account",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "my.statistics.refresh",
+          "my.statistics.search",
+          "my.statistics.filter",
+          "my.statistics.game.game-1",
+          "my.statistics.game.game-2",
+          "statistics.completed.game-1",
+          "my.statistics.more"
+        ],
+        "reachable": [
+          "library.tab.statistics",
+          "my.statistics.search",
+          "my.statistics.filter",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "my.statistics.refresh",
+          "top-nav.xcloud",
+          "library.tab.account",
+          "library.tab.achievements",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.album",
+          "my.statistics.game.game-1",
+          "my.statistics.game.game-2",
+          "statistics.completed.game-1",
+          "my.statistics.more"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整统计筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "成就进度：全部",
+        "afterLabel": "成就进度：进行中",
+        "cancelLabel": "成就进度：进行中",
+        "graph": {
+          "scope": "my.statistics.filter.options",
+          "nodes": [
+            "my.statistics.filter.options.close",
+            "my.statistics.filter.options.option.0",
+            "my.statistics.filter.options.option.1",
+            "my.statistics.filter.options.option.2"
+          ],
+          "reachable": [
+            "my.statistics.filter.options.option.0",
+            "my.statistics.filter.options.close",
+            "my.statistics.filter.options.option.1",
+            "my.statistics.filter.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/my/statistics",
+          "native": "my.statistics.filter.options.option.1",
+          "marked": [
+            "my.statistics.filter.options.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/my/statistics",
+          "native": "my.statistics.filter",
+          "marked": [
+            "my.statistics.filter"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/my/statistics",
+          "native": "my.statistics.filter",
+          "marked": [
+            "my.statistics.filter"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整相册媒体筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "媒体类型：全部",
+        "afterLabel": "媒体类型：截图",
+        "cancelLabel": "媒体类型：截图",
+        "graph": {
+          "scope": "album.filter.options",
+          "nodes": [
+            "album.filter.options.close",
+            "album.filter.options.option.0",
+            "album.filter.options.option.1",
+            "album.filter.options.option.2"
+          ],
+          "reachable": [
+            "album.filter.options.option.0",
+            "album.filter.options.close",
+            "album.filter.options.option.1",
+            "album.filter.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/my/album",
+          "native": "album.filter.options.option.1",
+          "marked": [
+            "album.filter.options.option.1"
+          ],
+          "busy": [
+            "album.refresh",
+            "album.more"
+          ],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/my/album",
+          "native": "album.filter",
+          "marked": [
+            "album.filter"
+          ],
+          "busy": [
+            "album.refresh",
+            "album.more"
+          ],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/my/album",
+          "native": "album.filter",
+          "marked": [
+            "album.filter"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整相册游戏筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "相册游戏：全部游戏",
+        "afterLabel": "相册游戏：本地游戏 1",
+        "cancelLabel": "相册游戏：本地游戏 1",
+        "graph": {
+          "scope": "album.game-filter.options",
+          "nodes": [
+            "album.game-filter.options.close",
+            "album.game-filter.options.option.0",
+            "album.game-filter.options.option.1",
+            "album.game-filter.options.option.2"
+          ],
+          "reachable": [
+            "album.game-filter.options.option.0",
+            "album.game-filter.options.close",
+            "album.game-filter.options.option.1",
+            "album.game-filter.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/my/album",
+          "native": "album.game-filter.options.option.1",
+          "marked": [
+            "album.game-filter.options.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/my/album",
+          "native": "album.game-filter",
+          "marked": [
+            "album.game-filter"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/my/album",
+          "native": "album.game-filter",
+          "marked": [
+            "album.game-filter"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整相册页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.account",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "album.refresh",
+          "album.filter",
+          "album.game-filter",
+          "album.screenshot.screenshot-1",
+          "album.more"
+        ],
+        "reachable": [
+          "album.game-filter",
+          "album.refresh",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "album.filter",
+          "album.screenshot.screenshot-1",
+          "library.tab.achievements",
+          "top-nav.my",
+          "top-nav.controller",
+          "library.tab.statistics",
+          "library.tab.album",
+          "top-nav.setting",
+          "album.more",
+          "library.tab.account"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整相册图片预览的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "album.preview",
+        "nodes": [
+          "album.preview.close",
+          "album.preview.refresh",
+          "album.preview.save",
+          "album.preview.game"
+        ],
+        "reachable": [
+          "album.preview.close",
+          "album.preview.game",
+          "album.preview.save",
+          "album.preview.refresh"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整相册保存 A 去重与焦点保持",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/my/album",
+          "native": "album.preview.save",
+          "marked": [
+            "album.preview.save"
+          ],
+          "busy": [
+            "album.preview.close",
+            "album.preview.refresh",
+            "album.preview.save",
+            "album.preview.game"
+          ],
+          "pending": [
+            "data.saveMedia"
+          ]
+        },
+        "after": {
+          "route": "#/my/album",
+          "native": "album.preview.save",
+          "marked": [
+            "album.preview.save"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整相册图片 B 返回来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/my/album",
+        "native": "album.screenshot.screenshot-1",
+        "marked": [
+          "album.screenshot.screenshot-1"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "完整相册视频播放控件的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "album.preview",
+        "nodes": [
+          "album.preview.close",
+          "album.preview.play",
+          "album.preview.rewind",
+          "album.preview.forward",
+          "album.preview.volume-down",
+          "album.preview.volume-up",
+          "album.preview.mute",
+          "album.preview.fullscreen",
+          "album.preview.refresh",
+          "album.preview.save",
+          "album.preview.game"
+        ],
+        "reachable": [
+          "album.preview.save",
+          "album.preview.game",
+          "album.preview.forward",
+          "album.preview.volume-down",
+          "album.preview.volume-up",
+          "album.preview.mute",
+          "album.preview.fullscreen",
+          "album.preview.close",
+          "album.preview.rewind",
+          "album.preview.play",
+          "album.preview.refresh"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整相册视频 A 操作播放 / 进度 / 音量 / 静音",
+      "passed": true,
+      "evidence": {
+        "playingVideo": {
+          "controls": false,
+          "currentTime": 0.0785,
+          "duration": 24,
+          "muted": false,
+          "paused": false,
+          "readyState": 4
+        },
+        "pausedVideo": {
+          "controls": false,
+          "currentTime": 0.0846,
+          "duration": 24,
+          "muted": false,
+          "paused": true,
+          "readyState": 4
+        },
+        "forwardVideo": {
+          "controls": false,
+          "currentTime": 10.0846,
+          "duration": 24,
+          "muted": false,
+          "paused": true,
+          "readyState": 4
+        },
+        "rewindVideo": {
+          "controls": false,
+          "currentTime": 0.0846,
+          "duration": 24,
+          "muted": false,
+          "paused": true,
+          "readyState": 4
+        },
+        "quietVideo": {
+          "controls": false,
+          "currentTime": 0.0846,
+          "duration": 24,
+          "muted": false,
+          "paused": true,
+          "readyState": 4
+        },
+        "mutedVideo": {
+          "controls": false,
+          "currentTime": 0.0846,
+          "duration": 24,
+          "muted": true,
+          "paused": true,
+          "readyState": 4
+        },
+        "quietText": "进度 0:00 / 0:24\n音量 90%\n播放录像\n后退 10 秒\n前进 10 秒\n音量 −\n音量 +\n静音\n全屏查看",
+        "loudText": "进度 0:00 / 0:24\n音量 100%\n播放录像\n后退 10 秒\n前进 10 秒\n音量 −\n音量 +\n静音\n全屏查看"
+      }
+    },
+    {
+      "name": "完整相册视频全屏七个控件的方向导航",
+      "passed": true,
+      "evidence": {
+        "nativeFullscreenId": "",
+        "current": {
+          "route": "#/my/album",
+          "native": "album.preview.mute",
+          "marked": [
+            "album.preview.mute"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "album.preview.video",
+          "nodes": [
+            "album.preview.play",
+            "album.preview.rewind",
+            "album.preview.forward",
+            "album.preview.volume-down",
+            "album.preview.volume-up",
+            "album.preview.mute",
+            "album.preview.fullscreen"
+          ],
+          "reachable": [
+            "album.preview.mute",
+            "album.preview.fullscreen",
+            "album.preview.volume-up",
+            "album.preview.volume-down",
+            "album.preview.forward",
+            "album.preview.rewind",
+            "album.preview.play"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整视频全屏 B 返回预览并恢复全屏入口",
+      "passed": true,
+      "evidence": {
+        "route": "#/my/album",
+        "native": "album.preview.fullscreen",
+        "marked": [
+          "album.preview.fullscreen"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "完整视频预览 B 返回录像来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/my/album",
+        "native": "album.clip.clip-1",
+        "marked": [
+          "album.clip.clip-1"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "完整已安装游戏库的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "console.games.back",
+          "console.games.stream",
+          "console.games.refresh",
+          "console.games.search",
+          "console.games.storage",
+          "console.games.sort",
+          "console.game.installed-1",
+          "console.game.installed-9",
+          "console.game.installed-10",
+          "console.game.installed-2",
+          "console.game.installed-11",
+          "console.game.installed-3",
+          "console.game.installed-12",
+          "console.game.installed-4",
+          "console.game.installed-5",
+          "console.game.installed-6",
+          "console.game.installed-7",
+          "console.game.installed-8"
+        ],
+        "reachable": [
+          "console.games.back",
+          "console.games.stream",
+          "console.games.refresh",
+          "top-nav.profile",
+          "console.games.sort",
+          "console.games.storage",
+          "console.games.search",
+          "top-nav.controller",
+          "top-nav.setting",
+          "console.game.installed-1",
+          "console.game.installed-9",
+          "console.game.installed-10",
+          "console.game.installed-2",
+          "console.game.installed-11",
+          "console.game.installed-3",
+          "console.game.installed-8",
+          "console.game.installed-7",
+          "console.game.installed-6",
+          "console.game.installed-5",
+          "console.game.installed-4",
+          "console.game.installed-12",
+          "top-nav.my",
+          "top-nav.xcloud",
+          "top-nav.xhome",
+          "top-nav.brand"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整主机存储筛选 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "存储位置：全部存储",
+        "afterLabel": "存储位置：内部存储",
+        "cancelLabel": "存储位置：内部存储",
+        "graph": {
+          "scope": "console.games.storage.options",
+          "nodes": [
+            "console.games.storage.options.close",
+            "console.games.storage.options.option.0",
+            "console.games.storage.options.option.1",
+            "console.games.storage.options.option.2"
+          ],
+          "reachable": [
+            "console.games.storage.options.option.0",
+            "console.games.storage.options.close",
+            "console.games.storage.options.option.1",
+            "console.games.storage.options.option.2"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.storage.options.option.1",
+          "marked": [
+            "console.games.storage.options.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.storage",
+          "marked": [
+            "console.games.storage"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.storage",
+          "marked": [
+            "console.games.storage"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整主机排序 A / 方向 / 提交 / B / 来源恢复",
+      "passed": true,
+      "evidence": {
+        "beforeLabel": "游戏排序：最近使用",
+        "afterLabel": "游戏排序：名称",
+        "cancelLabel": "游戏排序：名称",
+        "graph": {
+          "scope": "console.games.sort.options",
+          "nodes": [
+            "console.games.sort.options.close",
+            "console.games.sort.options.option.0",
+            "console.games.sort.options.option.1",
+            "console.games.sort.options.option.2",
+            "console.games.sort.options.option.3"
+          ],
+          "reachable": [
+            "console.games.sort.options.option.0",
+            "console.games.sort.options.close",
+            "console.games.sort.options.option.1",
+            "console.games.sort.options.option.2",
+            "console.games.sort.options.option.3"
+          ],
+          "unreachable": []
+        },
+        "selected": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.sort.options.option.1",
+          "marked": [
+            "console.games.sort.options.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "committed": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.sort",
+          "marked": [
+            "console.games.sort"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "canceled": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.sort",
+          "marked": [
+            "console.games.sort"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整主机库刷新期间串流入口保持可达并合并 A",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.stream",
+          "marked": [
+            "console.games.stream"
+          ],
+          "busy": [
+            "console.games.stream",
+            "console.games.refresh"
+          ],
+          "pending": [
+            "data.getConsoleLibrary",
+            "data.getHosts"
+          ]
+        },
+        "after": {
+          "route": "#/xhome/fixture-console/games?from=/xhome",
+          "native": "console.games.stream",
+          "marked": [
+            "console.games.stream"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "console.games.back",
+            "console.games.stream",
+            "console.games.refresh",
+            "console.games.search",
+            "console.games.storage",
+            "console.games.sort",
+            "console.game.installed-1",
+            "console.game.installed-9",
+            "console.game.installed-10",
+            "console.game.installed-2",
+            "console.game.installed-11",
+            "console.game.installed-3",
+            "console.game.installed-12",
+            "console.game.installed-4",
+            "console.game.installed-5",
+            "console.game.installed-6",
+            "console.game.installed-7",
+            "console.game.installed-8"
+          ],
+          "reachable": [
+            "console.games.stream",
+            "console.games.refresh",
+            "top-nav.profile",
+            "console.games.sort",
+            "console.games.storage",
+            "console.games.search",
+            "top-nav.controller",
+            "top-nav.setting",
+            "console.game.installed-1",
+            "console.game.installed-9",
+            "console.game.installed-10",
+            "console.game.installed-2",
+            "console.game.installed-11",
+            "console.game.installed-3",
+            "console.game.installed-8",
+            "console.game.installed-7",
+            "console.game.installed-6",
+            "console.game.installed-5",
+            "console.game.installed-4",
+            "console.game.installed-12",
+            "top-nav.my",
+            "top-nav.xcloud",
+            "console.games.back",
+            "top-nav.xhome",
+            "top-nav.brand"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整已安装游戏详情的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.overview",
+          "library.tab.achievements",
+          "library.tab.statistics",
+          "library.tab.album",
+          "game.back",
+          "game.refresh",
+          "game.stream",
+          "game.open-achievements",
+          "game.open-album"
+        ],
+        "reachable": [
+          "game.back",
+          "game.refresh",
+          "top-nav.profile",
+          "game.stream",
+          "library.tab.statistics",
+          "top-nav.controller",
+          "top-nav.setting",
+          "library.tab.album",
+          "game.open-achievements",
+          "game.open-album",
+          "top-nav.my",
+          "library.tab.achievements",
+          "library.tab.overview",
+          "top-nav.xcloud",
+          "top-nav.xhome",
+          "top-nav.brand"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整主机游戏详情刷新期间串流入口保持可达",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/xhome/fixture-console/games/installed-1?from=/xhome/fixture-console/games?from=/xhome",
+          "native": "game.stream",
+          "marked": [
+            "game.stream"
+          ],
+          "busy": [
+            "game.refresh",
+            "game.stream"
+          ],
+          "pending": [
+            "data.getConsoleLibrary",
+            "data.getHosts"
+          ]
+        },
+        "after": {
+          "route": "#/xhome/fixture-console/games/installed-1?from=/xhome/fixture-console/games?from=/xhome",
+          "native": "game.stream",
+          "marked": [
+            "game.stream"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.overview",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "game.back",
+            "game.refresh",
+            "game.stream",
+            "game.open-achievements",
+            "game.open-album"
+          ],
+          "reachable": [
+            "game.stream",
+            "game.refresh",
+            "top-nav.profile",
+            "game.back",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "library.tab.overview",
+            "library.tab.achievements",
+            "top-nav.my",
+            "top-nav.controller",
+            "library.tab.statistics",
+            "library.tab.album",
+            "top-nav.setting",
+            "game.open-achievements",
+            "game.open-album",
+            "top-nav.brand"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整控制器连接页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "controller.tabs.connection",
+          "controller.tabs.settings"
+        ],
+        "reachable": [
+          "top-nav.controller",
+          "controller.tabs.settings",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "controller.tabs.connection",
+          "top-nav.my",
+          "top-nav.setting"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整手柄设置页的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "app.shell",
+        "nodes": [
+          "top-nav.brand",
+          "top-nav.profile",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "controller.tabs.connection",
+          "controller.tabs.settings",
+          "controller.settings.background",
+          "controller.settings.layout",
+          "controller.settings.sticks",
+          "controller.settings.keyboard",
+          "controller.settings.advanced"
+        ],
+        "reachable": [
+          "controller.tabs.settings",
+          "controller.settings.background",
+          "top-nav.profile",
+          "top-nav.brand",
+          "top-nav.xhome",
+          "top-nav.xcloud",
+          "controller.tabs.connection",
+          "top-nav.my",
+          "top-nav.controller",
+          "top-nav.setting",
+          "controller.settings.layout",
+          "controller.settings.sticks",
+          "controller.settings.keyboard",
+          "controller.settings.advanced"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整摇杆编辑弹层的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "setting.gamepad.editor",
+        "nodes": [
+          "setting.gamepad.editor.close",
+          "setting.gamepad.editor.leftDeadzone",
+          "setting.gamepad.editor.rightDeadzone",
+          "setting.gamepad.editor.invert",
+          "setting.gamepad.editor.cancel",
+          "setting.gamepad.editor.defaults"
+        ],
+        "reachable": [
+          "setting.gamepad.editor.leftDeadzone",
+          "setting.gamepad.editor.close",
+          "setting.gamepad.editor.cancel",
+          "setting.gamepad.editor.defaults",
+          "setting.gamepad.editor.invert",
+          "setting.gamepad.editor.rightDeadzone"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整摇杆死区嵌套单选的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "setting.gamepad.choice",
+        "nodes": [
+          "setting.gamepad.choice.close",
+          "setting.gamepad.choice.option.0",
+          "setting.gamepad.choice.option.1",
+          "setting.gamepad.choice.option.2",
+          "setting.gamepad.choice.option.3",
+          "setting.gamepad.choice.option.4",
+          "setting.gamepad.choice.option.5",
+          "setting.gamepad.choice.option.6",
+          "setting.gamepad.choice.option.7",
+          "setting.gamepad.choice.option.8",
+          "setting.gamepad.choice.option.9",
+          "setting.gamepad.choice.option.10",
+          "setting.gamepad.choice.option.11",
+          "setting.gamepad.choice.option.12",
+          "setting.gamepad.choice.option.13",
+          "setting.gamepad.choice.option.14",
+          "setting.gamepad.choice.option.15",
+          "setting.gamepad.choice.option.16",
+          "setting.gamepad.choice.option.17",
+          "setting.gamepad.choice.option.18",
+          "setting.gamepad.choice.option.19",
+          "setting.gamepad.choice.option.20",
+          "setting.gamepad.choice.option.21",
+          "setting.gamepad.choice.option.22",
+          "setting.gamepad.choice.option.23",
+          "setting.gamepad.choice.option.24",
+          "setting.gamepad.choice.option.25",
+          "setting.gamepad.choice.option.26",
+          "setting.gamepad.choice.option.27",
+          "setting.gamepad.choice.option.28",
+          "setting.gamepad.choice.option.29",
+          "setting.gamepad.choice.option.30"
+        ],
+        "reachable": [
+          "setting.gamepad.choice.option.10",
+          "setting.gamepad.choice.close",
+          "setting.gamepad.choice.option.0",
+          "setting.gamepad.choice.option.1",
+          "setting.gamepad.choice.option.2",
+          "setting.gamepad.choice.option.3",
+          "setting.gamepad.choice.option.4",
+          "setting.gamepad.choice.option.5",
+          "setting.gamepad.choice.option.6",
+          "setting.gamepad.choice.option.7",
+          "setting.gamepad.choice.option.8",
+          "setting.gamepad.choice.option.9",
+          "setting.gamepad.choice.option.11",
+          "setting.gamepad.choice.option.12",
+          "setting.gamepad.choice.option.13",
+          "setting.gamepad.choice.option.14",
+          "setting.gamepad.choice.option.15",
+          "setting.gamepad.choice.option.16",
+          "setting.gamepad.choice.option.17",
+          "setting.gamepad.choice.option.18",
+          "setting.gamepad.choice.option.19",
+          "setting.gamepad.choice.option.20",
+          "setting.gamepad.choice.option.21",
+          "setting.gamepad.choice.option.22",
+          "setting.gamepad.choice.option.23",
+          "setting.gamepad.choice.option.24",
+          "setting.gamepad.choice.option.25",
+          "setting.gamepad.choice.option.26",
+          "setting.gamepad.choice.option.27",
+          "setting.gamepad.choice.option.28",
+          "setting.gamepad.choice.option.29",
+          "setting.gamepad.choice.option.30"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整摇杆死区 B 返回父编辑来源",
+      "passed": true,
+      "evidence": {
+        "route": "#/controller",
+        "native": "setting.gamepad.editor.leftDeadzone",
+        "marked": [
+          "setting.gamepad.editor.leftDeadzone"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "完整控制器应用草稿保持焦点并恢复来源",
+      "passed": true,
+      "evidence": {
+        "during": {
+          "route": "#/controller",
+          "native": "setting.gamepad.editor.apply",
+          "marked": [
+            "setting.gamepad.editor.apply"
+          ],
+          "busy": [
+            "controller.settings.background",
+            "controller.settings.vibration",
+            "controller.settings.strength",
+            "controller.settings.uiHaptics",
+            "setting.gamepad.editor.close",
+            "setting.gamepad.editor.leftDeadzone",
+            "setting.gamepad.editor.rightDeadzone",
+            "setting.gamepad.editor.invert",
+            "setting.gamepad.editor.cancel",
+            "setting.gamepad.editor.defaults",
+            "setting.gamepad.editor.apply"
+          ],
+          "pending": [
+            "config.set"
+          ]
+        },
+        "after": {
+          "route": "#/controller",
+          "native": "controller.settings.sticks",
+          "marked": [
+            "controller.settings.sticks"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整键盘绑定编辑的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "setting.gamepad.editor",
+        "nodes": [
+          "setting.gamepad.editor.close",
+          "setting.gamepad.editor.enabled",
+          "setting.gamepad.editor.leftStickUp",
+          "setting.gamepad.editor.leftStickDown",
+          "setting.gamepad.editor.leftStickLeft",
+          "setting.gamepad.editor.leftStickRight",
+          "setting.gamepad.editor.rightStickUp",
+          "setting.gamepad.editor.rightStickDown",
+          "setting.gamepad.editor.rightStickLeft",
+          "setting.gamepad.editor.rightStickRight",
+          "setting.gamepad.editor.south",
+          "setting.gamepad.editor.east",
+          "setting.gamepad.editor.west",
+          "setting.gamepad.editor.north",
+          "setting.gamepad.editor.l1",
+          "setting.gamepad.editor.r1",
+          "setting.gamepad.editor.l2",
+          "setting.gamepad.editor.r2",
+          "setting.gamepad.editor.l3",
+          "setting.gamepad.editor.r3",
+          "setting.gamepad.editor.view",
+          "setting.gamepad.editor.menu",
+          "setting.gamepad.editor.home",
+          "setting.gamepad.editor.dpadUp",
+          "setting.gamepad.editor.dpadDown",
+          "setting.gamepad.editor.dpadLeft",
+          "setting.gamepad.editor.dpadRight",
+          "setting.gamepad.editor.cancel",
+          "setting.gamepad.editor.defaults"
+        ],
+        "reachable": [
+          "setting.gamepad.editor.enabled",
+          "setting.gamepad.editor.close",
+          "setting.gamepad.editor.cancel",
+          "setting.gamepad.editor.rightStickUp",
+          "setting.gamepad.editor.defaults",
+          "setting.gamepad.editor.leftStickRight",
+          "setting.gamepad.editor.leftStickLeft",
+          "setting.gamepad.editor.leftStickDown",
+          "setting.gamepad.editor.leftStickUp",
+          "setting.gamepad.editor.rightStickDown",
+          "setting.gamepad.editor.rightStickLeft",
+          "setting.gamepad.editor.rightStickRight",
+          "setting.gamepad.editor.south",
+          "setting.gamepad.editor.east",
+          "setting.gamepad.editor.west",
+          "setting.gamepad.editor.north",
+          "setting.gamepad.editor.l1",
+          "setting.gamepad.editor.r1",
+          "setting.gamepad.editor.l2",
+          "setting.gamepad.editor.r2",
+          "setting.gamepad.editor.l3",
+          "setting.gamepad.editor.r3",
+          "setting.gamepad.editor.view",
+          "setting.gamepad.editor.menu",
+          "setting.gamepad.editor.home",
+          "setting.gamepad.editor.dpadUp",
+          "setting.gamepad.editor.dpadDown",
+          "setting.gamepad.editor.dpadLeft",
+          "setting.gamepad.editor.dpadRight"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整账户菜单的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "user.menu",
+        "nodes": [
+          "user-menu.close",
+          "user-menu.my",
+          "user-menu.logout"
+        ],
+        "reachable": [
+          "user-menu.my",
+          "user-menu.close",
+          "user-menu.logout"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整注销确认弹层的几何可达性",
+      "passed": true,
+      "evidence": {
+        "scope": "user-menu.logout-confirm",
+        "nodes": [
+          "user-menu.logout-confirm.close",
+          "user-menu.logout-confirm.cancel",
+          "user-menu.logout-confirm.confirm"
+        ],
+        "reachable": [
+          "user-menu.logout-confirm.cancel",
+          "user-menu.logout-confirm.confirm",
+          "user-menu.logout-confirm.close"
+        ],
+        "unreachable": []
+      }
+    },
+    {
+      "name": "完整账户菜单两级 B 取消及来源恢复",
+      "passed": true,
+      "evidence": {
+        "cancel": {
+          "route": "#/controller",
+          "native": "user-menu.logout",
+          "marked": [
+            "user-menu.logout"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "returned": {
+          "route": "#/controller",
+          "native": "top-nav.profile",
+          "marked": [
+            "top-nav.profile"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "390×844 完整通用设置实际视口与几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.general",
+          "marked": [
+            "setting.tabs.general"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "reachable": [
+            "setting.tabs.general",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "setting.items.general.fullscreen",
+            "top-nav.setting",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary",
+            "setting.tabs.advancedDiagnostics",
+            "setting.tabs.connectionHost",
+            "setting.tabs.streamingExperience"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 两个宽行开关连续导航",
+      "passed": true,
+      "evidence": {
+        "route": "#/setting",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "native": "setting.items.general.ui_audio",
+        "marked": [
+          "setting.items.general.ui_audio"
+        ],
+        "busy": [],
+        "pending": []
+      }
+    },
+    {
+      "name": "390×844 浅色通用设置几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+          "marked": [
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "reachable": [
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "top-nav.profile",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.tabs.general",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "setting.items.general.ui_audio",
+            "top-nav.setting",
+            "setting.items.general.fullscreen",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.tabs.advancedDiagnostics",
+            "setting.tabs.connectionHost",
+            "setting.tabs.streamingExperience",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 串流体验设置几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.streamingExperience",
+          "marked": [
+            "setting.tabs.streamingExperience"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.items.streamingExperience.xhome_resolution",
+            "setting.items.streamingExperience.resolution",
+            "setting.items.streamingExperience.video_format",
+            "setting.items.streamingExperience.display_options",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1"
+          ],
+          "reachable": [
+            "setting.tabs.streamingExperience",
+            "setting.items.streamingExperience.xhome_resolution",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "setting.items.streamingExperience.display_options",
+            "top-nav.setting",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.items.streamingExperience.video_format",
+            "setting.tabs.advancedDiagnostics",
+            "setting.items.streamingExperience.resolution",
+            "setting.tabs.connectionHost",
+            "setting.tabs.general"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 分辨率单选弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.single-select.option.0",
+          "marked": [
+            "setting.single-select.option.0"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "setting.single-select",
+          "nodes": [
+            "setting.single-select.close",
+            "setting.single-select.option.0",
+            "setting.single-select.option.1",
+            "setting.single-select.option.2",
+            "setting.single-select.option.3"
+          ],
+          "reachable": [
+            "setting.single-select.option.0",
+            "setting.single-select.close",
+            "setting.single-select.option.1",
+            "setting.single-select.option.2",
+            "setting.single-select.option.3"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 连接与主机设置几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.connectionHost",
+          "marked": [
+            "setting.tabs.connectionHost"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.items.connectionHost.force_region_ip",
+            "setting.items.connectionHost.preferred_game_language",
+            "setting.items.connectionHost.ipv6",
+            "setting.items.connectionHost.xhome_turn_fallback",
+            "setting.content.connectionHost.section.advanced"
+          ],
+          "reachable": [
+            "setting.tabs.connectionHost",
+            "setting.items.connectionHost.force_region_ip",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "setting.items.connectionHost.xhome_turn_fallback",
+            "top-nav.setting",
+            "setting.items.connectionHost.ipv6",
+            "setting.items.connectionHost.preferred_game_language",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.connectionHost.section.advanced",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 高级与诊断设置几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.advancedDiagnostics",
+          "marked": [
+            "setting.tabs.advancedDiagnostics"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.0",
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.1",
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+            "setting.items.advancedDiagnostics.debug"
+          ],
+          "reachable": [
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.0",
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.1",
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.items.advancedDiagnostics.debug",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 三个手动码率入口几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.streamingExperience",
+          "marked": [
+            "setting.tabs.streamingExperience"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.items.streamingExperience.xhome_resolution",
+            "setting.items.streamingExperience.resolution",
+            "setting.items.streamingExperience.video_format",
+            "setting.items.streamingExperience.display_options",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xhome_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xcloud_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+            "setting.items.streamingExperience.audio_bitrate"
+          ],
+          "reachable": [
+            "setting.tabs.streamingExperience",
+            "setting.items.streamingExperience.xhome_resolution",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "setting.items.streamingExperience.display_options",
+            "top-nav.setting",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.items.streamingExperience.xhome_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xcloud_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+            "setting.items.streamingExperience.audio_bitrate",
+            "setting.items.streamingExperience.video_format",
+            "setting.tabs.advancedDiagnostics",
+            "setting.items.streamingExperience.resolution",
+            "setting.tabs.connectionHost",
+            "setting.tabs.general"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 数字键盘嵌套弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.editor.xhome_bitrate.field.keyboard.key.0.0",
+          "marked": [
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.0"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "setting.editor.xhome_bitrate.field.keyboard",
+          "nodes": [
+            "setting.editor.xhome_bitrate.field.keyboard.close",
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.0",
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.2",
+            "setting.editor.xhome_bitrate.field.keyboard.key.1.0",
+            "setting.editor.xhome_bitrate.field.keyboard.key.1.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.1.2",
+            "setting.editor.xhome_bitrate.field.keyboard.key.2.0",
+            "setting.editor.xhome_bitrate.field.keyboard.key.2.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.2.2",
+            "setting.editor.xhome_bitrate.field.keyboard.key.3.0",
+            "setting.editor.xhome_bitrate.field.keyboard.key.3.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.3.2",
+            "setting.editor.xhome_bitrate.field.keyboard.backspace",
+            "setting.editor.xhome_bitrate.field.keyboard.cancel",
+            "setting.editor.xhome_bitrate.field.keyboard.clear",
+            "setting.editor.xhome_bitrate.field.keyboard.done"
+          ],
+          "reachable": [
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.0",
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.0.2",
+            "setting.editor.xhome_bitrate.field.keyboard.close",
+            "setting.editor.xhome_bitrate.field.keyboard.key.1.2",
+            "setting.editor.xhome_bitrate.field.keyboard.key.1.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.1.0",
+            "setting.editor.xhome_bitrate.field.keyboard.backspace",
+            "setting.editor.xhome_bitrate.field.keyboard.key.3.0",
+            "setting.editor.xhome_bitrate.field.keyboard.key.3.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.3.2",
+            "setting.editor.xhome_bitrate.field.keyboard.done",
+            "setting.editor.xhome_bitrate.field.keyboard.clear",
+            "setting.editor.xhome_bitrate.field.keyboard.cancel",
+            "setting.editor.xhome_bitrate.field.keyboard.key.2.2",
+            "setting.editor.xhome_bitrate.field.keyboard.key.2.1",
+            "setting.editor.xhome_bitrate.field.keyboard.key.2.0"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 数字键盘两级 B 返回来源",
+      "passed": true,
+      "evidence": {
+        "keyboardBack": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.editor.xhome_bitrate.field",
+          "marked": [
+            "setting.editor.xhome_bitrate.field"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "editorBack": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.items.streamingExperience.xhome_bitrate",
+          "marked": [
+            "setting.items.streamingExperience.xhome_bitrate"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "390×844 完整云游戏页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/xcloud",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "top-nav.xcloud",
+          "marked": [
+            "top-nav.xcloud"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "xcloud.search",
+            "xcloud.refresh",
+            "xcloud.jump.recent",
+            "xcloud.jump.new",
+            "xcloud.jump.all",
+            "v-0.next",
+            "xcloud.rail.recent.0.product-1",
+            "xcloud.rail.recent.1.product-2",
+            "xcloud.rail.recent.2.product-3",
+            "xcloud.rail.recent.3.product-4",
+            "v-1.next",
+            "xcloud.rail.new.0.product-5",
+            "xcloud.rail.new.1.product-6",
+            "xcloud.rail.new.2.product-7",
+            "xcloud.rail.new.3.product-8",
+            "xcloud.grid.all.0.product-1",
+            "xcloud.grid.all.1.product-2",
+            "xcloud.grid.all.2.product-3",
+            "xcloud.grid.all.3.product-4",
+            "xcloud.grid.all.4.product-5",
+            "xcloud.grid.all.5.product-6",
+            "xcloud.grid.all.6.product-7",
+            "xcloud.grid.all.7.product-8"
+          ],
+          "reachable": [
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "xcloud.grid.all.1.product-2",
+            "top-nav.setting",
+            "xcloud.rail.new.2.product-7",
+            "xcloud.rail.new.3.product-8",
+            "xcloud.rail.recent.3.product-4",
+            "xcloud.rail.recent.2.product-3",
+            "xcloud.rail.recent.1.product-2",
+            "xcloud.rail.recent.0.product-1",
+            "xcloud.jump.recent",
+            "xcloud.jump.new",
+            "xcloud.jump.all",
+            "xcloud.refresh",
+            "v-0.next",
+            "xcloud.search",
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "xcloud.grid.all.0.product-1",
+            "xcloud.grid.all.2.product-3",
+            "xcloud.grid.all.3.product-4",
+            "xcloud.grid.all.5.product-6",
+            "xcloud.grid.all.4.product-5",
+            "xcloud.grid.all.6.product-7",
+            "xcloud.grid.all.7.product-8",
+            "xcloud.rail.new.0.product-5",
+            "xcloud.rail.new.1.product-6",
+            "v-1.next"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 云游戏搜索屏幕键盘几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/xcloud",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "xcloud.search.keyboard.key.0.0",
+          "marked": [
+            "xcloud.search.keyboard.key.0.0"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "xcloud.search.keyboard",
+          "nodes": [
+            "xcloud.search.keyboard.close",
+            "xcloud.search.keyboard.key.0.0",
+            "xcloud.search.keyboard.key.0.1",
+            "xcloud.search.keyboard.key.0.2",
+            "xcloud.search.keyboard.key.0.3",
+            "xcloud.search.keyboard.key.0.4",
+            "xcloud.search.keyboard.key.0.5",
+            "xcloud.search.keyboard.key.0.6",
+            "xcloud.search.keyboard.key.0.7",
+            "xcloud.search.keyboard.key.0.8",
+            "xcloud.search.keyboard.key.0.9",
+            "xcloud.search.keyboard.key.1.0",
+            "xcloud.search.keyboard.key.1.1",
+            "xcloud.search.keyboard.key.1.2",
+            "xcloud.search.keyboard.key.1.3",
+            "xcloud.search.keyboard.key.1.4",
+            "xcloud.search.keyboard.key.1.5",
+            "xcloud.search.keyboard.key.1.6",
+            "xcloud.search.keyboard.key.1.7",
+            "xcloud.search.keyboard.key.1.8",
+            "xcloud.search.keyboard.key.1.9",
+            "xcloud.search.keyboard.key.2.0",
+            "xcloud.search.keyboard.key.2.1",
+            "xcloud.search.keyboard.key.2.2",
+            "xcloud.search.keyboard.key.2.3",
+            "xcloud.search.keyboard.key.2.4",
+            "xcloud.search.keyboard.key.2.5",
+            "xcloud.search.keyboard.key.2.6",
+            "xcloud.search.keyboard.key.2.7",
+            "xcloud.search.keyboard.key.2.8",
+            "xcloud.search.keyboard.key.2.9",
+            "xcloud.search.keyboard.key.3.0",
+            "xcloud.search.keyboard.key.3.1",
+            "xcloud.search.keyboard.key.3.2",
+            "xcloud.search.keyboard.key.3.3",
+            "xcloud.search.keyboard.key.3.4",
+            "xcloud.search.keyboard.key.3.5",
+            "xcloud.search.keyboard.key.3.6",
+            "xcloud.search.keyboard.key.3.7",
+            "xcloud.search.keyboard.key.3.8",
+            "xcloud.search.keyboard.key.3.9",
+            "xcloud.search.keyboard.shift",
+            "xcloud.search.keyboard.symbols",
+            "xcloud.search.keyboard.space",
+            "xcloud.search.keyboard.backspace",
+            "xcloud.search.keyboard.cancel",
+            "xcloud.search.keyboard.clear",
+            "xcloud.search.keyboard.done"
+          ],
+          "reachable": [
+            "xcloud.search.keyboard.key.0.0",
+            "xcloud.search.keyboard.key.0.1",
+            "xcloud.search.keyboard.key.0.2",
+            "xcloud.search.keyboard.key.0.3",
+            "xcloud.search.keyboard.key.0.4",
+            "xcloud.search.keyboard.key.0.5",
+            "xcloud.search.keyboard.key.0.6",
+            "xcloud.search.keyboard.key.0.7",
+            "xcloud.search.keyboard.key.0.8",
+            "xcloud.search.keyboard.key.0.9",
+            "xcloud.search.keyboard.key.1.9",
+            "xcloud.search.keyboard.key.1.8",
+            "xcloud.search.keyboard.key.1.7",
+            "xcloud.search.keyboard.key.1.6",
+            "xcloud.search.keyboard.key.1.5",
+            "xcloud.search.keyboard.key.1.4",
+            "xcloud.search.keyboard.key.1.3",
+            "xcloud.search.keyboard.key.1.2",
+            "xcloud.search.keyboard.key.1.1",
+            "xcloud.search.keyboard.key.1.0",
+            "xcloud.search.keyboard.key.2.0",
+            "xcloud.search.keyboard.key.2.1",
+            "xcloud.search.keyboard.key.2.2",
+            "xcloud.search.keyboard.key.2.3",
+            "xcloud.search.keyboard.key.2.4",
+            "xcloud.search.keyboard.key.2.5",
+            "xcloud.search.keyboard.key.2.6",
+            "xcloud.search.keyboard.key.2.7",
+            "xcloud.search.keyboard.key.2.8",
+            "xcloud.search.keyboard.key.2.9",
+            "xcloud.search.keyboard.key.3.9",
+            "xcloud.search.keyboard.key.3.8",
+            "xcloud.search.keyboard.key.3.7",
+            "xcloud.search.keyboard.key.3.6",
+            "xcloud.search.keyboard.key.3.5",
+            "xcloud.search.keyboard.key.3.4",
+            "xcloud.search.keyboard.key.3.3",
+            "xcloud.search.keyboard.key.3.2",
+            "xcloud.search.keyboard.key.3.1",
+            "xcloud.search.keyboard.key.3.0",
+            "xcloud.search.keyboard.shift",
+            "xcloud.search.keyboard.symbols",
+            "xcloud.search.keyboard.space",
+            "xcloud.search.keyboard.done",
+            "xcloud.search.keyboard.clear",
+            "xcloud.search.keyboard.cancel",
+            "xcloud.search.keyboard.backspace",
+            "xcloud.search.keyboard.close"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 云游戏方向导航到达延迟渲染的最后一款游戏",
+      "passed": true,
+      "evidence": {
+        "traversal": [
+          "xcloud.grid.all.2.product-3",
+          "xcloud.grid.all.4.product-5",
+          "xcloud.grid.all.6.product-7",
+          "top-nav.xcloud",
+          "xcloud.grid.all.10.product-11"
+        ],
+        "current": {
+          "route": "#/xcloud",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "xcloud.grid.all.11.product-12",
+          "marked": [
+            "xcloud.grid.all.11.product-12"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "xcloud.search",
+            "xcloud.refresh",
+            "xcloud.jump.recent",
+            "xcloud.jump.new",
+            "xcloud.jump.all",
+            "v-0.next",
+            "xcloud.rail.recent.0.product-1",
+            "xcloud.rail.recent.1.product-2",
+            "xcloud.rail.recent.2.product-3",
+            "xcloud.rail.recent.3.product-4",
+            "v-1.next",
+            "xcloud.rail.new.0.product-5",
+            "xcloud.rail.new.1.product-6",
+            "xcloud.rail.new.2.product-7",
+            "xcloud.rail.new.3.product-8",
+            "xcloud.grid.all.0.product-1",
+            "xcloud.grid.all.1.product-2",
+            "xcloud.grid.all.2.product-3",
+            "xcloud.grid.all.3.product-4",
+            "xcloud.grid.all.4.product-5",
+            "xcloud.grid.all.5.product-6",
+            "xcloud.grid.all.6.product-7",
+            "xcloud.grid.all.7.product-8",
+            "xcloud.grid.all.8.product-9",
+            "xcloud.grid.all.9.product-10",
+            "xcloud.grid.all.10.product-11",
+            "xcloud.grid.all.11.product-12"
+          ],
+          "reachable": [
+            "xcloud.grid.all.11.product-12",
+            "top-nav.setting",
+            "xcloud.refresh",
+            "top-nav.profile",
+            "xcloud.rail.new.2.product-7",
+            "xcloud.rail.new.3.product-8",
+            "xcloud.rail.recent.3.product-4",
+            "xcloud.rail.recent.2.product-3",
+            "xcloud.rail.recent.1.product-2",
+            "xcloud.rail.recent.0.product-1",
+            "top-nav.brand",
+            "xcloud.grid.all.4.product-5",
+            "xcloud.grid.all.5.product-6",
+            "xcloud.grid.all.3.product-4",
+            "xcloud.grid.all.2.product-3",
+            "xcloud.grid.all.0.product-1",
+            "xcloud.grid.all.1.product-2",
+            "v-1.next",
+            "xcloud.rail.new.1.product-6",
+            "xcloud.rail.new.0.product-5",
+            "xcloud.jump.new",
+            "xcloud.jump.all",
+            "xcloud.grid.all.7.product-8",
+            "xcloud.grid.all.9.product-10",
+            "xcloud.grid.all.8.product-9",
+            "xcloud.jump.recent",
+            "xcloud.grid.all.6.product-7",
+            "xcloud.grid.all.10.product-11",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "xcloud.search",
+            "v-0.next"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 账户与好友页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "top-nav.my",
+          "marked": [
+            "top-nav.my"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "my.account.refresh",
+            "my.friends.search",
+            "my.friends.filter",
+            "my.friend.fixture-friend-1",
+            "my.friend.fixture-friend-3",
+            "my.friend.fixture-friend-2"
+          ],
+          "reachable": [
+            "top-nav.my",
+            "top-nav.controller",
+            "my.friend.fixture-friend-1",
+            "top-nav.setting",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "library.tab.album",
+            "my.account.refresh",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "my.friends.search",
+            "my.friends.filter",
+            "my.friend.fixture-friend-3",
+            "my.friend.fixture-friend-2"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 库内筛选弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "my.friends.filter.options.option.0",
+          "marked": [
+            "my.friends.filter.options.option.0"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "my.friends.filter.options",
+          "nodes": [
+            "my.friends.filter.options.close",
+            "my.friends.filter.options.option.0",
+            "my.friends.filter.options.option.1",
+            "my.friends.filter.options.option.2"
+          ],
+          "reachable": [
+            "my.friends.filter.options.option.0",
+            "my.friends.filter.options.close",
+            "my.friends.filter.options.option.1",
+            "my.friends.filter.options.option.2"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 完整相册页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/album",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "library.tab.album",
+          "marked": [
+            "library.tab.album"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "album.refresh",
+            "album.filter",
+            "album.game-filter",
+            "album.clip.clip-1",
+            "album.screenshot.screenshot-1",
+            "album.clip.clip-2",
+            "album.screenshot.screenshot-2",
+            "album.more"
+          ],
+          "reachable": [
+            "library.tab.album",
+            "album.game-filter",
+            "album.clip.clip-1",
+            "top-nav.setting",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "album.screenshot.screenshot-2",
+            "album.more",
+            "album.clip.clip-2",
+            "album.screenshot.screenshot-1",
+            "library.tab.account",
+            "album.refresh",
+            "album.filter",
+            "library.tab.achievements",
+            "library.tab.statistics"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 相册视频七个控件几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/album",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "album.preview.close",
+          "marked": [
+            "album.preview.close"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "album.preview",
+          "nodes": [
+            "album.preview.close",
+            "album.preview.play",
+            "album.preview.rewind",
+            "album.preview.forward",
+            "album.preview.volume-down",
+            "album.preview.volume-up",
+            "album.preview.mute",
+            "album.preview.fullscreen",
+            "album.preview.refresh",
+            "album.preview.save",
+            "album.preview.game"
+          ],
+          "reachable": [
+            "album.preview.close",
+            "album.preview.forward",
+            "album.preview.fullscreen",
+            "album.preview.mute",
+            "album.preview.volume-up",
+            "album.preview.volume-down",
+            "album.preview.refresh",
+            "album.preview.save",
+            "album.preview.game",
+            "album.preview.play",
+            "album.preview.rewind"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 二级菜单上下分栏与悬浮面板隐藏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.streamingExperience",
+          "marked": [
+            "setting.tabs.streamingExperience"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 390,
+              "width": 390,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750,
+            "height": 678,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750,
+            "height": 570,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 180
+          },
+          "sidebar": {
+            "bottom": 164,
+            "height": 92,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 横向菜单 A 切换保持当前菜单焦点",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.streamingExperience",
+          "marked": [
+            "setting.tabs.streamingExperience"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局串流体验页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.streamingExperience",
+          "marked": [
+            "setting.tabs.streamingExperience"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.items.streamingExperience.xhome_resolution",
+            "setting.items.streamingExperience.resolution",
+            "setting.items.streamingExperience.video_format",
+            "setting.items.streamingExperience.display_options",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xhome_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xcloud_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+            "setting.items.streamingExperience.audio_bitrate"
+          ],
+          "reachable": [
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "top-nav.setting",
+            "top-nav.controller",
+            "top-nav.my",
+            "top-nav.xcloud",
+            "top-nav.xhome",
+            "setting.items.streamingExperience.codec",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xhome_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xhome_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.xcloud_bitrate_mode.option.1",
+            "setting.items.streamingExperience.xcloud_bitrate",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.0",
+            "setting.content.streamingExperience.inlineSelect.setting.items.streamingExperience.audio_bitrate_mode.option.1",
+            "setting.items.streamingExperience.audio_bitrate",
+            "setting.items.streamingExperience.enable_audio_control",
+            "setting.items.streamingExperience.display_options",
+            "setting.items.streamingExperience.video_format",
+            "setting.items.streamingExperience.resolution",
+            "setting.items.streamingExperience.xhome_resolution",
+            "setting.tabs.general",
+            "top-nav.brand",
+            "top-nav.profile"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 最后二级菜单方向导航后完整显露",
+      "passed": true,
+      "evidence": {
+        "focused": {
+          "id": "setting.tabs.advancedDiagnostics",
+          "right": 358.5,
+          "x": 254.5
+        },
+        "nav": {
+          "right": 374,
+          "x": 16
+        },
+        "scrollLeft": 57.5,
+        "visible": true
+      }
+    },
+    {
+      "name": "320×844 超窄屏上下布局与悬浮面板隐藏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 320,
+            "height": 844
+          },
+          "native": "setting.tabs.advancedDiagnostics",
+          "marked": [
+            "setting.tabs.advancedDiagnostics"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 320,
+              "width": 320,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750,
+            "height": 678,
+            "right": 308,
+            "width": 296,
+            "x": 12,
+            "y": 72
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750,
+            "height": 570,
+            "right": 308,
+            "width": 296,
+            "x": 12,
+            "y": 180
+          },
+          "sidebar": {
+            "bottom": 164,
+            "height": 92,
+            "right": 308,
+            "width": 296,
+            "x": 12,
+            "y": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "320×844 四个二级菜单连续方向导航与滚动显露",
+      "passed": true,
+      "evidence": {
+        "focus": "setting.tabs.advancedDiagnostics",
+        "scrollLeft": 127.5,
+        "visible": true
+      }
+    },
+    {
+      "name": "320×844 从顶部二级菜单向下进入内容控件",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 320,
+            "height": 844
+          },
+          "native": "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+          "marked": [
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "600×844 上下分栏断点含边界",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 600,
+            "height": 844
+          },
+          "native": "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+          "marked": [
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 600,
+              "width": 600,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750,
+            "height": 678,
+            "right": 588,
+            "width": 576,
+            "x": 12,
+            "y": 72
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750,
+            "height": 570,
+            "right": 588,
+            "width": 576,
+            "x": 12,
+            "y": 180
+          },
+          "sidebar": {
+            "bottom": 164,
+            "height": 92,
+            "right": 588,
+            "width": 576,
+            "x": 12,
+            "y": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "601×844 左右分栏与悬浮提示恢复",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 601,
+            "height": 844
+          },
+          "native": "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2",
+          "marked": [
+            "setting.content.advancedDiagnostics.inlineSelect.setting.items.advancedDiagnostics.runtime_trace_mode.option.2"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 601,
+              "width": 601,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "134px",
+            "scrollPaddingBottom": "134px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 762,
+              "height": 40,
+              "right": 507.5,
+              "width": 414,
+              "x": 93.5,
+              "y": 722
+            },
+            "display": "flex",
+            "statusClip": "none"
+          },
+          "layout": {
+            "bottom": 710,
+            "height": 638,
+            "right": 581,
+            "width": 561,
+            "x": 20,
+            "y": 72
+          },
+          "menuDirection": "column",
+          "overflow": false,
+          "panel": {
+            "bottom": 710,
+            "height": 638,
+            "right": 581,
+            "width": 365,
+            "x": 216,
+            "y": 72
+          },
+          "sidebar": {
+            "bottom": 710,
+            "height": 638,
+            "right": 200,
+            "width": 180,
+            "x": 20,
+            "y": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局通用设置页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.streamingExperience",
+          "marked": [
+            "setting.tabs.streamingExperience"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "setting.tabs.general",
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.items.general.fullscreen",
+            "setting.items.general.ui_audio",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary"
+          ],
+          "reachable": [
+            "setting.tabs.streamingExperience",
+            "setting.tabs.connectionHost",
+            "setting.tabs.advancedDiagnostics",
+            "top-nav.setting",
+            "top-nav.controller",
+            "top-nav.my",
+            "top-nav.xcloud",
+            "top-nav.xhome",
+            "setting.content.general.inlineSelect.setting.update.channel.option.0",
+            "setting.content.general.inlineSelect.setting.update.channel.option.1",
+            "setting.update.primary",
+            "setting.items.general.ui_audio",
+            "setting.items.general.fullscreen",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+            "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+            "setting.tabs.general",
+            "top-nav.brand",
+            "top-nav.profile"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局主题保存后焦点保持",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+          "marked": [
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局录像 B 返回保持来源",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/album",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "album.clip.clip-1",
+          "marked": [
+            "album.clip.clip-1"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局摇杆编辑 B 返回保持来源",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/controller",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "controller.settings.sticks",
+          "marked": [
+            "controller.settings.sticks"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "完整串流故障弹层全部控件几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/xhome/stream/fixture-console?name=%E6%9C%AC%E5%9C%B0%E4%B8%BB%E6%9C%BA&consoleId=fixture-console&powerState=On&remoteManagementEnabled=1",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "native": "stream.failure.exit",
+          "marked": [
+            "stream.failure.exit"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "stream.failed-sheet",
+          "nodes": [
+            "stream.failure.exit",
+            "stream.failure.exportTrace",
+            "stream.failed-sheet.details"
+          ],
+          "reachable": [
+            "stream.failure.exit",
+            "stream.failure.exportTrace",
+            "stream.failed-sheet.details"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "完整串流故障诊断 A 展开并保持焦点",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/xhome/stream/fixture-console?name=%E6%9C%AC%E5%9C%B0%E4%B8%BB%E6%9C%BA&consoleId=fixture-console&powerState=On&remoteManagementEnabled=1",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "native": "stream.failed-sheet.details",
+          "marked": [
+            "stream.failed-sheet.details"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "expanded": "true"
+      }
+    },
+    {
+      "name": "完整串流故障返回首页恢复有效焦点",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/xhome",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "native": "xhome.primary",
+          "marked": [
+            "xhome.primary"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "xhome.refresh",
+            "xhome.primary",
+            "xhome.installed-games",
+            "xhome.host.fixture-console",
+            "xhome.host.fixture-console-s"
+          ],
+          "reachable": [
+            "xhome.primary",
+            "xhome.installed-games",
+            "xhome.host.fixture-console",
+            "xhome.host.fixture-console-s",
+            "xhome.refresh",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.brand",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 控制器设置页上下分栏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/controller",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "controller.settings.sticks",
+          "marked": [
+            "controller.settings.sticks"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 390,
+              "width": 390,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750,
+            "height": 682,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 68
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750,
+            "height": 570,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 180
+          },
+          "sidebar": {
+            "bottom": 164,
+            "height": 92,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局控制器设置页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/controller",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "controller.settings.sticks",
+          "marked": [
+            "controller.settings.sticks"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "controller.tabs.connection",
+            "controller.tabs.settings",
+            "controller.settings.background",
+            "controller.settings.layout",
+            "controller.settings.sticks",
+            "controller.settings.keyboard",
+            "controller.settings.advanced"
+          ],
+          "reachable": [
+            "controller.settings.sticks",
+            "top-nav.controller",
+            "top-nav.setting",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "controller.settings.advanced",
+            "controller.settings.keyboard",
+            "controller.tabs.connection",
+            "controller.tabs.settings",
+            "controller.settings.background",
+            "controller.settings.layout"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 我的账户菜单与页面上下分栏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "top-nav.my",
+          "marked": [
+            "top-nav.my"
+          ],
+          "busy": [
+            "my.account.refresh"
+          ],
+          "pending": [
+            "data.getPersonalAccount"
+          ]
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 390,
+              "width": 390,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750.9864730834961,
+            "height": 678,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72.9864730834961
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750.9864807128906,
+            "height": 570,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 180.98648071289065
+          },
+          "sidebar": {
+            "bottom": 164.98648071289062,
+            "height": 92.00000762939452,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72.9864730834961
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局账户与好友页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "top-nav.my",
+          "marked": [
+            "top-nav.my"
+          ],
+          "busy": [
+            "my.account.refresh"
+          ],
+          "pending": [
+            "data.getPersonalAccount"
+          ]
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "my.account.refresh",
+            "my.friends.search",
+            "my.friends.filter",
+            "my.friend.fixture-friend-1",
+            "my.friend.fixture-friend-3",
+            "my.friend.fixture-friend-2"
+          ],
+          "reachable": [
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "my.friend.fixture-friend-2",
+            "my.friend.fixture-friend-3",
+            "my.friend.fixture-friend-1",
+            "my.friends.filter",
+            "my.account.refresh",
+            "library.tab.album",
+            "library.tab.statistics",
+            "library.tab.achievements",
+            "library.tab.account",
+            "my.friends.search"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 好友详情菜单与页面上下分栏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/account/friends/fixture-friend-1?from=/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "friend.current-game",
+          "marked": [
+            "friend.current-game"
+          ],
+          "busy": [
+            "friend.refresh",
+            "my.achievements.refresh",
+            "my.achievements.more"
+          ],
+          "pending": [
+            "data.getPersonalAccount",
+            "data.getGameHistory"
+          ]
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 390,
+              "width": 390,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750.9815521240234,
+            "height": 678,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72.98155212402344
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750.9815521240234,
+            "height": 570,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 180.98155212402344
+          },
+          "sidebar": {
+            "bottom": 164.98155212402344,
+            "height": 92,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72.98155212402344
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局好友详情页几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/account/friends/fixture-friend-1?from=/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "friend.current-game",
+          "marked": [
+            "friend.current-game"
+          ],
+          "busy": [
+            "friend.refresh",
+            "my.achievements.refresh",
+            "my.achievements.more"
+          ],
+          "pending": [
+            "data.getPersonalAccount",
+            "data.getGameHistory"
+          ]
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "friend.back",
+            "friend.refresh",
+            "friend.current-game",
+            "my.achievements.refresh",
+            "my.achievements.search",
+            "my.achievements.filter",
+            "my.achievements.game.game-1",
+            "my.achievements.game.game-2",
+            "my.achievements.more"
+          ],
+          "reachable": [
+            "friend.current-game",
+            "my.achievements.filter",
+            "top-nav.setting",
+            "friend.refresh",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "my.achievements.game.game-2",
+            "my.achievements.game.game-1",
+            "my.achievements.search",
+            "my.achievements.refresh",
+            "my.achievements.more",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "friend.back"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 游戏详情菜单与页面上下分栏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/achievements/game-1?targetXuid=fixture-friend-1&tab=achievements&from=/my/account/friends/fixture-friend-1?from=/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "game.back",
+          "marked": [
+            "game.back"
+          ],
+          "busy": [
+            "game.achievements.refresh",
+            "game.achievements.more"
+          ],
+          "pending": [
+            "data.getPersonalAccount",
+            "data.getGameHistory",
+            "data.getAchievements"
+          ]
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 390,
+              "width": 390,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750.9836807250977,
+            "height": 678,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72.98368072509766
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750.9836883544922,
+            "height": 570,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 180.9836883544922
+          },
+          "sidebar": {
+            "bottom": 164.98367309570312,
+            "height": 91.99999237060548,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72.98368072509766
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局游戏成就详情几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/achievements/game-1?targetXuid=fixture-friend-1&tab=achievements&from=/my/account/friends/fixture-friend-1?from=/my/account",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "game.back",
+          "marked": [
+            "game.back"
+          ],
+          "busy": [
+            "game.achievements.refresh",
+            "game.achievements.more"
+          ],
+          "pending": [
+            "data.getPersonalAccount",
+            "data.getGameHistory",
+            "data.getAchievements"
+          ]
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.overview",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "game.back",
+            "game.refresh",
+            "game.achievements.refresh",
+            "game.achievements.search",
+            "game.achievements.filter",
+            "achievement.:achievement-1",
+            "achievement.:achievement-2",
+            "game.achievements.more"
+          ],
+          "reachable": [
+            "game.back",
+            "game.refresh",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "achievement.:achievement-2",
+            "top-nav.controller",
+            "top-nav.setting",
+            "achievement.:achievement-1",
+            "game.achievements.search",
+            "game.achievements.filter",
+            "game.achievements.refresh",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "library.tab.overview",
+            "game.achievements.more"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 相册二级菜单与内容上下分栏",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/album",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "library.tab.album",
+          "marked": [
+            "library.tab.album"
+          ],
+          "busy": [
+            "album.refresh",
+            "album.more"
+          ],
+          "pending": [
+            "data.getMedia"
+          ]
+        },
+        "metrics": {
+          "content": {
+            "box": {
+              "bottom": 844,
+              "height": 792,
+              "right": 390,
+              "width": 390,
+              "x": 0,
+              "y": 52
+            },
+            "paddingBottom": "94px",
+            "scrollPaddingBottom": "94px"
+          },
+          "hints": {
+            "box": {
+              "bottom": 0,
+              "height": 0,
+              "right": 0,
+              "width": 0,
+              "x": 0,
+              "y": 0
+            },
+            "display": "contents",
+            "statusClip": "inset(50%)"
+          },
+          "layout": {
+            "bottom": 750,
+            "height": 678,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72
+          },
+          "menuDirection": "row",
+          "overflow": false,
+          "panel": {
+            "bottom": 750,
+            "height": 570,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 180
+          },
+          "sidebar": {
+            "bottom": 164,
+            "height": 92,
+            "right": 378,
+            "width": 366,
+            "x": 12,
+            "y": 72
+          }
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局相册列表几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/my/album",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "library.tab.album",
+          "marked": [
+            "library.tab.album"
+          ],
+          "busy": [
+            "album.refresh",
+            "album.more"
+          ],
+          "pending": [
+            "data.getMedia"
+          ]
+        },
+        "graph": {
+          "scope": "app.shell",
+          "nodes": [
+            "top-nav.brand",
+            "top-nav.profile",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics",
+            "library.tab.album",
+            "album.refresh",
+            "album.filter",
+            "album.game-filter",
+            "album.clip.clip-1",
+            "album.screenshot.screenshot-1",
+            "album.clip.clip-2",
+            "album.screenshot.screenshot-2",
+            "album.more"
+          ],
+          "reachable": [
+            "library.tab.album",
+            "top-nav.profile",
+            "top-nav.brand",
+            "top-nav.xhome",
+            "top-nav.xcloud",
+            "top-nav.my",
+            "top-nav.controller",
+            "top-nav.setting",
+            "album.clip.clip-2",
+            "album.screenshot.screenshot-2",
+            "album.more",
+            "album.screenshot.screenshot-1",
+            "album.clip.clip-1",
+            "album.refresh",
+            "album.game-filter",
+            "album.filter",
+            "library.tab.account",
+            "library.tab.achievements",
+            "library.tab.statistics"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局选择弹层几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.single-select.option.0",
+          "marked": [
+            "setting.single-select.option.0"
+          ],
+          "busy": [],
+          "pending": [
+            "data.getMedia"
+          ]
+        },
+        "graph": {
+          "scope": "setting.single-select",
+          "nodes": [
+            "setting.single-select.close",
+            "setting.single-select.option.0",
+            "setting.single-select.option.1",
+            "setting.single-select.option.2",
+            "setting.single-select.option.3"
+          ],
+          "reachable": [
+            "setting.single-select.option.0",
+            "setting.single-select.close",
+            "setting.single-select.option.1",
+            "setting.single-select.option.2",
+            "setting.single-select.option.3"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 新布局选择 B 返回保持来源",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.items.streamingExperience.xhome_resolution",
+          "marked": [
+            "setting.items.streamingExperience.xhome_resolution"
+          ],
+          "busy": [],
+          "pending": [
+            "data.getMedia"
+          ]
+        }
+      }
+    },
+    {
+      "name": "完整本地登录页默认焦点与控件几何可达",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/login",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "native": "login.sign-in",
+          "marked": [
+            "login.sign-in"
+          ],
+          "busy": [],
+          "pending": []
+        },
+        "graph": {
+          "scope": "login.scope",
+          "nodes": [
+            "login.sign-in"
+          ],
+          "reachable": [
+            "login.sign-in"
+          ],
+          "unreachable": []
+        }
+      }
+    },
+    {
+      "name": "390×844 设置四分类连续两轮 A 往返保持已选菜单",
+      "passed": true,
+      "evidence": {
+        "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+        "steps": [
+          {
+            "cycle": 0,
+            "key": "streamingExperience",
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "key": "connectionHost",
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "key": "advancedDiagnostics",
+            "expected": "setting.tabs.advancedDiagnostics",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.advancedDiagnostics",
+              "marked": [
+                "setting.tabs.advancedDiagnostics"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "key": "connectionHost",
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "key": "streamingExperience",
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "key": "general",
+            "expected": "setting.tabs.general",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.general",
+              "marked": [
+                "setting.tabs.general"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "key": "streamingExperience",
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "key": "connectionHost",
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "key": "advancedDiagnostics",
+            "expected": "setting.tabs.advancedDiagnostics",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.advancedDiagnostics",
+              "marked": [
+                "setting.tabs.advancedDiagnostics"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "key": "connectionHost",
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "key": "streamingExperience",
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "key": "general",
+            "expected": "setting.tabs.general",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "setting.tabs.general",
+              "marked": [
+                "setting.tabs.general"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          }
+        ],
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.tabs.general",
+          "marked": [
+            "setting.tabs.general"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    },
+    {
+      "name": "390×844 控制器分类连续两轮 A 往返保持已选菜单",
+      "passed": true,
+      "evidence": {
+        "steps": [
+          {
+            "cycle": 0,
+            "expected": "controller.tabs.settings",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/controller",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "controller.tabs.settings",
+              "marked": [
+                "controller.tabs.settings"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "expected": "controller.tabs.connection",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/controller",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "controller.tabs.connection",
+              "marked": [
+                "controller.tabs.connection"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "controller.tabs.settings",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/controller",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "controller.tabs.settings",
+              "marked": [
+                "controller.tabs.settings"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "controller.tabs.connection",
+            "instanceId": "3f69b559-ca15-44bb-9536-6e163fbbc86f",
+            "current": {
+              "route": "#/controller",
+              "viewport": {
+                "width": 390,
+                "height": 844
+              },
+              "native": "controller.tabs.connection",
+              "marked": [
+                "controller.tabs.connection"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "1280×720 设置四分类连续两轮 A 往返保持已选菜单",
+      "passed": true,
+      "evidence": {
+        "steps": [
+          {
+            "cycle": 0,
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "expected": "setting.tabs.advancedDiagnostics",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.advancedDiagnostics",
+              "marked": [
+                "setting.tabs.advancedDiagnostics"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 0,
+            "expected": "setting.tabs.general",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.general",
+              "marked": [
+                "setting.tabs.general"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "setting.tabs.advancedDiagnostics",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.advancedDiagnostics",
+              "marked": [
+                "setting.tabs.advancedDiagnostics"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "setting.tabs.connectionHost",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.connectionHost",
+              "marked": [
+                "setting.tabs.connectionHost"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "setting.tabs.streamingExperience",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.streamingExperience",
+              "marked": [
+                "setting.tabs.streamingExperience"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          },
+          {
+            "cycle": 1,
+            "expected": "setting.tabs.general",
+            "instanceId": "733e42b2-d6f2-4240-99b8-10f3df51a9ed",
+            "current": {
+              "route": "#/setting",
+              "viewport": {
+                "width": 1280,
+                "height": 720
+              },
+              "native": "setting.tabs.general",
+              "marked": [
+                "setting.tabs.general"
+              ],
+              "busy": [],
+              "pending": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "分类恢复修复后 390×844 主题保存继续保持来源",
+      "passed": true,
+      "evidence": {
+        "current": {
+          "route": "#/setting",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "native": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+          "marked": [
+            "setting.content.general.inlineSelect.setting.items.general.theme.option.1"
+          ],
+          "busy": [],
+          "pending": []
+        }
+      }
+    }
+  ]
+}

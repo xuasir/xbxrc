@@ -6,6 +6,56 @@ vi.mock('./haptics', () => ({ playNavSound: vi.fn(), triggerNavHaptic: vi.fn() }
 
 afterEach(() => vi.unstubAllGlobals())
 
+describe('滚动区与固定操作栏的几何导航', () => {
+  const rect = (top: number) => ({ left: 100, right: 300, top, bottom: top + 40, width: 200, height: 40 })
+
+  it.each(['down', 'up'] as const)('%s 优先显露滚动区内控件，固定操作栏保持区外', (direction) => {
+    const { engine, node, zone, focus } = fixture()
+    const modal = zone('modal')
+    const body = Object.assign(node('body', modal, false, 'div'), { scrollTop: 0, scrollLeft: 0, scrollTo: vi.fn() })
+    body.attrs.set('data-nav-scroll-container', 'true')
+    body.getBoundingClientRect = () => ({ left: 0, right: 360, top: 80, bottom: 240, width: 360, height: 160 })
+    const source = node('source', body)
+    const target = node('target', body)
+    const outside = node('fixed-action', modal)
+    source.getBoundingClientRect = () => rect(direction === 'down' ? 100 : 200)
+    target.getBoundingClientRect = () => rect(direction === 'down' ? 360 : 20)
+    outside.getBoundingClientRect = () => rect(direction === 'down' ? 260 : 120)
+    focus(source)
+    engine.start()
+    try {
+      inputDispatcher.dispatch(direction === 'down' ? NavigationIntent.Down : NavigationIntent.Up)
+      expect(engine.getCurrentFocus()).toBe(target)
+      expect(body.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: direction === 'down' ? 160 : -60 }))
+    }
+    finally { engine.stop() }
+  })
+
+  it('滚动区边界可以进入固定操作栏，横向移动继续使用全部几何候选', () => {
+    const { engine, node, zone, focus } = fixture()
+    const modal = zone('modal')
+    const body = Object.assign(node('body', modal, false, 'div'), { scrollTop: 0, scrollLeft: 0, scrollTo: vi.fn() })
+    body.attrs.set('data-nav-scroll-container', 'true')
+    body.getBoundingClientRect = () => ({ left: 0, right: 360, top: 80, bottom: 240, width: 360, height: 160 })
+    const last = node('last', body)
+    const footer = node('footer', modal)
+    const sidebar = node('sidebar', modal)
+    last.getBoundingClientRect = () => rect(180)
+    footer.getBoundingClientRect = () => rect(260)
+    sidebar.getBoundingClientRect = () => ({ left: 400, right: 480, top: 180, bottom: 220, width: 80, height: 40 })
+    focus(last)
+    engine.start()
+    try {
+      inputDispatcher.dispatch(NavigationIntent.Down)
+      expect(engine.getCurrentFocus()).toBe(footer)
+      focus(last)
+      inputDispatcher.dispatch(NavigationIntent.Right)
+      expect(engine.getCurrentFocus()).toBe(sidebar)
+    }
+    finally { engine.stop() }
+  })
+})
+
 describe('sticky header focus', () => {
   it.each([[false, 'smooth'], [true, 'auto']] as const)('uses reduced motion = %s when scrolling to focus', (matches, behavior) => {
     const { engine, node } = fixture()

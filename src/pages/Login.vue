@@ -9,6 +9,7 @@ import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spati
 import { createAuthTraceOperationId, recordAuthTrace } from '../services/auth-trace'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
+import { loginRecoveryAction } from './login-recovery'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -17,6 +18,7 @@ const route = useRoute()
 type LoginViewState = 'checking' | 'idle' | 'submitting'
 
 const viewState = ref<LoginViewState>('checking')
+const recoveryAction = ref<'retry' | 'login' | null>(null)
 const loginTraceId = createAuthTraceOperationId()
 
 function trace(event: string, context: AuthTraceContext = {}): void {
@@ -41,6 +43,9 @@ const loginStatusLine = computed(() => {
   if (viewState.value === 'submitting') {
     return t('login.signingStatusLine')
   }
+  if (recoveryAction.value) {
+    return t(recoveryAction.value === 'retry' ? 'login.restoreRetryHelp' : 'login.restoreLoginHelp')
+  }
   return t('login.playLine')
 })
 const loginActionLabel = computed(() => {
@@ -49,6 +54,9 @@ const loginActionLabel = computed(() => {
   }
   if (viewState.value === 'submitting') {
     return t('login.signingIn')
+  }
+  if (recoveryAction.value) {
+    return t(recoveryAction.value === 'retry' ? 'login.retryRestore' : 'streamPage.failure.login')
   }
   return t('login.signInSimple')
 })
@@ -98,6 +106,8 @@ function applyAuthStateView(
 }
 
 async function bootstrapLoginState(): Promise<void> {
+  recoveryAction.value = null
+  viewState.value = 'checking'
   const startedAt = performance.now()
   trace('loginRestoreStarted', { trigger: 'bootstrap' })
   try {
@@ -122,6 +132,7 @@ async function bootstrapLoginState(): Promise<void> {
       trace('loginAuthCheckCompleted', { outcome: 'success' })
     }
     catch (error) {
+      recoveryAction.value = loginRecoveryAction(error)
       viewState.value = 'idle'
       trace('loginRestoreCompleted', { outcome: 'failed', error, durationMs: Math.round(performance.now() - startedAt) })
       return
@@ -138,9 +149,20 @@ async function bootstrapLoginState(): Promise<void> {
     applyAuthStateView(nextState)
   }
   catch (error) {
+    recoveryAction.value = loginRecoveryAction(error)
+    viewState.value = 'idle'
     trace('loginRestoreFailed', { error, durationMs: Math.round(performance.now() - startedAt) })
-    throw error
   }
+}
+
+async function handleLoginAction(): Promise<void> {
+  if (viewState.value !== 'idle')
+    return
+  if (recoveryAction.value === 'retry') {
+    await bootstrapLoginState()
+    return
+  }
+  await handleSignIn()
 }
 
 async function handleSignIn(): Promise<void> {
@@ -160,6 +182,7 @@ async function handleSignIn(): Promise<void> {
   }
 
   viewState.value = 'submitting'
+  recoveryAction.value = null
   const startedAt = performance.now()
   trace('loginSignInStarted', { trigger: 'sign-in' })
   try {
@@ -239,7 +262,7 @@ onUnmounted(() => {
           as="button"
           class="login-content__sign-in ui-action-button ui-action-button--brand"
           type="button"
-          @click="() => void handleSignIn()"
+          @click="() => void handleLoginAction()"
         >
           {{ loginActionLabel }}
         </Focusable>

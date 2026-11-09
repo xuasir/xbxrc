@@ -8,6 +8,7 @@ import { Focusable } from '@/navigation/core/vue'
 import { rpc } from '@/services/rpc'
 import { formatDate, formatMinutes, isCompleted, progressText, rankGames, useLibraryFocusFallback } from './library-view'
 import LibraryRefresh from './LibraryRefresh.vue'
+import LibrarySelectControl from './LibrarySelectControl.vue'
 import { useLibraryPage, useLibraryQuery } from './use-library-query'
 import { usePlaytimes } from './use-playtimes'
 
@@ -72,15 +73,7 @@ async function refresh() {
     </div>
     <div class="library-toolbar">
       <SettingInputControl :id="`my.${mode}.search`" v-model="search" scope-id="app.shell" label="搜索游戏" placeholder="搜索游戏" />
-      <Focusable :id="`my.${mode}.filter`" as="select" :value="filter" class="library-control" aria-label="成就进度" @change="filter = ($event.target as HTMLSelectElement).value">
-        <option value="all">
-          全部
-        </option><option value="progress">
-          进行中
-        </option><option value="completed">
-          已完成
-        </option>
-      </Focusable>
+      <LibrarySelectControl :id="`my.${mode}.filter`" v-model="filter" label="成就进度" :options="[{ value: 'all', label: '全部' }, { value: 'progress', label: '进行中' }, { value: 'completed', label: '已完成' }]" />
     </div>
     <div v-if="mode === 'statistics'" class="library-list">
       <Focusable v-for="(game, index) in visible" :id="`my.statistics.game.${game.xboxTitleId}`" :key="game.xboxTitleId" as="button" class="library-row" @click="open(game.xboxTitleId)">
@@ -110,7 +103,7 @@ async function refresh() {
       {{ search || filter !== 'all' ? '当前筛选结果为空' : '当前可见游戏历史为空' }}
     </p>
     <div class="library-actions">
-      <span class="library-caption">已加载 {{ games.length }} 款游戏<span v-if="state.updatedAt"> · {{ formatDate(state.updatedAt) }}</span></span><Focusable v-if="state.value?.continuation" :id="`my.${mode}.more`" as="button" class="library-control" :disabled="state.loading" @click="history.more">
+      <span class="library-caption">已加载 {{ games.length }} 款游戏<span v-if="state.updatedAt"> · {{ formatDate(state.updatedAt) }}</span></span><Focusable v-if="state.value?.continuation" :id="`my.${mode}.more`" as="button" class="library-control" :busy="state.loading" @click="history.more">
         加载更多
       </Focusable>
     </div>

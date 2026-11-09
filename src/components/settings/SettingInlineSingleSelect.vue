@@ -10,6 +10,7 @@ interface SettingInlineSingleSelectProps {
   options: readonly SettingSelectOptionDefinition[]
   currentValue: string | number | null
   disabled?: boolean
+  busy?: boolean
   label?: string
 }
 
@@ -48,6 +49,7 @@ function handleClose(): void {
         :scope-id="props.scopeId"
         :on-back="handleClose"
         :disabled="props.disabled"
+        :busy="props.busy"
         :aria-label="option.label"
         :aria-checked="props.currentValue === option.value"
         role="radio"
@@ -63,7 +65,7 @@ function handleClose(): void {
 </template>
 
 <style scoped>
-.setting-inline-select { padding: var(--ui-space-sm) var(--ui-settings-control-padding) var(--ui-space-md); }
+.setting-inline-select { padding: var(--ui-space-xs) var(--ui-settings-control-padding) var(--ui-space-sm); }
 .setting-inline-select__rail { display: flex; flex-wrap: wrap; gap: var(--ui-space-sm); }
 .setting-inline-select__segment {
   flex: 1 1 0;
@@ -74,7 +76,7 @@ function handleClose(): void {
   gap: var(--ui-space-xs);
   align-items: center;
   justify-content: center;
-  padding: var(--ui-space-md);
+  padding: var(--ui-settings-row-padding);
   border: 1px solid transparent;
   border-radius: var(--ui-radius-md);
   background: var(--ui-settings-choice-bg);

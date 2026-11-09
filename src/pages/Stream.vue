@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import type { RenderControlsValue } from '../shared/config/render-controls'
 import type { StreamDiagnosticGroup } from '../streaming/stream-panel-view-models'
-import type { DisplayOptionsValue } from '../streaming/types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -22,7 +22,9 @@ import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { inputUiTrace } from '../navigation/core/input-trace'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
+import { copyRenderControls } from '../shared/config/render-controls'
 import { resolveEnhancementBinding } from '../streaming/enhancements'
+import { renderStateLabel } from '../streaming/runtime/render-state'
 import { buildFailureClipboard, captureStreamFailure, failureDiagnosticRows, streamFailureBody, streamFailureTitle } from '../streaming/stream-errors'
 import { useStreamPageOperations } from '../streaming/stream-page-operations'
 import { initialDiagnosticGroup } from '../streaming/stream-panel-view-models'
@@ -62,7 +64,9 @@ const {
   startupBoundedRetry,
   hasError,
   warningVisible,
-  displayOptions,
+  renderControls,
+  renderControlsSource,
+  renderState,
   runtimeMode,
   experienceMetricsVisible,
   browserDiagnosticsVisible,
@@ -96,6 +100,7 @@ interface StreamMenuActionViewModel {
   label: string
   danger?: boolean
   disabled?: boolean
+  busy?: boolean
 }
 
 const pageUi = useXStreamPageUi({
@@ -246,7 +251,7 @@ const exportSrComparisonErrorActions = computed(() => [
     id: 'stream.export.retry',
     label: t('streamPage.failure.tryAgain'),
     primary: true,
-    disabled: exportingSrComparison.value,
+    busy: exportingSrComparison.value,
   },
   {
     id: 'stream.export.dismiss',
@@ -258,7 +263,7 @@ const canUseDiagnosticsMenu = computed(
   () =>
     ability.canToggleExperienceMetrics.value
     || ability.canToggleBrowserDiagnostics.value
-    || ability.canToggleSuperResolution.value,
+    || ability.canExportSuperResolutionComparison.value,
 )
 
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
@@ -359,22 +364,16 @@ const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
         : t('streamPage.diagnosticsMenu.showBrowserDiagnostics'),
     })
   }
-  if (ability.canToggleSuperResolution.value) {
-    items.push({
-      id: 'toggleSuperResolution',
-      label: execution.superResolutionExperimental.value
-        ? t('streamPage.actions.disableSuperResolution')
-        : t('streamPage.actions.enableSuperResolution'),
-    })
+  if (ability.canExportSuperResolutionComparison.value) {
     items.push({
       id: 'exportSuperResolutionComparison',
       label: exportingSrComparison.value
         ? t('streamPage.actions.exportingSuperResolutionComparison')
         : t('streamPage.actions.exportSuperResolutionComparison'),
-      disabled: exportingSrComparison.value,
+      busy: exportingSrComparison.value,
     })
   }
-  items.push({ id: 'exportRuntimeTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), disabled: operations.pending.traceExport === true })
+  items.push({ id: 'exportRuntimeTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), busy: operations.pending.traceExport === true })
   return items
 })
 
@@ -382,18 +381,18 @@ const failureDetails = computed(() => pageFailure.value ? failureDiagnosticRows(
 const failureClipboard = computed(() => pageFailure.value ? buildFailureClipboard(pageFailure.value, cleanupState.value, t, appVersion.value) : '')
 const failureFeedback = computed(() => operations.errors.retry || operations.errors.login || operations.errors.exit || operations.errors.powerOff || operations.errors.traceExport || (cleanupState.value === 'running' || cleanupState.value === 'pending' ? t(`streamPage.failure.cleanup.${cleanupState.value}`) : ''))
 const failedSheetActions = computed(() => {
-  const list: Array<{ id: string, label: string, primary?: boolean, disabled?: boolean }> = []
+  const list: Array<{ id: string, label: string, primary?: boolean, disabled?: boolean, busy?: boolean }> = []
   if (pageFailure.value?.error.kind === 'powerOffFailed') {
-    list.push({ id: 'stream.failure.powerOff', label: t('streamPage.failure.retryPowerOff'), primary: true, disabled: operations.pending.powerOff === true })
+    list.push({ id: 'stream.failure.powerOff', label: t('streamPage.failure.retryPowerOff'), primary: true, busy: operations.pending.powerOff === true })
   }
   else if (pageFailure.value?.error.kind === 'auth') {
-    list.push({ id: 'stream.failure.login', label: t(operations.pending.login ? 'streamPage.failure.loggingIn' : 'streamPage.failure.login'), primary: true, disabled: operations.pending.login === true })
+    list.push({ id: 'stream.failure.login', label: t(operations.pending.login ? 'streamPage.failure.loggingIn' : 'streamPage.failure.login'), primary: true, busy: operations.pending.login === true })
   }
   else if (pageFailure.value?.error.retryable) {
-    list.push({ id: 'stream.failure.retry', label: t(operations.pending.retry ? 'streamPage.failure.reconnecting' : cleanupState.value === 'pending' ? 'streamPage.failure.retryCleanup' : 'streamPage.failure.reconnect'), primary: true, disabled: operations.pending.retry === true || cleanupState.value === 'running' })
+    list.push({ id: 'stream.failure.retry', label: t(operations.pending.retry ? 'streamPage.failure.reconnecting' : cleanupState.value === 'pending' ? 'streamPage.failure.retryCleanup' : 'streamPage.failure.reconnect'), primary: true, busy: operations.pending.retry === true || cleanupState.value === 'running' })
   }
-  list.push({ id: 'stream.failure.exit', label: t(operations.pending.exit ? 'streamPage.failure.returning' : streamRoute.targetType.value === 'home' ? 'streamPage.failure.backHome' : 'streamPage.failure.backCloud'), primary: list.length === 0, disabled: operations.pending.exit === true })
-  list.push({ id: 'stream.failure.exportTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), disabled: operations.pending.traceExport === true || cleanupState.value === 'running' })
+  list.push({ id: 'stream.failure.exit', label: t(operations.pending.exit ? 'streamPage.failure.returning' : streamRoute.targetType.value === 'home' ? 'streamPage.failure.backHome' : 'streamPage.failure.backCloud'), primary: list.length === 0, busy: operations.pending.exit === true })
+  list.push({ id: 'stream.failure.exportTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), busy: operations.pending.traceExport === true || cleanupState.value === 'running' })
   return list
 })
 const statusNotice = computed(() => {
@@ -445,12 +444,12 @@ const warningSheetActions = computed(() => [
     id: 'stream.alert.warning.wait',
     label: t('streamPage.warning.keepWaiting'),
     primary: true,
-    disabled: operations.pending.exit === true,
+    busy: operations.pending.exit === true,
   },
   {
     id: 'stream.alert.warning.exit',
     label: t(operations.pending.exit ? 'streamPage.failure.returning' : 'streamPage.failure.endStream'),
-    disabled: operations.pending.exit === true,
+    busy: operations.pending.exit === true,
   },
 ])
 
@@ -525,9 +524,7 @@ function closeDisplaySheet(): void {
   operations.invalidate('display')
   closeSheet('display')
   void moveStreamSpatialNavFocusToPostOverlaySink()
-  if (displayOptions.value !== null) {
-    actions.previewDisplayOptions(displayOptions.value)
-  }
+  actions.cancelRenderPreview()
 }
 
 function openAudioSheet(): void {
@@ -590,13 +587,17 @@ async function handleSendText(text: string): Promise<void> {
   await operations.run('text', () => actions.sendText(text), closeTextSheet)
 }
 
-function handleDisplayPreview(value: DisplayOptionsValue): void {
+function handleDisplayPreview(value: RenderControlsValue): void {
   revealChrome()
-  actions.previewDisplayOptions(value)
+  actions.previewRenderControls(value)
 }
 
-async function handleDisplaySubmit(value: DisplayOptionsValue): Promise<void> {
-  await operations.run('display', () => actions.saveDisplayOptions(value), closeDisplaySheet)
+async function handleDisplaySubmit(value: RenderControlsValue, saveAsDefault: boolean): Promise<void> {
+  await operations.run('display', () => actions.saveRenderControls(value, saveAsDefault), closeDisplaySheet)
+}
+
+async function handleRestoreRenderDefaults(): Promise<void> {
+  await operations.run('display', async () => actions.restoreRenderDefaults(), closeDisplaySheet)
 }
 
 async function captureFrameForSrExport(): Promise<HTMLCanvasElement> {
@@ -604,6 +605,8 @@ async function captureFrameForSrExport(): Promise<HTMLCanvasElement> {
   if (fromRuntime !== null && fromRuntime.width > 1 && fromRuntime.height > 1) {
     return fromRuntime
   }
+  if (renderState.value.mode !== 'video' || renderState.value.pending)
+    throw new Error('streamComparisonRenderModeUnavailable')
   const source = await waitForStreamCaptureSource()
   return captureSourceFrame(source)
 }
@@ -725,10 +728,27 @@ function resolveSrComparisonExportErrorMessage(error: unknown): string {
   if (code === 'streamComparisonSaveFailed') {
     return t('streamPage.errors.streamComparisonSaveFailed')
   }
+  if (code === 'streamComparisonRenderModeUnavailable')
+    return t('streamPage.errors.streamComparisonRenderModeUnavailable')
   if (code === 'streamFrameCaptureContextUnavailable' || code === 'streamComparisonComposeContextUnavailable') {
     return t('streamPage.errors.streamFrameCaptureFailed')
   }
   return t('streamPage.errors.streamComparisonExportFailed')
+}
+
+async function waitForComparisonRendering(mode: RenderControlsValue['mode'], current: () => boolean): Promise<void> {
+  const startedAt = performance.now()
+  while (performance.now() - startedAt < 6_000) {
+    if (!current())
+      throw new Error('streamExportSuperseded')
+    const state = renderState.value
+    if (state.mode === mode && !state.pending)
+      return
+    if (state.fallbackReason && !state.pending)
+      break
+    await new Promise(resolve => window.setTimeout(resolve, 50))
+  }
+  throw new Error('streamComparisonRenderModeUnavailable')
 }
 
 async function performSuperResolutionExport(operationCurrent: () => boolean): Promise<void> {
@@ -742,24 +762,26 @@ async function performSuperResolutionExport(operationCurrent: () => boolean): Pr
     if (!current())
       throw new Error('streamExportSuperseded')
   }
-  const originalEnabled = execution.superResolutionExperimental.value
-  const alternateEnabled = !originalEnabled
+  const original = copyRenderControls(renderControls.value)
+  const alternate: RenderControlsValue = { ...copyRenderControls(original), mode: original.mode === 'sr' ? 'video' : 'sr' }
+  let restore: (() => void) | undefined
   try {
-    await waitForAnimationFrames(2)
+    await waitForComparisonRendering(original.mode, current)
+    const beforeLabel = renderStateLabel(renderState.value, t)
     const beforeFrame = await captureFrameForSrExport()
     assertCurrent()
-    await actions.setSuperResolutionExperimental(alternateEnabled)
+    restore = actions.beginTemporaryRenderControls(alternate)
+    await nextTick()
     assertCurrent()
-    await waitForAnimationFrames(2)
-    await waitForStreamCaptureSource()
-    await waitForAnimationFrames(2)
+    await waitForComparisonRendering(alternate.mode, current)
+    const afterLabel = renderStateLabel(renderState.value, t)
     const afterFrame = await captureFrameForSrExport()
     assertCurrent()
     const comparison = composeSrComparisonCanvas({
       before: beforeFrame,
       after: afterFrame,
-      beforeLabel: `A: ${originalEnabled ? t('streamPage.performance.values.srSettingOn') : t('streamPage.performance.values.srSettingOff')}`,
-      afterLabel: `B: ${alternateEnabled ? t('streamPage.performance.values.srSettingOn') : t('streamPage.performance.values.srSettingOff')}`,
+      beforeLabel: `A: ${beforeLabel}`,
+      afterLabel: `B: ${afterLabel}`,
     })
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     await saveCanvasAsPng(comparison, `stream-sr-ab-${stamp}.png`)
@@ -780,8 +802,8 @@ async function performSuperResolutionExport(operationCurrent: () => boolean): Pr
   }
   finally {
     try {
-      if (sessionCurrent() && execution.superResolutionExperimental.value !== originalEnabled) {
-        await actions.setSuperResolutionExperimental(originalEnabled)
+      restore?.()
+      if (sessionCurrent()) {
         await waitForAnimationFrames(2)
       }
     }
@@ -871,13 +893,6 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
     inputUiTrace.result('operationCompleted')
     return
   }
-  if (id === 'toggleSuperResolution') {
-    if (await operations.run('superResolution', async () => {
-      await actions.toggleSuperResolutionExperimental()
-    })) {
-      closeDiagnosticsMenu()
-    }
-  }
   if (id === 'exportSuperResolutionComparison') {
     if (await runSuperResolutionExport())
       closeDiagnosticsMenu()
@@ -909,6 +924,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         :visible="experienceMetricsVisible && (isConnected || experienceBinding.phase === 'mounted')"
         :mount="experienceBinding"
         :model="experienceMetricsViewModel"
+        :render-state="renderState"
         :suppress-notice="Boolean(statusNotice)"
       />
       <StreamBrowserDiagnosticsPanel
@@ -986,7 +1002,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         scope-id="stream.action-sheet"
         :title="displayName"
         :eyebrow="eyebrow"
-        :items="streamMenuActions.map(item => ({ ...item, disabled: item.disabled || (item.id !== 'exit' && menuBusy) }))"
+        :items="streamMenuActions.map(item => ({ ...item, busy: item.busy || (item.id !== 'exit' && menuBusy) }))"
         :error="menuError"
         @close="closeActionSheet"
         @select="handleStreamMenuAction"
@@ -997,7 +1013,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         scope-id="stream.diagnostics-menu-sheet"
         :title="t('streamPage.diagnosticsMenu.title')"
         :eyebrow="eyebrow"
-        :items="diagnosticsMenuActions.map(item => ({ ...item, disabled: item.disabled || menuBusy }))"
+        :items="diagnosticsMenuActions.map(item => ({ ...item, busy: item.busy || menuBusy }))"
         :error="menuError"
         @close="closeDiagnosticsMenu"
         @select="handleDiagnosticsMenuAction"
@@ -1005,14 +1021,17 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       <SettingDisplayOptionsSheet
         :open="isDisplaySheetOpen"
         scope-id="stream.display-sheet"
-        :title="t('streamPage.display.title')"
-        :hint="t('streamPage.display.hint')"
-        :current-value="displayOptions"
+        :title="t('setting.renderControls.title')"
+        :hint="t('setting.renderControls.sessionHint')"
+        :current-value="renderControls"
+        configuration-scope="session"
+        :value-source="renderControlsSource"
         :loading="operations.pending.display"
         :error="operations.errors.display"
         @close="closeDisplaySheet"
         @change="handleDisplayPreview"
         @submit="handleDisplaySubmit"
+        @restore-defaults="handleRestoreRenderDefaults"
       />
       <StreamTextSheet :open="isTextSheetOpen" scope-id="stream.text-sheet" :loading="sendingText" :error="operations.errors.text" @close="closeTextSheet" @submit="handleSendText" />
       <StreamAudioSheet

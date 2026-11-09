@@ -129,7 +129,222 @@ fn transport(total_ms: u64, limit: usize) -> HttpTransport {
             total_timeout: Duration::from_millis(total_ms),
             max_body_bytes: limit,
         }),
+        bearer_recovery: None,
     }
+}
+
+struct Renewal {
+    calls: Arc<AtomicUsize>,
+    rejected: Arc<Mutex<Vec<String>>>,
+    result: Result<String, WebApiError>,
+    delay: Duration,
+}
+
+impl std::fmt::Debug for Renewal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TestRenewal")
+    }
+}
+
+impl BearerTokenRecovery for Renewal {
+    fn recover(&self, token: &str) -> BearerRecoveryFuture {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.rejected.lock().unwrap().push(token.to_string());
+        let result = self.result.clone();
+        let delay = self.delay;
+        Box::pin(async move {
+            sleep(delay).await;
+            result
+        })
+    }
+}
+
+fn renewal(result: Result<&str, WebApiError>, delay: Duration) -> Arc<Renewal> {
+    Arc::new(Renewal {
+        calls: Arc::new(AtomicUsize::new(0)),
+        rejected: Arc::new(Mutex::new(Vec::new())),
+        result: result.map(str::to_string),
+        delay,
+    })
+}
+
+fn bearer_headers() -> HeaderMap {
+    HttpTransport::create_header_map(&[
+        ("Authorization", "Bearer old-token"),
+        ("X-Request-Id", "same-operation"),
+    ])
+    .unwrap()
+}
+
+#[tokio::test]
+async fn rejected_bearer_command_renews_once_and_preserves_method_headers_and_body() {
+    let server = Server::start(vec![Reply::new(401, "{}"), Reply::new(200, "{}")]).await;
+    let recovery = renewal(Ok("new-token"), Duration::ZERO);
+    let api = transport(1000, 1024).with_bearer_recovery(recovery.clone());
+    let body = json!({"session": "same-session", "payload": {"text": "exact value"}});
+    api.post_command(&server.url, body.clone(), Some(bearer_headers()))
+        .await
+        .unwrap();
+    assert_eq!(server.attempts(), 2);
+    assert_eq!(recovery.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(&*recovery.rejected.lock().unwrap(), &["old-token"]);
+    let requests = server.requests.lock().unwrap();
+    for (index, request) in requests.iter().enumerate() {
+        assert!(request.starts_with("POST /query?private=secret HTTP/1.1"));
+        let (headers, request_body) = request.split_once("\r\n\r\n").unwrap();
+        let headers = headers.to_ascii_lowercase();
+        assert!(headers.contains("x-request-id: same-operation"));
+        assert!(headers.contains(if index == 0 {
+            "authorization: bearer old-token"
+        } else {
+            "authorization: bearer new-token"
+        }));
+        assert_eq!(serde_json::from_str::<Value>(request_body).unwrap(), body);
+    }
+}
+
+#[tokio::test]
+async fn bearer_recovery_preserves_raw_form_payload() {
+    let server = Server::start(vec![Reply::new(401, "{}"), Reply::new(200, "{}")]).await;
+    let recovery = renewal(Ok("new-token"), Duration::ZERO);
+    let mut headers = bearer_headers();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/x-www-form-urlencoded"),
+    );
+    transport(1000, 1024)
+        .with_bearer_recovery(recovery)
+        .post(
+            &server.url,
+            json!("value=exact%20value&request=unchanged"),
+            Some(headers),
+        )
+        .await
+        .unwrap();
+    for request in server.requests.lock().unwrap().iter() {
+        assert_eq!(
+            request.split_once("\r\n\r\n").unwrap().1,
+            "value=exact%20value&request=unchanged"
+        );
+    }
+}
+
+#[tokio::test]
+async fn repeated_unauthorized_or_followup_command_failure_stops_after_one_renewal() {
+    for status in [401, 503] {
+        let server = Server::start(vec![Reply::new(401, "{}"), Reply::new(status, "{}")]).await;
+        let recovery = renewal(Ok("new-token"), Duration::ZERO);
+        let error = transport(1000, 1024)
+            .with_bearer_recovery(recovery.clone())
+            .post_command(&server.url, json!({}), Some(bearer_headers()))
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_status_code(), Some(status));
+        assert_eq!(server.attempts(), 2);
+        assert_eq!(recovery.calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[tokio::test]
+async fn permission_and_transport_errors_keep_their_category_and_skip_auth_recovery() {
+    for status in [403, 429, 503] {
+        let server = Server::start(vec![Reply::new(status, "{}")]).await;
+        let recovery = renewal(Ok("new-token"), Duration::ZERO);
+        let mut api = transport(1000, 1024).with_bearer_recovery(recovery.clone());
+        api.retry_mode = RetryMode::Never;
+        assert_eq!(
+            api.get(&server.url, Some(bearer_headers()))
+                .await
+                .unwrap_err()
+                .to_status_code(),
+            Some(status)
+        );
+        assert_eq!(recovery.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(server.attempts(), 1);
+    }
+    let server = Server::start(vec![]).await;
+    let url = server.url.clone();
+    drop(server);
+    let recovery = renewal(Ok("new-token"), Duration::ZERO);
+    let mut api = transport(1000, 1024).with_bearer_recovery(recovery.clone());
+    api.retry_mode = RetryMode::Never;
+    assert!(matches!(
+        api.get(&url, Some(bearer_headers())).await,
+        Err(WebApiError::Network { .. })
+    ));
+    assert_eq!(recovery.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn recovery_failure_preserves_auth_network_and_rate_limit_results() {
+    for error in [
+        WebApiError::auth("renewal expired"),
+        WebApiError::network_kind(NetworkErrorKind::Timeout),
+        WebApiError::http(429, "limited"),
+    ] {
+        let server = Server::start(vec![Reply::new(401, "{}")]).await;
+        let recovery = renewal(Err(error.clone()), Duration::ZERO);
+        let result = transport(1000, 1024)
+            .with_bearer_recovery(recovery.clone())
+            .get(&server.url, Some(bearer_headers()))
+            .await
+            .unwrap_err();
+        assert_eq!(result.safe_summary(), error.safe_summary());
+        assert_eq!(recovery.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(server.attempts(), 1);
+    }
+}
+
+#[tokio::test]
+async fn recovery_and_replayed_response_share_the_original_total_budget() {
+    let mut first = Reply::new(401, "{}");
+    first.delay = Duration::from_millis(50);
+    let mut second = Reply::new(200, "{}");
+    second.delay = Duration::from_millis(250);
+    let server = Server::start(vec![first, second]).await;
+    let recovery = renewal(Ok("new-token"), Duration::from_millis(50));
+    let started = Instant::now();
+    let error = transport(200, 1024)
+        .with_bearer_recovery(recovery.clone())
+        .get(&server.url, Some(bearer_headers()))
+        .await
+        .unwrap_err();
+    assert_eq!(error.network_error_kind(), Some(NetworkErrorKind::Timeout));
+    assert!(started.elapsed() < Duration::from_millis(330));
+    assert_eq!(server.attempts(), 2);
+    assert_eq!(recovery.calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_missing_bearer_header_and_invalid_renewed_payload_avoid_replaying() {
+    for header in [
+        None,
+        Some(
+            HttpTransport::create_header_map(&[("Authorization", "XBL3.0 unrelated-token")])
+                .unwrap(),
+        ),
+    ] {
+        let server = Server::start(vec![Reply::new(401, "{}")]).await;
+        let recovery = renewal(Ok("new-token"), Duration::ZERO);
+        assert_eq!(
+            transport(1000, 1024)
+                .with_bearer_recovery(recovery.clone())
+                .get(&server.url, header)
+                .await
+                .unwrap_err()
+                .to_status_code(),
+            Some(401)
+        );
+        assert_eq!(recovery.calls.load(Ordering::SeqCst), 0);
+    }
+    let server = Server::start(vec![Reply::new(401, "{}")]).await;
+    let error = transport(1000, 1024)
+        .with_bearer_recovery(renewal(Ok(" "), Duration::ZERO))
+        .get(&server.url, Some(bearer_headers()))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, WebApiError::Parse { .. }));
+    assert_eq!(server.attempts(), 1);
 }
 
 #[tokio::test]

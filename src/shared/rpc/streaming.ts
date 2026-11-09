@@ -178,6 +178,8 @@ export interface StreamingRuntimeProjection {
 
 export type StreamingPipelineRenderPreference = 'auto' | 'video' | 'webgl2'
 
+export type StreamingRenderMode = 'video' | 'sharpen' | 'sr'
+
 export type StreamingSuperResolutionRenderPreference = 'off' | 'fsr1Experimental'
 
 export type StreamingRenderFallbackProcessing = 'usm' | 'cas'

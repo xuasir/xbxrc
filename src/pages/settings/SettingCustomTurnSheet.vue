@@ -73,14 +73,14 @@ function confirm() {
 <template>
   <SettingModalShell :open="props.open" :scope-id="scope" :default-focus-id="`${scope}.enabled`" :title="t('setting.experience.turn.title')" :hint="t('setting.experience.turn.hint')" :busy="saving" @close="close">
     <div class="setting-turn-form">
-      <SettingToggleRow :id="`${scope}.enabled`" :scope-id="scope" :label="t('setting.experience.turn.enable')" :enabled="enabled" :disabled="saving" @confirm="enabled = !enabled" />
+      <SettingToggleRow :id="`${scope}.enabled`" :scope-id="scope" :label="t('setting.experience.turn.enable')" :enabled="enabled" :busy="saving" @confirm="enabled = !enabled" />
       <template v-if="enabled">
         <p class="setting-panel__status">
           {{ t('setting.experience.input.controllerHint', { confirm: buttons.south }) }}
         </p>
-        <SettingTextField :id="`${scope}.url`" v-model="draft.server_url" :scope-id="scope" :label="t('setting.experience.turn.url')" placeholder="turn:relay.example.com:3478" :disabled="saving" />
-        <SettingTextField :id="`${scope}.username`" v-model="draft.server_username" :scope-id="scope" :label="t('setting.experience.turn.username')" :disabled="saving" />
-        <SettingTextField :id="`${scope}.credential`" v-model="draft.server_credential" :scope-id="scope" :label="t('setting.experience.turn.credential')" :disabled="saving" sensitive />
+        <SettingTextField :id="`${scope}.url`" v-model="draft.server_url" :scope-id="scope" :label="t('setting.experience.turn.url')" placeholder="turn:relay.example.com:3478" :busy="saving" />
+        <SettingTextField :id="`${scope}.username`" v-model="draft.server_username" :scope-id="scope" :label="t('setting.experience.turn.username')" :busy="saving" />
+        <SettingTextField :id="`${scope}.credential`" v-model="draft.server_credential" :scope-id="scope" :label="t('setting.experience.turn.credential')" :busy="saving" sensitive />
       </template>
       <p class="setting-panel__status">
         {{ t(enabled ? 'setting.experience.effects.nextConnection' : 'setting.experience.turn.default') }}
@@ -91,16 +91,16 @@ function confirm() {
       <p v-if="error" class="setting-panel__status setting-panel__status--error" role="alert">
         {{ error }}
       </p>
-      <Focusable v-if="props.config.server_url || props.config.server_username || props.config.server_credential" :id="`${scope}.reset`" as="button" :scope-id="scope" class="setting-panel__action" :disabled="saving" @click="confirming = 'reset'">
+      <Focusable v-if="props.config.server_url || props.config.server_username || props.config.server_credential" :id="`${scope}.reset`" as="button" :scope-id="scope" class="setting-panel__action" :busy="saving" @click="confirming = 'reset'">
         {{ t('setting.experience.turn.reset') }}
       </Focusable>
     </div>
     <template #footer>
       <div class="setting-panel__actions">
-        <Focusable :id="`${scope}.cancel`" as="button" :scope-id="scope" class="setting-panel__action" :disabled="saving" @click="close">
+        <Focusable :id="`${scope}.cancel`" as="button" :scope-id="scope" class="setting-panel__action" :busy="saving" @click="close">
           {{ t('setting.editor.cancel') }}
         </Focusable>
-        <Focusable :id="`${scope}.apply`" as="button" :scope-id="scope" class="setting-panel__action setting-panel__action--primary" :disabled="saving || !!validation || !dirty" @click="save()">
+        <Focusable :id="`${scope}.apply`" as="button" :scope-id="scope" class="setting-panel__action setting-panel__action--primary" :busy="saving" :disabled="!!validation || !dirty" @click="save()">
           {{ t(saving ? 'setting.experience.saving' : 'gamepadSettings.apply') }}
         </Focusable>
       </div>

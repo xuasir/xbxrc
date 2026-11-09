@@ -22,6 +22,8 @@ const scopeId = 'stream.diagnostic-details'
 const panelVisible = computed(() => props.visible && props.mount.phase === 'mounted')
 const rows = computed(() => diagnosticGroupRows(props.model, props.group))
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
+const copyBusy = ref(false)
+let copyRevision = 0
 
 function handleEscape(event: KeyboardEvent): void {
   if (event.defaultPrevented || !navigationEngine.isTopmostScope(scopeId))
@@ -33,20 +35,35 @@ function handleEscape(event: KeyboardEvent): void {
   }
 }
 watch(panelVisible, (visible) => {
+  copyRevision++
+  copyBusy.value = false
   window.removeEventListener('keydown', handleEscape, true)
   copyState.value = 'idle'
   if (visible)
     window.addEventListener('keydown', handleEscape, true)
 }, { immediate: true })
-onBeforeUnmount(() => window.removeEventListener('keydown', handleEscape, true))
+onBeforeUnmount(() => {
+  copyRevision++
+  window.removeEventListener('keydown', handleEscape, true)
+})
 
 async function copySnapshot(): Promise<void> {
+  if (!panelVisible.value || copyBusy.value)
+    return
+  const request = ++copyRevision
+  copyBusy.value = true
   try {
     await navigator.clipboard.writeText(buildDiagnosticClipboardSnapshot(props.model))
-    copyState.value = 'copied'
+    if (request === copyRevision && panelVisible.value)
+      copyState.value = 'copied'
   }
   catch {
-    copyState.value = 'failed'
+    if (request === copyRevision && panelVisible.value)
+      copyState.value = 'failed'
+  }
+  finally {
+    if (request === copyRevision)
+      copyBusy.value = false
   }
 }
 </script>
@@ -61,6 +78,7 @@ async function copySnapshot(): Promise<void> {
       :active="panelVisible"
       :default-focus-id="`${scopeId}.${group}`"
       :aria-label="t('streamPage.diagnosticsPanel.browser.title')"
+      @nav-back.prevent.stop="emit('close')"
     >
       <header class="stream-diagnostic__header">
         <h2>{{ t('streamPage.diagnosticsPanel.browser.title') }}</h2>
@@ -103,7 +121,7 @@ async function copySnapshot(): Promise<void> {
         {{ t(`streamPage.diagnosticsPanel.hints.${group}`) }}
       </p>
       <footer class="stream-diagnostic__footer">
-        <Focusable :id="`${scopeId}.copy`" :scope-id="scopeId" as="button" type="button" class="stream-diagnostic__button stream-diagnostic__copy" @click="copySnapshot">
+        <Focusable :id="`${scopeId}.copy`" :scope-id="scopeId" as="button" type="button" class="stream-diagnostic__button stream-diagnostic__copy" :busy="copyBusy" @click="copySnapshot">
           {{ t('streamPage.diagnosticsPanel.copy') }}
         </Focusable>
         <span aria-live="polite" class="stream-diagnostic__copy-state">{{ copyState === 'idle' ? '' : t(`streamPage.diagnosticsPanel.${copyState}`) }}</span>

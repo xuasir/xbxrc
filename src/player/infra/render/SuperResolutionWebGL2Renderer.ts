@@ -370,7 +370,7 @@ class SuperResolutionProcessor {
   private readonly drawObservation = new RenderObservation()
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.mobileOptProgram, this.easuProgram, this.rcasProgram, this.easuTex, this.midTex, this.midFbo, this.vbo].filter(Boolean).length, frameRequests: Number(this.videoFrameCbId !== null), animationCallbacks: Number(this.animRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.mobileOptProgram, this.easuProgram, this.rcasProgram, this.easuTex, this.midTex, this.midFbo, this.vbo].filter(Boolean).length, frameRequests: Number(this.videoFrameCbId !== null), animationCallbacks: Number(this.animRafId !== null), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -558,7 +558,7 @@ class SuperResolutionProcessor {
     if (this.targetFps > 0) {
       this.scheduleVideoFrameMarker()
       // 缓存首绘用于首次装配，context恢复沿订阅接收后续新候选。
-      const latest = drawLatest ? getVideoFrameSource(this.video).lastFrame : undefined
+      const latest = drawLatest ? getVideoFrameSource(this.video).lastRenderFrame : undefined
       if (latest) {
         this.drawObservation.candidate(latest)
         this.drawFrame(true)
@@ -580,7 +580,7 @@ class SuperResolutionProcessor {
     if (this.stopped || !this.initialized || this.targetFps <= 0 || this.videoFrameCbId !== null) {
       return
     }
-    const id = getVideoFrameSource(this.video).request((_atMs, metadata) => {
+    const id = getVideoFrameSource(this.video).requestRender((_atMs, metadata) => {
       if (this.videoFrameCbId !== id)
         return
       this.videoFrameCbId = null
@@ -889,8 +889,8 @@ class SuperResolutionProcessor {
 
   private uploadVideoSource(gl: WebGL2RenderingContext, vw: number, vh: number): void {
     gl.bindTexture(gl.TEXTURE_2D, this.easuTex!)
-    // 完整video源、level0及RGB保留WebKit的GPU拷贝尝试入口。
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, this.video)
+    // 逐解码帧直接上传，兼容入口仍使用video；RGB与原翻转约定保持一致。
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, getVideoFrameSource(this.video).renderSource)
     if (this.videoTexAllocW !== vw || this.videoTexAllocH !== vh) {
       this.videoTexAllocW = vw
       this.videoTexAllocH = vh
@@ -992,8 +992,7 @@ class SuperResolutionProcessor {
       const gl = this.gl
       if (gl === null || this.easuTex === null)
         return
-      const vw = this.video.videoWidth
-      const vh = this.video.videoHeight
+      const { width: vw, height: vh } = getVideoFrameSource(this.video).renderSize
       if (vw <= 0 || vh <= 0)
         return
       this.guard!.assertSize(vw, vh, Math.max(this.outW, vw), Math.max(this.outH, vh))
@@ -1039,7 +1038,7 @@ class SuperResolutionProcessor {
     finally {
       this.guard?.timer.end()
       if (presentedToDefault && !this.stopped) {
-        this.drawObservation.record(getVideoFrameSource(this.video).lastFrame, !realtime, performance.now() - startedAtMs, uploadDurationMs, submitDurationMs, startedAtMs)
+        this.drawObservation.record(getVideoFrameSource(this.video).lastRenderFrame, !realtime, performance.now() - startedAtMs, uploadDurationMs, submitDurationMs, startedAtMs)
         if (!this.frameReadyEmitted) {
           this.frameReadyEmitted = true
           this.onFrameReady?.()

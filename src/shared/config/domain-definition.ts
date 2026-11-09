@@ -108,12 +108,6 @@ const VIDEO_FORMAT_OPTIONS = [
   { value: '4:3', label: 'Fixed 4:3', description: '4:3' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
-const DISPLAY_PRESET_OPTIONS = [
-  { value: 'standard', label: 'Standard' },
-  { value: 'clear', label: 'Clear' },
-  { value: 'soft', label: 'Soft' },
-] as const satisfies readonly SettingSelectOptionDefinition[]
-
 export interface SettingSectionDefinition {
   key: string
   label: string
@@ -410,13 +404,13 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     control: 'toggle',
   },
   display_options: {
-    label: 'Picture style',
+    label: 'Rendering and picture',
+    description: 'Set the default rendering mode and picture for new streams.',
     control: 'singleSelect',
-    options: DISPLAY_PRESET_OPTIONS,
   },
   super_resolution_experimental: {
     label: 'Super Resolution (Experimental)',
-    description: 'Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure.',
+    description: 'Browser FSR1 spatial upscale; may increase GPU load. Falls back to default rendering on failure.',
     control: 'toggle',
   },
   ui_haptics: {

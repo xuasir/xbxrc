@@ -1,0 +1,468 @@
+{
+  "instanceId": "2577d3b1-0aea-4931-8172-e51586c4870d",
+  "counters": {
+    "config.get": 3,
+    "auth.getState": 3,
+    "data.primeXcloudTitles": 1,
+    "config.getGroups": 1,
+    "data.getUserProfile": 1,
+    "app.getVersion": 1,
+    "updater.getChannel": 1,
+    "config.set": 1
+  },
+  "keys": [
+    {
+      "key": "ArrowDown",
+      "atMs": 97551
+    },
+    {
+      "key": "j",
+      "atMs": 97653
+    },
+    {
+      "key": "j",
+      "atMs": 97659
+    },
+    {
+      "key": "j",
+      "atMs": 97667
+    }
+  ],
+  "timeline": [
+    {
+      "atMs": 102,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": []
+    },
+    {
+      "atMs": 151,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "config.get"
+      ]
+    },
+    {
+      "atMs": 152,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "config.get",
+        "auth.getState"
+      ]
+    },
+    {
+      "atMs": 172,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "auth.getState"
+      ]
+    },
+    {
+      "atMs": 173,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": []
+    },
+    {
+      "atMs": 192,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles"
+      ]
+    },
+    {
+      "atMs": 207,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles",
+        "config.getGroups"
+      ]
+    },
+    {
+      "atMs": 209,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles",
+        "config.getGroups",
+        "auth.getState"
+      ]
+    },
+    {
+      "atMs": 209,
+      "route": "#/setting",
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles",
+        "config.getGroups",
+        "auth.getState",
+        "data.getUserProfile"
+      ]
+    },
+    {
+      "atMs": 211,
+      "route": "#/setting",
+      "native": "",
+      "marked": [
+        "top-nav.brand"
+      ],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles",
+        "config.getGroups",
+        "auth.getState",
+        "data.getUserProfile"
+      ]
+    },
+    {
+      "atMs": 212,
+      "route": "#/setting",
+      "native": "",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles",
+        "config.getGroups",
+        "auth.getState",
+        "data.getUserProfile"
+      ]
+    },
+    {
+      "atMs": 213,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles",
+        "config.getGroups",
+        "auth.getState",
+        "data.getUserProfile"
+      ]
+    },
+    {
+      "atMs": 215,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": [
+        "config.getGroups",
+        "auth.getState",
+        "data.getUserProfile"
+      ]
+    },
+    {
+      "atMs": 231,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": [
+        "auth.getState",
+        "data.getUserProfile"
+      ]
+    },
+    {
+      "atMs": 234,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": [
+        "auth.getState",
+        "data.getUserProfile",
+        "app.getVersion"
+      ]
+    },
+    {
+      "atMs": 236,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": [
+        "auth.getState",
+        "data.getUserProfile",
+        "app.getVersion",
+        "updater.getChannel"
+      ]
+    },
+    {
+      "atMs": 237,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "pending": [
+        "auth.getState",
+        "data.getUserProfile",
+        "app.getVersion",
+        "updater.getChannel"
+      ]
+    },
+    {
+      "atMs": 238,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "pending": [
+        "data.getUserProfile",
+        "app.getVersion",
+        "updater.getChannel"
+      ]
+    },
+    {
+      "atMs": 239,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "pending": [
+        "app.getVersion",
+        "updater.getChannel"
+      ]
+    },
+    {
+      "atMs": 256,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "pending": [
+        "updater.getChannel"
+      ]
+    },
+    {
+      "atMs": 257,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "pending": []
+    },
+    {
+      "atMs": 258,
+      "route": "#/setting",
+      "native": "setting.tabs.general",
+      "marked": [
+        "setting.tabs.general"
+      ],
+      "busy": [],
+      "pending": []
+    },
+    {
+      "atMs": 97542,
+      "route": "#/setting",
+      "native": "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+      "marked": [
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.0"
+      ],
+      "busy": [],
+      "pending": []
+    },
+    {
+      "atMs": 97550,
+      "route": "#/setting",
+      "native": "",
+      "marked": [
+        "setting.items.general.fullscreen"
+      ],
+      "busy": [],
+      "pending": []
+    },
+    {
+      "atMs": 97554,
+      "route": "#/setting",
+      "native": "setting.items.general.fullscreen",
+      "marked": [
+        "setting.items.general.fullscreen"
+      ],
+      "busy": [],
+      "pending": []
+    },
+    {
+      "atMs": 97649,
+      "route": "#/setting",
+      "native": "setting.items.general.fullscreen",
+      "marked": [
+        "setting.items.general.fullscreen"
+      ],
+      "busy": [],
+      "pending": [
+        "config.set"
+      ]
+    },
+    {
+      "atMs": 97652,
+      "route": "#/setting",
+      "native": "setting.items.general.fullscreen",
+      "marked": [
+        "setting.items.general.fullscreen"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "setting.items.general.fullscreen",
+        "setting.items.general.ui_audio"
+      ],
+      "pending": [
+        "config.set"
+      ]
+    },
+    {
+      "atMs": 99154,
+      "route": "#/setting",
+      "native": "setting.items.general.fullscreen",
+      "marked": [
+        "setting.items.general.fullscreen"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "setting.items.general.fullscreen",
+        "setting.items.general.ui_audio"
+      ],
+      "pending": []
+    },
+    {
+      "atMs": 99162,
+      "route": "#/setting",
+      "native": "setting.items.general.fullscreen",
+      "marked": [
+        "setting.items.general.fullscreen"
+      ],
+      "busy": [],
+      "pending": []
+    }
+  ],
+  "current": {
+    "route": "#/setting",
+    "native": "setting.items.general.fullscreen",
+    "marked": [
+      "setting.items.general.fullscreen"
+    ],
+    "busy": [],
+    "pending": []
+  },
+  "graph": {
+    "scope": "app.shell",
+    "nodes": [
+      "top-nav.brand",
+      "top-nav.profile",
+      "top-nav.xhome",
+      "top-nav.xcloud",
+      "top-nav.my",
+      "top-nav.controller",
+      "top-nav.setting",
+      "setting.tabs.general",
+      "setting.tabs.streamingExperience",
+      "setting.tabs.connectionHost",
+      "setting.tabs.advancedDiagnostics",
+      "setting.restart",
+      "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+      "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+      "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+      "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+      "setting.items.general.fullscreen",
+      "setting.items.general.ui_audio",
+      "setting.content.general.inlineSelect.setting.update.channel.option.0",
+      "setting.content.general.inlineSelect.setting.update.channel.option.1",
+      "setting.update.primary"
+    ],
+    "reachable": [
+      "setting.items.general.fullscreen",
+      "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+      "top-nav.profile",
+      "setting.restart",
+      "top-nav.brand",
+      "top-nav.xhome",
+      "top-nav.xcloud",
+      "setting.tabs.general",
+      "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+      "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+      "setting.tabs.streamingExperience",
+      "top-nav.my",
+      "top-nav.controller",
+      "setting.tabs.connectionHost",
+      "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+      "setting.tabs.advancedDiagnostics",
+      "top-nav.setting",
+      "setting.items.general.ui_audio",
+      "setting.content.general.inlineSelect.setting.update.channel.option.1",
+      "setting.update.primary",
+      "setting.content.general.inlineSelect.setting.update.channel.option.0"
+    ],
+    "unreachable": []
+  }
+}

@@ -8,11 +8,13 @@ interface Props {
   as?: string
   id?: string
   disabled?: boolean
+  busy?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   as: undefined,
   disabled: false,
+  busy: false,
 })
 
 const emit = defineEmits<{
@@ -24,10 +26,12 @@ const emit = defineEmits<{
 const attrs = useAttrs()
 let pointerSource: UiInputSource = 'mouse'
 function handlePointerDown(event: PointerEvent): void {
+  navigationEngine.cancelPendingRecovery()
   pointerSource = event.pointerType === 'touch' ? 'touch' : 'mouse'
 }
 
 function handleClick(event: MouseEvent) {
+  navigationEngine.cancelPendingRecovery()
   const source = (event as PointerEvent).pointerType === 'touch' ? 'touch' : pointerSource
   if (props.disabled) {
     event.preventDefault()
@@ -40,7 +44,21 @@ function handleClick(event: MouseEvent) {
     inputUiTrace.activation(source, props.id, navigationEngine.getLastFocusFailure() ?? 'focusUnavailable', () => {})
     return
   }
+  if (props.busy) {
+    event.preventDefault()
+    inputUiTrace.activation(source, props.id, 'busy', () => {})
+    return
+  }
   inputUiTrace.activation(source, props.id, undefined, () => emit('click', event))
+}
+
+function handleNavAction(event: Event) {
+  if (props.disabled || props.busy) {
+    event.preventDefault()
+    inputUiTrace.activation(inputUiTrace.context()?.source ?? 'gamepad', props.id, props.disabled ? 'disabled' : 'busy', () => {})
+    return
+  }
+  emit('navAction', event)
 }
 
 function handleFocus(event: FocusEvent) {
@@ -56,13 +74,15 @@ function handleFocus(event: FocusEvent) {
     :id="props.id"
     :tabindex="props.disabled ? -1 : attrs.tabindex ?? 0"
     :data-focusable="!props.disabled ? 'true' : undefined"
+    :data-nav-busy="props.busy ? 'true' : undefined"
+    :aria-busy="props.busy ? 'true' : undefined"
     :aria-disabled="props.disabled"
     :disabled="['button', 'input', 'select', 'textarea'].includes(props.as ?? '') ? props.disabled : undefined"
     :style="!props.as ? { display: 'contents' } : undefined"
     @click="handleClick"
     @pointerdown="handlePointerDown"
     @focus="handleFocus"
-    @nav-action="emit('navAction', $event)"
+    @nav-action="handleNavAction"
     @nav-back="emit('navBack', $event)"
   >
     <slot />

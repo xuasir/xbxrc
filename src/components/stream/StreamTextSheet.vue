@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SettingInputControl from '@/components/settings/SettingInputControl.vue'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
@@ -21,7 +22,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const inputRef = ref<HTMLInputElement | null>(null)
 const draftValue = ref('')
 
 const fieldNodeId = computed(() => `${props.scopeId}.field`)
@@ -29,15 +29,6 @@ const cancelNodeId = computed(() => `${props.scopeId}.cancel`)
 const submitNodeId = computed(() => `${props.scopeId}.submit`)
 const defaultFocusId = computed(() => fieldNodeId.value)
 const isEmpty = computed(() => draftValue.value.trim() === '')
-let focusGeneration = 0
-
-async function focusInput(): Promise<void> {
-  const request = ++focusGeneration
-  await nextTick()
-  await nextTick()
-  if (request === focusGeneration && props.open && navigationEngine.isTopmostScope(props.scopeId) && navigationEngine.focusElement(inputRef.value, false))
-    inputRef.value?.select()
-}
 
 function handleClose(): void {
   emit('close')
@@ -63,7 +54,6 @@ function handleKeydown(event: KeyboardEvent): void {
 watch(
   () => props.open,
   (open) => {
-    focusGeneration++
     window.removeEventListener('keydown', handleKeydown, true)
     if (!open) {
       draftValue.value = ''
@@ -71,12 +61,10 @@ watch(
     }
     draftValue.value = ''
     window.addEventListener('keydown', handleKeydown, true)
-    void focusInput()
   },
   { immediate: true },
 )
 onBeforeUnmount(() => {
-  focusGeneration++
   window.removeEventListener('keydown', handleKeydown, true)
 })
 </script>
@@ -107,25 +95,19 @@ onBeforeUnmount(() => {
           </p>
         </header>
 
-        <Focusable
+        <SettingInputControl
           :id="fieldNodeId"
-          as="div"
-          class="stream-text-sheet__field-focus ui-focus-outline"
-          :on-back="handleClose"
-          @click="focusInput"
-        >
-          <input
-            ref="inputRef"
-            v-model="draftValue"
-            class="stream-text-sheet__input"
-            type="text"
-            :placeholder="t('streamPage.text.placeholder')"
-            :aria-label="t('streamPage.text.title')"
-            @focus="(event) => navigationEngine.focusElement(event.target as HTMLInputElement, false)"
-            @click.stop
-            @keydown.enter.prevent="handleSubmit"
-          >
-        </Focusable>
+          v-model="draftValue"
+          :scope-id="props.scopeId"
+          :active="props.open"
+          :busy="props.loading"
+          class="stream-text-sheet__input"
+          type="text"
+          :placeholder="t('streamPage.text.placeholder')"
+          :label="t('streamPage.text.title')"
+          select-on-focus
+          @submit="handleSubmit"
+        />
 
         <p v-if="props.error" class="stream-text-sheet__error" role="alert">
           {{ props.error }}
@@ -148,7 +130,8 @@ onBeforeUnmount(() => {
             as="button"
             type="button"
             class="stream-text-sheet__action stream-text-sheet__action--primary"
-            :disabled="isEmpty || props.loading"
+            :disabled="isEmpty"
+            :busy="props.loading"
             :on-back="handleClose"
             @click="handleSubmit"
           >
@@ -221,15 +204,16 @@ onBeforeUnmount(() => {
   color: var(--ui-page-text-soft);
 }
 
-.stream-text-sheet__field-focus {
+.stream-text-sheet__panel :deep(.setting-input-control__field-shell) {
   --focus-ring-border-width: 0px;
   border-radius: var(--ui-radius-md);
   margin-top: 8px;
 }
 
-.stream-text-sheet__input {
+.stream-text-sheet__panel :deep(.stream-text-sheet__input) {
   width: 100%;
   padding: 16px;
+  height: 56px;
   border: 2px solid var(--ui-border-subtle);
   border-radius: var(--ui-radius-md);
   background: var(--color-state-hover);
@@ -238,8 +222,8 @@ onBeforeUnmount(() => {
   transition: all var(--ui-motion-fast);
 }
 
-.stream-text-sheet__input:focus-visible { outline: none; }
-.stream-text-sheet__field-focus[data-focused='true'] .stream-text-sheet__input {
+.stream-text-sheet__panel :deep(.stream-text-sheet__input:focus-visible) { outline: none; }
+.stream-text-sheet__panel :deep(.stream-text-sheet__input[data-focused='true']) {
   background: var(--color-focus-bg);
   color: var(--ui-focus-text);
 }

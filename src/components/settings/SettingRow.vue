@@ -10,6 +10,7 @@ const props = defineProps<{
   effectLabel?: string
   needsRestart?: boolean
   disabled?: boolean
+  busy?: boolean
   select?: boolean
 }>()
 const emit = defineEmits<{ click: [] }>()
@@ -18,7 +19,7 @@ const emit = defineEmits<{ click: [] }>()
 <template>
   <Focusable
     :id="props.id" as="button" type="button" class="setting-row"
-    :scope-id="props.scopeId" :disabled="props.disabled"
+    :scope-id="props.scopeId" :disabled="props.disabled" :busy="props.busy"
     :aria-labelledby="`${props.id}.label ${props.id}.value`"
     :aria-describedby="props.description ? `${props.id}.description` : undefined"
     @click="emit('click')"

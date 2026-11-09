@@ -78,7 +78,7 @@ usePageFocus(() => pageRef.value, () => activeTab.value, () => `controller.tabs.
 <style scoped>
 .controller-page { display: grid; grid-template-columns: var(--ui-settings-layout-columns); grid-template-rows: var(--ui-settings-layout-rows); gap: var(--space-16); height: 100%; min-height: 0; overflow: hidden; }
 .controller-page__panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; }
-.controller-page__header { padding: var(--ui-space-lg) var(--ui-settings-side-padding); }
+.controller-page__header { padding: var(--ui-space-sm) var(--ui-settings-side-padding); }
 .controller-page__header h1 { margin: 0; font-size: var(--ui-text-title-lg); font-weight: var(--ui-font-weight-semibold); line-height: var(--ui-line-height-tight); }
 .controller-page__header p { margin: var(--ui-space-sm) 0 0; color: var(--color-text-secondary); font-size: var(--ui-settings-row-description-size); line-height: var(--ui-line-height-relaxed); }
 .controller-page__content { min-height: 0; min-width: 0; overflow: auto; scroll-padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail); }

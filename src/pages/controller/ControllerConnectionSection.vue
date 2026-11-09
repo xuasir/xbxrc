@@ -103,8 +103,8 @@ function percent(value: number): string {
 </template>
 
 <style scoped>
-.controller-connection { display: grid; gap: 24px; padding: var(--ui-settings-focus-safe) var(--ui-settings-side-padding) var(--ui-settings-focus-tail); }
-.controller-connection__hero { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr); align-items: center; gap: 24px; padding: 24px; border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); background: var(--ui-console-hero-bg); backdrop-filter: blur(16px); }
+.controller-connection { display: grid; gap: 16px; padding: var(--ui-settings-focus-safe) var(--ui-settings-side-padding) var(--ui-settings-focus-tail); }
+.controller-connection__hero { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr); align-items: center; gap: 16px; padding: 16px; border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); background: var(--ui-console-hero-bg); backdrop-filter: blur(16px); }
 .controller-connection__art { width: 100%; max-width: 260px; justify-self: center; filter: drop-shadow(0 12px 16px rgba(0,0,0,.2)); }
 .controller-connection__identity { min-width: 0; }
 .controller-connection__identity h2 { margin: 8px 0 16px; font-size: 18px; font-weight: 500; overflow-wrap: anywhere; }
@@ -117,7 +117,7 @@ function percent(value: number): string {
 .controller-connection__details dd { text-align: right; }
 .controller-connection__section { display: grid; gap: 12px; min-width: 0; }
 .controller-connection__section h2 { font-size: var(--ui-settings-section-title-size); font-weight: 600; }
-.controller-connection__inputs { display: grid; gap: 20px; padding: 16px; border-radius: var(--ui-radius-md); background: var(--ui-settings-item-bg); }
+.controller-connection__inputs { display: grid; gap: 16px; padding: 12px; border-radius: var(--ui-radius-md); background: var(--ui-settings-item-bg); }
 .controller-connection__buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .controller-connection__buttons span { display: grid; place-items: center; min-width: 32px; height: 30px; padding: 0 8px; background: var(--ui-settings-choice-bg); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-md); color: var(--color-text-secondary); font-size: 12px; transition: background-color 80ms, color 80ms; }
 .controller-connection__buttons [data-pressed='true'] { background: var(--brand-primary); color: var(--brand-on-primary); }
@@ -127,7 +127,7 @@ function percent(value: number): string {
 .controller-connection__stick-plane i { width: 16px; height: 16px; border-radius: 50%; background: var(--color-text-primary); }
 .controller-connection__stick small { color: var(--color-text-secondary); font-size: 11px; }
 .controller-connection__trigger { display: grid; gap: 8px; font-size: 12px; }
-.controller-connection__trigger div { height: 6px; border-radius: 3px; background: var(--ui-settings-choice-bg); overflow: hidden; }
+.controller-connection__trigger div { height: 6px; border-radius: var(--ui-radius-pill); background: var(--ui-settings-choice-bg); overflow: hidden; }
 .controller-connection__trigger i { display: block; height: 100%; background: var(--ui-status-positive); }
 .controller-connection__error { color: var(--color-danger); font-size: 13px; }
 @media(max-width:1000px) { .controller-connection__hero { gap: 16px; padding: 16px; grid-template-columns: 120px minmax(0,1fr); } }

@@ -80,11 +80,13 @@ describe('renderers', () => {
 
     expect(video.dataset.renderPipeline).toBe('video')
     expect(appended.length).toBeGreaterThanOrEqual(1)
-    expect(styleNode.textContent).toContain('#game-stream video')
+    expect(styleNode.textContent).toContain(`video[data-render-filter="${video.dataset.renderFilter}"]`)
     expect(styleNode.textContent).toContain('saturate(120%)')
+    expect(styleNode.textContent).not.toContain('url(')
+    expect(appended).toEqual([styleNode])
+    expect(matrixNode.setAttribute).not.toHaveBeenCalled()
     renderer.destroy()
     expect(styleNode.remove).toHaveBeenCalled()
-    expect(svgNode.remove).toHaveBeenCalled()
   })
 
   it('initializes webgl2 pipeline and supports update/destroy lifecycle', async () => {

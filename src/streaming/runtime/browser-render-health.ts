@@ -44,6 +44,9 @@ export function resolveBrowserRenderCause(stats: StreamStats): BrowserRenderCaus
     return 'renderStarvation'
   }
   const sourceFps = expectedSourceFps(stats)
+  // 解码帧直接供给时，以实际提交验收；RVFC继续表示浏览器video呈现通知。
+  if ((stats.rendererFrameSource === 'main-thread' || stats.rendererFrameSource === 'worker') && sufficientFps(submitted, sourceFps))
+    return 'renderStable'
   if (callbacks !== undefined && sourceFps !== undefined && !sufficientFps(callbacks, sourceFps))
     return 'frameDeliveryLimited'
   return received === undefined || decoded === undefined ? 'unknown' : 'renderStable'

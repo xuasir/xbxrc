@@ -69,6 +69,7 @@ import {
   applyBrowserVideoDisplay,
 } from './browser-video-display'
 import { createConnectionRecoveryCoordinator } from './connection-recovery'
+import { observeRenderState } from './render-state'
 import { shouldRecoverMediaConnection } from './runtime-host-policy'
 import { createSerialOperationQueue } from './serial-operation'
 
@@ -385,6 +386,7 @@ export function createBrowserRuntime(options: {
   let renderDecisionDigest: string | undefined
   let lastBrowserRendererPlan: BrowserRendererPlan | null = null
   let appliedRendererDigest: string | undefined
+  let renderStateDigest: string | undefined
   const rendererProjection = {
     get renderPipelineType() { return lastBrowserRendererPlan?.kind ?? 'webgl2' },
     get renderPolicySource() { return lastBrowserRendererPlan?.source ?? 'auto' },
@@ -470,6 +472,7 @@ export function createBrowserRuntime(options: {
           outputWidth: stats?.renderActualOutputWidth,
           outputHeight: stats?.renderActualOutputHeight,
           rendererKind: stats?.rendererKind ?? plan?.kind,
+          rendererFrameSource: stats?.rendererFrameSource ?? 'presentation',
           pipelineType: plan?.kind,
           processing: plan ? projectRenderProcessingFromPlan(plan) : undefined,
           processingMode: plan?.sharpening.processingMode,
@@ -1365,7 +1368,15 @@ export function createBrowserRuntime(options: {
         playbackTrace.observe(observation)
       }),
       eventBus.on('stats.collectionState', state => playbackTrace.collectionState(state)),
-      eventBus.on('media.resourcesObserved', payload => recordRuntimeTraceEvent('browserMediaResourcesObserved', () => ({ ...payload }))),
+      eventBus.on('media.resourcesObserved', (payload) => {
+        const state = observeRenderState(payload.resources)
+        const digest = JSON.stringify(state)
+        if (digest !== renderStateDigest) {
+          renderStateDigest = digest
+          emit({ type: 'renderStateChanged', state })
+        }
+        recordRuntimeTraceEvent('browserMediaResourcesObserved', () => ({ ...payload }))
+      }),
       eventBus.on('transport.connectionState', ({ state }) => {
         handleTransportStateChanged(state)
         emit({ type: 'connectionStateChanged', state })
@@ -1459,6 +1470,8 @@ export function createBrowserRuntime(options: {
     destroyClient()
     clientGeneration++
     appliedRendererDigest = undefined
+    renderStateDigest = undefined
+    emit({ type: 'renderStateChanged', state: { mode: null, pending: false } })
     lastBrowserRendererPlan = null
     renderHealth.reset()
     networkPolicy.reset()
@@ -1869,6 +1882,7 @@ export function createBrowserRuntime(options: {
       sampledAtMs: stats.statsSampledAtMs,
       rendererGeneration: stats.rendererGeneration,
       rendererKind: stats.rendererKind,
+      rendererFrameSource: stats.rendererFrameSource,
       rendererTargetFps: stats.rendererTargetFps,
       trackingSource: frameObservation.renderFrameTrackingSource,
       sourceFpsEstimate: frameObservation.renderFrameSourceFpsEstimate ?? null,
@@ -2141,7 +2155,7 @@ export function createBrowserRuntime(options: {
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(spec.render.displayOptions),
         render: spec.render,
-        superResolutionExperimental: spec.clientExperimentalSuperResolution === true,
+        superResolutionExperimental: spec.clientExperimentalSuperResolution,
       }
       reconnectPromise = null
       resetRuntimeState(resolveDefaultVideoBitrateKbps(spec))
@@ -2288,11 +2302,11 @@ export function createBrowserRuntime(options: {
       return await (operation?.wait(reconnectPromise) ?? reconnectPromise)
     },
     applyDisplayState(state) {
-      const previousUiSuperResolution = currentDisplayState?.superResolutionExperimental === true
+      const previousUiSuperResolution = resolveSuperResolutionIntent()
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(state.displayOptions),
         render: state.render,
-        superResolutionExperimental: state.superResolutionExperimental === true,
+        superResolutionExperimental: state.superResolutionExperimental,
       }
       applyCurrentDisplayState()
       if (client !== null) {
@@ -2300,7 +2314,7 @@ export function createBrowserRuntime(options: {
         updateSuperResolutionRuntimeState({
           retryAfterExplicitEnable:
             previousUiSuperResolution !== true
-            && currentDisplayState.superResolutionExperimental === true,
+            && srIntent,
           freezeFromLatestVideoIfAvailable: srIntent,
         })
         void applyRenderPolicy('displayStateChanged').catch(() => {

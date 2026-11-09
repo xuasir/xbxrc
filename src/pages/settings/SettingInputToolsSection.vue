@@ -321,7 +321,7 @@ function exportDiagnostic(): void {
         </h2>
       </header>
       <div class="setting-panel__section-body">
-        <SettingRow :id="`${props.navNodeBaseId}.background`" :scope-id="props.scopeId" :disabled="saving" :label="tr('background')" select @click="selectPreference('gamepad_background_policy', tr('background'), ['keep-active', 'follow-app'], [tr('keepActive'), tr('followApp')], prefs.backgroundPolicy, tr('backgroundHint'))">
+        <SettingRow :id="`${props.navNodeBaseId}.background`" :scope-id="props.scopeId" :busy="saving" :label="tr('background')" select @click="selectPreference('gamepad_background_policy', tr('background'), ['keep-active', 'follow-app'], [tr('keepActive'), tr('followApp')], prefs.backgroundPolicy, tr('backgroundHint'))">
           {{ tr(prefs.backgroundPolicy === 'keep-active' ? 'keepActive' : 'followApp') }}
         </SettingRow>
       </div>
@@ -354,11 +354,11 @@ function exportDiagnostic(): void {
         <p v-if="!activeDevice?.rumble" class="pad-hint">
           {{ tr('unsupported') }}
         </p>
-        <SettingToggleRow :id="`${props.navNodeBaseId}.vibration`" :scope-id="props.scopeId" :label="tr('vibration')" :enabled="prefs.vibration" :disabled="saving || !activeDevice?.rumble" @confirm="persist({ vibration: !prefs.vibration })" />
-        <SettingRow :id="`${props.navNodeBaseId}.strength`" :scope-id="props.scopeId" :disabled="saving || !activeDevice?.rumble || !prefs.vibration" :label="tr('strength')" select @click="selectPreference('vibration_strength', tr('strength'), ['realistic', 'enhanced', 'full'], [tr('light'), tr('normal'), tr('strong')], prefs.vibrationStrength)">
+        <SettingToggleRow :id="`${props.navNodeBaseId}.vibration`" :scope-id="props.scopeId" :label="tr('vibration')" :enabled="prefs.vibration" :busy="saving" :disabled="!activeDevice?.rumble" @confirm="persist({ vibration: !prefs.vibration })" />
+        <SettingRow :id="`${props.navNodeBaseId}.strength`" :scope-id="props.scopeId" :busy="saving" :disabled="!activeDevice?.rumble || !prefs.vibration" :label="tr('strength')" select @click="selectPreference('vibration_strength', tr('strength'), ['realistic', 'enhanced', 'full'], [tr('light'), tr('normal'), tr('strong')], prefs.vibrationStrength)">
           {{ tr(prefs.vibrationStrength === 'realistic' ? 'light' : prefs.vibrationStrength === 'enhanced' ? 'normal' : 'strong') }}
         </SettingRow>
-        <SettingToggleRow :id="`${props.navNodeBaseId}.uiHaptics`" :scope-id="props.scopeId" :label="tr('uiHaptics')" :enabled="prefs.uiHaptics" :disabled="saving || !activeDevice?.rumble" @confirm="persist({ ui_haptics: !prefs.uiHaptics })" />
+        <SettingToggleRow :id="`${props.navNodeBaseId}.uiHaptics`" :scope-id="props.scopeId" :label="tr('uiHaptics')" :enabled="prefs.uiHaptics" :busy="saving" :disabled="!activeDevice?.rumble" @confirm="persist({ ui_haptics: !prefs.uiHaptics })" />
       </div>
     </section>
     <section class="setting-panel__section">
@@ -387,15 +387,15 @@ function exportDiagnostic(): void {
         </Focusable>
       </template>
       <template v-if="pane === 'layout'">
-        <SettingRow v-for="key in BUTTON_KEYS.filter(key => key !== 'home')" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :disabled="saving || capturing !== null || !activeDevice" :label="BUTTON_LABELS[key]" select @click="startCapture(key)">
+        <SettingRow v-for="key in BUTTON_KEYS.filter(key => key !== 'home')" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :busy="saving" :disabled="capturing !== null || !activeDevice" :label="BUTTON_LABELS[key]" select @click="startCapture(key)">
           {{ BUTTON_LABELS[draft.buttons[key]] }}
         </SettingRow>
       </template>
       <template v-if="pane === 'sticks'">
-        <SettingRow v-for="key in (['leftDeadzone', 'rightDeadzone'] as const)" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :label="tr(key)" :disabled="saving" select @click="chooseDeadzone(key)">
+        <SettingRow v-for="key in (['leftDeadzone', 'rightDeadzone'] as const)" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :label="tr(key)" :busy="saving" select @click="chooseDeadzone(key)">
           {{ Math.round(draft[key] * 100) }}%
         </SettingRow>
-        <SettingToggleRow :id="`${paneScope}.invert`" :scope-id="paneScope" :label="tr('invertY')" :enabled="draft.invertRightY" :disabled="saving" @confirm="draft.invertRightY = !draft.invertRightY" />
+        <SettingToggleRow :id="`${paneScope}.invert`" :scope-id="paneScope" :label="tr('invertY')" :enabled="draft.invertRightY" :busy="saving" @confirm="draft.invertRightY = !draft.invertRightY" />
         <p class="pad-hint">
           {{ tr('previewHint') }}
         </p>
@@ -406,8 +406,8 @@ function exportDiagnostic(): void {
         </div>
       </template>
       <template v-if="pane === 'keyboard'">
-        <SettingToggleRow :id="`${paneScope}.enabled`" :scope-id="paneScope" :label="tr('keyboard')" :enabled="keyboardEnabled" :disabled="saving || capturing !== null" @confirm="keyboardEnabled = !keyboardEnabled" />
-        <SettingRow v-for="key in keyboardControls" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :disabled="saving || capturing !== null" :label="keyLabel(key)" select @click="startCapture(key)">
+        <SettingToggleRow :id="`${paneScope}.enabled`" :scope-id="paneScope" :label="tr('keyboard')" :enabled="keyboardEnabled" :busy="saving" :disabled="capturing !== null" @confirm="keyboardEnabled = !keyboardEnabled" />
+        <SettingRow v-for="key in keyboardControls" :id="`${paneScope}.${key}`" :key="key" :scope-id="paneScope" :busy="saving" :disabled="capturing !== null" :label="keyLabel(key)" select @click="startCapture(key)">
           {{ keyboardBinding(key) }}
         </SettingRow>
       </template>
@@ -433,7 +433,7 @@ function exportDiagnostic(): void {
             </div>
           </div>
         </section>
-        <Focusable :id="`${paneScope}.rumbleTest`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="!activeDevice?.rumble || rumbleTesting" @click="testRumble">
+        <Focusable :id="`${paneScope}.rumbleTest`" as="button" :scope-id="paneScope" class="setting-panel__action" :busy="rumbleTesting" :disabled="!activeDevice?.rumble" @click="testRumble">
           {{ tr('rumbleTest') }}
         </Focusable>
         <Focusable :id="`${paneScope}.finishTest`" as="button" :scope-id="paneScope" class="setting-panel__action" @click="requestClosePane">
@@ -452,20 +452,20 @@ function exportDiagnostic(): void {
       </template>
       <template v-if="pane === 'reset'">
         <p>{{ tr('resetHint') }}</p>
-        <Focusable :id="`${paneScope}.confirmReset`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="saving" @click="resetPreferences">
+        <Focusable :id="`${paneScope}.confirmReset`" as="button" :scope-id="paneScope" class="setting-panel__action" :busy="saving" @click="resetPreferences">
           {{ tr('confirmReset') }}
         </Focusable>
       </template>
     </div>
     <template v-if="pane === 'layout' || pane === 'sticks' || pane === 'keyboard'" #footer>
       <div class="setting-panel__actions">
-        <Focusable :id="`${paneScope}.cancel`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="saving" @click="requestClosePane">
+        <Focusable :id="`${paneScope}.cancel`" as="button" :scope-id="paneScope" class="setting-panel__action" :busy="saving" @click="requestClosePane">
           {{ t('setting.editor.cancel') }}
         </Focusable>
-        <Focusable :id="`${paneScope}.defaults`" as="button" :scope-id="paneScope" class="setting-panel__action" :disabled="saving || capturing !== null" @click="resetDraft">
+        <Focusable :id="`${paneScope}.defaults`" as="button" :scope-id="paneScope" class="setting-panel__action" :busy="saving" :disabled="capturing !== null" @click="resetDraft">
           {{ tr('resetDraft') }}
         </Focusable>
-        <Focusable :id="`${paneScope}.apply`" as="button" :scope-id="paneScope" class="setting-panel__action setting-panel__action--primary" :disabled="saving || capturing !== null || !dirty" @click="applyDraft">
+        <Focusable :id="`${paneScope}.apply`" as="button" :scope-id="paneScope" class="setting-panel__action setting-panel__action--primary" :busy="saving" :disabled="capturing !== null || !dirty" @click="applyDraft">
           {{ saving ? t('setting.experience.saving') : tr('apply') }}
         </Focusable>
       </div>

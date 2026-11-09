@@ -1,5 +1,6 @@
 //! 设置到领域偏好的纯映射。
 use super::*;
+use xbox_streaming::PipelineRenderPreference;
 
 pub(super) fn apply_streaming_preferences(
     config: &mut DomainStreamingConfig,
@@ -26,12 +27,21 @@ pub(super) fn apply_streaming_preferences(
     config.render.enable_audio_control = snapshot.enable_audio_control;
     config.render.video_format = normalize_optional(&snapshot.video_format);
     config.render.display_options = DomainDisplayOptions {
-        sharpness: snapshot.display_options.sharpness,
+        sharpness: if snapshot.render_mode == "sharpen" {
+            snapshot.display_options.sharpness
+        } else {
+            0
+        },
         saturation: snapshot.display_options.saturation,
         contrast: snapshot.display_options.contrast,
         brightness: snapshot.display_options.brightness,
     };
-    config.render.super_resolution_preference = if snapshot.super_resolution_experimental {
+    config.render.pipeline_preference = if snapshot.render_mode == "video" {
+        PipelineRenderPreference::Video
+    } else {
+        PipelineRenderPreference::Webgl2
+    };
+    config.render.super_resolution_preference = if snapshot.render_mode == "sr" {
         SuperResolutionRenderPreference::Fsr1Experimental
     } else {
         SuperResolutionRenderPreference::Off

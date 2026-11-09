@@ -1,12 +1,13 @@
 use crate::error::{AppError, AppResult};
 use crate::mods::auth::persistence_service::AuthPersistenceService;
 use crate::mods::auth::runtime_state::{AuthRuntimeState, BeginCheckOutcome};
+use crate::mods::auth::token_policy::{cloud_token_unavailable_error, extract_gs_token};
 use crate::mods::auth::trace::{
     app_error_summary, flow_error_summary, record_auth_event, state_summary, token_summary,
     AuthOperationTrace,
 };
 use crate::mods::auth::types::{
-    AuthSessionReadyEvent, AuthState, CheckAuthResponse, LoginResponse,
+    AuthSessionReadyEvent, AuthState, AuthTokenScope, CheckAuthResponse, LoginResponse,
 };
 use crate::mods::auth::{events, AuthProvider};
 use crate::mods::config::ConfigProviderRef;
@@ -16,11 +17,10 @@ use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 use xbox_auth_flow::{
-    AuthFlow, BuildDownstreamTokensInput, CompleteOAuthLoginInput, RefreshAndFinalizeInput,
-    StartOAuthLoginInput, TransferTokenInput,
+    AuthFlow, BuildDownstreamTokensInput, CompleteOAuthLoginInput, StartOAuthLoginInput,
+    TransferTokenInput,
 };
 
-const REFRESH_SKIP_WINDOW_MS: u64 = 23 * 60 * 60 * 1000;
 const CHECK_AUTH_COOLDOWN: Duration = Duration::from_secs(15);
 pub const AUTH_WINDOW_LABEL: &str = "auth-oauth-window";
 
@@ -142,49 +142,74 @@ impl AuthService {
     }
 
     async fn check_authentication_impl(&self) -> AppResult<CheckAuthResponse> {
-        self.check_authentication_with_rejection(None).await
+        self.check_authentication_with_rejection(AuthTokenScope::Home, None, None)
+            .await
     }
 
     async fn check_authentication_with_rejection(
         &self,
+        scope: AuthTokenScope,
         rejected_token: Option<&str>,
+        credential_generation: Option<u64>,
     ) -> AppResult<CheckAuthResponse> {
         log::info!("Auth: 开始检查认证状态");
         let trace = AuthOperationTrace::new(&self.runtime_trace, "checkAuthentication");
         let _gate = self.runtime.lock_check().await;
         let result = async {
+            if let Some(generation) = credential_generation {
+                self.runtime.ensure_generation(generation)?;
+            }
             if let Some(rejected) = rejected_token {
                 // 等待同一轮恢复完成后，新 Token 可直接供其他 401 请求重试。
-                if self.persistence.get_web_api_tokens()?.is_some_and(|(_, token)| {
-                    token != rejected && !self.runtime.is_web_token_rejected(&token)
-                }) {
+                if self.accepted_session_snapshot_for(scope)?.as_ref().and_then(|snapshot| scope_token_secret(scope, snapshot)).is_some_and(|token| token != rejected) {
                     return self.runtime.finish_check_success(false);
                 }
             }
             let cached_token = self.persistence.get_web_token()?;
-            let force_core_refresh = core_refresh_required(rejected_token, cached_token.as_ref(), &self.runtime);
-            let has_valid_credentials = !force_core_refresh && self.get_web_api_tokens()?.is_some();
+            let cached_stream_tokens = self.persistence.get_stream_tokens()?;
+            let force_core_refresh = core_refresh_required(
+                rejected_token, scope, cached_token.as_ref(), cached_stream_tokens.as_ref(), &self.runtime,
+            );
+            let has_valid_credentials = rejected_token.is_none() && !force_core_refresh && self.accepted_session_snapshot_for(scope)?.is_some();
+            trace.stage("credentialScopeChecked", json!({ "scope": scope.as_str(), "hasValidCredentials": has_valid_credentials }));
+            if !has_valid_credentials {
+                if let Some(error) = self.runtime.cached_refresh_failure(scope, Instant::now()) {
+                    trace.stage("checkSkipped", json!({ "reason": "refreshBackoff", "scope": scope.as_str() }));
+                    return Err(AppError::WebApi(error));
+                }
+            }
             let previous_state = match self.runtime.begin_check(
                 Instant::now(), CHECK_AUTH_COOLDOWN, has_valid_credentials,
             )? {
                 BeginCheckOutcome::ShortCircuit(response) => {
                     let state = self.runtime.current_state();
                     trace.stage("checkSkipped", json!({ "reason": if state.is_authenticating { "inFlight" } else { "cooldown" }, "state": state_summary(&state) }));
-                    if force_core_refresh && state.is_authenticating {
-                        return Err(AppError::Auth("登录正在处理中，请完成登录后刷新".into()));
+                    if state.is_authenticating && !has_valid_credentials {
+                        return Err(AppError::WebApi(xbox_webapi::WebApiError::parse("登录正在处理中，请完成登录后刷新")));
                     }
                     return Ok(response);
                 }
                 BeginCheckOutcome::Proceed { previous_state } => previous_state,
             };
             if let Some(token) = rejected_token {
-                self.runtime.reject_web_token(token)?;
+                match scope {
+                    AuthTokenScope::Web => self.runtime.reject_web_token(token)?,
+                    _ => self.runtime.reject_stream_token(scope, token)?,
+                }
             }
             let lease = self.runtime.check_lease()?;
             self.sync_auth_state_with_operation(Some(&trace));
             let result = self.check_authentication_internal(
-                previous_state, &trace, lease.generation, force_core_refresh,
+                previous_state, &trace, lease.generation, force_core_refresh, scope,
             ).await;
+            if let Err(error) = &result {
+                let safe_error = match error {
+                    AppError::WebApi(error) => error.clone(),
+                    AppError::Auth(_) => xbox_webapi::WebApiError::auth("登录续期暂不可用，请选择重新登录"),
+                    _ => xbox_webapi::WebApiError::parse("认证续期暂不可用，请重试"),
+                };
+                self.runtime.remember_refresh_failure(lease.generation, scope, Instant::now(), safe_error)?;
+            }
             drop(lease);
             self.sync_auth_state_with_operation(Some(&trace));
             result
@@ -199,10 +224,11 @@ impl AuthService {
         trace: &AuthOperationTrace,
         generation: u64,
         force_core_refresh: bool,
+        scope: AuthTokenScope,
     ) -> AppResult<CheckAuthResponse> {
         trace.stage("sessionSnapshotReadStarted", json!({}));
         if let Some(snapshot) = self
-            .accepted_session_snapshot()?
+            .accepted_session_snapshot_for(scope)?
             .filter(|_| !force_core_refresh)
         {
             trace.stage(
@@ -213,8 +239,7 @@ impl AuthService {
             return self.runtime.finish_check_from_snapshot(&snapshot);
         }
 
-        let should_start_silent_flow = self.persistence.has_valid_auth_tokens()
-            || self.persistence.get_user_token()?.is_some();
+        let should_start_silent_flow = self.persistence.get_user_token()?.is_some();
         trace.stage(
             "silentFlowPolicy",
             json!({ "hasValidSessionSnapshot": false, "eligible": should_start_silent_flow }),
@@ -223,49 +248,43 @@ impl AuthService {
         if should_start_silent_flow {
             log::info!("Auth: 未发现有效会话快照, 但存在核心 Token, 尝试静默登录");
             let flow_result = self
-                .start_silent_flow_impl(trace, generation, force_core_refresh)
+                .start_silent_flow_impl(trace, generation, force_core_refresh, scope)
                 .await;
             self.runtime.ensure_generation(generation)?;
             match flow_result {
                 Ok(()) => {
+                    if self.accepted_session_snapshot_for(scope)?.is_none() {
+                        return Err(self.scope_unavailable_error(scope)?);
+                    }
                     log::info!("Auth: 静默登录成功");
                     return self.runtime.finish_check_success(true);
                 }
                 Err(error) => {
-                    if !requires_interactive_login(&error) {
-                        trace.stage("transientSessionFallbackStarted", json!({}));
-                        trace.stage("sessionRefreshFailed", app_error_summary(&error));
-                        log::warn!(
-                            "Auth: 静默登录失败，保留凭据并延后重试: {}",
-                            app_error_summary(&error)
+                    if requires_interactive_login(&error) {
+                        trace.stage(
+                            "interactiveLoginRequired",
+                            json!({ "scope": scope.as_str() }),
                         );
-
-                        let has_web_tokens = self.get_web_api_tokens()?.is_some();
-                        let fallback_app_level = self
-                            .accepted_session_snapshot()?
-                            .map(|snapshot| snapshot.app_level)
-                            .unwrap_or(0);
-
-                        let response = self.runtime.finish_check_transient_failure(
-                            &previous_state,
-                            has_web_tokens,
-                            fallback_app_level,
-                        )?;
-                        return if has_web_tokens {
-                            Ok(response)
-                        } else {
-                            Err(error)
-                        };
                     }
-
-                    log::error!(
-                        "Auth: 登录凭据已被拒绝, 清理 Token: {}",
+                    trace.stage("transientSessionFallbackStarted", json!({}));
+                    trace.stage("sessionRefreshFailed", app_error_summary(&error));
+                    log::warn!(
+                        "Auth: 静默登录失败，保留凭据并延后重试: {}",
                         app_error_summary(&error)
                     );
-                    trace.stage("credentialsClearStarted", json!({}));
-                    self.runtime
-                        .clear_credentials(|| self.persistence.clear_all_tokens())?;
-                    trace.stage("credentialsCleared", json!({}));
+
+                    let has_web_tokens = self.get_web_api_tokens()?.is_some();
+                    let fallback_app_level = self
+                        .accepted_session_snapshot()?
+                        .map(|snapshot| snapshot.app_level)
+                        .unwrap_or(0);
+
+                    self.runtime.finish_check_transient_failure(
+                        &previous_state,
+                        has_web_tokens,
+                        fallback_app_level,
+                    )?;
+                    return Err(error);
                 }
             }
         }
@@ -348,123 +367,6 @@ impl AuthService {
         Ok(())
     }
 
-    async fn start_silent_flow_impl(
-        &self,
-        trace: &AuthOperationTrace,
-        generation: u64,
-        force_core_refresh: bool,
-    ) -> AppResult<()> {
-        log::info!("Auth: 静默流程开始");
-        trace.stage("silentCacheReadStarted", json!({}));
-        let stream_tokens = self.persistence.get_stream_tokens()?;
-        let web_token = self.persistence.get_web_token()?;
-        let has_any_cached_token = stream_tokens
-            .as_ref()
-            .map(|tokens| tokens.get("xHomeToken").is_some() || tokens.get("xCloudToken").is_some())
-            .unwrap_or(false)
-            && web_token.is_some();
-
-        let token_update_time = self.persistence.get_token_update_time();
-        let now_ms = now_ms();
-        let should_skip_core_refresh = !force_core_refresh
-            && has_any_cached_token
-            && token_update_time > 0
-            && now_ms.saturating_sub(token_update_time) < REFRESH_SKIP_WINDOW_MS
-            && self.persistence.can_reuse_sisu_user_token()?;
-        trace.stage("refreshPolicy", json!({
-            "skipCoreRefresh": should_skip_core_refresh,
-            "hasCachedTokens": has_any_cached_token,
-            "tokenAgeMs": (token_update_time > 0).then(|| now_ms.saturating_sub(token_update_time)),
-        }));
-
-        if !should_skip_core_refresh {
-            log::info!("Auth: 核心 Token 需要刷新 (超过23小时或无缓存)");
-            let user_token = self
-                .persistence
-                .get_user_token()?
-                .ok_or_else(|| AppError::Auth("Missing user token for refresh".into()))?;
-            let seed = self.persistence.load_auth_flow_seed()?;
-            let force_region_ip = self.config_provider.get_force_region_ip();
-
-            log::info!("Auth: 通过 xbox-auth-flow 执行静默刷新与下游令牌收口");
-            trace.stage(
-                "coreAndDownstreamRefreshStarted",
-                json!({ "forceRegionApplied": !force_region_ip.trim().is_empty() }),
-            );
-            let output = AuthFlow::new()
-                .refresh_and_finalize(RefreshAndFinalizeInput {
-                    refresh_token: user_token.refresh_token,
-                    seed,
-                    force_region_ip,
-                    include_streaming_tokens: true,
-                })
-                .await
-                .map_err(|error| {
-                    trace.stage("refreshFailed", flow_error_summary(&error));
-                    log::error!("Auth: 静默刷新流程失败: {}", flow_error_summary(&error));
-                    auth_flow_app_error(error)
-                })?;
-
-            trace.stage(
-                "authBundlePersistStarted",
-                token_summary(&output.auth_bundle.stream_tokens),
-            );
-            self.runtime
-                .commit_authentication(generation, output.auth_bundle.app_level, || {
-                    self.persistence.persist_auth_bundle(&output.auth_bundle)
-                })?;
-            trace.stage(
-                "authBundlePersistCompleted",
-                json!({ "appLevel": output.auth_bundle.app_level }),
-            );
-            log::info!("Auth: 静默刷新与下游令牌收口完成");
-            return Ok(());
-        }
-
-        log::info!("Auth: 跳过核心 Token 刷新 (23小时窗口内)");
-        let user_token = self
-            .persistence
-            .get_user_token()?
-            .ok_or_else(|| AppError::Auth("Missing user token for downstream refresh".into()))?;
-        let sisu_token = self.persistence.load_flow_sisu_token()?;
-        let seed = self.persistence.load_auth_flow_seed()?;
-        let force_region_ip = self.config_provider.get_force_region_ip();
-
-        log::info!("Auth: 通过 xbox-auth-flow 复用已有核心 token 获取下游令牌");
-        trace.stage(
-            "downstreamRefreshStarted",
-            json!({ "forceRegionApplied": !force_region_ip.trim().is_empty() }),
-        );
-        let output = AuthFlow::new()
-            .build_downstream_tokens(BuildDownstreamTokensInput {
-                user_token: serde_json::from_value(serde_json::to_value(user_token)?)?,
-                sisu_token,
-                seed,
-                force_region_ip,
-            })
-            .await
-            .map_err(|error| {
-                trace.stage("refreshFailed", flow_error_summary(&error));
-                log::error!("Auth: 下游令牌收口失败: {}", flow_error_summary(&error));
-                auth_flow_app_error(error)
-            })?;
-
-        trace.stage(
-            "authBundlePersistStarted",
-            token_summary(&output.auth_bundle.stream_tokens),
-        );
-        self.runtime
-            .commit_authentication(generation, output.auth_bundle.app_level, || {
-                self.persistence.persist_auth_bundle(&output.auth_bundle)
-            })?;
-        trace.stage(
-            "authBundlePersistCompleted",
-            json!({ "appLevel": output.auth_bundle.app_level }),
-        );
-        log::info!("Auth: 复用已有核心 token 的下游令牌收口完成");
-        Ok(())
-    }
-
     fn accepted_session_snapshot(
         &self,
     ) -> AppResult<Option<crate::mods::auth::token_policy::ValidSessionSnapshot>> {
@@ -475,6 +377,60 @@ impl AuthService {
                 web_token_secret(&snapshot.web_token)
                     .is_some_and(|token| !self.runtime.is_web_token_rejected(token))
             }))
+    }
+
+    fn accepted_session_snapshot_for(
+        &self,
+        scope: AuthTokenScope,
+    ) -> AppResult<Option<crate::mods::auth::token_policy::ValidSessionSnapshot>> {
+        Ok(self
+            .persistence
+            .get_valid_session_for(scope)?
+            .filter(|snapshot| {
+                web_token_secret(&snapshot.web_token)
+                    .is_some_and(|token| !self.runtime.is_web_token_rejected(token))
+                    && (scope == AuthTokenScope::Web
+                        || scope_token_secret(scope, snapshot).is_some_and(|token| {
+                            !self.runtime.is_stream_token_rejected(scope, token)
+                        }))
+            }))
+    }
+
+    fn scope_unavailable_error(&self, scope: AuthTokenScope) -> AppResult<AppError> {
+        if scope == AuthTokenScope::Cloud {
+            if let Some(error) = self
+                .persistence
+                .get_stream_tokens()?
+                .as_ref()
+                .and_then(cloud_token_unavailable_error)
+            {
+                return Ok(AppError::WebApi(error));
+            }
+        }
+        Ok(AppError::WebApi(xbox_webapi::WebApiError::parse(
+            "认证续期响应暂不可用，请重试",
+        )))
+    }
+
+    fn scoped_stream_token_snapshot(
+        &self,
+        scope: AuthTokenScope,
+        expected_generation: Option<u64>,
+    ) -> AppResult<Option<Value>> {
+        let generation = expected_generation.unwrap_or(self.runtime.generation()?);
+        self.runtime.ensure_generation(generation)?;
+        let mut token = self
+            .accepted_session_snapshot_for(scope)?
+            .and_then(|snapshot| {
+                scope
+                    .stream_key()
+                    .and_then(|key| snapshot.streaming_tokens.get(key).cloned())
+            });
+        self.runtime.ensure_generation(generation)?;
+        if let Some(token) = token.as_mut().and_then(Value::as_object_mut) {
+            token.insert("_authGeneration".into(), json!(generation));
+        }
+        Ok(token)
     }
 
     fn sync_auth_state(&self) {
@@ -523,10 +479,22 @@ impl AuthProvider for AuthService {
     }
 
     fn get_active_session(&self) -> AppResult<Option<AuthSessionReadyEvent>> {
+        let generation = self.runtime.generation()?;
         let snapshot = self.accepted_session_snapshot()?;
-        let Some(snapshot) = snapshot else {
+        self.runtime.ensure_generation(generation)?;
+        let Some(mut snapshot) = snapshot else {
             return Ok(None);
         };
+
+        for key in ["xHomeToken", "xCloudToken"] {
+            if let Some(token) = snapshot
+                .streaming_tokens
+                .get_mut(key)
+                .and_then(Value::as_object_mut)
+            {
+                token.insert("_authGeneration".into(), json!(generation));
+            }
+        }
 
         Ok(Some(AuthSessionReadyEvent {
             provider: self.runtime.provider()?,
@@ -536,8 +504,32 @@ impl AuthProvider for AuthService {
         }))
     }
 
-    fn get_streaming_token(&self, target_type: &str) -> AppResult<Option<Value>> {
-        self.persistence.get_streaming_token(target_type)
+    async fn get_streaming_token(&self, target_type: &str) -> AppResult<Option<Value>> {
+        let scope = AuthTokenScope::from_target(target_type);
+        if self.accepted_session_snapshot_for(scope)?.is_none() {
+            self.check_authentication_with_rejection(scope, None, None)
+                .await?;
+        }
+        self.scoped_stream_token_snapshot(scope, None)
+    }
+
+    async fn recover_streaming_token(
+        &self,
+        target_type: &str,
+        rejected_token: &str,
+        credential_generation: Option<u64>,
+    ) -> AppResult<Option<Value>> {
+        let scope = AuthTokenScope::from_target(target_type);
+        self.check_authentication_with_rejection(
+            scope,
+            Some(rejected_token),
+            credential_generation,
+        )
+        .await?;
+        if let Some(generation) = credential_generation {
+            self.runtime.ensure_generation(generation)?;
+        }
+        self.scoped_stream_token_snapshot(scope, credential_generation)
     }
 
     async fn login(&self) -> AppResult<LoginResponse> {
@@ -545,15 +537,36 @@ impl AuthProvider for AuthService {
     }
 
     async fn get_transfer_token(&self) -> AppResult<String> {
-        let refresh_token = self.persistence.get_refresh_token()?.ok_or_else(|| {
-            AppError::Data("Refresh token is missing. Please authenticate first.".to_string())
-        })?;
+        let trace = AuthOperationTrace::new(&self.runtime_trace, "transferToken");
+        let _gate = self.runtime.lock_check().await;
+        let result = async {
+            let generation = self.runtime.generation()?;
+            if self.runtime.is_refresh_token_rejected() {
+                return Err(AppError::Auth("登录续期凭据已失效，请选择重新登录".into()));
+            }
+            let refresh_token = self.persistence.get_refresh_token()?.ok_or_else(|| {
+                AppError::Auth("登录续期凭据暂不可用，请选择重新登录".to_string())
+            })?;
 
-        AuthFlow::new()
-            .transfer_token(TransferTokenInput { refresh_token })
-            .await
-            .map(|output| output.transfer_token)
-            .map_err(auth_flow_app_error)
+            let output = AuthFlow::new()
+                .transfer_token(TransferTokenInput { refresh_token })
+                .await
+                .map_err(|error| {
+                    trace.stage("refreshFailed", flow_error_summary(&error));
+                    self.map_refresh_grant_error(error, generation)
+                })?;
+            self.runtime.ensure_generation(generation)?;
+            if let Some(refresh_token) = output.refresh_token.as_deref() {
+                self.runtime.checkpoint_credentials(generation, || {
+                    self.persistence
+                        .persist_rotated_refresh_token(refresh_token)
+                })?;
+            }
+            Ok(output.transfer_token)
+        }
+        .await;
+        trace.finish(&result, &self.runtime.current_state());
+        result
     }
 
     fn get_web_api_tokens(&self) -> AppResult<Option<(String, String)>> {
@@ -576,9 +589,14 @@ impl AuthProvider for AuthService {
     }
 
     async fn recover_web_api_session(&self, rejected_token: &str) -> AppResult<()> {
-        self.check_authentication_with_rejection(Some(rejected_token))
+        self.check_authentication_with_rejection(AuthTokenScope::Web, Some(rejected_token), None)
             .await
             .map(|_| ())
+    }
+
+    async fn check_web_authentication(&self) -> AppResult<CheckAuthResponse> {
+        self.check_authentication_with_rejection(AuthTokenScope::Web, None, None)
+            .await
     }
 
     async fn clear_auth_cache(&self, scope: &str) -> AppResult<()> {
@@ -610,20 +628,18 @@ impl AuthProvider for AuthService {
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 fn requires_interactive_login(error: &AppError) -> bool {
-    matches!(error, AppError::WebApi(error) if error.to_status_code() == Some(401) || error.safe_service_code().as_deref() == Some("invalid_grant"))
+    matches!(error, AppError::Auth(_))
+        || matches!(error, AppError::WebApi(error) if matches!(error, xbox_webapi::WebApiError::Auth { .. }) || error.to_status_code() == Some(401))
 }
 
 fn auth_flow_app_error(error: xbox_auth_flow::AuthFlowError) -> AppError {
+    if error.requires_interactive_login() {
+        return AppError::Auth("登录续期凭据已失效，请选择重新登录".into());
+    }
     match error {
-        xbox_auth_flow::AuthFlowError::Upstream(error) => AppError::WebApi(match error {
+        xbox_auth_flow::AuthFlowError::Upstream(error)
+        | xbox_auth_flow::AuthFlowError::RefreshGrant(error) => AppError::WebApi(match error {
             xbox_webapi::WebApiError::Network { kind, .. } => {
                 xbox_webapi::WebApiError::network_kind(kind)
             }
@@ -646,7 +662,9 @@ fn auth_flow_app_error(error: xbox_auth_flow::AuthFlowError) -> AppError {
                 xbox_webapi::WebApiError::auth("Xbox 登录信息暂不可用，请重新登录")
             }
         }),
-        _ => AppError::Auth("Xbox 登录协议响应异常，请稍后重试".into()),
+        _ => AppError::WebApi(xbox_webapi::WebApiError::parse(
+            "Xbox 登录协议响应异常，请稍后重试",
+        )),
     }
 }
 
@@ -657,17 +675,40 @@ fn web_token_secret(raw: &Value) -> Option<&str> {
         .and_then(Value::as_str)
 }
 
+fn scope_token_secret(
+    scope: AuthTokenScope,
+    snapshot: &crate::mods::auth::token_policy::ValidSessionSnapshot,
+) -> Option<&str> {
+    match scope.stream_key() {
+        Some(key) => snapshot
+            .streaming_tokens
+            .get(key)
+            .and_then(extract_gs_token),
+        None => web_token_secret(&snapshot.web_token),
+    }
+}
+
 fn core_refresh_required(
     rejected_token: Option<&str>,
-    cached_token: Option<&Value>,
+    scope: AuthTokenScope,
+    cached_web_token: Option<&Value>,
+    cached_stream_tokens: Option<&Value>,
     runtime: &AuthRuntimeState,
 ) -> bool {
-    // 401 恢复被网络中断后，下一轮检查继续刷新核心凭据。
+    // 所有目标的 401 都重建核心授权；网络中断后的下一轮继续这一恢复路径。
     rejected_token.is_some()
-        || cached_token
+        || cached_web_token
             .and_then(web_token_secret)
             .is_some_and(|token| runtime.is_web_token_rejected(token))
+        || scope
+            .stream_key()
+            .and_then(|key| cached_stream_tokens?.get(key))
+            .and_then(extract_gs_token)
+            .is_some_and(|token| runtime.is_stream_token_rejected(scope, token))
 }
+
+#[path = "token_refresh.rs"]
+mod token_refresh;
 
 #[cfg(test)]
 #[path = "service.test.rs"]

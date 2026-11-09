@@ -671,6 +671,7 @@
       "streamComparisonSaveFailed": "The A/B comparison image could not be saved.",
       "streamFrameCaptureFailed": "The current picture could not be captured.",
       "streamComparisonExportFailed": "Failed to export the Super Resolution A/B comparison image.",
+      "streamComparisonRenderModeUnavailable": "The requested rendering mode is unavailable for the comparison image.",
       "cleanupPending": "Resources from the previous connection are still being cleaned up."
     },
     "failure": {
@@ -778,6 +779,11 @@
     }
   },
   "login": {
+    "retryRestore": "Retry session restore",
+    "restoreRetryHelp": "Session restore temporarily failed. Your credentials are saved. Please try again.",
+    "restoreLoginHelp": "Your session renewal credentials have expired. Choose to sign in again.",
+    "reauthenticateHelp": "Your sign-in needs to be verified. You can sign in again.",
+    "reauthenticateFailed": "Could not open sign-in. Please try again.",
     "playLine": "Sign in to play games installed on your console and cloud games.",
     "checkingStatusLine": "Restoring your session. Please wait.",
     "signingStatusLine": "Signing in. Please wait.",
@@ -944,6 +950,29 @@
   },
   "setting": {
     "title": "Settings",
+    "renderControls": {
+      "title": "Rendering and picture",
+      "defaultRendering": "Default rendering",
+      "useDefaultRendering": "Use default rendering",
+      "selected": "Selected: {mode}",
+      "sr": "SR (Experimental)",
+      "srHint": "Enhances picture detail and may increase rendering load. Independent sharpening turns off when enabled.",
+      "sharpening": "Sharpening",
+      "sharpeningHint": "Clear enhances edges; Soft adds light sharpening. Off uses default rendering.",
+      "srSharpeningHint": "SR includes detail enhancement. Independent sharpening stays off.",
+      "choices": { "off": "Off", "clear": "Clear", "soft": "Soft" },
+      "colors": { "title": "Color style", "standard": "Standard", "clear": "Vivid", "soft": "Soft" },
+      "defaultHint": "Save the global default for new streams.",
+      "sessionHint": "Changes apply to this stream. Save as default to use them in future streams.",
+      "sources": { "default": "Using the global default.", "session": "Using changes for this stream." },
+      "restoreDefaults": "Restore default",
+      "applySession": "Apply to this stream",
+      "saveDefault": "Save default",
+      "saveDefaultAndApply": "Save default and apply",
+      "preparing": "Preparing",
+      "switching": "Switching",
+      "fallback": { "performance": "FPS protection", "unsupported": "Device limit", "failed": "Enhancement failed" }
+    },
     "aria": {
       "groups": "Setting groups",
       "panel": "{group} settings",
@@ -1477,10 +1506,11 @@
       },
       "super_resolution_experimental": {
         "label": "Super Resolution (Experimental)",
-        "description": "Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure."
+        "description": "Enhances picture detail and may increase rendering load. Uses default rendering on failure."
       },
       "display_options": {
-        "label": "Picture style",
+        "label": "Rendering and picture",
+        "description": "Set the default rendering mode and picture for new streams.",
         "options": {
           "standard": {
             "label": "Standard"

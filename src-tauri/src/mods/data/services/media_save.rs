@@ -1,6 +1,7 @@
-use super::personal_service::{user_error, PersonalContext, PersonalService};
+use super::personal_service::{PersonalContext, PersonalService};
 use crate::mods::data::session_resolver::DataSessionResolver;
 use crate::mods::data::types::{DataMediaSaveResult, LibraryMedia, MediaKind};
+use crate::mods::data::DataError;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
@@ -28,14 +29,14 @@ async fn resolve_current(
     kind: MediaKind,
     id: &str,
     continuation: Option<&str>,
-) -> Result<LibraryMedia, String> {
+) -> Result<LibraryMedia, DataError> {
     resolver
         .run_query(|session| async move {
             let ctx = PersonalService::context(&session, None, recorder.clone()).await?;
             resolve(&ctx, kind, id, continuation).await
         })
         .await
-        .map_err(|error| user_error(&error))
+        .map_err(DataError::from)
 }
 
 pub async fn save(
@@ -44,7 +45,7 @@ pub async fn save(
     kind: MediaKind,
     id: &str,
     continuation: Option<&str>,
-) -> Result<DataMediaSaveResult, String> {
+) -> Result<DataMediaSaveResult, DataError> {
     let media = resolve_current(resolver, recorder, kind, id, continuation).await?;
     let parsed = media_url(&media)?;
     let extension = if kind == MediaKind::Clip {

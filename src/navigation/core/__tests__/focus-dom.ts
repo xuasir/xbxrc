@@ -23,7 +23,7 @@ export interface FocusNode {
   getClientRects: () => object[]
   getBoundingClientRect: () => { left: number, right: number, top: number, bottom: number, width: number, height: number }
   focus: ReturnType<typeof vi.fn>
-  blur: ReturnType<typeof vi.fn>
+  blur: ReturnType<typeof vi.fn<() => void>>
   scrollIntoView: ReturnType<typeof vi.fn>
   dispatchEvent: ReturnType<typeof vi.fn<(event: Event) => boolean>>
   click: ReturnType<typeof vi.fn>
@@ -103,19 +103,21 @@ export function focusFixture() {
     querySelectorAll: (selector = FOCUSABLE_SELECTOR) => nodes.filter(item => item.connected && item.matches(selector)),
     querySelector: (selector = FOCUSABLE_SELECTOR) => body.querySelectorAll(selector)[0] ?? null,
   }
+  const connected = (item: FocusNode) => {
+    let current: FocusNode | null = item
+    while (current) {
+      if (!current.connected)
+        return false
+      current = current.parentElement
+    }
+    return !!item
+  }
   vi.stubGlobal('document', {
     body,
     querySelectorAll: body.querySelectorAll,
-    contains: (item: FocusNode) => {
-      let current: FocusNode | null = item
-      while (current) {
-        if (!current.connected)
-          return false
-        current = current.parentElement
-      }
-      return !!item
-    },
-    getElementById: (id: string) => nodes.find(n => n.id === id && n.connected) ?? null,
+    querySelector: body.querySelector,
+    contains: connected,
+    getElementById: (id: string) => nodes.find(n => n.id === id && connected(n)) ?? null,
     get activeElement() { return active },
   })
   const getStyle = (el: FocusNode) => ({ display: el.hidden ? 'none' : 'block', visibility: el.attrs.get('visibility') ?? 'visible', scrollPaddingTop: '0', scrollPaddingBottom: '0', scrollPaddingLeft: '0', scrollPaddingRight: '0' })

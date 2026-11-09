@@ -1,0 +1,13 @@
+.verification-page { height: 100%; overflow: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.verification-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; }
+.verification-header h1 { font-size: 22px; }
+.verification-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.verification-controls button { font: inherit; background: var(--ui-material-glass); color: var(--color-text-primary); padding: 10px 14px; border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-md); }
+.verification-controls button:disabled { opacity: .5; }
+.verification-area { min-height: 240px; padding: 16px; border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-panel); }
+.verification-area .setting-panel__list { max-width: 680px; }
+.verification-area .setting-panel__section-body { display: flex; flex-direction: column; gap: 12px; }
+.verification-area .setting-toggle-row { width: 100%; }
+.verification-area .setting-input-control__field-shell { display: block; }
+pre { font: 12px/1.6 ui-monospace,monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media(max-width:720px) { .verification-page { padding: 16px; } .verification-area { padding: 12px; } }

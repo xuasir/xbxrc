@@ -347,7 +347,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       const source = getVideoFrameSource(h.video as unknown as HTMLVideoElement)
       expect(p.canvas.getContext).not.toHaveBeenCalled()
       if (diagnostic)
-        source.snapshotDiagnostics()
+        source.snapshotDiagnostics({ videoPixels: true })
       const imported: number[] = []
       let image = 0
       h.gl.texImage2D.mockImplementation((...args: unknown[]) => {

@@ -35,7 +35,7 @@ function effect(row: SettingIndexedRow) {
       <div v-if="!section.collapsible || expanded.has(section.key)" :id="`${props.scopeId}.body.${section.key}`" class="setting-panel__section-body">
         <template v-for="(entry, i) in section.entries" :key="entry.kind === 'field' ? entry.row.key : i">
           <template v-if="entry.kind === 'field'">
-            <SettingToggleRow v-if="entry.row.control === 'toggle'" :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :effect-label="effect(entry.row)" :enabled="entry.row.value === true" :disabled="props.pendingActionKey !== null" @confirm="emit('rowConfirm', entry.row)" />
+            <SettingToggleRow v-if="entry.row.control === 'toggle'" :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :effect-label="effect(entry.row)" :enabled="entry.row.value === true" :busy="props.pendingActionKey !== null" @confirm="emit('rowConfirm', entry.row)" />
             <div v-else-if="entry.row.control === 'singleSelect' && entry.row.options && entry.row.options.length <= 3" class="setting-panel__inline-field">
               <h3 class="setting-panel__inline-label">
                 {{ entry.row.label }}
@@ -46,11 +46,11 @@ function effect(row: SettingIndexedRow) {
               <p v-if="effect(entry.row)" class="setting-panel__effect">
                 {{ effect(entry.row) }}
               </p>
-              <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="entry.row.nodeId" :label="entry.row.label" :options="entry.row.options" :current-value="typeof entry.row.value === 'object' ? entry.row.options.find(option => option.label === entry.row.valueText)?.value ?? null : (entry.row.value as string | number)" :disabled="props.pendingActionKey !== null" @select="emit('rowSelect', entry.row, $event)" />
+              <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="entry.row.nodeId" :label="entry.row.label" :options="entry.row.options" :current-value="typeof entry.row.value === 'object' ? entry.row.options.find(option => option.label === entry.row.valueText)?.value ?? null : (entry.row.value as string | number)" :busy="props.pendingActionKey !== null" @select="emit('rowSelect', entry.row, $event)" />
             </div>
-            <SettingRow v-else :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :value="entry.row.valueText" :effect-label="effect(entry.row)" :disabled="props.pendingActionKey !== null" select @click="emit('rowConfirm', entry.row)" />
+            <SettingRow v-else :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :value="entry.row.valueText" :effect-label="effect(entry.row)" :busy="props.pendingActionKey !== null" select @click="emit('rowConfirm', entry.row)" />
           </template>
-          <SettingRow v-else-if="entry.kind === 'action'" :id="entry.nodeId" :scope-id="props.scopeId" :label="entry.label" :value="entry.value" :disabled="props.pendingActionKey !== null" select @click="emit('actionClick', entry.actionId)" />
+          <SettingRow v-else-if="entry.kind === 'action'" :id="entry.nodeId" :scope-id="props.scopeId" :label="entry.label" :value="entry.value" :busy="props.pendingActionKey !== null" select @click="emit('actionClick', entry.actionId)" />
           <p v-else-if="entry.kind === 'notice'" class="setting-panel__notice">
             {{ entry.body }}
           </p>

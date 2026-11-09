@@ -1,0 +1,2568 @@
+{
+  "url": "http://127.0.0.1:1430/dev-docs/validation/2026-11-09-ui-focus-inset-density/index.html",
+  "cases": [
+    {
+      "name": "home-dark-800",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 48,
+        "heroHeight": 208,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "dark",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 568,
+          "width": 800
+        }
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 130,
+              "left": 116,
+              "right": 768,
+              "top": 72
+            },
+            "class": "home-page__header",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 512,
+              "left": 108,
+              "right": 776,
+              "top": 64
+            },
+            "class": "home-page ui-page-shell",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 520,
+              "left": 100,
+              "right": 784,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 119,
+          "left": 732,
+          "right": 768,
+          "top": 83
+        },
+        "focused": "true",
+        "id": "xhome.refresh",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 728,
+          "right": 772,
+          "top": 79,
+          "bottom": 123
+        },
+        "clipping": []
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 468,
+          "clientWidth": 684,
+          "scrollHeight": 468,
+          "scrollTop": 0,
+          "scrollWidth": 684,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "home-page ui-page-shell",
+          "clientHeight": 448,
+          "clientWidth": 668,
+          "scrollHeight": 448,
+          "scrollTop": 0,
+          "scrollWidth": 668,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "home-dark-1280",
+      "layout": {
+        "density": "standard",
+        "footerHeight": 48,
+        "heroHeight": 240,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "dark",
+        "tokens": {
+          "--ui-console-hero-padding": "24px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "16px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "24px",
+          "--ui-shell-content-top": "16px",
+          "--ui-shell-edge-inset": "24px",
+          "--ui-shell-gap": "24px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        }
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 134,
+              "left": 124,
+              "right": 1240,
+              "top": 76
+            },
+            "class": "home-page__header",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 116,
+              "right": 1248,
+              "top": 68
+            },
+            "class": "home-page ui-page-shell",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 672,
+              "left": 108,
+              "right": 1256,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 123,
+          "left": 1204,
+          "right": 1240,
+          "top": 87
+        },
+        "focused": "true",
+        "id": "xhome.refresh",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 1200,
+          "right": 1244,
+          "top": 83,
+          "bottom": 127
+        },
+        "clipping": []
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 620,
+          "clientWidth": 1148,
+          "scrollHeight": 620,
+          "scrollTop": 0,
+          "scrollWidth": 1148,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "home-page ui-page-shell",
+          "clientHeight": 596,
+          "clientWidth": 1132,
+          "scrollHeight": 596,
+          "scrollTop": 0,
+          "scrollWidth": 1132,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setting-dark-1280",
+      "layout": {
+        "density": "standard",
+        "footerHeight": 48,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "dark",
+        "tokens": {
+          "--ui-console-hero-padding": "24px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "16px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "24px",
+          "--ui-shell-content-top": "16px",
+          "--ui-shell-edge-inset": "24px",
+          "--ui-shell-gap": "24px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 620,
+          "clientWidth": 1148,
+          "scrollHeight": 620,
+          "scrollTop": 0,
+          "scrollWidth": 1148,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 256,
+          "clientWidth": 216,
+          "scrollHeight": 256,
+          "scrollTop": 0,
+          "scrollWidth": 216,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-panel__content",
+          "clientHeight": 541,
+          "clientWidth": 892,
+          "scrollHeight": 836,
+          "scrollTop": 295,
+          "scrollWidth": 892,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ],
+      "scroll": {
+        "before": {
+          "clientHeight": 541,
+          "scrollHeight": 836,
+          "scrollTop": 0
+        },
+        "after": {
+          "clientHeight": 541,
+          "scrollHeight": 836,
+          "scrollTop": 295
+        }
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 631.796875,
+              "left": 1072.640625,
+              "right": 1207.640625,
+              "top": 589.796875
+            },
+            "class": "setting-panel__actions",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 631.796875,
+              "left": 396,
+              "right": 1208,
+              "top": 589.796875
+            },
+            "class": "setting-app-update__footer",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 647.796875,
+              "left": 380,
+              "right": 1224,
+              "top": 447.796875
+            },
+            "class": "setting-app-update__card",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 663.796875,
+              "left": 356,
+              "right": 1248,
+              "top": 400.796875
+            },
+            "class": "setting-panel__section setting-app-update",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 356,
+              "right": 1248,
+              "top": 123
+            },
+            "class": "setting-panel__content",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 356,
+              "right": 1248,
+              "top": 72
+            },
+            "class": "setting-panel",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 116,
+              "right": 1248,
+              "top": 72
+            },
+            "class": "setting-page__layout",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 116,
+              "right": 1248,
+              "top": 68
+            },
+            "class": "setting-page ui-page-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 672,
+              "left": 108,
+              "right": 1256,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 631.796875,
+          "left": 1072.640625,
+          "right": 1208,
+          "top": 589.796875
+        },
+        "focused": "true",
+        "id": "setting.update.primary",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 1068.640625,
+          "right": 1212,
+          "top": 585.796875,
+          "bottom": 635.796875
+        },
+        "clipping": []
+      }
+    },
+    {
+      "name": "setting-light-1280",
+      "layout": {
+        "density": "standard",
+        "footerHeight": 48,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "24px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "16px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "24px",
+          "--ui-shell-content-top": "16px",
+          "--ui-shell-edge-inset": "24px",
+          "--ui-shell-gap": "24px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 620,
+          "clientWidth": 1148,
+          "scrollHeight": 620,
+          "scrollTop": 0,
+          "scrollWidth": 1148,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 256,
+          "clientWidth": 216,
+          "scrollHeight": 256,
+          "scrollTop": 0,
+          "scrollWidth": 216,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-panel__content",
+          "clientHeight": 541,
+          "clientWidth": 892,
+          "scrollHeight": 839,
+          "scrollTop": 0,
+          "scrollWidth": 892,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ],
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 408,
+              "left": 392,
+              "right": 1212,
+              "top": 364
+            },
+            "class": "setting-inline-select__rail",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 416,
+              "left": 380,
+              "right": 1224,
+              "top": 360
+            },
+            "class": "setting-inline-select",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 416.5,
+              "left": 380,
+              "right": 1224,
+              "top": 321.5
+            },
+            "class": "setting-panel__inline-field",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 416,
+              "left": 380,
+              "right": 1224,
+              "top": 170
+            },
+            "class": "setting-panel__section-body",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 416,
+              "left": 380,
+              "right": 1224,
+              "top": 131
+            },
+            "class": "setting-panel__section",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 696,
+              "left": 356,
+              "right": 1248,
+              "top": 123
+            },
+            "class": "setting-panel__list",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 356,
+              "right": 1248,
+              "top": 123
+            },
+            "class": "setting-panel__content",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 356,
+              "right": 1248,
+              "top": 72
+            },
+            "class": "setting-panel",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 116,
+              "right": 1248,
+              "top": 72
+            },
+            "class": "setting-page__layout",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 664,
+              "left": 116,
+              "right": 1248,
+              "top": 68
+            },
+            "class": "setting-page ui-page-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 672,
+              "left": 108,
+              "right": 1256,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 720,
+              "left": 0,
+              "right": 1280,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 408,
+          "left": 806,
+          "right": 1212,
+          "top": 364
+        },
+        "focused": "true",
+        "id": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 802,
+          "right": 1216,
+          "top": 360,
+          "bottom": 412
+        },
+        "clipping": []
+      }
+    },
+    {
+      "name": "setting-light-390",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 0,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 844,
+          "width": 390
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 792,
+          "clientWidth": 390,
+          "scrollHeight": 792,
+          "scrollTop": 0,
+          "scrollWidth": 390,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 68,
+          "clientWidth": 358,
+          "scrollHeight": 68,
+          "scrollTop": 0,
+          "scrollWidth": 368,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-panel__content",
+          "clientHeight": 547,
+          "clientWidth": 366,
+          "scrollHeight": 547,
+          "scrollTop": 0,
+          "scrollWidth": 366,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ],
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 140,
+              "left": 16,
+              "right": 374,
+              "top": 72
+            },
+            "class": "setting-sidebar__nav",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 144,
+              "left": 12,
+              "right": 378,
+              "top": 68
+            },
+            "class": "setting-sidebar",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 758,
+              "left": 12,
+              "right": 378,
+              "top": 68
+            },
+            "class": "setting-page__layout",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 758,
+              "left": 12,
+              "right": 378,
+              "top": 64
+            },
+            "class": "setting-page ui-page-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 132,
+          "left": 270,
+          "right": 366,
+          "top": 80
+        },
+        "focused": "true",
+        "id": "setting.tabs.advancedDiagnostics",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 266,
+          "right": 370,
+          "top": 76,
+          "bottom": 136
+        },
+        "clipping": []
+      }
+    },
+    {
+      "name": "setting-light-600",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 0,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 568,
+          "width": 600
+        }
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 140,
+              "left": 16,
+              "right": 584,
+              "top": 72
+            },
+            "class": "setting-sidebar__nav",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 144,
+              "left": 12,
+              "right": 588,
+              "top": 68
+            },
+            "class": "setting-sidebar",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 482,
+              "left": 12,
+              "right": 588,
+              "top": 68
+            },
+            "class": "setting-page__layout",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 482,
+              "left": 12,
+              "right": 588,
+              "top": 64
+            },
+            "class": "setting-page ui-page-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 600,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 600,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 600,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 600,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 600,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 132,
+          "left": 280,
+          "right": 376,
+          "top": 80
+        },
+        "focused": "true",
+        "id": "setting.tabs.advancedDiagnostics",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 276,
+          "right": 380,
+          "top": 76,
+          "bottom": 136
+        },
+        "clipping": []
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 516,
+          "clientWidth": 600,
+          "scrollHeight": 516,
+          "scrollTop": 0,
+          "scrollWidth": 600,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 68,
+          "clientWidth": 568,
+          "scrollHeight": 68,
+          "scrollTop": 0,
+          "scrollWidth": 568,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-panel__content",
+          "clientHeight": 271,
+          "clientWidth": 576,
+          "scrollHeight": 271,
+          "scrollTop": 0,
+          "scrollWidth": 576,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setting-light-601",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 36,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 568,
+          "width": 601
+        }
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 396,
+              "left": 16,
+              "right": 188,
+              "top": 140
+            },
+            "class": "setting-sidebar__nav",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 446,
+              "left": 12,
+              "right": 192,
+              "top": 68
+            },
+            "class": "setting-sidebar",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 446,
+              "left": 12,
+              "right": 589,
+              "top": 68
+            },
+            "class": "setting-page__layout",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 446,
+              "left": 12,
+              "right": 589,
+              "top": 64
+            },
+            "class": "setting-page ui-page-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 601,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 601,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 601,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 601,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 601,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 380,
+          "left": 24,
+          "right": 180,
+          "top": 328
+        },
+        "focused": "true",
+        "id": "setting.tabs.advancedDiagnostics",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 20,
+          "right": 184,
+          "top": 324,
+          "bottom": 384
+        },
+        "clipping": []
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 516,
+          "clientWidth": 601,
+          "scrollHeight": 516,
+          "scrollTop": 0,
+          "scrollWidth": 601,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 256,
+          "clientWidth": 172,
+          "scrollHeight": 256,
+          "scrollTop": 0,
+          "scrollWidth": 172,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-panel__content",
+          "clientHeight": 327,
+          "clientWidth": 381,
+          "scrollHeight": 327,
+          "scrollTop": 0,
+          "scrollWidth": 381,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "controller-light-390",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 0,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 844,
+          "width": 390
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 792,
+          "clientWidth": 390,
+          "scrollHeight": 792,
+          "scrollTop": 0,
+          "scrollWidth": 390,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 68,
+          "clientWidth": 358,
+          "scrollHeight": 68,
+          "scrollTop": 0,
+          "scrollWidth": 358,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "controller-page__content",
+          "clientHeight": 521,
+          "clientWidth": 366,
+          "scrollHeight": 869,
+          "scrollTop": 0,
+          "scrollWidth": 366,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ],
+      "padding": [
+        {
+          "class": "controller-connection__hero",
+          "padding": "16px"
+        },
+        {
+          "class": "controller-connection__inputs",
+          "padding": "12px"
+        }
+      ]
+    },
+    {
+      "name": "my-light-390",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 0,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 844,
+          "width": 390
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 792,
+          "clientWidth": 390,
+          "scrollHeight": 792,
+          "scrollTop": 0,
+          "scrollWidth": 390,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 68,
+          "clientWidth": 358,
+          "scrollHeight": 68,
+          "scrollTop": 0,
+          "scrollWidth": 358,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "library-content",
+          "clientHeight": 598,
+          "clientWidth": 366,
+          "scrollHeight": 598,
+          "scrollTop": 0,
+          "scrollWidth": 366,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "friend-picker-light-390",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 0,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 844,
+          "width": 390
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 792,
+          "clientWidth": 390,
+          "scrollHeight": 792,
+          "scrollTop": 0,
+          "scrollWidth": 390,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-sidebar__nav",
+          "clientHeight": 68,
+          "clientWidth": 358,
+          "scrollHeight": 68,
+          "scrollTop": 0,
+          "scrollWidth": 358,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "library-content",
+          "clientHeight": 598,
+          "clientWidth": 366,
+          "scrollHeight": 598,
+          "scrollTop": 0,
+          "scrollWidth": 366,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "setting-modal-shell__body",
+          "clientHeight": 204,
+          "clientWidth": 356,
+          "scrollHeight": 204,
+          "scrollTop": 0,
+          "scrollWidth": 356,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ],
+      "panel": {
+        "height": 284,
+        "padding": "12px",
+        "width": 364
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 520,
+              "left": 25,
+              "right": 365,
+              "top": 332
+            },
+            "class": "setting-single-select-popup-sheet__list",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 528,
+              "left": 17,
+              "right": 373,
+              "top": 324
+            },
+            "class": "setting-modal-shell__body",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 540,
+              "left": 13,
+              "right": 377,
+              "top": 256
+            },
+            "class": "setting-modal-shell__panel ui-overlay-panel",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "setting-modal-shell",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 384,
+          "left": 25,
+          "right": 365,
+          "top": 332
+        },
+        "focused": "true",
+        "id": "my.friends.filter.options.option.0",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 21,
+          "right": 369,
+          "top": 328,
+          "bottom": 388
+        },
+        "clipping": []
+      }
+    },
+    {
+      "name": "cloud-light-800",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 48,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 568,
+          "width": 800
+        }
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 468,
+          "clientWidth": 684,
+          "scrollHeight": 468,
+          "scrollTop": 0,
+          "scrollWidth": 684,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "xcloud-page__content",
+          "clientHeight": 331,
+          "clientWidth": 668,
+          "scrollHeight": 1798,
+          "scrollTop": 0,
+          "scrollWidth": 668,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "horizontal-list-rail__viewport",
+          "clientHeight": 172,
+          "clientWidth": 668,
+          "scrollHeight": 172,
+          "scrollTop": 0,
+          "scrollWidth": 668,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "horizontal-list-rail__viewport",
+          "clientHeight": 172,
+          "clientWidth": 668,
+          "scrollHeight": 172,
+          "scrollTop": 0,
+          "scrollWidth": 668,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ],
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 123.5390625,
+              "left": 424,
+              "right": 768,
+              "top": 81.5390625
+            },
+            "class": "xcloud-page__search-actions",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 129,
+              "left": 116,
+              "right": 768,
+              "top": 76
+            },
+            "class": "xcloud-page__toolbar",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 181,
+              "left": 108,
+              "right": 776,
+              "top": 68
+            },
+            "class": "xcloud-page__header",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 512,
+              "left": 108,
+              "right": 776,
+              "top": 64
+            },
+            "class": "xcloud-page ui-page-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 520,
+              "left": 100,
+              "right": 784,
+              "top": 52
+            },
+            "class": "app-shell__content",
+            "overflowX": "hidden",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "app-shell",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 0,
+              "left": 0,
+              "right": 0,
+              "top": 0
+            },
+            "class": "app-root",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 568,
+              "left": 0,
+              "right": 800,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 120.5390625,
+          "left": 732,
+          "right": 768,
+          "top": 84.5390625
+        },
+        "focused": "true",
+        "id": "xcloud.refresh",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 728,
+          "right": 772,
+          "top": 80.5390625,
+          "bottom": 124.5390625
+        },
+        "clipping": []
+      }
+    },
+    {
+      "name": "account-menu-light-390",
+      "layout": {
+        "density": "narrow",
+        "footerHeight": 0,
+        "status": {
+          "clipPath": "inset(50%)",
+          "height": 1,
+          "position": "absolute",
+          "width": 1
+        },
+        "theme": "light",
+        "tokens": {
+          "--ui-console-hero-padding": "16px",
+          "--ui-settings-focus-safe": "8px",
+          "--ui-settings-modal-panel-padding": "12px",
+          "--ui-settings-row-padding": "8px 12px",
+          "--ui-settings-side-padding": "12px",
+          "--ui-shell-content-top": "12px",
+          "--ui-shell-edge-inset": "16px",
+          "--ui-shell-gap": "16px",
+          "--ui-shell-hint-area": "48px"
+        },
+        "viewport": {
+          "height": 844,
+          "width": 390
+        }
+      },
+      "panel": {
+        "bounds": {
+          "bottom": 350,
+          "height": 290,
+          "left": 54,
+          "right": 374,
+          "top": 60,
+          "width": 320
+        },
+        "clientHeight": 288,
+        "padding": "16px",
+        "scrollHeight": 288
+      },
+      "focus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 333,
+              "left": 71,
+              "right": 357,
+              "top": 241
+            },
+            "class": "user-menu__actions",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 333,
+              "left": 71,
+              "right": 357,
+              "top": 77
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 349,
+              "left": 55,
+              "right": 373,
+              "top": 61
+            },
+            "class": "user-menu__panel",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 350,
+              "left": 54,
+              "right": 374,
+              "top": 60
+            },
+            "class": "user-menu-anchor",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "user-menu-layer",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 287,
+          "left": 71,
+          "right": 357,
+          "top": 241
+        },
+        "focused": "true",
+        "id": "user-menu.my",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 67,
+          "right": 361,
+          "top": 237,
+          "bottom": 291
+        },
+        "clipping": []
+      },
+      "bottomFocus": {
+        "ancestors": [
+          {
+            "bounds": {
+              "bottom": 333,
+              "left": 71,
+              "right": 357,
+              "top": 241
+            },
+            "class": "user-menu__actions",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 333,
+              "left": 71,
+              "right": 357,
+              "top": 77
+            },
+            "class": "",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 349,
+              "left": 55,
+              "right": 373,
+              "top": 61
+            },
+            "class": "user-menu__panel",
+            "overflowX": "auto",
+            "overflowY": "auto"
+          },
+          {
+            "bounds": {
+              "bottom": 350,
+              "left": 54,
+              "right": 374,
+              "top": 60
+            },
+            "class": "user-menu-anchor",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "user-menu-layer",
+            "overflowX": "visible",
+            "overflowY": "visible"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          },
+          {
+            "bounds": {
+              "bottom": 844,
+              "left": 0,
+              "right": 390,
+              "top": 0
+            },
+            "class": "",
+            "overflowX": "hidden",
+            "overflowY": "hidden"
+          }
+        ],
+        "border": {
+          "bottom": "1px",
+          "left": "1px",
+          "right": "1px",
+          "top": "1px"
+        },
+        "button": {
+          "bottom": 333,
+          "left": 71,
+          "right": 357,
+          "top": 287
+        },
+        "focused": "true",
+        "id": "user-menu.logout",
+        "inset": {
+          "bottom": "-5px",
+          "left": "-5px",
+          "right": "-5px",
+          "top": "-5px"
+        },
+        "ringOpacity": "1",
+        "ringEdges": {
+          "left": 67,
+          "right": 361,
+          "top": 283,
+          "bottom": 337
+        },
+        "clipping": []
+      },
+      "scrollbars": [
+        {
+          "class": "app-shell__content",
+          "clientHeight": 792,
+          "clientWidth": 390,
+          "scrollHeight": 792,
+          "scrollTop": 0,
+          "scrollWidth": 390,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "xcloud-page__content",
+          "clientHeight": 523,
+          "clientWidth": 366,
+          "scrollHeight": 1194,
+          "scrollTop": 0,
+          "scrollWidth": 366,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "horizontal-list-rail__viewport",
+          "clientHeight": 172,
+          "clientWidth": 366,
+          "scrollHeight": 172,
+          "scrollTop": 0,
+          "scrollWidth": 610,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "horizontal-list-rail__viewport",
+          "clientHeight": 172,
+          "clientWidth": 366,
+          "scrollHeight": 172,
+          "scrollTop": 0,
+          "scrollWidth": 610,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        },
+        {
+          "class": "user-menu__panel",
+          "clientHeight": 288,
+          "clientWidth": 318,
+          "scrollHeight": 288,
+          "scrollTop": 0,
+          "scrollWidth": 318,
+          "scrollbarWidth": "none",
+          "webkit": {
+            "display": "none",
+            "height": "0px",
+            "width": "0px"
+          }
+        }
+      ]
+    }
+  ]
+}

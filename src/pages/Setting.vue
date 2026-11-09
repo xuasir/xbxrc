@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { SettingFieldDefinition, SettingSelectOptionDefinition } from '@shared/config/domain-definition'
+import type { RenderControlsValue } from '@shared/config/render-controls'
 import type { SettingTabKey } from '../navigation/spatial-nav.constants'
 import type { SettingPageKey } from './settings/setting-page-schema'
 import type { SettingIndexedRow, SettingIndexedSection, SettingSectionEntry, SettingTabNavItem } from './settings/setting-types'
 import { CONFIG_FIELD_DEFINITIONS } from '@shared/config/domain-definition'
+import { normalizeRenderControls, renderControlsLabel, renderControlsPatch } from '@shared/config/render-controls'
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
@@ -13,6 +15,7 @@ import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import SettingConfirmSheet from '../components/settings/SettingConfirmSheet.vue'
+import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
 import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleSelectPopupSheet.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
@@ -25,61 +28,6 @@ import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
 
 type SettingGroupMap = Awaited<ReturnType<typeof rpc.config.getGroups>>
-interface DisplayOptionsValue {
-  sharpness: number
-  saturation: number
-  contrast: number
-  brightness: number
-}
-
-function resolveDisplayPresetKey(value: DisplayOptionsValue): 'standard' | 'clear' | 'soft' | null {
-  if (
-    value.sharpness === 0
-    && value.saturation === 100
-    && value.contrast === 100
-    && value.brightness === 100
-  ) {
-    return 'standard'
-  }
-  if (
-    value.sharpness === 3
-    && value.saturation === 105
-    && value.contrast === 105
-    && value.brightness === 100
-  ) {
-    return 'clear'
-  }
-  if (
-    value.sharpness === 0
-    && value.saturation === 96
-    && value.contrast === 96
-    && value.brightness === 102
-  ) {
-    return 'soft'
-  }
-  return null
-}
-
-const DISPLAY_PRESET_VALUES = {
-  standard: {
-    sharpness: 0,
-    saturation: 100,
-    contrast: 100,
-    brightness: 100,
-  },
-  clear: {
-    sharpness: 3,
-    saturation: 105,
-    contrast: 105,
-    brightness: 100,
-  },
-  soft: {
-    sharpness: 0,
-    saturation: 96,
-    contrast: 96,
-    brightness: 102,
-  },
-} as const satisfies Record<'standard' | 'clear' | 'soft', DisplayOptionsValue>
 
 const pageRef = ref<HTMLElement | null>(null)
 const { t, te } = useI18n()
@@ -94,6 +42,8 @@ const restartPending = ref(false)
 const restartConfirm = ref(false)
 const activeSingleSelectRow = ref<SettingIndexedRow | null>(null)
 const activeValueEditorRow = ref<SettingIndexedRow | null>(null)
+const renderSheetOpen = ref(false)
+let renderEditorGeneration = 0
 const customTurnOpen = ref(false)
 const panelRef = ref<HTMLElement | null>(null)
 const scrollPositions = new Map<string, number>()
@@ -154,6 +104,7 @@ const tabs = computed<SettingTabNavItem[]>(() => SETTING_PAGE_ORDER.map((key, or
 const activeLabel = computed(() => t(SETTING_PAGE_LABEL_KEYS[activeTabKey.value as SettingPageKey]))
 useShellPageHints(() => ({ regionLabel: t('shell.hints.categories'), status: loadError.value || statusMessage.value || activeLabel.value, error: !!loadError.value || statusError.value }))
 const panelScope = computed(() => `setting.content.${activeTabKey.value}`)
+const renderControls = computed(() => normalizeRenderControls((groupState.value?.streaming ?? {}) as Parameters<typeof normalizeRenderControls>[0]))
 const turnConfig = computed(() => ({
   server_url: String(getConfigFieldValue(groupState.value, 'server_url') ?? ''),
   server_username: String(getConfigFieldValue(groupState.value, 'server_username') ?? ''),
@@ -194,6 +145,8 @@ function formatConfigValue(
   value: unknown,
   options?: readonly SettingSelectOptionDefinition[],
 ): string {
+  if (key === 'display_options')
+    return renderControlsLabel(renderControls.value, t)
   if (key === 'locale' && typeof value === 'string' && options !== undefined) {
     const resolvedLocale = resolveUiLocale(value)
     const matchedLocaleOption = options.find(option => option.value === resolvedLocale)
@@ -220,15 +173,6 @@ function formatConfigValue(
   }
   if (value === null) {
     return t('setting.values.notSet')
-  }
-  if (key === 'display_options' && isRecord(value)) {
-    const presetKey = resolveDisplayPresetKey({
-      sharpness: Number(value.sharpness ?? 0),
-      saturation: Number(value.saturation ?? 100),
-      contrast: Number(value.contrast ?? 100),
-      brightness: Number(value.brightness ?? 100),
-    })
-    return t(`setting.displayOptions.presets.${presetKey ?? 'custom'}`)
   }
   if (isRecord(value)) {
     return t('setting.summaries.entries', { count: Object.keys(value).length })
@@ -284,8 +228,7 @@ async function persistRowValue(row: SettingIndexedRow, value: string | number | 
   statusMessage.value = t('setting.experience.saving')
   statusError.value = false
   try {
-    const patchValue = row.key === 'display_options' && typeof value === 'string' ? DISPLAY_PRESET_VALUES[value as keyof typeof DISPLAY_PRESET_VALUES] : value
-    const saved = await rpc.config.set({ patch: { [row.key]: patchValue } }) as Record<string, unknown>
+    const saved = await rpc.config.set({ patch: { [row.key]: value } }) as Record<string, unknown>
     // 使用写入返回的规范化结果同步展示，保存结果与第二次读取相互独立。
     if (groupState.value) {
       groupState.value = Object.fromEntries(Object.entries(groupState.value).map(([group, bucket]) => [group, Object.fromEntries(Object.keys(bucket as object).map(key => [key, saved[key]]))])) as SettingGroupMap
@@ -314,11 +257,45 @@ async function handleRowConfirm(row: SettingIndexedRow) {
     return
   statusMessage.value = ''
   statusError.value = false
-  if (row.control === 'toggle')
+  if (row.key === 'display_options') {
+    renderEditorGeneration++
+    renderSheetOpen.value = true
+  }
+  else if (row.control === 'toggle') {
     await persistRowValue(row, !row.value)
-  else if (row.control === 'singleSelect')
+  }
+  else if (row.control === 'singleSelect') {
     activeSingleSelectRow.value = row
-  else activeValueEditorRow.value = row
+  }
+  else {
+    activeValueEditorRow.value = row
+  }
+}
+
+async function saveRenderDefault(value: RenderControlsValue): Promise<void> {
+  if (pendingActionKey.value)
+    return
+  const generation = renderEditorGeneration
+  pendingActionKey.value = 'display_options'
+  statusError.value = false
+  statusMessage.value = t('setting.experience.saving')
+  try {
+    const saved = await rpc.config.set({ patch: renderControlsPatch(value) }) as Record<string, unknown>
+    if (!pageActive || generation !== renderEditorGeneration)
+      return
+    if (groupState.value) {
+      groupState.value = Object.fromEntries(Object.entries(groupState.value).map(([group, bucket]) => [group, Object.fromEntries(Object.keys(bucket as object).map(key => [key, saved[key]]))])) as SettingGroupMap
+    }
+    renderSheetOpen.value = false
+    statusMessage.value = t('setting.experience.saved.nextConnection')
+  }
+  catch {
+    if (pageActive && generation === renderEditorGeneration) {
+      statusError.value = true
+      statusMessage.value = t('setting.experience.saveFailed')
+    }
+  }
+  finally { pendingActionKey.value = null }
 }
 async function selectRow(row: SettingIndexedRow, value: string | number) {
   const saved = await persistRowValue(row, value)
@@ -344,6 +321,8 @@ async function restart() {
   finally { pendingActionKey.value = null }
 }
 function closeEditors() {
+  renderEditorGeneration++
+  renderSheetOpen.value = false
   activeSingleSelectRow.value = null
   activeValueEditorRow.value = null
   customTurnOpen.value = false
@@ -398,7 +377,7 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
           </div>
           <template v-else-if="!isLoading">
             <div v-if="restartPending" class="setting-panel__feedback">
-              <Focusable v-if="restartPending" id="setting.restart" as="button" :scope-id="panelScope" class="setting-panel__action" :disabled="!!pendingActionKey" @click="restartConfirm = true">
+              <Focusable v-if="restartPending" id="setting.restart" as="button" :scope-id="panelScope" class="setting-panel__action" :busy="!!pendingActionKey" @click="restartConfirm = true">
                 {{ t('setting.experience.restartNow') }}
               </Focusable>
             </div>
@@ -412,6 +391,7 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
       </div>
     </div>
     <SettingValueSheet :key="activeValueEditorRow?.nodeId" :open="!!activeValueEditorRow" :scope-id="`setting.editor.${activeValueEditorRow?.key ?? 'idle'}`" :title="activeValueEditorRow?.label ?? ''" :hint="activeValueEditorRow?.description" :mode="activeValueEditorRow?.control === 'numberInput' ? 'number' : 'text'" :current-value="(activeValueEditorRow?.value as string | number) ?? null" :min="activeValueEditorRow?.input?.min" :max="activeValueEditorRow?.input?.max" :step="activeValueEditorRow?.input?.step" :busy="!!pendingActionKey" :error="statusError ? statusMessage : ''" @close="activeValueEditorRow = null" @submit="submitValue" />
+    <SettingDisplayOptionsSheet :open="renderSheetOpen" scope-id="setting.render-sheet" :title="t('setting.renderControls.title')" :hint="t('setting.renderControls.defaultHint')" :current-value="renderControls" :loading="pendingActionKey === 'display_options'" :error="statusError ? statusMessage : ''" @close="renderSheetOpen = false" @submit="saveRenderDefault" />
     <SettingSingleSelectPopupSheet :key="activeSingleSelectRow?.nodeId" :open="!!activeSingleSelectRow" :scope-id="SPATIAL_NAV_SCOPE_IDS.settingSingleSelect" :title="activeSingleSelectRow?.label ?? ''" :hint="activeSingleSelectRow?.description" :options="activeSingleSelectRow?.options ?? []" :current-value="(activeSingleSelectRow?.value as string | number) ?? null" :busy="!!pendingActionKey" :error="statusError ? statusMessage : ''" @close="activeSingleSelectRow = null" @select="value => activeSingleSelectRow && selectRow(activeSingleSelectRow, value)" />
     <SettingCustomTurnSheet :open="customTurnOpen" :config="turnConfig" @close="customTurnOpen = false" @saved="refreshConfig" />
     <SettingConfirmSheet :open="restartConfirm" scope-id="setting.restart.confirm" :title="t('setting.experience.restartNow')" :message="t('setting.experience.restartHint')" :busy="pendingActionKey === '__restart__'" @close="restartConfirm = false" @confirm="restart" />
@@ -425,7 +405,7 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
 .setting-page__layout { position: relative; display: grid; grid-template-columns: var(--ui-settings-layout-columns); grid-template-rows: var(--ui-settings-layout-rows); height: 100%; min-height: 0; gap: var(--space-16); }
 .setting-panel { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; background: transparent; }
 .setting-panel__content { min-height: 0; min-width: 0; overflow: auto; scroll-padding: var(--ui-settings-focus-safe) var(--ui-settings-focus-safe) var(--ui-settings-focus-tail); }
-.setting-panel__header { padding: var(--ui-space-lg) var(--ui-settings-side-padding); }
+.setting-panel__header { padding: var(--ui-space-sm) var(--ui-settings-side-padding); }
 .setting-panel__group-title { margin: 0; font-size: var(--ui-text-title-lg); line-height: var(--ui-line-height-tight); font-weight: var(--ui-font-weight-semibold); color: var(--color-text-primary); }
 .setting-panel__feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-lg); padding: var(--ui-settings-focus-safe) var(--ui-settings-side-padding) var(--ui-settings-focus-tail); }
 .setting-panel__state { display: grid; justify-items: start; gap: var(--ui-space-xl); padding: var(--ui-settings-side-padding); color: var(--color-text-secondary); }

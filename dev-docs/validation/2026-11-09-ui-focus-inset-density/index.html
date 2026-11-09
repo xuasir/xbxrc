@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XBXRC 内边距与焦点裁切验证</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #20252b; color: #eef3f7; font: 14px system-ui; }
+      label { display: block; margin-bottom: 12px; }
+      select { margin-left: 8px; }
+      iframe { display: block; width: 800px; height: 568px; border: 0; outline: 1px solid #64717d; }
+    </style>
+  </head>
+  <body>
+    <label>实际应用尺寸<select id="viewport-size" aria-label="实际应用尺寸"><option value="800x568" selected>800×568</option><option value="1280x720">1280×720</option><option value="390x844">390×844</option><option value="600x568">600×568</option><option value="601x568">601×568</option></select></label>
+    <iframe id="validation-app" title="XBXRC 完整本地前端" src="../2026-11-09-gamepad-focus-action-completion/project.html#/xhome"></iframe>
+    <script type="module">
+      document.getElementById('viewport-size').addEventListener('change', (event) => {
+        const [width, height] = event.target.value.split('x').map(Number)
+        const frame = document.getElementById('validation-app')
+        frame.style.width = `${width}px`
+        frame.style.height = `${height}px`
+      })
+    </script>
+  </body>
+</html>

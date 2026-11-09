@@ -1,23 +1,28 @@
 <script setup lang="ts">
+import type { StreamRenderState } from '../../streaming/runtime/runtime-contract'
 import type { StreamEnhancementMountState, StreamExperienceMetricsViewModel } from '../../streaming/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { renderStateLabel } from '../../streaming/runtime/render-state'
 import { experienceMetricValue, RUNTIME_METRIC_KEYS } from '../../streaming/stream-panel-view-models'
 
 const props = defineProps<{
   visible: boolean
   mount: StreamEnhancementMountState
   model: StreamExperienceMetricsViewModel
+  renderState?: StreamRenderState
   suppressNotice?: boolean
 }>()
 const { t } = useI18n()
 const panelVisible = computed(() => props.visible && props.mount.phase === 'mounted')
 const rows = computed(() => RUNTIME_METRIC_KEYS.map(key => ({ key, value: experienceMetricValue(props.model, key) })))
 const notice = computed(() => !props.suppressNotice && props.model.notice ? t(`streamPage.experience.notices.${props.model.notice}`) : '')
+const renderLabel = computed(() => renderStateLabel(props.renderState ?? { mode: null, pending: false }, t))
 </script>
 
 <template>
   <div v-if="panelVisible" class="stream-runtime-bar" :aria-label="t('streamPage.experience.title')" :data-notice="model.notice">
+    <span class="stream-runtime-bar__metric stream-runtime-bar__render" :class="{ 'stream-runtime-bar__notice': renderState?.fallbackReason }">{{ renderLabel }}</span>
     <template v-for="row in rows" :key="row.key">
       <span v-if="row.key !== 'videoBitrate' || !notice" class="stream-runtime-bar__metric" :class="`stream-runtime-bar__metric--${row.key}`">
         <span v-if="row.key === 'rtt' || row.key === 'packetLoss'" class="stream-runtime-bar__label">{{ t(`streamPage.experience.metrics.${row.key}`) }}</span>
@@ -36,9 +41,12 @@ const notice = computed(() => !props.suppressNotice && props.model.notice ? t(`s
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-stream-metrics);
+  width: max-content;
   max-width: calc(100% - var(--ui-stream-metrics-inset) * 2);
   min-height: var(--ui-stream-metrics-height);
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   padding: var(--ui-space-xs);
   border-radius: 0 0 var(--ui-radius-sm) var(--ui-radius-sm);
@@ -64,6 +72,7 @@ const notice = computed(() => !props.suppressNotice && props.model.notice ? t(`s
   border-left: 1px solid var(--ui-stream-metrics-divider);
 }
 .stream-runtime-bar__label { color: var(--ui-stream-metrics-label); }
+.stream-runtime-bar__render { min-width: 0; }
 .stream-runtime-bar__notice { color: var(--color-warning); }
 .stream-runtime-bar[data-notice='sampling'] .stream-runtime-bar__notice,
 .stream-runtime-bar[data-notice='stale'] .stream-runtime-bar__notice { color: var(--ui-stream-metrics-label); }

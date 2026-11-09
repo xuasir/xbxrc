@@ -6,6 +6,7 @@ use crate::mods::data::DataProviderRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::events;
 use crate::mods::streaming::types::*;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
@@ -336,15 +337,33 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
     ) -> Result<serde_json::Value, SessionFlowError> {
         self.auth_provider
             .get_streaming_token(target_type)
-            .map_err(|e| SessionFlowError::message(e.to_string()))?
-            .ok_or_else(|| SessionFlowError::message("token missing"))
+            .await
+            .map_err(map_auth_error)?
+            .ok_or_else(|| {
+                map_auth_error(AppError::Auth(
+                    "登录续期凭据暂不可用，请选择重新登录".into(),
+                ))
+            })
+    }
+
+    async fn recover_streaming_token(
+        &self,
+        target_type: &str,
+        rejected_token: &str,
+        credential_generation: Option<u64>,
+    ) -> Result<Value, xbox_webapi::WebApiError> {
+        self.auth_provider
+            .recover_streaming_token(target_type, rejected_token, credential_generation)
+            .await
+            .map_err(auth_error_to_webapi)?
+            .ok_or_else(|| xbox_webapi::WebApiError::auth("登录续期凭据暂不可用，请选择重新登录"))
     }
 
     async fn transfer_token(&self) -> Result<String, SessionFlowError> {
         self.auth_provider
             .get_transfer_token()
             .await
-            .map_err(|error| SessionFlowError::message(error.to_string()))
+            .map_err(map_auth_error)
     }
 
     async fn power_on_console(&self, console_id: &str) -> Result<bool, SessionFlowError> {
@@ -359,10 +378,15 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
                     None,
                     serde_json::json!({
                         "consoleId": console_id,
-                        "error": error,
+                        "error": error.safe_summary(),
                     }),
                 );
-                SessionFlowError::message(error)
+                match error {
+                    crate::mods::data::DataError::Request { source, .. } => source.into(),
+                    crate::mods::data::DataError::Message(message) => {
+                        SessionFlowError::message(message)
+                    }
+                }
             })?;
         self.runtime_trace.record_event(
             "streaming",
@@ -717,7 +741,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
                     async {
                         self.resolve_streaming_plan(&params.target_type, &params.target_id)
                             .await
-                            .map_err(|error| SessionFlowError::message(error.to_string()))
+                            .map_err(map_auth_error)
                     },
                 )
                 .await
@@ -1114,6 +1138,18 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
 
 fn map_flow_error(error: SessionFlowError) -> AppError {
     AppError::Streaming(error.to_string())
+}
+
+fn auth_error_to_webapi(error: AppError) -> xbox_webapi::WebApiError {
+    match error {
+        AppError::WebApi(error) => error,
+        AppError::Auth(message) => xbox_webapi::WebApiError::auth(message),
+        _ => xbox_webapi::WebApiError::parse("认证续期暂不可用，请重试"),
+    }
+}
+
+fn map_auth_error(error: AppError) -> SessionFlowError {
+    auth_error_to_webapi(error).into()
 }
 
 fn now_ms() -> u64 {

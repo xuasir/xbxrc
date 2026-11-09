@@ -61,7 +61,7 @@ pub async fn handle_rpc(
             }))
         }
         AuthCommand::CheckAuthentication => {
-            let result = auth.check_authentication().await?;
+            let result = auth.check_web_authentication().await?;
             Ok(serde_json::to_value(result)?)
         }
         AuthCommand::ClearAuthCache { scope } => {

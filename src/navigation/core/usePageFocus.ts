@@ -56,7 +56,15 @@ export function usePageFocus(root: () => HTMLElement | null, key: () => string, 
       preservedNavigationId = ''
       return
     }
-    const ids = [preferredId, primary()].filter(Boolean)
+    const primaryId = primary()
+    // 同页分类确认以当前选中的入口为准，往返分类时旧记忆只服务于后续页面返回。
+    if (!preferredId && !pageSwitchRequested && focus?.id === primaryId && container.contains(focus) && navigationEngine.focusElement(focus, false)) {
+      pending = false
+      preservedNavigationId = ''
+      save()
+      return
+    }
+    const ids = [preferredId, primaryId].filter(Boolean)
     const preferredNode = preferredId ? document.getElementById(preferredId) : null
     const candidates = [preferredNode, navigationEngine.getRememberedFocus(memoryKey(), container), ...ids.map(id => document.getElementById(id)), ...navigationEngine.getFocusableElements(container)]
     restoring = true

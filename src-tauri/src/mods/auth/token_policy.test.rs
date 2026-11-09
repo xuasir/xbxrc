@@ -72,3 +72,123 @@ fn sisu_reuse_follows_its_expiry_after_downstream_cache_updates() {
     token.user_token.not_after = None;
     assert!(!can_reuse_sisu_user_token(&token, now));
 }
+
+fn stream_token(created_at: i64, seconds: i64, expiry_ms: Option<i64>) -> Value {
+    let gs_token = expiry_ms
+        .map(|expiry| {
+            let payload =
+                URL_SAFE_NO_PAD.encode(serde_json::to_vec(&json!({"exp": expiry / 1000})).unwrap());
+            format!("header.{payload}.signature")
+        })
+        .unwrap_or_else(|| "opaque-fixture-token".into());
+    json!({"_objectCreateTime": created_at, "data": {"durationInSeconds": seconds, "gsToken": gs_token}})
+}
+
+#[test]
+fn each_scope_requires_its_own_valid_credentials() {
+    let now = 1_794_000_000_000;
+    let web = web_token(now + 300_000);
+    let tokens = json!({
+        "xHomeToken": stream_token(now - 14_500_000, 14_400, None),
+        "xCloudToken": stream_token(now, 14_400, None),
+    });
+    assert!(resolve_valid_session_for(&web, &tokens, AuthTokenScope::Home, now).is_none());
+    assert_eq!(
+        resolve_valid_session_for(&web, &tokens, AuthTokenScope::Cloud, now)
+            .unwrap()
+            .app_level,
+        2
+    );
+    assert!(resolve_valid_session_for(&web, &tokens, AuthTokenScope::Web, now).is_some());
+    assert!(resolve_valid_session_for(&web, &json!({}), AuthTokenScope::Home, now).is_none());
+    assert_eq!(
+        resolve_valid_session_for(&web, &json!({}), AuthTokenScope::Web, now)
+            .unwrap()
+            .app_level,
+        0
+    );
+    let expired_web = web_token(now - 1000);
+    for scope in [
+        AuthTokenScope::Web,
+        AuthTokenScope::Home,
+        AuthTokenScope::Cloud,
+    ] {
+        assert!(resolve_valid_session_for(&expired_web, &tokens, scope, now).is_none());
+    }
+}
+
+#[test]
+fn stream_validity_uses_earliest_known_expiry_and_reserves_request_margin() {
+    let now = 1_794_000_000_000;
+    for token in [
+        stream_token(now, 120, Some(now + 60_000)),
+        stream_token(now, 60, Some(now + 120_000)),
+    ] {
+        assert_eq!(resolve_stream_token_expiry_ms(&token), Some(now + 60_000));
+        assert!(!is_stream_token_valid_at(&token, now));
+    }
+    assert!(is_stream_token_valid_at(
+        &stream_token(now, 61, Some(now + 120_000)),
+        now
+    ));
+    let jwt_only =
+        json!({"gsToken": stream_token(now, 120, Some(now + 120_000))["data"]["gsToken"]});
+    assert!(is_stream_token_valid_at(&jwt_only, now));
+    for gs_token in [Value::Null, json!(""), json!(" ")] {
+        let mut token = stream_token(now, 120, None);
+        token["data"]["gsToken"] = gs_token;
+        assert!(!is_stream_token_valid_at(&token, now));
+    }
+    assert!(!is_stream_token_valid_at(
+        &json!({"gsToken": "opaque"}),
+        now
+    ));
+}
+
+#[test]
+fn scoped_refresh_preserves_other_target_credentials_and_replaces_failed_target() {
+    let previous = json!({"xHomeToken": "old-home", "xCloudToken": "cloud", "_diagnostics": {"xCloudToken": "old-failure"}});
+    let home = merge_stream_tokens(
+        Some(previous.clone()),
+        &json!({"xHomeToken": "new-home"}),
+        AuthTokenScope::Home,
+        true,
+    );
+    assert_eq!(home["xHomeToken"], "new-home");
+    assert_eq!(home["xCloudToken"], "cloud");
+    let web = merge_stream_tokens(
+        Some(previous.clone()),
+        &json!({}),
+        AuthTokenScope::Web,
+        true,
+    );
+    assert_eq!(web, previous);
+    let cloud = merge_stream_tokens(
+        Some(previous.clone()),
+        &json!({"_diagnostics": {"xCloudToken": "new-failure"}}),
+        AuthTokenScope::Cloud,
+        true,
+    );
+    assert!(cloud.get("xCloudToken").is_none());
+    assert_eq!(cloud["xHomeToken"], "old-home");
+    assert_eq!(cloud["_diagnostics"]["xCloudToken"], "new-failure");
+    let switched = merge_stream_tokens(
+        Some(previous),
+        &json!({"xHomeToken": "new-account-home"}),
+        AuthTokenScope::Home,
+        false,
+    );
+    assert_eq!(switched, json!({"xHomeToken": "new-account-home"}));
+}
+
+#[test]
+fn cache_merging_uses_account_claims_instead_of_rotating_access_token() {
+    let mut previous = web_token(1_794_000_120_000);
+    previous["data"]["DisplayClaims"]["xui"][0]["xid"] = json!("account-one");
+    let mut next = previous.clone();
+    next["data"]["Token"] = json!("rotated-access");
+    next["data"]["DisplayClaims"]["xui"][0]["uhs"] = json!("new-hash");
+    assert!(same_web_account(&previous, &next));
+    next["data"]["DisplayClaims"]["xui"][0]["xid"] = json!("account-two");
+    assert!(!same_web_account(&previous, &next));
+}

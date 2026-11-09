@@ -86,7 +86,7 @@ const pages = [{ key: 'xhome', label: 'shell.home' }, { key: 'xcloud', label: 's
     padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
     border: 1px solid var(--ui-border-subtle);
     border-bottom: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--ui-shell-dock-radius) var(--ui-shell-dock-radius) 0 0;
     background: color-mix(in srgb, var(--ui-surface-overlay) 90%, transparent);
     backdrop-filter: blur(24px) saturate(140%);
     box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low);

@@ -1,7 +1,7 @@
 use super::{
     apply_streaming_preferences, build_console_ready_snapshot, build_fallback_progress_snapshot,
     build_smartglass_ready_candidates, build_startup_diagnostic_summary_fallback,
-    classify_startup_error_kind_fallback, is_startup_error_retryable_fallback,
+    classify_startup_error_kind_fallback, is_startup_error_retryable_fallback, map_auth_error,
     map_domain_progress_snapshot, parse_audio_bitrate_preference, parse_bitrate_preference,
     parse_codec_preference, parse_runtime_preference, startup_error_message_key, SessionFlowError,
     StreamingStartupErrorKind, StreamingStartupPhase,
@@ -36,6 +36,59 @@ fn unavailable_streaming_token_maps_to_authentication_failure() {
             "streamPage.errors.authFailed"
         );
         assert!(!is_startup_error_retryable_fallback(&kind, &error));
+    }
+}
+
+#[test]
+fn credential_recovery_failure_uses_the_shared_typed_retry_and_login_policy() {
+    use crate::error::AppError;
+    use xbox_webapi::{NetworkErrorKind, WebApiError};
+    for (error, kind, retryable) in [
+        (
+            AppError::Auth("refresh expired".into()),
+            DomainStartupErrorKind::Auth,
+            false,
+        ),
+        (
+            AppError::WebApi(WebApiError::http(401, "rejected")),
+            DomainStartupErrorKind::Auth,
+            false,
+        ),
+        (
+            AppError::WebApi(WebApiError::http(403, "forbidden")),
+            DomainStartupErrorKind::Target,
+            false,
+        ),
+        (
+            AppError::WebApi(WebApiError::http(429, "limited")),
+            DomainStartupErrorKind::Network,
+            true,
+        ),
+        (
+            AppError::WebApi(WebApiError::network_kind(NetworkErrorKind::Timeout)),
+            DomainStartupErrorKind::Network,
+            true,
+        ),
+        (
+            AppError::WebApi(WebApiError::network_kind(NetworkErrorKind::Tls)),
+            DomainStartupErrorKind::Network,
+            true,
+        ),
+        (
+            AppError::WebApi(WebApiError::parse("secret-response")),
+            DomainStartupErrorKind::Unknown,
+            true,
+        ),
+        (
+            AppError::Data("secret-store-error".into()),
+            DomainStartupErrorKind::Unknown,
+            true,
+        ),
+    ] {
+        let hint = map_auth_error(error).startup_hint.unwrap();
+        assert_eq!(hint.kind, kind);
+        assert_eq!(hint.retryable, retryable);
+        assert!(!hint.diagnostic_summary.contains("secret"));
     }
 }
 
@@ -80,6 +133,7 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
             brightness: 105,
         },
         super_resolution_experimental: true,
+        render_mode: "sr".to_string(),
     };
 
     apply_streaming_preferences(&mut config, &snapshot);
@@ -104,11 +158,39 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
     assert_eq!(config.runtime.home_fallback_turn, true);
     assert!(config.render.enable_audio_control);
     assert_eq!(config.render.video_format.as_deref(), Some("Zoom"));
-    assert_eq!(config.render.display_options.sharpness, 5);
+    assert_eq!(config.render.display_options.sharpness, 0);
     assert_eq!(
         config.render.super_resolution_preference,
         SuperResolutionRenderPreference::Fsr1Experimental
     );
+    assert_eq!(
+        config.render.pipeline_preference,
+        xbox_streaming::PipelineRenderPreference::Webgl2
+    );
+    let mut video_snapshot = snapshot.clone();
+    video_snapshot.render_mode = "video".to_string();
+    apply_streaming_preferences(&mut config, &video_snapshot);
+    assert_eq!(
+        config.render.pipeline_preference,
+        xbox_streaming::PipelineRenderPreference::Video
+    );
+    assert_eq!(
+        config.render.super_resolution_preference,
+        SuperResolutionRenderPreference::Off
+    );
+    assert_eq!(config.render.display_options.sharpness, 0);
+    let mut sharpen_snapshot = snapshot.clone();
+    sharpen_snapshot.render_mode = "sharpen".to_string();
+    apply_streaming_preferences(&mut config, &sharpen_snapshot);
+    assert_eq!(
+        config.render.pipeline_preference,
+        xbox_streaming::PipelineRenderPreference::Webgl2
+    );
+    assert_eq!(
+        config.render.super_resolution_preference,
+        SuperResolutionRenderPreference::Off
+    );
+    assert_eq!(config.render.display_options.sharpness, 5);
     assert_eq!(
         config
             .runtime

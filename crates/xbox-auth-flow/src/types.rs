@@ -1,5 +1,23 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DownstreamTokenScope {
+    Web,
+    Home,
+    Cloud,
+    All,
+}
+
+impl DownstreamTokenScope {
+    pub fn includes_home(self) -> bool {
+        matches!(self, Self::Home | Self::All)
+    }
+
+    pub fn includes_cloud(self) -> bool {
+        matches!(self, Self::Cloud | Self::All)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartOAuthLoginInput {
     pub title_id: String,
@@ -73,6 +91,8 @@ pub struct TransferTokenInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransferTokenOutput {
     pub transfer_token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

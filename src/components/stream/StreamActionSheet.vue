@@ -9,6 +9,7 @@ interface StreamActionItem {
   label: string
   danger?: boolean
   disabled?: boolean
+  busy?: boolean
 }
 
 interface StreamActionSheetProps {
@@ -36,9 +37,10 @@ function handleClose(): void {
 }
 
 function handleSelect(id: string): void {
-  if (props.items.find(item => item.id === id && !item.disabled))
+  const item = props.items.find(item => item.id === id)
+  if (item && !item.disabled && !item.busy)
     emit('select', id)
-  else inputUiTrace.result('blocked', 'disabled')
+  else inputUiTrace.result('blocked', item?.busy ? 'busy' : 'disabled')
 }
 
 function handleEscapeKeydown(event: KeyboardEvent): void {
@@ -105,6 +107,7 @@ onBeforeUnmount(() => {
               class="stream-action-sheet__item"
               :class="{ 'stream-action-sheet__item--danger': item.danger }"
               :disabled="item.disabled"
+              :busy="item.busy"
               :on-back="handleClose"
               @click="handleSelect(item.id)"
             >

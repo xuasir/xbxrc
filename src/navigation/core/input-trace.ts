@@ -1,6 +1,7 @@
 /** 既有输入链的结果投影；sink 随串流 runtime 装配，热路径先检查准入。 */
 export type UiInputSource = 'touch' | 'mouse' | 'gamepad' | 'keyboard'
 export type FocusFailure = 'disabled' | 'inactiveAncestorScope' | 'outsideTopScope' | 'focusUnavailable'
+export type ActivationFailure = FocusFailure | 'busy'
 export interface UiTraceContext { operationId: string, source: UiInputSource, intent: string, action?: string, scope?: string }
 interface TraceSink {
   enabled: () => boolean
@@ -23,6 +24,7 @@ const SCOPES: Record<string, string> = {
 const ACTIONS = new Set(['display', 'audio', 'sendText', 'pressNexus', 'longPressNexus', 'microphone', 'fullscreen', 'powerOffExit', 'exit', 'retryOperation', 'toggleExperience', 'toggleBrowserDiagnostics', 'toggleSuperResolution', 'exportSuperResolutionComparison', 'text', 'export', 'traceExport', 'exportRuntimeTrace', 'powerOff', 'superResolution', 'retry', 'login'])
 const ACTION_ALIASES: Record<string, string> = { 'stream.failure.retry': 'retry', 'stream.failure.login': 'login', 'stream.failure.powerOff': 'powerOff', 'stream.failure.exit': 'exit', 'stream.failure.exportTrace': 'exportRuntimeTrace' }
 const DIRECTIONS = new Set(['up', 'down', 'left', 'right'])
+const EXPECTED_BLOCKS = new Set(['noCandidate', 'disabled', 'busy', 'outsideTopScope', 'cancelled'])
 let sink: TraceSink | undefined
 let context: UiTraceContext | undefined
 let sequence = 0
@@ -114,7 +116,7 @@ export const inputUiTrace = {
         if (outcome === 'blocked' || outcome === 'failed')
           failureCount++
       }
-      if (outcome === 'failed' || outcome === 'blocked') {
+      if (outcome === 'failed' || (outcome === 'blocked' && !EXPECTED_BLOCKS.has(reason ?? ''))) {
         try {
           origin?.anomaly('inputFailed')
         }
@@ -148,7 +150,7 @@ export const inputUiTrace = {
     }
     inputUiTrace.result(outcome, reason)
   },
-  activation<T>(source: UiInputSource, id: string | undefined, failure: FocusFailure | undefined, action: () => T): T | undefined {
+  activation<T>(source: UiInputSource, id: string | undefined, failure: ActivationFailure | undefined, action: () => T): T | undefined {
     if (!enabled())
       return failure ? undefined : action()
     const previous = context
@@ -175,7 +177,7 @@ export const inputUiTrace = {
       successCount++
     if (outcome === 'blocked' || outcome === 'failed') {
       failureCount++
-      if (!['noCandidate', 'disabled', 'outsideTopScope', 'cancelled'].includes(reason ?? '')) {
+      if (!EXPECTED_BLOCKS.has(reason ?? '')) {
         try {
           sink!.anomaly('inputFailed')
         }

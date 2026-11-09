@@ -398,6 +398,7 @@ export class StatsService {
         ...this.projection.observe(sample, presentation),
         ...presentation,
         rendererKind: renderer?.kind,
+        rendererFrameSource: renderer?.resources.renderFrameSource,
         rendererTargetFps: renderer?.targetFps,
         rendererLatestVideoSequence: renderer?.latestVideoSequence,
         rendererSubmittedVideoSequence: renderer?.resources.lastDrawSequence,

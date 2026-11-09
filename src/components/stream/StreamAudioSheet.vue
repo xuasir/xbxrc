@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SettingInputControl from '@/components/settings/SettingInputControl.vue'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
@@ -26,7 +27,7 @@ const increaseNodeId = computed(() => `${props.scopeId}.increase`)
 const closeNodeId = computed(() => `${props.scopeId}.close`)
 
 function clampValue(value: number): number {
-  return Math.min(10, Math.max(0, value))
+  return Math.min(10, Math.max(0, Number.isFinite(value) ? value : 1))
 }
 
 function updateValue(nextValue: number): void {
@@ -97,27 +98,24 @@ watch(
             -
           </Focusable>
 
-          <Focusable
-            :id="valueNodeId"
-            as="label"
-            class="stream-audio-sheet__value ui-focus-outline"
-            :on-back="handleClose"
-          >
-            <span class="stream-audio-sheet__label">{{ t('streamPage.audio.volume') }}</span>
-            <input
+          <div class="stream-audio-sheet__value">
+            <label :for="valueNodeId" class="stream-audio-sheet__label">{{ t('streamPage.audio.volume') }}</label>
+            <SettingInputControl
+              :id="valueNodeId"
+              :scope-id="props.scopeId"
+              :active="props.open"
               class="stream-audio-sheet__input"
               type="number"
               inputmode="numeric"
               min="0"
               max="10"
               step="1"
-              :value="draftValue"
-              :aria-label="t('streamPage.audio.volume')"
-              @focus="(event) => navigationEngine.focusElement(event.target as HTMLInputElement, false)"
-              @click.stop
-              @input="(event) => updateValue(Number((event.target as HTMLInputElement).value))"
-            >
-          </Focusable>
+              :model-value="String(draftValue)"
+              :label="t('streamPage.audio.volume')"
+              select-on-focus
+              @update:model-value="updateValue(Number($event))"
+            />
+          </div>
 
           <Focusable
             :id="increaseNodeId"
@@ -243,9 +241,11 @@ watch(
   color: var(--ui-page-text-soft);
 }
 
-.stream-audio-sheet__input {
+.stream-audio-sheet__value :deep(.stream-audio-sheet__input) {
   width: 100%;
   border: 0;
+  height: 40px;
+  padding: 0;
   background: transparent;
   color: var(--ui-page-text);
   font-size: 24px;
@@ -253,7 +253,7 @@ watch(
   text-align: center;
 }
 
-.stream-audio-sheet__input:focus-visible { outline: none; }
+.stream-audio-sheet__value :deep(.stream-audio-sheet__input:focus-visible) { outline: none; }
 
 .stream-audio-sheet__close {
   width: 100%;
@@ -262,8 +262,6 @@ watch(
 }
 
 .stream-audio-sheet__step[data-focused='true'],
-.stream-audio-sheet__value[data-focused='true'],
-.stream-audio-sheet__value:focus-within,
 .stream-audio-sheet__close[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);

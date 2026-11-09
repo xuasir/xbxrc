@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::mods::auth::storage_repository::AuthStorageRepository;
-use crate::mods::auth::types::SisuTokenData;
+use crate::mods::auth::types::{AuthTokenScope, SisuTokenData};
 
 const TOKEN_EXPIRY_SKEW_MS: i64 = 60 * 1000;
 
@@ -67,19 +67,9 @@ impl AuthTokenPolicy {
     }
 
     pub fn is_stream_token_valid(&self, token: Option<&Value>) -> bool {
-        let Some(token) = token else {
-            return false;
-        };
-        if token.is_null() {
-            return false;
-        }
-
-        let Some(expires_at) = resolve_stream_token_expiry_ms(token) else {
-            return false;
-        };
-
-        let now = chrono::Utc::now().timestamp_millis();
-        expires_at - now > TOKEN_EXPIRY_SKEW_MS
+        token.is_some_and(|token| {
+            is_stream_token_valid_at(token, chrono::Utc::now().timestamp_millis())
+        })
     }
 
     pub fn is_web_token_valid(&self, token: Option<&Value>) -> bool {
@@ -89,31 +79,65 @@ impl AuthTokenPolicy {
     }
 
     pub fn get_valid_session_snapshot(&self) -> Result<Option<ValidSessionSnapshot>, String> {
-        let stream_tokens = self.get_stream_tokens()?;
-        let web_token = self.get_web_token()?;
+        Ok(self
+            .get_valid_session_for(AuthTokenScope::Web)?
+            .filter(|snapshot| snapshot.app_level > 0))
+    }
 
-        let (Some(stream_tokens), Some(web_token)) = (stream_tokens, web_token) else {
+    pub fn get_valid_session_for(
+        &self,
+        scope: AuthTokenScope,
+    ) -> Result<Option<ValidSessionSnapshot>, String> {
+        let Some(web_token) = self.get_web_token()? else {
             return Ok(None);
         };
-
-        let web_valid = self.is_web_token_valid(Some(&web_token));
-        if !web_valid {
-            return Ok(None);
-        }
-
-        let xhome_valid = self.is_stream_token_valid(stream_tokens.get("xHomeToken"));
-        let xcloud_valid = self.is_stream_token_valid(stream_tokens.get("xCloudToken"));
-
-        if !xhome_valid && !xcloud_valid {
-            return Ok(None);
-        }
-
-        Ok(Some(ValidSessionSnapshot {
-            app_level: if xcloud_valid { 2 } else { 1 },
-            streaming_tokens: stream_tokens,
-            web_token,
-        }))
+        let streaming_tokens = self
+            .get_stream_tokens()?
+            .unwrap_or_else(|| serde_json::json!({}));
+        Ok(resolve_valid_session_for(
+            &web_token,
+            &streaming_tokens,
+            scope,
+            chrono::Utc::now().timestamp_millis(),
+        ))
     }
+}
+
+fn is_stream_token_valid_at(token: &Value, now_ms: i64) -> bool {
+    extract_gs_token(token).is_some_and(|token| !token.trim().is_empty())
+        && resolve_stream_token_expiry_ms(token)
+            .is_some_and(|expiry| expiry.saturating_sub(now_ms) > TOKEN_EXPIRY_SKEW_MS)
+}
+
+fn resolve_valid_session_for(
+    web_token: &Value,
+    streaming_tokens: &Value,
+    scope: AuthTokenScope,
+    now_ms: i64,
+) -> Option<ValidSessionSnapshot> {
+    resolve_valid_web_api_tokens(web_token, now_ms)?;
+    let home_valid = streaming_tokens
+        .get("xHomeToken")
+        .is_some_and(|token| is_stream_token_valid_at(token, now_ms));
+    let cloud_valid = streaming_tokens
+        .get("xCloudToken")
+        .is_some_and(|token| is_stream_token_valid_at(token, now_ms));
+    let scope_valid = match scope {
+        AuthTokenScope::Web => true,
+        AuthTokenScope::Home => home_valid,
+        AuthTokenScope::Cloud => cloud_valid,
+    };
+    scope_valid.then(|| ValidSessionSnapshot {
+        web_token: web_token.clone(),
+        streaming_tokens: streaming_tokens.clone(),
+        app_level: if cloud_valid {
+            2
+        } else if home_valid {
+            1
+        } else {
+            0
+        },
+    })
 }
 
 fn parse_i64_value(value: &Value) -> Option<i64> {
@@ -150,7 +174,7 @@ fn extract_stream_create_time_ms(token: &Value) -> Option<i64> {
         })
 }
 
-fn extract_gs_token(token: &Value) -> Option<&str> {
+pub(super) fn extract_gs_token(token: &Value) -> Option<&str> {
     token
         .get("data")
         .and_then(|data| data.get("gsToken"))
@@ -159,24 +183,125 @@ fn extract_gs_token(token: &Value) -> Option<&str> {
 }
 
 fn resolve_stream_token_expiry_ms(token: &Value) -> Option<i64> {
-    if let (Some(create_time), Some(duration_seconds)) = (
+    let duration_expiry = if let (Some(create_time), Some(duration_seconds)) = (
         extract_stream_create_time_ms(token),
         extract_stream_duration_seconds(token),
     ) {
         if create_time > 0 && duration_seconds > 0 {
-            return Some(create_time.saturating_add(duration_seconds.saturating_mul(1000)));
+            Some(create_time.saturating_add(duration_seconds.saturating_mul(1000)))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let jwt_expiry = extract_gs_token(token).and_then(|gs_token| {
+        let payload_segment = gs_token.split('.').nth(1)?;
+        let payload_bytes = URL_SAFE_NO_PAD
+            .decode(payload_segment)
+            .or_else(|_| URL_SAFE.decode(payload_segment))
+            .ok()?;
+        let payload: Value = serde_json::from_slice(&payload_bytes).ok()?;
+        Some(
+            payload
+                .get("exp")
+                .and_then(parse_i64_value)?
+                .saturating_mul(1000),
+        )
+    });
+    match (duration_expiry, jwt_expiry) {
+        (Some(duration), Some(jwt)) => Some(duration.min(jwt)),
+        (duration, jwt) => duration.or(jwt),
+    }
+}
+
+pub(super) fn same_web_account(previous: &Value, current: &Value) -> bool {
+    fn claims(value: &Value) -> Option<(Option<&str>, &str)> {
+        let claims = value
+            .get("data")
+            .unwrap_or(value)
+            .get("DisplayClaims")?
+            .get("xui")?
+            .as_array()?
+            .first()?;
+        Some((
+            claims
+                .get("xid")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+            claims.get("uhs")?.as_str()?.trim(),
+        ))
+    }
+    claims(previous)
+        .zip(claims(current))
+        .is_some_and(
+            |((old_xid, old_uhs), (new_xid, new_uhs))| match (old_xid, new_xid) {
+                (Some(old), Some(new)) => old == new,
+                _ => old_uhs == new_uhs,
+            },
+        )
+}
+
+pub(super) fn merge_stream_tokens(
+    previous: Option<Value>,
+    incoming: &Value,
+    scope: AuthTokenScope,
+    same_account: bool,
+) -> Value {
+    let mut merged = if same_account {
+        previous
+            .and_then(|value| value.as_object().cloned())
+            .unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+    if let Some(key) = scope.stream_key() {
+        merged.remove(key);
+    }
+    if scope == AuthTokenScope::Cloud {
+        merged.remove("_diagnostics");
+    }
+    if let Some(incoming) = incoming.as_object() {
+        merged.extend(incoming.clone());
+    }
+    Value::Object(merged)
+}
+
+pub(crate) fn cloud_token_unavailable_error(tokens: &Value) -> Option<xbox_webapi::WebApiError> {
+    use xbox_webapi::{NetworkErrorKind, WebApiError};
+    for offering in ["xgpuwebf2p", "xgpuweb"] {
+        let diagnostic = &tokens["_diagnostics"]["xCloudToken"][offering];
+        let kind = match diagnostic["networkErrorKind"].as_str() {
+            Some("dns") => Some(NetworkErrorKind::Dns),
+            Some("connect") => Some(NetworkErrorKind::Connect),
+            Some("tls") => Some(NetworkErrorKind::Tls),
+            Some("timeout") => Some(NetworkErrorKind::Timeout),
+            Some("body") => Some(NetworkErrorKind::Body),
+            Some("request") => Some(NetworkErrorKind::Request),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            return Some(WebApiError::network_kind(kind));
+        }
+        if let Some(status) = diagnostic["statusCode"]
+            .as_u64()
+            .filter(|status| (400..=599).contains(status))
+        {
+            return Some(
+                match diagnostic["serviceCode"]
+                    .as_str()
+                    .and_then(xbox_webapi::sanitize_service_code)
+                {
+                    Some(code) => {
+                        WebApiError::http_with_code(status as u16, code, "cloud access unavailable")
+                    }
+                    None => WebApiError::http(status as u16, "cloud access unavailable"),
+                },
+            );
         }
     }
-
-    let gs_token = extract_gs_token(token)?;
-    let payload_segment = gs_token.split('.').nth(1)?;
-    let payload_bytes = URL_SAFE_NO_PAD
-        .decode(payload_segment)
-        .or_else(|_| URL_SAFE.decode(payload_segment))
-        .ok()?;
-    let payload: Value = serde_json::from_slice(&payload_bytes).ok()?;
-    let exp_seconds = payload.get("exp").and_then(parse_i64_value)?;
-    Some(exp_seconds.saturating_mul(1000))
+    None
 }
 
 fn parse_datetime_to_timestamp_millis(input: &str) -> Option<i64> {

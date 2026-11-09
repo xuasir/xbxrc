@@ -1,0 +1,64 @@
+{
+  "scope": "主机串流登录提示与自动续期审计，生产代码保持原状",
+  "date": "2026-11-09",
+  "timezone": "Asia/Shanghai",
+  "sourceHead": "20348f4cbfb294efe118082d1831d466b08a2554",
+  "sourceSha256": {
+    "src-tauri/src/mods/auth/runtime_state.rs": "c7e0b20c6e6be1a6e0a444b43decbdc3e637547b127fbf3b61b5a175829bed0d",
+    "src-tauri/src/mods/auth/token_policy.rs": "2a00ab40f1fa410701f02bb6856fdae1e07e40a2ace2a73450943e7a021f2d31",
+    "src-tauri/src/mods/auth/service.rs": "d12741b13b066cb920a79b0bf1adcc52cf275e0a3c07b62cd975d7dfd61f9d7a",
+    "src-tauri/src/shell/mod.rs": "a0484f76a25f66bb72c48346217f4a1b2b01c5b8513c5ec86bc5b23b8f663e3f",
+    "src-tauri/src/mods/streaming/context.rs": "8b14f21d9bf8137c48af74a3f9c4853de8d8e36251cb5a7a567e19645e5b7846",
+    "src/streaming/useStreamExecution.ts": "e29cf9943850de8b718db11046d53ebf598a57de476ae4625dd08e1f80b16580"
+  },
+  "trace": {
+    "sourcePath": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794190273035-1.jsonl",
+    "snapshotPath": "/private/tmp/xbxrc-xhome-auth-investigation-trace.jsonl",
+    "sha256": "e3c88d94856c299dbbc39a14221000f04354b7864fd7ac3f3a242a16232aa1d7",
+    "rows": 3701,
+    "firstTime": "2026-11-09T10:11:13.035000+08:00",
+    "lastTime": "2026-11-09T10:17:17.560000+08:00",
+    "firstFailureSeq": 115,
+    "firstFailureTime": "2026-11-09T10:12:56.066000+08:00",
+    "errorKind": "auth",
+    "stage": "resolvingContext",
+    "upstreamHttpStatus": null,
+    "authChecksBeforeFirstFailure": 0,
+    "authEvents": 36,
+    "budgetNoticeCount": 0
+  },
+  "observedPostInteractiveLoginTokenMetadata": {
+    "homeDurationInSeconds": 14400,
+    "homeCreatedAt": "2026-11-09T10:13:43.676+08:00",
+    "homeComputedExpiry": "2026-11-09T14:13:43.676+08:00",
+    "homeJwtExpiry": "2026-11-09T14:13:45+08:00",
+    "homeExpiryDifferenceMs": -1324,
+    "webExpiry": "2026-11-10T02:13:43.594333+08:00",
+    "hasRefreshToken": true,
+    "cloudTokenPresent": false,
+    "note": "元数据采样位于用户重新登录之后，原失败凭据已由应用登出清理。"
+  },
+  "offlineAudit": {
+    "passed": 17,
+    "failed": 1,
+    "expectedFailure": "audit::current_startup_should_attempt_silent_restore_for_expired_home",
+    "historicalStartup": "认证检查触发",
+    "currentStartup": "认证检查被跳过",
+    "currentState": {
+      "isAuthenticated": true,
+      "appLevel": 0
+    },
+    "coverage": [
+      "真实有效期策略与JWT秒数回退",
+      "60秒余量",
+      "Web-only状态与启动检查",
+      "Home失效而Cloud有效的通用快照",
+      "现有并发/代次/取消保护"
+    ],
+    "limits": "离线桩隔离存储与OAuth pending数据；HTTP续期结果与原refresh token状态继续依赖后续实机验证。",
+    "testOutputSha256": "f3dec7fbae84b9f8a1a472c1cbb160b8eef8ccc8faca6cf063067c1fa80f224a",
+    "reproducer": "2026-11-09-xhome-auth-refresh-investigation.py",
+    "persistedReproducerVerified": true,
+    "persistedReproducerOutputSha256": "6a9cf78d94c1e6ab17382754b1193c496887391d16dad3005451bba01030741a"
+  }
+}

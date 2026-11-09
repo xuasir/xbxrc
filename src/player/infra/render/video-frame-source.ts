@@ -1,6 +1,7 @@
-import type { VideoFrameTrackingSource } from '../../domain/media'
+import type { MediaDiagnosticsOptions, VideoFrameTrackingSource } from '../../domain/media'
 import type { FrameIdentityReason } from './video-frame-identity-observation'
 import type { PixelObservationInput } from './video-frame-pixel-observation'
+import { DecodedVideoFrameReader } from './decoded-video-frame-reader'
 import { finiteIdentityValue, identityValueState, VideoFrameIdentityObservation } from './video-frame-identity-observation'
 import { VideoFramePixelObservation } from './video-frame-pixel-observation'
 
@@ -65,7 +66,12 @@ function readVideoFrameCounter(video: HTMLVideoElement): VideoFrameCounter | und
 
 /** 同一 video 的原始 metadata 和最新帧轮询共用帧身份、消费者与取消代际。 */
 class VideoFrameSource {
-  private readonly pending = new Map<number, { callback: FrameRequest }>()
+  private readonly pending = new Map<number, { callback: FrameRequest, render?: boolean }>()
+  private decodedReader?: DecodedVideoFrameReader
+  private decodedFrame?: VideoFrame
+  private renderFrame?: ObservedVideoFrameMetadata
+  private renderSequence = 0
+  private lastDecodedTimestamp?: number
   private nextRequest = 0
   private frameSequence = 0
   private lastPresentedFrames?: number
@@ -86,20 +92,48 @@ class VideoFrameSource {
   private polledFrameCount = 0
   private readonly identityObservation = new VideoFrameIdentityObservation()
   private readonly pixelObservation: VideoFramePixelObservation
+  private pixelDiagnosticsEnabled = false
   private diagnosticRtpTimestamp?: number
   readonly videoGeneration = ++videoGeneration
   lastFrame?: ObservedVideoFrameMetadata
+  get lastRenderFrame(): ObservedVideoFrameMetadata | undefined {
+    return this.renderFrame ?? this.lastFrame
+  }
+
+  get renderSource(): TexImageSource {
+    return this.decodedReader?.mode === 'main-thread' || this.decodedReader?.mode === 'worker'
+      ? this.decodedFrame ?? this.video
+      : this.video
+  }
+
+  get renderSize() {
+    const frame = this.renderSource
+    return frame === this.video
+      ? { width: this.video.videoWidth, height: this.video.videoHeight }
+      : { width: (frame as VideoFrame).displayWidth, height: (frame as VideoFrame).displayHeight }
+  }
+
+  get renderSupply() {
+    return { renderFrameSource: this.decodedReader?.mode ?? 'presentation', renderFrameFallbackReason: this.decodedReader?.fallbackReason, decodedFramesReceived: this.decodedReader?.receivedFrames ?? 0 }
+  }
+
   private readonly onTimeUpdate = () => {
     this.observe(performance.now(), 'timeupdate')
     this.schedule()
   }
 
   snapshotResources() {
-    return { videoGeneration: this.videoGeneration, frameRequests: this.pending.size, framePreparationRequests: 0, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
+    return { videoGeneration: this.videoGeneration, renderFrameSource: this.decodedReader?.mode ?? 'presentation', renderFrameFallbackReason: this.decodedReader?.fallbackReason, decodedFramesReceived: this.decodedReader?.receivedFrames ?? 0, decodedFrameReaders: Number(this.decodedReader !== undefined && this.decodedReader.mode !== 'presentation'), retainedDecodedFrames: Number(this.decodedFrame !== undefined), renderFrameTimestampUs: this.decodedFrame?.timestamp, frameRequests: this.pending.size, framePreparationRequests: 0, nativeFrameCallbacks: Number(this.nativeHandle !== undefined), animationCallbacks: Number(this.animationHandle !== undefined), localSequence: this.frameSequence, frameCounterSource: this.counterSource, nativeCallbackCount: this.nativeCallbackCount, polledFrameCount: this.polledFrameCount, uncountedNativeFrames: this.uncountedNativeFrames, expiredNativeFramesTotal: this.expiredNativeFramesTotal, nativeCreditWindowExpirationCount: this.nativeCreditWindowExpirationCount, nativeCounterCreditWindowMs: NATIVE_COUNTER_CREDIT_WINDOW_MS, ...this.pixelObservation.snapshotResources() }
   }
 
-  snapshotDiagnostics() {
-    return { videoGeneration: this.videoGeneration, localSequence: this.frameSequence, ...this.identityObservation.snapshot(), videoPixels: this.pixelObservation.snapshot() }
+  snapshotDiagnostics(options?: MediaDiagnosticsOptions) {
+    // 常规trace只开启数值取证；像素导入与shader准备由显式诊断请求启用。
+    if (options?.videoPixels !== undefined && options.videoPixels !== this.pixelDiagnosticsEnabled) {
+      this.pixelDiagnosticsEnabled = options.videoPixels
+      if (!options.videoPixels)
+        this.pixelObservation.reset()
+    }
+    return { videoGeneration: this.videoGeneration, localSequence: this.frameSequence, ...this.identityObservation.snapshot(), videoPixels: { ...this.pixelObservation.snapshot(), enabled: this.pixelDiagnosticsEnabled } }
   }
 
   constructor(private readonly video: HTMLVideoElement) {
@@ -117,8 +151,48 @@ class VideoFrameSource {
     return id
   }
 
+  requestRender(callback: FrameRequest): number {
+    const id = ++this.nextRequest
+    this.pending.set(id, { callback, render: true })
+    if (!this.decodedReader)
+      this.renderSequence = Math.max(this.renderSequence, this.lastFrame?.localSequence ?? 0)
+    this.decodedReader ??= new DecodedVideoFrameReader(this.video, frame => this.observeDecoded(frame), () => this.releaseDecodedFrame())
+    this.schedule()
+    return id
+  }
+
+  private observeDecoded(frame: VideoFrame): void {
+    if (![...this.pending.values()].some(request => request.render)) {
+      frame.close()
+      return
+    }
+    if (frame.timestamp === this.lastDecodedTimestamp) {
+      frame.close()
+      return
+    }
+    this.lastDecodedTimestamp = frame.timestamp
+    const previous = this.decodedFrame
+    this.decodedFrame = frame
+    const metadata: ObservedVideoFrameMetadata = { newFrame: true, trackingSource: 'decodedFrame', localSequence: ++this.renderSequence, videoGeneration: this.videoGeneration, mediaTime: frame.timestamp / 1e6 }
+    this.renderFrame = metadata
+    this.notify(performance.now(), metadata)
+    previous?.close()
+  }
+
+  private releaseDecodedFrame(): void {
+    this.decodedFrame?.close()
+    this.decodedFrame = undefined
+    this.renderFrame = undefined
+    this.lastDecodedTimestamp = undefined
+  }
+
   cancel(id: number): void {
     this.pending.delete(id)
+    if (![...this.pending.values()].some(request => request.render)) {
+      this.decodedReader?.dispose()
+      this.decodedReader = undefined
+      this.releaseDecodedFrame()
+    }
     if (this.pending.size === 0)
       this.cancelScheduled()
   }
@@ -145,6 +219,7 @@ class VideoFrameSource {
     this.nativeCreditStartedAtMs = this.counterProgressAtMs = undefined
     this.identityObservation.resetTimingBaseline()
     this.pixelObservation.reset()
+    this.pixelDiagnosticsEnabled = false
     this.epoch++
   }
 
@@ -338,7 +413,7 @@ class VideoFrameSource {
       this.lastPresentedFrames = metadata.presentedFrames
     if (mediaTime !== undefined)
       this.lastMediaTime = mediaTime
-    const pixelInput: PixelObservationInput | undefined = this.identityObservation.enabled
+    const pixelInput: PixelObservationInput | undefined = this.pixelDiagnosticsEnabled
       ? { enteredAtMs: callbackEnteredAtMs!, trackingSource, newFrame, localSequence: this.frameSequence + Number(newFrame), nativeCallbackCount: this.nativeCallbackCount, counterSource: counter?.source, counterFrames: counter?.frames, counterReset: counterReset || nativeReset, counterPaired: advance > 0 && credited === advance, epoch: this.epoch }
       : undefined
     // 重复轮询保持等待；原始 RVFC metadata 继续交给协议与诊断消费者。
@@ -357,14 +432,24 @@ class VideoFrameSource {
   }
 
   private notify(atMs: number, observed: ObservedVideoFrameMetadata): void {
-    if (observed.newFrame) {
+    const decoded = observed.trackingSource === 'decodedFrame'
+    const directActive = this.decodedReader?.mode === 'main-thread' || this.decodedReader?.mode === 'worker'
+    if (observed.newFrame && !decoded) {
       this.lastFrame = observed
+      if (!directActive && [...this.pending.values()].some(request => request.render))
+        this.renderFrame = { ...observed, localSequence: ++this.renderSequence }
     }
     for (const id of [...this.pending.keys()]) {
-      const callback = this.pending.get(id)?.callback
+      const request = this.pending.get(id)
+      if (!request || (decoded && !request.render) || (!decoded && request.render && directActive))
+        continue
+      let metadata = observed
+      if (request.render && !decoded) {
+        metadata = { ...observed, localSequence: this.renderFrame?.localSequence ?? this.renderSequence }
+      }
       this.pending.delete(id)
       try {
-        callback?.(atMs, observed)
+        request.callback(atMs, metadata)
       }
       catch (error) {
         if (typeof reportError === 'function')

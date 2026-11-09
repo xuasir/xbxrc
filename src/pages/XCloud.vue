@@ -13,6 +13,7 @@ import GameCard from '../components/common/GameCard.vue'
 import HorizontalListRail from '../components/common/HorizontalListRail.vue'
 import PageUnavailable from '../components/common/PageUnavailable.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
+import SettingInputControl from '../components/settings/SettingInputControl.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
@@ -470,23 +471,23 @@ function unregisterTabSwitch(): void {
             </p>
           </div>
           <div class="xcloud-page__search-actions">
-            <label class="xcloud-page__search-shell" :aria-label="t('xcloudPage.searchLabel')">
+            <div class="xcloud-page__search-shell">
               <span class="xcloud-page__search-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" class="xcloud-page__search-svg" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
                   <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" />
                 </svg>
               </span>
-              <input
+              <SettingInputControl
+                id="xcloud.search"
                 v-model="searchKeyword"
+                scope-id="app.shell"
                 type="search"
                 class="xcloud-page__search-input"
                 :placeholder="t('xcloudPage.searchPlaceholder')"
-                :aria-label="t('xcloudPage.searchLabel')"
-                data-focusable="true"
-                @focus="navigationEngine.focusElement($event.target as HTMLInputElement, false)"
-              >
-            </label>
-            <Focusable id="xcloud.refresh" as="button" type="button" class="xcloud-page__refresh" :aria-label="t('xcloudPage.actions.refresh')" :title="t('xcloudPage.actions.refresh')" :aria-busy="isRefreshing" @click="loadTitles(true)">
+                :label="t('xcloudPage.searchLabel')"
+              />
+            </div>
+            <Focusable id="xcloud.refresh" as="button" type="button" class="xcloud-page__refresh" :aria-label="t('xcloudPage.actions.refresh')" :title="t('xcloudPage.actions.refresh')" :busy="isRefreshing" @click="loadTitles(true)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" :class="{ 'xcloud-page__refresh-icon--spinning': isRefreshing }"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8" /></svg>
             </Focusable>
           </div>
@@ -648,7 +649,7 @@ function unregisterTabSwitch(): void {
   min-height: 0;
 }
 
-.xcloud-page__header { display: flex; flex: 0 0 auto; flex-direction: column; gap: var(--space-16); padding: var(--space-16) var(--space-8); background: transparent; }
+.xcloud-page__header { display: flex; flex: 0 0 auto; flex-direction: column; gap: var(--space-12); padding: var(--ui-focus-safe-inset); background: transparent; }
 .xcloud-page__jumps { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
 .xcloud-page__jumps button { min-height: 32px; padding: var(--space-4) var(--space-12); border: 1px solid transparent; border-radius: var(--ui-radius-md); background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 13px; line-height: 18px; cursor: pointer; }
 .xcloud-page__jumps button[aria-pressed='true'] { background: var(--ui-choice-selected-bg); color: var(--color-text-primary); border-color: var(--ui-choice-selected-border); }
@@ -728,10 +729,12 @@ function unregisterTabSwitch(): void {
   height: 100%;
 }
 
-.xcloud-page__search-input {
+.xcloud-page__search-shell :deep(.setting-input-control__field-shell) { margin-left: 10px; }
+.xcloud-page__search-shell :deep(.xcloud-page__search-input) {
   flex: 1 1 auto;
   min-width: 0;
-  margin-left: 10px;
+  height: 40px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
@@ -739,22 +742,21 @@ function unregisterTabSwitch(): void {
   line-height: 1.2;
 }
 
-.xcloud-page__search-input::placeholder {
+.xcloud-page__search-shell :deep(.xcloud-page__search-input::placeholder) {
   color: var(--color-text-tertiary);
 }
 
-.xcloud-page__search-shell:focus-within { box-shadow: var(--shadow-xbox-focus); }
-.xcloud-page__search-input:focus-visible { outline: none; }
+.xcloud-page__search-shell :deep(.xcloud-page__search-input:focus-visible) { outline: none; }
 
 .xcloud-page__content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-24);
+  gap: var(--space-16);
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-12) var(--space-8) var(--space-24);
-  scroll-padding: var(--space-12) var(--space-8) var(--space-24);
+  padding: var(--ui-focus-safe-inset) var(--ui-focus-safe-inset) var(--space-16);
+  scroll-padding: var(--ui-focus-safe-inset) var(--ui-focus-safe-inset) var(--space-16);
 }
 
 .xcloud-page__rail {

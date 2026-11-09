@@ -10,6 +10,7 @@ interface StreamAlertAction {
   danger?: boolean
   primary?: boolean
   disabled?: boolean
+  busy?: boolean
 }
 const props = withDefaults(defineProps<{
   open: boolean
@@ -46,7 +47,7 @@ async function handleClose(): Promise<void> {
   emit('close')
 }
 function handleSelect(id: string): void {
-  if (props.actions.find(action => action.id === id && !action.disabled))
+  if (props.actions.find(action => action.id === id && !action.disabled && !action.busy))
     emit('select', id)
 }
 async function copyDetails(): Promise<void> {
@@ -108,7 +109,7 @@ onBeforeUnmount(() => {
           </p>
         </header>
         <div class="stream-alert-sheet__actions">
-          <Focusable v-for="action in actions" :id="action.id" :key="action.id" :scope-id="scopeId" as="button" type="button" class="stream-alert-sheet__action" :class="{ 'stream-alert-sheet__action--danger': action.danger, 'stream-alert-sheet__action--primary': action.primary }" :disabled="action.disabled" :on-back="handleClose" @click="handleSelect(action.id)">
+          <Focusable v-for="action in actions" :id="action.id" :key="action.id" :scope-id="scopeId" as="button" type="button" class="stream-alert-sheet__action" :class="{ 'stream-alert-sheet__action--danger': action.danger, 'stream-alert-sheet__action--primary': action.primary }" :disabled="action.disabled" :busy="action.busy" :on-back="handleClose" @click="handleSelect(action.id)">
             {{ action.label }}
           </Focusable>
         </div>
@@ -126,7 +127,7 @@ onBeforeUnmount(() => {
               <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
             </div>
           </dl>
-          <Focusable :id="`${scopeId}.copy`" :scope-id="scopeId" as="button" type="button" class="stream-alert-sheet__action stream-alert-sheet__copy" :disabled="copyState === 'copying'" :on-back="handleClose" @click="copyDetails">
+          <Focusable :id="`${scopeId}.copy`" :scope-id="scopeId" as="button" type="button" class="stream-alert-sheet__action stream-alert-sheet__copy" :busy="copyState === 'copying'" :on-back="handleClose" @click="copyDetails">
             {{ t('streamPage.failure.copy') }}
           </Focusable>
           <p v-if="copyState !== 'idle'" role="status" aria-live="polite" class="stream-alert-sheet__feedback">

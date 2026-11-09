@@ -1,0 +1,477 @@
+{
+  "date": "2026-11-09",
+  "frontend": "http://127.0.0.1:1420",
+  "entry": "dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project.html",
+  "before": {
+    "theme": "light",
+    "tokens": {
+      "--radius-10": "4px",
+      "--radius-12": "6px",
+      "--radius-16": "8px",
+      "--radius-20": "8px",
+      "--radius-6": "2px",
+      "--ui-radius-lg": "6px",
+      "--ui-radius-md": "4px",
+      "--ui-radius-panel": "8px",
+      "--ui-radius-pill": "999px",
+      "--ui-radius-sm": "2px"
+    }
+  },
+  "narrowLight": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "theme": "light",
+    "tokens": {
+      "--radius-10": "6px",
+      "--radius-12": "8px",
+      "--radius-16": "10px",
+      "--radius-20": "10px",
+      "--radius-6": "4px",
+      "--ui-radius-lg": "8px",
+      "--ui-radius-md": "6px",
+      "--ui-radius-panel": "10px",
+      "--ui-radius-pill": "999px",
+      "--ui-radius-sm": "4px"
+    },
+    "controls": [
+      {
+        "class": "sn-icon-button top-nav__brand",
+        "focusRadius": "6px",
+        "id": "top-nav.brand",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "sn-icon-button sn-icon-button--round top-nav__avatar",
+        "focusRadius": "999px",
+        "id": "top-nav.profile",
+        "radius": "999px",
+        "ringRadius": "1003px"
+      },
+      {
+        "class": "top-nav__dock",
+        "focusRadius": "6px",
+        "id": "",
+        "radius": "18px 18px 0px 0px",
+        "ringRadius": "0px"
+      },
+      {
+        "class": "sn-icon-button",
+        "focusRadius": "6px",
+        "id": "top-nav.xhome",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "sn-icon-button",
+        "focusRadius": "6px",
+        "id": "top-nav.xcloud",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "sn-icon-button",
+        "focusRadius": "6px",
+        "id": "top-nav.my",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "sn-icon-button",
+        "focusRadius": "6px",
+        "id": "top-nav.controller",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "sn-icon-button sn-icon-button--active",
+        "focusRadius": "6px",
+        "id": "top-nav.setting",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab setting-sidebar__tab--active is-focused",
+        "focusRadius": "6px",
+        "id": "setting.tabs.general",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab",
+        "focusRadius": "6px",
+        "id": "setting.tabs.streamingExperience",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab",
+        "focusRadius": "6px",
+        "id": "setting.tabs.connectionHost",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab",
+        "focusRadius": "6px",
+        "id": "setting.tabs.advancedDiagnostics",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment",
+        "focusRadius": "6px",
+        "id": "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment setting-inline-select__segment--selected",
+        "focusRadius": "6px",
+        "id": "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment",
+        "focusRadius": "6px",
+        "id": "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment setting-inline-select__segment--selected",
+        "focusRadius": "6px",
+        "id": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-toggle-row",
+        "focusRadius": "6px",
+        "id": "setting.items.general.fullscreen",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-toggle-row",
+        "focusRadius": "6px",
+        "id": "setting.items.general.ui_audio",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment setting-inline-select__segment--selected",
+        "focusRadius": "6px",
+        "id": "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment",
+        "focusRadius": "6px",
+        "id": "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "radius": "6px",
+        "ringRadius": "10px"
+      },
+      {
+        "class": "setting-panel__action setting-panel__action--primary",
+        "focusRadius": "6px",
+        "id": "setting.update.primary",
+        "radius": "6px",
+        "ringRadius": "10px"
+      }
+    ]
+  },
+  "narrowDark": {
+    "radii": [
+      "4px",
+      "6px",
+      "8px",
+      "10px"
+    ],
+    "theme": "dark",
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  },
+  "wideDark": {
+    "radii": [
+      "4px",
+      "6px",
+      "8px",
+      "10px"
+    ],
+    "theme": "dark",
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    },
+    "controls": [
+      {
+        "class": "sn-icon-button top-nav__brand",
+        "id": "top-nav.brand",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "sn-icon-button sn-icon-button--round top-nav__avatar",
+        "id": "top-nav.profile",
+        "radius": "999px",
+        "ring": "1003px"
+      },
+      {
+        "class": "sn-icon-button",
+        "id": "top-nav.xhome",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "sn-icon-button",
+        "id": "top-nav.xcloud",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "sn-icon-button",
+        "id": "top-nav.my",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "sn-icon-button",
+        "id": "top-nav.controller",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "sn-icon-button sn-icon-button--active",
+        "id": "top-nav.setting",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab setting-sidebar__tab--active is-focused",
+        "id": "setting.tabs.general",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab",
+        "id": "setting.tabs.streamingExperience",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab",
+        "id": "setting.tabs.connectionHost",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-sidebar__tab",
+        "id": "setting.tabs.advancedDiagnostics",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment",
+        "id": "setting.content.general.inlineSelect.setting.items.general.locale.option.0",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment setting-inline-select__segment--selected",
+        "id": "setting.content.general.inlineSelect.setting.items.general.locale.option.1",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment setting-inline-select__segment--selected",
+        "id": "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment",
+        "id": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-toggle-row",
+        "id": "setting.items.general.fullscreen",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-toggle-row",
+        "id": "setting.items.general.ui_audio",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment setting-inline-select__segment--selected",
+        "id": "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-inline-select__segment",
+        "id": "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "setting-panel__action setting-panel__action--primary",
+        "id": "setting.update.primary",
+        "radius": "6px",
+        "ring": "10px"
+      },
+      {
+        "class": "",
+        "id": "",
+        "radius": "6px",
+        "ring": "0px"
+      },
+      {
+        "class": "",
+        "id": "",
+        "radius": "6px",
+        "ring": "0px"
+      },
+      {
+        "class": "",
+        "id": "",
+        "radius": "6px",
+        "ring": "0px"
+      },
+      {
+        "class": "",
+        "id": "",
+        "radius": "6px",
+        "ring": "0px"
+      },
+      {
+        "class": "",
+        "id": "",
+        "radius": "6px",
+        "ring": "0px"
+      }
+    ]
+  },
+  "wideLight": {
+    "radii": [
+      "4px",
+      "6px",
+      "8px",
+      "10px"
+    ],
+    "theme": "light",
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    }
+  },
+  "home": [
+    {
+      "class": "sn-icon-button top-nav__brand",
+      "id": "top-nav.brand",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "sn-icon-button sn-icon-button--round top-nav__avatar",
+      "id": "top-nav.profile",
+      "radius": "999px",
+      "ring": "1003px"
+    },
+    {
+      "class": "sn-icon-button sn-icon-button--active",
+      "id": "top-nav.xhome",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "sn-icon-button",
+      "id": "top-nav.xcloud",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "sn-icon-button",
+      "id": "top-nav.my",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "sn-icon-button",
+      "id": "top-nav.controller",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "sn-icon-button",
+      "id": "top-nav.setting",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "home-page__refresh",
+      "id": "xhome.refresh",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "home-page__hero",
+      "id": "",
+      "radius": "10px",
+      "ring": "0px"
+    },
+    {
+      "class": "home-page__primary ui-action-button ui-action-button--brand",
+      "id": "xhome.primary",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "home-page__library ui-action-button",
+      "id": "xhome.installed-games",
+      "radius": "6px",
+      "ring": "10px"
+    },
+    {
+      "class": "console-status-card",
+      "id": "xhome.host.fixture-console",
+      "radius": "8px",
+      "ring": "12px"
+    },
+    {
+      "class": "console-status-card",
+      "id": "xhome.host.fixture-console-s",
+      "radius": "8px",
+      "ring": "12px"
+    }
+  ],
+  "profilePanel": {
+    "radius": "10px",
+    "rect": {
+      "height": 306,
+      "width": 320
+    }
+  },
+  "checks": {
+    "finiteTokensIncreasedBy2": true,
+    "dockTopCorners18": true,
+    "buttonsAndFocusRings": true,
+    "keycaps6": true,
+    "hero10": true,
+    "consoleCards8": true,
+    "profilePanel10": true,
+    "wideThemes": true,
+    "narrowThemes": true
+  }
+}

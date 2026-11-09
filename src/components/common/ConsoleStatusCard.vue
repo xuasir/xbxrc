@@ -68,7 +68,7 @@ const resolvedAriaLabel = computed(() => {
 </template>
 
 <style scoped>
-.console-status-card { --focus-ring-radius: var(--ui-radius-lg); position: relative; display: flex; align-items: center; gap: var(--space-16); min-width: 0; width: 100%; min-height: 88px; padding: var(--space-12) var(--space-16); border: 1px solid var(--ui-border-subtle); border-radius: var(--focus-ring-radius); background: var(--ui-material-glass); color: var(--color-text-primary); text-align: left; cursor: pointer; box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low); transition: background var(--ui-motion-fast), border-color var(--ui-motion-fast), box-shadow var(--ui-motion-fast); }
+.console-status-card { --focus-ring-radius: var(--ui-radius-lg); position: relative; display: flex; align-items: center; gap: var(--space-12); min-width: 0; width: 100%; min-height: 80px; padding: var(--space-8) var(--space-12); border: 1px solid var(--ui-border-subtle); border-radius: var(--focus-ring-radius); background: var(--ui-material-glass); color: var(--color-text-primary); text-align: left; cursor: pointer; box-shadow: inset 0 1px 0 var(--ui-material-edge), var(--ui-shadow-low); transition: background var(--ui-motion-fast), border-color var(--ui-motion-fast), box-shadow var(--ui-motion-fast); }
 .console-status-card[aria-pressed='true'] { background: var(--ui-choice-selected-bg); border-color: var(--ui-choice-selected-border); box-shadow: none; }
 .console-status-card:hover { background: var(--ui-material-hover); border-color: transparent; }
 .console-status-card[aria-pressed='true']:hover { background: var(--ui-choice-selected-bg); border-color: var(--ui-choice-selected-border); }

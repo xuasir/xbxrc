@@ -1,0 +1,238 @@
+{
+  "vueFiles": 60,
+  "focusableSites": 106,
+  "defaultContentsSites": [],
+  "nativeSelectSites": [
+    {
+      "file": "src/pages/ConsoleLibrary.vue",
+      "line": 91,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "console.games.storage",
+      "navAction": false,
+      "change": true
+    },
+    {
+      "file": "src/pages/ConsoleLibrary.vue",
+      "line": 97,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "console.games.sort",
+      "navAction": false,
+      "change": true
+    },
+    {
+      "file": "src/pages/library/AccountPanel.vue",
+      "line": 49,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "my.friends.filter",
+      "navAction": false,
+      "change": true
+    },
+    {
+      "file": "src/pages/library/AchievementsPanel.vue",
+      "line": 64,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "game.achievements.filter",
+      "navAction": false,
+      "change": true
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 152,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "album.filter",
+      "navAction": false,
+      "change": true
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 160,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "album.game-filter",
+      "navAction": false,
+      "change": true
+    },
+    {
+      "file": "src/pages/library/GameHistoryPanel.vue",
+      "line": 75,
+      "tag": "Focusable",
+      "as": "select",
+      "id": "`my.${mode}.filter`",
+      "navAction": false,
+      "change": true
+    }
+  ],
+  "rawInteractiveSites": [
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 70,
+      "tag": "button",
+      "focusSync": false,
+      "navAction": false,
+      "controls": false,
+      "class": "user-menu-layer__backdrop"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 107,
+      "tag": "input",
+      "focusableOwner": "valueNodeId",
+      "focusSync": true,
+      "navAction": false,
+      "controls": false,
+      "class": "stream-audio-sheet__input"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 117,
+      "tag": "input",
+      "focusableOwner": "fieldNodeId",
+      "focusSync": true,
+      "navAction": false,
+      "controls": false,
+      "class": "stream-text-sheet__input"
+    },
+    {
+      "file": "src/pages/XCloud.vue",
+      "line": 479,
+      "tag": "input",
+      "directMarker": "true",
+      "focusSync": true,
+      "navAction": false,
+      "controls": false,
+      "class": "xcloud-page__search-input"
+    },
+    {
+      "file": "src/pages/library/AlbumPanel.vue",
+      "line": 183,
+      "tag": "video",
+      "focusSync": false,
+      "navAction": false,
+      "controls": true,
+      "class": "album-preview"
+    }
+  ],
+  "rawActivationSites": [
+    {
+      "file": "src/components/layout/AppShellLayout.vue",
+      "line": 315,
+      "tag": "main",
+      "activations": [
+        "touchstart",
+        "touchend"
+      ],
+      "class": "app-shell__content"
+    },
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 70,
+      "tag": "button",
+      "activations": [
+        "click"
+      ],
+      "class": "user-menu-layer__backdrop"
+    },
+    {
+      "file": "src/components/settings/SettingModalShell.vue",
+      "line": 67,
+      "tag": "div",
+      "activations": [
+        "click"
+      ],
+      "class": "setting-modal-shell"
+    },
+    {
+      "file": "src/components/stream/StreamActionSheet.vue",
+      "line": 75,
+      "tag": "div",
+      "activations": [
+        "click"
+      ],
+      "class": "stream-action-sheet-backdrop"
+    },
+    {
+      "file": "src/components/stream/StreamAlertSheet.vue",
+      "line": 93,
+      "tag": "div",
+      "activations": [
+        "click"
+      ],
+      "class": "stream-alert-sheet-backdrop"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 67,
+      "tag": "div",
+      "activations": [
+        "click"
+      ],
+      "class": "stream-audio-sheet-backdrop"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 107,
+      "tag": "input",
+      "activations": [
+        "click"
+      ],
+      "focusableOwner": "valueNodeId",
+      "class": "stream-audio-sheet__input"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 87,
+      "tag": "div",
+      "activations": [
+        "click"
+      ],
+      "class": "stream-text-sheet-backdrop"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 117,
+      "tag": "input",
+      "activations": [
+        "click"
+      ],
+      "focusableOwner": "fieldNodeId",
+      "class": "stream-text-sheet__input"
+    }
+  ],
+  "pointerBackdropSites": [
+    {
+      "file": "src/components/navigation/UserProfileMenu.vue",
+      "line": 70,
+      "tag": "button"
+    },
+    {
+      "file": "src/components/settings/SettingModalShell.vue",
+      "line": 67,
+      "tag": "div"
+    },
+    {
+      "file": "src/components/stream/StreamActionSheet.vue",
+      "line": 75,
+      "tag": "div"
+    },
+    {
+      "file": "src/components/stream/StreamAlertSheet.vue",
+      "line": 93,
+      "tag": "div"
+    },
+    {
+      "file": "src/components/stream/StreamAudioSheet.vue",
+      "line": 67,
+      "tag": "div"
+    },
+    {
+      "file": "src/components/stream/StreamTextSheet.vue",
+      "line": 87,
+      "tag": "div"
+    }
+  ]
+}

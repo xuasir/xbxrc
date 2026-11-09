@@ -33,6 +33,25 @@ function fixture() {
 }
 
 describe('input result evidence', () => {
+  it('记录 busy 重复确认并合并诊断，正常等待保持输入健康', () => {
+    const f = fixture()
+    const action = vi.fn()
+    inputUiTrace.activation('gamepad', 'fullscreen', 'busy', action)
+    inputUiTrace.activation('gamepad', 'fullscreen', 'busy', action)
+    expect(action).not.toHaveBeenCalled()
+    expect(f.rows.filter(row => row.payload.reason === 'busy')).toHaveLength(1)
+    expect(f.rows.at(-1)?.payload).toMatchObject({ source: 'gamepad', outcome: 'blocked', reason: 'busy' })
+    expect(f.anomaly).not.toHaveBeenCalled()
+  })
+
+  it('异步操作入口的 busy 结果继续配对，等待期间保持输入健康', () => {
+    const f = fixture()
+    const finish = inputUiTrace.beginOperation('text')
+    finish('blocked', 'busy')
+    expect(f.rows.at(-1)?.payload).toMatchObject({ action: 'text', outcome: 'blocked', reason: 'busy' })
+    expect(f.anomaly).not.toHaveBeenCalled()
+  })
+
   it('pairs source/operation across handler invocation and async completion after teardown', async () => {
     const f = fixture()
     let finish: (result: string) => void = () => {}

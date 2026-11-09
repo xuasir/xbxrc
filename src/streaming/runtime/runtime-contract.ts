@@ -1,4 +1,6 @@
 import type { StreamStats } from '../../player'
+import type { RendererFallbackReason } from '../../player/domain/media'
+import type { RenderMode } from '../../shared/config/render-controls'
 import type {
   DisplayOptionsValue,
   RuntimeLaunchSpec,
@@ -24,6 +26,13 @@ export type StreamPresentationMilestone
 
 export type StreamRuntimeReconnectReason = 'network-lost' | 'ice-failed' | 'media-stalled'
 
+export interface StreamRenderState {
+  mode: RenderMode | null
+  sharpening?: 'clear' | 'soft'
+  pending: boolean
+  fallbackReason?: RendererFallbackReason
+}
+
 export interface RuntimeDisplayState {
   displayOptions: DisplayOptionsValue
   render: StreamRenderProjection
@@ -43,6 +52,7 @@ export type RuntimeEvent
     }
     | { type: 'microphoneStateChanged', capturing: boolean, paused: boolean }
     | { type: 'frameReady', fresh?: boolean }
+    | { type: 'renderStateChanged', state: StreamRenderState }
     | { type: 'error', error: unknown }
 
 /**

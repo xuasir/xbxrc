@@ -1,0 +1,153 @@
+{
+  "date": "2026-11-09",
+  "taskId": "2026-11-09-ui-focus-inset-density",
+  "gitRevision": "20348f4cbfb294efe118082d1831d466b08a2554",
+  "localFrontend": {
+    "command": "pnpm dev --port 1430 --host 127.0.0.1",
+    "url": "http://127.0.0.1:1430/dev-docs/validation/2026-11-09-ui-focus-inset-density/index.html",
+    "port": 1430,
+    "serviceStopped": true,
+    "portReleased": true
+  },
+  "browser": {
+    "caseCount": 12,
+    "focusSampleCount": 11,
+    "scrollContainerSampleCount": 38,
+    "allSampledFocusRingsComplete": true,
+    "allSampledScrollbarsHidden": true,
+    "duplicateStatusVisuallyHidden": true,
+    "footerBreakpointsPassed": true,
+    "wheelScrollTop": {
+      "before": 0,
+      "after": 295
+    },
+    "cases": [
+      "home-dark-800",
+      "home-dark-1280",
+      "setting-dark-1280",
+      "setting-light-1280",
+      "setting-light-390",
+      "setting-light-600",
+      "setting-light-601",
+      "controller-light-390",
+      "my-light-390",
+      "friend-picker-light-390",
+      "cloud-light-800",
+      "account-menu-light-390"
+    ]
+  },
+  "home800x568": {
+    "rightFocusClippingBeforePx": 4,
+    "focusClippingAfter": [],
+    "footerHeightBeforePx": 72,
+    "footerHeightAfterPx": 48,
+    "heroHeightBeforePx": 226,
+    "heroHeightAfterPx": 208
+  },
+  "staticChecks": {
+    "pnpm lint:fix": "passed",
+    "pnpm typecheck": "passed",
+    "pnpm build": "passed",
+    "git diff --check": "passed",
+    "vueTemplateAndScriptUnchanged": {
+      "passed": true,
+      "count": 11
+    }
+  },
+  "sources": [
+    {
+      "path": "src/components/common/ConsoleStatusCard.vue",
+      "beforeSha256": "c72ed9060a824663114cd363cf1ad106db53d24058f9be9a308bb67035ccc59e",
+      "sha256": "2f52c897cb4f56279e7d33167078b60cb8752e0d01478d1f74fba7483163eff4",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/components/layout/AppShellLayout.vue",
+      "beforeSha256": "b6d1da806128fed964d5d8c0c9b4dfeb5dadc6b8781cfb2bf63fc9666f506926",
+      "sha256": "3f487e0d1af644117cddd03e6bf0bf9d5a2a73fe4c7924492d32093ed00e0af6",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/components/layout/ShellActionHints.vue",
+      "beforeSha256": "6ca8cef804ee3862e1b1836615dc2a74ec97c14e2ebe7f4d7fed8c6c686b46fa",
+      "sha256": "03c5786c143f1caff61971adc8df52e39f98f934c978b42262287f7b6446bf56",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/components/navigation/UserProfileMenu.vue",
+      "beforeSha256": "7962a04108bed2943759294d1d90adbb067f9de539d9ab8bc43923b63b00f674",
+      "sha256": "81ed5c09a697e7900e6586c00248268c369a792b6455d1b426e4deb0df635a4e",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/components/settings/SettingInlineSingleSelect.vue",
+      "beforeSha256": "f15713b155f33c8fd08b3064b246da68e50f6f22e0bc37f6b1e6c2a1bf40552c",
+      "sha256": "1c1b6239023220eb567e00e52d01eceb273acf702ac16fd1245814b028483e41",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/pages/Controller.vue",
+      "beforeSha256": "5035a7f1c8cba2e75c8fbdd632411327e28ce4905b63022e09a7e734d96bb7cf",
+      "sha256": "7b02b23d39ac528e10b4667dea1b6c255c06b8ef512a4c0ec0e52e3ca963f4d9",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/pages/Home.vue",
+      "beforeSha256": "31cc3a0db99a329daa511a067deb7bf16568d0b1cedeff0d337a1a40ff0653ab",
+      "sha256": "6abe708087d11bf8852f6a3618933f98f082e95b4f2dc90ee2b004bf7d272eb0",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/pages/Setting.vue",
+      "beforeSha256": "60c535934d69be2267a423cb9946e8abbf180594b05a71d19e89422c4f20f074",
+      "sha256": "c289ff143669735b9d04c1d6a70939181ac472690908d9f608b7cc7b4d5e293b",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/pages/XCloud.vue",
+      "beforeSha256": "78bc88823e2e26c5fd0e1b9d86ee3616478387f2ac80777db98f2e0b57687da2",
+      "sha256": "8a1598397a914cf9ed50c5635c410f24724cc8a5c3c32b69aafeb8eeb45cc42c",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/pages/controller/ControllerConnectionSection.vue",
+      "beforeSha256": "ace06adb02a0ee4c712863b02d493b44bddd71ab4af9d67f4755339a311cef53",
+      "sha256": "9772d58ca411e21a187c79ad67a753a2d1eb7171a7bcee860c8197c051884d08",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/pages/library/library.scss",
+      "beforeSha256": "c073b1699027a9e35bcc8d42a5f2355064ebf5d671659d76e41103f216c8b2ca",
+      "sha256": "7de9d3a295c6dd05183572d3398e8f0c80cbfda710d3089f563af5e586af3f28"
+    },
+    {
+      "path": "src/pages/settings/SettingSidebar.vue",
+      "beforeSha256": "9fa1d9dd886cc82934d733ca6158d5cb4068e3bc29d84226ca6d1fd80fa94ed9",
+      "sha256": "7b01a3b1ff861fddf20b3ec23578fa65f4db42ff131e75f744f153ec163ec4f4",
+      "templateAndScriptUnchanged": true
+    },
+    {
+      "path": "src/styles/_theme-semantic.scss",
+      "beforeSha256": "59ee877b8c69099aaa67aed595f5c44c6b249879eb309eeb6bdf091cec5b2a95",
+      "sha256": "ca6ea422a2f162a1d54d8d5b7ff3c5bf9de5831b932581be54d6ec034f5b4145"
+    },
+    {
+      "path": "src/styles/base.css",
+      "beforeSha256": "08f96e046e6209e7bc02ccca68c4ac25e3b4b1a07bf1e9d612cadd0a1c0085d1",
+      "sha256": "3f66dfe0e3be2e8719d33fe3d12a0f2db1892a148087e6b922b5ffd6bf97e631"
+    }
+  ],
+  "screenshots": [
+    "account-menu-light-narrow-full.png",
+    "cloud-light-full.png",
+    "controller-light-narrow-full.png",
+    "friend-picker-light-narrow-full.png",
+    "home-after-full.png",
+    "home-after.png",
+    "home-before-full.png",
+    "my-light-narrow-full.png",
+    "settings-dark-wide-full.png",
+    "settings-light-narrow-full.png",
+    "settings-light-wide-full.png"
+  ]
+}

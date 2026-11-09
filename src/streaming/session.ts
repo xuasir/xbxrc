@@ -4,14 +4,15 @@ import type {
   StreamingTargetType,
 } from '@shared/rpc/streaming'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
+import type { RenderControlsValue } from '../shared/config/render-controls'
 import type {
-  DisplayOptionsValue,
   StreamConfigSnapshot,
   StreamingSessionProgress,
   StreamRouteDescriptor,
 } from './types'
 import { computed } from 'vue'
 import { rpc } from '../services/rpc'
+import { renderControlsPatch } from '../shared/config/render-controls'
 import { withOperationTimeout } from './execution/async-operation'
 import { isRecord } from './utils'
 
@@ -66,6 +67,7 @@ export const STREAM_POLICY_CONFIG_KEYS = [
   'codec',
   'video_format',
   'display_options',
+  'render_mode',
   'super_resolution_experimental',
   'ice_policy_enabled',
   'ice_policy_prefer_ipv6',
@@ -205,21 +207,9 @@ export async function sendTextToRemoteConsole(consoleId: string, text: string): 
   return result.accepted
 }
 
-export async function persistStreamSuperResolutionExperimental(enabled: boolean): Promise<void> {
+export async function persistStreamRenderControls(value: RenderControlsValue): Promise<void> {
   await rpc.config.set({
-    patch: {
-      super_resolution_experimental: enabled,
-    },
-  })
-}
-
-export async function persistStreamDisplayOptions(
-  optionsValue: DisplayOptionsValue,
-): Promise<void> {
-  await rpc.config.set({
-    patch: {
-      display_options: optionsValue,
-    },
+    patch: renderControlsPatch(value),
   })
 }
 

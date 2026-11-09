@@ -94,6 +94,31 @@ afterEach(() => {
 })
 
 describe('页面恢复事务', () => {
+  it('分类连续确认往返时保持当前选中的分类入口', async () => {
+    const f = fixture()
+    const entries = { one: f.node('entry.one', f.root), two: f.node('entry.two', f.root) }
+    hooks.mounted.forEach(fn => fn())
+    await flush()
+    for (const key of ['two', 'one', 'two', 'one'] as const) {
+      f.focus(entries[key])
+      f.identity.value = key
+      await flush()
+      expect(f.engine.getCurrentFocus()).toBe(entries[key])
+    }
+  })
+  it.each(['page', 'preferred'] as const)('分类入口已聚焦时 %s 显式恢复继续采用指定来源', async (request) => {
+    const f = fixture()
+    const entry = f.node('entry.one', f.root)
+    const source = f.node('source', f.root)
+    hooks.mounted.forEach(fn => fn())
+    await flush()
+    f.engine.rememberFocus('page:page:one', source as unknown as HTMLElement)
+    if (request === 'page')
+      requestPageFocus()
+    await f.page.restore(request === 'preferred' ? source.id : '')
+    expect(f.engine.getCurrentFocus()).toBe(source)
+    expect(entry.attrs.has('data-focused')).toBe(false)
+  })
   it('加载等待期间观察器回调收敛，数据到达后恢复主入口', async () => {
     const f = fixture()
     const mutations = observePageMutations(f)

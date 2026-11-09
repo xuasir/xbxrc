@@ -69,13 +69,44 @@ function counterHarness(initialFrames = 0) {
 }
 
 describe('shared video frame callback', () => {
+  it('keeps routine diagnostics on frame metadata and collects pixels only after an explicit request', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const h = counterHarness(1)
+    const p = gpuProbe(h.video)
+    h.source.snapshotDiagnostics()
+    for (let frame = 1; frame <= 180; frame++) {
+      h.supply(frame)
+      h.native(frame * 1000 / 60, frame)
+      h.poll(frame * 1000 / 60 + 0.2)
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(h.source.snapshotDiagnostics().observed.videoFrameCallback).toBe(180)
+    expect(p.canvas.getContext).toHaveBeenCalledTimes(0)
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbePreparations: 0, pixelProbeGpuReads: 0 })
+
+    h.source.snapshotDiagnostics({ videoPixels: true })
+    h.native(3100, 181)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(p.canvas.getContext).toHaveBeenCalledTimes(1)
+    expect(h.source.snapshotDiagnostics().videoPixels.enabled).toBe(true)
+
+    h.source.snapshotDiagnostics({ videoPixels: false })
+    h.native(3200, 182)
+    expect(h.source.snapshotDiagnostics().videoPixels.enabled).toBe(false)
+    expect(h.source.snapshotResources()).toMatchObject({ pixelProbeCanvases: 0, pixelProbeGpuReads: 0, pixelProbeTimers: 0 })
+    expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(182)
+    h.cancel()
+  })
+
   it('delivers the latest candidate before diagnostic imports and honors consumer cleanup', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const h = counterHarness(1)
     const p = gpuProbe(h.video)
     let now = 0
     vi.spyOn(performance, 'now').mockImplementation(() => now)
-    h.source.snapshotDiagnostics()
+    h.source.snapshotDiagnostics({ videoPixels: true })
     h.native(0, 1)
     await Promise.resolve()
     await Promise.resolve()
@@ -99,7 +130,7 @@ describe('shared video frame callback', () => {
     const p = gpuProbe(h.video)
     let now = 0
     vi.spyOn(performance, 'now').mockImplementation(() => now)
-    h.source.snapshotDiagnostics()
+    h.source.snapshotDiagnostics({ videoPixels: true })
     h.native(0, 1)
     expect(h.observed.filter(frame => frame.newFrame)).toHaveLength(1)
     await Promise.resolve()

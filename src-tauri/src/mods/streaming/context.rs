@@ -58,7 +58,7 @@ impl StreamingService {
         let token = self
             .auth_provider
             .get_streaming_token(target_type.as_str())
-            .map_err(|error| AppError::Streaming(error.to_string()))?
+            .await?
             .ok_or_else(|| {
                 AppError::Auth(format!(
                     "Streaming token is unavailable for {}",

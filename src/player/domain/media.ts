@@ -17,9 +17,15 @@ export interface RendererGpuTiming {
   duration: LatencySummary
 }
 
+export interface MediaDiagnosticsOptions {
+  videoPixels?: boolean
+}
+
 export type VideoFit = 'Contain' | 'Stretch' | 'Zoom' | string
 
-export type VideoFrameTrackingSource = 'videoFrameCallback' | 'animationFrame' | 'timeupdate'
+export type RendererFallbackReason = 'performance' | 'unsupported' | 'failed'
+
+export type VideoFrameTrackingSource = 'videoFrameCallback' | 'animationFrame' | 'timeupdate' | 'decodedFrame'
 
 export type VideoFrameSourceFpsUnavailableReason
   = | 'mediaTimeMissing'
@@ -97,7 +103,8 @@ export function mergeRendererConfigWithAttachSpec(
     processing: attach.processing ?? config.processing,
     processingMode: attach.processingMode ?? config.processingMode,
     shaderPreset: attach.shaderPreset ?? config.shaderPreset,
-    sharpenStrength: attach.sharpenStrength ?? config.sharpenStrength,
+    sharpness: attach.kind === 'video' ? 0 : config.sharpness,
+    sharpenStrength: attach.kind === 'video' ? 0 : attach.sharpenStrength ?? config.sharpenStrength,
     pipelineType,
     mode,
     superResolutionEnabled: attach.kind === 'webgl2_sr',
@@ -192,6 +199,8 @@ export interface AudioRuntimeConfig {
 
 export interface RendererRuntimeConfig {
   enabled: boolean
+  /** 已提交管线持有的回退原因，供普通指标栏显示。 */
+  renderFallbackReason?: RendererFallbackReason
   sharpness: number
   sharpenStrength?: number
   /** clarity 预设仅映射本地锐化强度与算法，不代表 FSR 超分链路。 */
@@ -206,7 +215,7 @@ export interface RendererRuntimeConfig {
   targetFps: number
   mode: 'native' | 'webgl2'
   format: VideoFit
-  /** 用户意图：开启后优先走独立 SR renderer，不因 display degrade 动态关闭。 */
+  /** 用户意图：开启后优先走独立 SR renderer，性能保护与技术回退独立保留意图。 */
   superResolutionEnabled?: boolean
   superResolutionAlgorithm?: 'fsr1'
   superResolutionOutputTier?: '720p' | '1080p' | '1440p' | '2160p'
@@ -218,7 +227,7 @@ export interface RendererRuntimeConfig {
    * 值越大越柔和；0.88 为当前串流实验默认档。
    */
   superResolutionRcasStops?: number
-  /** SR 技术性失败回退到标准 webgl2 时使用的锐化算法。 */
+  /** 兼容旧启动投影的算法字段；增强故障使用默认渲染。 */
   superResolutionFallbackProcessing?: 'usm' | 'cas'
   /** 本会话内 SR attach 失败后置位，阻止再次选用 SR renderer。 */
   superResolutionInactiveAfterFailure?: boolean
@@ -235,7 +244,7 @@ export interface RendererRuntimeConfig {
   renderSourceHeight?: number
   /**
    * 仅客户端注入：SR 在 attach 成功后绘制期仍失败（如持续 GL 错误）时回调，
-   * 由 PlaybackService 切回标准 webgl2。不向 Rust 序列化。
+   * 由 PlaybackService 切回 Video 默认渲染，仅在客户端使用。
    */
   superResolutionRuntimeDegradeNotifier?: (reason: string) => void
   /** 播放资源所有者注入的首帧与硬故障通知。 */
@@ -277,6 +286,7 @@ export interface BrowserPlaybackStats {
   rendererSubmitAgeObservedAtMs?: number
   rendererGeneration?: number
   rendererKind?: 'video' | 'webgl2' | 'webgl2_sr'
+  rendererFrameSource?: 'initializing' | 'main-thread' | 'worker' | 'presentation'
   rendererTargetFps?: number
   rendererLatestVideoSequence?: number
   rendererSubmittedVideoSequence?: number

@@ -3,6 +3,7 @@ import type { EffectScope } from 'vue'
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
+import { normalizeRenderControls } from '../shared/config/render-controls'
 import { useStreamExecution } from './useStreamExecution'
 
 const harness = vi.hoisted(() => ({
@@ -17,7 +18,7 @@ const harness = vi.hoisted(() => ({
   logout: vi.fn(),
   powerOff: vi.fn(),
   captureInput: vi.fn(),
-  applyDisplayOptions: vi.fn(),
+  applyRenderControls: vi.fn(),
   progress: vi.fn(),
   closeRuntime: vi.fn(),
   startRuntime: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock('./runtime/runtime-host', () => ({
     harness.runtimeOptions = options
     return {
       performanceSnapshot: ref(null),
+      renderState: ref({ mode: null, pending: false }),
       lastFrameAt: ref(null),
       audioVolume: ref(1),
       microphoneState: ref(null),
@@ -66,7 +68,7 @@ vi.mock('./runtime/runtime-host', () => ({
       setExperienceMetricsEnabled: vi.fn(),
       setBrowserDiagnosticsEnabled: vi.fn(),
       setRustDiagnosticsEnabled: vi.fn(),
-      applyDisplayOptions: harness.applyDisplayOptions,
+      syncRenderControls: () => harness.applyRenderControls(options?.getRenderControls?.()),
     }
   },
 }))
@@ -284,12 +286,28 @@ describe('stream execution resource lifecycle', () => {
     harness.mount[0]()
     await flush()
     expect(vm.execution.failure.value?.error.kind).toBe('auth')
+    expect(harness.logout).not.toHaveBeenCalled()
     await vm.actions.handleRetry()
     expect(harness.startSession).toHaveBeenCalledTimes(1)
     await vm.actions.relogin()
     expect(harness.logout).toHaveBeenCalledTimes(1)
     expect(router.push).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/xhome/stream/console-1' } })
     expect(harness.closeRuntime.mock.invocationCallOrder[0]).toBeLessThan(harness.logout.mock.invocationCallOrder[0])
+  })
+
+  it('keeps credentials after renewal network failure and retries the original target', async () => {
+    const vm = setup()
+    harness.startSession.mockRejectedValueOnce({ details: { errorKind: 'network', retryable: true, phase: 'resolvingContext' } })
+    harness.mount[0]()
+    await flush()
+    expect(vm.execution.failure.value?.error).toMatchObject({ kind: 'network', retryable: true })
+    expect(harness.logout).not.toHaveBeenCalled()
+    await vm.actions.handleRetry()
+    await flush()
+    expect(harness.startSession).toHaveBeenCalledTimes(2)
+    expect(harness.startRuntime).toHaveBeenCalledTimes(1)
+    expect(harness.logout).not.toHaveBeenCalled()
+    expect(harness.startSession.mock.calls[1][0]).toMatchObject({ targetType: 'home', targetId: 'console-1' })
   })
 
   it('retains the classified first startup failure and offers sign-in before any media session exists', async () => {
@@ -373,40 +391,76 @@ describe('stream execution resource lifecycle', () => {
     expect(router.push).toHaveBeenCalledTimes(2)
   })
 
-  it('restores display state on save failure and isolates rollback from a newer execution', async () => {
+  it('restores the applied controls on explicit default save failure and isolates late rollback', async () => {
     const vm = setup()
     harness.mount[0]()
     await flush()
-    const draft = { sharpness: 3, saturation: 105, contrast: 105, brightness: 100 }
+    const draft = normalizeRenderControls({ render_mode: 'sharpen', display_options: { sharpness: 3, saturation: 105, contrast: 105, brightness: 100 } })
+    vm.actions.previewRenderControls(draft)
+    await flush()
     harness.saveConfig.mockRejectedValueOnce(new Error('save'))
-    await expect(vm.actions.saveDisplayOptions(draft)).rejects.toThrow('save')
-    expect(harness.applyDisplayOptions.mock.calls.at(-1)?.[0]).toEqual({ sharpness: 0, saturation: 100, contrast: 100, brightness: 100 })
+    await expect(vm.actions.saveRenderControls(draft, true)).rejects.toThrow('save')
+    await flush()
+    expect(harness.applyRenderControls.mock.calls.at(-1)?.[0]).toEqual(normalizeRenderControls({}))
     const save = deferred<void>()
     harness.saveConfig.mockReturnValue(save.promise)
-    const pending = vm.actions.saveDisplayOptions(draft)
+    const pending = vm.actions.saveRenderControls(draft, true)
     const result = expect(pending).rejects.toThrow('late save')
     await vm.actions.disconnectStream()
-    const calls = harness.applyDisplayOptions.mock.calls.length
+    const calls = harness.applyRenderControls.mock.calls.length
     save.reject(new Error('late save'))
     await result
-    expect(harness.applyDisplayOptions).toHaveBeenCalledTimes(calls)
+    expect(harness.applyRenderControls).toHaveBeenCalledTimes(calls)
   })
 
-  it('restores super-resolution on save failure and keeps late rollback out of the new config', async () => {
+  it('applies SR and explicit default rendering only to this session and preserves the override on retry', async () => {
+    harness.config.mockResolvedValue({ render_mode: 'sr', super_resolution_experimental: true })
     const vm = setup()
     harness.mount[0]()
     await flush()
-    harness.saveConfig.mockRejectedValueOnce(new Error('save'))
-    await expect(vm.actions.setSuperResolutionExperimental(true)).rejects.toThrow('save')
-    expect(vm.execution.superResolutionExperimental.value).toBe(false)
-    const save = deferred<void>()
-    harness.saveConfig.mockReturnValueOnce(save.promise)
-    const pending = vm.actions.setSuperResolutionExperimental(true)
-    const result = expect(pending).rejects.toThrow('late save')
+    await vm.actions.saveRenderControls({ ...vm.execution.renderControls.value, mode: 'video' })
+    expect(vm.execution.renderControls.value.mode).toBe('video')
+    expect(vm.execution.renderControlsSource.value).toBe('session')
+    expect(harness.saveConfig).not.toHaveBeenCalled()
     await vm.actions.handleRetry()
-    save.reject(new Error('late save'))
-    await result
-    expect(vm.execution.superResolutionExperimental.value).toBe(false)
+    expect(vm.execution.renderControls.value.mode).toBe('video')
+    expect(harness.startRuntime.mock.calls.at(-1)?.[0].render).toMatchObject({ pipelinePreference: 'video', superResolutionPreference: 'off', displayOptions: { sharpness: 0 } })
+    await vm.actions.saveRenderControls({ ...vm.execution.renderControls.value, mode: 'sr' })
+    expect(vm.execution.renderControls.value.mode).toBe('sr')
+    expect(harness.saveConfig).not.toHaveBeenCalled()
+  })
+
+  it('writes a complete rendering default only after explicit saving and restores that new default', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    const soft = normalizeRenderControls({ render_mode: 'sharpen', display_options: { sharpness: 1, brightness: 102, contrast: 96, saturation: 96 } })
+    await vm.actions.saveRenderControls(soft)
+    expect(harness.saveConfig).not.toHaveBeenCalled()
+    await vm.actions.saveRenderControls(soft, true)
+    expect(harness.saveConfig).toHaveBeenCalledExactlyOnceWith({ patch: { render_mode: 'sharpen', display_options: soft.displayOptions } })
+    expect(vm.execution.renderControlsSource.value).toBe('default')
+    await vm.actions.saveRenderControls({ ...vm.execution.renderControls.value, mode: 'sr' })
+    vm.actions.restoreRenderDefaults()
+    expect(vm.execution.renderControls.value).toEqual(soft)
+    expect(harness.saveConfig).toHaveBeenCalledTimes(1)
+  })
+
+  it('absorbs a late default save when the current edit has moved to a newer rendering choice', async () => {
+    const vm = setup()
+    harness.mount[0]()
+    await flush()
+    const saving = deferred<void>()
+    harness.saveConfig.mockReturnValueOnce(saving.promise)
+    const sr = normalizeRenderControls({ render_mode: 'sr' })
+    vm.actions.previewRenderControls(sr)
+    const pending = vm.actions.saveRenderControls(sr, true)
+    const soft = normalizeRenderControls({ render_mode: 'sharpen', display_options: { sharpness: 1 } })
+    await vm.actions.saveRenderControls(soft)
+    saving.resolve()
+    await pending
+    expect(vm.execution.renderControls.value).toEqual(soft)
+    expect(vm.execution.renderControlsSource.value).toBe('session')
   })
 
   it('shows a waiting warning once per interruption and rearms it after actual frame progress', async () => {

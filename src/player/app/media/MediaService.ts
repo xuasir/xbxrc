@@ -1,5 +1,5 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { AudioRuntimeConfig, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
+import type { AudioRuntimeConfig, MediaDiagnosticsOptions, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
 import type { InputService } from '../input/InputService'
 import { AudioEffectsService } from './AudioEffectsService'
 import { MicrophoneService } from './MicrophoneService'
@@ -96,8 +96,8 @@ export class MediaService {
     return this.playbackService.snapshotRendererObservation()
   }
 
-  snapshotDiagnostics() {
-    return this.playbackService.snapshotDiagnostics()
+  snapshotDiagnostics(options?: MediaDiagnosticsOptions) {
+    return this.playbackService.snapshotDiagnostics(options)
   }
 
   destroy(): void {

@@ -572,7 +572,7 @@ describe('browser-runtime super resolution state', () => {
       client.eventBus.emit('media.videoReady', { width: 1920, height: 1080 })
       const snapshot = await runtime.snapshotStats()
       expect(snapshot.renderPipelineType).toBe('video')
-      expect(snapshot.renderSuperResolutionEnabled).toBe(true)
+      expect(snapshot.renderSuperResolutionEnabled).toBe(false)
       expect(snapshot.renderSuperResolutionActive).toBe(false)
 
       await runtime.stop()
@@ -659,7 +659,7 @@ describe('browser-runtime super resolution state', () => {
     }
   })
 
-  it('honors Rust superResolutionPreference=fsr1Experimental when UI switch is off', async () => {
+  it('honors an explicit UI SR disable over the startup preference', async () => {
     const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
     await runtime.launch(createLaunchSpec({
       superResolutionExperimental: false,
@@ -690,22 +690,35 @@ describe('browser-runtime super resolution state', () => {
       superResolutionExperimental: false,
     })
 
-    const plan = resolveSuperResolutionTierPlan(2560, 1440, 1920, 1080)
-    await runtime.snapshotStats()
-    expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-      superResolutionOutputTier: plan.outputTier,
-    }))
     await runtime.snapshotStats()
     expect(client.updateRendererAttach).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'webgl2_sr',
+      kind: 'video',
     }))
 
     const snapshot = await runtime.snapshotStats()
-    expect(snapshot.renderSuperResolutionEnabled).toBe(true)
-    expect(snapshot.renderSuperResolutionActive).toBe(true)
-    expect(snapshot.renderSuperResolutionAlgorithm).toBe('fsr1')
-    expect(snapshot.renderSharpenMode).toBe('fsr1_rcas')
+    expect(snapshot.renderSuperResolutionEnabled).toBe(false)
+    expect(snapshot.renderSuperResolutionActive).toBe(false)
 
+    await runtime.stop()
+  })
+
+  it('forwards committed render facts while diagnostics are closed without extra stats reads', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    const changed = vi.fn()
+    runtime.subscribe((event) => {
+      if (event.type === 'renderStateChanged')
+        changed(event.state)
+    })
+    await runtime.launch(createLaunchSpec())
+    const client = getClient()
+    const reads = client.statsController.snapshot.mock.calls.length
+    client.eventBus.emit('media.resourcesObserved', { reason: 'rendererPending', resources: { actualPipeline: 'video', pendingRenderers: 1 } })
+    expect(changed.mock.calls.at(-1)?.[0]).toEqual({ mode: 'video', pending: true, sharpening: undefined, fallbackReason: undefined })
+    client.eventBus.emit('media.resourcesObserved', { reason: 'rendererCommitted', resources: { actualPipeline: 'webgl2_sr', pendingRenderers: 0 } })
+    expect(changed.mock.calls.at(-1)?.[0].mode).toBe('sr')
+    client.eventBus.emit('media.resourcesObserved', { reason: 'rendererCommitted', resources: { actualPipeline: 'video', actualFallbackReason: 'failed' } })
+    expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ mode: 'video', fallbackReason: 'failed' })
+    expect(client.statsController.snapshot).toHaveBeenCalledTimes(reads)
     await runtime.stop()
   })
 

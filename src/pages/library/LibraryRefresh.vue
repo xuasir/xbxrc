@@ -6,7 +6,7 @@ defineEmits<{ refresh: [] }>()
 </script>
 
 <template>
-  <Focusable :id="id" as="button" type="button" class="library-refresh" :class="{ 'library-refresh--busy': busy }" aria-label="刷新" title="刷新" :aria-busy="busy" :disabled="busy" @click="$emit('refresh')">
+  <Focusable :id="id" as="button" type="button" class="library-refresh" :class="{ 'library-refresh--busy': busy }" aria-label="刷新" title="刷新" :aria-busy="busy" :busy="busy" @click="$emit('refresh')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.2 6.2A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.8 5.8" /></svg>
   </Focusable>
 </template>

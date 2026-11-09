@@ -65,12 +65,9 @@ pub(super) fn token_summary(tokens: &Value) -> Value {
 
 pub(super) fn flow_error_summary(error: &AuthFlowError) -> Value {
     // 错误正文可能携带请求URL或服务端身份，只记录固定分类与状态码。
-    match error {
-        AuthFlowError::Upstream(error) => error.safe_summary(),
-        _ => {
-            json!({ "errorKind": "protocol", "statusCode": null, "retriable": error.is_retriable() })
-        }
-    }
+    error.upstream_error().map(|error| error.safe_summary()).unwrap_or_else(|| {
+        json!({ "errorKind": "protocol", "statusCode": null, "retriable": error.is_retriable() })
+    })
 }
 
 pub(super) fn app_error_summary(error: &AppError) -> Value {
@@ -85,6 +82,7 @@ pub(super) struct AuthOperationTrace {
     id: String,
     operation: &'static str,
     started_at: Instant,
+    finished: std::sync::atomic::AtomicBool,
 }
 
 impl AuthOperationTrace {
@@ -97,6 +95,7 @@ impl AuthOperationTrace {
             ),
             operation,
             started_at: Instant::now(),
+            finished: std::sync::atomic::AtomicBool::new(false),
         };
         trace.record("authOperationStarted", json!({}));
         trace
@@ -127,6 +126,9 @@ impl AuthOperationTrace {
     }
 
     pub fn finish<T>(&self, result: &AppResult<T>, state: &AuthState) {
+        if self.finished.swap(true, Ordering::Relaxed) {
+            return;
+        }
         self.record(
             "authOperationFinished",
             json!({
@@ -135,6 +137,14 @@ impl AuthOperationTrace {
                 "state": state_summary(state),
             }),
         );
+    }
+}
+
+impl Drop for AuthOperationTrace {
+    fn drop(&mut self) {
+        if !self.finished.load(Ordering::Relaxed) {
+            self.record("authOperationFinished", json!({ "outcome": "cancelled" }));
+        }
     }
 }
 

@@ -1,5 +1,46 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AuthTokenScope {
+    Web,
+    Home,
+    Cloud,
+}
+
+impl AuthTokenScope {
+    pub fn from_target(target: &str) -> Self {
+        if target == "home" {
+            Self::Home
+        } else {
+            Self::Cloud
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Web => "web",
+            Self::Home => "home",
+            Self::Cloud => "cloud",
+        }
+    }
+
+    pub fn stream_key(self) -> Option<&'static str> {
+        match self {
+            Self::Web => None,
+            Self::Home => Some("xHomeToken"),
+            Self::Cloud => Some("xCloudToken"),
+        }
+    }
+
+    pub fn flow_scope(self) -> xbox_auth_flow::DownstreamTokenScope {
+        match self {
+            Self::Web => xbox_auth_flow::DownstreamTokenScope::Web,
+            Self::Home => xbox_auth_flow::DownstreamTokenScope::Home,
+            Self::Cloud => xbox_auth_flow::DownstreamTokenScope::Cloud,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserTokenData {
     pub token_type: String,

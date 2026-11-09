@@ -1,7 +1,7 @@
 .library-page { position: relative; min-height: 0; height: 100%; overflow: hidden; --color-focus-bg-strong: var(--ui-material-selected); }
 .library-layout { display: grid; grid-template-columns: var(--ui-settings-layout-columns); grid-template-rows: var(--ui-settings-layout-rows); height: 100%; min-height: 0; gap: var(--space-16); }
 .library-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
-.library-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); padding: var(--ui-space-lg) var(--ui-settings-side-padding); min-width: 0; }
+.library-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); padding: var(--ui-space-sm) var(--ui-settings-side-padding); min-width: 0; }
 .library-header h1, .library-stack > .library-toolbar > h1 { margin: 0; color: var(--color-text-primary); font-size: var(--ui-text-title-md); line-height: var(--ui-line-height-default); font-weight: var(--ui-font-weight-medium); overflow-wrap: anywhere; }
 /* 阅读信息保持实体文字；层级由字号和留白区分，背景延续壳层环境光。 */
 .library-copy, .library-caption { color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text-primary)); font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); overflow-wrap: anywhere; }
@@ -15,7 +15,7 @@
 .library-heading > .library-back { flex-shrink: 0; }
 .library-heading > div { min-width: 0; }
 .library-detail-heading { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-16); }
-.library-empty { flex: 1; display: grid; place-items: center; min-height: 0; padding: var(--space-24); color: var(--color-text-secondary); font-size: var(--ui-text-body-md); line-height: var(--ui-line-height-relaxed); text-align: center; }
+.library-empty { flex: 1; display: grid; place-items: center; min-height: 0; padding: var(--space-16); color: var(--color-text-secondary); font-size: var(--ui-text-body-md); line-height: var(--ui-line-height-relaxed); text-align: center; }
 .library-actions .ui-action-button { min-width: 0; }
 .library-actions .ui-action-button:disabled { opacity: .5; cursor: default; }
 .library-actions .ui-action-button[data-focused='true'] { box-shadow: var(--shadow-xbox-focus); }

@@ -15,10 +15,10 @@ const { t } = useI18n()
     </p>
     <template #footer>
       <div class="setting-panel__actions">
-        <Focusable :id="`${props.scopeId}.cancel`" as="button" :scope-id="props.scopeId" class="setting-panel__action" :disabled="props.busy" @click="emit('close')">
+        <Focusable :id="`${props.scopeId}.cancel`" as="button" :scope-id="props.scopeId" class="setting-panel__action" :busy="props.busy" @click="emit('close')">
           {{ t('setting.editor.cancel') }}
         </Focusable>
-        <Focusable :id="`${props.scopeId}.confirm`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--primary" :disabled="props.busy" @click="emit('confirm')">
+        <Focusable :id="`${props.scopeId}.confirm`" as="button" :scope-id="props.scopeId" class="setting-panel__action setting-panel__action--primary" :busy="props.busy" @click="emit('confirm')">
           {{ props.confirmLabel || t('setting.experience.confirm') }}
         </Focusable>
       </div>

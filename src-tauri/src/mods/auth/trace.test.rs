@@ -106,3 +106,24 @@ fn production_and_dev_keep_correlated_auth_stages_and_terminal_error() {
         assert!(!contents.contains("secret"));
     }
 }
+
+#[test]
+fn cancelled_refresh_finishes_its_trace_exactly_once_without_credentials() {
+    let recorder = Arc::new(RuntimeTraceRecorder::new_with_mode("production").unwrap());
+    let id;
+    {
+        let trace = AuthOperationTrace::new(&recorder, "transferToken");
+        id = trace.id().to_string();
+        trace.stage("coreRefreshStarted", json!({ "scope": "cloud" }));
+    }
+    let contents = std::fs::read_to_string(recorder.path().unwrap()).unwrap();
+    let finishes: Vec<Value> = contents
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|row| row["event"] == "authOperationFinished")
+        .collect();
+    assert_eq!(finishes.len(), 1);
+    assert_eq!(finishes[0]["payload"]["operationId"], id);
+    assert_eq!(finishes[0]["payload"]["details"]["outcome"], "cancelled");
+    assert!(!contents.contains("secret"));
+}

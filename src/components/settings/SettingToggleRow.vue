@@ -9,6 +9,7 @@ interface SettingToggleRowProps {
   enabled: boolean
   effectLabel?: string
   disabled?: boolean
+  busy?: boolean
   upNeighborId?: string
   downNeighborId?: string
   leftNeighborId?: string
@@ -43,6 +44,7 @@ function handleConfirm(): void {
     :aria-label="props.label"
     :aria-describedby="props.description ? `${props.id}.description` : undefined"
     :disabled="props.disabled"
+    :busy="props.busy"
     role="switch"
     :aria-checked="props.enabled"
     @click="handleConfirm"

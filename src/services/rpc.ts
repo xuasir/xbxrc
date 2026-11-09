@@ -8,9 +8,19 @@ let rpcRequestSeq = 0
 
 function debugLog(..._args: Array<unknown>): void {}
 
-interface RpcCallError extends Error {
+export interface RpcCallError extends Error {
   code?: string
   details?: unknown
+}
+
+type RpcErrorListener = (request: RpcInvokePayload, error: RpcCallError) => void
+const errorListeners = new Set<RpcErrorListener>()
+
+export function onRpcError(listener: RpcErrorListener): () => void {
+  errorListeners.add(listener)
+  return () => {
+    errorListeners.delete(listener)
+  }
 }
 
 async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
@@ -37,6 +47,15 @@ async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
       const error = new Error(envelope.error?.message ?? 'Unknown RPC error') as RpcCallError
       error.code = envelope.error?.code
       error.details = envelope.error?.details
+
+      for (const listener of errorListeners) {
+        try {
+          listener(payload, error)
+        }
+        catch (listenerError) {
+          console.error('[RPC] error listener failed:', listenerError)
+        }
+      }
 
       console.error(
         `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} err ${duration}ms`,

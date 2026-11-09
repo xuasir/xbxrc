@@ -61,12 +61,14 @@ export function useConsole(key: () => string) {
   onDeactivated(deactivate)
   onUnmounted(deactivate)
   const host = computed(() => hosts.value.find(h => h.id === key() || h.deviceId === key()))
-  const canStream = computed(() => !loading.value && !!host.value && !!(host.value.serverId || host.value.id) && ((host.value.powerState === 'On' && host.value.consoleStreamingEnabled !== false) || (['Connected', 'ConnectedStandby'].includes(host.value.powerState ?? '') && host.value.remoteManagementEnabled === true)))
+  // 刷新期间沿用已知设备能力，UI 通过 busy 合并确认并保持导航候选。
+  const streamAvailable = computed(() => !!host.value && !!(host.value.serverId || host.value.id) && ((host.value.powerState === 'On' && host.value.consoleStreamingEnabled !== false) || (['Connected', 'ConnectedStandby'].includes(host.value.powerState ?? '') && host.value.remoteManagementEnabled === true)))
+  const canStream = computed(() => !loading.value && streamAvailable.value)
   function stream() {
     const h = host.value
     if (!h || !canStream.value)
       return
     void router.push({ name: 'xhome-stream', params: { targetId: h.serverId || h.id }, query: { name: h.name || h.deviceName || 'Xbox', consoleId: h.id || h.deviceId, powerState: h.powerState, remoteManagementEnabled: h.remoteManagementEnabled ? '1' : '0' } })
   }
-  return { host, canStream, stream, refresh, loading }
+  return { host, streamAvailable, canStream, stream, refresh, loading }
 }

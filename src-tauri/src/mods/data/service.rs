@@ -3,7 +3,7 @@ use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::mods::data::events;
 use crate::mods::data::runtime_state::{DataRuntimeState, XcloudCatalogRefreshJoin};
-use crate::mods::data::services::personal_service::{user_error, PersonalContext, PersonalService};
+use crate::mods::data::services::personal_service::{PersonalContext, PersonalService};
 use crate::mods::data::services::{
     HostService, ProfileService, StreamingQueryService, XcloudService,
 };
@@ -17,6 +17,7 @@ use crate::mods::data::types::{
     DataUserProfile, DataXcloudCatalogCacheState, DataXcloudCatalogPayload,
     DataXcloudCatalogUpdatedEvent, XcloudCatalogCacheScope,
 };
+use crate::mods::data::DataError;
 use crate::mods::data::DataProvider;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use async_trait::async_trait;
@@ -50,7 +51,7 @@ impl DataService {
         operation: &'static str,
         target: Option<&str>,
         request: F,
-    ) -> Result<DataQuery<T>, String>
+    ) -> Result<DataQuery<T>, DataError>
     where
         T: Send,
         F: Fn(PersonalContext) -> Fut + Send + Sync,
@@ -68,7 +69,7 @@ impl DataService {
             })
             .await;
         self.record_http_result(operation, started, result.as_ref().err());
-        result.map_err(|error| user_error(&error))
+        result.map_err(DataError::from)
     }
 
     fn record_http_result(
@@ -104,13 +105,13 @@ impl DataService {
         }
     }
 
-    fn catalog_scope(&self) -> Result<xbox_cloud_catalog_flow::CloudCatalogScope, String> {
+    fn catalog_scope(&self) -> Result<xbox_cloud_catalog_flow::CloudCatalogScope, DataError> {
         Self::catalog_scope_for(&self.config_provider)
     }
 
     fn catalog_scope_for(
         config_provider: &ConfigProviderRef,
-    ) -> Result<xbox_cloud_catalog_flow::CloudCatalogScope, String> {
+    ) -> Result<xbox_cloud_catalog_flow::CloudCatalogScope, DataError> {
         let config = config_provider.get_by_keys(&["locale".to_owned()])?;
         let locale = config
             .get("locale")
@@ -126,12 +127,12 @@ impl DataService {
             crate::mods::data::types::DataSessionContext,
             XcloudCatalogCacheScope,
         )>,
-        String,
+        DataError,
     > {
         let started = std::time::Instant::now();
         let result = self.resolve_xcloud_catalog_context_inner().await;
         self.record_http_result("xcloudAccess", started, result.as_ref().err());
-        result.map_err(|error| XcloudService::catalog_error(&error))
+        result.map_err(catalog_data_error)
     }
 
     async fn resolve_xcloud_catalog_context_inner(
@@ -143,7 +144,10 @@ impl DataService {
         )>,
         xbox_webapi::WebApiError,
     > {
-        let session = self.session_resolver.ensure_session().await?;
+        let session = self
+            .session_resolver
+            .ensure_session_for(crate::mods::auth::AuthTokenScope::Cloud)
+            .await?;
         let Some(session) = session else {
             return Ok(None);
         };
@@ -167,7 +171,7 @@ impl DataService {
     async fn get_xcloud_catalog_impl(
         &self,
         reason: &str,
-    ) -> Result<DataXcloudCatalogPayload, String> {
+    ) -> Result<DataXcloudCatalogPayload, DataError> {
         let Some((session, scope)) = self.resolve_xcloud_catalog_context().await? else {
             return Ok(Self::empty_catalog_payload(
                 DataXcloudCatalogCacheState::Miss,
@@ -213,7 +217,7 @@ impl DataService {
     async fn refresh_xcloud_catalog_impl(
         &self,
         reason: &str,
-    ) -> Result<DataXcloudCatalogPayload, String> {
+    ) -> Result<DataXcloudCatalogPayload, DataError> {
         let Some((session, scope)) = self.resolve_xcloud_catalog_context().await? else {
             return Ok(Self::empty_catalog_payload(
                 DataXcloudCatalogCacheState::Miss,
@@ -224,7 +228,7 @@ impl DataService {
             .await
     }
 
-    async fn prime_xcloud_catalog_impl(&self, reason: &str) -> Result<bool, String> {
+    async fn prime_xcloud_catalog_impl(&self, reason: &str) -> Result<bool, DataError> {
         let Some((session, scope)) = self.resolve_xcloud_catalog_context().await? else {
             return Ok(false);
         };
@@ -253,7 +257,7 @@ impl DataService {
         scope: XcloudCatalogCacheScope,
         reason: &str,
         force_refresh: bool,
-    ) -> Result<DataXcloudCatalogPayload, String> {
+    ) -> Result<DataXcloudCatalogPayload, DataError> {
         let cache_key = DataCacheRepository::scoped_cache_key(&scope);
         match self.runtime_state.begin_xcloud_refresh(&cache_key) {
             XcloudCatalogRefreshJoin::Leader(lease) => {
@@ -317,7 +321,7 @@ impl DataService {
         scope: XcloudCatalogCacheScope,
         reason: String,
         force_refresh: bool,
-    ) -> Result<DataXcloudCatalogPayload, String> {
+    ) -> Result<DataXcloudCatalogPayload, DataError> {
         let started_at = std::time::Instant::now();
         let catalog_scope = Self::catalog_scope_for(&context.config_provider)?;
         let query_context = &context;
@@ -325,30 +329,35 @@ impl DataService {
         let requested_catalog = &catalog_scope;
         let result = context
             .session_resolver
-            .run_query(|session| async move {
-                let active_scope = query_context
-                    .xcloud_service
-                    .resolve_cache_scope(&session, requested_catalog)
-                    .ok_or_else(|| {
-                        XcloudService::unavailable_error(&session).unwrap_or_else(|| {
-                            xbox_webapi::WebApiError::auth("云游戏访问凭据暂不可用，请重新登录")
-                        })
-                    })?;
-                if active_scope != *expected_scope {
-                    return Err(xbox_webapi::WebApiError::auth(
-                        "登录或目录设置已更新，请刷新",
-                    ));
-                }
-                query_context
-                    .xcloud_service
-                    .refresh_catalog(
-                        &session,
-                        expected_scope,
-                        &query_context.cache_repository,
-                        force_refresh,
-                    )
-                    .await
-            })
+            .run_scoped_query(
+                crate::mods::auth::AuthTokenScope::Cloud,
+                |session| async move {
+                    let active_scope = query_context
+                        .xcloud_service
+                        .resolve_cache_scope(&session, requested_catalog)
+                        .ok_or_else(|| {
+                            XcloudService::unavailable_error(&session).unwrap_or_else(|| {
+                                xbox_webapi::WebApiError::parse(
+                                    "云游戏访问凭据响应暂不可用，请重试",
+                                )
+                            })
+                        })?;
+                    if active_scope != *expected_scope {
+                        return Err(xbox_webapi::WebApiError::parse(
+                            "登录或目录设置已更新，请刷新",
+                        ));
+                    }
+                    query_context
+                        .xcloud_service
+                        .refresh_catalog(
+                            &session,
+                            expected_scope,
+                            &query_context.cache_repository,
+                            force_refresh,
+                        )
+                        .await
+                },
+            )
             .await;
         record_data_http_result(
             &context.runtime_trace,
@@ -356,11 +365,11 @@ impl DataService {
             started_at,
             result.as_ref().err(),
         );
-        let outcome = result.map_err(|error| XcloudService::catalog_error(&error))?;
+        let outcome = result.map_err(catalog_data_error)?;
         let current = context
             .session_resolver
             .current_session()
-            .map_err(|error| user_error(&error))?
+            .map_err(DataError::from)?
             .ok_or("登录状态已更新，请刷新")?;
         let current_scope = Self::catalog_scope_for(&context.config_provider)?;
         if context
@@ -409,7 +418,7 @@ impl DataProvider for DataService {
         &self,
         target: Option<String>,
         title: String,
-    ) -> Result<DataQuery<Option<LibraryGame>>, String> {
+    ) -> Result<DataQuery<Option<LibraryGame>>, DataError> {
         self.personal_query("titleDetail", target.as_deref(), |ctx| {
             let title = title.clone();
             async move { PersonalService::game(&ctx, &title).await }
@@ -420,7 +429,7 @@ impl DataProvider for DataService {
     async fn get_personal_account(
         &self,
         target: Option<String>,
-    ) -> Result<DataQuery<DataPersonalAccount>, String> {
+    ) -> Result<DataQuery<DataPersonalAccount>, DataError> {
         self.personal_query("personalAccount", target.as_deref(), |ctx| async move {
             PersonalService::account(&ctx).await
         })
@@ -430,7 +439,7 @@ impl DataProvider for DataService {
         &self,
         target: Option<String>,
         continuation: Option<String>,
-    ) -> Result<DataQuery<LibraryPage<LibraryGame>>, String> {
+    ) -> Result<DataQuery<LibraryPage<LibraryGame>>, DataError> {
         self.personal_query("titleHistory", target.as_deref(), |ctx| {
             let continuation = continuation.clone();
             async move { PersonalService::history(&ctx, continuation.as_deref()).await }
@@ -443,7 +452,7 @@ impl DataProvider for DataService {
         title: String,
         continuation: Option<String>,
         language: String,
-    ) -> Result<DataQuery<LibraryPage<LibraryAchievement>>, String> {
+    ) -> Result<DataQuery<LibraryPage<LibraryAchievement>>, DataError> {
         self.personal_query("achievements", target.as_deref(), |ctx| {
             let (title, continuation, language) =
                 (title.clone(), continuation.clone(), language.clone());
@@ -458,7 +467,7 @@ impl DataProvider for DataService {
         &self,
         target: Option<String>,
         ids: Vec<String>,
-    ) -> Result<DataQuery<Vec<DataPlaytime>>, String> {
+    ) -> Result<DataQuery<Vec<DataPlaytime>>, DataError> {
         self.personal_query("playtimes", target.as_deref(), |ctx| {
             let ids = ids.clone();
             async move { PersonalService::playtimes(&ctx, ids).await }
@@ -468,7 +477,7 @@ impl DataProvider for DataService {
     async fn get_console_library(
         &self,
         id: String,
-    ) -> Result<DataQuery<DataConsoleLibrary>, String> {
+    ) -> Result<DataQuery<DataConsoleLibrary>, DataError> {
         let scope = self.catalog_scope()?;
         self.personal_query("consoleLibrary", None, |ctx| {
             let (id, scope) = (id.clone(), scope.clone());
@@ -480,7 +489,7 @@ impl DataProvider for DataService {
         &self,
         kind: MediaKind,
         continuation: Option<String>,
-    ) -> Result<DataQuery<LibraryPage<LibraryMedia>>, String> {
+    ) -> Result<DataQuery<LibraryPage<LibraryMedia>>, DataError> {
         self.personal_query("mediaSearch", None, |ctx| {
             let continuation = continuation.clone();
             async move { PersonalService::media(&ctx, kind, continuation.as_deref()).await }
@@ -492,7 +501,7 @@ impl DataProvider for DataService {
         kind: MediaKind,
         id: String,
         continuation: Option<String>,
-    ) -> Result<DataQuery<LibraryMedia>, String> {
+    ) -> Result<DataQuery<LibraryMedia>, DataError> {
         self.personal_query("mediaResolve", None, |ctx| {
             let (id, continuation) = (id.clone(), continuation.clone());
             async move {
@@ -512,7 +521,7 @@ impl DataProvider for DataService {
         kind: MediaKind,
         id: String,
         continuation: Option<String>,
-    ) -> Result<DataMediaSaveResult, String> {
+    ) -> Result<DataMediaSaveResult, DataError> {
         crate::mods::data::services::media_save::save(
             &self.session_resolver,
             &self.runtime_trace,
@@ -523,7 +532,7 @@ impl DataProvider for DataService {
         .await
     }
 
-    async fn get_user_profile(&self) -> Result<DataUserProfile, String> {
+    async fn get_user_profile(&self) -> Result<DataUserProfile, DataError> {
         let started = std::time::Instant::now();
         let result = self
             .session_resolver
@@ -546,119 +555,135 @@ impl DataProvider for DataService {
                     }
                 }
             }
+            Err(error)
+                if matches!(error, xbox_webapi::WebApiError::Auth { .. })
+                    || error.to_status_code() == Some(401) =>
+            {
+                return Err(error.into());
+            }
             Err(error) => log::warn!("[Data] refresh profile failed: {}", error.safe_summary()),
         }
         let current = self
             .session_resolver
             .current_session()
-            .map_err(|error| user_error(&error))?;
+            .map_err(DataError::from)?;
         let Some(current) = current else {
             self.cache_repository.clear_cached_profile()?;
-            return self.cache_repository.get_cached_profile(None, 0);
+            return self
+                .cache_repository
+                .get_cached_profile(None, 0)
+                .map_err(Into::into);
         };
         let claims =
             crate::mods::data::session_resolver::resolve_web_token_claims(&current.web_token);
-        self.cache_repository.get_cached_profile(
-            claims.as_ref().map(|claims| claims.account_scope()),
-            current.app_level,
-        )
+        self.cache_repository
+            .get_cached_profile(
+                claims.as_ref().map(|claims| claims.account_scope()),
+                current.app_level,
+            )
+            .map_err(Into::into)
     }
 
-    async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, String> {
+    async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, DataError> {
         let started = std::time::Instant::now();
         let result = self
             .session_resolver
             .run_query(|session| async move { self.host_service.get_hosts(&session).await })
             .await;
         self.record_http_result("hosts", started, result.as_ref().err());
-        result.map_err(|error| user_error(&error))
+        result.map_err(DataError::from)
     }
 
-    async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            return Ok(Vec::new());
-        };
-
-        self.streaming_query_service
-            .get_remote_consoles(&session)
+    async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, DataError> {
+        self.session_resolver
+            .run_scoped_query(
+                crate::mods::auth::AuthTokenScope::Home,
+                |session| async move {
+                    self.streaming_query_service
+                        .get_remote_consoles(&session)
+                        .await
+                },
+            )
             .await
+            .map_err(DataError::from)
     }
 
     async fn get_streaming_title_input_config(
         &self,
         xbox_title_id: &str,
-    ) -> Result<DataStreamingTitleInputConfig, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            return Ok(DataStreamingTitleInputConfig {
-                xbox_title_id: xbox_title_id.to_string(),
-                config: serde_json::json!({}),
-            });
-        };
-
-        self.streaming_query_service
-            .get_streaming_title_input_config(&session, xbox_title_id)
+    ) -> Result<DataStreamingTitleInputConfig, DataError> {
+        self.session_resolver
+            .run_scoped_query(
+                crate::mods::auth::AuthTokenScope::Home,
+                |session| async move {
+                    self.streaming_query_service
+                        .get_streaming_title_input_config(&session, xbox_title_id)
+                        .await
+                },
+            )
             .await
+            .map_err(DataError::from)
     }
 
-    async fn power_on_console(&self, console_id: &str) -> Result<DataConsolePowerResult, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            return Ok(DataConsolePowerResult {
-                console_id: console_id.to_string(),
-                accepted: false,
-            });
-        };
-
-        self.streaming_query_service
-            .power_on_console(&session, console_id)
+    async fn power_on_console(
+        &self,
+        console_id: &str,
+    ) -> Result<DataConsolePowerResult, DataError> {
+        self.session_resolver
+            .run_query(|session| async move {
+                self.streaming_query_service
+                    .power_on_console(&session, console_id)
+                    .await
+            })
             .await
+            .map_err(DataError::from)
     }
 
-    async fn power_off_console(&self, console_id: &str) -> Result<DataConsolePowerResult, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            return Ok(DataConsolePowerResult {
-                console_id: console_id.to_string(),
-                accepted: false,
-            });
-        };
-
-        self.streaming_query_service
-            .power_off_console(&session, console_id)
+    async fn power_off_console(
+        &self,
+        console_id: &str,
+    ) -> Result<DataConsolePowerResult, DataError> {
+        self.session_resolver
+            .run_query(|session| async move {
+                self.streaming_query_service
+                    .power_off_console(&session, console_id)
+                    .await
+            })
             .await
+            .map_err(DataError::from)
     }
 
     async fn send_text_to_console(
         &self,
         console_id: &str,
         text: &str,
-    ) -> Result<DataSendTextResult, String> {
-        let session = self.session_resolver.ensure_authenticated_session().await?;
-        let Some(session) = session else {
-            return Ok(DataSendTextResult {
-                console_id: console_id.to_string(),
-                accepted: false,
-            });
-        };
-
-        self.streaming_query_service
-            .send_text_to_console(&session, console_id, text)
+    ) -> Result<DataSendTextResult, DataError> {
+        self.session_resolver
+            .run_query(|session| async move {
+                self.streaming_query_service
+                    .send_text_to_console(&session, console_id, text)
+                    .await
+            })
             .await
+            .map_err(DataError::from)
     }
 
-    async fn get_xcloud_titles(&self) -> Result<DataXcloudCatalogPayload, String> {
+    async fn get_xcloud_titles(&self) -> Result<DataXcloudCatalogPayload, DataError> {
         self.get_xcloud_catalog_impl("pageEnter").await
     }
 
-    async fn refresh_xcloud_titles(&self) -> Result<DataXcloudCatalogPayload, String> {
+    async fn refresh_xcloud_titles(&self) -> Result<DataXcloudCatalogPayload, DataError> {
         self.refresh_xcloud_catalog_impl("manualRefresh").await
     }
 
-    async fn prime_xcloud_titles(&self) -> Result<bool, String> {
+    async fn prime_xcloud_titles(&self) -> Result<bool, DataError> {
         self.prime_xcloud_catalog_impl("startupWarmup").await
     }
+}
+
+fn catalog_data_error(error: xbox_webapi::WebApiError) -> DataError {
+    let message = XcloudService::catalog_error(&error);
+    DataError::request(error, message)
 }
 
 fn record_data_http_result(

@@ -1,15 +1,16 @@
 use crate::mods::data::types::DataXcloudCatalogPayload;
+use crate::mods::data::DataError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
 struct XcloudCatalogRefreshFlight {
-    waiters: Vec<oneshot::Sender<Result<DataXcloudCatalogPayload, String>>>,
+    waiters: Vec<oneshot::Sender<Result<DataXcloudCatalogPayload, DataError>>>,
 }
 
 pub enum XcloudCatalogRefreshJoin {
     Leader(XcloudCatalogRefreshLease),
-    Follower(oneshot::Receiver<Result<DataXcloudCatalogPayload, String>>),
+    Follower(oneshot::Receiver<Result<DataXcloudCatalogPayload, DataError>>),
 }
 
 pub struct XcloudCatalogRefreshLease {
@@ -19,7 +20,7 @@ pub struct XcloudCatalogRefreshLease {
 }
 
 impl XcloudCatalogRefreshLease {
-    pub fn finish(mut self, result: Result<DataXcloudCatalogPayload, String>) {
+    pub fn finish(mut self, result: Result<DataXcloudCatalogPayload, DataError>) {
         self.finished = true;
         self.state.finish_xcloud_refresh(&self.cache_key, result);
     }
@@ -71,7 +72,7 @@ impl DataRuntimeState {
     pub fn finish_xcloud_refresh(
         &self,
         cache_key: &str,
-        result: Result<DataXcloudCatalogPayload, String>,
+        result: Result<DataXcloudCatalogPayload, DataError>,
     ) {
         let waiters = self
             .xcloud_refresh_flights
@@ -116,5 +117,25 @@ mod tests {
             state.begin_xcloud_refresh("scope"),
             XcloudCatalogRefreshJoin::Leader(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn catalog_refresh_waiters_keep_the_authentication_failure_category() {
+        let state = Arc::new(DataRuntimeState::new());
+        let XcloudCatalogRefreshJoin::Leader(lease) = state.begin_xcloud_refresh("scope") else {
+            panic!("leader");
+        };
+        let XcloudCatalogRefreshJoin::Follower(receiver) = state.begin_xcloud_refresh("scope")
+        else {
+            panic!("follower");
+        };
+        let error = DataError::from(xbox_webapi::WebApiError::auth("登录续期失效"));
+        let expected = error.safe_summary();
+        lease.finish(Err(error));
+        assert_eq!(
+            receiver.await.unwrap().unwrap_err().safe_summary(),
+            expected
+        );
+        assert!(!state.is_xcloud_refreshing("scope"));
     }
 }

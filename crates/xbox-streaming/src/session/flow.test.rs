@@ -901,6 +901,10 @@ fn home_server_registration_retry_exhausted_is_terminal_host_issue() {
 struct HttpTestProvider {
     fail_access: Arc<std::sync::atomic::AtomicBool>,
     events: Arc<(Mutex<Vec<String>>, tokio::sync::Notify)>,
+    credential_error: Arc<Mutex<Option<SessionFlowError>>>,
+    transfer_error: Arc<Mutex<Option<SessionFlowError>>>,
+    renewed_token: Arc<Mutex<Option<Result<Value, xbox_webapi::WebApiError>>>>,
+    renewals: Arc<AtomicUsize>,
 }
 
 const HTTP_TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -956,12 +960,34 @@ fn http_test_flow(provider: HttpTestProvider) -> SessionFlowService<Snapshot, Ht
 #[async_trait::async_trait]
 impl SessionFlowProvider for HttpTestProvider {
     async fn get_streaming_token(&self, _: &str) -> Result<Value, SessionFlowError> {
+        if let Some(error) = self.credential_error.lock().unwrap().clone() {
+            return Err(error);
+        }
         if self.fail_access.load(Ordering::SeqCst) {
             return Err(SessionFlowError::message("authenticationUnavailable"));
         }
-        Ok(serde_json::json!({"gsToken":"test-token"}))
+        Ok(serde_json::json!({"gsToken":"test-token", "_authGeneration": 7}))
+    }
+    async fn recover_streaming_token(
+        &self,
+        target: &str,
+        rejected: &str,
+        credential_generation: Option<u64>,
+    ) -> Result<Value, xbox_webapi::WebApiError> {
+        assert_eq!(target, "home");
+        assert_eq!(rejected, "test-token");
+        assert_eq!(credential_generation, Some(7));
+        self.renewals.fetch_add(1, Ordering::SeqCst);
+        self.renewed_token
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| Err(xbox_webapi::WebApiError::http(401, "renewal unavailable")))
     }
     async fn transfer_token(&self) -> Result<String, SessionFlowError> {
+        if let Some(error) = self.transfer_error.lock().unwrap().clone() {
+            return Err(error);
+        }
         Ok("transfer".to_owned())
     }
     fn on_session_lifecycle_event(&self, event: &str, _: Option<&str>, _: Value) {
@@ -1426,6 +1452,136 @@ async fn keepalive_status_classes_preserve_transient_failures_and_publish_real_t
                 assert_eq!(progress.phase, SessionPhase::SessionReady);
                 assert!(!cancelled.is_cancelled());
             }
+        }
+    }
+}
+
+fn renewal_error(kind: SessionFlowStartupErrorKind) -> SessionFlowError {
+    let retryable = kind != SessionFlowStartupErrorKind::Auth;
+    SessionFlowError::message("renewal failure").with_startup_hint(SessionFlowStartupErrorHint {
+        kind,
+        retryable,
+        diagnostic_summary: "safe-summary".into(),
+    })
+}
+
+async fn mark_http_record_playing(flow: &SessionFlowService<Snapshot, HttpTestProvider>) {
+    let mut record = flow.get_session_record("session").await.unwrap();
+    record.snapshot.runtime.player_state = "started".into();
+    record.snapshot.runtime.stream_state = Some("Provisioned".into());
+    record.metadata.reached_provisioned = true;
+    flow.inner
+        .sessions
+        .write()
+        .await
+        .upsert_if_same("session".into(), record);
+}
+
+#[tokio::test]
+async fn keepalive_renews_rejected_credentials_once_and_retains_the_active_session() {
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let observed = attempts.clone();
+    let server = TestServer::new(move |_| {
+        let status = if observed.fetch_add(1, Ordering::SeqCst) == 0 {
+            401
+        } else {
+            200
+        };
+        (status, serde_json::json!({}), None)
+    })
+    .await;
+    let provider = HttpTestProvider::default();
+    *provider.renewed_token.lock().unwrap() = Some(Ok(serde_json::json!({"gsToken":"renewed"})));
+    let flow = http_test_flow(provider.clone());
+    let cancelled = install_http_record(&flow, &server.base_url).await;
+    mark_http_record_playing(&flow).await;
+    assert!(flow.send_keepalive("session").await.unwrap());
+    assert_eq!(
+        flow.get_session_progress("session").await.unwrap().phase,
+        SessionPhase::SessionReady
+    );
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    assert_eq!(provider.renewals.load(Ordering::SeqCst), 1);
+    assert!(!cancelled.is_cancelled());
+}
+
+#[tokio::test]
+async fn keepalive_credential_failure_publishes_auth_or_preserves_a_temporary_failure() {
+    for kind in [
+        SessionFlowStartupErrorKind::Auth,
+        SessionFlowStartupErrorKind::Network,
+    ] {
+        let server = TestServer::new(|_| (200, serde_json::json!({}), None)).await;
+        let provider = HttpTestProvider::default();
+        *provider.credential_error.lock().unwrap() = Some(renewal_error(kind.clone()));
+        let flow = http_test_flow(provider);
+        let cancelled = install_http_record(&flow, &server.base_url).await;
+        mark_http_record_playing(&flow).await;
+        let result = flow.send_keepalive("session").await;
+        let progress = flow.get_session_progress("session").await.unwrap();
+        if kind == SessionFlowStartupErrorKind::Auth {
+            assert!(!result.unwrap());
+            assert_eq!(progress.phase, SessionPhase::Failed);
+            assert_eq!(progress.error_code.as_deref(), Some("AuthRenewalRequired"));
+            assert_eq!(
+                progress.error_hint.unwrap().kind,
+                SessionFlowStartupErrorKind::Auth
+            );
+            assert!(cancelled.is_cancelled());
+        } else {
+            assert_eq!(
+                result.unwrap_err().startup_hint.unwrap().kind,
+                SessionFlowStartupErrorKind::Network
+            );
+            assert_eq!(progress.phase, SessionPhase::SessionReady);
+            assert!(!cancelled.is_cancelled());
+        }
+    }
+}
+
+#[tokio::test]
+async fn connect_token_auth_failure_terminates_and_network_failure_retries_on_the_next_tick() {
+    for kind in [
+        SessionFlowStartupErrorKind::Auth,
+        SessionFlowStartupErrorKind::Network,
+    ] {
+        let server = TestServer::new(|request| {
+            if request.starts_with("GET") {
+                (200, serde_json::json!({"state":"ReadyToConnect"}), None)
+            } else {
+                (200, serde_json::json!({}), None)
+            }
+        })
+        .await;
+        let provider = HttpTestProvider::default();
+        *provider.transfer_error.lock().unwrap() = Some(renewal_error(kind.clone()));
+        let flow = http_test_flow(provider.clone());
+        let cancelled = install_http_record(&flow, &server.base_url).await;
+        let scheduler = SessionScheduler::new(flow.inner.clone());
+        let continues = scheduler.monitor_session_tick("session").await;
+        let progress = flow.get_session_progress("session").await.unwrap();
+        if kind == SessionFlowStartupErrorKind::Auth {
+            assert!(!continues);
+            assert_eq!(
+                progress.error_hint.unwrap().kind,
+                SessionFlowStartupErrorKind::Auth
+            );
+            assert!(cancelled.is_cancelled());
+        } else {
+            assert!(continues);
+            assert!(!cancelled.is_cancelled());
+            assert!(progress.error_hint.is_none());
+            *provider.transfer_error.lock().unwrap() = None;
+            assert!(scheduler.monitor_session_tick("session").await);
+            assert!(
+                flow.session_mutation("session", &cancelled)
+                    .await
+                    .unwrap()
+                    .state
+                    .lock()
+                    .await
+                    .connect_token_sent
+            );
         }
     }
 }

@@ -11,6 +11,7 @@ import { mergeConsoleLibrary } from './library/library-merge'
 import { formatBytes, formatDate, useLibraryFocusFallback, useLibraryNavigation, useLibraryRoute } from './library/library-view'
 import LibraryBack from './library/LibraryBack.vue'
 import LibraryRefresh from './library/LibraryRefresh.vue'
+import LibrarySelectControl from './library/LibrarySelectControl.vue'
 import { useConsole } from './library/use-console'
 import { useLibraryQuery } from './library/use-library-query'
 import './library/library.scss'
@@ -29,6 +30,7 @@ const storageFilter = ref('')
 const sort = ref('recent')
 const games = computed(() => state.value.value?.games ?? [])
 const storage = computed(() => state.value.value?.storage ?? [])
+const storageOptions = computed(() => [{ value: '', label: '全部存储' }, ...storage.value.map(device => ({ value: device.id, label: device.name }))])
 const statusLabel = computed(() => {
   const power = state.value.value?.powerState || consoleState.host.value?.powerState
   const status = power === 'On' ? 'availableOn' : power === 'Connected' || power === 'ConnectedStandby' ? 'availableStandby' : power === 'Off' ? 'unavailableOff' : 'unavailableUnknown'
@@ -63,7 +65,7 @@ async function refresh() {
           </p>
         </div>
       </div><div class="library-actions">
-        <Focusable id="console.games.stream" as="button" class="ui-action-button ui-action-button--brand" :disabled="!consoleState.canStream.value" @click="consoleState.stream">
+        <Focusable id="console.games.stream" as="button" class="ui-action-button ui-action-button--brand" :disabled="!consoleState.streamAvailable.value" :busy="consoleState.loading.value" @click="consoleState.stream">
           串流此主机
         </Focusable><LibraryRefresh id="console.games.refresh" :busy="state.loading || consoleState.loading.value" @refresh="refresh" />
       </div>
@@ -88,23 +90,7 @@ async function refresh() {
       </div>
       <template v-else>
         <div class="library-toolbar">
-          <SettingInputControl id="console.games.search" v-model="search" scope-id="app.shell" label="搜索已安装游戏" placeholder="搜索游戏" /><Focusable id="console.games.storage" as="select" :value="storageFilter" class="library-control" aria-label="存储位置" @change="storageFilter = ($event.target as HTMLSelectElement).value">
-            <option value="">
-              全部存储
-            </option><option v-for="device in storage" :key="device.id" :value="device.id">
-              {{ device.name }}
-            </option>
-          </Focusable><Focusable id="console.games.sort" as="select" :value="sort" class="library-control" aria-label="游戏排序" @change="sort = ($event.target as HTMLSelectElement).value">
-            <option value="recent">
-              最近使用
-            </option><option value="name">
-              名称
-            </option><option value="installed">
-              安装时间
-            </option><option value="size">
-              占用空间
-            </option>
-          </Focusable>
+          <SettingInputControl id="console.games.search" v-model="search" scope-id="app.shell" label="搜索已安装游戏" placeholder="搜索游戏" /><LibrarySelectControl id="console.games.storage" v-model="storageFilter" label="存储位置" :options="storageOptions" /><LibrarySelectControl id="console.games.sort" v-model="sort" label="游戏排序" :options="[{ value: 'recent', label: '最近使用' }, { value: 'name', label: '名称' }, { value: 'installed', label: '安装时间' }, { value: 'size', label: '占用空间' }]" />
         </div>
         <section class="library-results" aria-label="已安装游戏列表">
           <p class="library-caption">

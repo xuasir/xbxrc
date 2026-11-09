@@ -73,7 +73,7 @@ async function refresh() {
               </p><p v-if="target" class="library-copy">
                 正在阅读好友可见游戏数据
               </p><div v-if="consoleKey" class="library-actions">
-                <Focusable id="game.stream" as="button" class="ui-action-button ui-action-button--brand" :disabled="!consoleState.canStream.value" @click="consoleState.stream">
+                <Focusable id="game.stream" as="button" class="ui-action-button ui-action-button--brand" :disabled="!consoleState.streamAvailable.value" :busy="consoleState.loading.value" @click="consoleState.stream">
                   串流此主机
                 </Focusable>
               </div>

@@ -41,10 +41,14 @@ impl RpcEnvelope {
             error: Some(RpcError {
                 code: error.code().to_string(),
                 message: match &error {
-                    crate::error::AppError::Data(message) => message.clone(),
+                    crate::error::AppError::Data(message)
+                    | crate::error::AppError::DataDetailed { message, .. } => message.clone(),
                     _ => error.to_string(),
                 },
-                details: error.details().cloned(),
+                details: match &error {
+                    crate::error::AppError::WebApi(error) => Some(error.safe_summary()),
+                    _ => error.details().cloned(),
+                },
             }),
         }
     }
@@ -180,5 +184,43 @@ mod tests {
             "missing parameter".into(),
         ));
         assert_eq!(invalid.error.unwrap().code, "APP_INVALID_PARAMS");
+    }
+
+    #[test]
+    fn auth_recovery_rpc_exposes_safe_status_and_network_category() {
+        for cause in [
+            xbox_webapi::WebApiError::http(401, "secret-body"),
+            xbox_webapi::WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Timeout),
+        ] {
+            let expected = cause.safe_summary();
+            let error = RpcEnvelope::fail(crate::error::AppError::WebApi(cause))
+                .error
+                .unwrap();
+            assert_eq!(error.code, "WEBAPI_ERROR");
+            assert_eq!(error.details, Some(expected));
+            assert!(!serde_json::to_string(&error.details)
+                .unwrap()
+                .contains("secret"));
+        }
+    }
+
+    #[test]
+    fn data_query_failures_preserve_safe_authentication_details_and_user_messages() {
+        for cause in [
+            xbox_webapi::WebApiError::auth("登录续期失效，请重新登录"),
+            xbox_webapi::WebApiError::http(401, "secret-body"),
+            xbox_webapi::WebApiError::http(403, "secret-body"),
+            xbox_webapi::WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Timeout),
+            xbox_webapi::WebApiError::parse("secret-body"),
+        ] {
+            let expected = cause.safe_summary();
+            let failure = crate::mods::data::DataError::from(cause);
+            let message = failure.to_string();
+            let error = RpcEnvelope::fail(failure.into()).error.unwrap();
+            assert_eq!(error.code, "DATA_ERROR");
+            assert_eq!(error.message, message);
+            assert_eq!(error.details, Some(expected));
+            assert!(!serde_json::to_string(&error).unwrap().contains("secret"));
+        }
     }
 }

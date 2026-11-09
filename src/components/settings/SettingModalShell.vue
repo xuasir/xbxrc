@@ -109,7 +109,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
                 :scope-id="props.scopeId"
                 :on-back="handleClose"
                 :aria-label="t('setting.editor.cancel')"
-                :disabled="props.busy"
+                :busy="props.busy"
                 @click="handleClose"
               >
                 <span class="setting-modal-shell__close-icon" aria-hidden="true">✕</span>

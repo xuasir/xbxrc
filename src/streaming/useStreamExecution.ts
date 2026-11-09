@@ -3,10 +3,10 @@ import type {
   StreamingStartupEvent,
 } from '@shared/rpc/streaming'
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
+import type { RenderControlsValue } from '../shared/config/render-controls'
 import type { StreamExecutionViewAction, StreamExecutionViewState } from './execution/view-state'
 import type { SessionHealthSnapshot } from './session'
 import type {
-  DisplayOptionsValue,
   IceCandidatePolicySpec,
   RuntimeLaunchSpec,
   StreamConfigSnapshot,
@@ -21,6 +21,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
+import { copyRenderControls, projectRenderControls } from '../shared/config/render-controls'
 import { monotonicNowMs } from './clock'
 import { buildStreamDiagnosticsSnapshot, resetDiagnosticsNoticeLatch } from './diagnostics'
 import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
@@ -34,6 +35,7 @@ import {
   NO_FRAME_RECENT_ACTIVITY_MS,
   NO_FRAME_WARNING_DELAY_MS,
 } from './no-frame-warning'
+import { useSessionRenderControls } from './render-controls'
 import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
@@ -44,8 +46,7 @@ import {
   createStreamRouteState,
   getRemoteSessionProgress,
   loadStreamConfigSnapshot,
-  persistStreamDisplayOptions,
-  persistStreamSuperResolutionExperimental,
+  persistStreamRenderControls,
   powerOffRemoteConsole,
   resolveProgressError,
   resolveStartupPhasePrimaryStatusTextKey,
@@ -58,7 +59,6 @@ import {
   buildStreamBrowserDiagnosticsViewModel,
   buildStreamExperienceMetricsViewModel,
 } from './stream-panel-view-models'
-import { DEFAULT_DISPLAY_OPTIONS } from './utils'
 
 interface UseStreamExecutionOptions {
   route: RouteLocationNormalizedLoaded
@@ -123,6 +123,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const startupAttemptId = ref('')
   const sessionExecution = ref<StreamingSessionExecution | null>(null)
   const streamConfig = ref<StreamConfigSnapshot>({})
+  const renderControlsState = useSessionRenderControls()
   const sessionHealth = ref<SessionHealthSnapshot | null>(null)
   const sessionReportingEnabled = ref(false)
   const closing = ref(false)
@@ -167,7 +168,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   const runtimeHost = useStreamRuntimeHost({
     playerElementId: 'stream-page-video',
-    getSuperResolutionExperimental: () => streamConfig.value.super_resolution_experimental === true,
+    getRenderControls: () => renderControlsState.active.value,
     onConnectionStateChange: (state) => {
       if (state === 'failed' || state === 'closed') {
         resetExecutionWarning()
@@ -299,8 +300,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         ...execution.runtime,
         iceCandidatePolicy,
       },
-      render: execution.render,
-      clientExperimentalSuperResolution: streamConfig.value.super_resolution_experimental === true,
+      render: projectRenderControls(execution.render, renderControlsState.active.value),
+      clientExperimentalSuperResolution: renderControlsState.active.value.mode === 'sr',
     }
   })
 
@@ -470,6 +471,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       if (!active())
         return
       streamConfig.value = config
+      renderControlsState.initialize(config)
 
       dispatchViewAction({
         type: 'startPreparing',
@@ -535,17 +537,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     return await sendTextToRemoteConsole(routeState.controlConsoleId.value, normalizedText)
   }
 
-  async function persistDisplayOptions(optionsValue: DisplayOptionsValue): Promise<void> {
-    const generation = executionGeneration
-    await persistStreamDisplayOptions(optionsValue)
-    if (disposed || generation !== executionGeneration)
-      return
-    streamConfig.value = {
-      ...streamConfig.value,
-      display_options: optionsValue,
-    }
-  }
-
   function handlePlayerConnected(statusTextKey = 'streamPage.status.connectedWaitingMedia'): void {
     dispatchViewAction({
       type: 'runtimeConnected',
@@ -608,6 +599,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       return closePromise
     // 先撤销写入资格，再等待资源停止；所有清理使用捕获的旧资源标识。
     executionGeneration += 1
+    renderControlsState.clearTransient()
     const stoppedSessionId = sessionId.value || pendingCleanupSessionId
     const stoppedAttemptId = startupAttemptId.value || pendingCleanupAttemptId
     startupAttemptId.value = ''
@@ -737,22 +729,31 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     await navigateToList()
   }
 
-  async function saveDisplayOptions(nextValue: DisplayOptionsValue): Promise<void> {
+  async function saveRenderControls(nextValue: RenderControlsValue, saveAsDefault = false): Promise<void> {
+    if (disposed || closing.value || exitRequested)
+      return
     const generation = executionGeneration
-    const previousValue = streamConfig.value.display_options ?? DEFAULT_DISPLAY_OPTIONS
-    runtimeHost.applyDisplayOptions(nextValue)
+    const revision = renderControlsState.getRevision()
+    const value = copyRenderControls(nextValue)
+    if (!saveAsDefault) {
+      renderControlsState.apply(value)
+      return
+    }
     try {
-      await persistDisplayOptions(nextValue)
+      await persistStreamRenderControls(value)
+      if (!disposed && generation === executionGeneration && revision === renderControlsState.getRevision())
+        renderControlsState.acceptSavedDefault(value)
     }
     catch (error) {
-      if (!disposed && generation === executionGeneration)
-        runtimeHost.applyDisplayOptions(previousValue)
+      if (!disposed && generation === executionGeneration && revision === renderControlsState.getRevision())
+        renderControlsState.clearTransient()
       throw error
     }
   }
 
-  function previewDisplayOptions(nextValue: DisplayOptionsValue): void {
-    runtimeHost.applyDisplayOptions(nextValue)
+  function previewRenderControls(nextValue: RenderControlsValue): void {
+    if (!disposed && !closing.value && !exitRequested)
+      renderControlsState.preview(nextValue)
   }
 
   function setAudioVolume(value: number): void {
@@ -778,28 +779,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   function toggleBrowserDiagnostics(): void {
     browserDiagnosticsVisible.value = !browserDiagnosticsVisible.value
-  }
-
-  async function setSuperResolutionExperimental(enabled: boolean): Promise<boolean> {
-    const generation = executionGeneration
-    const previousConfig = streamConfig.value
-    streamConfig.value = {
-      ...previousConfig,
-      super_resolution_experimental: enabled,
-    }
-    try {
-      await persistStreamSuperResolutionExperimental(enabled)
-      return enabled
-    }
-    catch (error) {
-      if (!disposed && generation === executionGeneration)
-        streamConfig.value = previousConfig
-      throw error
-    }
-  }
-
-  async function toggleSuperResolutionExperimental(): Promise<boolean> {
-    return await setSuperResolutionExperimental(streamConfig.value.super_resolution_experimental !== true)
   }
 
   function setTextInputActive(active: boolean): void {
@@ -831,12 +810,12 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   )
 
   watch(
-    () => streamConfig.value.super_resolution_experimental,
+    renderControlsState.active,
     () => {
-      if (!isConnected.value) {
+      if (disposed || closing.value) {
         return
       }
-      runtimeHost.syncSuperResolutionFromStreamConfig()
+      runtimeHost.syncRenderControls()
     },
   )
 
@@ -914,7 +893,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         () => runtimeControlsReady.value && streamRuntimeMode.value === 'webrtc-direct',
       ),
       canOpenDisplaySettings: computed(() => runtimeControlsReady.value),
-      canToggleSuperResolution: computed(() =>
+      canExportSuperResolutionComparison: computed(() =>
         runtimeControlsReady.value && (
           sessionExecution.value?.runtime.mode
           ?? streamConfig.value.stream_runtime_mode
@@ -947,7 +926,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       hasError: computed(() => errorText.value !== ''),
       lifecyclePhase,
       warningVisible,
-      displayOptions: computed(() => streamConfig.value.display_options ?? null),
+      renderControls: renderControlsState.current,
+      renderControlsSource: renderControlsState.source,
+      renderState: runtimeHost.renderState,
       resolutionMode: streamResolutionMode,
       runtimeMode: streamRuntimeMode,
       metadata: sessionMetadata,
@@ -967,7 +948,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       audioVolume: runtimeHost.audioVolume,
       microphone: runtimeHost.microphoneState,
       microphoneOpen: runtimeHost.microphoneOpen,
-      superResolutionExperimental: computed(() => streamConfig.value.super_resolution_experimental === true),
     },
     actions: {
       disconnectStream: closeExecution,
@@ -976,16 +956,17 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       toggleFullscreen,
       powerOffAndDisconnect,
       sendText: sendTextToConsole,
-      saveDisplayOptions,
-      previewDisplayOptions,
+      saveRenderControls,
+      previewRenderControls,
+      cancelRenderPreview: renderControlsState.clearTransient,
+      restoreRenderDefaults: renderControlsState.restoreDefaults,
+      beginTemporaryRenderControls: renderControlsState.beginTemporary,
       setAudioVolume,
       toggleMicrophone,
       pressNexus,
       longPressNexus,
       toggleExperienceMetrics,
       toggleBrowserDiagnostics,
-      setSuperResolutionExperimental,
-      toggleSuperResolutionExperimental,
       captureStreamRenderedFrame: () => runtimeHost.captureRenderedFrame(),
       setTextInputActive,
       dismissWarning: () => {

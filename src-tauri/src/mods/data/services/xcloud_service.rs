@@ -47,41 +47,7 @@ impl XcloudService {
     }
 
     pub(crate) fn unavailable_error(session: &DataSessionContext) -> Option<WebApiError> {
-        // 优先报告最终回退请求的结果，保留可恢复的网络故障。
-        for offering in ["xgpuwebf2p", "xgpuweb"] {
-            let diagnostic = &session.streaming_tokens["_diagnostics"]["xCloudToken"][offering];
-            if let Some(kind) =
-                diagnostic["networkErrorKind"]
-                    .as_str()
-                    .and_then(|kind| match kind {
-                        "dns" => Some(xbox_webapi::NetworkErrorKind::Dns),
-                        "connect" => Some(xbox_webapi::NetworkErrorKind::Connect),
-                        "tls" => Some(xbox_webapi::NetworkErrorKind::Tls),
-                        "timeout" => Some(xbox_webapi::NetworkErrorKind::Timeout),
-                        "body" => Some(xbox_webapi::NetworkErrorKind::Body),
-                        "request" => Some(xbox_webapi::NetworkErrorKind::Request),
-                        _ => None,
-                    })
-            {
-                return Some(WebApiError::network_kind(kind));
-            }
-            let Some(status) = diagnostic["statusCode"]
-                .as_u64()
-                .filter(|status| (400..=599).contains(status))
-            else {
-                continue;
-            };
-            let code = diagnostic["serviceCode"]
-                .as_str()
-                .and_then(xbox_webapi::sanitize_service_code);
-            return Some(match code {
-                Some(code) => {
-                    WebApiError::http_with_code(status as u16, code, "cloud access unavailable")
-                }
-                None => WebApiError::http(status as u16, "cloud access unavailable"),
-            });
-        }
-        None
+        crate::mods::auth::token_policy::cloud_token_unavailable_error(&session.streaming_tokens)
     }
 
     pub(crate) fn catalog_error(error: &WebApiError) -> String {

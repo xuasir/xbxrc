@@ -21,12 +21,21 @@ use crate::error::AppResult;
 pub trait AuthProvider: Send + Sync {
     fn get_state(&self) -> AuthState;
     fn get_active_session(&self) -> AppResult<Option<AuthSessionReadyEvent>>;
-    fn get_streaming_token(&self, target_type: &str) -> AppResult<Option<serde_json::Value>>;
+    async fn get_streaming_token(&self, target_type: &str) -> AppResult<Option<serde_json::Value>>;
+    async fn recover_streaming_token(
+        &self,
+        target_type: &str,
+        rejected_token: &str,
+        credential_generation: Option<u64>,
+    ) -> AppResult<Option<serde_json::Value>>;
     async fn login(&self) -> AppResult<LoginResponse>;
     async fn get_transfer_token(&self) -> AppResult<String>;
     fn get_web_api_tokens(&self) -> AppResult<Option<(String, String)>>;
     fn get_web_api_token_snapshot(&self) -> AppResult<Option<serde_json::Value>>;
     async fn check_authentication(&self) -> AppResult<CheckAuthResponse>;
+    async fn check_web_authentication(&self) -> AppResult<CheckAuthResponse> {
+        self.check_authentication().await
+    }
     async fn recover_web_api_session(&self, rejected_token: &str) -> AppResult<()>;
     async fn clear_auth_cache(&self, scope: &str) -> AppResult<()>;
     async fn logout(&self) -> AppResult<()>;

@@ -72,6 +72,24 @@ describe('主机详情上下文', () => {
     console.stream()
     expect(hooks.push).not.toHaveBeenCalled()
   })
+  it('刷新期间保留已知设备能力，完成后按最新事实决定串流可用性', async () => {
+    let resolveRefresh!: (hosts: ReturnType<typeof host>[]) => void
+    hooks.getHosts.mockResolvedValueOnce([host('A')])
+      .mockReturnValueOnce(new Promise(resolve => resolveRefresh = resolve))
+    const console = create(() => 'A')
+    await nextTick()
+    const pending = console.refresh()
+    expect(console.loading.value).toBe(true)
+    expect(console.streamAvailable.value).toBe(true)
+    expect(console.canStream.value).toBe(false)
+    console.stream()
+    expect(hooks.push).not.toHaveBeenCalled()
+    resolveRefresh([host('A', 'Off')])
+    await pending
+    expect(console.loading.value).toBe(false)
+    expect(console.streamAvailable.value).toBe(false)
+    expect(console.canStream.value).toBe(false)
+  })
   it('离开页面后丢弃迟到结果，重新激活请求当前设备', async () => {
     let resolveOld!: (hosts: ReturnType<typeof host>[]) => void
     hooks.getHosts.mockReturnValueOnce(new Promise(resolve => resolveOld = resolve))

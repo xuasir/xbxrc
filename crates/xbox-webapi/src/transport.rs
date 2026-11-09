@@ -1,8 +1,9 @@
 use crate::error::{NetworkErrorKind, WebApiError};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, Method};
 use serde_json::Value;
 use std::time::Duration;
+use std::{future::Future, pin::Pin, sync::Arc};
 use tokio::time::{sleep, timeout_at, Instant};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 12;
@@ -19,12 +20,18 @@ struct RequestPolicy {
     max_body_bytes: usize,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct RequestOptions {
     query_post: bool,
     paginated: bool,
     allow_empty: bool,
     command: bool,
+}
+
+pub type BearerRecoveryFuture = Pin<Box<dyn Future<Output = Result<String, WebApiError>> + Send>>;
+
+pub trait BearerTokenRecovery: std::fmt::Debug + Send + Sync {
+    fn recover(&self, rejected_token: &str) -> BearerRecoveryFuture;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,6 +52,7 @@ pub struct HttpTransport {
     client: Result<Client, WebApiError>,
     retry_mode: RetryMode,
     policy: Option<RequestPolicy>,
+    bearer_recovery: Option<Arc<dyn BearerTokenRecovery>>,
 }
 
 impl HttpTransport {
@@ -53,6 +61,7 @@ impl HttpTransport {
             client: Ok(client),
             retry_mode: RetryMode::SafeOnly,
             policy: None,
+            bearer_recovery: None,
         }
     }
 
@@ -64,6 +73,7 @@ impl HttpTransport {
                 .map_err(WebApiError::from_reqwest_safe),
             retry_mode: RetryMode::SafeOnly,
             policy: None,
+            bearer_recovery: None,
         }
     }
 
@@ -75,6 +85,7 @@ impl HttpTransport {
                 .map_err(WebApiError::from_reqwest_safe),
             retry_mode: RetryMode::SafeOnly,
             policy: None,
+            bearer_recovery: None,
         }
     }
 
@@ -86,6 +97,7 @@ impl HttpTransport {
                 .map_err(WebApiError::from_reqwest_safe),
             retry_mode,
             policy: None,
+            bearer_recovery: None,
         }
     }
 
@@ -102,6 +114,7 @@ impl HttpTransport {
                 total_timeout: Duration::from_secs(QUERY_TOTAL_TIMEOUT_SECS),
                 max_body_bytes: QUERY_MAX_BODY_BYTES,
             }),
+            bearer_recovery: None,
         }
     }
 
@@ -109,6 +122,12 @@ impl HttpTransport {
         let mut transport = Self::for_queries();
         transport.retry_mode = RetryMode::Never;
         transport
+    }
+
+    /// 仅为当前 Bearer 请求装配恢复；明确 401 拒绝后重新提交一次。
+    pub fn with_bearer_recovery(mut self, recovery: Arc<dyn BearerTokenRecovery>) -> Self {
+        self.bearer_recovery = Some(recovery);
+        self
     }
 
     pub async fn request(
@@ -123,6 +142,67 @@ impl HttpTransport {
     }
 
     async fn request_with_options(
+        &self,
+        method: Method,
+        url: &str,
+        headers: Option<HeaderMap>,
+        body: Option<Value>,
+        options: RequestOptions,
+    ) -> Result<Value, WebApiError> {
+        let deadline = self
+            .policy
+            .map(|policy| Instant::now() + policy.total_timeout);
+        let request = async {
+            let result = self
+                .request_once_with_options(
+                    method.clone(),
+                    url,
+                    headers.clone(),
+                    body.clone(),
+                    options.clone(),
+                )
+                .await;
+            if !result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.to_status_code() == Some(401))
+            {
+                return result;
+            }
+            let Some(recovery) = &self.bearer_recovery else {
+                return result;
+            };
+            let Some(rejected) = headers
+                .as_ref()
+                .and_then(|headers| headers.get(AUTHORIZATION))
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.strip_prefix("Bearer "))
+                .filter(|value| !value.trim().is_empty())
+            else {
+                return result;
+            };
+            let token = recovery.recover(rejected).await?;
+            if token.trim().is_empty() {
+                return Err(WebApiError::parse(
+                    "credential renewal returned an empty token",
+                ));
+            }
+            let authorization = HeaderValue::from_str(&format!("Bearer {token}"))
+                .map_err(|_| WebApiError::parse("invalid renewed authorization header"))?;
+            let mut headers = headers.unwrap_or_default();
+            headers.insert(AUTHORIZATION, authorization);
+            self.request_once_with_options(method, url, Some(headers), body, options)
+                .await
+        };
+        match deadline {
+            Some(deadline) => timeout_at(deadline, request)
+                .await
+                .unwrap_or_else(|_| Err(WebApiError::network_kind(NetworkErrorKind::Timeout))),
+            None => request.await,
+        }
+    }
+
+    async fn request_once_with_options(
         &self,
         method: Method,
         url: &str,

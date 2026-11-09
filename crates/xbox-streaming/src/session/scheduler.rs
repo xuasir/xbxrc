@@ -103,7 +103,7 @@ where
         }
     }
 
-    async fn monitor_session_tick(&self, session_id: &str) -> bool {
+    pub(crate) async fn monitor_session_tick(&self, session_id: &str) -> bool {
         let mut record = match self.get_session_record(session_id).await {
             Some(record) => record,
             None => return false,
@@ -114,7 +114,19 @@ where
         let target_id = plan.session.target_id.clone();
         let api = match self.create_session_api(&plan).await {
             Ok(api) => api,
-            Err(_) => return true,
+            Err(error) => {
+                self.inner.provider.on_session_state_poll_failed(
+                    session_id,
+                    &target_type,
+                    &target_id,
+                    &error,
+                );
+                if is_auth_failure(&error) {
+                    self.record_terminal_error(session_id, record, error).await;
+                    return false;
+                }
+                return true;
+            }
         };
 
         self.inner
@@ -144,7 +156,7 @@ where
                     &target_id,
                     &flow_error,
                 );
-                if matches!(flow_error.status, Some(401 | 404)) {
+                if matches!(flow_error.status, Some(404)) || is_auth_failure(&flow_error) {
                     self.record_terminal_error(session_id, record, flow_error)
                         .await;
                     return false;
@@ -248,6 +260,14 @@ where
                 if result.is_ok() { "sent" } else { "sendFailed" },
                 result.as_ref().err(),
             );
+            if let Err(error) = result {
+                if is_auth_failure(&error) {
+                    if let Some(current) = self.get_session_record(session_id).await {
+                        self.record_terminal_error(session_id, current, error).await;
+                    }
+                    return false;
+                }
+            }
         }
 
         if matches!(progress.phase, SessionPhase::Failed | SessionPhase::Closed) {
@@ -268,7 +288,15 @@ where
                 "keepalive",
                 Some(std::time::Duration::from_secs(15)),
                 async {
-                    let api = self.create_session_api(&record.plan).await?;
+                    let api = match self.create_session_api(&record.plan).await {
+                        Ok(api) => api,
+                        Err(error) if is_auth_failure(&error) => {
+                            self.record_terminal_error(session_id, record.clone(), error)
+                                .await;
+                            return Ok(false);
+                        }
+                        Err(error) => return Err(error),
+                    };
                     if record.cancelled.is_cancelled() {
                         return Ok(false);
                     }
@@ -276,7 +304,7 @@ where
                         Ok(()) => Ok(true),
                         Err(error) => {
                             let error = map_webapi_error(error);
-                            if matches!(error.status, Some(401 | 404)) {
+                            if matches!(error.status, Some(404)) || is_auth_failure(&error) {
                                 self.record_terminal_error(session_id, record.clone(), error)
                                     .await;
                                 return Ok(false);
@@ -316,7 +344,12 @@ where
             .to_owned(),
         );
         runtime.error_details = Some(crate::session::monitor::SessionErrorDetails {
-            code: error.status.map(|status| serde_json::json!(status)),
+            code: error
+                .status
+                .map(|status| serde_json::json!(status))
+                .or_else(|| {
+                    is_auth_failure(&error).then(|| serde_json::json!("AuthRenewalRequired"))
+                }),
             message: Some(error.message),
         });
         record.snapshot.replace_runtime_snapshot(runtime);
@@ -373,11 +406,25 @@ where
             .map_err(|e| SessionFlowError::message(e.to_string()))?;
 
         Ok(WebApiSessionGateway::with_transport(
-            self.inner.transport.clone(),
+            crate::session::api::token_recovery::with_token_recovery(
+                self.inner.transport.clone(),
+                self.inner.provider.clone(),
+                target_type,
+                token_value
+                    .get("_authGeneration")
+                    .and_then(serde_json::Value::as_u64),
+            ),
             plan.clone(),
             token,
         ))
     }
+}
+
+fn is_auth_failure(error: &SessionFlowError) -> bool {
+    error.status == Some(401)
+        || error.startup_hint.as_ref().is_some_and(|hint| {
+            hint.kind == crate::session::flow::SessionFlowStartupErrorKind::Auth
+        })
 }
 
 impl<S, P> Clone for SessionScheduler<S, P>

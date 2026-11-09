@@ -1,9 +1,10 @@
 use crate::error::{AppError, AppResult};
 use crate::mods::auth::storage_repository::AuthStorageRepository;
 use crate::mods::auth::token_policy::{
-    can_reuse_sisu_user_token, resolve_valid_web_api_tokens, AuthTokenPolicy, ValidSessionSnapshot,
+    can_reuse_sisu_user_token, merge_stream_tokens, resolve_valid_web_api_tokens, same_web_account,
+    AuthTokenPolicy, ValidSessionSnapshot,
 };
-use crate::mods::auth::types::{SisuTokenData, UserTokenData};
+use crate::mods::auth::types::{AuthTokenScope, SisuTokenData, UserTokenData};
 use serde_json::Value;
 use tauri::AppHandle;
 use xbox_auth_flow::{AuthBundle, AuthFlowSeed, FlowSisuTokenData};
@@ -46,7 +47,7 @@ impl AuthPersistenceService {
             .storage_repository
             .get_jwt_private_jwk()
             .map_err(AppError::Data)?
-            .ok_or_else(|| AppError::Data("Missing JWT private key".to_string()))?;
+            .ok_or_else(|| AppError::Auth("登录认证密钥暂不可用，请选择重新登录".to_string()))?;
         Ok(AuthFlowSeed { private_jwk })
     }
 
@@ -88,12 +89,53 @@ impl AuthPersistenceService {
             .map_err(AppError::Data)
     }
 
-    pub fn get_cached_app_level(&self) -> u32 {
-        self.token_policy.get_cached_app_level().unwrap_or(0)
+    pub fn get_valid_session_for(
+        &self,
+        scope: AuthTokenScope,
+    ) -> AppResult<Option<ValidSessionSnapshot>> {
+        self.token_policy
+            .get_valid_session_for(scope)
+            .map_err(AppError::Data)
     }
 
-    pub fn has_valid_auth_tokens(&self) -> bool {
-        self.storage_repository.has_valid_auth_tokens()
+    pub fn persist_refreshed_bundle(
+        &self,
+        bundle: &AuthBundle,
+        scope: AuthTokenScope,
+    ) -> AppResult<()> {
+        let same_account = self
+            .get_web_token()?
+            .as_ref()
+            .is_some_and(|old| same_web_account(old, &bundle.web_token));
+        let mut bundle = bundle.clone();
+        bundle.stream_tokens = merge_stream_tokens(
+            self.get_stream_tokens()?,
+            &bundle.stream_tokens,
+            scope,
+            same_account,
+        );
+        self.persist_auth_bundle(&bundle)
+    }
+
+    pub fn persist_user_token(&self, token: &xbox_webapi::OAuthTokenResponse) -> AppResult<()> {
+        let token = serde_json::from_value(serde_json::to_value(token)?)?;
+        self.storage_repository
+            .set_user_token(token)
+            .map_err(AppError::Data)
+    }
+
+    pub fn persist_rotated_refresh_token(&self, refresh_token: &str) -> AppResult<()> {
+        let mut token = self
+            .get_user_token()?
+            .ok_or_else(|| AppError::Auth("登录续期凭据暂不可用，请选择重新登录".into()))?;
+        token.refresh_token = refresh_token.to_string();
+        self.storage_repository
+            .set_user_token(token)
+            .map_err(AppError::Data)
+    }
+
+    pub fn get_cached_app_level(&self) -> u32 {
+        self.token_policy.get_cached_app_level().unwrap_or(0)
     }
 
     pub fn get_user_token(&self) -> AppResult<Option<UserTokenData>> {
@@ -107,10 +149,6 @@ impl AuthPersistenceService {
             .get_user_token()?
             .map(|token| token.refresh_token.trim().to_string())
             .filter(|token| !token.is_empty()))
-    }
-
-    pub fn get_token_update_time(&self) -> u64 {
-        self.storage_repository.get_token_update_time()
     }
 
     pub fn can_reuse_sisu_user_token(&self) -> AppResult<bool> {
@@ -144,25 +182,6 @@ impl AuthPersistenceService {
         self.token_policy
             .clear_ephemeral_tokens()
             .map_err(AppError::Data)
-    }
-
-    pub fn get_streaming_token(&self, target_type: &str) -> AppResult<Option<Value>> {
-        let tokens = self.get_stream_tokens()?;
-        let Some(tokens) = tokens else {
-            return Ok(None);
-        };
-
-        let token = if target_type == "home" {
-            tokens.get("xHomeToken")
-        } else {
-            tokens.get("xCloudToken")
-        };
-
-        if self.token_policy.is_stream_token_valid(token) {
-            return Ok(token.cloned());
-        }
-
-        Ok(None)
     }
 
     pub fn get_web_api_tokens(&self) -> AppResult<Option<(String, String)>> {

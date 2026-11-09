@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XBXRC 本地前端导航验证</title>
+  </head>
+  <body data-navigation-test-fixture="true">
+    <div id="app"></div>
+    <pre id="project-validation-results" hidden></pre>
+    <script type="module">
+      import './project-fixture.js'
+      await import('/src/main.ts')
+    </script>
+  </body>
+</html>

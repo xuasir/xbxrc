@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XBXRC 完整前端窄屏验证</title>
+    <style>
+      body { margin: 0; padding: 24px; background: #20252b; color: #eef3f7; font: 14px system-ui; }
+      main { width: 390px; margin: auto; }
+      p { margin: 0 0 16px; }
+      label { display: block; margin-bottom: 16px; }
+      select { margin-left: 8px; }
+      iframe { display: block; width: 390px; height: 844px; border: 0; outline: 1px solid #64717d; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>完整本地前端 · 390×844</p>
+      <label>实际应用宽度<select id="project-viewport-width" aria-label="实际应用宽度"><option value="320">320px</option><option value="390" selected>390px</option><option value="600">600px</option><option value="601">601px</option></select></label>
+      <!-- iframe 提供实际布局视口，继续装配同一 src/main.ts、App、路由与导航引擎。 -->
+      <iframe id="project-narrow-app" title="XBXRC 390×844 完整应用" src="./project.html#/setting"></iframe>
+    </main>
+    <script type="module">
+      const frame = document.getElementById('project-narrow-app')
+      const container = document.querySelector('main')
+      document.getElementById('project-viewport-width').addEventListener('change', (event) => {
+        const width = Number(event.target.value)
+        frame.style.width = `${width}px`
+        container.style.width = `${width}px`
+        document.querySelector('p').textContent = `完整本地前端 · ${width}×844`
+      })
+    </script>
+  </body>
+</html>

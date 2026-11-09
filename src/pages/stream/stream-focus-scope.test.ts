@@ -1,13 +1,12 @@
 import type { VNode } from 'vue'
-import type { FocusNode } from '@/navigation/core/__tests__/focus-dom'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as vue from 'vue'
-import { compileScript, compileTemplate, parse } from 'vue/compiler-sfc'
+import { compileTemplate, parse } from 'vue/compiler-sfc'
 import StreamActionSheet from '@/components/stream/StreamActionSheet.vue'
 import { focusFixture } from '@/navigation/core/__tests__/focus-dom'
-import { navigationEngine } from '@/navigation/core/engine'
+import { enableClientTemplate, vueFocusFixture } from '@/navigation/core/__tests__/vue-focus'
 import { inputDispatcher, NavigationIntent } from '@/navigation/core/input'
 import { inputUiTrace } from '@/navigation/core/input-trace'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
@@ -39,22 +38,9 @@ const renderScope = runInNewContext(`${code}; render`, {
   runtime: { ...vue, resolveComponent: () => 'section' },
 }) as (context: object, cache: unknown[]) => VNode
 
-// Vitest 默认加载 SSR 模板；客户端模板与真实 setup 共用同一组件。
-function enableClientTemplate(component: object, relativePath: string) {
-  const filename = new URL(relativePath, import.meta.url)
-  const { descriptor } = parse(readFileSync(filename, 'utf8'))
-  const bindings = compileScript(descriptor, { id: 'stream-pointer-test' }).bindings
-  const template = compileTemplate({ source: descriptor.template!.content, filename: filename.pathname, id: 'stream-pointer-test', compilerOptions: { bindingMetadata: bindings } })
-  if (template.errors.length)
-    throw new Error(template.errors.map(String).join('\n'))
-  const code = template.code
-    .replace(/import \{([^}]+)\} from "vue"/g, (_, names: string) => `const {${names.replace(/ as /g, ': ')}} = runtime`)
-    .replace('export function render', 'function render')
-  Object.assign(component, { render: runInNewContext(`${code}; render`, { runtime: vue }) })
-}
-enableClientTemplate(FocusScope, '../../navigation/core/vue/FocusScope.vue')
-enableClientTemplate(Focusable, '../../navigation/core/vue/Focusable.vue')
-enableClientTemplate(StreamActionSheet, '../../components/stream/StreamActionSheet.vue')
+enableClientTemplate(FocusScope, new URL('../../navigation/core/vue/FocusScope.vue', import.meta.url))
+enableClientTemplate(Focusable, new URL('../../navigation/core/vue/Focusable.vue', import.meta.url))
+enableClientTemplate(StreamActionSheet, new URL('../../components/stream/StreamActionSheet.vue', import.meta.url))
 
 const engines: ReturnType<typeof focusFixture>['engine'][] = []
 const unmounts: Array<() => void> = []
@@ -66,96 +52,9 @@ afterEach(() => {
 })
 
 function pointerFixture() {
-  const f = focusFixture()
-  engines.push(f.engine)
-  f.engine.start()
-  vi.spyOn(navigationEngine, 'focusElement').mockImplementation((...args) => f.engine.focusElement(...args))
-  vi.spyOn(navigationEngine, 'updateActiveScope').mockImplementation((...args) => f.engine.updateActiveScope(...args))
-  vi.spyOn(navigationEngine, 'getLastFocusFailure').mockImplementation(() => f.engine.getLastFocusFailure())
-  vi.spyOn(navigationEngine, 'isTopmostScope').mockImplementation(id => f.engine.isTopmostScope(id))
-  vi.stubGlobal('HTMLElement', class {
-    static [Symbol.hasInstance](value: unknown): boolean {
-      return !!value && typeof value === 'object' && 'attrs' in value && value.attrs instanceof Map
-    }
-  })
-  const children = new Map<FocusNode, FocusNode[]>()
-  type Listener = (event: Event) => void
-  const listeners = new Map<FocusNode, Record<string, Listener | Listener[]>>()
-  const fireClick = (el: FocusNode, pointerType: string) => {
-    const event = new Event('click', { bubbles: true, cancelable: true })
-    Object.defineProperties(event, { currentTarget: { value: el }, target: { value: el }, pointerType: { value: pointerType } })
-    const handler = listeners.get(el)?.onClick
-    for (const listener of handler ? Array.isArray(handler) ? handler : [handler] : []) listener(event)
-    return event
-  }
-  const createNode = (tag: string) => {
-    const el = f.node('', null, false, tag)
-    Object.assign(el, { scrollTop: 0, scrollLeft: 0, scrollTo: vi.fn() })
-    children.set(el, [])
-    listeners.set(el, {})
-    el.click = vi.fn(() => fireClick(el, ''))
-    return el
-  }
-  const detach = (el: FocusNode) => {
-    const siblings = el.parentElement ? children.get(el.parentElement) : undefined
-    if (siblings) {
-      const index = siblings.indexOf(el)
-      if (index >= 0)
-        siblings.splice(index, 1)
-    }
-  }
-  const renderer = vue.createRenderer<FocusNode, FocusNode>({
-    createElement: createNode,
-    createText: () => createNode('#text'),
-    createComment: () => createNode('#comment'),
-    setText: (el, value) => { el.attrs.set('text', value) },
-    setElementText: (el, value) => { el.attrs.set('text', value) },
-    setScopeId: (el, id) => { el.setAttribute(id, '') },
-    parentNode: el => el.parentElement,
-    nextSibling: el => el.parentElement ? children.get(el.parentElement)?.[children.get(el.parentElement)!.indexOf(el) + 1] ?? null : null,
-    patchProp: (el, key, _, value) => {
-      if (/^on[A-Z]/.test(key)) {
-        listeners.get(el)![key] = value
-        return
-      }
-      if (key === 'id')
-        el.id = value ?? ''
-      if (key === 'disabled')
-        el.disabled = value === true
-      if (value === null || value === undefined || value === false)
-        el.removeAttribute(key)
-      else
-        el.setAttribute(key, String(value))
-    },
-    insert: (el, parent, anchor) => {
-      detach(el)
-      const siblings = children.get(parent)!
-      const index = anchor ? siblings.indexOf(anchor) : -1
-      siblings.splice(index < 0 ? siblings.length : index, 0, el)
-      el.parentElement = parent
-      el.connected = true
-    },
-    remove: (el) => {
-      detach(el)
-      el.parentElement = null
-      el.connected = false
-    },
-  })
-  const root = createNode('main')
-  const app = renderer.createApp({ render: () => null })
-  app.provide(vue.ssrContextKey, { modules: new Set() })
-  const render = (vnode: VNode | null) => {
-    if (vnode)
-      vnode.appContext = app._context
-    renderer.render(vnode, root)
-  }
-  unmounts.push(() => render(null))
-  return { ...f, render, fireClick, find: (id: string) => {
-    const el = document.getElementById(id)
-    if (!el)
-      throw new Error(`菜单测试节点缺失：${id}`)
-    return el as unknown as FocusNode
-  } }
+  const f = vueFocusFixture()
+  unmounts.push(f.dispose)
+  return f
 }
 
 describe('串流弹层与父焦点域', () => {
