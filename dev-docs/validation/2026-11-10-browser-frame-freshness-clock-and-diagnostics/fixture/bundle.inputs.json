@@ -1,0 +1,294 @@
+{
+  "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/external-source.ts": {
+    "bytes": 3708,
+    "imports": [],
+    "format": "esm"
+  },
+  "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/drawable-identity.ts": {
+    "bytes": 6746,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/shared/latency-window.ts": {
+    "bytes": 1542,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/decoded-frame-clock.ts": {
+    "bytes": 2438,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/frame-supply-diagnostics.ts": {
+    "bytes": 2454,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/decoded-video-frame-reader.ts": {
+    "bytes": 16551,
+    "imports": [
+      {
+        "path": "src/shared/latency-window.ts",
+        "kind": "import-statement",
+        "original": "../../../shared/latency-window"
+      },
+      {
+        "path": "src/player/infra/render/decoded-frame-clock.ts",
+        "kind": "import-statement",
+        "original": "./decoded-frame-clock"
+      },
+      {
+        "path": "src/player/infra/render/frame-supply-diagnostics.ts",
+        "kind": "import-statement",
+        "original": "./frame-supply-diagnostics"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/video-frame-identity-observation.ts": {
+    "bytes": 9036,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/gpu-completion-probe.ts": {
+    "bytes": 4700,
+    "imports": [
+      {
+        "path": "src/shared/latency-window.ts",
+        "kind": "import-statement",
+        "original": "../../../shared/latency-window"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/gpu-frame-timer.ts": {
+    "bytes": 3662,
+    "imports": [
+      {
+        "path": "src/shared/latency-window.ts",
+        "kind": "import-statement",
+        "original": "../../../shared/latency-window"
+      },
+      {
+        "path": "src/player/infra/render/gpu-completion-probe.ts",
+        "kind": "import-statement",
+        "original": "./gpu-completion-probe"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/webgl-runtime-guard.ts": {
+    "bytes": 1787,
+    "imports": [
+      {
+        "path": "src/player/infra/render/gpu-frame-timer.ts",
+        "kind": "import-statement",
+        "original": "./gpu-frame-timer"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/video-frame-pixel-observation.ts": {
+    "bytes": 23873,
+    "imports": [
+      {
+        "path": "src/shared/latency-window.ts",
+        "kind": "import-statement",
+        "original": "../../../shared/latency-window"
+      },
+      {
+        "path": "src/player/infra/render/webgl-runtime-guard.ts",
+        "kind": "import-statement",
+        "original": "./webgl-runtime-guard"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/video-frame-source.ts": {
+    "bytes": 26631,
+    "imports": [
+      {
+        "path": "src/player/infra/render/decoded-video-frame-reader.ts",
+        "kind": "import-statement",
+        "original": "./decoded-video-frame-reader"
+      },
+      {
+        "path": "src/player/infra/render/video-frame-identity-observation.ts",
+        "kind": "import-statement",
+        "original": "./video-frame-identity-observation"
+      },
+      {
+        "path": "src/player/infra/render/video-frame-pixel-observation.ts",
+        "kind": "import-statement",
+        "original": "./video-frame-pixel-observation"
+      }
+    ],
+    "format": "esm"
+  },
+  "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/direct-frames.ts": {
+    "bytes": 4280,
+    "imports": [
+      {
+        "path": "src/player/infra/render/video-frame-source.ts",
+        "kind": "import-statement",
+        "original": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/video-frame-source"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/frame-capture-queue.ts": {
+    "bytes": 1094,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/frame-pacer.ts": {
+    "bytes": 998,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/fsr1-cpu.ts": {
+    "bytes": 2833,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/fsr1-reconstruction-pass.ts": {
+    "bytes": 12141,
+    "imports": [
+      {
+        "path": "src/player/infra/render/fsr1-cpu.ts",
+        "kind": "import-statement",
+        "original": "./fsr1-cpu"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/render-observation.ts": {
+    "bytes": 7091,
+    "imports": [
+      {
+        "path": "src/shared/latency-window.ts",
+        "kind": "import-statement",
+        "original": "../../../shared/latency-window"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/render-surface-observation.ts": {
+    "bytes": 3923,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/sharpening-tuning.ts": {
+    "bytes": 1766,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/webgl-frame-capture.ts": {
+    "bytes": 1419,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/Renderers.ts": {
+    "bytes": 45485,
+    "imports": [
+      {
+        "path": "src/player/infra/render/frame-capture-queue.ts",
+        "kind": "import-statement",
+        "original": "./frame-capture-queue"
+      },
+      {
+        "path": "src/player/infra/render/frame-pacer.ts",
+        "kind": "import-statement",
+        "original": "./frame-pacer"
+      },
+      {
+        "path": "src/player/infra/render/fsr1-reconstruction-pass.ts",
+        "kind": "import-statement",
+        "original": "./fsr1-reconstruction-pass"
+      },
+      {
+        "path": "src/player/infra/render/render-observation.ts",
+        "kind": "import-statement",
+        "original": "./render-observation"
+      },
+      {
+        "path": "src/player/infra/render/render-surface-observation.ts",
+        "kind": "import-statement",
+        "original": "./render-surface-observation"
+      },
+      {
+        "path": "src/player/infra/render/sharpening-tuning.ts",
+        "kind": "import-statement",
+        "original": "./sharpening-tuning"
+      },
+      {
+        "path": "src/player/infra/render/video-frame-source.ts",
+        "kind": "import-statement",
+        "original": "./video-frame-source"
+      },
+      {
+        "path": "src/player/infra/render/webgl-frame-capture.ts",
+        "kind": "import-statement",
+        "original": "./webgl-frame-capture"
+      },
+      {
+        "path": "src/player/infra/render/webgl-runtime-guard.ts",
+        "kind": "import-statement",
+        "original": "./webgl-runtime-guard"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/SuperResolutionWebGL2Renderer.ts": {
+    "bytes": 106,
+    "imports": [
+      {
+        "path": "src/player/infra/render/Renderers.ts",
+        "kind": "import-statement",
+        "original": "./Renderers"
+      }
+    ],
+    "format": "esm"
+  },
+  "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/entry.ts": {
+    "bytes": 21157,
+    "imports": [
+      {
+        "path": "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/external-source.ts",
+        "kind": "import-statement",
+        "original": "./external-source"
+      },
+      {
+        "path": "./ablation",
+        "kind": "import-statement",
+        "external": true
+      },
+      {
+        "path": "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/drawable-identity.ts",
+        "kind": "import-statement",
+        "original": "./drawable-identity"
+      },
+      {
+        "path": "../../../../../../private/tmp/xbxrc-2026-11-10-clock-diagnostics-probe/direct-frames.ts",
+        "kind": "import-statement",
+        "original": "./direct-frames"
+      },
+      {
+        "path": "src/player/infra/render/Renderers.ts",
+        "kind": "import-statement",
+        "original": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/Renderers"
+      },
+      {
+        "path": "src/player/infra/render/SuperResolutionWebGL2Renderer.ts",
+        "kind": "import-statement",
+        "original": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/SuperResolutionWebGL2Renderer"
+      },
+      {
+        "path": "src/player/infra/render/video-frame-source.ts",
+        "kind": "import-statement",
+        "original": "/Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/video-frame-source"
+      }
+    ],
+    "format": "esm"
+  }
+}

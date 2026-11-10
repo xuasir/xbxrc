@@ -14,6 +14,7 @@ export interface ObservedVideoFrameMetadata extends Partial<VideoFrameCallbackMe
   trackingSource: VideoFrameTrackingSource
   receivedAtMs?: number
   readFinishedAtEpochMs?: number
+  clockUncertaintyMs?: number
 }
 
 type FrameRequest = (atMs: number, metadata?: ObservedVideoFrameMetadata) => void
@@ -89,6 +90,9 @@ class VideoFrameSource {
   private epoch = 0
   private nativeHandle?: number
   private animationHandle?: number
+  private presentationWatchdog?: ReturnType<typeof setTimeout>
+  private lastNativeCallbackAtMs?: number
+  private nativeStalled = false
   private timeUpdateBound = false
   private nativeCallbackCount = 0
   private polledFrameCount = 0
@@ -229,15 +233,7 @@ class VideoFrameSource {
   }
 
   private cancelScheduled(): void {
-    if (this.nativeHandle !== undefined)
-      this.video.cancelVideoFrameCallback?.(this.nativeHandle)
-    if (this.animationHandle !== undefined)
-      cancelAnimationFrame(this.animationHandle)
-    if (this.timeUpdateBound) {
-      this.video.removeEventListener?.('timeupdate', this.onTimeUpdate)
-      this.timeUpdateBound = false
-    }
-    this.nativeHandle = this.animationHandle = undefined
+    this.cancelPresentationCallbacks()
     // 消费者中断后从当前帧恢复，抵扣资格只覆盖连续观察期间。
     this.uncountedNativeFrames = this.polledFramesSinceNative = 0
     this.nativeCreditStartedAtMs = this.counterProgressAtMs = undefined
@@ -247,18 +243,57 @@ class VideoFrameSource {
     this.epoch++
   }
 
+  private cancelPresentationCallbacks(): void {
+    if (this.nativeHandle !== undefined)
+      this.video.cancelVideoFrameCallback?.(this.nativeHandle)
+    if (this.animationHandle !== undefined)
+      cancelAnimationFrame(this.animationHandle)
+    if (this.timeUpdateBound) {
+      this.video.removeEventListener?.('timeupdate', this.onTimeUpdate)
+      this.timeUpdateBound = false
+    }
+    this.nativeHandle = this.animationHandle = undefined
+    if (this.presentationWatchdog !== undefined)
+      clearTimeout(this.presentationWatchdog)
+    this.presentationWatchdog = undefined
+    this.lastNativeCallbackAtMs = undefined
+    this.nativeStalled = false
+  }
+
   private schedule(): void {
     if (this.pending.size === 0) {
       this.cancelScheduled()
       return
     }
+    if (![...this.pending.values()].some(request => !request.render) && !this.pixelDiagnosticsEnabled && this.decodedReader?.mode !== 'initializing') {
+      this.cancelPresentationCallbacks()
+      return
+    }
     const epoch = this.epoch
+    const direct = this.decodedReader !== undefined && this.decodedReader.mode !== 'presentation'
     if (typeof this.video.requestVideoFrameCallback === 'function') {
+      if (direct && this.presentationWatchdog === undefined) {
+        this.lastNativeCallbackAtMs ??= performance.now()
+        this.presentationWatchdog = setTimeout(() => {
+          this.presentationWatchdog = undefined
+          if (epoch !== this.epoch)
+            return
+          this.nativeStalled = performance.now() - (this.lastNativeCallbackAtMs ?? performance.now()) >= 250
+          this.schedule()
+        }, 250)
+      }
       if (this.nativeHandle === undefined) {
         this.nativeHandle = this.video.requestVideoFrameCallback((atMs, metadata) => {
           if (epoch !== this.epoch)
             return
           this.nativeHandle = undefined
+          if (this.decodedReader && this.decodedReader.mode !== 'presentation')
+            this.lastNativeCallbackAtMs = performance.now()
+          this.nativeStalled = false
+          if (direct && this.animationHandle !== undefined) {
+            cancelAnimationFrame(this.animationHandle)
+            this.animationHandle = undefined
+          }
           this.nativeCallbackCount++
           this.observe(atMs, 'videoFrameCallback', metadata)
           this.schedule()
@@ -269,7 +304,12 @@ class VideoFrameSource {
       this.video.addEventListener?.('timeupdate', this.onTimeUpdate)
       this.timeUpdateBound = true
     }
-    if (this.animationHandle === undefined && typeof requestAnimationFrame === 'function') {
+    const needsPolling = !direct || typeof this.video.requestVideoFrameCallback !== 'function' || this.nativeStalled
+    if (!needsPolling && this.animationHandle !== undefined) {
+      cancelAnimationFrame(this.animationHandle)
+      this.animationHandle = undefined
+    }
+    if (needsPolling && this.animationHandle === undefined && typeof requestAnimationFrame === 'function') {
       this.animationHandle = requestAnimationFrame((atMs) => {
         if (epoch !== this.epoch)
           return

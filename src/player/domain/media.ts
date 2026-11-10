@@ -1,6 +1,33 @@
 import type { LatencySummary } from '../../shared/latency-window'
 import type { BrowserStatsWindowSummary } from './stats'
 
+export interface DecodedFrameClockObservation {
+  state: 'calibrated' | 'expired' | 'uncalibrated'
+  probes?: number
+  samples: number
+  rejected: number
+  offsetMs?: number
+  uncertaintyMs?: number
+  ageMs?: number
+}
+
+export interface FrameSupplyAnomaly {
+  sequence: number
+  atMs: number
+  startup: boolean
+  reasons: string[]
+  times: number[]
+  offsetMs?: number
+  uncertaintyMs?: number
+}
+
+export interface FrameSupplyDiagnosticsObservation {
+  count: number
+  suppressed: number
+  taskState: 'unavailable' | 'observing' | 'failed' | 'stopped'
+  samples: Array<FrameSupplyAnomaly & { longTasks: Array<{ atMs: number, durationMs: number }> }>
+}
+
 export interface RendererTiming {
   duration: LatencySummary
   upload: LatencySummary
@@ -18,6 +45,13 @@ export interface DecodedFrameSupplyObservation {
   deliveredFrames: number
   staleFrameDropCount: number
   invalidClockCount: number
+  unknownClockCount?: number
+  adjustedClockCount?: number
+  invalidClockReasons?: Record<string, number>
+  clock?: DecodedFrameClockObservation
+  diagnostics?: FrameSupplyDiagnosticsObservation
+  ackDeliveryStatus?: 'valid' | 'uncertaintyClamped' | 'uncalibrated' | 'invalid'
+  framePixelFormat?: VideoPixelFormat | null
   deliveryBudgetMs: number
   workerReadFrames: number
   workerSentFrames: number
@@ -36,6 +70,17 @@ export interface RendererGpuTiming {
   disjointCount: number
   queryCount: number
   duration: LatencySummary
+  completion?: {
+    source: 'webglFenceCompletionBounds'
+    state: 'unavailable' | 'ready' | 'pending' | 'failed' | 'stopped'
+    fenceCount: number
+    completed: number
+    timeouts: number
+    insertionCpuMaxMs?: number
+    failureReason?: 'driver' | 'overBudget'
+    latest?: { submittedAtMs: number, insertedAtMs?: number, observedAtMs: number, lowerBoundMs: number, upperBoundMs: number, polls: number }
+    upperBound: LatencySummary
+  }
 }
 
 export interface MediaDiagnosticsOptions {

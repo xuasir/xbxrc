@@ -305,8 +305,8 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       const at = 100 + Math.round(frame * 1000 / 60) + [-3, 0, 3][frame % 3]!
       h.frame(at, frame + 1)
       expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: frame + 1, lastDrawSequence: frame + 1, animationCallbacks: 0 })
-      expect(h.rafs.size).toBe(1)
-      expect(h.frames.size).toBe(1)
+      expect(h.rafs.size).toBe(0)
+      expect(h.frames.size).toBe(0)
     }
     expect(h.renderer.snapshotResources()).toMatchObject({ rateLimitDropCount: 0, duplicateDrawCount: 0 })
     h.renderer.destroy()
@@ -333,7 +333,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       const at = Math.round(frame * 1000 / sourceFps + drift)
       h.frame(at, frame + 1, 0)
       expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: frame + 1, lastDrawSequence: frame + 1, rateLimitDropCount: 0, animationCallbacks: 0 })
-      expect(h.frames.size).toBe(1)
+      expect(h.frames.size).toBe(0)
     }
     h.renderer.destroy()
     expect(h.rafs.size + h.frames.size).toBe(0)
@@ -488,7 +488,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       h.raf(at + 0.2)
     }
     expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 600, duplicateDrawCount: 0, latestOverwriteCount: 0 })
-    expect(source.snapshotResources().polledFrameCount).toBe(150)
+    expect(source.snapshotResources().polledFrameCount).toBe(0)
     h.renderer.destroy()
     source.cancel(requestId)
     expect(h.rafs.size + h.frames.size).toBe(0)
@@ -533,7 +533,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       expect(stats.realtimeDrawCount).toBeLessThanOrEqual(offered)
       expect(stats.duplicateDrawCount).toBe(0)
       expect(h.rafs.size).toBeLessThanOrEqual(2)
-      expect(h.frames.size).toBe(1)
+      expect(h.frames.size).toBe(0)
       expect(h.gl.getParameter).toHaveBeenCalledTimes(2)
       expect(h.gl.getError.mock.calls.length).toBeLessThanOrEqual(12)
       h.renderer.destroy()

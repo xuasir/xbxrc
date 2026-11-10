@@ -68,14 +68,20 @@ function harness() {
   }
 }
 
-function workerHarness() {
+function workerHarness(clockOffsetMs = 0) {
   const h = harness()
   vi.stubGlobal('MediaStreamTrackProcessor', undefined)
   class MockWorker {
     static instance: MockWorker
     onmessage?: (event: MessageEvent) => void
     onerror?: () => void
-    postMessage = vi.fn()
+    postMessage = vi.fn((message: { type: string, id?: number }) => {
+      if (message.type === 'clock') {
+        const atMs = performance.timeOrigin + performance.now() + clockOffsetMs
+        this.emit({ type: 'clock', id: message.id, receivedAtEpochMs: atMs, sentAtEpochMs: atMs })
+      }
+    })
+
     terminate = vi.fn()
     constructor() { MockWorker.instance = this }
     emit(data: unknown) { this.onmessage?.({ data } as MessageEvent) }
@@ -100,6 +106,63 @@ function workerTiming(overrides: Partial<DecodedFrameWorkerTiming> = {}): Decode
 }
 
 describe('decoded-frame supply', () => {
+  it('keeps direct RVFC diagnostics free of RAF polling and resumes polling only after a stall', async () => {
+    vi.useFakeTimers()
+    const h = harness()
+    let raf: FrameRequestCallback | undefined
+    const poll = vi.fn((callback: FrameRequestCallback) => {
+      raf = callback
+      return 10
+    })
+    vi.stubGlobal('requestAnimationFrame', poll)
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      raf = undefined
+    })
+    const source = getVideoFrameSource(h.video)
+    let presentationId = 0
+    const present = () => source.request(() => {
+      presentationId = present()
+    })
+    presentationId = present()
+    let renderId = 0
+    const render = () => source.requestRender(() => {
+      renderId = render()
+    })
+    renderId = render()
+    await h.push(h.frame(0))
+    expect(raf).toBeUndefined()
+    const before = poll.mock.calls.length
+    for (let i = 0; i < 60; i++) {
+      vi.advanceTimersByTime(16)
+      h.native()
+    }
+    expect(poll).toHaveBeenCalledTimes(before)
+    vi.advanceTimersByTime(500)
+    expect(raf).toBeDefined()
+    h.native()
+    expect(raf).toBeUndefined()
+    source.cancel(renderId)
+    source.cancel(presentationId)
+    await Promise.resolve()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('releases presentation callbacks after render-only supply becomes active', async () => {
+    vi.useFakeTimers()
+    const h = harness()
+    const source = getVideoFrameSource(h.video)
+    let id = 0
+    const render = () => source.requestRender(() => {
+      id = render()
+    })
+    id = render()
+    await h.push(h.frame(0))
+    expect(source.snapshotResources()).toMatchObject({ nativeFrameCallbacks: 0, animationCallbacks: 0 })
+    source.cancel(id)
+    await Promise.resolve()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('main-thread delivers independent frames before any RVFC and retains only the latest', async () => {
     const h = harness()
     const source = getVideoFrameSource(h.video)
@@ -412,8 +475,8 @@ describe('decoded-frame supply', () => {
     const worker = h.worker()
     const first = h.frame(0)
     worker.emit({ type: 'frame', frame: first, timing: workerTiming({ lastAckRoundTripMs: 18, lastAckDeliveryMs: 3 }) })
-    expect(received).toHaveBeenCalledWith(first, { receivedAtMs: 100, readFinishedAtEpochMs: 100091 })
-    expect(worker.postMessage).toHaveBeenLastCalledWith({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 100102 })
+    expect(received).toHaveBeenCalledWith(first, { receivedAtMs: 100, readFinishedAtEpochMs: 100091, clockUncertaintyMs: 2 })
+    expect(worker.postMessage).toHaveBeenLastCalledWith({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 100102, acknowledgedAtWorkerEpochMs: 100102, clockUncertaintyMs: 2 })
     atMs = 116
     worker.emit({ type: 'frame', frame: h.frame(0), timing: workerTiming({ sequence: 2, readCount: 3, sentCount: 2, overwriteCount: 1, ackCount: 1 }) })
     expect(reader.snapshot()).toMatchObject({
@@ -461,7 +524,7 @@ describe('decoded-frame supply', () => {
     expect(stale.close).toHaveBeenCalledOnce()
     expect(received).toHaveBeenCalledTimes(0)
     expect(reader.snapshot()).toMatchObject({ receivedMessages: 1, deliveredFrames: 0, staleFrameDropCount: 1, timing: { ackRoundTrip: { p95Ms: 77 } } })
-    expect(worker.postMessage).toHaveBeenLastCalledWith({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 100100 })
+    expect(worker.postMessage).toHaveBeenLastCalledWith({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 100100, acknowledgedAtWorkerEpochMs: 100100, clockUncertaintyMs: 2 })
     vi.advanceTimersByTime(1500)
     worker.emit({ type: 'frame', frame: h.frame(0), timing: workerTiming({ sequence: 2 }) })
     vi.advanceTimersByTime(2500)
@@ -495,10 +558,41 @@ describe('decoded-frame supply', () => {
     const worker = h.worker()
     worker.emit({ type: 'frame', frame: h.frame(0), timing: workerTiming({ readStartedAtEpochMs: 100040, readFinishedAtEpochMs: 100050 }) })
     worker.emit({ type: 'frame', frame: h.frame(0) })
-    for (const timing of [workerTiming({ sentAtEpochMs: 100101 }), workerTiming({ readFinishedAtEpochMs: Number.NaN }), workerTiming({ readStartedAtEpochMs: 100099 })])
+    for (const timing of [workerTiming({ sentAtEpochMs: 100103 }), workerTiming({ readFinishedAtEpochMs: Number.NaN }), workerTiming({ readStartedAtEpochMs: 100099 })])
       worker.emit({ type: 'frame', frame: h.frame(0), timing })
     expect(reader.snapshot()).toMatchObject({ deliveredFrames: 5, staleFrameDropCount: 0, invalidClockCount: 3 })
     expect(received.mock.calls.slice(1).every(call => call[1].readFinishedAtEpochMs === undefined)).toBe(true)
+    reader.dispose()
+    worker.emit({ type: 'stopped' })
+  })
+
+  it('calibrates worker epochs and adjusts bounded quantization before freshness decisions', () => {
+    const h = workerHarness(500)
+    vi.stubGlobal('performance', { timeOrigin: 100000, now: () => 100 })
+    const received = vi.fn((frame: VideoFrame, _delivery: DecodedFrameDelivery) => frame.close())
+    const reader = new DecodedVideoFrameReader(h.video, received)
+    const worker = h.worker()
+    worker.emit({ type: 'frame', frame: h.frame(0), timing: workerTiming({ readStartedAtEpochMs: 100580, readFinishedAtEpochMs: 100602, sentAtEpochMs: 100601 }) })
+    expect(received.mock.calls[0]![1]).toEqual({ receivedAtMs: 100, readFinishedAtEpochMs: 100102, clockUncertaintyMs: 2 })
+    expect(reader.snapshot()).toMatchObject({ invalidClockCount: 0, adjustedClockCount: 2, timing: { pendingWait: { p95Ms: 0 }, transfer: { p95Ms: 0 } } })
+    expect(worker.postMessage).toHaveBeenLastCalledWith({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 100100, acknowledgedAtWorkerEpochMs: 100600, clockUncertaintyMs: 2 })
+    for (const [sequence, finished] of [[2, 100549], [3, 100547]])
+      worker.emit({ type: 'frame', frame: h.frame(0), timing: workerTiming({ sequence, readStartedAtEpochMs: 100540, readFinishedAtEpochMs: finished, sentAtEpochMs: 100600 }) })
+    expect(reader.snapshot()).toMatchObject({ deliveredFrames: 2, staleFrameDropCount: 1 })
+    reader.dispose()
+    worker.emit({ type: 'stopped' })
+  })
+
+  it('keeps expired calibration unknown while preserving frame progress and ACK', () => {
+    const h = workerHarness()
+    let atMs = 0
+    vi.stubGlobal('performance', { timeOrigin: 100000, now: () => atMs })
+    const reader = new DecodedVideoFrameReader(h.video, frame => frame.close())
+    const worker = h.worker()
+    atMs = 15001
+    worker.emit({ type: 'frame', frame: h.frame(0), timing: workerTiming() })
+    expect(reader.snapshot()).toMatchObject({ clock: { state: 'expired' }, unknownClockCount: 1, invalidClockCount: 0, deliveredFrames: 1, staleFrameDropCount: 0 })
+    expect(worker.postMessage).toHaveBeenLastCalledWith({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 115001, acknowledgedAtWorkerEpochMs: undefined, clockUncertaintyMs: undefined })
     reader.dispose()
     worker.emit({ type: 'stopped' })
   })

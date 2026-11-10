@@ -1,0 +1,29 @@
+{
+  "src/player/infra/render/decoded-frame-clock.ts": {
+    "bytes": 2438,
+    "imports": [],
+    "format": "esm"
+  },
+  "src/player/infra/render/decoded-video-frame-worker-source.ts": {
+    "bytes": 6231,
+    "imports": [
+      {
+        "path": "src/player/infra/render/decoded-frame-clock.ts",
+        "kind": "import-statement",
+        "original": "./decoded-frame-clock"
+      }
+    ],
+    "format": "esm"
+  },
+  "src/player/infra/render/decoded-video-frame-worker.ts": {
+    "bytes": 643,
+    "imports": [
+      {
+        "path": "src/player/infra/render/decoded-video-frame-worker-source.ts",
+        "kind": "import-statement",
+        "original": "./decoded-video-frame-worker-source"
+      }
+    ],
+    "format": "esm"
+  }
+}

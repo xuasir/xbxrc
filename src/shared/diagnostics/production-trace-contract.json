@@ -218,6 +218,9 @@
       "expectedFps"
     ],
     "browserPlaybackAnomalySample": [
+      "rendererGeneration",
+      "gpuTiming",
+      "decodedSupply",
       "episodeId",
       "sampleId",
       "sampledAtMs",
@@ -519,7 +522,8 @@
       "source",
       "queryCount",
       "disjointCount",
-      "duration"
+      "duration",
+      "completion"
     ],
     "duration": [
       "capacity",
@@ -1021,6 +1025,13 @@
       "endedAtMs"
     ],
     "decodedSupply": [
+      "pixelFormat",
+      "unknownClocks",
+      "adjustedClocks",
+      "ackDeliveryStatus",
+      "supplyClock",
+      "invalidClockReasons",
+      "diagnostics",
       "read",
       "sent",
       "overwrites",
@@ -1047,9 +1058,40 @@
       "ackDeliveryP95Ms",
       "ackDeliveryMaxMs",
       "workerObservationAgeMs"
-    ]
+    ],
+    "supplyClock": ["state", "samples", "rejected", "offsetMs", "uncertaintyMs", "ageMs"],
+    "invalidClockReasons": ["outsideCalibration", "workerOrderOrNonFinite"],
+    "diagnostics": ["count", "suppressed", "taskState", "lastAnomaly"],
+    "lastAnomaly": ["sequence", "atMs", "startup", "reasons", "times", "offsetMs", "uncertaintyMs", "longTasks"],
+    "longTasks": ["atMs", "durationMs"],
+    "completion": ["state", "fenceCount", "completed", "timeouts", "insertionCpuMaxMs", "failureReason", "latest"],
+    "latest": ["submittedAtMs", "insertedAtMs", "observedAtMs", "lowerBoundMs", "upperBoundMs", "polls"]
   },
   "enums": [
+    "NV12",
+    "I420",
+    "I420A",
+    "I422",
+    "I444",
+    "RGBA",
+    "RGBX",
+    "BGRA",
+    "BGRX",
+    "calibrated",
+    "expired",
+    "uncalibrated",
+    "uncertaintyClamped",
+    "observing",
+    "frameSupply",
+    "readWait",
+    "receiveGap",
+    "transfer",
+    "consume",
+    "staleDrop",
+    "outsideCalibration",
+    "workerOrderOrNonFinite",
+    "overBudget",
+    "driver",
     "off",
     "production",
     "dev",

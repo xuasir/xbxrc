@@ -48,6 +48,27 @@ function harness() {
 }
 
 describe('worker latest-frame supply', () => {
+  it('returns clock timestamps and preserves ACK progress across bounded quantization and missing evidence', async () => {
+    const h = harness()
+    h.source.handle({ type: 'clock', id: 4 })
+    expect(h.endpoint.postMessage).toHaveBeenLastCalledWith({ type: 'clock', id: 4, receivedAtEpochMs: 1000, sentAtEpochMs: 1000 })
+    h.source.handle({ type: 'start', track: h.track })
+    await h.push(h.frame(1))
+    h.at(999)
+    h.source.handle({ type: 'ack', sequence: 1, acknowledgedAtWorkerEpochMs: 1000, clockUncertaintyMs: 2 })
+    h.at(1001)
+    await h.push(h.frame(2))
+    expect(h.sent()[1]!.timing).toMatchObject({ ackCount: 1, lastAckRoundTripMs: 0, lastAckDeliveryMs: 0, lastAckDeliveryStatus: 'uncertaintyClamped', lastAckSequence: 1, lastAckReceivedAtEpochMs: 999 })
+    h.source.handle({ type: 'ack', sequence: 2, acknowledgedAtWorkerEpochMs: 1010, clockUncertaintyMs: 2 })
+    await h.push(h.frame(3))
+    expect(h.sent()[2]!.timing).toMatchObject({ ackCount: 2, lastAckDeliveryStatus: 'invalid', lastAckDeliveryMs: undefined })
+    h.source.handle({ type: 'ack', sequence: 3 })
+    await h.push(h.frame(4))
+    expect(h.sent()[3]!.timing).toMatchObject({ ackCount: 3, lastAckDeliveryStatus: 'uncalibrated', lastAckDeliveryMs: undefined })
+    h.source.handle({ type: 'stop' })
+    await h.settle()
+  })
+
   it('reads continuously during a delayed ACK and sends the newest pending frame immediately', async () => {
     const h = harness()
     h.source.handle({ type: 'start', track: h.track })
@@ -64,7 +85,7 @@ describe('worker latest-frame supply', () => {
     expect(overwritten.close).toHaveBeenCalledOnce()
     expect(first.close).toHaveBeenCalledTimes(0)
     h.at(1040)
-    h.source.handle({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 1038 })
+    h.source.handle({ type: 'ack', sequence: 1, acknowledgedAtEpochMs: 1038, acknowledgedAtWorkerEpochMs: 1038, clockUncertaintyMs: 1 })
     expect(h.sent()).toHaveLength(2)
     expect(h.sent()[1]).toMatchObject({ frame: latest, timing: {
       sequence: 3,

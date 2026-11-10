@@ -1,10 +1,14 @@
 import type { DecodedFrameFallback, DecodedFrameWorkerMessage, TrackProcessorConstructor } from './decoded-video-frame-reader'
+import { FRAME_CLOCK_QUANTIZATION_MS } from './decoded-frame-clock'
 
 export interface DecodedFrameWorkerRequest {
-  type: 'start' | 'ack' | 'stop'
+  type: 'start' | 'ack' | 'stop' | 'clock'
+  id?: number
   track?: MediaStreamTrack
   sequence?: number
   acknowledgedAtEpochMs?: number
+  acknowledgedAtWorkerEpochMs?: number
+  clockUncertaintyMs?: number
 }
 
 interface WorkerEndpoint {
@@ -26,10 +30,20 @@ export class DecodedVideoFrameWorkerSource {
   private ackCount = 0
   private lastAckRoundTripMs?: number
   private lastAckDeliveryMs?: number
+  private lastAckSequence?: number
+  private lastAckReceivedAtEpochMs?: number
+  private lastAckDeliveryStatus?: 'valid' | 'uncertaintyClamped' | 'uncalibrated' | 'invalid'
 
   constructor(private readonly endpoint: WorkerEndpoint, private readonly now = () => performance.timeOrigin + performance.now()) {}
 
   handle(message: DecodedFrameWorkerRequest): void {
+    if (message.type === 'clock') {
+      if (!this.stopped && message.id !== undefined) {
+        const receivedAtEpochMs = this.now()
+        this.endpoint.postMessage({ type: 'clock', id: message.id, receivedAtEpochMs, sentAtEpochMs: this.now() })
+      }
+      return
+    }
     if (message.type === 'stop') {
       void this.stop()
     }
@@ -38,9 +52,14 @@ export class DecodedVideoFrameWorkerSource {
         return
       const atMs = this.now()
       const roundTrip = atMs - this.inFlight.sentAtEpochMs
-      this.lastAckRoundTripMs = Number.isFinite(roundTrip) && roundTrip >= 0 ? roundTrip : undefined
-      const delivery = message.acknowledgedAtEpochMs === undefined ? undefined : atMs - message.acknowledgedAtEpochMs
-      this.lastAckDeliveryMs = delivery !== undefined && Number.isFinite(delivery) && delivery >= 0 ? delivery : undefined
+      this.lastAckRoundTripMs = Number.isFinite(roundTrip) && roundTrip >= -FRAME_CLOCK_QUANTIZATION_MS ? Math.max(0, roundTrip) : undefined
+      const delivery = message.acknowledgedAtWorkerEpochMs === undefined ? undefined : atMs - message.acknowledgedAtWorkerEpochMs
+      const uncertainty = message.clockUncertaintyMs ?? 0
+      const valid = delivery !== undefined && Number.isFinite(delivery) && Number.isFinite(uncertainty) && uncertainty >= 0 && delivery >= -uncertainty
+      this.lastAckDeliveryMs = valid ? Math.max(0, delivery!) : undefined
+      this.lastAckDeliveryStatus = delivery === undefined ? 'uncalibrated' : valid ? delivery! < 0 ? 'uncertaintyClamped' : 'valid' : 'invalid'
+      this.lastAckSequence = message.sequence
+      this.lastAckReceivedAtEpochMs = atMs
       this.ackCount++
       this.inFlight = undefined
       this.sendLatest()
@@ -101,7 +120,7 @@ export class DecodedVideoFrameWorkerSource {
       this.endpoint.postMessage({
         type: 'frame',
         frame: pending.frame,
-        timing: { sequence: pending.sequence, readStartedAtEpochMs: pending.readStartedAtEpochMs, readFinishedAtEpochMs: pending.readFinishedAtEpochMs, sentAtEpochMs, readCount: this.readCount, sentCount: ++this.sentCount, overwriteCount: this.overwriteCount, ackCount: this.ackCount, lastAckRoundTripMs: this.lastAckRoundTripMs, lastAckDeliveryMs: this.lastAckDeliveryMs },
+        timing: { sequence: pending.sequence, readStartedAtEpochMs: pending.readStartedAtEpochMs, readFinishedAtEpochMs: pending.readFinishedAtEpochMs, sentAtEpochMs, readCount: this.readCount, sentCount: ++this.sentCount, overwriteCount: this.overwriteCount, ackCount: this.ackCount, lastAckRoundTripMs: this.lastAckRoundTripMs, lastAckDeliveryMs: this.lastAckDeliveryMs, lastAckSequence: this.lastAckSequence, lastAckReceivedAtEpochMs: this.lastAckReceivedAtEpochMs, lastAckDeliveryStatus: this.lastAckDeliveryStatus },
       }, [pending.frame])
     }
     catch {

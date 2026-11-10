@@ -1,9 +1,11 @@
 import { LatencyWindow } from '../../../shared/latency-window'
+import { GpuCompletionProbe } from './gpu-completion-probe'
 
 interface TimerExtension { TIME_ELAPSED_EXT: number, GPU_DISJOINT_EXT: number }
 
 /** 每秒至多一张GPU耗时样本，单query在途；查询结果始终异步读取。 */
 export class GpuFrameTimer {
+  private readonly completion: GpuCompletionProbe
   private readonly extension?: TimerExtension
   private readonly duration = new LatencyWindow()
   private query?: WebGLQuery
@@ -15,6 +17,7 @@ export class GpuFrameTimer {
   private disjointCount = 0
 
   constructor(private readonly gl: WebGL2RenderingContext) {
+    this.completion = new GpuCompletionProbe(gl)
     try {
       this.extension = typeof gl.getExtension === 'function'
         ? gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExtension | undefined ?? undefined
@@ -102,9 +105,14 @@ export class GpuFrameTimer {
     this.sampledAtMs = undefined
   }
 
-  dispose(): void { this.disposeQuery() }
+  submitted(atMs: number): void { this.completion.submit(atMs) }
+
+  dispose(): void {
+    this.disposeQuery()
+    this.completion.dispose()
+  }
 
   snapshot() {
-    return { source: 'EXT_disjoint_timer_query_webgl2' as const, state: this.state, sampledAtMs: this.sampledAtMs, disjointCount: this.disjointCount, queryCount: Number(this.query !== undefined), duration: this.duration.snapshot() }
+    return { source: 'EXT_disjoint_timer_query_webgl2' as const, state: this.state, sampledAtMs: this.sampledAtMs, disjointCount: this.disjointCount, queryCount: Number(this.query !== undefined), duration: this.duration.snapshot(), completion: this.completion.snapshot() }
   }
 }

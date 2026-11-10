@@ -311,7 +311,19 @@
         "staleDrops": 1,
         "transferP95Ms": 4,
         "transferMaxMs": 80,
-        "token": "private"
+        "token": "private",
+        "unknownClocks": 0,
+        "adjustedClocks": 2,
+        "supplyClock": {
+          "state": "calibrated",
+          "samples": 3,
+          "rejected": 1,
+          "offsetMs": -100.125,
+          "uncertaintyMs": 2.5,
+          "ageMs": 0
+        },
+        "ackDeliveryStatus": "uncertaintyClamped",
+        "pixelFormat": "NV12"
       },
       "timing": {
         "readToSubmit": {
@@ -338,7 +350,19 @@
         "delivered": 55,
         "staleDrops": 1,
         "transferP95Ms": 4,
-        "transferMaxMs": 80
+        "transferMaxMs": 80,
+        "unknownClocks": 0,
+        "adjustedClocks": 2,
+        "supplyClock": {
+          "state": "calibrated",
+          "samples": 3,
+          "rejected": 1,
+          "offsetMs": -100.125,
+          "uncertaintyMs": 2.5,
+          "ageMs": 0
+        },
+        "ackDeliveryStatus": "uncertaintyClamped",
+        "pixelFormat": "NV12"
       },
       "timing": {
         "readToSubmit": {
@@ -348,6 +372,145 @@
         }
       },
       "timingScope": "retainedSamples"
+    }
+  },
+  {
+    "event": "browserPlaybackAnomalySample",
+    "input": {
+      "rendererGeneration": 3,
+      "phase": "frameSupply",
+      "gpuTiming": {
+        "completion": {
+          "state": "ready",
+          "fenceCount": 0,
+          "completed": 2,
+          "timeouts": 0,
+          "insertionCpuMaxMs": 1,
+          "latest": {
+            "submittedAtMs": 1000,
+            "insertedAtMs": 1001,
+            "observedAtMs": 1005,
+            "lowerBoundMs": 0,
+            "upperBoundMs": 5,
+            "polls": 1
+          }
+        }
+      },
+      "decodedSupply": {
+        "invalidClockReasons": {
+          "outsideCalibration": 1,
+          "workerOrderOrNonFinite": 0
+        },
+        "supplyClock": {
+          "state": "calibrated",
+          "samples": 3,
+          "rejected": 1,
+          "offsetMs": -100.125,
+          "uncertaintyMs": 2.5,
+          "ageMs": 0
+        },
+        "diagnostics": {
+          "count": 4,
+          "suppressed": 3,
+          "taskState": "observing",
+          "lastAnomaly": {
+            "sequence": 22,
+            "atMs": 100,
+            "startup": false,
+            "reasons": [
+              "readWait",
+              "receiveGap",
+              "transfer"
+            ],
+            "times": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "offsetMs": -100.125,
+            "uncertaintyMs": 2.5,
+            "longTasks": [
+              {
+                "atMs": 30,
+                "durationMs": 65
+              }
+            ]
+          }
+        }
+      },
+      "token": "private"
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "rendererGeneration": 3,
+      "phase": "frameSupply",
+      "gpuTiming": {
+        "completion": {
+          "state": "ready",
+          "fenceCount": 0,
+          "completed": 2,
+          "timeouts": 0,
+          "insertionCpuMaxMs": 1,
+          "latest": {
+            "submittedAtMs": 1000,
+            "insertedAtMs": 1001,
+            "observedAtMs": 1005,
+            "lowerBoundMs": 0,
+            "upperBoundMs": 5,
+            "polls": 1
+          }
+        }
+      },
+      "decodedSupply": {
+        "invalidClockReasons": {
+          "outsideCalibration": 1,
+          "workerOrderOrNonFinite": 0
+        },
+        "supplyClock": {
+          "state": "calibrated",
+          "samples": 3,
+          "rejected": 1,
+          "offsetMs": -100.125,
+          "uncertaintyMs": 2.5,
+          "ageMs": 0
+        },
+        "diagnostics": {
+          "count": 4,
+          "suppressed": 3,
+          "taskState": "observing",
+          "lastAnomaly": {
+            "sequence": 22,
+            "atMs": 100,
+            "startup": false,
+            "reasons": [
+              "readWait",
+              "receiveGap",
+              "transfer"
+            ],
+            "times": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "offsetMs": -100.125,
+            "uncertaintyMs": 2.5,
+            "longTasks": [
+              {
+                "atMs": 30,
+                "durationMs": 65
+              }
+            ]
+          }
+        }
+      }
     }
   }
 ]

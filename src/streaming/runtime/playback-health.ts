@@ -75,9 +75,10 @@ function timing(value: unknown): Record<string, number> | undefined {
 
 export function compactTimings(observation: PlaybackObservation): Record<string, unknown> {
   const { stats } = observation
+  const completion = stats.rendererGpuTiming?.completion
   return {
     timing: { duration: timing(stats.rendererTiming?.duration), upload: timing(stats.rendererTiming?.upload), submit: timing(stats.rendererTiming?.submit), interval: timing(stats.rendererTiming?.interval) },
-    gpuTiming: { state: stats.rendererGpuTiming?.state, queryCount: stats.rendererGpuTiming?.queryCount, disjointCount: stats.rendererGpuTiming?.disjointCount, duration: timing(stats.rendererGpuTiming?.duration) },
+    gpuTiming: { state: stats.rendererGpuTiming?.state, queryCount: stats.rendererGpuTiming?.queryCount, disjointCount: stats.rendererGpuTiming?.disjointCount, duration: timing(stats.rendererGpuTiming?.duration), completion: completion ? { state: completion.state, completed: completion.completed, timeouts: completion.timeouts, insertionCpuMaxMs: measured(completion.insertionCpuMaxMs), failureReason: completion.failureReason, latest: completion.latest ? { lowerBoundMs: measured(completion.latest.lowerBoundMs), upperBoundMs: measured(completion.latest.upperBoundMs) } : undefined } : undefined },
     timingScope: 'retainedSamples',
   }
 }
@@ -102,6 +103,11 @@ export function compactDecodedSupply(stats: BrowserPlaybackStats): Record<string
           delivered: supply.deliveredFrames,
           staleDrops: supply.staleFrameDropCount,
           invalidClocks: supply.invalidClockCount,
+          unknownClocks: supply.unknownClockCount,
+          adjustedClocks: supply.adjustedClockCount,
+          supplyClock: supply.clock ? { state: supply.clock.state, uncertaintyMs: measured(supply.clock.uncertaintyMs), offsetMs: measured(supply.clock.offsetMs) } : undefined,
+          ackDeliveryStatus: supply.ackDeliveryStatus,
+          pixelFormat: supply.framePixelFormat,
           lastSequence: supply.lastReadSequence,
           receiveAgeMs: measured(supply.receiveAgeMs),
           workerObservationAgeMs: measured(supply.workerObservationAgeMs),

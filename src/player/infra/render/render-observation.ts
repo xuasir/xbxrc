@@ -137,8 +137,10 @@ export class RenderObservation {
       const atMs = performance.now()
       if (frame?.receivedAtMs !== undefined)
         this.receiveToSubmit.record(atMs - frame.receivedAtMs)
-      if (frame?.readFinishedAtEpochMs !== undefined)
-        this.readToSubmit.record(performance.timeOrigin + atMs - frame.readFinishedAtEpochMs)
+      if (frame?.readFinishedAtEpochMs !== undefined) {
+        const age = performance.timeOrigin + atMs - frame.readFinishedAtEpochMs
+        this.readToSubmit.record(age >= -(frame.clockUncertaintyMs ?? 0) ? Math.max(0, age) : Number.NaN)
+      }
       this.duration.record(durationMs)
       if (uploadMs !== undefined)
         this.upload.record(uploadMs)

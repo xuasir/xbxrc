@@ -30,7 +30,9 @@ function decodedFixture(video: HTMLVideoElement) {
   video.srcObject = { getVideoTracks: () => [{ readyState: 'live', muted: true, clone: () => ({ stop: vi.fn() }) }] } as unknown as MediaStream
   return {
     push: async () => {
-      const frame = { timestamp: 0, displayWidth: video.videoWidth, displayHeight: video.videoHeight, close: vi.fn() } as unknown as VideoFrame
+      const frame = { timestamp: 0, displayWidth: video.videoWidth, displayHeight: video.videoHeight, close: vi.fn(), copyTo: vi.fn(() => {
+        throw new Error('CPU pixel copy forbidden in realtime supply')
+      }) } as unknown as VideoFrame
       controller.enqueue(frame)
       await Promise.resolve()
       await Promise.resolve()
@@ -220,6 +222,7 @@ describe('renderers', () => {
     expect(gl.getUniformLocation).toHaveBeenCalledTimes(9)
     expect(gl.uniform1f).toHaveBeenCalled()
     expect(gl.texImage2D).toHaveBeenCalledWith(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame)
+    expect(frame.copyTo).toHaveBeenCalledTimes(0)
     expect(canvasNode.remove).toHaveBeenCalled()
     expect(canvasNode.addEventListener).toHaveBeenCalled()
     expect(canvasNode.removeEventListener).toHaveBeenCalled()

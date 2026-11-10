@@ -1,0 +1,58 @@
+{
+  "gitHead": "02ac7646af00979b56086bce0011582fc334e0f2",
+  "dirty": true,
+  "fixtureInputs": {
+    "fixture/external-source.ts": "3423bb0c7b2ab5133e91c5857c3d1776262d790a583e1990296a1c04789720f4",
+    "fixture/drawable-identity.ts": "0e7e13610622bb843d9ed9e5280cc76eb8f3070f3bde52274ef24dffd36a6ea6",
+    "src/shared/latency-window.ts": "cd3b5e6496fc1225685c7abd6fc1de5be93747c1e70b34835b4e3ce81dde4886",
+    "src/player/infra/render/decoded-frame-clock.ts": "b22076b04c79ca5e91be00652dca46f247718052486fb05ab4520ff02382a1ad",
+    "src/player/infra/render/frame-supply-diagnostics.ts": "b9487f7226dac8a63bc029ac63ab8e0f3e0eade4e75130a3f2e2bba96c9caa7a",
+    "src/player/infra/render/decoded-video-frame-reader.ts": "b104d905b4fe8bab816a3b1b2da6d00640ac5caaf67a25b6281d4c2313114892",
+    "src/player/infra/render/video-frame-identity-observation.ts": "01e90d5d33fdfb560a632ad48ce6cd44b7d9255bd25085756535b563ed2a43d2",
+    "src/player/infra/render/gpu-completion-probe.ts": "6e0e4c44fcbe79686c9b5ab20bad370311d5fe8c70132a78dfb4804648a49c24",
+    "src/player/infra/render/gpu-frame-timer.ts": "b273cc1e93ca116b7bf408ddf8d6f1caf5fa9cd2b1ca8252d63abd99e04bdfd2",
+    "src/player/infra/render/webgl-runtime-guard.ts": "6e1f33d7ffd9d0180659c3a57d95d86c2353727dae31e5020909efd495e81384",
+    "src/player/infra/render/video-frame-pixel-observation.ts": "8651504705d24fac52cf721d21053b23dc9cb24ecd17e57904efbca56c9c21b1",
+    "src/player/infra/render/video-frame-source.ts": "5981091adb7f7e5121d1d2e6be63478abd4a222d111bc60a1ff22dfa2f9fa85f",
+    "fixture/direct-frames.ts": "680d891ee2352db988969e30e5e2e1e6f545ed283ddbaf000c59a626fd48d9f7",
+    "src/player/infra/render/frame-capture-queue.ts": "9e94d5fa7b0165acade860e6b7a4608005c8c616403e5f95b70dc37528caf710",
+    "src/player/infra/render/frame-pacer.ts": "40366fa56683719a349acc7885be328ac8a9a6d5b2b0d880e213a3845017d013",
+    "src/player/infra/render/fsr1-cpu.ts": "f3d19e5560632dc24153070a1eaef443a7982d482765a8d8870b64797eacf0a7",
+    "src/player/infra/render/fsr1-reconstruction-pass.ts": "acaad11889d4bee1da6a7fb83d684f30b4ff19536001d794bb356bace14a0f7d",
+    "src/player/infra/render/render-observation.ts": "c45bc70686d3f6a0356d165e30b017b9b1d52f9c7cc5faf754d8189156b8a82d",
+    "src/player/infra/render/render-surface-observation.ts": "73aedb7b4e5c331c5e7bdfcc1191ec62098248e23af1a9961ef59f61f64d2bde",
+    "src/player/infra/render/sharpening-tuning.ts": "19d70be1928b9d2a3eb0f98e3c1c2defa8dc766e4802c2071b9be5b764545538",
+    "src/player/infra/render/webgl-frame-capture.ts": "1a49a61378b77948f0bfe78b18e88c0ce395913982471dcb8b3ce4026ce3e651",
+    "src/player/infra/render/Renderers.ts": "8996e56127edfde9a1d16fb28cfe7eee52af035bf09897a63ca80d73b614cc54",
+    "src/player/infra/render/SuperResolutionWebGL2Renderer.ts": "a36af07ebf1fbe83c662c6283c741b78d532a6a45ff7934695a5501febedbbb8",
+    "fixture/entry.ts": "9465973969efae6fdd4b39bd2244a2d3e36ddefcb004276dc88777e8c5ba04d5",
+    "src/player/infra/render/decoded-video-frame-worker-source.ts": "d5b7dd1959c8fad34614995f158c25280fb7a0df7f417e62065752fe0634f1b9",
+    "src/player/infra/render/decoded-video-frame-worker.ts": "7433e753760ed6ac87f434f8aa084724fc8c2d15924630b875910738e05b9ffd",
+    "fixture/probe-webkit": "bcfc9d85e2044e2df3c3967496c1706c8d5b0f1118d6a2edccb42283aabc53d4",
+    "fixture/run-webkit.mjs": "2a389f4a6ecd288d2cceca08e331b0e0ca52fc53582781a9c745b0258a591f88"
+  },
+  "resultSha256": "bb32d4d211ef156944d3bca49c852c5fb5e9c2eb74cabeda3b3353a43fd42de7",
+  "productionMetricsSha256": "49ad03937bf20fda808d0613facdb403b3985565e6f6916a312665e36691c972",
+  "engineSources": {
+    "WebGLRenderingContextBase.cpp": {
+      "sha256": "2f1a3e6d761160a59e8a0aa830f5c366525c52aea070a54fd20c0139abbef943",
+      "reference": "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/canvas/WebGLRenderingContextBase.cpp",
+      "qualification": "public main snapshot downloaded 2026-11-10; installed engine revision unverified"
+    },
+    "VideoFrame.mm": {
+      "sha256": "8cf5a421301e154c118874915e166e043e745c8ca85f7275dea228fd8f0948e1",
+      "reference": "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/platform/graphics/cocoa/VideoFrame.mm",
+      "qualification": "public main snapshot downloaded 2026-11-10; installed engine revision unverified"
+    },
+    "VideoFrameCV.mm": {
+      "sha256": "36b108cc9b0fa88ff43609f7615a3b06ae0a3418bbb8f68271b87d1c6e374004",
+      "reference": "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/platform/graphics/cv/VideoFrameCV.mm",
+      "qualification": "public main snapshot downloaded 2026-11-10; installed engine revision unverified"
+    },
+    "GraphicsContextGLCocoa.mm": {
+      "sha256": "e5fd4587c0c2bc6b0bbb25f8bea8ad76deee99974216f74f841de40ebb461cb3",
+      "reference": "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/platform/graphics/angle/GraphicsContextGLCocoa.mm",
+      "qualification": "public main snapshot downloaded 2026-11-10; installed engine revision unverified"
+    }
+  }
+}

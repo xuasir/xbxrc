@@ -29,6 +29,7 @@ export function createBrowserPlaybackTrace(input: {
   let collecting = false
   let collectingAtMs = 0
   let healthSequence = 0
+  let lastSupplyAnomaly = ''
   let observationEpoch = 0
   let healthRecords = 0
   let validRecords = 0
@@ -95,6 +96,24 @@ export function createBrowserPlaybackTrace(input: {
   function publishHealth(at: number, partial = false): void {
     if (latest?.stats.rendererDecodedFrameSupply)
       emit('decodedFrameSupplyObserved', compactDecodedSupply(latest.stats))
+    const supply = latest?.stats.rendererDecodedFrameSupply
+    const anomaly = supply?.diagnostics?.samples.at(-1)
+    const stamp = `${latest?.stats.rendererGeneration}:${anomaly?.sequence}`
+    if (anomaly && stamp !== lastSupplyAnomaly) {
+      lastSupplyAnomaly = stamp
+      const completion = latest?.stats.rendererGpuTiming?.completion
+      const payload = { phase: 'frameSupply', sampleId: latest?.sample.sampleId, rendererGeneration: latest?.stats.rendererGeneration, gpuTiming: { completion: completion ? { state: completion.state, insertionCpuMaxMs: measured(completion.insertionCpuMaxMs), failureReason: completion.failureReason, latest: completion.latest } : undefined }, decodedSupply: { invalidClockReasons: supply?.invalidClockReasons, supplyClock: supply?.clock, diagnostics: { count: supply?.diagnostics?.count, suppressed: supply?.diagnostics?.suppressed, taskState: supply?.diagnostics?.taskState, lastAnomaly: { ...anomaly, times: anomaly.times.map(value => measured(value, 1)), longTasks: anomaly.longTasks.slice(-2) } } } }
+      const bytes = encoder.encode(JSON.stringify(payload)).byteLength + 512
+      if (at - anomalyMinuteAtMs >= 60000) {
+        anomalyMinuteAtMs = at
+        anomalyBytes = 0
+      }
+      if (bytes <= 2048 && anomalyBytes + bytes <= 131072) {
+        if (emit('browserPlaybackAnomalySample', payload))
+          anomalyBytes += bytes
+      }
+      else { suppressed++ }
+    }
     const payload = window.payload(at, input.facts(), ++healthSequence, input.trace(), partial, { pending: collecting, startedAtMs: collectingAtMs })
     const coverage = payload.coverage as { validMs: number, elapsedMs: number, ratio: number }
     if (emit('browserPlaybackHealthObserved', payload)) {
@@ -309,6 +328,7 @@ export function createBrowserPlaybackTrace(input: {
       window = new PlaybackHealthWindow()
       latest = undefined
       healthSequence = healthRecords = validRecords = validMs = totalWindowMs = maxSampleGapMs = resets = 0
+      lastSupplyAnomaly = ''
       ring.length = 0
       lastCounters.clear()
       COUNTERS.forEach(counter => delete totals[counter])

@@ -777,6 +777,7 @@ void main() {
     this.guard?.check(startedAtMs)
     this.drewToScreenThisFrame = true
     const submittedAtMs = performance.now()
+    this.guard?.timer.submitted(submittedAtMs)
     this.drawObservation.record(getVideoFrameSource(this.video).lastRenderFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs, startedAtMs)
     if (!this.hasDrawnFrame) {
       this.hasDrawnFrame = true

@@ -47,6 +47,13 @@ describe('production trace full-path budgets', () => {
       deliveredFrames: 107000,
       staleFrameDropCount: 1000,
       invalidClockCount: 0,
+      unknownClockCount: 3,
+      adjustedClockCount: 400,
+      clock: { state: 'calibrated' as const, samples: 360, rejected: 2, offsetMs: -100.125, uncertaintyMs: 2.5, ageMs: 4999 },
+      ackDeliveryStatus: 'uncertaintyClamped' as const,
+      framePixelFormat: 'NV12' as const,
+      invalidClockReasons: { outsideCalibration: 1, workerOrderOrNonFinite: 1 },
+      diagnostics: { count: 10000, suppressed: 8200, taskState: 'observing' as const, samples: [{ sequence: 1, atMs: 1800000, startup: false, reasons: ['readWait', 'receiveGap', 'transfer'], times: [1794285000000, 1794285000050, 1794285000051, 1794285000070, 1794285000071, 1794285000072, 1794285000073], offsetMs: -100.125, uncertaintyMs: 2.5, longTasks: [{ atMs: 1794285000000, durationMs: 55 }] }] },
       deliveryBudgetMs: 50,
       workerReadFrames: 110000,
       workerSentFrames: 108000,
@@ -61,7 +68,8 @@ describe('production trace full-path budgets', () => {
     const trace = createBrowserPlaybackTrace({ enabled: () => true, now: () => at, facts: () => facts, trace: () => ({ ...producer.snapshot(), backend, backendSampleAgeMs: 29000 }), write: (event, payload, options) => producer.record(event, payload, options) })
     trace.begin()
     for (at = 0; at <= 1800000; at += 250) {
-      const current = observation(at, { rendererTiming: timing, rendererDecodedFrameSupply: decodedSupply, rendererFrameSource: 'worker', rendererGpuTiming: { source: 'EXT_disjoint_timer_query_webgl2', state: 'ready', queryCount: 108000, disjointCount: 0, duration: distribution }, browserStatsWindows: { short: { sampleCount: 12, durationMs: 3000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 3000, decodeCoverageMs: 3000, videoCoverageMs: 3000, callbackCoverageMs: 3000, rendererCoverageMs: 3000 }, long: { sampleCount: 60, durationMs: 15000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 15000, decodeCoverageMs: 15000, videoCoverageMs: 15000, callbackCoverageMs: 15000, rendererCoverageMs: 15000 } }, maxCallbackIntervalMs: at >= 900000 ? 150 : 16.67, renderCause: 'healthy', videoPresentAgeMs: 5, rendererSubmitAgeMs: 5, renderDrawDurationMsAvg: 1, renderUploadDurationMsAvg: 0.5 })
+      decodedSupply.diagnostics.samples[0]!.sequence = Math.floor(at / 1000)
+      const current = observation(at, { rendererTiming: timing, rendererDecodedFrameSupply: decodedSupply, rendererFrameSource: 'worker', rendererGpuTiming: { source: 'EXT_disjoint_timer_query_webgl2', state: 'ready', queryCount: 108000, disjointCount: 0, duration: distribution, completion: { source: 'webglFenceCompletionBounds', state: 'ready', fenceCount: 0, completed: 1800, timeouts: 0, insertionCpuMaxMs: 1, latest: { submittedAtMs: 1799000, insertedAtMs: 1799001, observedAtMs: 1799005, lowerBoundMs: 0, upperBoundMs: 5, polls: 1 }, upperBound: distribution } }, browserStatsWindows: { short: { sampleCount: 12, durationMs: 3000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 3000, decodeCoverageMs: 3000, videoCoverageMs: 3000, callbackCoverageMs: 3000, rendererCoverageMs: 3000 }, long: { sampleCount: 60, durationMs: 15000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 15000, decodeCoverageMs: 15000, videoCoverageMs: 15000, callbackCoverageMs: 15000, rendererCoverageMs: 15000 } }, maxCallbackIntervalMs: at >= 900000 ? 150 : 16.67, renderCause: 'healthy', videoPresentAgeMs: 5, rendererSubmitAgeMs: 5, renderDrawDurationMsAvg: 1, renderUploadDurationMsAvg: 0.5 })
       const start = process.hrtime.bigint()
       trace.observe(current)
       trace.tick()
@@ -79,18 +87,26 @@ describe('production trace full-path budgets', () => {
       expect(encoder.encode(`${JSON.stringify(row)}\n`).length, row.event).toBeLessThanOrEqual(descriptor.maxRowBytes)
     }
     expect(producer.snapshot()).toMatchObject({ dropped: 0, producerRowOversized: 0, ipcFailed: 0, inFlight: 0, pending: 0 })
+    const supplySample = rows.find(row => row.event === 'browserPlaybackAnomalySample' && (row.payload as any).phase === 'frameSupply')
+    expect((supplySample?.payload as any).gpuTiming.completion.latest).toMatchObject({ submittedAtMs: 1799000, insertedAtMs: 1799001, observedAtMs: 1799005 })
     const normal = rows.filter(row => !row.event.startsWith('browserPlaybackAnomaly'))
     const normalBytesPerMinute = normal.reduce((sum, row) => sum + encoder.encode(`${JSON.stringify(row)}\n`).length, 0) / 30
     expect(normalBytesPerMinute).toBeLessThanOrEqual(327680)
     const anomalyBytes = rows.filter(row => row.event === 'browserPlaybackAnomalySample').reduce((sum, row) => sum + encoder.encode(`${JSON.stringify(row)}\n`).length, 0)
-    expect(anomalyBytes / 15).toBeLessThanOrEqual(131072)
+    const anomalyMinutes = new Map<number, number>()
+    for (const row of rows.filter(row => row.event === 'browserPlaybackAnomalySample')) {
+      const minute = Math.floor((row.tsMs - 1794116093651) / 60000)
+      anomalyMinutes.set(minute, (anomalyMinutes.get(minute) ?? 0) + encoder.encode(`${JSON.stringify(row)}\n`).length)
+    }
+    const maxAnomalyBytesPerMinute = Math.max(...anomalyMinutes.values())
+    expect(maxAnomalyBytesPerMinute).toBeLessThanOrEqual(131072)
     durations.sort((a, b) => a - b)
     const p95Ms = durations[Math.ceil(durations.length * 0.95) - 1]!
     // 成本门由独立 runner 执行；全量功能测试并发时继续验证全部硬字节与覆盖预算。
     if (process.env.PRODUCTION_TRACE_VERIFY_COST === '1')
       expect(p95Ms).toBeLessThanOrEqual(0.5)
     if (process.env.PRODUCTION_TRACE_METRICS_PATH)
-      writeFileSync(process.env.PRODUCTION_TRACE_METRICS_PATH, `${JSON.stringify({ healthRecords: health.length, normalBytesPerMinute, anomalyBytesPerMinute: anomalyBytes / 15, healthEncodingP95Ms: p95Ms, maxHealthRowBytes: Math.max(...health.map(row => encoder.encode(`${JSON.stringify(row)}\n`).length)), producer: producer.snapshot() }, null, 2)}\n`)
+      writeFileSync(process.env.PRODUCTION_TRACE_METRICS_PATH, `${JSON.stringify({ healthRecords: health.length, normalBytesPerMinute, anomalyBytes, anomalyBytesPerMinute: maxAnomalyBytesPerMinute, healthEncodingP95Ms: p95Ms, maxHealthRowBytes: Math.max(...health.map(row => encoder.encode(`${JSON.stringify(row)}\n`).length)), producer: producer.snapshot() }, null, 2)}\n`)
     if (process.env.PRODUCTION_TRACE_FIXTURE_PATH)
       writeFileSync(process.env.PRODUCTION_TRACE_FIXTURE_PATH, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`)
   })
