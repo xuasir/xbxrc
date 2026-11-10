@@ -102,6 +102,21 @@ impl StreamingService {
             context,
         })
         .map_err(|error| AppError::Streaming(error.to_string()))?;
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionVideoConstraintsResolved",
+            None,
+            serde_json::json!({
+                "targetType": target_type.as_str(),
+                "configuredResolution": if target.is_home() { config_snapshot.xhome_resolution } else { config_snapshot.resolution },
+                "deviceKind": output.plan.session.device.kind,
+                "deviceWidth": output.plan.session.device.max_width,
+                "deviceHeight": output.plan.session.device.max_height,
+                "deviceOs": output.plan.session.settings.os_name,
+                "headerDisplayWidth": output.plan.session.ms_device_info.display_width_pixels,
+                "headerDisplayHeight": output.plan.session.ms_device_info.display_height_pixels,
+            }),
+        );
         self.runtime_trace.record_decision(
             "streaming",
             "compiledPlan",

@@ -1,0 +1,324 @@
+{
+  "trace": {
+    "file": "runtime-trace-1794217868106-1.jsonl",
+    "sha256": "e6c76a1d25e3bdefa90a46d6445ba8fb990fbd30a54e27ec572e98e13728d1a0",
+    "rows": 1680,
+    "profile": "dev",
+    "build": {
+      "buildFingerprint": {
+        "buildTimestampUnixMs": "1794217853468",
+        "cargoProfile": "debug",
+        "edition": "browser",
+        "gitCommitShort": "20348f4c",
+        "sourceFingerprintSha256": "cda8c30cc7d2a6ccf57d461efdfdd7af7fd03cecabb5b05e2f6793950695da88",
+        "workspaceDirty": true
+      }
+    }
+  },
+  "cause": "独立VideoFrame对象的timestamp在实机持续为0；时间戳去重过滤后续reader交付，渲染提交停滞触发sustainedRendererPressure。",
+  "resourcePoints": [
+    {
+      "seq": 700,
+      "tsMs": 1794217949538,
+      "observedAtMs": 81094,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 510,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 511
+        },
+        {
+          "decodedFramesReceived": 510,
+          "lastDrawAtMs": 72517,
+          "lastDrawSequence": 511,
+          "realtimeDrawCount": 5,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 510,
+          "lastDrawAtMs": 72517,
+          "lastDrawSequence": 511,
+          "realtimeDrawCount": 5,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1096,
+      "tsMs": 1794217968921,
+      "observedAtMs": 100478,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 76,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 76,
+          "lastDrawAtMs": 99223,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 5,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 76,
+          "lastDrawAtMs": 99223,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 5,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1098,
+      "tsMs": 1794217968942,
+      "observedAtMs": 100498,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 76,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 76,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 76,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1101,
+      "tsMs": 1794217969026,
+      "observedAtMs": 100583,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 82,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 82,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 82,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1148,
+      "tsMs": 1794217971027,
+      "observedAtMs": 102583,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 202,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 202,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 202,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1189,
+      "tsMs": 1794217973027,
+      "observedAtMs": 104583,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 322,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 322,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 322,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1229,
+      "tsMs": 1794217975031,
+      "observedAtMs": 106588,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 442,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 442,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 442,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    },
+    {
+      "seq": 1243,
+      "tsMs": 1794217975639,
+      "observedAtMs": 107196,
+      "fields": [
+        {
+          "decodedFrameReaders": 1,
+          "decodedFramesReceived": 478,
+          "renderFrameSource": "worker",
+          "renderFrameTimestampUs": 0,
+          "retainedDecodedFrames": 1
+        },
+        {
+          "latestVideoSequence": 1946
+        },
+        {
+          "decodedFramesReceived": 478,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        },
+        {
+          "decodedFramesReceived": 478,
+          "lastDrawAtMs": 100497,
+          "lastDrawSequence": 1946,
+          "realtimeDrawCount": 1,
+          "renderFrameSource": "worker",
+          "submitFailureCount": 0
+        }
+      ]
+    }
+  ],
+  "mediaWindow": {
+    "durationMs": 61492,
+    "receivedFps": 59.94275678136994,
+    "decodeFps": 59.95901905938984,
+    "deltas": {
+      "framesReceived": 3686,
+      "framesDecoded": 3687,
+      "framesDropped": 0,
+      "freezeCount": 1,
+      "totalFreezesDuration": 0.214,
+      "packetsLost": 26,
+      "nackCount": 24,
+      "pliCount": 0,
+      "firCount": 0,
+      "retransmittedPacketsReceived": 26
+    }
+  },
+  "actions": [
+    {
+      "seq": 698,
+      "tsMs": 1794217949537,
+      "reason": "sustainedRendererPressure",
+      "generation": 2
+    },
+    {
+      "seq": 1063,
+      "tsMs": 1794217967607,
+      "reason": "healthyEnhancementTrial",
+      "generation": 3
+    },
+    {
+      "seq": 1241,
+      "tsMs": 1794217975638,
+      "reason": "sustainedRendererPressure",
+      "generation": 5
+    }
+  ],
+  "fix": "以每次reader交付产生独立localSequence，timestamp仅作诊断；两个timestamp=0的VideoFrame均送达renderer。",
+  "validation": "修正后的5项定向回归与lint:fix通过；实际设备帧率接续重新进入串流后验收。"
+}

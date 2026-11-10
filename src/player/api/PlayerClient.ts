@@ -264,6 +264,8 @@ export class PlayerClient {
     this.mediaService.updateRendererAttach(spec)
   }
 
+  retryRendering(): void { this.mediaService.retryRendering() }
+
   updateRendererState(
     config: Partial<RendererRuntimeConfig>,
     spec: RendererAttachSpec,

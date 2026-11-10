@@ -3,6 +3,7 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMoun
 import { useI18n } from 'vue-i18n'
 import { navigationEngine } from '@/navigation/core'
 import { usePageFocus } from '@/navigation/core/usePageFocus'
+import UiMotionTransition from '../components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import ControllerConnectionSection from './controller/ControllerConnectionSection.vue'
@@ -13,6 +14,7 @@ const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
 type ControllerTab = 'connection' | 'settings'
 const activeTab = ref<ControllerTab>('connection')
+const panelDirection = ref<'forward' | 'back'>('forward')
 const tabs = computed(() => (['connection', 'settings'] as const).map(key => ({ key, label: t(`controllerPage.${key}`), nodeId: `controller.tabs.${key}` })))
 const activeLabel = computed(() => t(`controllerPage.${activeTab.value}`))
 const contentRef = ref<HTMLElement | null>(null)
@@ -25,7 +27,12 @@ function changeTab(key: ControllerTab): void {
   if (key === activeTab.value)
     return
   scrollPositions[activeTab.value] = contentRef.value?.scrollTop ?? 0
+  panelDirection.value = key === 'settings' ? 'forward' : 'back'
   activeTab.value = key
+  void nextTick(() => {
+    if (active && activeTab.value === key)
+      restoreScroll()
+  })
 }
 function restoreScroll(): void {
   if (contentRef.value)
@@ -62,14 +69,14 @@ usePageFocus(() => pageRef.value, () => activeTab.value, () => `controller.tabs.
         <h1>{{ activeLabel }}</h1>
         <p>{{ t(`controllerPage.${activeTab}Hint`) }}</p>
       </header>
-      <div ref="contentRef" class="controller-page__content" data-nav-scroll-container>
-        <Transition name="panel-slide" mode="out-in" @after-enter="restoreScroll">
+      <div ref="contentRef" class="controller-page__content ui-motion-stack" data-nav-scroll-container>
+        <UiMotionTransition kind="panel" :direction="panelDirection">
           <!-- 设置编辑器包含多个弹层根节点，单根容器承接子页进出动画。 -->
           <div :key="activeTab">
             <ControllerConnectionSection v-if="activeTab === 'connection'" />
             <SettingInputToolsSection v-else scope-id="controller.content" nav-node-base-id="controller.settings" />
           </div>
-        </Transition>
+        </UiMotionTransition>
       </div>
     </section>
   </section>

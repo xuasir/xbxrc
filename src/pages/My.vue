@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { MySection } from './library/library-view'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import UiMotionTransition from '@/components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '@/components/layout/shell-context'
 import { SPATIAL_NAV_SCOPE_IDS } from '@/navigation/spatial-nav.constants'
 import AccountPanel from './library/AccountPanel.vue'
@@ -16,6 +17,10 @@ const router = useRouter()
 const panel = ref<HTMLElement | null>(null)
 const active = computed(() => (route.params.section || 'account') as MySection)
 const tabs = MY_SECTIONS.map(key => ({ key, label: MY_LABELS[key], nodeId: `library.tab.${key}` }))
+const panelDirection = ref<'forward' | 'back'>('forward')
+watch(active, (next, previous) => {
+  panelDirection.value = MY_SECTIONS.indexOf(next) > MY_SECTIONS.indexOf(previous) ? 'forward' : 'back'
+}, { flush: 'sync' })
 const component = computed(() => active.value === 'account' ? AccountPanel : active.value === 'album' ? AlbumPanel : GameHistoryPanel)
 function select(key: string) {
   void router.push(`/my/${key}`)
@@ -28,8 +33,10 @@ useLibraryNavigation(() => panel.value, () => `/my/${active.value}`, () => MY_SE
   <section class="library-page ui-page-shell">
     <div class="library-layout">
       <SettingSidebar title="我的" :tabs="tabs" :active-tab-key="active" :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell" @tab-change="select" />
-      <div ref="panel" class="library-content" data-nav-scroll-container>
-        <KeepAlive><component :is="component" :key="active" :mode="active" /></KeepAlive>
+      <div ref="panel" class="library-content ui-motion-stack" data-nav-scroll-container>
+        <UiMotionTransition kind="panel" :direction="panelDirection">
+          <KeepAlive><component :is="component" :key="active" :mode="active" /></KeepAlive>
+        </UiMotionTransition>
       </div>
     </div>
   </section>

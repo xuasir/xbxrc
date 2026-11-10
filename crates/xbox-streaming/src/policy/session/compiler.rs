@@ -603,6 +603,72 @@ mod tests {
     }
 
     #[test]
+    fn home_resolution_is_isolated_from_cloud_profile_across_all_tiers() {
+        for (resolution, width, height, os) in [
+            (ResolutionPreference::P720, 1280, 720, "android"),
+            (ResolutionPreference::P1080, 1920, 1080, "windows"),
+            (ResolutionPreference::P1080Hq, 1920, 1080, "tizen"),
+            (ResolutionPreference::P1440, 2560, 1440, "tizen"),
+        ] {
+            let mut config = Config::default();
+            config.session.cloud_resolution = ResolutionPreference::P1440;
+            config.session.home_resolution = resolution;
+            let context = Context {
+                target: Target::Home,
+                ..Default::default()
+            };
+            let plan = compile_session(
+                &config,
+                &context,
+                &sample_access(),
+                RuntimeMode::WebRtcDirect,
+            );
+            let header = parse_header_json(plan.headers.get("x-ms-device-info").unwrap());
+            assert_eq!(
+                (plan.device.max_width, plan.device.max_height),
+                (width, height)
+            );
+            assert_eq!(plan.settings.os_name, os);
+            assert_eq!(
+                header_u64(
+                    &header,
+                    &["dev", "displayInfo", "dimensions", "widthInPixels"]
+                ),
+                u64::from(width)
+            );
+            assert_eq!(
+                header_u64(
+                    &header,
+                    &["dev", "displayInfo", "dimensions", "heightInPixels"]
+                ),
+                u64::from(height)
+            );
+            let context = Context {
+                target: Target::Cloud,
+                ..Default::default()
+            };
+            let cloud = compile_session(
+                &config,
+                &context,
+                &sample_access(),
+                RuntimeMode::WebRtcDirect,
+            );
+            assert_eq!(
+                (cloud.device.max_width, cloud.device.max_height),
+                (2560, 1440)
+            );
+            assert_eq!(cloud.settings.os_name, "tizen");
+            assert_eq!(
+                (
+                    cloud.ms_device_info.display_width_pixels,
+                    cloud.ms_device_info.display_height_pixels
+                ),
+                (4096, 2160)
+            );
+        }
+    }
+
+    #[test]
     fn cloud_session_headers_keep_custom_image() {
         let config = Config::default();
 

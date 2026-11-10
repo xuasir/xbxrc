@@ -136,6 +136,10 @@ fn normalize_configuration_response(response: Value) -> Option<Value> {
 }
 
 #[cfg(test)]
+#[path = "session.test.rs"]
+mod request_tests;
+
+#[cfg(test)]
 mod tests {
     use super::normalize_configuration_response;
     use serde_json::json;

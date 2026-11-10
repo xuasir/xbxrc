@@ -63,7 +63,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const experienceMetricsEnabled = ref(false)
   const browserDiagnosticsEnabled = ref(false)
   const performanceSnapshot = ref<StreamStats | null>(null)
-  const renderState = shallowRef<StreamRenderState>({ mode: null, pending: false })
+  const renderState = shallowRef<StreamRenderState>({ engine: null, superResolution: false, pending: false })
   const renderProjection = shallowRef<StreamRenderProjection | null>(null)
   const lastFrameAt = ref<number | null>(null)
   let runtimeCleanup: (() => void) | null = null
@@ -382,7 +382,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     performanceSnapshot.value = null
     lastFrameAt.value = null
     renderProjection.value = null
-    renderState.value = { mode: null, pending: false }
+    renderState.value = { engine: null, superResolution: false, pending: false }
     if (!input?.preserveLaunchContext) {
       activeSessionId = null
       activeMode = null
@@ -454,7 +454,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     const launchSpec = {
       ...attemptSpec,
       render: projectRenderControls(attemptSpec.render, controls),
-      clientExperimentalSuperResolution: controls.mode === 'sr',
+      clientExperimentalSuperResolution: controls.superResolution,
     }
     void recordRuntimeTraceEvent('runtimeLaunchReadyToInvoke', {
       targetType: input.targetType,
@@ -526,7 +526,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     runtime.value.applyDisplayState({
       displayOptions: render.displayOptions,
       render,
-      superResolutionExperimental: controls.mode === 'sr',
+      superResolutionExperimental: controls.superResolution,
     })
   }
 
@@ -594,6 +594,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     microphoneOpen: computed(() => microphoneState.value.open),
     microphoneState,
     performanceSnapshot,
+    retryRendering: () => runtime.value?.retryRendering?.(),
     renderState,
     lastFrameAt,
     closeRuntime,

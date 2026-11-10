@@ -1,6 +1,6 @@
 import type { StreamStats } from '../../player'
 import type { RendererFallbackReason } from '../../player/domain/media'
-import type { RenderMode } from '../../shared/config/render-controls'
+import type { ColorPreset } from '../../shared/config/render-controls'
 import type {
   DisplayOptionsValue,
   RuntimeLaunchSpec,
@@ -27,8 +27,12 @@ export type StreamPresentationMilestone
 export type StreamRuntimeReconnectReason = 'network-lost' | 'ice-failed' | 'media-stalled'
 
 export interface StreamRenderState {
-  mode: RenderMode | null
+  engine: 'passthrough' | 'compatibility' | null
+  superResolution: boolean
+  superResolutionActive?: boolean
   sharpening?: 'clear' | 'soft'
+  style?: ColorPreset | 'custom'
+  warning?: 'performance'
   pending: boolean
   fallbackReason?: RendererFallbackReason
 }
@@ -70,5 +74,6 @@ export interface RuntimePort {
   snapshotStats: () => Promise<StreamStats>
   /** webrtc-direct：下一帧渲染后读回；rust-owned 返回 null。 */
   captureRenderedFrame: () => Promise<HTMLCanvasElement | null>
+  retryRendering?: () => void
   subscribe: (listener: (event: RuntimeEvent) => void) => () => void
 }

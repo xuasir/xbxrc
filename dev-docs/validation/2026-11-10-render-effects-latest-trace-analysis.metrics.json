@@ -1,0 +1,1470 @@
+{
+  "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794275474604-1.jsonl",
+  "snapshot": "/tmp/xbxrc-2026-11-10-render-effects-trace.jsonl",
+  "sha256": "4f2939390f10309d080d7ec9e49027463abc5f08e19dae0b212827c8ac52e45f",
+  "rows": 4388,
+  "timeRange": [
+    "2026-11-10T09:51:14.604+08:00",
+    "2026-11-10T09:57:53.133+08:00"
+  ],
+  "build": [
+    {
+      "buildFingerprint": {
+        "buildTimestampUnixMs": "1794275460337",
+        "cargoProfile": "debug",
+        "edition": "browser",
+        "gitCommitShort": "76a1ea69",
+        "sourceFingerprintSha256": "10c0e6a97f0dd6aff486f1978344c7a298260d05a4b19b34ddbe9ac0e4030bf4",
+        "workspaceDirty": true
+      }
+    },
+    {
+      "buildFingerprint": {
+        "buildTimestampUnixMs": "1794275460337",
+        "cargoProfile": "debug",
+        "edition": "browser",
+        "gitCommitShort": "76a1ea69",
+        "sourceFingerprintSha256": "10c0e6a97f0dd6aff486f1978344c7a298260d05a4b19b34ddbe9ac0e4030bf4",
+        "workspaceDirty": true
+      },
+      "platform": "macos",
+      "targetType": "home"
+    }
+  ],
+  "counts": {
+    "profiles": {
+      "dev": 4388
+    },
+    "stats": 733,
+    "telemetry": 184,
+    "commits": 1,
+    "actualStateSegments": 7,
+    "traceBudgetNotices": 0
+  },
+  "segments": [
+    {
+      "index": 1,
+      "label": "SR同尺寸直通 + USM锐化3",
+      "state": {
+        "actualPipeline": "webgl2_sr",
+        "actualSharpness": 3,
+        "actualProcessing": "usm",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 396,
+      "endSeq": 1739,
+      "startMs": 168193,
+      "endMs": 230687,
+      "startTime": "2026-11-10T09:54:03.285+08:00",
+      "endTime": "2026-11-10T09:55:05.779+08:00",
+      "durationMs": 62494,
+      "raw": {
+        "samples": 247,
+        "coverageMs": 62281,
+        "framesReceivedDelta": 3737,
+        "framesDecodedDelta": 3736,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 138648280,
+        "packetsLostDelta": 43,
+        "packetsReceivedDelta": 126905,
+        "nackCountDelta": 40,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 5,
+        "retransmittedPacketsReceivedDelta": 133,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 60.002247876559466,
+        "decodedFps": 59.98619161542043,
+        "bitrateMbps": 17.809383921260093,
+        "decodeMsAvg": 4.305468147751605,
+        "rttMsP95": 24.0,
+        "jitterMsP95": 8.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 396,
+        "endSeq": 1739,
+        "startMs": 168193,
+        "endMs": 230687,
+        "frames": 3290,
+        "coverageMs": 62494,
+        "fps": 52.64505392517682
+      },
+      "cadence": {
+        "samples": 62,
+        "coverageMs": 62248,
+        "callbackCountSinceLastSample": 3280,
+        "presentedFramesAdvancedSinceLastSample": 3732,
+        "callbackGapCountSinceLastSample": 3,
+        "presentedFramesJumpCountSinceLastSample": 445,
+        "droppedFramesSinceLastSample": 447,
+        "callbackFps": 52.69245598252153,
+        "videoPresentProxyFps": 59.95373345328364,
+        "maxCallbackMs": 120,
+        "trackingSources": {
+          "videoFrameCallback": 63
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 63
+        },
+        "renderCauses": {
+          "unknown": 1,
+          "frameDeliveryLimited": 62
+        },
+        "submitAgeMsP95": 32,
+        "submitAgeMsMax": 38
+      },
+      "liveSupply": {
+        "startSeq": 406,
+        "endSeq": 1736,
+        "coverageMs": 62248,
+        "accepted": {
+          "animationFrame": 0,
+          "decodedFrame": 0,
+          "timeupdate": 0,
+          "videoFrameCallback": 3280
+        },
+        "submittedFrames": 3280
+      },
+      "pairedCachedSupply": {
+        "startSeq": 406,
+        "endSeq": 1736,
+        "fromSampleId": "1:36",
+        "toSampleId": "1:283",
+        "coverageMs": 62281,
+        "receivedFrames": 3737,
+        "decodedFrames": 3736,
+        "submittedFrames": 3280,
+        "freezeCountDelta": 0,
+        "decodeSubmitDeficitFrames": 456,
+        "receivedFps": 60.002247876559466,
+        "decodedFps": 59.98619161542043,
+        "submittedFps": 52.66453653602222
+      },
+      "threeSecondSamples": 67,
+      "worst3s": {
+        "seq": 842,
+        "sampleId": "1:116",
+        "at": 188372,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 45.27224435590969,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 3.689322101388888,
+        "decodeFpsAvg": 59.79548472775564,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.75962815405046,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 0.3726250166666687,
+        "jitterBufferMsFirst": 0.040562500000007606,
+        "jitterBufferMsLast": 1.8674285714285992,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 2.589,
+        "lossAvg": 0,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 8.707666666666666,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.4072560606060606,
+        "renderSubmitDurationMsAvg": 0.015483333333333337,
+        "renderUploadDurationMsAvg": 0.3917727272727274,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 8.707666666666666,
+        "rendererSubmitFpsAvg": 45.27224435590969,
+        "repairPacketsPerSecondAvg": 0,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 16.64,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 60.09296148738379
+      },
+      "last3s": {
+        "seq": 1733,
+        "sampleId": "1:283",
+        "at": 230480,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 51.58730158730159,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.23288562352941,
+        "decodeFpsAvg": 59.85714285714286,
+        "durationMs": 3000,
+        "inboundFpsAvg": 60.15873015873016,
+        "jitterBufferCoverageMs": 2748,
+        "jitterBufferMsAvg": 2.31149110262009,
+        "jitterBufferMsFirst": 1.7669375000000098,
+        "jitterBufferMsLast": 3.464200000000043,
+        "jitterCoverageMs": 2748,
+        "jitterMsAvg": 2.366812227074236,
+        "lossAvg": 0.0007990183488856548,
+        "lossCoverageMs": 2748,
+        "presentAgeMsAvg": 9.268,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.2745846153846154,
+        "renderSubmitDurationMsAvg": 0.03230769230769231,
+        "renderUploadDurationMsAvg": 0.24227692307692303,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 9.268,
+        "rendererSubmitFpsAvg": 51.58730158730159,
+        "repairPacketsPerSecondAvg": 1.455604075691412,
+        "rttCoverageMs": 2748,
+        "rttMsAvg": 12.366812227074236,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 59.523809523809526
+      },
+      "retainedTail": {
+        "seq": 1739,
+        "timing": {
+          "duration": {
+            "capacity": 256,
+            "count": 3291,
+            "maxMs": 1,
+            "maxObservedMs": 7,
+            "meanMs": 0.26171875,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "interval": {
+            "capacity": 256,
+            "count": 3290,
+            "maxMs": 36,
+            "maxObservedMs": 121,
+            "meanMs": 18.87890625,
+            "p50Ms": 17,
+            "p95Ms": 34,
+            "p99Ms": 35,
+            "retained": 256
+          },
+          "submit": {
+            "capacity": 256,
+            "count": 3291,
+            "maxMs": 1,
+            "maxObservedMs": 1,
+            "meanMs": 0.02734375,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "upload": {
+            "capacity": 256,
+            "count": 3291,
+            "maxMs": 1,
+            "maxObservedMs": 6,
+            "meanMs": 0.234375,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          }
+        },
+        "gpuTiming": {
+          "disjointCount": 0,
+          "duration": {
+            "capacity": 256,
+            "count": 0,
+            "retained": 0
+          },
+          "queryCount": 0,
+          "source": "EXT_disjoint_timer_query_webgl2",
+          "state": "unavailable"
+        },
+        "counters": {
+          "latestOverwriteCount": 0,
+          "rateLimitDropCount": 0,
+          "submitFailureCount": 0,
+          "duplicateDrawCount": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "label": "SR同尺寸直通",
+      "state": {
+        "actualPipeline": "webgl2_sr",
+        "actualSharpness": 0,
+        "actualProcessing": "cas",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 1739,
+      "endSeq": 1786,
+      "startMs": 230687,
+      "endMs": 232672,
+      "startTime": "2026-11-10T09:55:05.779+08:00",
+      "endTime": "2026-11-10T09:55:07.764+08:00",
+      "durationMs": 1985,
+      "raw": {
+        "samples": 7,
+        "coverageMs": 1768,
+        "framesReceivedDelta": 106,
+        "framesDecodedDelta": 106,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 3066177,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 2862,
+        "nackCountDelta": 0,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 0,
+        "retransmittedPacketsReceivedDelta": 0,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.95475113122172,
+        "decodedFps": 59.95475113122172,
+        "bitrateMbps": 13.87410407239819,
+        "decodeMsAvg": 4.1608962264150815,
+        "rttMsP95": 14.0,
+        "jitterMsP95": 2.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 1739,
+        "endSeq": 1786,
+        "startMs": 230687,
+        "endMs": 232672,
+        "frames": 102,
+        "coverageMs": 1985,
+        "fps": 51.385390428211586
+      },
+      "cadence": {
+        "samples": 1,
+        "coverageMs": 1004,
+        "callbackCountSinceLastSample": 48,
+        "presentedFramesAdvancedSinceLastSample": 60,
+        "callbackGapCountSinceLastSample": 0,
+        "presentedFramesJumpCountSinceLastSample": 12,
+        "droppedFramesSinceLastSample": 12,
+        "callbackFps": 47.808764940239044,
+        "videoPresentProxyFps": 59.7609561752988,
+        "maxCallbackMs": 34,
+        "trackingSources": {
+          "videoFrameCallback": 2
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 2
+        },
+        "renderCauses": {
+          "frameDeliveryLimited": 2
+        },
+        "submitAgeMsP95": 12,
+        "submitAgeMsMax": 12
+      },
+      "liveSupply": {
+        "startSeq": 1761,
+        "endSeq": 1783,
+        "coverageMs": 1004,
+        "accepted": {
+          "animationFrame": 0,
+          "decodedFrame": 0,
+          "timeupdate": 0,
+          "videoFrameCallback": 48
+        },
+        "submittedFrames": 48
+      },
+      "pairedCachedSupply": {
+        "startSeq": 1761,
+        "endSeq": 1783,
+        "fromSampleId": "1:287",
+        "toSampleId": "1:291",
+        "coverageMs": 1011,
+        "receivedFrames": 61,
+        "decodedFrames": 61,
+        "submittedFrames": 50,
+        "freezeCountDelta": 0,
+        "decodeSubmitDeficitFrames": 11,
+        "receivedFps": 60.33630069238378,
+        "decodedFps": 60.33630069238378,
+        "submittedFps": 49.45598417408507
+      },
+      "threeSecondSamples": 0,
+      "worst3s": null,
+      "last3s": null
+    },
+    {
+      "index": 3,
+      "label": "SR同尺寸直通 + USM锐化3",
+      "state": {
+        "actualPipeline": "webgl2_sr",
+        "actualSharpness": 3,
+        "actualProcessing": "usm",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 1786,
+      "endSeq": 1819,
+      "startMs": 232672,
+      "endMs": 234053,
+      "startTime": "2026-11-10T09:55:07.764+08:00",
+      "endTime": "2026-11-10T09:55:09.145+08:00",
+      "durationMs": 1381,
+      "raw": {
+        "samples": 5,
+        "coverageMs": 1264,
+        "framesReceivedDelta": 76,
+        "framesDecodedDelta": 76,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 2198405,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 2052,
+        "nackCountDelta": 0,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 0,
+        "retransmittedPacketsReceivedDelta": 0,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 60.12658227848101,
+        "decodedFps": 60.12658227848101,
+        "bitrateMbps": 13.913955696202532,
+        "decodeMsAvg": 4.0833421052631245,
+        "rttMsP95": 12.0,
+        "jitterMsP95": 2.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 1786,
+        "endSeq": 1819,
+        "startMs": 232672,
+        "endMs": 234053,
+        "frames": 64,
+        "coverageMs": 1381,
+        "fps": 46.34322954380883
+      },
+      "cadence": {
+        "samples": 0,
+        "coverageMs": 0,
+        "callbackCountSinceLastSample": 0,
+        "presentedFramesAdvancedSinceLastSample": 0,
+        "callbackGapCountSinceLastSample": 0,
+        "presentedFramesJumpCountSinceLastSample": 0,
+        "droppedFramesSinceLastSample": 0,
+        "maxCallbackMs": null,
+        "trackingSources": {
+          "videoFrameCallback": 1
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 1
+        },
+        "renderCauses": {
+          "frameDeliveryLimited": 1
+        },
+        "submitAgeMsP95": 16,
+        "submitAgeMsMax": 16
+      },
+      "threeSecondSamples": 0,
+      "worst3s": null,
+      "last3s": null
+    },
+    {
+      "index": 4,
+      "label": "SR同尺寸直通",
+      "state": {
+        "actualPipeline": "webgl2_sr",
+        "actualSharpness": 0,
+        "actualProcessing": "cas",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 1819,
+      "endSeq": 2565,
+      "startMs": 234053,
+      "endMs": 269678,
+      "startTime": "2026-11-10T09:55:09.145+08:00",
+      "endTime": "2026-11-10T09:55:44.770+08:00",
+      "durationMs": 35625,
+      "raw": {
+        "samples": 140,
+        "coverageMs": 35288,
+        "framesReceivedDelta": 2115,
+        "framesDecodedDelta": 2115,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 96151408,
+        "packetsLostDelta": 59,
+        "packetsReceivedDelta": 87913,
+        "nackCountDelta": 21,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 1,
+        "retransmittedPacketsReceivedDelta": 59,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.93538880072546,
+        "decodedFps": 59.93538880072546,
+        "bitrateMbps": 21.79809748356382,
+        "decodeMsAvg": 4.459610874704492,
+        "rttMsP95": 24.0,
+        "jitterMsP95": 8.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 1819,
+        "endSeq": 2565,
+        "startMs": 234053,
+        "endMs": 269678,
+        "frames": 1883,
+        "coverageMs": 35625,
+        "fps": 52.85614035087719
+      },
+      "cadence": {
+        "samples": 34,
+        "coverageMs": 34136,
+        "callbackCountSinceLastSample": 1802,
+        "presentedFramesAdvancedSinceLastSample": 2046,
+        "callbackGapCountSinceLastSample": 1,
+        "presentedFramesJumpCountSinceLastSample": 241,
+        "droppedFramesSinceLastSample": 241,
+        "callbackFps": 52.788844621513945,
+        "videoPresentProxyFps": 59.936723693461445,
+        "maxCallbackMs": 133,
+        "trackingSources": {
+          "videoFrameCallback": 35
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 35
+        },
+        "renderCauses": {
+          "frameDeliveryLimited": 35
+        },
+        "submitAgeMsP95": 29,
+        "submitAgeMsMax": 43
+      },
+      "liveSupply": {
+        "startSeq": 1836,
+        "endSeq": 2548,
+        "coverageMs": 34136,
+        "accepted": {
+          "animationFrame": 0,
+          "decodedFrame": 0,
+          "timeupdate": 0,
+          "videoFrameCallback": 1802
+        },
+        "submittedFrames": 1802
+      },
+      "pairedCachedSupply": {
+        "startSeq": 1836,
+        "endSeq": 2571,
+        "fromSampleId": "1:299",
+        "toSampleId": "1:438",
+        "coverageMs": 35036,
+        "receivedFrames": 2100,
+        "decodedFrames": 2100,
+        "submittedFrames": 1854,
+        "freezeCountDelta": 0,
+        "decodeSubmitDeficitFrames": 246,
+        "receivedFps": 59.93834912661263,
+        "decodedFps": 59.93834912661263,
+        "submittedFps": 52.91699965749515
+      },
+      "threeSecondSamples": 46,
+      "worst3s": {
+        "seq": 2141,
+        "sampleId": "1:359",
+        "at": 249644,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 46.22222222222223,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.431008850835419,
+        "decodeFpsAvg": 59.85714285714286,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.85714285714286,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 5.383463178637563,
+        "jitterBufferMsFirst": 7.280733333333227,
+        "jitterBufferMsLast": 5.761000000000156,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 5.664,
+        "lossAvg": 0.000296421765826805,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 11.272,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.3434242979242979,
+        "renderSubmitDurationMsAvg": 0.022939393939393937,
+        "renderUploadDurationMsAvg": 0.3129091464091464,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 11.272,
+        "rendererSubmitFpsAvg": 46.22222222222223,
+        "repairPacketsPerSecondAvg": 0.6666666666666666,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 15.024,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 59.85714285714286
+      },
+      "last3s": {
+        "seq": 2569,
+        "sampleId": "1:438",
+        "at": 269560,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 55.22222222222223,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.407591700000015,
+        "decodeFpsAvg": 60.15873015873016,
+        "durationMs": 3000,
+        "inboundFpsAvg": 60.15873015873016,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 4.004350349999983,
+        "jitterBufferMsFirst": 8.753187499999981,
+        "jitterBufferMsLast": 4.225266666666509,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 4.9,
+        "lossAvg": 0.0006800654975702516,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 9.192,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.3868263736263736,
+        "renderSubmitDurationMsAvg": 0.02406153846153846,
+        "renderUploadDurationMsAvg": 0.3567648351648352,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 9.192,
+        "rendererSubmitFpsAvg": 55.22222222222223,
+        "repairPacketsPerSecondAvg": 1.6349206349206349,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 13,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 59.85714285714286
+      },
+      "retainedTail": {
+        "seq": 2565,
+        "timing": {
+          "duration": {
+            "capacity": 256,
+            "count": 5340,
+            "maxMs": 1,
+            "maxObservedMs": 8,
+            "meanMs": 0.37109375,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "interval": {
+            "capacity": 256,
+            "count": 5339,
+            "maxMs": 134,
+            "maxObservedMs": 134,
+            "meanMs": 19.0078125,
+            "p50Ms": 17,
+            "p95Ms": 33,
+            "p99Ms": 49,
+            "retained": 256
+          },
+          "submit": {
+            "capacity": 256,
+            "count": 5340,
+            "maxMs": 1,
+            "maxObservedMs": 1,
+            "meanMs": 0.0234375,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "upload": {
+            "capacity": 256,
+            "count": 5340,
+            "maxMs": 1,
+            "maxObservedMs": 8,
+            "meanMs": 0.34375,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          }
+        },
+        "gpuTiming": {
+          "disjointCount": 0,
+          "duration": {
+            "capacity": 256,
+            "count": 0,
+            "retained": 0
+          },
+          "queryCount": 0,
+          "source": "EXT_disjoint_timer_query_webgl2",
+          "state": "unavailable"
+        },
+        "counters": {
+          "latestOverwriteCount": 0,
+          "rateLimitDropCount": 0,
+          "submitFailureCount": 0,
+          "duplicateDrawCount": 0
+        }
+      }
+    },
+    {
+      "index": 5,
+      "label": "原画",
+      "state": {
+        "actualPipeline": "webgl2",
+        "actualSharpness": 0,
+        "actualProcessing": "cas",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 2565,
+      "endSeq": 2592,
+      "startMs": 269678,
+      "endMs": 270694,
+      "startTime": "2026-11-10T09:55:44.770+08:00",
+      "endTime": "2026-11-10T09:55:45.786+08:00",
+      "durationMs": 1016,
+      "raw": {
+        "samples": 3,
+        "coverageMs": 759,
+        "framesReceivedDelta": 46,
+        "framesDecodedDelta": 46,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 1993418,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 1840,
+        "nackCountDelta": 0,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 0,
+        "retransmittedPacketsReceivedDelta": 0,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 60.60606060606061,
+        "decodedFps": 60.60606060606061,
+        "bitrateMbps": 21.010993412384718,
+        "decodeMsAvg": 4.429978260869583,
+        "rttMsP95": 26.0,
+        "jitterMsP95": 4.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 2565,
+        "endSeq": 2592,
+        "startMs": 269678,
+        "endMs": 270694,
+        "frames": 59,
+        "coverageMs": 1016,
+        "fps": 58.07086614173228
+      },
+      "cadence": {
+        "samples": 0,
+        "coverageMs": 0,
+        "callbackCountSinceLastSample": 0,
+        "presentedFramesAdvancedSinceLastSample": 0,
+        "callbackGapCountSinceLastSample": 0,
+        "presentedFramesJumpCountSinceLastSample": 0,
+        "droppedFramesSinceLastSample": 0,
+        "maxCallbackMs": null,
+        "trackingSources": {
+          "videoFrameCallback": 1
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 1
+        },
+        "renderCauses": {
+          "frameDeliveryLimited": 1
+        },
+        "submitAgeMsP95": null,
+        "submitAgeMsMax": null
+      },
+      "threeSecondSamples": 0,
+      "worst3s": null,
+      "last3s": null
+    },
+    {
+      "index": 6,
+      "label": "原画 + USM锐化3",
+      "state": {
+        "actualPipeline": "webgl2",
+        "actualSharpness": 3,
+        "actualProcessing": "usm",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 2592,
+      "endSeq": 3477,
+      "startMs": 270694,
+      "endMs": 312455,
+      "startTime": "2026-11-10T09:55:45.786+08:00",
+      "endTime": "2026-11-10T09:56:27.547+08:00",
+      "durationMs": 41761,
+      "raw": {
+        "samples": 165,
+        "coverageMs": 41596,
+        "framesReceivedDelta": 2493,
+        "framesDecodedDelta": 2493,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 104509814,
+        "packetsLostDelta": 25,
+        "packetsReceivedDelta": 95593,
+        "nackCountDelta": 22,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 1,
+        "retransmittedPacketsReceivedDelta": 26,
+        "freezeCountDelta": 1,
+        "totalFreezesDurationDelta": 0.227,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.93364746610251,
+        "decodedFps": 59.93364746610251,
+        "bitrateMbps": 20.09997384363881,
+        "decodeMsAvg": 4.416056959486561,
+        "rttMsP95": 33.0,
+        "jitterMsP95": 8.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 2592,
+        "endSeq": 3477,
+        "startMs": 270694,
+        "endMs": 312455,
+        "frames": 2155,
+        "coverageMs": 41761,
+        "fps": 51.60317042216422
+      },
+      "cadence": {
+        "samples": 41,
+        "coverageMs": 41164,
+        "callbackCountSinceLastSample": 2122,
+        "presentedFramesAdvancedSinceLastSample": 2468,
+        "callbackGapCountSinceLastSample": 1,
+        "presentedFramesJumpCountSinceLastSample": 343,
+        "droppedFramesSinceLastSample": 344,
+        "callbackFps": 51.54989796909921,
+        "videoPresentProxyFps": 59.955300748226605,
+        "maxCallbackMs": 216,
+        "trackingSources": {
+          "videoFrameCallback": 42
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 42
+        },
+        "renderCauses": {
+          "frameDeliveryLimited": 42
+        },
+        "submitAgeMsP95": 31,
+        "submitAgeMsMax": 177
+      },
+      "liveSupply": {
+        "startSeq": 2597,
+        "endSeq": 3467,
+        "coverageMs": 41164,
+        "accepted": {
+          "animationFrame": 0,
+          "decodedFrame": 0,
+          "timeupdate": 0,
+          "videoFrameCallback": 2122
+        },
+        "submittedFrames": 2122
+      },
+      "pairedCachedSupply": {
+        "startSeq": 2619,
+        "endSeq": 3467,
+        "fromSampleId": "1:446",
+        "toSampleId": "1:606",
+        "coverageMs": 40337,
+        "receivedFrames": 2418,
+        "decodedFrames": 2418,
+        "submittedFrames": 2076,
+        "freezeCountDelta": 1,
+        "decodeSubmitDeficitFrames": 342,
+        "receivedFps": 59.94496368098768,
+        "decodedFps": 59.94496368098768,
+        "submittedFps": 51.466395616927386
+      },
+      "threeSecondSamples": 58,
+      "worst3s": {
+        "seq": 2744,
+        "sampleId": "1:470",
+        "at": 277629,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 44.91899070385126,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.699323152579367,
+        "decodeFpsAvg": 59.85524568393094,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.85524568393094,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 8.04457077222221,
+        "jitterBufferMsFirst": 6.460533333333274,
+        "jitterBufferMsLast": 9.48059999999984,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 7.596666666666667,
+        "lossAvg": 9.655773594806042e-05,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 10.690666666666669,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.3465807303807304,
+        "renderSubmitDurationMsAvg": 0.007,
+        "renderUploadDurationMsAvg": 0.3395807303807304,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 10.690666666666669,
+        "rendererSubmitFpsAvg": 44.91899070385126,
+        "repairPacketsPerSecondAvg": 0.3333333333333333,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 15.216333333333331,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 59.823373173970786
+      },
+      "last3s": {
+        "seq": 3480,
+        "sampleId": "1:608",
+        "at": 312420,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 54.833333333333336,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.443027790277772,
+        "decodeFpsAvg": 59.53125,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.864583333333336,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 2.3848783009920593,
+        "jitterBufferMsFirst": 1.535133333333268,
+        "jitterBufferMsLast": 2.442466666666595,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 2.251,
+        "lossAvg": 0.0009271599930463,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 11.958333333333334,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.3220968253968253,
+        "renderSubmitDurationMsAvg": 0.029976190476190476,
+        "renderUploadDurationMsAvg": 0.2856590964590965,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 11.958333333333334,
+        "rendererSubmitFpsAvg": 54.833333333333336,
+        "repairPacketsPerSecondAvg": 2,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 12,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 59.833333333333336
+      },
+      "retainedTail": {
+        "seq": 3477,
+        "timing": {
+          "duration": {
+            "capacity": 256,
+            "count": 7554,
+            "maxMs": 1,
+            "maxObservedMs": 8,
+            "meanMs": 0.328125,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "interval": {
+            "capacity": 256,
+            "count": 7553,
+            "maxMs": 35,
+            "maxObservedMs": 218,
+            "meanMs": 17.90234375,
+            "p50Ms": 17,
+            "p95Ms": 33,
+            "p99Ms": 35,
+            "retained": 256
+          },
+          "submit": {
+            "capacity": 256,
+            "count": 7554,
+            "maxMs": 1,
+            "maxObservedMs": 1,
+            "meanMs": 0.03125,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "upload": {
+            "capacity": 256,
+            "count": 7554,
+            "maxMs": 1,
+            "maxObservedMs": 8,
+            "meanMs": 0.2890625,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          }
+        },
+        "gpuTiming": {
+          "disjointCount": 0,
+          "duration": {
+            "capacity": 256,
+            "count": 0,
+            "retained": 0
+          },
+          "queryCount": 0,
+          "source": "EXT_disjoint_timer_query_webgl2",
+          "state": "unavailable"
+        },
+        "counters": {
+          "latestOverwriteCount": 0,
+          "rateLimitDropCount": 0,
+          "submitFailureCount": 0,
+          "duplicateDrawCount": 0
+        }
+      }
+    },
+    {
+      "index": 7,
+      "label": "原画",
+      "state": {
+        "actualPipeline": "webgl2",
+        "actualSharpness": 0,
+        "actualProcessing": "cas",
+        "actualSuperResolutionActive": false,
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualSaturation": 100,
+        "actualTargetFps": 60
+      },
+      "startSeq": 3477,
+      "endSeq": 4327,
+      "startMs": 312455,
+      "endMs": 352956,
+      "startTime": "2026-11-10T09:56:27.547+08:00",
+      "endTime": "2026-11-10T09:57:08.048+08:00",
+      "durationMs": 40501,
+      "raw": {
+        "samples": 159,
+        "coverageMs": 40096,
+        "framesReceivedDelta": 2404,
+        "framesDecodedDelta": 2404,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 104548970,
+        "packetsLostDelta": 49,
+        "packetsReceivedDelta": 95397,
+        "nackCountDelta": 29,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 2,
+        "retransmittedPacketsReceivedDelta": 49,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.9561053471668,
+        "decodedFps": 59.9561053471668,
+        "bitrateMbps": 20.859730646448522,
+        "decodeMsAvg": 4.402017054908485,
+        "rttMsP95": 24.0,
+        "jitterMsP95": 7.0,
+        "receiveEmptyWindows": []
+      },
+      "drawWindow": {
+        "startSeq": 3477,
+        "endSeq": 4314,
+        "startMs": 312455,
+        "endMs": 352744,
+        "frames": 2138,
+        "coverageMs": 40289,
+        "fps": 53.06659385936608
+      },
+      "cadence": {
+        "samples": 39,
+        "coverageMs": 39157,
+        "callbackCountSinceLastSample": 2075,
+        "presentedFramesAdvancedSinceLastSample": 2347,
+        "callbackGapCountSinceLastSample": 0,
+        "presentedFramesJumpCountSinceLastSample": 270,
+        "droppedFramesSinceLastSample": 270,
+        "callbackFps": 52.99180223204025,
+        "videoPresentProxyFps": 59.938197512577574,
+        "maxCallbackMs": 67,
+        "trackingSources": {
+          "videoFrameCallback": 40
+        },
+        "sourceFpsUnavailableReasons": {
+          "mediaTimeDeltaTooSmall": 40
+        },
+        "renderCauses": {
+          "frameDeliveryLimited": 40
+        },
+        "submitAgeMsP95": 16,
+        "submitAgeMsMax": 28
+      },
+      "liveSupply": {
+        "startSeq": 3495,
+        "endSeq": 4302,
+        "coverageMs": 39157,
+        "accepted": {
+          "animationFrame": 0,
+          "decodedFrame": 0,
+          "timeupdate": 0,
+          "videoFrameCallback": 2075
+        },
+        "submittedFrames": 2075
+      },
+      "pairedCachedSupply": {
+        "startSeq": 3495,
+        "endSeq": 4302,
+        "fromSampleId": "1:610",
+        "toSampleId": "1:765",
+        "coverageMs": 39088,
+        "receivedFrames": 2342,
+        "decodedFrames": 2343,
+        "submittedFrames": 2070,
+        "freezeCountDelta": 0,
+        "decodeSubmitDeficitFrames": 273,
+        "receivedFps": 59.91608677855096,
+        "decodedFps": 59.94167007777323,
+        "submittedFps": 52.95742939009415
+      },
+      "threeSecondSamples": 56,
+      "worst3s": {
+        "seq": 3561,
+        "sampleId": "1:622",
+        "at": 315956,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 46.6984126984127,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.488153443055551,
+        "decodeFpsAvg": 60.03174603174604,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.6984126984127,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 2.8533959777777915,
+        "jitterBufferMsFirst": 1.6094000000000126,
+        "jitterBufferMsLast": 2.2155333333335157,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 2.927666666666666,
+        "lossAvg": 0.0006200177147918512,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 11.083666666666666,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.3390470085470086,
+        "renderSubmitDurationMsAvg": 0.012525252525252526,
+        "renderUploadDurationMsAvg": 0.31952175602175603,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 11.083666666666666,
+        "rendererSubmitFpsAvg": 46.6984126984127,
+        "repairPacketsPerSecondAvg": 1.3333333333333333,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 11.157333333333334,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 60.03174603174604
+      },
+      "last3s": {
+        "seq": 4312,
+        "sampleId": "1:767",
+        "at": 352516,
+        "callbackCoverageMs": 3000,
+        "callbackFpsAvg": 55.25925925925926,
+        "decodeCoverageMs": 3000,
+        "decodeDurationMsAvg": 4.332802436111112,
+        "decodeFpsAvg": 59.77777777777778,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.77777777777778,
+        "jitterBufferCoverageMs": 3000,
+        "jitterBufferMsAvg": 1.7549359111110865,
+        "jitterBufferMsFirst": 1.3733999999999469,
+        "jitterBufferMsLast": 1.2836666666662684,
+        "jitterCoverageMs": 3000,
+        "jitterMsAvg": 2.168,
+        "lossAvg": 0.0003578884580972264,
+        "lossCoverageMs": 3000,
+        "presentAgeMsAvg": 12.029,
+        "receivedCoverageMs": 3000,
+        "renderDrawDurationMsAvg": 0.3732781662781663,
+        "renderSubmitDurationMsAvg": 0.03071111111111111,
+        "renderUploadDurationMsAvg": 0.3425670551670552,
+        "rendererCoverageMs": 3000,
+        "rendererSubmitAgeMsAvg": 12.029,
+        "rendererSubmitFpsAvg": 55.25925925925926,
+        "repairPacketsPerSecondAvg": 0.6666666666666666,
+        "rttCoverageMs": 3000,
+        "rttMsAvg": 11.991333333333332,
+        "sampleCount": 12,
+        "videoCoverageMs": 3000,
+        "videoPresentFpsAvg": 60.111111111111114
+      },
+      "retainedTail": {
+        "seq": 4314,
+        "timing": {
+          "duration": {
+            "capacity": 256,
+            "count": 9692,
+            "maxMs": 1,
+            "maxObservedMs": 8,
+            "meanMs": 0.3125,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "interval": {
+            "capacity": 256,
+            "count": 9691,
+            "maxMs": 68,
+            "maxObservedMs": 218,
+            "meanMs": 19.33984375,
+            "p50Ms": 17,
+            "p95Ms": 34,
+            "p99Ms": 35,
+            "retained": 256
+          },
+          "submit": {
+            "capacity": 256,
+            "count": 9692,
+            "maxMs": 1,
+            "maxObservedMs": 1,
+            "meanMs": 0.0234375,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "upload": {
+            "capacity": 256,
+            "count": 9692,
+            "maxMs": 1,
+            "maxObservedMs": 8,
+            "meanMs": 0.28515625,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          }
+        },
+        "gpuTiming": {
+          "disjointCount": 0,
+          "duration": {
+            "capacity": 256,
+            "count": 0,
+            "retained": 0
+          },
+          "queryCount": 0,
+          "source": "EXT_disjoint_timer_query_webgl2",
+          "state": "unavailable"
+        },
+        "counters": {
+          "latestOverwriteCount": 0,
+          "rateLimitDropCount": 0,
+          "submitFailureCount": 0,
+          "duplicateDrawCount": 0
+        }
+      }
+    }
+  ],
+  "allPlaybackRaw": {
+    "samples": 732,
+    "coverageMs": 184569,
+    "framesReceivedDelta": 11067,
+    "framesDecodedDelta": 11067,
+    "framesDroppedDelta": 0,
+    "bytesReceivedDelta": 454312652,
+    "packetsLostDelta": 176,
+    "packetsReceivedDelta": 415525,
+    "nackCountDelta": 112,
+    "pliCountDelta": 0,
+    "firCountDelta": 0,
+    "keyFramesDecodedDelta": 9,
+    "retransmittedPacketsReceivedDelta": 267,
+    "freezeCountDelta": 1,
+    "totalFreezesDurationDelta": 0.227,
+    "pauseCountDelta": 0,
+    "receivedFps": 59.96131528046422,
+    "decodedFps": 59.96131528046422,
+    "bitrateMbps": 19.6918291587428,
+    "decodeMsAvg": 4.377480437336224,
+    "rttMsP95": 26.0,
+    "jitterMsP95": 8.0,
+    "receiveEmptyWindows": []
+  },
+  "freezeEvents": [
+    {
+      "seq": 3027,
+      "wall": "2026-11-10T09:56:06.081+08:00",
+      "at": 290988,
+      "delta": {
+        "bytesReceivedDelta": 273112,
+        "elapsedMs": 252,
+        "firCountDelta": 0,
+        "framesAssembledFromMultiplePacketsDelta": 3,
+        "framesDecodedDelta": 3,
+        "framesDroppedDelta": 0,
+        "framesReceivedDelta": 7,
+        "freezeCountDelta": 1,
+        "headerBytesReceivedDelta": 6944,
+        "jitterBufferDelayDelta": 0.29366899999999774,
+        "jitterBufferEmittedCountDelta": 4,
+        "jitterBufferMinimumDelayDelta": 0.07195900000002098,
+        "jitterBufferTargetDelayDelta": 0.07195900000002098,
+        "keyFramesDecodedDelta": 0,
+        "nackCountDelta": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 248,
+        "pauseCountDelta": 0,
+        "pliCountDelta": 0,
+        "retransmittedBytesReceivedDelta": 0,
+        "retransmittedPacketsReceivedDelta": 0,
+        "totalAssemblyTimeDelta": 0.2691769999999991,
+        "totalDecodeTimeDelta": 0.017043999999998505,
+        "totalFreezesDurationDelta": 0.227,
+        "totalInterFrameDelayDelta": 0.29699999999999704,
+        "totalPausesDurationDelta": 0,
+        "totalProcessingDelayDelta": 0.295774999999999,
+        "totalSquaredInterFrameDelayDelta": 0.055547000000000235
+      }
+    }
+  ],
+  "finalInboundCounters": {
+    "framesReceived": 11069,
+    "framesDecoded": 11069,
+    "framesDropped": 0,
+    "packetsLost": 348,
+    "packetsReceived": 416178,
+    "nackCount": 113,
+    "pliCount": 1,
+    "firCount": 0,
+    "freezeCount": 1,
+    "totalFreezesDuration": 0.227
+  },
+  "pixels": {
+    "enabledCounts": {
+      "false": 184
+    },
+    "readCountMax": 0
+  },
+  "assertions": {
+    "sameGenerationMonotonicSubmission": "PASS",
+    "rawSampleIdsUnique": "PASS",
+    "acceptedEqualsSubmittedPerMeasuredSegment": "PASS"
+  },
+  "assumptions": [
+    "Segments start at actual renderer resource state transitions, including in-place updates.",
+    "Canvas FPS is cumulative submitted count delta divided by monotonic observation time.",
+    "Three-second windows have full renderer coverage and remain inside one actual state segment.",
+    "Receive/decode/bitrate sum complete raw RTC delta intervals within each segment.",
+    "Paired deficits use identical sample IDs and sampledAtMs for RTC and cached renderer counters.",
+    "GPU completion and physical scanout are unavailable; submit age reports local last-submit age."
+  ],
+  "browserAudit": {
+    "gate": "FAIL",
+    "failures": [
+      "browser runtime stability evidence is MISSING"
+    ],
+    "stabilityGate": "MISSING",
+    "missingEvidence": [
+      "rendererEffectEvents"
+    ],
+    "evidence": {
+      "resourceEvents": 101,
+      "shaderDrawEvents": 96,
+      "collectionEvents": 733,
+      "observationEvents": 273,
+      "actualDimensionSamples": 273,
+      "freshObservationEvents": 273,
+      "telemetryEvents": 184,
+      "traceBudgetSamples": 184,
+      "gpuBudgetSamples": 184,
+      "frameChainSamples": 247,
+      "softActionEvents": 13,
+      "qualifiedActionEvents": 13,
+      "closedClients": 1,
+      "sharedSamples": 25
+    }
+  },
+  "productionAudit": {
+    "gate": "INSUFFICIENT_EVIDENCE",
+    "acceptanceGate": "INSUFFICIENT_EVIDENCE",
+    "sections": {
+      "networkHealth": {
+        "status": "PASS",
+        "segments": 2,
+        "samples": 247,
+        "validMs": 62367.0
+      },
+      "recoveryChainHealth": {
+        "status": "PASS",
+        "segments": 2,
+        "samples": 247,
+        "validMs": 62367.0
+      },
+      "mediaSupply": {
+        "status": "INSUFFICIENT_EVIDENCE",
+        "segments": 2,
+        "samples": 247,
+        "validMs": 62367.0
+      },
+      "steadySupply": {
+        "status": "INSUFFICIENT_EVIDENCE",
+        "segments": 2,
+        "samples": 247,
+        "validMs": 62367.0
+      },
+      "submitPresentTail": {
+        "status": "PASS",
+        "segments": 2,
+        "samples": 247,
+        "validMs": 62367.0
+      },
+      "frameSupplyDelta": {
+        "status": "INSUFFICIENT_EVIDENCE",
+        "segments": 2,
+        "samples": 247,
+        "validMs": 62367.0
+      }
+    },
+    "capabilities": {
+      "browserPhysicalScanout": "UNSUPPORTED",
+      "browserNativeReferenceChain": "UNSUPPORTED"
+    },
+    "traceLoss": {
+      "status": "PASS",
+      "producerMaxCounters": {
+        "dropped": 0,
+        "droppedEssential": 0,
+        "ipcFailed": 0,
+        "ipcTimedOut": 0,
+        "producerRowOversized": 0,
+        "payloadFailed": 0,
+        "ackMissing": 0,
+        "coalesced": 0,
+        "profileFiltered": 0,
+        "queueFull": 0,
+        "rowOversized": 0,
+        "writerUnavailable": 0
+      },
+      "backendMaxCounters": {
+        "essentialDropped": 0,
+        "keyDropped": 0,
+        "debugDropped": 0,
+        "rawDropped": 0,
+        "ioDropped": 0,
+        "ioFailures": 0,
+        "oversizedDropped": 0
+      },
+      "counterScope": "maxObservedCumulativeWithinRun"
+    },
+    "ending": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "partialEnding": true,
+      "sessions": []
+    }
+  }
+}

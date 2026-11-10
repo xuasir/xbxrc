@@ -1,0 +1,39 @@
+{
+  "runtimeBuildFingerprint": {
+    "buildTimestampUnixMs": "1794280632326",
+    "cargoProfile": "debug",
+    "edition": "browser",
+    "gitCommitShort": "76a1ea69",
+    "sourceFingerprintSha256": "6be9987d2344adba8fdbc95a0ab849dc6ce1a5869f2d205ff211f655f4072383",
+    "workspaceDirty": true
+  },
+  "earlierSourceVerification": {
+    "sha256": "6be9987d2344adba8fdbc95a0ab849dc6ce1a5869f2d205ff211f655f4072383",
+    "files": 555,
+    "matchesRuntime": true,
+    "evidence": "首次按src-tauri/build.rs复核的工具stdout；后续工作区整体指纹随其他编辑变化。"
+  },
+  "samplingSourceVerification": {
+    "src/player/infra/render/fsr1-reconstruction-pass.ts": {
+      "sha256": "acaad11889d4bee1da6a7fb83d684f30b4ff19536001d794bb356bace14a0f7d",
+      "matchesPixelFixture": true
+    },
+    "src/player/infra/render/Renderers.ts": {
+      "sha256": "211e046090de73708878860785ad61eb8bf53cc9d88ebc93f6f6145496acd954",
+      "matchesPixelFixture": true
+    },
+    "src/player/infra/render/sharpening-tuning.ts": {
+      "sha256": "19d70be1928b9d2a3eb0f98e3c1c2defa8dc766e4802c2071b9be5b764545538",
+      "matchesPixelFixture": true
+    },
+    "src/player/infra/render/sharpening-math.ts": {
+      "sha256": "1cce4aef641f3788a81de35a8f33eb7c674e58e4021bc272f3a97dfb92d1ef68",
+      "matchesPixelFixture": true
+    },
+    "src/player/infra/render/fsr1-cpu.ts": {
+      "sha256": "f3d19e5560632dc24153070a1eaef443a7982d482765a8d8870b64797eacf0a7",
+      "matchesPixelFixture": true
+    }
+  },
+  "qualification": "首次整体源码校验与日志构建一致；后续其他源码编辑改变工作区整体指纹。性能结论绑定日志构建身份，采样相关五个源文件与像素夹具指纹一致。"
+}

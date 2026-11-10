@@ -1,0 +1,4 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>XBXRC 帧供给隔离对照</title>
+<style>html,body{margin:0;background:#142234;color:white;font-family:system-ui}#stage{position:relative;width:800px;height:450px}#status{position:fixed;top:8px;left:12px;z-index:10;pointer-events:none;font-size:13px}</style>
+<div id="stage"></div><div id="status">正在准备本地 WebRTC 对照</div><script>window.XBXProbe={run:async()=>{try { const bundle=await import('./bundle.js');return await bundle.run(); } catch(error) {return {error:String(error),stack:error.stack};}}};</script></html>

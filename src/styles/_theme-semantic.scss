@@ -311,6 +311,21 @@
   --ui-login-overlay-gradient-bottom: #{$ui-login-overlay-gradient-bottom-dark};
 
   --ui-motion-fast: #{$ui-motion-fast};
+
+  // 轻流动节奏 token：方向感知切页、弹层进出与焦点飞行共用一套曲线。
+  --ui-motion-ease-settle: #{$ui-motion-ease-settle};
+  --ui-motion-ease-travel: #{$ui-motion-ease-travel};
+  --ui-motion-duration-page: #{$ui-motion-duration-page};
+  --ui-motion-duration-panel: #{$ui-motion-duration-panel};
+  --ui-motion-distance-page: #{$ui-motion-distance-page};
+  --ui-motion-distance-panel: #{$ui-motion-distance-panel};
+  --ui-motion-duration-overlay-in: #{$ui-motion-duration-overlay-in};
+  --ui-motion-duration-overlay-out: #{$ui-motion-duration-overlay-out};
+  --ui-motion-duration-focus-flight: #{$ui-motion-duration-focus-flight};
+  --ui-motion-duration-focus-fade: #{$ui-motion-duration-focus-fade};
+  --ui-ambient-drift-x: #{$ui-ambient-drift-x};
+  --ui-ambient-drift-y: #{$ui-ambient-drift-y};
+  --ui-ambient-period: #{$ui-ambient-period};
 }
 
 :root[data-ui-density='comfortable'] {

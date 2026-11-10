@@ -1,4 +1,5 @@
 import type { CodecPreferenceOptions } from '../../domain/session'
+import { parseSdpImageAttributes } from './sdp-image-attributes'
 
 export class SdpManipulator {
   setBitrate(sdp: string, media: string, bitrate: number): string {
@@ -115,95 +116,87 @@ export class SdpManipulator {
     return lines.join('\r\n')
   }
 
-  setH264VideoConstraints(
-    sdp: string,
-    options: {
-      maxFrameSize: number
-      maxFrameRate: number
-      minBitrateKbps?: number
-      startBitrateKbps?: number
-      maxBitrateKbps?: number
-    },
-  ): string {
-    const lines = sdp.split('\r\n')
-    const videoPayloadTypes = new Set<string>()
-    const h264PayloadTypes = new Set<string>()
-
-    for (const line of lines) {
-      if (line.startsWith('m=video ')) {
-        const parts = line.trim().split(/\s+/)
-        for (const payloadType of parts.slice(3)) {
-          videoPayloadTypes.add(payloadType)
-        }
-        continue
-      }
-      if (!line.startsWith('a=rtpmap:')) {
-        continue
-      }
-      const match = /^a=rtpmap:(\d+)\s+([^/]+)/i.exec(line)
-      if (!match) {
-        continue
-      }
-      const payloadType = match[1]
-      const codecName = match[2]?.toLowerCase() ?? ''
-      if (videoPayloadTypes.has(payloadType) && codecName === 'h264') {
-        h264PayloadTypes.add(payloadType)
-      }
-    }
-
-    if (h264PayloadTypes.size === 0) {
+  setH264VideoConstraints(sdp: string, options: H264VideoConstraints): string {
+    if (!Number.isFinite(options.maxFrameSize) || options.maxFrameSize <= 0
+      || !Number.isFinite(options.maxFrameRate) || options.maxFrameRate <= 0) {
       return sdp
     }
-
-    return lines
-      .map((line) => {
-        if (!line.startsWith('a=fmtp:')) {
-          return line
-        }
-        const firstSpaceIndex = line.indexOf(' ')
-        if (firstSpaceIndex === -1) {
-          return line
-        }
-        const payloadType = line.slice('a=fmtp:'.length, firstSpaceIndex)
-        if (!h264PayloadTypes.has(payloadType)) {
-          return line
-        }
-        const rawParams = line.slice(firstSpaceIndex + 1).trim()
-        if (rawParams === '') {
-          return line
-        }
-
-        const params = rawParams
-          .split(';')
-          .map(part => part.trim())
-          .filter(Boolean)
-        const normalized = new Map<string, string>()
-        for (const param of params) {
-          const separatorIndex = param.indexOf('=')
-          if (separatorIndex === -1) {
-            normalized.set(param.toLowerCase(), param)
-            continue
-          }
-          const key = param.slice(0, separatorIndex).trim().toLowerCase()
-          normalized.set(key, `${key}=${param.slice(separatorIndex + 1).trim()}`)
-        }
-
-        normalized.set('max-fs', `max-fs=${options.maxFrameSize}`)
-        normalized.set('max-fr', `max-fr=${options.maxFrameRate}`)
-        if (options.minBitrateKbps !== undefined) {
-          normalized.set('x-google-min-bitrate', `x-google-min-bitrate=${options.minBitrateKbps}`)
-        }
-        if (options.startBitrateKbps !== undefined) {
-          normalized.set('x-google-start-bitrate', `x-google-start-bitrate=${options.startBitrateKbps}`)
-        }
-        if (options.maxBitrateKbps !== undefined) {
-          normalized.set('x-google-max-bitrate', `x-google-max-bitrate=${options.maxBitrateKbps}`)
-        }
-
-        return `a=fmtp:${payloadType} ${Array.from(normalized.values()).join(';')}`
-      })
-      .join('\r\n')
+    const separator = sdp.includes('\r\n') ? '\r\n' : '\n'
+    const sections = sdp.split(/(?=^m=)/m)
+    return sections.map((section) => {
+      if (!/^m=video [1-9]/.test(section) || /^a=(?:inactive|sendonly)\s*$/m.test(section))
+        return section
+      return constrainVideoSection(section.split(/\r?\n/), options).join(separator)
+    }).join('')
   }
+}
+
+interface H264VideoConstraints {
+  maxFrameSize: number
+  maxFrameRate: number
+  maxWidth?: number
+  maxHeight?: number
+  minBitrateKbps?: number
+  startBitrateKbps?: number
+  maxBitrateKbps?: number
+}
+
+function constrainVideoSection(lines: string[], options: H264VideoConstraints): string[] {
+  const payloads = new Set(lines[0].trim().split(/\s+/).slice(3))
+  const h264 = new Set(lines.flatMap((line) => {
+    const match = /^a=rtpmap:(\d+)\s+H264\//i.exec(line)
+    return match && payloads.has(match[1]) ? [match[1]] : []
+  }))
+  if (h264.size === 0)
+    return lines
+  const dimensions = Number.isInteger(options.maxWidth) && options.maxWidth! > 0
+    && Number.isInteger(options.maxHeight) && options.maxHeight! > 0
+    ? `recv [x=[1:${options.maxWidth}],y=[1:${options.maxHeight}]]`
+    : undefined
+  const fmtpSeen = new Set<string>()
+  const sendAttributes = new Map<string, string>()
+  const result = lines.flatMap((line) => {
+    const image = parseSdpImageAttributes(line)
+    if (dimensions && image && (h264.has(image.payloadType) || image.payloadType === '*')) {
+      if (image.payloadType === '*')
+        return [`a=imageattr:*${image.send ? ` send ${image.send}` : ''} ${dimensions}`]
+      if (image.send)
+        sendAttributes.set(image.payloadType, ` send ${image.send}`)
+      return []
+    }
+    const fmtp = /^a=fmtp:(\d+)(?:\s+(\S.*))?$/.exec(line)
+    if (!fmtp || !h264.has(fmtp[1]))
+      return [line]
+    fmtpSeen.add(fmtp[1])
+    return [`a=fmtp:${fmtp[1]} ${constrainH264Parameters(fmtp[2] ?? '', options)}`]
+  })
+  let insert = result.length
+  while (insert > 0 && result[insert - 1] === '') insert--
+  const added: string[] = []
+  for (const payload of h264) {
+    if (!fmtpSeen.has(payload))
+      added.push(`a=fmtp:${payload} ${constrainH264Parameters('', options)}`)
+    if (dimensions)
+      added.push(`a=imageattr:${payload}${sendAttributes.get(payload) ?? ''} ${dimensions}`)
+  }
+  result.splice(insert, 0, ...added)
+  return result
+}
+
+function constrainH264Parameters(raw: string, options: H264VideoConstraints): string {
+  const normalized = new Map<string, string>()
+  for (const param of raw.split(';').map(p => p.trim()).filter(Boolean)) {
+    const separator = param.indexOf('=')
+    const key = (separator < 0 ? param : param.slice(0, separator)).trim().toLowerCase()
+    normalized.set(key, separator < 0 ? param : `${key}=${param.slice(separator + 1).trim()}`)
+  }
+  normalized.set('max-fs', `max-fs=${options.maxFrameSize}`)
+  normalized.set('max-fr', `max-fr=${options.maxFrameRate}`)
+  for (const [name, value] of [['min', options.minBitrateKbps], ['start', options.startBitrateKbps], ['max', options.maxBitrateKbps]] as const) {
+    if (value !== undefined)
+      normalized.set(`x-google-${name}-bitrate`, `x-google-${name}-bitrate=${value}`)
+  }
+  return Array.from(normalized.values()).join(';')
 }
 
 function normalizeH264ProfileToken(profile: string): string {

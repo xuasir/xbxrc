@@ -952,26 +952,50 @@
     "title": "设置",
     "renderControls": {
       "title": "渲染与画面",
-      "defaultRendering": "默认渲染",
-      "useDefaultRendering": "使用默认渲染",
+      "defaultRendering": "原画",
+      "useDefaultRendering": "恢复原画",
       "selected": "所选：{mode}",
       "sr": "SR（实验性）",
-      "srHint": "提升画面细节，可能增加渲染负载。开启后独立锐化关闭。",
+      "srHint": "提升低分辨率画面的细节，可与锐化和风格同时使用。",
       "sharpening": "锐化",
-      "sharpeningHint": "清晰增强轮廓，柔和轻度增强；关闭时使用默认渲染。",
-      "srSharpeningHint": "SR 已包含细节增强，独立锐化保持关闭。",
-      "choices": { "off": "关闭", "clear": "清晰", "soft": "柔和" },
-      "colors": { "title": "色彩风格", "standard": "标准", "clear": "鲜明", "soft": "柔和" },
+      "sharpeningHint": "柔和轻度增强轮廓，清晰增强更多细节；可与 SR 和风格同时使用。",
+      "choices": {
+        "off": "关闭",
+        "clear": "清晰",
+        "soft": "柔和"
+      },
+      "colors": {
+        "title": "色彩风格",
+        "standard": "标准",
+        "clear": "鲜明",
+        "soft": "柔和",
+        "custom": "自定义"
+      },
       "defaultHint": "保存为全局默认，下次开始串流时生效。",
       "sessionHint": "调整只作用于本次串流；保存为默认可用于后续串流。",
-      "sources": { "default": "当前沿用全局默认。", "session": "当前使用本次调整。" },
+      "sources": {
+        "default": "当前沿用全局默认。",
+        "session": "当前使用本次调整。"
+      },
       "restoreDefaults": "恢复默认",
       "applySession": "应用本次",
       "saveDefault": "保存默认",
       "saveDefaultAndApply": "保存为默认并应用",
       "preparing": "准备中",
       "switching": "切换中",
-      "fallback": { "performance": "帧率保护", "unsupported": "设备限制", "failed": "增强失败" }
+      "fallback": {
+        "performance": "渲染掉帧",
+        "unsupported": "设备限制",
+        "failed": "渲染异常"
+      },
+      "compatibilityRendering": "渲染降级已开启",
+      "compatibilityTitle": "兼容设置",
+      "compatibility": "渲染降级",
+      "compatibilityHint": "仅在黑屏、闪烁、画面异常或持续渲染掉帧时开启。开启后暂停 SR、锐化和风格处理；关闭后恢复原设置。",
+      "effectsPaused": "渲染降级已暂停画面处理，原设置保留。",
+      "retryRendering": "重试画面处理",
+      "srAtTarget": "SR · 已达目标",
+      "performanceWarning": "当前渲染持续掉帧，可降低锐化、关闭 SR，或在画面异常时开启渲染降级。"
     },
     "aria": {
       "groups": "设置分组",

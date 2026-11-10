@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import UiMotionTransition from '@/components/common/UiMotionTransition.vue'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import exitIcon from '../../assets/nav/exit.svg'
@@ -65,7 +66,7 @@ function emitLogout(): void {
 
 <template>
   <Teleport to="body">
-    <Transition name="user-menu-transition">
+    <UiMotionTransition kind="overlay">
       <div v-if="props.open" class="user-menu-layer">
         <button
           type="button"
@@ -80,6 +81,7 @@ function emitLogout(): void {
             :id="SPATIAL_NAV_SCOPE_IDS.userMenu"
             as="section"
             class="user-menu__panel"
+            data-ui-motion-panel
             :aria-label="t('shell.profile')"
             :active="props.open"
             :default-focus-id="SPATIAL_NAV_NODE_IDS.userMenu.my"
@@ -169,7 +171,7 @@ function emitLogout(): void {
           </FocusScope>
         </div>
       </div>
-    </Transition>
+    </UiMotionTransition>
   </Teleport>
   <SettingConfirmSheet :open="logoutConfirm" scope-id="user-menu.logout-confirm" :eyebrow="t('shell.account')" :title="t('userMenu.logout')" :message="t('userMenu.confirmLogout')" :confirm-label="t('userMenu.logout')" :busy="props.loggingOut" @close="logoutConfirm = false" @confirm="emitLogout" />
 </template>
@@ -201,10 +203,5 @@ function emitLogout(): void {
 .user-menu__logout-icon { width: 18px; height: 18px; filter: var(--ui-nav-icon-filter); }
 .user-menu__close:hover, .user-menu__logout:hover { background: var(--ui-material-hover); }
 .user-menu__close[data-focused='true'], .user-menu__logout[data-focused='true'] { background: var(--ui-material-selected); box-shadow: var(--shadow-xbox-focus); }
-.user-menu-transition-enter-active, .user-menu-transition-leave-active { transition: opacity 160ms var(--ease-standard); }
-.user-menu-transition-enter-active .user-menu__panel, .user-menu-transition-leave-active .user-menu__panel { transition: transform 160ms var(--ease-standard); }
-.user-menu-transition-enter-from, .user-menu-transition-leave-to { opacity: 0; }
-.user-menu-transition-enter-from .user-menu__panel, .user-menu-transition-leave-to .user-menu__panel { transform: translateY(-8px); }
 @media(max-width:700px) { .user-menu-anchor { right: 16px; } }
-@media(prefers-reduced-motion:reduce) { .user-menu-transition-enter-active, .user-menu-transition-leave-active, .user-menu-transition-enter-active .user-menu__panel, .user-menu-transition-leave-active .user-menu__panel { transition: none; } }
 </style>

@@ -4,6 +4,7 @@ import type { RenderSurfaceObservation } from './render-surface-observation'
 import type { ObservedVideoFrameMetadata } from './video-frame-source'
 import { FrameCaptureQueue } from './frame-capture-queue'
 import { FramePacer } from './frame-pacer'
+import { Fsr1ReconstructionPass } from './fsr1-reconstruction-pass'
 import { RenderObservation } from './render-observation'
 import { observeRenderSurface } from './render-surface-observation'
 import {
@@ -15,6 +16,7 @@ import {
   CAS_RING_BLEND,
   CAS_RING_PAD,
   USM_GAIN_SCALE,
+  USM_NOISE_FLOOR,
 } from './sharpening-tuning'
 import { getVideoFrameSource } from './video-frame-source'
 import { captureVideoElementToCanvas, readWebglDefaultFramebufferToCanvas } from './webgl-frame-capture'
@@ -71,7 +73,10 @@ abstract class BaseCanvasVideoProcessor {
     this.canvas.style.height = '100%'
     this.canvas.style.pointerEvents = 'none'
     video.insertAdjacentElement('afterend', this.canvas)
-    this.frameCallback = callback => getVideoFrameSource(video).requestRender(callback)
+    this.frameCallback = callback => getVideoFrameSource(video).requestRender(callback, (reason) => {
+      this.stopPresentationLoop()
+      this.onFailure?.(`decodedFrame:${reason}`)
+    })
   }
 
   init(): Promise<void> {
@@ -263,6 +268,8 @@ function resolveShaderPreset(
 class WebGL2Processor extends BaseCanvasVideoProcessor {
   private gl: WebGL2RenderingContext | null = null
   private guard?: WebglRuntimeGuard
+  private srEnabled = false
+  private reconstruction?: Fsr1ReconstructionPass
   private program: WebGLProgram | null = null
   private presentProgram: WebGLProgram | null = null
   private videoTexture: WebGLTexture | null = null
@@ -307,7 +314,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private vertexBuffer: WebGLBuffer | null = null
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, superResolutionActive: this.usesReconstruction(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: (this.reconstruction?.gpuObjects ?? 0) + [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -335,15 +342,21 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   }
 
   applyRendererPresentationConfig(config: RendererRuntimeConfig): void {
-    this.onFailure = config.rendererRuntimeFailureNotifier
+    this.onFailure = config.rendererRuntimeFailureNotifier ?? config.superResolutionRuntimeDegradeNotifier
     this.onFrameReady = config.rendererFrameReadyNotifier
-    this.explicitPresentTarget = config.renderOutputWidth !== undefined
-      && config.renderOutputHeight !== undefined
+    this.srEnabled = config.superResolutionEnabled === true
+    if (!this.srEnabled) {
+      this.reconstruction?.dispose()
+      this.reconstruction = undefined
+    }
+    const configuredWidth = this.srEnabled ? config.superResolutionOutputWidth ?? config.renderOutputWidth : config.renderOutputWidth
+    const configuredHeight = this.srEnabled ? config.superResolutionOutputHeight ?? config.renderOutputHeight : config.renderOutputHeight
+    this.explicitPresentTarget = configuredWidth !== undefined && configuredHeight !== undefined
     const nextOutputWidth = this.explicitPresentTarget
-      ? Math.max(1, this.video.videoWidth, Math.round(config.renderOutputWidth!))
+      ? Math.max(1, this.video.videoWidth || 0, Math.round(configuredWidth!))
       : Math.max(1, this.video.videoWidth || this.currentSourceWidth || 1)
     const nextOutputHeight = this.explicitPresentTarget
-      ? Math.max(1, this.video.videoHeight, Math.round(config.renderOutputHeight!))
+      ? Math.max(1, this.video.videoHeight || 0, Math.round(configuredHeight!))
       : Math.max(1, this.video.videoHeight || this.currentSourceHeight || 1)
     const nextViewportWidthCss = config.renderViewportWidth !== undefined && config.renderViewportWidth > 0
       ? Math.round(config.renderViewportWidth)
@@ -437,9 +450,12 @@ const float CAS_RING_PAD = ${CAS_RING_PAD.toFixed(4)};
 const float CAS_RING_BLEND = ${CAS_RING_BLEND.toFixed(4)};
 const float CAS_CHROMA_BLEND = ${CAS_CHROMA_BLEND.toFixed(4)};
 const float USM_GAIN_SCALE = ${USM_GAIN_SCALE.toFixed(4)};
+const float USM_NOISE_FLOOR = ${USM_NOISE_FLOOR.toFixed(6)};
 vec3 usmBoost(vec2 uv, vec3 center) {
   vec2 texel = 1.0 / sourceResolution.xy;
   vec3 blur;
+  vec3 neighborhoodMin;
+  vec3 neighborhoodMax;
   if (all(equal(outputResolution, sourceResolution))) {
     // 1:1 像素中心上，四个半像素双线性采样等价于 3x3 高斯核 [1,2,1]²/16。
     vec2 halfTexel = texel * 0.5;
@@ -448,6 +464,9 @@ vec3 usmBoost(vec2 uv, vec3 center) {
     vec3 g = texture(data, uv + halfTexel * vec2(-1.0, -1.0)).rgb;
     vec3 i = texture(data, uv + halfTexel * vec2(1.0, -1.0)).rgb;
     blur = (a + c + g + i) * 0.25;
+    // 复用四次双线性读取构建保守边界，保持完整3x3高斯与读取预算。
+    neighborhoodMin = min(center, min(min(a, c), min(g, i)));
+    neighborhoodMax = max(center, max(max(a, c), max(g, i)));
   } else {
     // 非 1:1 映射保留原核，维持亚像素位置的锐化结果。
     vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
@@ -459,8 +478,19 @@ vec3 usmBoost(vec2 uv, vec3 center) {
     vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
     vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
     blur = ((a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0) / 16.0;
+    neighborhoodMin = min(center, min(min(min(a, c), min(g, i)), min(min(b, d), min(f, h))));
+    neighborhoodMax = max(center, max(max(max(a, c), max(g, i)), max(max(b, d), max(f, h))));
   }
-  return clamp(center + (center - blur) * (clamp(sharpenFactor, 0.0, 1.0) * USM_GAIN_SCALE), 0.0, 1.0);
+  vec3 residual = center - blur;
+  float residualLuma = dot(residual, LUMINOSITY_FACTOR);
+  float gate = smoothstep(USM_NOISE_FLOOR, USM_NOISE_FLOOR * CAS_GATE_RAMP, abs(residualLuma));
+  residual = mix(residual, vec3(residualLuma), CAS_CHROMA_BLEND);
+  vec3 outColor = center + residual * (clamp(sharpenFactor, 0.0, 1.0) * USM_GAIN_SCALE * gate);
+  vec3 range = neighborhoodMax - neighborhoodMin;
+  vec3 lo = neighborhoodMin - range * CAS_RING_PAD - 1e-4;
+  vec3 hi = neighborhoodMax + range * CAS_RING_PAD + 1e-4;
+  outColor = mix(outColor, clamp(outColor, lo, hi), CAS_RING_BLEND);
+  return clamp(outColor, 0.0, 1.0);
 }
 // CAS 风格锐化：显式增益 + luma 噪声门限 + 邻域钳制。
 // 原式等价于 out = center + (center - mean4) * G，平坦区 G=3.33 会把编码噪声放大成颗粒，
@@ -530,6 +560,7 @@ void main() {
     this.saturationUniform = gl.getUniformLocation(program, 'saturation')
 
     gl.useProgram(program)
+    gl.activeTexture?.(gl.TEXTURE0)
     const buffer = gl.createBuffer()!
     this.vertexBuffer = buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
@@ -602,8 +633,12 @@ void main() {
     if (!gl)
       return
     const previous = this.uniformOptions
+    const width = this.processingWidth
+    const height = this.processingHeight
     const sourcePass = this.usesSharpenTarget()
-    if (previous && this.uniformSourceWidth === this.currentSourceWidth && this.uniformSourceHeight === this.currentSourceHeight
+    if (!sourcePass && this.sharpenTexture !== null)
+      this.releaseSharpenTarget()
+    if (previous && this.uniformSourceWidth === width && this.uniformSourceHeight === height
       && this.uniformOutputWidth === this.currentOutputWidth && this.uniformOutputHeight === this.currentOutputHeight
       && previous.processing === this.options.processing && previous.sharpness === this.options.sharpness
       && previous.brightness === this.options.brightness && previous.contrast === this.options.contrast && previous.saturation === this.options.saturation
@@ -616,8 +651,8 @@ void main() {
     if (this.program !== null) {
       gl.useProgram(this.program)
     }
-    gl.uniform2f(this.outputResolutionUniform, sourcePass ? this.currentSourceWidth : this.currentOutputWidth, sourcePass ? this.currentSourceHeight : this.currentOutputHeight)
-    gl.uniform2f(this.sourceResolutionUniform, this.currentSourceWidth, this.currentSourceHeight)
+    gl.uniform2f(this.outputResolutionUniform, sourcePass ? width : this.currentOutputWidth, sourcePass ? height : this.currentOutputHeight)
+    gl.uniform2f(this.sourceResolutionUniform, width, height)
     gl.uniform1i(this.filterIdUniform, this.toFilterId(this.options.processing))
     gl.uniform1i(this.applyColorUniform, !sourcePass && applyColor ? 1 : 0)
     gl.uniform1f(this.sharpenFactorUniform, this.options.sharpness)
@@ -633,8 +668,8 @@ void main() {
       gl.uniform1i(this.presentApplyColorUniform, applyColor ? 1 : 0)
     }
     this.uniformOptions = { ...this.options }
-    this.uniformSourceWidth = this.currentSourceWidth
-    this.uniformSourceHeight = this.currentSourceHeight
+    this.uniformSourceWidth = width
+    this.uniformSourceHeight = height
     this.uniformOutputWidth = this.currentOutputWidth
     this.uniformOutputHeight = this.currentOutputHeight
     this.uniformUsesSharpenTarget = sourcePass
@@ -686,7 +721,12 @@ void main() {
     const startedAtMs = performance.now()
     this.drewToScreenThisFrame = false
     const frameSource = getVideoFrameSource(this.video)
-    const { width: sourceWidth, height: sourceHeight } = frameSource.renderSize
+    const frame = frameSource.renderSource
+    // 暂停后的截图复用最后一次解码帧上传的纹理，保持逐解码帧输入合同。
+    if (!frame && (!capture || !this.hasDrawnFrame))
+      return
+    const sourceWidth = frame?.displayWidth ?? this.currentSourceWidth
+    const sourceHeight = frame?.displayHeight ?? this.currentSourceHeight
     if (sourceWidth <= 0 || sourceHeight <= 0)
       return
     const gl = this.gl
@@ -698,8 +738,8 @@ void main() {
       this.currentSourceHeight = sourceHeight
       this.guard!.assertSize(this.currentSourceWidth, this.currentSourceHeight, Math.max(this.currentOutputWidth, this.currentSourceWidth), Math.max(this.currentOutputHeight, this.currentSourceHeight))
       if (!this.explicitPresentTarget || this.currentOutputWidth < this.currentSourceWidth || this.currentOutputHeight < this.currentSourceHeight) {
-        this.currentOutputWidth = Math.max(this.currentOutputWidth, this.currentSourceWidth)
-        this.currentOutputHeight = Math.max(this.currentOutputHeight, this.currentSourceHeight)
+        this.currentOutputWidth = this.srEnabled ? this.currentSourceWidth : Math.max(this.currentOutputWidth, this.currentSourceWidth)
+        this.currentOutputHeight = this.srEnabled ? this.currentSourceHeight : Math.max(this.currentOutputHeight, this.currentSourceHeight)
         this.canvas.width = this.currentOutputWidth
         this.canvas.height = this.currentOutputHeight
         this.guard!.assertBacking(this.currentOutputWidth, this.currentOutputHeight)
@@ -714,13 +754,19 @@ void main() {
     try {
       if (this.videoTexture !== null)
         gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
-      // 解码供给上传对应VideoFrame，兼容入口使用video；两者复用同一纹理。
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameSource.renderSource)
+      if (frame)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame)
       if (!this.textureAllocated) {
         this.guard?.check(performance.now(), true)
         this.textureAllocated = true
       }
       uploadFinishedAtMs = performance.now()
+      if (this.usesReconstruction()) {
+        this.reconstruction ??= new Fsr1ReconstructionPass(gl, this.shaders[0]!)
+        const rebuilt = this.reconstruction.render(this.videoTexture!, sourceWidth, sourceHeight, this.currentOutputWidth, this.currentOutputHeight)
+        gl.bindTexture(gl.TEXTURE_2D, rebuilt)
+      }
+      this.refresh()
       if (!this.drawThroughSharpenTarget(gl)) {
         gl.bindFramebuffer?.(gl.FRAMEBUFFER, null)
         gl.useProgram(this.program)
@@ -747,8 +793,15 @@ void main() {
    */
   private usesSharpenTarget(): boolean {
     return this.options.sharpness > 0 && this.explicitPresentTarget
-      && (this.currentOutputWidth !== this.currentSourceWidth || this.currentOutputHeight !== this.currentSourceHeight)
+      && (this.currentOutputWidth !== this.processingWidth || this.currentOutputHeight !== this.processingHeight)
   }
+
+  private usesReconstruction(): boolean {
+    return this.srEnabled && (this.currentOutputWidth > this.currentSourceWidth || this.currentOutputHeight > this.currentSourceHeight)
+  }
+
+  private get processingWidth(): number { return this.usesReconstruction() ? this.currentOutputWidth : this.currentSourceWidth }
+  private get processingHeight(): number { return this.usesReconstruction() ? this.currentOutputHeight : this.currentSourceHeight }
 
   private drawThroughSharpenTarget(gl: WebGL2RenderingContext): boolean {
     if (!this.usesSharpenTarget() || this.presentProgram === null) {
@@ -864,6 +917,8 @@ void main() {
   }
 
   private releaseGl(): void {
+    this.reconstruction?.dispose()
+    this.reconstruction = undefined
     this.releaseSharpenTarget()
     const gl = this.gl
     if (gl) {
@@ -989,7 +1044,7 @@ export class NativeVideoRenderer implements VideoRenderer {
 }
 
 export class WebGL2VideoRenderer implements VideoRenderer {
-  readonly kind = 'webgl2'
+  get kind(): 'webgl2' | 'webgl2_sr' { return this.config.superResolutionEnabled ? 'webgl2_sr' : 'webgl2' }
   private player: WebGL2Processor | null = null
   private config: RendererRuntimeConfig
 
@@ -1024,7 +1079,7 @@ export class WebGL2VideoRenderer implements VideoRenderer {
     await player.init()
     if (this.player !== player)
       return
-    video.dataset.renderPipeline = 'webgl2'
+    video.dataset.renderPipeline = this.kind === 'webgl2_sr' ? 'webgl2-sr' : 'webgl2'
   }
 
   update(config: Partial<RendererRuntimeConfig>): void {
@@ -1056,4 +1111,7 @@ export class WebGL2VideoRenderer implements VideoRenderer {
   }
 }
 
-export { SuperResolutionWebGL2Renderer } from './SuperResolutionWebGL2Renderer'
+/** 既有 SR 装配入口复用同一引擎与时钟，保留诊断身份。 */
+export class SuperResolutionWebGL2Renderer extends WebGL2VideoRenderer {
+  constructor(config: RendererRuntimeConfig) { super({ ...config, superResolutionEnabled: true }) }
+}

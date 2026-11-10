@@ -1,0 +1,1720 @@
+{
+  "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794285015731-1.jsonl",
+  "snapshot": "/tmp/xbxrc-2026-11-10-1230-latest.jsonl",
+  "sha256": "9f21810d88716cbdc19de0fc8a3fd722c73fcfa125f9b98bb3dfae9c084062ae",
+  "rows": 975,
+  "bytes": 2110047,
+  "timeRange": [
+    "2026-11-10T12:30:15.731+08:00",
+    "2026-11-10T12:31:49.631+08:00"
+  ],
+  "profileCounts": {
+    "dev": 975
+  },
+  "traceBudgetNoticeCount": 0,
+  "build": {
+    "buildTimestampUnixMs": "1794285001479",
+    "cargoProfile": "debug",
+    "edition": "browser",
+    "gitCommitShort": "76a1ea69",
+    "sourceFingerprintSha256": "de93f89e2eb119c2083bc37e68b52cce4177ce4cedca9d3005ae79db75f6d3a2",
+    "workspaceDirty": true
+  },
+  "sessions": [
+    {
+      "index": 1,
+      "sessionId": "2A057286-29F6-4FFA-AA31-1C7D32371895",
+      "startTime": "2026-11-10T12:30:55.717+08:00",
+      "endTime": "2026-11-10T12:31:43.668+08:00",
+      "stats": 133,
+      "telemetry": 33,
+      "segments": [
+        {
+          "index": 1,
+          "label": "SR开关开启（同尺寸跳过重建） + USM 3",
+          "generation": 1,
+          "state": {
+            "actualBrightness": 100,
+            "actualContrast": 100,
+            "actualPipeline": "webgl2_sr",
+            "actualProcessing": "usm",
+            "actualProcessingMode": "quality",
+            "actualSaturation": 100,
+            "actualSharpness": 3,
+            "actualSuperResolutionActive": false,
+            "actualTargetFps": 60
+          },
+          "startSeq": 210,
+          "endSeq": 938,
+          "startMs": 54013,
+          "endMs": 87228,
+          "startTime": "2026-11-10T12:31:10.037+08:00",
+          "endTime": "2026-11-10T12:31:43.251+08:00",
+          "durationMs": 33215,
+          "raw": {
+            "samples": 131,
+            "coverageMs": 33059,
+            "framesReceivedDelta": 1980,
+            "framesDecodedDelta": 1980,
+            "framesDroppedDelta": 0,
+            "bytesReceivedDelta": 77031824,
+            "packetsLostDelta": 16,
+            "packetsReceivedDelta": 70502,
+            "nackCountDelta": 84,
+            "pliCountDelta": 0,
+            "firCountDelta": 0,
+            "keyFramesDecodedDelta": 1,
+            "retransmittedPacketsReceivedDelta": 85,
+            "freezeCountDelta": 0,
+            "totalFreezesDurationDelta": 0,
+            "pauseCountDelta": 0,
+            "receivedFps": 59.892918721074444,
+            "decodedFps": 59.892918721074444,
+            "bitrateMbps": 18.64105363138631,
+            "decodeMsAvg": 4.349453030303029,
+            "jitterBufferMsAvg": 3.4059217171717173,
+            "rttMs": {
+              "samples": 131,
+              "min": 0,
+              "p95": 18.0,
+              "max": 18.0
+            },
+            "jitterMs": {
+              "samples": 131,
+              "min": 1.0,
+              "p95": 7.0,
+              "max": 9.0
+            },
+            "receiveEmptyWindows": []
+          },
+          "submission": {
+            "startSeq": 210,
+            "endSeq": 918,
+            "coverageMs": 32643,
+            "frames": 1954,
+            "fps": 59.859694268296415
+          },
+          "pairedSupply": {
+            "startSeq": 222,
+            "endSeq": 911,
+            "fromSampleId": "1:16",
+            "toSampleId": "1:144",
+            "coverageMs": 32299,
+            "receivedFrames": 1936,
+            "decodedFrames": 1936,
+            "submittedFrames": 1933,
+            "decodeSubmitDeficitFrames": 3,
+            "receivedFps": 59.939936220935635,
+            "decodedFps": 59.939936220935635,
+            "submittedFps": 59.847054088361865,
+            "counterGapLevels": {
+              "samples": 33,
+              "min": 4,
+              "p95": 7,
+              "max": 7
+            }
+          },
+          "steadySupply": {
+            "full3sSamples": 45,
+            "submitFps": {
+              "samples": 45,
+              "min": 58.67460317460318,
+              "p95": 60.19047619047619,
+              "max": 60.210317460317455
+            },
+            "decodeSubmitFpsDelta": {
+              "samples": 45,
+              "min": 0.0,
+              "p95": 1.0,
+              "max": 1.0
+            },
+            "worst3s": {
+              "seq": 358,
+              "sampleId": "1:41",
+              "atMs": 60382,
+              "callbackCoverageMs": 3000,
+              "callbackFpsAvg": 53.47354497354497,
+              "decodeCoverageMs": 3000,
+              "decodeDurationMsAvg": 4.641666630555556,
+              "decodeFpsAvg": 59.67460317460318,
+              "durationMs": 3000,
+              "inboundFpsAvg": 60.007936507936506,
+              "jitterBufferCoverageMs": 3000,
+              "jitterBufferMsAvg": 5.938481481871346,
+              "jitterBufferMsFirst": 3.4188000000000036,
+              "jitterBufferMsLast": 4.192368421052645,
+              "jitterCoverageMs": 3000,
+              "jitterMsAvg": 6.054333333333333,
+              "lossAvg": 9.835829296747944e-05,
+              "lossCoverageMs": 3000,
+              "presentAgeMsAvg": 8.549,
+              "receivedCoverageMs": 3000,
+              "renderDrawDurationMsAvg": 0.34178333333333333,
+              "renderSubmitDurationMsAvg": 0.01082638888888889,
+              "renderUploadDurationMsAvg": 0.32540138888888887,
+              "rendererCoverageMs": 3000,
+              "rendererSubmitAgeMsAvg": 8.549,
+              "rendererSubmitFpsAvg": 58.67460317460318,
+              "repairPacketsPerSecondAvg": 3.4682539682539684,
+              "rttCoverageMs": 3000,
+              "rttMsAvg": 12.573333333333334,
+              "sampleCount": 12,
+              "videoCoverageMs": 3000,
+              "videoPresentFpsAvg": 60.07407407407408
+            }
+          },
+          "rvfcDiagnostic": {
+            "coverageMs": 32122,
+            "callbackCountSinceLastSample": 1732,
+            "presentedFramesAdvancedSinceLastSample": 1926,
+            "callbackGapCountSinceLastSample": 0,
+            "presentedFramesJumpCountSinceLastSample": 190,
+            "callbackFps": 53.91943216487143,
+            "videoPresentProxyFps": 59.958906668327,
+            "maxCallbackIntervalMs": 88
+          },
+          "localSubmitAgeMs": {
+            "samples": 33,
+            "min": 0,
+            "p95": 22,
+            "max": 26
+          },
+          "retainedTimingWindows": {
+            "qualifiedSnapshots": 43,
+            "capacity": 256,
+            "duration": {
+              "p95AcrossWindowsMs": {
+                "samples": 43,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "upload": {
+              "p95AcrossWindowsMs": {
+                "samples": 43,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "submit": {
+              "p95AcrossWindowsMs": {
+                "samples": 43,
+                "min": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "interval": {
+              "p95AcrossWindowsMs": {
+                "samples": 43,
+                "min": 23,
+                "p95": 29,
+                "max": 29
+              },
+              "maxAcrossWindowsMs": 89
+            }
+          },
+          "finalCounters": {
+            "decodedFramesReceived": 1955,
+            "realtimeDrawCount": 1955,
+            "latestOverwriteCount": 0,
+            "rateLimitDropCount": 0,
+            "submitFailureCount": 0,
+            "duplicateDrawCount": 0
+          },
+          "cpuCostDelta": {
+            "frames": 1954,
+            "drawDurationTotalMs": 629,
+            "drawDurationMsAvg": 0.3219037871033777,
+            "uploadDurationTotalMs": 585,
+            "uploadDurationMsAvg": 0.2993858751279427,
+            "submitDurationTotalMs": 38,
+            "submitDurationMsAvg": 0.019447287615148412
+          },
+          "rendererSources": {
+            "worker": 33
+          },
+          "renderCauses": {
+            "renderStable": 33
+          }
+        }
+      ],
+      "allPlaybackRaw": {
+        "samples": 131,
+        "coverageMs": 33059,
+        "framesReceivedDelta": 1980,
+        "framesDecodedDelta": 1980,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 77031824,
+        "packetsLostDelta": 16,
+        "packetsReceivedDelta": 70502,
+        "nackCountDelta": 84,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 1,
+        "retransmittedPacketsReceivedDelta": 85,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.892918721074444,
+        "decodedFps": 59.892918721074444,
+        "bitrateMbps": 18.64105363138631,
+        "decodeMsAvg": 4.349453030303029,
+        "jitterBufferMsAvg": 3.4059217171717173,
+        "rttMs": {
+          "samples": 131,
+          "min": 0,
+          "p95": 18.0,
+          "max": 18.0
+        },
+        "jitterMs": {
+          "samples": 131,
+          "min": 1.0,
+          "p95": 7.0,
+          "max": 9.0
+        },
+        "receiveEmptyWindows": []
+      },
+      "measuredSupply": {
+        "fromSampleId": "1:16",
+        "toSampleId": "1:144",
+        "coverageMs": 32299,
+        "decodedFrames": 1936,
+        "submittedFrames": 1933,
+        "decodeSubmitDeficitFrames": 3,
+        "decodedFps": 59.939936220935635,
+        "submittedFps": 59.847054088361865
+      },
+      "traceProducerMax": {
+        "dropped": 0,
+        "droppedEssential": 0,
+        "queueFull": 0,
+        "ipcFailed": 0,
+        "ipcTimedOut": 0,
+        "rowOversized": 0,
+        "ackMissing": 0
+      },
+      "readerSupply": {
+        "snapshots": 16,
+        "counterDifferences": [],
+        "last": {
+          "seq": 918,
+          "atMs": 86656,
+          "readerFrames": 1955,
+          "submittedFrames": 1955
+        }
+      },
+      "startup": {
+        "connectedSeq": 193,
+        "connectedAtMs": 53169,
+        "committedSeq": 210,
+        "committedAtMs": 54013,
+        "connectedToCommitMs": 844
+      },
+      "finalInboundCounters": {
+        "framesReceived": 1989,
+        "framesDecoded": 1988,
+        "framesDropped": 0,
+        "packetsLost": 17,
+        "packetsReceived": 71024,
+        "nackCount": 86,
+        "pliCount": 2,
+        "firCount": 0,
+        "freezeCount": 0,
+        "totalFreezesDuration": 0,
+        "pauseCount": 0
+      },
+      "cleanEndingResources": {
+        "currentRenderers": 0,
+        "pendingRenderers": 0,
+        "decodedFrameReaders": 0,
+        "retainedDecodedFrames": 0,
+        "frameRequests": 0,
+        "nativeFrameCallbacks": 0,
+        "animationCallbacks": 0,
+        "videoElements": 0,
+        "audioElements": 0,
+        "pixelProbeGpuReads": 0,
+        "readyTimers": 0
+      },
+      "assertions": {
+        "rawSampleIdsUnique": true,
+        "monotonicSubmission": true,
+        "monotonicFailures": [],
+        "readerEqualsSubmitted": true
+      }
+    }
+  ],
+  "anomalies": [],
+  "browserReports": [
+    {
+      "input": "/tmp/xbxrc-1230-browser-report.json",
+      "behaviorGate": "FAIL",
+      "failures": [
+        "browser runtime stability evidence is MISSING"
+      ],
+      "stability": {
+        "gate": "MISSING",
+        "failures": [],
+        "missingEvidence": [
+          "sharedSamples"
+        ],
+        "evidence": {
+          "resourceEvents": 21,
+          "observationEvents": 49,
+          "collectionEvents": 133,
+          "shaderDrawEvents": 16,
+          "actualDimensionSamples": 48,
+          "freshObservationEvents": 48,
+          "telemetryEvents": 33,
+          "traceBudgetSamples": 33,
+          "gpuBudgetSamples": 33,
+          "frameChainSamples": 47,
+          "closedClients": 1,
+          "sharedSamples": 0
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    "RTC decode and cached submit deltas pair by sessionId/sampleId/sampledAtMs.",
+    "Worker reader counters and renderer counters pair inside the same live resource snapshot.",
+    "RVFC accepted/decodedFrame identity counters describe presentation diagnostics only.",
+    "Fully covered 3s windows stay in the same actual effect segment and renderer generation.",
+    "256-frame CPU/interval P95 windows are retained snapshots; overlapping windows do not establish a global P95.",
+    "GPU timing is unavailable; screenPresentState is unavailable. Submit age is local last-submit age.",
+    "Worker read-finished to submit is measured locally; VideoFrame timestamp is zero, and capture-to-display / physical scanout remain unavailable.",
+    "Browser ReferenceChain/cleanAnchorCommitted/DisplayStable and per-request NACK effectiveness are capability-limited."
+  ],
+  "currentSource": {
+    "sha256": "de93f89e2eb119c2083bc37e68b52cce4177ce4cedca9d3005ae79db75f6d3a2",
+    "files": 560,
+    "matchesRuntime": true
+  },
+  "sequence": {
+    "first": 1,
+    "last": 975,
+    "continuous": true
+  },
+  "resolution": {
+    "resolved": {
+      "seq": 103,
+      "configuredResolution": 1080,
+      "deviceHeight": 1080,
+      "deviceKind": "windows",
+      "deviceOs": "windows",
+      "deviceWidth": 1920,
+      "headerDisplayHeight": 1080,
+      "headerDisplayWidth": 1920,
+      "targetType": "home"
+    },
+    "execution": {
+      "seq": 141,
+      "targetVideoWidth": 1920,
+      "targetVideoHeight": 1080
+    },
+    "sdp": [
+      {
+        "seq": 155,
+        "stage": "localOfferAfterPatch",
+        "videoImageConstraints": [
+          {
+            "allPayloads": false,
+            "direction": "recv",
+            "maxHeight": 1080,
+            "maxWidth": 1920,
+            "minHeight": 1,
+            "minWidth": 1,
+            "payloadType": "96"
+          },
+          {
+            "allPayloads": false,
+            "direction": "recv",
+            "maxHeight": 1080,
+            "maxWidth": 1920,
+            "minHeight": 1,
+            "minWidth": 1,
+            "payloadType": "98"
+          },
+          {
+            "allPayloads": false,
+            "direction": "recv",
+            "maxHeight": 1080,
+            "maxWidth": 1920,
+            "minHeight": 1,
+            "minWidth": 1,
+            "payloadType": "100"
+          },
+          {
+            "allPayloads": false,
+            "direction": "recv",
+            "maxHeight": 1080,
+            "maxWidth": 1920,
+            "minHeight": 1,
+            "minWidth": 1,
+            "payloadType": "103"
+          }
+        ],
+        "h264": [
+          {
+            "payloadType": "96",
+            "profileLevelId": "640c1f",
+            "packetizationMode": "1",
+            "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f;max-fs=8160;max-fr=60;x-google-min-bitrate=5000;x-google-start-bitrate=20000;x-google-max-bitrate=100000"
+          },
+          {
+            "payloadType": "98",
+            "profileLevelId": "42e01f",
+            "packetizationMode": "1",
+            "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f;max-fs=8160;max-fr=60;x-google-min-bitrate=5000;x-google-start-bitrate=20000;x-google-max-bitrate=100000"
+          },
+          {
+            "payloadType": "100",
+            "profileLevelId": "640c1f",
+            "packetizationMode": "0",
+            "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=640c1f;max-fs=8160;max-fr=60;x-google-min-bitrate=5000;x-google-start-bitrate=20000;x-google-max-bitrate=100000"
+          },
+          {
+            "payloadType": "103",
+            "profileLevelId": "42e01f",
+            "packetizationMode": "0",
+            "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f;max-fs=8160;max-fr=60;x-google-min-bitrate=5000;x-google-start-bitrate=20000;x-google-max-bitrate=100000"
+          }
+        ]
+      },
+      {
+        "seq": 171,
+        "stage": "remoteAnswer",
+        "videoImageConstraints": [
+          {
+            "allPayloads": false,
+            "direction": "send",
+            "maxHeight": 1440,
+            "maxWidth": 2560,
+            "minHeight": 0,
+            "minWidth": 0,
+            "payloadType": "98"
+          },
+          {
+            "allPayloads": false,
+            "direction": "send",
+            "maxHeight": 1440,
+            "maxWidth": 2560,
+            "minHeight": 0,
+            "minWidth": 0,
+            "payloadType": "99"
+          },
+          {
+            "allPayloads": false,
+            "direction": "send",
+            "maxHeight": 1440,
+            "maxWidth": 2560,
+            "minHeight": 0,
+            "minWidth": 0,
+            "payloadType": "103"
+          },
+          {
+            "allPayloads": false,
+            "direction": "send",
+            "maxHeight": 1440,
+            "maxWidth": 2560,
+            "minHeight": 0,
+            "minWidth": 0,
+            "payloadType": "104"
+          },
+          {
+            "allPayloads": false,
+            "direction": "send",
+            "maxHeight": 1440,
+            "maxWidth": 2560,
+            "minHeight": 0,
+            "minWidth": 0,
+            "payloadType": "118"
+          },
+          {
+            "allPayloads": false,
+            "direction": "send",
+            "maxHeight": 1440,
+            "maxWidth": 2560,
+            "minHeight": 0,
+            "minWidth": 0,
+            "payloadType": "37"
+          }
+        ],
+        "h264": [
+          {
+            "payloadType": "98",
+            "profileLevelId": "42e02a",
+            "packetizationMode": "1",
+            "fmtp": "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e02a"
+          },
+          {
+            "payloadType": "103",
+            "profileLevelId": "42e02a",
+            "packetizationMode": "0",
+            "fmtp": "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e02a"
+          }
+        ]
+      }
+    ],
+    "validDimensionSamples": 132,
+    "actualDimensions": {
+      "2560x1440": 132
+    },
+    "firstActualSeq": 217,
+    "lastActualSeq": 924
+  },
+  "worker": {
+    "snapshots": 50,
+    "liveSnapshots": 17,
+    "final": {
+      "seq": 918,
+      "event": "browserMediaResourcesSnapshot",
+      "atMs": 86656,
+      "submittedFrames": 1955,
+      "workerReadFrames": 1962,
+      "workerSentFrames": 1956,
+      "receivedMessages": 1956,
+      "deliveredFrames": 1955,
+      "workerOverwriteCount": 6,
+      "staleFrameDropCount": 1,
+      "workerAckCount": 1955,
+      "invalidClockCount": 15,
+      "workerObservationAgeMs": 16,
+      "supplyTiming": {
+        "ackDelivery": {
+          "capacity": 256,
+          "count": 789,
+          "maxMs": 1,
+          "maxObservedMs": 1,
+          "meanMs": 0.23046875,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        },
+        "ackRoundTrip": {
+          "capacity": 256,
+          "count": 1953,
+          "maxMs": 5,
+          "maxObservedMs": 67,
+          "meanMs": 0.75390625,
+          "p50Ms": 1,
+          "p95Ms": 2,
+          "p99Ms": 3,
+          "retained": 256
+        },
+        "consume": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 6,
+          "meanMs": 0.375,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        },
+        "pendingWait": {
+          "capacity": 256,
+          "count": 1941,
+          "maxMs": 0,
+          "maxObservedMs": 6,
+          "meanMs": 0,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "retained": 256
+        },
+        "readWait": {
+          "capacity": 256,
+          "count": 1941,
+          "maxMs": 57,
+          "maxObservedMs": 1789,
+          "meanMs": 16.671875,
+          "p50Ms": 16,
+          "p95Ms": 26,
+          "p99Ms": 41,
+          "retained": 256
+        },
+        "receiveInterval": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 57,
+          "maxObservedMs": 86,
+          "meanMs": 16.68359375,
+          "p50Ms": 16,
+          "p95Ms": 26,
+          "p99Ms": 41,
+          "retained": 256
+        },
+        "transfer": {
+          "capacity": 256,
+          "count": 1941,
+          "maxMs": 4,
+          "maxObservedMs": 68,
+          "meanMs": 0.15625,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 3,
+          "retained": 256
+        }
+      },
+      "rendererTiming": {
+        "duration": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 6,
+          "meanMs": 0.3359375,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        },
+        "interval": {
+          "capacity": 256,
+          "count": 1954,
+          "maxMs": 57,
+          "maxObservedMs": 89,
+          "meanMs": 16.68359375,
+          "p50Ms": 16,
+          "p95Ms": 25,
+          "p99Ms": 42,
+          "retained": 256
+        },
+        "readToSubmit": {
+          "capacity": 256,
+          "count": 1940,
+          "maxMs": 4,
+          "maxObservedMs": 41,
+          "meanMs": 0.5234375,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 3,
+          "retained": 256
+        },
+        "receiveToSubmit": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 6,
+          "meanMs": 0.37890625,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        },
+        "submit": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 1,
+          "meanMs": 0.0078125,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "retained": 256
+        },
+        "upload": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 5,
+          "meanMs": 0.328125,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        }
+      }
+    },
+    "layeredDelta": {
+      "readToSent": 6,
+      "sentToMainReceived": 0,
+      "mainReceivedToDelivered": 1,
+      "deliveredToSubmitted": 0
+    },
+    "lossChanges": [
+      {
+        "from": {
+          "seq": 210,
+          "event": "browserMediaResourcesObserved",
+          "atMs": 54013,
+          "submittedFrames": 1,
+          "workerReadFrames": 1,
+          "workerSentFrames": 1,
+          "receivedMessages": 1,
+          "deliveredFrames": 1,
+          "workerOverwriteCount": 0,
+          "staleFrameDropCount": 0,
+          "workerAckCount": 0,
+          "invalidClockCount": 0,
+          "workerObservationAgeMs": 41,
+          "supplyTiming": {
+            "ackDelivery": {
+              "capacity": 256,
+              "count": 0,
+              "retained": 0
+            },
+            "ackRoundTrip": {
+              "capacity": 256,
+              "count": 0,
+              "retained": 0
+            },
+            "consume": {
+              "capacity": 256,
+              "count": 0,
+              "retained": 0
+            },
+            "pendingWait": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 0,
+              "maxObservedMs": 0,
+              "meanMs": 0,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 0,
+              "retained": 1
+            },
+            "readWait": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 1789,
+              "maxObservedMs": 1789,
+              "meanMs": 1789,
+              "p50Ms": 1789,
+              "p95Ms": 1789,
+              "p99Ms": 1789,
+              "retained": 1
+            },
+            "receiveInterval": {
+              "capacity": 256,
+              "count": 0,
+              "retained": 0
+            },
+            "transfer": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 35,
+              "maxObservedMs": 35,
+              "meanMs": 35,
+              "p50Ms": 35,
+              "p95Ms": 35,
+              "p99Ms": 35,
+              "retained": 1
+            }
+          },
+          "rendererTiming": {
+            "duration": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 6,
+              "p50Ms": 6,
+              "p95Ms": 6,
+              "p99Ms": 6,
+              "retained": 1
+            },
+            "interval": {
+              "capacity": 256,
+              "count": 0,
+              "retained": 0
+            },
+            "readToSubmit": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 41,
+              "maxObservedMs": 41,
+              "meanMs": 41,
+              "p50Ms": 41,
+              "p95Ms": 41,
+              "p99Ms": 41,
+              "retained": 1
+            },
+            "receiveToSubmit": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 6,
+              "p50Ms": 6,
+              "p95Ms": 6,
+              "p99Ms": 6,
+              "retained": 1
+            },
+            "submit": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 1,
+              "maxObservedMs": 1,
+              "meanMs": 1,
+              "p50Ms": 1,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 1
+            },
+            "upload": {
+              "capacity": 256,
+              "count": 1,
+              "maxMs": 5,
+              "maxObservedMs": 5,
+              "meanMs": 5,
+              "p50Ms": 5,
+              "p95Ms": 5,
+              "p99Ms": 5,
+              "retained": 1
+            }
+          }
+        },
+        "to": {
+          "seq": 222,
+          "event": "renderTelemetryObserved",
+          "atMs": 54053,
+          "submittedFrames": 4,
+          "workerReadFrames": 8,
+          "workerSentFrames": 4,
+          "receivedMessages": 4,
+          "deliveredFrames": 4,
+          "workerOverwriteCount": 4,
+          "staleFrameDropCount": 0,
+          "workerAckCount": 3,
+          "invalidClockCount": 0,
+          "workerObservationAgeMs": 14,
+          "supplyTiming": {
+            "ackDelivery": {
+              "capacity": 256,
+              "count": 0,
+              "retained": 0
+            },
+            "ackRoundTrip": {
+              "capacity": 256,
+              "count": 3,
+              "maxMs": 40,
+              "maxObservedMs": 40,
+              "meanMs": 16.666666666666668,
+              "p50Ms": 10,
+              "p95Ms": 40,
+              "p99Ms": 40,
+              "retained": 3
+            },
+            "consume": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 1.75,
+              "p50Ms": 0,
+              "p95Ms": 6,
+              "p99Ms": 6,
+              "retained": 4
+            },
+            "pendingWait": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 2,
+              "maxObservedMs": 2,
+              "meanMs": 0.75,
+              "p50Ms": 0,
+              "p95Ms": 2,
+              "p99Ms": 2,
+              "retained": 4
+            },
+            "readWait": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 1789,
+              "maxObservedMs": 1789,
+              "meanMs": 456.5,
+              "p50Ms": 11,
+              "p95Ms": 1789,
+              "p99Ms": 1789,
+              "retained": 4
+            },
+            "receiveInterval": {
+              "capacity": 256,
+              "count": 3,
+              "maxMs": 17,
+              "maxObservedMs": 17,
+              "meanMs": 11,
+              "p50Ms": 15,
+              "p95Ms": 17,
+              "p99Ms": 17,
+              "retained": 3
+            },
+            "transfer": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 35,
+              "maxObservedMs": 35,
+              "meanMs": 11.75,
+              "p50Ms": 1,
+              "p95Ms": 35,
+              "p99Ms": 35,
+              "retained": 4
+            }
+          },
+          "rendererTiming": {
+            "duration": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 1.5,
+              "p50Ms": 0,
+              "p95Ms": 6,
+              "p99Ms": 6,
+              "retained": 4
+            },
+            "interval": {
+              "capacity": 256,
+              "count": 3,
+              "maxMs": 17,
+              "maxObservedMs": 17,
+              "meanMs": 9,
+              "p50Ms": 9,
+              "p95Ms": 17,
+              "p99Ms": 17,
+              "retained": 3
+            },
+            "readToSubmit": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 41,
+              "maxObservedMs": 41,
+              "meanMs": 14,
+              "p50Ms": 2,
+              "p95Ms": 41,
+              "p99Ms": 41,
+              "retained": 4
+            },
+            "receiveToSubmit": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 1.5,
+              "p50Ms": 0,
+              "p95Ms": 6,
+              "p99Ms": 6,
+              "retained": 4
+            },
+            "submit": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 1,
+              "maxObservedMs": 1,
+              "meanMs": 0.25,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 4
+            },
+            "upload": {
+              "capacity": 256,
+              "count": 4,
+              "maxMs": 5,
+              "maxObservedMs": 5,
+              "meanMs": 1.25,
+              "p50Ms": 0,
+              "p95Ms": 5,
+              "p99Ms": 5,
+              "retained": 4
+            }
+          }
+        },
+        "increments": {
+          "workerOverwriteCount": 4,
+          "staleFrameDropCount": 0
+        }
+      },
+      {
+        "from": {
+          "seq": 305,
+          "event": "renderTelemetryObserved",
+          "atMs": 58097,
+          "submittedFrames": 246,
+          "workerReadFrames": 250,
+          "workerSentFrames": 246,
+          "receivedMessages": 246,
+          "deliveredFrames": 246,
+          "workerOverwriteCount": 4,
+          "staleFrameDropCount": 0,
+          "workerAckCount": 245,
+          "invalidClockCount": 0,
+          "workerObservationAgeMs": 12,
+          "supplyTiming": {
+            "ackDelivery": {
+              "capacity": 256,
+              "count": 58,
+              "maxMs": 0,
+              "maxObservedMs": 0,
+              "meanMs": 0,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 0,
+              "retained": 58
+            },
+            "ackRoundTrip": {
+              "capacity": 256,
+              "count": 245,
+              "maxMs": 40,
+              "maxObservedMs": 40,
+              "meanMs": 1.1061224489795918,
+              "p50Ms": 1,
+              "p95Ms": 2,
+              "p99Ms": 10,
+              "retained": 245
+            },
+            "consume": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 0.3739837398373983,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 246
+            },
+            "pendingWait": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 0.04878048780487805,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 1,
+              "retained": 246
+            },
+            "readWait": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 1789,
+              "maxObservedMs": 1789,
+              "meanMs": 23.817073170731707,
+              "p50Ms": 16,
+              "p95Ms": 27,
+              "p99Ms": 41,
+              "retained": 246
+            },
+            "receiveInterval": {
+              "capacity": 256,
+              "count": 245,
+              "maxMs": 61,
+              "maxObservedMs": 61,
+              "meanMs": 16.648979591836735,
+              "p50Ms": 16,
+              "p95Ms": 28,
+              "p99Ms": 37,
+              "retained": 245
+            },
+            "transfer": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 35,
+              "maxObservedMs": 35,
+              "meanMs": 1.4878048780487805,
+              "p50Ms": 1,
+              "p95Ms": 3,
+              "p99Ms": 10,
+              "retained": 246
+            }
+          },
+          "rendererTiming": {
+            "duration": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 0.3048780487804878,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 246
+            },
+            "interval": {
+              "capacity": 256,
+              "count": 245,
+              "maxMs": 61,
+              "maxObservedMs": 61,
+              "meanMs": 16.624489795918368,
+              "p50Ms": 16,
+              "p95Ms": 28,
+              "p99Ms": 38,
+              "retained": 245
+            },
+            "readToSubmit": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 41,
+              "maxObservedMs": 41,
+              "meanMs": 1.8902439024390243,
+              "p50Ms": 1,
+              "p95Ms": 3,
+              "p99Ms": 12,
+              "retained": 246
+            },
+            "receiveToSubmit": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 0.35365853658536583,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 246
+            },
+            "submit": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 1,
+              "maxObservedMs": 1,
+              "meanMs": 0.016260162601626018,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 1,
+              "retained": 246
+            },
+            "upload": {
+              "capacity": 256,
+              "count": 246,
+              "maxMs": 5,
+              "maxObservedMs": 5,
+              "meanMs": 0.2886178861788618,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 246
+            }
+          }
+        },
+        "to": {
+          "seq": 318,
+          "event": "browserMediaResourcesSnapshot",
+          "atMs": 58626,
+          "submittedFrames": 274,
+          "workerReadFrames": 281,
+          "workerSentFrames": 275,
+          "receivedMessages": 275,
+          "deliveredFrames": 274,
+          "workerOverwriteCount": 6,
+          "staleFrameDropCount": 1,
+          "workerAckCount": 274,
+          "invalidClockCount": 0,
+          "workerObservationAgeMs": 13,
+          "supplyTiming": {
+            "ackDelivery": {
+              "capacity": 256,
+              "count": 61,
+              "maxMs": 0,
+              "maxObservedMs": 0,
+              "meanMs": 0,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 0,
+              "retained": 61
+            },
+            "ackRoundTrip": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 67,
+              "maxObservedMs": 67,
+              "meanMs": 1.1796875,
+              "p50Ms": 1,
+              "p95Ms": 2,
+              "p99Ms": 10,
+              "retained": 256
+            },
+            "consume": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 1,
+              "maxObservedMs": 6,
+              "meanMs": 0.37109375,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 256
+            },
+            "pendingWait": {
+              "capacity": 256,
+              "count": 275,
+              "maxMs": 6,
+              "maxObservedMs": 6,
+              "meanMs": 0.04296875,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 1,
+              "retained": 256
+            },
+            "readWait": {
+              "capacity": 256,
+              "count": 275,
+              "maxMs": 60,
+              "maxObservedMs": 1789,
+              "meanMs": 16.6796875,
+              "p50Ms": 16,
+              "p95Ms": 27,
+              "p99Ms": 37,
+              "retained": 256
+            },
+            "receiveInterval": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 86,
+              "maxObservedMs": 86,
+              "meanMs": 16.8984375,
+              "p50Ms": 16,
+              "p95Ms": 28,
+              "p99Ms": 41,
+              "retained": 256
+            },
+            "transfer": {
+              "capacity": 256,
+              "count": 275,
+              "maxMs": 68,
+              "maxObservedMs": 68,
+              "meanMs": 1.58984375,
+              "p50Ms": 1,
+              "p95Ms": 3,
+              "p99Ms": 10,
+              "retained": 256
+            }
+          },
+          "rendererTiming": {
+            "duration": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 1,
+              "maxObservedMs": 6,
+              "meanMs": 0.3125,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 256
+            },
+            "interval": {
+              "capacity": 256,
+              "count": 273,
+              "maxMs": 89,
+              "maxObservedMs": 89,
+              "meanMs": 16.953125,
+              "p50Ms": 16,
+              "p95Ms": 28,
+              "p99Ms": 41,
+              "retained": 256
+            },
+            "readToSubmit": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 20,
+              "maxObservedMs": 41,
+              "meanMs": 1.73046875,
+              "p50Ms": 1,
+              "p95Ms": 3,
+              "p99Ms": 9,
+              "retained": 256
+            },
+            "receiveToSubmit": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 1,
+              "maxObservedMs": 6,
+              "meanMs": 0.359375,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 256
+            },
+            "submit": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 1,
+              "maxObservedMs": 1,
+              "meanMs": 0.01171875,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 1,
+              "retained": 256
+            },
+            "upload": {
+              "capacity": 256,
+              "count": 274,
+              "maxMs": 1,
+              "maxObservedMs": 5,
+              "meanMs": 0.30078125,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "retained": 256
+            }
+          }
+        },
+        "increments": {
+          "workerOverwriteCount": 2,
+          "staleFrameDropCount": 1
+        }
+      }
+    ],
+    "invalidClockChanges": [
+      {
+        "fromSeq": 729,
+        "toSeq": 735,
+        "atMs": 78641,
+        "count": 1
+      },
+      {
+        "fromSeq": 735,
+        "toSeq": 752,
+        "atMs": 79293,
+        "count": 9
+      },
+      {
+        "fromSeq": 781,
+        "toSeq": 800,
+        "atMs": 81312,
+        "count": 10
+      },
+      {
+        "fromSeq": 800,
+        "toSeq": 823,
+        "atMs": 82320,
+        "count": 11
+      },
+      {
+        "fromSeq": 843,
+        "toSeq": 862,
+        "atMs": 84336,
+        "count": 13
+      },
+      {
+        "fromSeq": 886,
+        "toSeq": 911,
+        "atMs": 86352,
+        "count": 14
+      },
+      {
+        "fromSeq": 911,
+        "toSeq": 918,
+        "atMs": 86656,
+        "count": 15
+      }
+    ],
+    "invalidClockRatio": 0.007668711656441718,
+    "ackDeliveryValidRecordRatioToAckCount": 0.40358056265984654,
+    "retainedWindowRanges": {
+      "supply.ackDelivery": {
+        "snapshots": 20,
+        "p95RangeMs": [
+          0,
+          1
+        ],
+        "p99RangeMs": [
+          0,
+          1
+        ],
+        "retainedMaxMs": 1
+      },
+      "supply.ackRoundTrip": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          2
+        ],
+        "p99RangeMs": [
+          3,
+          10
+        ],
+        "retainedMaxMs": 67
+      },
+      "supply.consume": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          1
+        ],
+        "p99RangeMs": [
+          1,
+          1
+        ],
+        "retainedMaxMs": 1
+      },
+      "supply.pendingWait": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          0,
+          0
+        ],
+        "p99RangeMs": [
+          0,
+          1
+        ],
+        "retainedMaxMs": 6
+      },
+      "supply.readWait": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          23,
+          29
+        ],
+        "p99RangeMs": [
+          31,
+          44
+        ],
+        "retainedMaxMs": 67
+      },
+      "supply.receiveInterval": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          24,
+          29
+        ],
+        "p99RangeMs": [
+          31,
+          49
+        ],
+        "retainedMaxMs": 86
+      },
+      "supply.transfer": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          3
+        ],
+        "p99RangeMs": [
+          2,
+          10
+        ],
+        "retainedMaxMs": 68
+      },
+      "renderer.duration": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          1
+        ],
+        "p99RangeMs": [
+          1,
+          1
+        ],
+        "retainedMaxMs": 1
+      },
+      "renderer.interval": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          23,
+          29
+        ],
+        "p99RangeMs": [
+          30,
+          49
+        ],
+        "retainedMaxMs": 89
+      },
+      "renderer.readToSubmit": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          3
+        ],
+        "p99RangeMs": [
+          2,
+          10
+        ],
+        "retainedMaxMs": 20
+      },
+      "renderer.receiveToSubmit": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          1
+        ],
+        "p99RangeMs": [
+          1,
+          1
+        ],
+        "retainedMaxMs": 1
+      },
+      "renderer.submit": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          0,
+          0
+        ],
+        "p99RangeMs": [
+          0,
+          1
+        ],
+        "retainedMaxMs": 1
+      },
+      "renderer.upload": {
+        "snapshots": 43,
+        "p95RangeMs": [
+          1,
+          1
+        ],
+        "p99RangeMs": [
+          1,
+          1
+        ],
+        "retainedMaxMs": 1
+      }
+    },
+    "liveBalanceFailures": [],
+    "actualSrStates": {
+      "False": 16
+    }
+  },
+  "staleDeliveryWindow": [
+    {
+      "fromSeq": 305,
+      "toSeq": 318,
+      "snapshotIntervalMs": 529,
+      "rtc": [
+        {
+          "seq": 307,
+          "sampleId": "1:33",
+          "atMs": 58348,
+          "delta": {
+            "bytesReceivedDelta": 648816,
+            "elapsedMs": 251,
+            "firCountDelta": 0,
+            "framesAssembledFromMultiplePacketsDelta": 16,
+            "framesDecodedDelta": 16,
+            "framesDroppedDelta": 0,
+            "framesReceivedDelta": 15,
+            "freezeCountDelta": 0,
+            "headerBytesReceivedDelta": 16592,
+            "jitterBufferDelayDelta": 0.08163600000000004,
+            "jitterBufferEmittedCountDelta": 15,
+            "jitterBufferMinimumDelayDelta": 0.2881140000000002,
+            "jitterBufferTargetDelayDelta": 0.2881140000000002,
+            "keyFramesDecodedDelta": 0,
+            "nackCountDelta": 0,
+            "packetsLostDelta": 0,
+            "packetsReceivedDelta": 592,
+            "pauseCountDelta": 0,
+            "pliCountDelta": 0,
+            "retransmittedBytesReceivedDelta": 0,
+            "retransmittedPacketsReceivedDelta": 0,
+            "totalAssemblyTimeDelta": 0.0824999999999998,
+            "totalDecodeTimeDelta": 0.07459700000000002,
+            "totalFreezesDurationDelta": 0,
+            "totalInterFrameDelayDelta": 0.258,
+            "totalPausesDurationDelta": 0,
+            "totalProcessingDelayDelta": 0.16292599999999968,
+            "totalSquaredInterFrameDelayDelta": 0.00452000000000001
+          },
+          "rttMs": 12.0,
+          "jitterMs": 6.0
+        },
+        {
+          "seq": 310,
+          "sampleId": "1:34",
+          "atMs": 58617,
+          "delta": {
+            "bytesReceivedDelta": 836950,
+            "elapsedMs": 269,
+            "firCountDelta": 0,
+            "framesAssembledFromMultiplePacketsDelta": 14,
+            "framesDecodedDelta": 15,
+            "framesDroppedDelta": 0,
+            "framesReceivedDelta": 16,
+            "freezeCountDelta": 0,
+            "headerBytesReceivedDelta": 21340,
+            "jitterBufferDelayDelta": 0.0921559999999999,
+            "jitterBufferEmittedCountDelta": 16,
+            "jitterBufferMinimumDelayDelta": 0.30105299999999957,
+            "jitterBufferTargetDelayDelta": 0.30105299999999957,
+            "keyFramesDecodedDelta": 0,
+            "nackCountDelta": 0,
+            "packetsLostDelta": 0,
+            "packetsReceivedDelta": 761,
+            "pauseCountDelta": 0,
+            "pliCountDelta": 0,
+            "retransmittedBytesReceivedDelta": 0,
+            "retransmittedPacketsReceivedDelta": 0,
+            "totalAssemblyTimeDelta": 0.077434,
+            "totalDecodeTimeDelta": 0.0714300000000001,
+            "totalFreezesDurationDelta": 0,
+            "totalInterFrameDelayDelta": 0.2560000000000002,
+            "totalPausesDurationDelta": 0,
+            "totalProcessingDelayDelta": 0.15497700000000014,
+            "totalSquaredInterFrameDelayDelta": 0.004629999999999995
+          },
+          "rttMs": 12.0,
+          "jitterMs": 5.0
+        }
+      ]
+    }
+  ],
+  "sharedSampleEvidence": {
+    "criterion": "panel and supervision consume the same run/session/client/peer/sample identity",
+    "sharedSamples": 0,
+    "consumerSamples": {
+      "supervision": [
+        "1:12",
+        "1:16",
+        "1:20",
+        "1:24",
+        "1:28",
+        "1:32",
+        "1:36",
+        "1:40",
+        "1:44",
+        "1:48",
+        "1:52",
+        "1:56",
+        "1:60",
+        "1:64",
+        "1:68",
+        "1:72",
+        "1:76",
+        "1:80",
+        "1:84",
+        "1:88",
+        "1:92",
+        "1:96",
+        "1:100",
+        "1:104",
+        "1:108",
+        "1:112",
+        "1:116",
+        "1:120",
+        "1:124",
+        "1:128",
+        "1:132",
+        "1:136",
+        "1:140",
+        "1:144"
+      ],
+      "panel": [
+        "1:34",
+        "1:41",
+        "1:49",
+        "1:57",
+        "1:65",
+        "1:73",
+        "1:81",
+        "1:89",
+        "1:97",
+        "1:105",
+        "1:113",
+        "1:121",
+        "1:129",
+        "1:137",
+        "1:145"
+      ]
+    }
+  }
+}

@@ -399,6 +399,7 @@ export class StatsService {
         ...presentation,
         rendererKind: renderer?.kind,
         rendererFrameSource: renderer?.resources.renderFrameSource,
+        rendererDecodedFrameSupply: renderer?.resources.decodedFrameSupply,
         rendererTargetFps: renderer?.targetFps,
         rendererLatestVideoSequence: renderer?.latestVideoSequence,
         rendererSubmittedVideoSequence: renderer?.resources.lastDrawSequence,

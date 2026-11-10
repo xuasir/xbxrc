@@ -1,0 +1,90 @@
+#version 300 es
+precision highp float;
+uniform sampler2D data;
+uniform vec2 outputResolution;
+uniform vec2 sourceResolution;
+uniform int filterId;
+uniform bool applyColor;
+uniform float sharpenFactor;
+uniform float brightness;
+uniform float contrast;
+uniform float saturation;
+const vec3 LUMINOSITY_FACTOR = vec3(0.299, 0.587, 0.114);
+const float CAS_EDGE_WEIGHT = ${CAS_EDGE_WEIGHT.toFixed(4)};
+const float CAS_GAIN_MAX = ${CAS_GAIN_MAX.toFixed(4)};
+const float CAS_NOISE_FLOOR = ${CAS_NOISE_FLOOR.toFixed(6)};
+const float CAS_GATE_RAMP = ${CAS_GATE_RAMP.toFixed(4)};
+const float CAS_RING_PAD = ${CAS_RING_PAD.toFixed(4)};
+const float CAS_RING_BLEND = ${CAS_RING_BLEND.toFixed(4)};
+const float CAS_CHROMA_BLEND = ${CAS_CHROMA_BLEND.toFixed(4)};
+const float USM_GAIN_SCALE = ${USM_GAIN_SCALE.toFixed(4)};
+vec3 usmBoost(vec2 uv, vec3 center) {
+  vec2 texel = 1.0 / sourceResolution.xy;
+  vec3 blur;
+  if (all(equal(outputResolution, sourceResolution))) {
+    // 1:1 像素中心上，四个半像素双线性采样等价于 3x3 高斯核 [1,2,1]²/16。
+    vec2 halfTexel = texel * 0.5;
+    vec3 a = texture(data, uv + halfTexel * vec2(-1.0, 1.0)).rgb;
+    vec3 c = texture(data, uv + halfTexel * vec2(1.0, 1.0)).rgb;
+    vec3 g = texture(data, uv + halfTexel * vec2(-1.0, -1.0)).rgb;
+    vec3 i = texture(data, uv + halfTexel * vec2(1.0, -1.0)).rgb;
+    blur = (a + c + g + i) * 0.25;
+  } else {
+    // 非 1:1 映射保留原核，维持亚像素位置的锐化结果。
+    vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
+    vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
+    vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
+    vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
+    vec3 a = texture(data, uv + texel * vec2(-1.0, 1.0)).rgb;
+    vec3 c = texture(data, uv + texel * vec2(1.0, 1.0)).rgb;
+    vec3 g = texture(data, uv + texel * vec2(-1.0, -1.0)).rgb;
+    vec3 i = texture(data, uv + texel * vec2(1.0, -1.0)).rgb;
+    blur = ((a + c + g + i) + (b + d + f + h) * 2.0 + center * 4.0) / 16.0;
+  }
+  return clamp(center + (center - blur) * (clamp(sharpenFactor, 0.0, 1.0) * USM_GAIN_SCALE), 0.0, 1.0);
+}
+// CAS 风格锐化：显式增益 + luma 噪声门限 + 邻域钳制。
+// 原式等价于 out = center + (center - mean4) * G，平坦区 G=3.33 会把编码噪声放大成颗粒，
+// 强边缘 G->0 又让轮廓保持糊；这里给 G 加上限、给低对比残差加软门限，并限制过冲。
+vec3 casBoost(vec2 uv, vec3 center) {
+  vec2 texel = 1.0 / sourceResolution.xy;
+  vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
+  vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
+  vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
+  vec3 h = texture(data, uv + texel * vec2(0.0, -1.0)).rgb;
+
+  vec3 min4 = min(min(min(d, f), min(b, h)), center);
+  vec3 max4 = max(max(max(d, f), max(b, h)), center);
+  float lumaMin = dot(min4, LUMINOSITY_FACTOR);
+  float lumaMax = dot(max4, LUMINOSITY_FACTOR);
+  float adaptive = clamp(min(lumaMin, 2.0 - lumaMax) / max(lumaMax, 1e-4), 0.0, 1.0);
+  float rootA = sqrt(adaptive);
+  float gain = min(4.0 * rootA / max(CAS_EDGE_WEIGHT - 4.0 * rootA, 1e-3), CAS_GAIN_MAX);
+
+  vec3 mean4 = (b + d + f + h) * 0.25;
+  vec3 residual = center - mean4;
+  float residualLuma = dot(residual, LUMINOSITY_FACTOR);
+  float gate = smoothstep(CAS_NOISE_FLOOR, CAS_NOISE_FLOOR * CAS_GATE_RAMP, abs(residualLuma));
+  residual = mix(residual, vec3(residualLuma), CAS_CHROMA_BLEND);
+  vec3 outColor = center + residual * gain * gate * clamp(sharpenFactor, 0.0, 1.0);
+
+  vec3 range = max4 - min4;
+  vec3 lo = min4 - range * CAS_RING_PAD - 1e-4;
+  vec3 hi = max4 + range * CAS_RING_PAD + 1e-4;
+  outColor = mix(outColor, clamp(outColor, lo, hi), CAS_RING_BLEND);
+  return clamp(outColor, 0.0, 1.0);
+}
+out vec4 fragColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / outputResolution.xy;
+  vec3 color = texture(data, uv).rgb;
+  if (sharpenFactor > 0.0) {
+    color = filterId == 1 ? usmBoost(uv, color) : casBoost(uv, color);
+  }
+  if (applyColor) {
+    color = mix(vec3(dot(color, LUMINOSITY_FACTOR)), color, saturation / 100.0);
+    color = (contrast / 100.0) * (color - 0.5) + 0.5;
+    color = (brightness / 100.0) * color;
+  }
+  fragColor = vec4(color, 1.0);
+}

@@ -172,7 +172,7 @@ impl ConfigProvider for ConfigService {
                     sharpness: display
                         .get("sharpness")
                         .and_then(Value::as_i64)
-                        .unwrap_or(3) as i16,
+                        .unwrap_or(0) as i16,
                     saturation: display
                         .get("saturation")
                         .and_then(Value::as_i64)
@@ -187,16 +187,15 @@ impl ConfigProvider for ConfigService {
                         .unwrap_or(100) as i16,
                 })
                 .unwrap_or(StreamingDisplayOptionsValue {
-                    sharpness: 3,
+                    sharpness: 0,
                     saturation: 100,
                     contrast: 100,
                     brightness: 100,
                 }),
-            render_mode: normalized
-                .get("render_mode")
-                .and_then(Value::as_str)
-                .unwrap_or("video")
-                .to_string(),
+            render_compatibility_mode: normalized
+                .get("render_compatibility_mode")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             super_resolution_experimental: normalized
                 .get("super_resolution_experimental")
                 .and_then(Value::as_bool)

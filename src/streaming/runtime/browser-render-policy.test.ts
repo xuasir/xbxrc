@@ -59,9 +59,9 @@ describe('browser display intent', () => {
 })
 
 describe('deterministic renderer plan', () => {
-  it('uses native presentation for neutral auto display while retaining explicit WebGL and SR intent', () => {
+  it('uses the direct engine for original pictures and composes SR with sharpening', () => {
     const neutral = { sharpness: 0, brightness: 100, contrast: 100, saturation: 100 }
-    expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral }))).toMatchObject({ kind: 'video', source: 'auto' })
+    expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral }))).toMatchObject({ kind: 'webgl2', source: 'auto', sharpness: 0, sharpening: { mode: 'none', strength: 0 } })
     expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral, pipelineOverride: 'webgl2' }))).toMatchObject({ kind: 'webgl2', source: 'userOverride' })
     expect(resolveBrowserRendererPlan(baseInput({ displayOptions: neutral, superResolutionUserIntent: true }))).toMatchObject({ kind: 'webgl2_sr' })
     for (const displayOptions of [{ ...neutral, sharpness: 1 }, { ...neutral, brightness: 101 }, { ...neutral, contrast: 99 }, { ...neutral, saturation: 101 }])
@@ -88,7 +88,7 @@ describe('deterministic renderer plan', () => {
     expect(projectRenderShaderPathFromPlan(plan)).toBe('usm')
     expect(planToRendererRuntimeConfigPatch(plan)).toMatchObject({ processing: 'usm', processingMode: 'quality', sharpness: 4, sharpenStrength: 80, targetFps: 60 })
     const fallback = resolveBrowserRendererPlan(baseInput({ localFallback: true, superResolutionUserIntent: true }))
-    expect(fallback).toMatchObject({ kind: 'video', source: 'localFallback', sharpness: 0, display: plan.display })
+    expect(fallback).toMatchObject({ kind: 'video', source: 'localFallback', sharpness: 0, display: { format: 'Contain', brightness: 100, contrast: 100, saturation: 100 } })
     expect(projectRenderProcessingFromPlan(fallback)).toBeUndefined()
     expect(projectRenderShaderPathFromPlan(fallback)).toBe('none')
   })

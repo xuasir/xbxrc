@@ -245,6 +245,16 @@ export interface BrowserWebRtcSdpObservation {
   h264Payloads: Array<BrowserWebRtcH264PayloadSummary>
   videoHeaderExtensions: Array<string>
   videoSsrcs: Array<string>
+  videoImageAttributes?: Array<string>
+  videoImageConstraints?: Array<{
+    payloadType?: string
+    allPayloads: boolean
+    direction: 'send' | 'recv'
+    minWidth: number
+    maxWidth: number
+    minHeight: number
+    maxHeight: number
+  }>
 }
 
 export interface BrowserWebRtcReceiverSnapshot {

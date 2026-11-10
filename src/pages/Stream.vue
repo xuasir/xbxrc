@@ -371,6 +371,7 @@ const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
         ? t('streamPage.actions.exportingSuperResolutionComparison')
         : t('streamPage.actions.exportSuperResolutionComparison'),
       busy: exportingSrComparison.value,
+      disabled: renderState.value.engine !== 'passthrough' || renderState.value.pending || renderControls.value.compatibilityMode,
     })
   }
   items.push({ id: 'exportRuntimeTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), busy: operations.pending.traceExport === true })
@@ -427,6 +428,13 @@ watch(execution.sessionId, (id) => {
   if (id)
     localFailure.value = null
 })
+// 退出 / 关机退出等断开连接后收起菜单弹窗，交给全屏 busy 与失败反馈接管。
+watch(isConnected, (connected) => {
+  if (!connected) {
+    closeSheet('menu')
+    closeSheet('diagnosticsMenu')
+  }
+}, { flush: 'sync' })
 watch(() => [operations.errors.exit, operations.errors.powerOff], ([exitError, powerOffError]) => {
   if (!isConnected.value && (exitError || powerOffError)) {
     const powerOffFailed = powerOffError && operations.errorCodes.powerOff !== 'navigationFailed'
@@ -605,7 +613,7 @@ async function captureFrameForSrExport(): Promise<HTMLCanvasElement> {
   if (fromRuntime !== null && fromRuntime.width > 1 && fromRuntime.height > 1) {
     return fromRuntime
   }
-  if (renderState.value.mode !== 'video' || renderState.value.pending)
+  if (renderState.value.engine !== 'compatibility' || renderState.value.pending)
     throw new Error('streamComparisonRenderModeUnavailable')
   const source = await waitForStreamCaptureSource()
   return captureSourceFrame(source)
@@ -736,13 +744,13 @@ function resolveSrComparisonExportErrorMessage(error: unknown): string {
   return t('streamPage.errors.streamComparisonExportFailed')
 }
 
-async function waitForComparisonRendering(mode: RenderControlsValue['mode'], current: () => boolean): Promise<void> {
+async function waitForComparisonRendering(value: RenderControlsValue, current: () => boolean): Promise<void> {
   const startedAt = performance.now()
   while (performance.now() - startedAt < 6_000) {
     if (!current())
       throw new Error('streamExportSuperseded')
     const state = renderState.value
-    if (state.mode === mode && !state.pending)
+    if (state.engine === 'passthrough' && state.superResolution === value.superResolution && state.sharpening === (value.displayOptions.sharpness > 0 ? value.displayOptions.sharpness <= 2 ? 'soft' : 'clear' : undefined) && !state.pending)
       return
     if (state.fallbackReason && !state.pending)
       break
@@ -763,17 +771,17 @@ async function performSuperResolutionExport(operationCurrent: () => boolean): Pr
       throw new Error('streamExportSuperseded')
   }
   const original = copyRenderControls(renderControls.value)
-  const alternate: RenderControlsValue = { ...copyRenderControls(original), mode: original.mode === 'sr' ? 'video' : 'sr' }
+  const alternate: RenderControlsValue = { ...copyRenderControls(original), superResolution: !original.superResolution }
   let restore: (() => void) | undefined
   try {
-    await waitForComparisonRendering(original.mode, current)
+    await waitForComparisonRendering(original, current)
     const beforeLabel = renderStateLabel(renderState.value, t)
     const beforeFrame = await captureFrameForSrExport()
     assertCurrent()
     restore = actions.beginTemporaryRenderControls(alternate)
     await nextTick()
     assertCurrent()
-    await waitForComparisonRendering(alternate.mode, current)
+    await waitForComparisonRendering(alternate, current)
     const afterLabel = renderStateLabel(renderState.value, t)
     const afterFrame = await captureFrameForSrExport()
     assertCurrent()
@@ -1024,10 +1032,13 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
         :title="t('setting.renderControls.title')"
         :hint="t('setting.renderControls.sessionHint')"
         :current-value="renderControls"
+        :compatibility-active="renderState.engine === 'compatibility'"
+        :performance-warning="renderState.warning === 'performance'"
         configuration-scope="session"
         :value-source="renderControlsSource"
         :loading="operations.pending.display"
         :error="operations.errors.display"
+        @retry-rendering="actions.retryRendering()"
         @close="closeDisplaySheet"
         @change="handleDisplayPreview"
         @submit="handleDisplaySubmit"

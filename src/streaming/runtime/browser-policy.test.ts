@@ -212,7 +212,7 @@ describe('local render ownership', () => {
       let action
       for (let at = 3000; at <= 6000; at += 1000)
         action = health.observe(facts(at, { rendererKind, rendererSubmitFps, renderDrawDurationMsAvg: 4 }), at)
-      expect(action).toMatchObject({ fallback: true, reason: 'sustainedRendererPressure' })
+      expect(action).toMatchObject({ fallback: false, reason: 'sustainedRendererPressure' })
     }
   })
 
@@ -222,12 +222,12 @@ describe('local render ownership', () => {
     let action
     for (let at = 3000; at <= 6000; at += 1000)
       action = health.observe(facts(at, { callbackFps: 44, rendererSubmitFps: 44, renderDrawDurationMsAvg: 15 }), at)
-    expect(action).toMatchObject({ fallback: true, reason: 'sustainedFrameDeliveryDeficit' })
-    expect(health.fallbackReason).toBe('sustainedFrameDeliveryDeficit')
+    expect(action).toMatchObject({ fallback: false, reason: 'sustainedFrameDeliveryDeficit' })
+    expect(health.warning).toBe('performance')
     for (let at = 7000; at <= 9000; at += 1000)
       health.observe(facts(at, { rendererGeneration: 2, rendererKind: 'video', callbackFps: 44, rendererSubmitFps: 44, videoPresentFps: 44 }), at)
-    expect(health.effect).toBe('neutral')
-    expect(health.fallback).toBe(true)
+    expect(health.warning).toBeUndefined()
+    expect(health.fallback).toBe(false)
   })
 
   it('keeps a complete 30fps source and a user 30fps limit healthy, and holds incomplete source evidence', () => {
@@ -241,22 +241,15 @@ describe('local render ownership', () => {
     }
   })
 
-  it('accepts native full-rate serving with sparse callbacks and rolls back a trial that restores only 55/60fps', () => {
+  it('clears pressure on healthy serving and leaves engine selection to the user', () => {
     const health = new BrowserRenderHealth()
     for (let at = 3000; at <= 6000; at += 1000)
-      health.observe(facts(at, { callbackFps: 44, rendererSubmitFps: 44 }), at)
-    let trial
-    for (let at = 7000; at <= 24000; at += 1000)
-      trial = health.observe(facts(at, { rendererGeneration: 2, rendererKind: 'video', callbackFps: 52 }), at) ?? trial
-    expect(health.effect).toBe('improved')
-    expect(trial).toMatchObject({ fallback: false, reason: 'healthyEnhancementTrial' })
-    let rollback
-    for (let at = 25000; at <= 28000; at += 1000)
-      rollback = health.observe(facts(at, { rendererGeneration: 3, callbackFps: 55, rendererSubmitFps: 55 }), at) ?? rollback
-    expect(rollback).toMatchObject({ fallback: true, reason: 'enhancementTrialFailed' })
-    expect(health.fallbackReason).toBe('enhancementTrialFailed')
-    for (let at = 29000; at <= 60000; at += 1000)
-      expect(health.observe(facts(at, { rendererGeneration: 4, rendererKind: 'video', callbackFps: 52 }), at)).toBeUndefined()
+      health.observe(facts(at, { rendererSubmitFps: 40 }), at)
+    expect(health.warning).toBe('performance')
+    for (let at = 7000; at <= 60000; at += 1000)
+      expect(health.observe(facts(at), at)).toBeUndefined()
+    expect(health.warning).toBeUndefined()
+    expect(health.fallback).toBe(false)
   })
 
   it('finds a canvas stall while video and decode continue, with network unchanged', () => {
@@ -272,31 +265,25 @@ describe('local render ownership', () => {
     expect(resolveBrowserRenderCause(s)).toBe('frameDeliveryLimited')
     const health = new BrowserRenderHealth()
     for (let at = 3000; at <= 30000; at += 1000)
-      expect(health.observe(facts(at, { ...s, statsSampleId: `sample:${at}`, statsSampledAtMs: at }), at)).toBeUndefined()
+      health.observe(facts(at, { ...s, statsSampleId: `sample:${at}`, statsSampledAtMs: at }), at)
+    expect(health.warning).toBe('performance')
     expect(health.fallback).toBe(false)
     expect(resolveBrowserRenderCause(facts(4000, { rendererTargetFps: 30, rendererSubmitFps: 30 }))).toBe('renderStable')
   })
 
-  it('performs a source-preserving fallback, verifies submission, then makes one enhancement trial', () => {
+  it('rate limits repeated pressure recommendations and invalidates old context', () => {
     const health = new BrowserRenderHealth()
-    let action
-    for (let at = 3000; at <= 6000; at += 1000)
-      action = health.observe(facts(at, { rendererSubmitFps: 0, rendererSubmitAgeMs: 1000, rendererSubmittedVideoSequence: 1 }), at)
-    expect(action).toMatchObject({ fallback: true })
-    for (let at = 7000; at <= 9000; at += 1000)
-      health.observe(facts(at, { rendererGeneration: 2, rendererKind: 'video' }), at)
-    expect(health.effect).toBe('improved')
-    let trial
-    for (let at = 10000; at <= 24000; at += 1000)
-      trial = health.observe(facts(at, { rendererGeneration: 2, rendererKind: 'video' }), at) ?? trial
-    expect(trial).toMatchObject({ fallback: false, reason: 'healthyEnhancementTrial' })
-    let failed
-    for (let at = 25000; at <= 28000; at += 1000)
-      failed = health.observe(facts(at, { rendererGeneration: 3, rendererSubmitFps: 0, rendererSubmitAgeMs: 1000, rendererSubmittedVideoSequence: 1 }), at) ?? failed
-    expect(failed).toMatchObject({ fallback: true, reason: 'enhancementTrialFailed' })
-    for (let at = 29000; at <= 60000; at += 1000)
-      expect(health.observe(facts(at, { rendererGeneration: 4, rendererKind: 'video' }), at)).toBeUndefined()
+    const actions: number[] = []
+    for (let at = 3000; at <= 30000; at += 1000) {
+      const action = health.observe(facts(at, { rendererSubmitFps: 0, rendererSubmitAgeMs: 1000 }), at)
+      if (action) {
+        expect(action.fallback).toBe(false)
+        actions.push(at)
+      }
+    }
+    expect(actions).toEqual([6000, 21000])
     health.setContext('newUserIntent')
+    expect(health.warning).toBeUndefined()
     expect(health.fallback).toBe(false)
   })
 

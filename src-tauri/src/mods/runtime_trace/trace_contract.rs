@@ -16,6 +16,22 @@ pub(super) struct EventContract {
 
 const EVENTS: &[EventContract] = &[
     EventContract {
+        event: "decodedFrameSupplyObserved",
+        dimension: TraceDimension::MediaSupply,
+        importance: TraceImportance::Key,
+        category: "snapshot",
+        interval_ms: 1000,
+        max_row_bytes: 2048,
+    },
+    EventContract {
+        event: "sessionVideoConstraintsResolved",
+        dimension: TraceDimension::Network,
+        importance: TraceImportance::Key,
+        category: "event",
+        interval_ms: 0,
+        max_row_bytes: 1024,
+    },
+    EventContract {
         event: "executionCleanupObserved",
         dimension: TraceDimension::Lifecycle,
         importance: TraceImportance::Essential,

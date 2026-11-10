@@ -20,6 +20,7 @@ import type {
 import type { InputService } from '../input/InputService'
 import type { MediaService } from '../media/MediaService'
 import { DataChannelHub } from '../../infra/webrtc/DataChannelHub'
+import { parseSdpImageAttributes } from '../../infra/webrtc/sdp-image-attributes'
 import { SdpManipulator } from '../../infra/webrtc/SdpManipulator'
 import { WebRtcTransport } from '../../infra/webrtc/WebRtcTransport'
 import { ChatChannel } from '../../protocol/channels/ChatChannel'
@@ -193,6 +194,8 @@ export class SessionService {
         nextSdp = this.sdpManipulator.setH264VideoConstraints(nextSdp, {
           maxFrameSize: transportProfile.maxFrameSize,
           maxFrameRate: H264_MAX_FRAME_RATE,
+          maxWidth: this.options.transport.targetVideoWidth,
+          maxHeight: this.options.transport.targetVideoHeight,
           minBitrateKbps: transportProfile.minBitrateKbps,
           startBitrateKbps: transportProfile.startBitrateKbps,
           maxBitrateKbps: transportProfile.maxBitrateKbps,
@@ -540,7 +543,7 @@ function summarizeSdp(sdp: string): {
 }
 
 function summarizeSdpForTrace(stage: BrowserWebRtcSdpStage, sdp: string): BrowserWebRtcSdpObservation {
-  const lines = sdp.split('\r\n')
+  const lines = sdp.split(/\r?\n/)
   const videoLines = selectMediaSection(lines, 'video')
   const h264PayloadTypes = new Set<string>()
   const rtpmapByPayload = new Map<string, string>()
@@ -588,9 +591,9 @@ function summarizeSdpForTrace(stage: BrowserWebRtcSdpStage, sdp: string): Browse
   return {
     stage,
     length: sdp.length,
-    hasAudio: sdp.includes('\r\nm=audio ') || sdp.startsWith('m=audio '),
-    hasVideo: sdp.includes('\r\nm=video ') || sdp.startsWith('m=video '),
-    hasApplication: sdp.includes('\r\nm=application ') || sdp.startsWith('m=application '),
+    hasAudio: lines.some(line => line.startsWith('m=audio ')),
+    hasVideo: lines.some(line => line.startsWith('m=video ')),
+    hasApplication: lines.some(line => line.startsWith('m=application ')),
     h264Payloads: Array.from(h264PayloadTypes).map((payloadType) => {
       const fmtp = fmtpByPayload.get(payloadType)
       return {
@@ -605,7 +608,28 @@ function summarizeSdpForTrace(stage: BrowserWebRtcSdpStage, sdp: string): Browse
     }),
     videoHeaderExtensions,
     videoSsrcs,
+    videoImageAttributes: videoLines.filter(line => /^a=imageattr:(?:\d+|\*)\s/.test(line)).slice(0, 8).map(line => line.slice(0, 512)),
+    videoImageConstraints: summarizeImageConstraints(videoLines),
   }
+}
+
+/** 仅提取标准尺寸数值，生产日志保持可核验的协商事实。 */
+function summarizeImageConstraints(lines: string[]): NonNullable<BrowserWebRtcSdpObservation['videoImageConstraints']> {
+  const result: NonNullable<BrowserWebRtcSdpObservation['videoImageConstraints']> = []
+  for (const line of lines) {
+    const attribute = parseSdpImageAttributes(line)
+    if (!attribute)
+      continue
+    for (const direction of ['send', 'recv'] as const) {
+      const parameters = attribute[direction] ?? ''
+      const width = /\bx=(?:\[(\d+):(\d+)\]|(\d+))/.exec(parameters)
+      const height = /\by=(?:\[(\d+):(\d+)\]|(\d+))/.exec(parameters)
+      if (width && height && result.length < 8) {
+        result.push({ payloadType: attribute.payloadType === '*' ? undefined : attribute.payloadType, allPayloads: attribute.payloadType === '*', direction, minWidth: Number(width[1] ?? width[3]), maxWidth: Number(width[2] ?? width[3]), minHeight: Number(height[1] ?? height[3]), maxHeight: Number(height[2] ?? height[3]) })
+      }
+    }
+  }
+  return result
 }
 
 function selectMediaSection(lines: Array<string>, media: string): Array<string> {

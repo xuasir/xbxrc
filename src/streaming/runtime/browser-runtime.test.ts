@@ -692,7 +692,7 @@ describe('browser-runtime super resolution state', () => {
 
     await runtime.snapshotStats()
     expect(client.updateRendererAttach).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'video',
+      kind: 'webgl2',
     }))
 
     const snapshot = await runtime.snapshotStats()
@@ -713,11 +713,11 @@ describe('browser-runtime super resolution state', () => {
     const client = getClient()
     const reads = client.statsController.snapshot.mock.calls.length
     client.eventBus.emit('media.resourcesObserved', { reason: 'rendererPending', resources: { actualPipeline: 'video', pendingRenderers: 1 } })
-    expect(changed.mock.calls.at(-1)?.[0]).toEqual({ mode: 'video', pending: true, sharpening: undefined, fallbackReason: undefined })
+    expect(changed.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ engine: 'compatibility', superResolution: false, pending: true, fallbackReason: undefined }))
     client.eventBus.emit('media.resourcesObserved', { reason: 'rendererCommitted', resources: { actualPipeline: 'webgl2_sr', pendingRenderers: 0 } })
-    expect(changed.mock.calls.at(-1)?.[0].mode).toBe('sr')
+    expect(changed.mock.calls.at(-1)?.[0].superResolution).toBe(true)
     client.eventBus.emit('media.resourcesObserved', { reason: 'rendererCommitted', resources: { actualPipeline: 'video', actualFallbackReason: 'failed' } })
-    expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ mode: 'video', fallbackReason: 'failed' })
+    expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ engine: 'compatibility', fallbackReason: 'failed' })
     expect(client.statsController.snapshot).toHaveBeenCalledTimes(reads)
     await runtime.stop()
   })
@@ -1155,7 +1155,7 @@ describe('browser-runtime super resolution state', () => {
     await runtime.stop()
   })
 
-  it('assigns a stronger RCAS preset for 720p to 1080p super resolution', async () => {
+  it('retains the legacy SR preset while reporting independent reconstruction and sharpening', async () => {
     const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
     await runtime.launch(createLaunchSpec({
       superResolutionExperimental: true,
@@ -1172,9 +1172,18 @@ describe('browser-runtime super resolution state', () => {
       superResolutionRcasStops: 0.72,
     }))
 
-    const snapshot = await runtime.snapshotStats()
+    client.snapshotMediaResources.mockReturnValue({ ...client.snapshotMediaResources(), actualPipeline: 'webgl2_sr', actualSuperResolutionActive: true, actualSharpness: 0 } as any)
+    let snapshot = await runtime.snapshotStats()
     expect(snapshot.renderSuperResolutionRcasBaseStops).toBe(0.72)
-    expect(snapshot.renderSuperResolutionRcasStops).toBe(0.72)
+    expect(snapshot.renderSuperResolutionRcasStops).toBeUndefined()
+    expect(snapshot.renderSuperResolutionActive).toBe(true)
+    expect(snapshot.renderSharpenMode).toBe('none')
+    expect(snapshot.renderSharpenStrength).toBe(0)
+
+    client.snapshotMediaResources.mockReturnValue({ ...client.snapshotMediaResources(), actualSuperResolutionActive: false, actualSharpness: 3, actualProcessing: 'cas' } as any)
+    snapshot = await runtime.snapshotStats()
+    expect(snapshot.renderSuperResolutionActive).toBe(false)
+    expect(snapshot.renderSharpenMode).toBe('cas')
 
     await runtime.stop()
   })
@@ -1470,7 +1479,7 @@ describe('browser-runtime super resolution state', () => {
     }
   })
 
-  it('falls back to native video after sustained actual renderer stall while transport stays unchanged', async () => {
+  it('keeps the direct engine and reports persistent renderer pressure while transport stays unchanged', async () => {
     vi.useFakeTimers()
     try {
       globalThis.window.setInterval = setInterval
@@ -1517,7 +1526,7 @@ describe('browser-runtime super resolution state', () => {
       await vi.advanceTimersByTimeAsync(8_300)
 
       expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({
-        pipelineType: 'video',
+        pipelineType: 'webgl2',
         targetFps: 60,
       }))
       expect(client.applyVideoSenderPolicy).toHaveBeenCalledTimes(0)
@@ -1557,7 +1566,7 @@ describe('browser-runtime super resolution state', () => {
           expect(client.updateTransportConfig).not.toHaveBeenCalled()
           client.statsController.snapshot.mockResolvedValue({ ...healthy, videoPresentFps: 60, callbackFps: 60, rendererSubmitFps: 0, rendererSubmitAgeMs: 1000, rendererLatestVideoSequence: 10, rendererSubmittedVideoSequence: 1 })
           await vi.advanceTimersByTimeAsync(8000)
-          expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({ pipelineType: 'video', targetFps: 60 }))
+          expect(client.updateRenderer).toHaveBeenCalledWith(expect.objectContaining({ pipelineType: 'webgl2', targetFps: 60 }))
           expect(client.updateTransportConfig).not.toHaveBeenCalled()
           expect(client.requestVideoKeyframe).not.toHaveBeenCalled()
           expect(client.rebuildVideoPlayback).not.toHaveBeenCalled()

@@ -6,6 +6,27 @@ export interface RendererTiming {
   upload: LatencySummary
   submit: LatencySummary
   interval: LatencySummary
+  receiveToSubmit?: LatencySummary
+  readToSubmit?: LatencySummary
+}
+
+export interface DecodedFrameSupplyObservation {
+  schemaVersion: 1
+  clockDomain: 'performanceEpoch'
+  observedAtMs: number
+  receivedMessages: number
+  deliveredFrames: number
+  staleFrameDropCount: number
+  invalidClockCount: number
+  deliveryBudgetMs: number
+  workerReadFrames: number
+  workerSentFrames: number
+  workerOverwriteCount: number
+  workerAckCount: number
+  lastReadSequence?: number
+  receiveAgeMs?: number
+  workerObservationAgeMs?: number
+  timing: Record<'readWait' | 'pendingWait' | 'transfer' | 'consume' | 'receiveInterval' | 'ackRoundTrip' | 'ackDelivery', LatencySummary>
 }
 
 export interface RendererGpuTiming {
@@ -287,6 +308,7 @@ export interface BrowserPlaybackStats {
   rendererGeneration?: number
   rendererKind?: 'video' | 'webgl2' | 'webgl2_sr'
   rendererFrameSource?: 'initializing' | 'main-thread' | 'worker' | 'presentation'
+  rendererDecodedFrameSupply?: DecodedFrameSupplyObservation
   rendererTargetFps?: number
   rendererLatestVideoSequence?: number
   rendererSubmittedVideoSequence?: number

@@ -1,0 +1,1061 @@
+{
+  "passed": 35,
+  "failed": 0,
+  "records": [
+    {
+      "name": "单例外环、2px 均匀边框与四边对齐",
+      "passed": true,
+      "detail": {
+        "route": "xhome",
+        "motion": "active",
+        "focus": "top-nav.xhome",
+        "owner": "top-nav.xhome",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 9,
+          "y": 779.5,
+          "width": 77.59375,
+          "height": 60,
+          "top": 779.5,
+          "right": 86.59375,
+          "bottom": 839.5,
+          "left": 9
+        },
+        "target": {
+          "x": 13,
+          "y": 783.5,
+          "width": 69.59375,
+          "height": 52,
+          "top": 783.5,
+          "right": 82.59375,
+          "bottom": 835.5,
+          "left": 13
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "140.741deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "邻近焦点 220ms 整体飞行",
+      "passed": true,
+      "detail": {
+        "duration": 220,
+        "frames": [
+          {
+            "left": "9px",
+            "top": "779.5px",
+            "width": "77.59375px",
+            "height": "60px",
+            "borderRadius": "10px"
+          },
+          {
+            "left": "82.59375px",
+            "top": "779.5px",
+            "width": "77.6015625px",
+            "height": "60px",
+            "borderRadius": "10px 10px 10px 10px / 10px 10px 10px 10px"
+          }
+        ]
+      }
+    },
+    {
+      "name": "连按沿当前视觉位置重定向，逻辑目标即时更新",
+      "passed": true,
+      "detail": {
+        "midflight": {
+          "x": 43.5625,
+          "y": 779.5,
+          "width": 77.59375,
+          "height": 60,
+          "top": 779.5,
+          "right": 121.15625,
+          "bottom": 839.5,
+          "left": 43.5625
+        },
+        "frames": [
+          {
+            "left": "49.59375px",
+            "top": "779.5px",
+            "width": "77.59375px",
+            "height": "60px",
+            "borderRadius": "10px"
+          },
+          {
+            "left": "156.1953125px",
+            "top": "779.5px",
+            "width": "77.6015625px",
+            "height": "60px",
+            "borderRadius": "10px 10px 10px 10px / 10px 10px 10px 10px"
+          }
+        ]
+      }
+    },
+    {
+      "name": "飞行收稳，角度连续且停稳后静止",
+      "passed": true,
+      "detail": {
+        "route": "xhome",
+        "motion": "active",
+        "focus": "top-nav.my",
+        "owner": "top-nav.my",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 156.1953125,
+          "y": 779.5,
+          "width": 77.6015625,
+          "height": 60,
+          "top": 779.5,
+          "right": 233.796875,
+          "bottom": 839.5,
+          "left": 156.1953125
+        },
+        "target": {
+          "x": 160.1953125,
+          "y": 783.5,
+          "width": 69.6015625,
+          "height": 52,
+          "top": 783.5,
+          "right": 229.796875,
+          "bottom": 835.5,
+          "left": 160.1953125
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "152.333deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "焦点静止阶段释放持续动画",
+      "passed": true,
+      "detail": {
+        "route": "xhome",
+        "motion": "active",
+        "focus": "top-nav.my",
+        "owner": "top-nav.my",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 156.1953125,
+          "y": 779.5,
+          "width": 77.6015625,
+          "height": 60,
+          "top": 779.5,
+          "right": 233.796875,
+          "bottom": 839.5,
+          "left": 156.1953125
+        },
+        "target": {
+          "x": 160.1953125,
+          "y": 783.5,
+          "width": 69.6015625,
+          "height": 52,
+          "top": 783.5,
+          "right": 229.796875,
+          "bottom": 835.5,
+          "left": 160.1953125
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "152.333deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "邻近不同尺寸控件同步过渡外环宽高",
+      "passed": true,
+      "detail": {
+        "frames": [
+          {
+            "left": "29px",
+            "top": "287.15625px",
+            "width": "90px",
+            "height": "52px",
+            "borderRadius": "10px"
+          },
+          {
+            "left": "123px",
+            "top": "287.15625px",
+            "width": "102px",
+            "height": "52px",
+            "borderRadius": "10px 10px 10px 10px / 10px 10px 10px 10px"
+          }
+        ]
+      }
+    },
+    {
+      "name": "尺寸飞行收稳后维持四边对齐",
+      "passed": true,
+      "detail": {
+        "route": "xhome",
+        "motion": "active",
+        "focus": "xhome.installed-games",
+        "owner": "xhome.installed-games",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 123,
+          "y": 287.15625,
+          "width": 102,
+          "height": 52,
+          "top": 287.15625,
+          "right": 225,
+          "bottom": 339.15625,
+          "left": 123
+        },
+        "target": {
+          "x": 127,
+          "y": 291.15625,
+          "width": 94,
+          "height": 44,
+          "top": 291.15625,
+          "right": 221,
+          "bottom": 335.15625,
+          "left": 127
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "166.481deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "飞行期间 A 即时确认当前逻辑目标",
+      "passed": true,
+      "detail": {
+        "route": "controller"
+      }
+    },
+    {
+      "name": "并行切页：新页激活，旧页 inert 退出候选",
+      "passed": true,
+      "detail": {
+        "oldInert": true,
+        "activePages": 1
+      }
+    },
+    {
+      "name": "一级 48px/280ms 交接跟随主导航排列",
+      "passed": true,
+      "detail": {
+        "menuDirection": "row",
+        "animation": {
+          "target": {},
+          "frames": [
+            {
+              "transform": "translateX(48px)"
+            },
+            {
+              "transform": "none"
+            }
+          ],
+          "duration": 280,
+          "delay": 0
+        }
+      }
+    },
+    {
+      "name": "同层交接保持等距相反方向",
+      "passed": true,
+      "detail": {
+        "target": {},
+        "frames": [
+          {
+            "transform": "none"
+          },
+          {
+            "transform": "translateX(-48px)"
+          }
+        ],
+        "duration": 280,
+        "delay": 0
+      }
+    },
+    {
+      "name": "连续快切保留最新页面与唯一可操作焦点",
+      "passed": true,
+      "detail": {
+        "route": "controller",
+        "motion": "active",
+        "focus": "controller.tabs.connection",
+        "owner": "controller.tabs.connection",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 20,
+          "y": 76,
+          "width": 90,
+          "height": 60,
+          "top": 76,
+          "right": 110,
+          "bottom": 136,
+          "left": 20
+        },
+        "target": {
+          "x": 24,
+          "y": 80,
+          "width": 82,
+          "height": 52,
+          "top": 80,
+          "right": 106,
+          "bottom": 132,
+          "left": 24
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "197.27deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "KeepAlive 恢复原组件，撤销临时定位和 inert",
+      "passed": true,
+      "detail": {
+        "sameInstance": true,
+        "style": ""
+      }
+    },
+    {
+      "name": "二级 24px/220ms 交接跟随分类菜单排列",
+      "passed": true,
+      "detail": {
+        "menuDirection": "row",
+        "animation": {
+          "target": {},
+          "frames": [
+            {
+              "transform": "translateX(24px)"
+            },
+            {
+              "transform": "none"
+            }
+          ],
+          "duration": 220,
+          "delay": 0
+        }
+      }
+    },
+    {
+      "name": "二级返回方向与进入对称",
+      "passed": true,
+      "detail": {
+        "panelAxis": "X",
+        "childCount": 1
+      }
+    },
+    {
+      "name": "缓存设置页恢复同一组件与滚动容器",
+      "passed": true,
+      "detail": {
+        "sameInstance": true
+      }
+    },
+    {
+      "name": "弹层遮罩先入，面板 6px 升起，进入 180ms",
+      "passed": true,
+      "detail": {
+        "target": {},
+        "frames": [
+          {
+            "transform": "translateY(6px)"
+          },
+          {
+            "transform": "none"
+          }
+        ],
+        "duration": 160,
+        "delay": 20
+      }
+    },
+    {
+      "name": "跨弹层在新位置使用 100ms 淡入",
+      "passed": true,
+      "detail": {
+        "duration": 100,
+        "frames": [
+          {
+            "opacity": 0
+          },
+          {
+            "opacity": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "弹层独占焦点并暂停背景",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "user-menu.my",
+        "owner": "user-menu.my",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 67,
+          "y": 237,
+          "width": 294,
+          "height": 53.9921875,
+          "top": 237,
+          "right": 361,
+          "bottom": 290.9921875,
+          "left": 67
+        },
+        "target": {
+          "x": 71,
+          "y": 241,
+          "width": 286,
+          "height": 46,
+          "top": 241,
+          "right": 357,
+          "bottom": 287,
+          "left": 71
+        },
+        "maxDelta": 0.0078125,
+        "padding": "2px",
+        "angle": "215.567deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "确认弹层沿用共享过渡与独占 Scope",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "user-menu.logout-confirm.cancel",
+        "owner": "user-menu.logout-confirm.cancel",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 161,
+          "y": 436.5,
+          "width": 104,
+          "height": 52,
+          "top": 436.5,
+          "right": 265,
+          "bottom": 488.5,
+          "left": 161
+        },
+        "target": {
+          "x": 165,
+          "y": 440.5,
+          "width": 96,
+          "height": 44,
+          "top": 440.5,
+          "right": 261,
+          "bottom": 484.5,
+          "left": 165
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "220.054deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "关闭确认即刻恢复来源，退出画面保持 inert",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "user-menu.logout",
+        "owner": "user-menu.logout-confirm.cancel",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 161,
+          "y": 436.5,
+          "width": 104,
+          "height": 52,
+          "top": 436.5,
+          "right": 265,
+          "bottom": 488.5,
+          "left": 161
+        },
+        "target": {
+          "x": 165,
+          "y": 440.5,
+          "width": 96,
+          "height": 44,
+          "top": 440.5,
+          "right": 261,
+          "bottom": 484.5,
+          "left": 165
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "220.054deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": true,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "返回源导航，弹层退出 120ms 后释放 DOM",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "top-nav.profile",
+        "owner": "top-nav.profile",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 334,
+          "y": 4,
+          "width": 44,
+          "height": 44,
+          "top": 4,
+          "right": 378,
+          "bottom": 48,
+          "left": 334
+        },
+        "target": {
+          "x": 338,
+          "y": 8,
+          "width": 36,
+          "height": 36,
+          "top": 8,
+          "right": 374,
+          "bottom": 44,
+          "left": 338
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "228.874deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "嵌套滚动即时吸附，外环保持对齐",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "owner": "setting.content.general.inlineSelect.setting.items.general.theme.option.0",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 32,
+          "y": 405.5,
+          "width": 163,
+          "height": 52,
+          "top": 405.5,
+          "right": 195,
+          "bottom": 457.5,
+          "left": 32
+        },
+        "target": {
+          "x": 36,
+          "y": 409.5,
+          "width": 155,
+          "height": 44,
+          "top": 409.5,
+          "right": 191,
+          "bottom": 453.5,
+          "left": 36
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "233.185deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "原生输入外环归属安全外层且保持唯一轮廓",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "fixture.native-input",
+        "owner": "fixture.native-outline",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 136,
+          "y": 56,
+          "width": 188,
+          "height": 56,
+          "top": 56,
+          "right": 324,
+          "bottom": 112,
+          "left": 136
+        },
+        "target": {
+          "x": 140,
+          "y": 60,
+          "width": 180,
+          "height": 48,
+          "top": 60,
+          "right": 320,
+          "bottom": 108,
+          "left": 140
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "233.185deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "WAAPI 能力缺失回到当前元素 CSS 外环",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "top-nav.setting",
+        "ringCount": 1,
+        "owners": 0,
+        "hidden": true,
+        "ring": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "maxDelta": null,
+        "padding": "2px",
+        "angle": "233.185deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "窗口后台即使 keep-active 输入策略仍静止装饰",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "static",
+        "focus": "top-nav.xcloud",
+        "ringCount": 1,
+        "owners": 0,
+        "hidden": true,
+        "ring": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "maxDelta": null,
+        "padding": "2px",
+        "angle": "237.919deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "窗口恢复后重新对齐当前焦点",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "top-nav.xcloud",
+        "owner": "top-nav.xcloud",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 82.59375,
+          "y": 779.5,
+          "width": 77.6015625,
+          "height": 60,
+          "top": 779.5,
+          "right": 160.1953125,
+          "bottom": 839.5,
+          "left": 82.59375
+        },
+        "target": {
+          "x": 86.59375,
+          "y": 783.5,
+          "width": 69.6015625,
+          "height": 52,
+          "top": 783.5,
+          "right": 156.1953125,
+          "bottom": 835.5,
+          "left": 86.59375
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "242.072deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "减少动态效果保留逻辑焦点与静态 fallback",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "static",
+        "focus": "top-nav.xcloud",
+        "ringCount": 1,
+        "owners": 0,
+        "hidden": true,
+        "ring": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "maxDelta": null,
+        "padding": "2px",
+        "angle": "242.072deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "详情进入按深度向右推进",
+      "passed": true,
+      "detail": {
+        "route": "console-games"
+      }
+    },
+    {
+      "name": "详情返回自左进入并恢复首页缓存",
+      "passed": true,
+      "detail": {
+        "route": "xhome",
+        "motion": "active",
+        "focus": "xhome.installed-games",
+        "owner": "xhome.installed-games",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 123,
+          "y": 287.15625,
+          "width": 102,
+          "height": 52,
+          "top": 287.15625,
+          "right": 225,
+          "bottom": 339.15625,
+          "left": 123
+        },
+        "target": {
+          "x": 127,
+          "y": 291.15625,
+          "width": 94,
+          "height": 44,
+          "top": 291.15625,
+          "right": 221,
+          "bottom": 335.15625,
+          "left": 127
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "261.58deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "串流准备阶段进入静止状态",
+      "passed": true,
+      "detail": {
+        "motion": "static"
+      }
+    },
+    {
+      "name": "录像播放事实暂停动效",
+      "passed": true,
+      "detail": {
+        "route": "my",
+        "motion": "static",
+        "focus": "album.preview.play",
+        "ringCount": 1,
+        "owners": 0,
+        "hidden": true,
+        "ring": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "maxDelta": null,
+        "padding": "2px",
+        "angle": "268.915deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark",
+        "paused": false
+      }
+    },
+    {
+      "name": "录像暂停恢复焦点呈现",
+      "passed": true,
+      "detail": {
+        "route": "my",
+        "motion": "active",
+        "focus": "album.preview.play",
+        "owner": "album.preview.play",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 21,
+          "y": 455.125,
+          "width": 90,
+          "height": 46,
+          "top": 455.125,
+          "right": 111,
+          "bottom": 501.125,
+          "left": 21
+        },
+        "target": {
+          "x": 25,
+          "y": 459.125,
+          "width": 82,
+          "height": 38,
+          "top": 459.125,
+          "right": 107,
+          "bottom": 497.125,
+          "left": 25
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "273.532deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "paused",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "dark"
+      }
+    },
+    {
+      "name": "浅色主题的焦点与环境光保持同一合同",
+      "passed": true,
+      "detail": {
+        "route": "setting",
+        "motion": "active",
+        "focus": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "owner": "setting.content.general.inlineSelect.setting.items.general.theme.option.1",
+        "ringCount": 1,
+        "owners": 1,
+        "hidden": false,
+        "ring": {
+          "x": 195,
+          "y": 429.5,
+          "width": 163,
+          "height": 52,
+          "top": 429.5,
+          "right": 358,
+          "bottom": 481.5,
+          "left": 195
+        },
+        "target": {
+          "x": 199,
+          "y": 433.5,
+          "width": 155,
+          "height": 44,
+          "top": 433.5,
+          "right": 354,
+          "bottom": 477.5,
+          "left": 199
+        },
+        "maxDelta": 0,
+        "padding": "2px",
+        "angle": "287.414deg",
+        "themeColorMatches": true,
+        "ringAnimations": 0,
+        "transitions": false,
+        "activePages": 1,
+        "ambient": "running",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "light"
+      }
+    },
+    {
+      "name": "浏览器运行错误为零",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "errors": []
+}

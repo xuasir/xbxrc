@@ -3,6 +3,7 @@ import { computed, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
+import UiMotionTransition from '../common/UiMotionTransition.vue'
 import { useShellOverlayHints } from '../layout/shell-context'
 
 interface SettingModalShellProps {
@@ -63,7 +64,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
 <template>
   <!-- 挂到 body，避免祖先（如设置页 overflow:hidden）裁剪 fixed 全屏遮罩与面板 -->
   <Teleport to="body">
-    <Transition name="setting-modal-shell-transition">
+    <UiMotionTransition kind="overlay">
       <div v-if="props.open" class="setting-modal-shell" @click.self="handleClose">
         <FocusScope
           :id="props.scopeId"
@@ -74,6 +75,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
         >
           <section
             class="setting-modal-shell__panel ui-overlay-panel"
+            data-ui-motion-panel
             :style="{
               width: props.width,
               maxHeight: `min(${props.maxHeight}, calc(100dvh - var(--ui-shell-hint-area) - 48px))`,
@@ -126,7 +128,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
           </section>
         </FocusScope>
       </div>
-    </Transition>
+    </UiMotionTransition>
   </Teleport>
 </template>
 
@@ -254,29 +256,4 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
   padding: 0;
   margin: 0;
 }
-
-/* 动画：与现有 setting-*sheet 统一为淡入 + panel scale */
-.setting-modal-shell-transition-enter-active,
-.setting-modal-shell-transition-leave-active {
-  transition: opacity 300ms var(--ease-standard);
-}
-
-.setting-modal-shell-transition-enter-from,
-.setting-modal-shell-transition-leave-to {
-  opacity: 0;
-}
-
-.setting-modal-shell-transition-enter-active .setting-modal-shell__panel,
-.setting-modal-shell-transition-leave-active .setting-modal-shell__panel {
-  transition: transform 400ms var(--ease-standard);
-}
-
-.setting-modal-shell-transition-enter-from .setting-modal-shell__panel {
-  transform: translateY(8px);
-}
-
-.setting-modal-shell-transition-leave-to .setting-modal-shell__panel {
-  transform: translateY(8px);
-}
-@media(prefers-reduced-motion:reduce) { .setting-modal-shell-transition-enter-active, .setting-modal-shell-transition-leave-active, .setting-modal-shell-transition-enter-active .setting-modal-shell__panel, .setting-modal-shell-transition-leave-active .setting-modal-shell__panel { transition: none; } }
 </style>

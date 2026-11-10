@@ -50,6 +50,14 @@ export class PlaybackService {
     this.updateRendererState({}, spec)
   }
 
+  retryRendering(): void {
+    this.fallbackKind = undefined
+    if (this.pending)
+      return
+    if (this.videoElement)
+      this.beginRenderer(this.videoElement, this.effectiveSpec())
+  }
+
   updateRendererState(config: Partial<RendererRuntimeConfig>, spec: RendererAttachSpec): void {
     if (this.rendererAttach.kind !== spec.kind)
       this.fallbackKind = undefined
@@ -61,7 +69,8 @@ export class PlaybackService {
     const effective = this.effectiveSpec()
     const target = this.pending ?? this.current
     const nextConfig = mergeRendererConfigWithAttachSpec(this.rendererConfig, effective)
-    if (target?.renderer.kind === effective.kind) {
+    const canvasUpdate = target && target.renderer.kind !== 'video' && effective.kind !== 'video'
+    if (target && (target.renderer.kind === effective.kind || canvasUpdate)) {
       const fallbackCleared = target.fallbackReason !== undefined && !this.fallbackKind && nextConfig.renderFallbackReason === undefined
       if (fallbackCleared) {
         target.fallbackReason = undefined
@@ -71,6 +80,7 @@ export class PlaybackService {
         target.config = nextConfig
         try {
           target.renderer.update(nextConfig)
+          video.dataset.renderPipeline = effective.kind === 'webgl2_sr' ? 'webgl2-sr' : effective.kind
           this.armReadyDeadline(target)
           this.reportResources('rendererUpdated')
         }
@@ -185,6 +195,10 @@ export class PlaybackService {
       actualProcessingMode: this.current?.config.processingMode,
       actualTargetFps: this.current?.config.targetFps,
       actualSharpness: this.current?.config.sharpness,
+      actualBrightness: this.current?.config.brightness,
+      actualContrast: this.current?.config.contrast,
+      actualSaturation: this.current?.config.saturation,
+      actualSuperResolutionActive: this.current?.renderer.snapshotResources()?.superResolutionActive,
       actualFallbackReason: this.current?.config.renderFallbackReason ?? (this.current?.fallbackReason ? 'failed' : undefined),
       rendererGeneration: this.current?.generation,
       rendererObservation: this.snapshotRendererObservation(),
@@ -197,13 +211,18 @@ export class PlaybackService {
     const resource = this.current
     if (!resource)
       return undefined
+    const source = getVideoFrameSource(resource.video)
+    const sourceFrame = resource.renderer.kind === 'video' ? source.lastFrame : source.lastRenderFrame
+    const sourceSize = resource.renderer.kind === 'video'
+      ? { width: resource.video.videoWidth, height: resource.video.videoHeight }
+      : source.renderSize
     return {
       generation: resource.generation,
       kind: resource.renderer.kind,
       targetFps: resource.config.targetFps,
-      latestVideoSequence: this.videoElement ? getVideoFrameSource(this.videoElement).lastRenderFrame?.localSequence : undefined,
-      sourceWidth: resource.video.videoWidth || undefined,
-      sourceHeight: resource.video.videoHeight || undefined,
+      latestVideoSequence: sourceFrame?.localSequence,
+      sourceWidth: sourceSize.width || resource.video.videoWidth || undefined,
+      sourceHeight: sourceSize.height || resource.video.videoHeight || undefined,
       lifecycle: { ...resource.lifecycle },
       resources: resource.renderer.snapshotResources() ?? { gpuObjects: 0, frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, domNodes: 0 },
     }
@@ -268,7 +287,7 @@ export class PlaybackService {
     const spec = this.rendererAttach
     if (!this.fallbackKind || spec.kind === 'video')
       return spec
-    return { ...spec, kind: this.fallbackKind, sr: undefined, sharpenStrength: 0 }
+    return { ...spec, kind: this.fallbackKind, sr: undefined, sharpenStrength: 0, brightness: 100, contrast: 100, saturation: 100 }
   }
 
   /** 待提交资源归属具体 video/renderer；首帧交接后统一释放旧管线。 */

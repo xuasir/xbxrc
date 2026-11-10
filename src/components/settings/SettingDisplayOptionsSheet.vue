@@ -3,6 +3,7 @@ import type { ColorPreset, RenderControlsValue, SharpeningChoice } from '@shared
 import { COLOR_PRESETS, copyRenderControls, normalizeRenderControls, renderControlsLabel, selectSharpening, sharpeningChoice } from '@shared/config/render-controls'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable } from '@/navigation/core/vue'
 import SettingModalShell from './SettingModalShell.vue'
 import SettingToggleRow from './SettingToggleRow.vue'
@@ -17,6 +18,8 @@ interface SettingDisplayOptionsSheetProps {
   valueSource?: 'default' | 'session'
   loading?: boolean
   error?: string
+  compatibilityActive?: boolean
+  performanceWarning?: boolean
 }
 
 const props = withDefaults(defineProps<SettingDisplayOptionsSheetProps>(), {
@@ -30,6 +33,7 @@ const emit = defineEmits<{
   (event: 'change', value: RenderControlsValue): void
   (event: 'submit', value: RenderControlsValue, saveAsDefault: boolean): void
   (event: 'restoreDefaults'): void
+  (event: 'retryRendering'): void
 }>()
 
 const { t } = useI18n()
@@ -37,7 +41,8 @@ const draft = ref(normalizeRenderControls({}))
 
 const cancelNodeId = computed(() => `${props.scopeId}.cancel`)
 const submitNodeId = computed(() => `${props.scopeId}.submit`)
-const defaultFocusId = computed(() => `${props.scopeId}.sr`)
+const effectsDisabled = computed(() => draft.value.compatibilityMode || props.compatibilityActive === true)
+const defaultFocusId = computed(() => `${props.scopeId}.${effectsDisabled.value ? 'compatibility' : 'sr'}`)
 const choices: SharpeningChoice[] = ['off', 'clear', 'soft']
 const presetKeys: ColorPreset[] = ['standard', 'clear', 'soft']
 const selectedLabel = computed(() => renderControlsLabel(draft.value, t))
@@ -70,14 +75,14 @@ function publish(): void {
 }
 
 function toggleSr(): void {
-  if (props.loading)
+  if (props.loading || effectsDisabled.value)
     return
-  draft.value.mode = draft.value.mode === 'sr' ? 'video' : 'sr'
+  draft.value.superResolution = !draft.value.superResolution
   publish()
 }
 
 function applySharpening(choice: SharpeningChoice): void {
-  if (props.loading)
+  if (props.loading || effectsDisabled.value)
     return
   draft.value = selectSharpening(draft.value, choice)
   publish()
@@ -86,12 +91,20 @@ function applySharpening(choice: SharpeningChoice): void {
 function useDefaultRendering(): void {
   if (props.loading)
     return
-  draft.value.mode = 'video'
+  draft.value.superResolution = false
+  draft.value.displayOptions = { sharpness: 0, ...COLOR_PRESETS.standard }
+  publish()
+}
+
+function toggleCompatibility(): void {
+  if (props.loading)
+    return
+  draft.value.compatibilityMode = !draft.value.compatibilityMode
   publish()
 }
 
 function applyPreset(key: ColorPreset): void {
-  if (props.loading)
+  if (props.loading || effectsDisabled.value)
     return
   Object.assign(draft.value.displayOptions, COLOR_PRESETS[key])
   publish()
@@ -113,6 +126,15 @@ watch(
   },
   { immediate: true },
 )
+
+watch(effectsDisabled, (disabled) => {
+  const focus = navigationEngine.getCurrentFocus()?.id
+  if (disabled && props.open && (focus === `${props.scopeId}.sr` || focus?.startsWith(`${props.scopeId}.sharpening.`) || focus?.startsWith(`${props.scopeId}.preset.`))) {
+    const target = document.getElementById(`${props.scopeId}.compatibility`)
+    if (target)
+      navigationEngine.focusElement(target)
+  }
+})
 </script>
 
 <template>
@@ -135,7 +157,8 @@ watch(
         :scope-id="props.scopeId"
         :label="t('setting.renderControls.sr')"
         :description="t('setting.renderControls.srHint')"
-        :enabled="draft.mode === 'sr'"
+        :enabled="draft.superResolution"
+        :disabled="effectsDisabled"
         :busy="props.loading"
         :on-back="handleClose"
         @confirm="toggleSr"
@@ -156,13 +179,14 @@ watch(
           :scope-id="props.scopeId"
           :on-back="handleClose"
           :busy="props.loading"
+          :disabled="effectsDisabled"
           @click="applySharpening(choice)"
         >
           {{ t(`setting.renderControls.choices.${choice}`) }}
         </Focusable>
       </div>
       <p class="setting-display-options-sheet__preset-help">
-        {{ t(draft.mode === 'sr' ? 'setting.renderControls.srSharpeningHint' : 'setting.renderControls.sharpeningHint') }}
+        {{ t(effectsDisabled ? 'setting.renderControls.effectsPaused' : 'setting.renderControls.sharpeningHint') }}
       </p>
       <Focusable
         :id="`${props.scopeId}.video`"
@@ -194,11 +218,43 @@ watch(
           :scope-id="props.scopeId"
           :on-back="handleClose"
           :busy="props.loading"
+          :disabled="effectsDisabled"
           @click="applyPreset(presetKey)"
         >
           {{ t(`setting.renderControls.colors.${presetKey}`) }}
         </Focusable>
       </div>
+    </section>
+
+    <section class="setting-display-options-sheet__section">
+      <p class="setting-display-options-sheet__section-title">
+        {{ t('setting.renderControls.compatibilityTitle') }}
+      </p>
+      <p v-if="props.performanceWarning" class="setting-display-options-sheet__preset-help">
+        {{ t('setting.renderControls.performanceWarning') }}
+      </p>
+      <SettingToggleRow
+        :id="`${props.scopeId}.compatibility`"
+        :scope-id="props.scopeId"
+        :label="t('setting.renderControls.compatibility')"
+        :description="t('setting.renderControls.compatibilityHint')"
+        :enabled="draft.compatibilityMode"
+        :busy="props.loading"
+        :on-back="handleClose"
+        @confirm="toggleCompatibility"
+      />
+      <Focusable
+        v-if="props.compatibilityActive && !draft.compatibilityMode"
+        :id="`${props.scopeId}.retry`"
+        as="button"
+        type="button"
+        :scope-id="props.scopeId"
+        :busy="props.loading"
+        :on-back="handleClose"
+        @click="emit('retryRendering')"
+      >
+        {{ t('setting.renderControls.retryRendering') }}
+      </Focusable>
     </section>
 
     <section v-if="props.configurationScope === 'session'" class="setting-display-options-sheet__section">

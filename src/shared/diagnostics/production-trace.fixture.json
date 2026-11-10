@@ -38,7 +38,31 @@
             "p99Ms": 27,
             "maxMs": 31,
             "message": "secret"
+          },
+          "receiveToSubmit": {
+            "count": 256,
+            "p95Ms": 4,
+            "maxMs": 50,
+            "token": "private"
+          },
+          "readToSubmit": {
+            "count": 256,
+            "p95Ms": 4,
+            "maxMs": 50,
+            "token": "private"
           }
+        },
+        "decodedSupply": {
+          "read": 60,
+          "sent": 56,
+          "overwrites": 4,
+          "acks": 55,
+          "received": 56,
+          "delivered": 55,
+          "staleDrops": 1,
+          "transferP95Ms": 4,
+          "transferMaxMs": 80,
+          "token": "private"
         }
       },
       "recovery": {
@@ -80,7 +104,28 @@
             "p95Ms": 23.5,
             "p99Ms": 27,
             "maxMs": 31
+          },
+          "receiveToSubmit": {
+            "count": 256,
+            "p95Ms": 4,
+            "maxMs": 50
+          },
+          "readToSubmit": {
+            "count": 256,
+            "p95Ms": 4,
+            "maxMs": 50
           }
+        },
+        "decodedSupply": {
+          "read": 60,
+          "sent": 56,
+          "overwrites": 4,
+          "acks": 55,
+          "received": 56,
+          "delivered": 55,
+          "staleDrops": 1,
+          "transferP95Ms": 4,
+          "transferMaxMs": 80
         }
       },
       "recovery": {
@@ -181,6 +226,128 @@
         "remoteClosed": true,
         "startupCancelled": true
       }
+    }
+  },
+  {
+    "event": "sessionVideoConstraintsResolved",
+    "input": {
+      "targetType": "home",
+      "configuredResolution": 1080,
+      "deviceKind": "windows",
+      "deviceWidth": 1920,
+      "deviceHeight": 1080,
+      "deviceOs": "windows",
+      "headerDisplayWidth": 1920,
+      "headerDisplayHeight": 1080,
+      "token": "private"
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "targetType": "home",
+      "configuredResolution": 1080,
+      "deviceKind": "windows",
+      "deviceWidth": 1920,
+      "deviceHeight": 1080,
+      "deviceOs": "windows",
+      "headerDisplayWidth": 1920,
+      "headerDisplayHeight": 1080
+    }
+  },
+  {
+    "event": "browserWebRtcSdpObserved",
+    "input": {
+      "stage": "remoteAnswer",
+      "videoImageAttributes": [
+        "a=imageattr:98 send [x=[0:2560],y=[0:1440]]"
+      ],
+      "videoImageConstraints": [
+        {
+          "payloadType": "98",
+          "allPayloads": false,
+          "direction": "send",
+          "minWidth": 0,
+          "maxWidth": 2560,
+          "minHeight": 0,
+          "maxHeight": 1440,
+          "token": "private"
+        }
+      ],
+      "h264Payloads": [],
+      "videoHeaderExtensions": []
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "stage": "remoteAnswer",
+      "h264Payloads": [],
+      "videoHeaderExtensions": [],
+      "videoImageConstraints": [
+        {
+          "payloadType": "98",
+          "allPayloads": false,
+          "direction": "send",
+          "minWidth": 0,
+          "maxWidth": 2560,
+          "minHeight": 0,
+          "maxHeight": 1440
+        }
+      ]
+    }
+  },
+  {
+    "event": "decodedFrameSupplyObserved",
+    "input": {
+      "rendererKind": "webgl2",
+      "rendererGeneration": 2,
+      "rendererFrameSource": "worker",
+      "sampleAgeMs": 0,
+      "sampleId": "2:3",
+      "decodedSupply": {
+        "read": 60,
+        "sent": 56,
+        "overwrites": 4,
+        "acks": 55,
+        "received": 56,
+        "delivered": 55,
+        "staleDrops": 1,
+        "transferP95Ms": 4,
+        "transferMaxMs": 80,
+        "token": "private"
+      },
+      "timing": {
+        "readToSubmit": {
+          "count": 256,
+          "p95Ms": 12,
+          "maxMs": 49
+        }
+      },
+      "timingScope": "retainedSamples"
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "rendererKind": "webgl2",
+      "rendererGeneration": 2,
+      "rendererFrameSource": "worker",
+      "sampleAgeMs": 0,
+      "sampleId": "2:3",
+      "decodedSupply": {
+        "read": 60,
+        "sent": 56,
+        "overwrites": 4,
+        "acks": 55,
+        "received": 56,
+        "delivered": 55,
+        "staleDrops": 1,
+        "transferP95Ms": 4,
+        "transferMaxMs": 80
+      },
+      "timing": {
+        "readToSubmit": {
+          "count": 256,
+          "p95Ms": 12,
+          "maxMs": 49
+        }
+      },
+      "timingScope": "retainedSamples"
     }
   }
 ]

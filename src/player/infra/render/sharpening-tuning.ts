@@ -32,3 +32,6 @@ export const CAS_CHROMA_BLEND = 0.85
 
 /** USM 分支的增益换算：strength 1.0 等价于旧实现 `sharpenFactor = 4`。 */
 export const USM_GAIN_SCALE = 4 / 3
+
+/** USM高斯残差较小，1/255起软门限；邻域过冲与色度保护复用CAS参数。 */
+export const USM_NOISE_FLOOR = 1 / 255

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { resolvePageMotion } from './app/page-motion'
 import { setupTheme } from './app/theme'
 import { setupUiDensity } from './app/ui-density'
+import { useUiMotionLifecycle } from './app/ui-motion'
+import UiMotionTransition from './components/common/UiMotionTransition.vue'
 import AppShellLayout from './components/layout/AppShellLayout.vue'
+import FocusFlowLayer from './components/navigation/FocusFlowLayer.vue'
 import SpatialNavGlobalHotkeys from './components/navigation/SpatialNavGlobalHotkeys.vue'
 import { useGamepadNavigation } from './navigation/core'
 import { events } from './services/events'
@@ -11,11 +15,18 @@ import { rpc } from './services/rpc'
 import { devWarn } from './shared/dev-log'
 
 const route = useRoute()
+const router = useRouter()
 let disposeAuthSessionReady: (() => void) | undefined
 let disposeUiDensity: (() => void) | undefined
 let xcloudWarmupPromise: Promise<unknown> | undefined
 const streamUiInputEnabled = ref(false)
+const pageMotion = ref<ReturnType<typeof resolvePageMotion>>({ direction: 'fade', axis: 'auto' })
+const disposePageMotion = router.afterEach((to, from, failure) => {
+  if (!failure && to.fullPath !== from.fullPath)
+    pageMotion.value = resolvePageMotion(to, from)
+})
 
+useUiMotionLifecycle()
 useGamepadNavigation()
 
 function handleStreamUiInputMode(event: Event): void {
@@ -40,6 +51,9 @@ function resolveRouteViewKey(currentRoute: {
   if (currentRoute.name === 'xhome-stream' || currentRoute.name === 'xcloud-stream') {
     return currentRoute.fullPath
   }
+
+  if (currentRoute.meta.navPage && currentRoute.name !== 'my')
+    return currentRoute.path
 
   return String(currentRoute.name ?? currentRoute.path)
 }
@@ -89,6 +103,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  disposePageMotion()
   if (disposeUiDensity !== undefined) {
     disposeUiDensity()
     disposeUiDensity = undefined
@@ -103,6 +118,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app-root" data-nav-zone="app-root" style="display: contents">
+    <FocusFlowLayer />
     <SpatialNavGlobalHotkeys v-if="!isStreamRoute || streamUiInputEnabled" />
 
     <RouterView v-slot="{ Component, route: currentRoute }">
@@ -111,14 +127,14 @@ onUnmounted(() => {
         只有内容区域进行切换动画。
       -->
       <AppShellLayout v-if="currentRoute.meta.layout === 'shell'">
-        <Transition name="page-fade" mode="out-in">
+        <UiMotionTransition :direction="pageMotion.direction" :axis="pageMotion.axis">
           <KeepAlive>
             <component
               :is="Component"
-              :key="currentRoute.name"
+              :key="resolveRouteViewKey(currentRoute)"
             />
           </KeepAlive>
-        </Transition>
+        </UiMotionTransition>
       </AppShellLayout>
 
       <div
@@ -132,12 +148,12 @@ onUnmounted(() => {
           :key="resolveRouteViewKey(currentRoute)"
         />
 
-        <Transition v-else name="page-fade" mode="out-in">
+        <UiMotionTransition v-else :direction="pageMotion.direction" :axis="pageMotion.axis">
           <component
             :is="Component"
             :key="resolveRouteViewKey(currentRoute)"
           />
-        </Transition>
+        </UiMotionTransition>
       </div>
     </RouterView>
   </div>

@@ -1,5 +1,10 @@
+import type { PlayerEvents } from '../../api/events'
+import type { InputService } from '../../app/input/InputService'
 import type { RendererRuntimeConfig } from '../../domain/media'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TypedEventEmitter } from '../../api/events'
+import { PlaybackService } from '../../app/media/PlaybackService'
+import { deriveRendererAttachSpec } from '../../domain/media'
 import { SuperResolutionWebGL2Renderer, WebGL2VideoRenderer } from './Renderers'
 import { gpuProbe } from './video-frame-gpu.test-support'
 import { getVideoFrameSource } from './video-frame-source'
@@ -44,7 +49,7 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
     FRAMEBUFFER_COMPLETE: 1,
     getParameter: vi.fn((p: number) => p === 0x0D3A ? new Int32Array([8192, 8192]) : 8192),
     getError: vi.fn(() => 0),
-    getShaderParameter: vi.fn(() => true),
+    getShaderParameter: vi.fn((_shader?: { source: string }, _parameter?: number) => true),
     getProgramParameter: vi.fn((program: { shaders: { source: string }[] }) => kind !== 'webgl2_sr' || !dualPass || !program.shaders.some(shader => shader.source.includes('void FsrMobile('))),
     getUniformLocation: vi.fn((_p: unknown, name: string) => name),
     getShaderInfoLog: vi.fn(() => ''),
@@ -85,13 +90,19 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
     attachShader: vi.fn((program: { shaders: { source: string }[] }, shader: { source: string }) => { program.shaders.push(shader) }),
     linkProgram: vi.fn(),
   }
+  let currentCanvas: (() => Canvas) | undefined
   class Canvas extends EventTarget {
     width = 0
     height = 0
     style: Record<string, string> = {}
     isConnected = true
     remove = vi.fn(() => { this.isConnected = false })
-    getContext = vi.fn((type: string) => type === '2d' ? { putImageData: vi.fn() } : gl)
+    getContext = vi.fn((type: string) => {
+      if (type === '2d')
+        return { putImageData: vi.fn() }
+      currentCanvas = () => this
+      return gl
+    })
   }
   const canvases: Canvas[] = []
   vi.stubGlobal('document', { createElement: () => {
@@ -101,10 +112,26 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
   } })
   vi.stubGlobal('ImageData', class {})
   Object.defineProperties(gl, {
-    drawingBufferWidth: { get: () => canvases[0]?.width ?? 0 },
-    drawingBufferHeight: { get: () => canvases[0]?.height ?? 0 },
+    drawingBufferWidth: { get: () => currentCanvas?.()?.width ?? 0 },
+    drawingBufferHeight: { get: () => currentCanvas?.()?.height ?? 0 },
   })
+  const clone = { stop: vi.fn() }
+  class MockWorker {
+    static instance: MockWorker
+    onmessage?: (event: MessageEvent) => void
+    onerror?: () => void
+    postMessage = vi.fn((message: { type: string }) => {
+      if (message.type === 'stop')
+        this.emit({ type: 'stopped' })
+    })
+
+    terminate = vi.fn()
+    constructor() { MockWorker.instance = this }
+    emit(data: unknown) { this.onmessage?.({ data } as MessageEvent) }
+  }
+  vi.stubGlobal('Worker', MockWorker)
   const video = {
+    srcObject: { getVideoTracks: () => [{ readyState: 'live', muted: true, clone: () => clone }] } as unknown as MediaStream,
     videoWidth: options.renderSourceWidth ?? 1920,
     videoHeight: options.renderSourceHeight ?? 1080,
     currentTime: 0,
@@ -132,17 +159,33 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
   const attaching = renderer.attach(video as unknown as HTMLVideoElement)
   duringInit?.(renderer)
   await attaching
+  MockWorker.instance?.emit({ type: 'ready' })
+  let lastDecodedSequence: number | undefined
+  const decodedFrames: VideoFrame[] = []
+  const decoded = (at: number, sequence: number, timestamp = 0) => {
+    atMs = at
+    if (lastDecodedSequence === sequence)
+      return
+    lastDecodedSequence = sequence
+    const frame = { timestamp, displayWidth: video.videoWidth, displayHeight: video.videoHeight, close: vi.fn() } as unknown as VideoFrame
+    decodedFrames.push(frame)
+    MockWorker.instance?.emit({ type: 'frame', frame })
+  }
   const supply = (sequence: number, dropped = 0) => {
     presentedFrames = sequence
     droppedFrames = dropped
   }
-  const frame = (at: number, sequence: number, mediaTime = sequence / 60, playbackFrames = sequence) => {
+  const native = (at: number, sequence: number, mediaTime = sequence / 60, playbackFrames = sequence) => {
     atMs = at
     supply(playbackFrames, droppedFrames)
     for (const [id, callback] of [...frames]) {
       frames.delete(id)
       callback(at, { presentedFrames: sequence, mediaTime, rtpTimestamp: sequence * 3000 } as VideoFrameCallbackMetadata)
     }
+  }
+  const frame = (at: number, sequence: number, mediaTime = sequence / 60, playbackFrames = sequence) => {
+    native(at, sequence, mediaTime, playbackFrames)
+    decoded(at, sequence)
   }
   const raf = (at: number) => {
     atMs = at
@@ -178,6 +221,7 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
     while (Math.min(sourceAt, displayAt, nativeAt) <= duration) {
       if (sourceAt <= displayAt && sourceAt <= nativeAt) {
         supply(++sequence)
+        decoded(sourceAt, sequence)
         sourceAt = sequence * 1000 / sourceFps
       }
       else if (displayAt <= nativeAt) {
@@ -192,7 +236,7 @@ async function harness(kind: 'webgl2' | 'webgl2_sr', options: Partial<RendererRu
     raf(duration + 1000 / refresh)
     return sequence
   }
-  return { renderer, gl, video, canvases, failure, rafs, frames, frame, raf, run, supply, runSparse }
+  return { renderer, gl, video, canvases, failure, rafs, frames, frame, raf, run, supply, runSparse, native, decoded, decodedFrames, clone, worker: () => MockWorker.instance }
 }
 
 afterEach(() => {
@@ -351,7 +395,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       const imported: number[] = []
       let image = 0
       h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
-        if (args.at(-1) === h.video)
+        if (args.at(-1) === h.decodedFrames.at(-1))
           imported.push(image)
       })
       for (let slot = 0; slot < 600; slot++) {
@@ -360,6 +404,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
         p.image(staticImage ? 20 : image % 255)
         const counted = Math.floor(slot / 15) * 15 + 1
         h.supply(counted)
+        h.decoded(at, image)
         if ((slot + 1) % 4)
           h.frame(at, image, 0, counted)
         h.raf(at + 0.2)
@@ -367,6 +412,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
         h.gl.spend(1)
         vi.advanceTimersByTime(1)
       }
+      expect(imported).toHaveLength(600)
       expect(new Set(imported).size).toBe(imported.length)
       expect(h.renderer.snapshotResources()).toMatchObject({ animationCallbacks: 0, duplicateDrawCount: 0, submitFailureCount: 0 })
       const pixels = source.snapshotDiagnostics().videoPixels
@@ -436,6 +482,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     for (let frame = 1; frame <= 600; frame++) {
       const at = 102000 + frame * 1000 / 60
       h.supply(frame)
+      h.decoded(at, 6120 + frame)
       if (frame % 4)
         h.frame(at, 6120 + frame, 0, frame)
       h.raf(at + 0.2)
@@ -449,14 +496,14 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
 
   it('imports each new video frame through texImage2D while retaining one source texture and skipping duplicate identities', async () => {
     const h = await harness(kind)
-    const format = kind === 'webgl2_sr' ? h.gl.RGB : h.gl.RGBA
+    const format = h.gl.RGBA
     h.frame(0, 1)
     const textures = h.gl.createTexture.mock.calls.length
     h.frame(20, 2)
     h.frame(40, 2)
-    expect(h.gl.texImage2D.mock.calls.filter(args => args.at(-1) === h.video)).toEqual([
-      [h.gl.TEXTURE_2D, 0, format, format, h.gl.UNSIGNED_BYTE, h.video],
-      [h.gl.TEXTURE_2D, 0, format, format, h.gl.UNSIGNED_BYTE, h.video],
+    expect(h.gl.texImage2D.mock.calls.filter(args => h.decodedFrames.includes(args.at(-1) as VideoFrame))).toEqual([
+      [h.gl.TEXTURE_2D, 0, format, format, h.gl.UNSIGNED_BYTE, h.decodedFrames[0]],
+      [h.gl.TEXTURE_2D, 0, format, format, h.gl.UNSIGNED_BYTE, h.decodedFrames[1]],
     ])
     expect(h.gl.texSubImage2D).not.toHaveBeenCalled()
     expect(h.gl.createTexture).toHaveBeenCalledTimes(textures)
@@ -467,7 +514,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
   it('measures video upload and command submission separately for each realtime processing', async () => {
     const h = await harness(kind)
     h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
-      if (args.at(-1) === h.video)
+      if (args.at(-1) === h.decodedFrames.at(-1))
         h.gl.spend(8)
     })
     h.gl.texSubImage2D.mockImplementation(() => h.gl.spend(8))
@@ -528,7 +575,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     expect(h.rafs.size + h.frames.size).toBe(0)
   })
 
-  it.each([60, 144])('recovers 30/60fps supply from 15fps RVFC on a %iHz display with zero mediaTime', async (refresh) => {
+  it.each([60, 144])('preserves 30/60fps decoded supply alongside 15fps RVFC on a %iHz display with zero mediaTime', async (refresh) => {
     for (const sourceFps of [30, 60]) {
       const h = await harness(kind, {}, false, 'playbackQuality')
       const offered = h.runSparse(10000, sourceFps, refresh)
@@ -542,16 +589,20 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     }
   })
 
-  it('uses WebKit frame counters while RVFC is waiting and resumes from the latest frame', async () => {
+  it('waits for decoded frames while WebKit counters advance and resumes from the latest decoded frame', async () => {
     const h = await harness(kind, {}, false, 'webkit')
     h.supply(1)
     h.raf(0)
+    expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(0)
+    h.decoded(1, 1)
     expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(1)
     h.renderer.update({ targetFps: 0 })
     h.supply(120)
     expect(h.rafs.size + h.frames.size).toBe(0)
     h.renderer.update({ targetFps: 60 })
     h.raf(2000)
+    expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(1)
+    h.decoded(2000, 120)
     expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(2)
     h.frame(2001, 120, 0)
     h.raf(2010)
@@ -584,7 +635,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     h.canvases[0]?.dispatchEvent(new Event('webglcontextrestored'))
     expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, duplicateDrawCount: 0, rateLimitDropCount: 0 })
     h.frame(34, 2)
-    expect(h.failure.mock.calls).toEqual([[kind === 'webgl2_sr' ? 'srContextLost' : 'webgl2ContextLost']])
+    expect(h.failure.mock.calls).toEqual([['webgl2ContextLost']])
     expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, duplicateDrawCount: 0, rateLimitDropCount: 0 })
     expect(h.canvases[0]?.style.opacity).toBe('1')
     expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
@@ -717,56 +768,80 @@ it('uses one direct WebGL pass for zero sharpening and prepares the sharpen targ
   h.renderer.destroy()
 })
 
-it('prepares fused SR alone, then prepares RCAS when a later source matches the output', async () => {
-  const h = await harness('webgl2_sr', { superResolutionOutputWidth: 2560, superResolutionOutputHeight: 1440 })
+it('reconstructs before one shared sharpening pass and bypasses reconstruction at the source size', async () => {
+  const h = await harness('webgl2_sr', { superResolutionOutputWidth: 2560, superResolutionOutputHeight: 1440, sharpness: 3, brightness: 120 })
   h.frame(0, 1)
-  expect(h.gl.createProgram).toHaveBeenCalledTimes(1)
-  expect(h.gl.createFramebuffer).toHaveBeenCalledTimes(0)
-  h.video.videoWidth = 2560
-  h.video.videoHeight = 1440
-  h.frame(34, 2)
   expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
-  expect(h.gl.drawArrays).toHaveBeenCalledTimes(2)
-  expect(h.gl.createFramebuffer).toHaveBeenCalledTimes(0)
-  h.video.videoWidth = 1920
-  h.video.videoHeight = 1080
-  h.frame(68, 3)
-  expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
-  expect(h.gl.drawArrays).toHaveBeenCalledTimes(3)
-  h.renderer.destroy()
-  expect(h.rafs.size + h.frames.size).toBe(0)
-})
-
-it('keeps fused SR independent from an unused EASU program and updates only active uniforms', async () => {
-  const h = await harness('webgl2_sr', { superResolutionOutputWidth: 2560, superResolutionOutputHeight: 1440 })
-  h.gl.getProgramParameter.mockImplementation(program => !program.shaders.some(shader => shader.source.includes('FsrEasuGatherComp') || shader.source.includes('textureGather(')))
-  h.renderer.update({ superResolutionOutputWidth: 3840, superResolutionOutputHeight: 2160, brightness: 120 })
-  h.frame(0, 1)
-  expect(h.failure).toHaveBeenCalledTimes(0)
-  expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(1)
-  expect(h.gl.getUniformLocation.mock.calls.map(call => call[1])).not.toContain('rcasCon')
-  expect(h.gl.uniform1i).toHaveBeenCalledWith('applyColor', 1)
-  expect(h.gl.createProgram).toHaveBeenCalledTimes(1)
-  h.renderer.destroy()
-})
-
-it('settles a fused shader failure once and reuses its EASU/RCAS fallback across mode changes', async () => {
-  const h = await harness('webgl2_sr', { superResolutionOutputWidth: 2560, superResolutionOutputHeight: 1440 }, true)
-  h.frame(0, 1)
-  expect(h.gl.createProgram).toHaveBeenCalledTimes(3)
-  expect(h.gl.drawArrays).toHaveBeenCalledTimes(2)
-  h.video.videoWidth = 2560
-  h.video.videoHeight = 1440
-  h.frame(34, 2)
-  h.video.videoWidth = 1920
-  h.video.videoHeight = 1080
-  h.frame(68, 3)
-  expect(h.gl.createProgram).toHaveBeenCalledTimes(3)
-  expect(h.gl.drawArrays).toHaveBeenCalledTimes(5)
   expect(h.gl.createFramebuffer).toHaveBeenCalledTimes(1)
-  expect(h.failure).toHaveBeenCalledTimes(0)
+  expect(h.gl.drawArrays).toHaveBeenCalledTimes(2)
+  expect(h.gl.uniform1f).toHaveBeenCalledWith('sharpenFactor', 0.6)
+  expect(h.gl.uniform2f).toHaveBeenCalledWith('sourceResolution', 2560, 1440)
+  expect(h.gl.uniform1i).toHaveBeenCalledWith('applyColor', 1)
+  h.video.videoWidth = 2560
+  h.video.videoHeight = 1440
+  h.frame(34, 2)
+  expect(h.gl.drawArrays).toHaveBeenCalledTimes(3)
+  expect(h.renderer.snapshotResources()?.superResolutionActive).toBe(false)
+  h.video.videoWidth = 1920
+  h.video.videoHeight = 1080
+  h.frame(68, 3)
+  expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
+  expect(h.gl.drawArrays).toHaveBeenCalledTimes(5)
   h.renderer.destroy()
   expect(h.rafs.size + h.frames.size).toBe(0)
+})
+
+it('turns SR and sharpening off in the same engine and skips their passes', async () => {
+  const h = await harness('webgl2', { superResolutionEnabled: true, superResolutionOutputWidth: 2560, superResolutionOutputHeight: 1440, sharpness: 1 })
+  h.frame(0, 1)
+  expect(h.gl.drawArrays).toHaveBeenCalledTimes(2)
+  h.renderer.update({ superResolutionEnabled: false, sharpness: 0, brightness: 100, contrast: 100, saturation: 100 })
+  h.frame(34, 2)
+  expect(h.gl.drawArrays).toHaveBeenCalledTimes(3)
+  expect(h.gl.uniform1f).toHaveBeenCalledWith('sharpenFactor', 0)
+  expect(h.gl.uniform1i).toHaveBeenCalledWith('applyColor', 0)
+  expect(h.canvases).toHaveLength(1)
+  expect(h.gl.deleteFramebuffer).toHaveBeenCalledTimes(1)
+  expect(h.failure).not.toHaveBeenCalled()
+  h.renderer.destroy()
+})
+
+it('submits every zero-timestamp decoded frame in the original picture path before RVFC', async () => {
+  let controller!: ReadableStreamDefaultController<VideoFrame>
+  const readable = new ReadableStream<VideoFrame>({
+    start(value) { controller = value },
+  })
+  const clone = { stop: vi.fn() }
+  vi.stubGlobal('MediaStreamTrackProcessor', class { readonly readable = readable })
+  const h = await harness('webgl2', { sharpness: 0 }, false, 'none', (video) => {
+    video.srcObject = { getVideoTracks: () => [{ readyState: 'live', clone: () => clone }] } as unknown as MediaStream
+  })
+  const frames = [1, 2].map(() => ({ timestamp: 0, displayWidth: 1920, displayHeight: 1080, close: vi.fn() }) as unknown as VideoFrame)
+  for (const frame of frames) {
+    controller.enqueue(frame)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(h.gl.texImage2D).toHaveBeenLastCalledWith(h.gl.TEXTURE_2D, 0, h.gl.RGBA, h.gl.RGBA, h.gl.UNSIGNED_BYTE, frame)
+  }
+  expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, renderFrameSource: 'main-thread', duplicateDrawCount: 0, submitFailureCount: 0 })
+  expect(h.gl.drawArrays).toHaveBeenCalledTimes(2)
+  expect(h.gl.createFramebuffer).not.toHaveBeenCalled()
+  h.renderer.destroy()
+  expect(frames[1]!.close).toHaveBeenCalledOnce()
+  expect(clone.stop).toHaveBeenCalledOnce()
+})
+
+it('uses the existing gather compatibility shader for an unsupported reconstruction shader', async () => {
+  const h = await harness('webgl2_sr', { superResolutionOutputWidth: 2560, superResolutionOutputHeight: 1440 })
+  h.gl.getShaderParameter.mockImplementation(shader => !shader?.source.includes('textureGather('))
+  h.gl.getShaderInfoLog.mockReturnValue('textureGather unsupported')
+  h.frame(0, 1)
+  h.frame(34, 2)
+  expect(h.renderer.snapshotResources()?.realtimeDrawCount).toBe(2)
+  expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
+  expect(h.gl.createFramebuffer).toHaveBeenCalledTimes(1)
+  expect(h.failure).not.toHaveBeenCalled()
+  h.renderer.destroy()
 })
 
 it('updates the SR viewport only on size changes and selects texture unit zero once per context', async () => {
@@ -818,4 +893,80 @@ it('preserves both source dimensions after a width-only change beyond the standa
   h.frame(34, 2)
   expect(h.renderer.snapshotResources()).toMatchObject({ outputWidth: 2800, outputHeight: 1080 })
   h.renderer.destroy()
+})
+
+// 使用实际PlaybackService与renderer验证供给故障最终呈现归属。
+describe.each(['webgl2', 'webgl2_sr'] as const)('%s decoded-only fallback integration', (kind) => {
+  it.each(['unsupported', 'readerFailed', 'firstFrameTimeout'] as const)('falls back to video on %s and restores decoded rendering only after an explicit retry', async (reason) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const h = await harness(kind, { sharpness: 0 })
+    h.renderer.destroy()
+    const video = h.video as unknown as HTMLVideoElement
+    const events = new EventTarget()
+    Object.assign(video, {
+      style: {},
+      play: vi.fn(async () => {}),
+      pause: vi.fn(),
+      remove: vi.fn(),
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+    })
+    const createElement = document.createElement.bind(document)
+    document.createElement = ((tag: string) => tag === 'video' ? video : createElement(tag)) as typeof document.createElement
+    Object.assign(document, { documentElement: { appendChild: vi.fn() } })
+    const emitter = new TypedEventEmitter<PlayerEvents>()
+    const observations = vi.fn()
+    emitter.on('media.resourcesObserved', observations)
+    const cfg = { ...config, sharpness: 3, brightness: 110, superResolutionEnabled: kind === 'webgl2_sr', superResolutionOutputWidth: 1920, superResolutionOutputHeight: 1080, mode: 'webgl2' as const, pipelineType: 'webgl2' as const }
+    const service = new PlaybackService(() => ({ appendChild: vi.fn() } as unknown as HTMLElement), { addProcessedFrame: vi.fn() } as unknown as InputService, emitter, cfg, deriveRendererAttachSpec(cfg))
+    const flush = async () => {
+      for (let i = 0; i < 12; i++)
+        await Promise.resolve()
+    }
+    service.attachVideoStream(video.srcObject as MediaStream)
+    await flush()
+    const source = getVideoFrameSource(video)
+    const worker = h.worker()
+    worker.emit({ type: 'ready' })
+    h.native(100, 1)
+    expect(h.gl.drawArrays).toHaveBeenCalledTimes(0)
+    expect(source.lastRenderFrame).toBeUndefined()
+    expect(service.snapshotResources()).toMatchObject({ currentRenderers: 0, pendingRenderers: 1 })
+    if (reason === 'readerFailed') {
+      h.decoded(101, 1)
+      expect(service.snapshotResources()).toMatchObject({ actualPipeline: kind, currentRenderers: 1, pendingRenderers: 0 })
+      worker.emit({ type: 'failed', reason })
+    }
+    else if (reason === 'firstFrameTimeout') {
+      vi.advanceTimersByTime(2000)
+    }
+    else {
+      worker.emit({ type: 'failed', reason })
+    }
+    await flush()
+    expect(service.snapshotResources()).toMatchObject({ actualPipeline: 'video', actualFallbackReason: 'failed', actualSharpness: 0, actualBrightness: 100, actualSuperResolutionActive: undefined, currentRenderers: 1, pendingRenderers: 0, decodedFrameReaders: 0, retainedDecodedFrames: 0 })
+    expect(observations).toHaveBeenCalledWith(expect.objectContaining({ reason: 'rendererFailed', resources: expect.objectContaining({ failedRenderer: expect.objectContaining({ kind, reason: `decodedFrame:${reason}` }) }) }))
+    expect(video.dataset.renderPipeline).toBe('video')
+    expect(h.canvases[1]?.isConnected).toBe(false)
+    const drawsAtFallback = h.gl.drawArrays.mock.calls.length
+    h.native(200, 2)
+    expect(h.gl.drawArrays).toHaveBeenCalledTimes(drawsAtFallback)
+    const late = { timestamp: 0, close: vi.fn() } as unknown as VideoFrame
+    worker.emit({ type: 'frame', frame: late })
+    expect(late.close).toHaveBeenCalledOnce()
+    service.updateRendererConfig({ brightness: 120 })
+    expect(service.snapshotResources()).toMatchObject({ actualPipeline: 'video', decodedFrameReaders: 0 })
+    service.retryRendering()
+    service.retryRendering()
+    await flush()
+    h.worker().emit({ type: 'ready' })
+    expect(service.snapshotResources()).toMatchObject({ actualPipeline: 'video', pendingRenderers: 1, decodedFrameReaders: 1 })
+    h.decoded(201, 3)
+    expect(service.snapshotResources()).toMatchObject({ actualPipeline: kind, actualSharpness: 3, actualBrightness: 120, actualFallbackReason: undefined, currentRenderers: 1, pendingRenderers: 0, renderFrameSource: 'worker' })
+    expect(h.gl.texImage2D.mock.calls.filter(args => args.at(-1) === video)).toHaveLength(0)
+    service.destroy()
+    expect(source.snapshotResources()).toMatchObject({ decodedFrameReaders: 0, retainedDecodedFrames: 0, frameRequests: 0, nativeFrameCallbacks: 0, animationCallbacks: 0 })
+    expect(h.decodedFrames.at(-1)?.close).toHaveBeenCalledOnce()
+    expect(h.rafs.size + h.frames.size + vi.getTimerCount()).toBe(0)
+  })
 })

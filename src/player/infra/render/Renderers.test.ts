@@ -21,6 +21,24 @@ function createRendererConfig(partial?: Partial<RendererRuntimeConfig>): Rendere
   }
 }
 
+function decodedFixture(video: HTMLVideoElement) {
+  let controller!: ReadableStreamDefaultController<VideoFrame>
+  const readable = new ReadableStream<VideoFrame>({
+    start(value) { controller = value },
+  })
+  vi.stubGlobal('MediaStreamTrackProcessor', class { readonly readable = readable })
+  video.srcObject = { getVideoTracks: () => [{ readyState: 'live', muted: true, clone: () => ({ stop: vi.fn() }) }] } as unknown as MediaStream
+  return {
+    push: async () => {
+      const frame = { timestamp: 0, displayWidth: video.videoWidth, displayHeight: video.videoHeight, close: vi.fn() } as unknown as VideoFrame
+      controller.enqueue(frame)
+      await Promise.resolve()
+      await Promise.resolve()
+      return frame
+    },
+  }
+}
+
 describe('renderers', () => {
   const originalDocument = globalThis.document
   const originalHTMLVideoElement = globalThis.HTMLVideoElement
@@ -29,6 +47,7 @@ describe('renderers', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     globalThis.document = originalDocument
     globalThis.HTMLVideoElement = originalHTMLVideoElement
     globalThis.requestAnimationFrame = originalRAF
@@ -73,6 +92,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new NativeVideoRenderer(createRendererConfig())
     renderer.attach(video)
@@ -180,6 +200,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    const decoded = decodedFixture(video)
     globalThis.requestAnimationFrame = vi.fn(() => 1)
     globalThis.cancelAnimationFrame = vi.fn()
 
@@ -189,7 +210,7 @@ describe('renderers', () => {
       targetFps: 45,
     }))
     await renderer.attach(video)
-    ;(video as unknown as LocalVideoElement).frameCallback?.()
+    const frame = await decoded.push()
     renderer.update({ sharpness: 6, targetFps: 30, brightness: 120 })
     renderer.destroy()
 
@@ -198,7 +219,7 @@ describe('renderers', () => {
     // 等尺寸只准备当前主pass；映射shader按实际需要准备。
     expect(gl.getUniformLocation).toHaveBeenCalledTimes(9)
     expect(gl.uniform1f).toHaveBeenCalled()
-    expect(gl.texImage2D).toHaveBeenCalledWith(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video)
+    expect(gl.texImage2D).toHaveBeenCalledWith(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame)
     expect(canvasNode.remove).toHaveBeenCalled()
     expect(canvasNode.addEventListener).toHaveBeenCalled()
     expect(canvasNode.removeEventListener).toHaveBeenCalled()
@@ -295,6 +316,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    const decoded = decodedFixture(video)
 
     const config = {
       ...createRendererConfig(),
@@ -311,7 +333,7 @@ describe('renderers', () => {
 
     const renderer = new WebGL2VideoRenderer(config)
     await renderer.attach(video)
-    ;(video as unknown as LocalVideoElement).frameCallback?.()
+    const frame = await decoded.push()
 
     expect(canvasNode.width).toBe(2880)
     expect(canvasNode.height).toBe(1620)
@@ -321,7 +343,7 @@ describe('renderers', () => {
       gl.RGBA,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
-      video,
+      frame,
     )
     expect(video.videoWidth).toBe(1920)
     expect(video.videoHeight).toBe(1080)
@@ -427,6 +449,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    const decoded = decodedFixture(video)
 
     const renderer = new WebGL2VideoRenderer({
       ...createRendererConfig(),
@@ -436,7 +459,7 @@ describe('renderers', () => {
       renderViewportHeight: 1080,
     } as RendererRuntimeConfig)
     await renderer.attach(video)
-    ;(video as unknown as LocalVideoElement).frameCallback?.()
+    await decoded.push()
 
     // 两个 pass：① 源尺寸 1:1 锐化进 FBO ② 升采样 + 色彩上屏。
     expect(gl.drawArrays).toHaveBeenCalledTimes(2)
@@ -539,6 +562,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new WebGL2VideoRenderer(createRendererConfig({
       renderOutputWidth: 2880,
@@ -644,6 +668,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new WebGL2VideoRenderer(createRendererConfig())
     await expect(renderer.attach(video)).rejects.toThrow(/CompileFailed/)
@@ -739,6 +764,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new WebGL2VideoRenderer(createRendererConfig({
       shaderPreset: 'clarityL3',
@@ -792,6 +818,7 @@ describe('renderers', () => {
       activeTexture: vi.fn(),
       uniform1i: vi.fn(),
       uniform1f: vi.fn(),
+      uniform2f: vi.fn(),
       uniform4fv: vi.fn(),
       VERTEX_SHADER: 1,
       FRAGMENT_SHADER: 2,
@@ -848,6 +875,7 @@ describe('renderers', () => {
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
       superResolutionEnabled: true,
@@ -961,6 +989,7 @@ describe('renderers', () => {
     globalThis.requestAnimationFrame = vi.fn(() => 1)
     globalThis.cancelAnimationFrame = vi.fn()
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
       superResolutionEnabled: true,
@@ -1091,6 +1120,7 @@ describe('renderers', () => {
       rafCallbacks.delete(id)
     })
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    decodedFixture(video)
 
     const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
       superResolutionEnabled: true,
@@ -1107,8 +1137,8 @@ describe('renderers', () => {
     expect(gl.drawArrays.mock.calls.length).toBe(drawCallsBefore)
   })
 
-  // 用户请求 1080p、实际源 1440p 时，实际 backing 保留源尺寸并执行等尺寸 RCAS。
-  it('preserves an oversized source at native dimensions and applies RCAS once', async () => {
+  // 用户请求 1080p、实际源 1440p 时，实际 backing 保留源尺寸并执行等尺寸共享锐化。
+  it('preserves an oversized source at native dimensions and applies shared sharpening once', async () => {
     const gl = {
       getParameter: vi.fn((parameter: number) => parameter === 0x0D3A ? new Int32Array([16384, 16384]) : 16384),
       MAX_TEXTURE_SIZE: 0x0D33,
@@ -1225,6 +1255,7 @@ describe('renderers', () => {
       rafCallbacks.delete(id)
     })
     const video = new LocalVideoElement() as unknown as HTMLVideoElement
+    const decoded = decodedFixture(video)
 
     const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
       superResolutionEnabled: true,
@@ -1234,9 +1265,8 @@ describe('renderers', () => {
     }))
     await renderer.attach(video)
     gl.drawArrays.mockClear()
-    gl.uniform1f.mockClear()
 
-    videoFrameMarker.callback?.()
+    await decoded.push()
     const nextRaf = [...rafCallbacks.entries()].sort((a, b) => a[0] - b[0])[0]
     if (nextRaf !== undefined) {
       const [id, callback] = nextRaf
@@ -1244,7 +1274,7 @@ describe('renderers', () => {
       callback(0)
     }
 
-    // 等尺寸 RCAS 直接提交至源尺寸画布。
+    // 等尺寸共享锐化 直接提交至源尺寸画布。
     expect(canvasNode.width).toBe(2560)
     expect(canvasNode.height).toBe(1440)
     expect(gl.drawArrays).toHaveBeenCalledTimes(1)

@@ -305,7 +305,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="app-shell" :style="{ '--ui-shell-floating-hints-height': `${actionHintsHeight}px` }">
+  <section class="app-shell" :class="{ 'app-shell--ambient-paused': isProfileMenuOpen || !!shell.overlay.value }" :style="{ '--ui-shell-floating-hints-height': `${actionHintsHeight}px` }">
     <FocusScope
       :id="SPATIAL_NAV_SCOPE_IDS.appShell"
       :default-focus-id="SPATIAL_NAV_NODE_IDS.topNav.brand"
@@ -386,6 +386,10 @@ onUnmounted(() => {
 }
 
 .app-shell::before { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse 52% 70% at 48% 0%, color-mix(in srgb, var(--ui-ambient-color) 60%, transparent), transparent); }
+
+.app-shell::after { content: ''; position: absolute; inset: -12px -24px; z-index: 0; pointer-events: none; background: radial-gradient(ellipse 44% 58% at 35% 18%, color-mix(in srgb, var(--ui-focus-ring-start) 8%, transparent), transparent 80%), radial-gradient(ellipse 40% 50% at 65% 6%, color-mix(in srgb, var(--ui-focus-ring-end) 7%, transparent), transparent 80%); animation: ui-ambient-drift var(--ui-ambient-period) ease-in-out infinite; }
+.app-shell--ambient-paused::after { animation-play-state: paused; }
+:global([data-theme='light']) .app-shell::after { filter: opacity(.65); }
 
 .app-shell__content {
   position: relative;

@@ -952,26 +952,50 @@
     "title": "Settings",
     "renderControls": {
       "title": "Rendering and picture",
-      "defaultRendering": "Default rendering",
-      "useDefaultRendering": "Use default rendering",
+      "defaultRendering": "Original picture",
+      "useDefaultRendering": "Restore original picture",
       "selected": "Selected: {mode}",
       "sr": "SR (Experimental)",
-      "srHint": "Enhances picture detail and may increase rendering load. Independent sharpening turns off when enabled.",
+      "srHint": "Reconstructs lower resolution details. Works with sharpening and color styles.",
       "sharpening": "Sharpening",
-      "sharpeningHint": "Clear enhances edges; Soft adds light sharpening. Off uses default rendering.",
-      "srSharpeningHint": "SR includes detail enhancement. Independent sharpening stays off.",
-      "choices": { "off": "Off", "clear": "Clear", "soft": "Soft" },
-      "colors": { "title": "Color style", "standard": "Standard", "clear": "Vivid", "soft": "Soft" },
+      "sharpeningHint": "Soft lightly enhances edges; Clear adds stronger detail. Works with SR and color styles.",
+      "choices": {
+        "off": "Off",
+        "clear": "Clear",
+        "soft": "Soft"
+      },
+      "colors": {
+        "title": "Color style",
+        "standard": "Standard",
+        "clear": "Vivid",
+        "soft": "Soft",
+        "custom": "Custom"
+      },
       "defaultHint": "Save the global default for new streams.",
       "sessionHint": "Changes apply to this stream. Save as default to use them in future streams.",
-      "sources": { "default": "Using the global default.", "session": "Using changes for this stream." },
+      "sources": {
+        "default": "Using the global default.",
+        "session": "Using changes for this stream."
+      },
       "restoreDefaults": "Restore default",
       "applySession": "Apply to this stream",
       "saveDefault": "Save default",
       "saveDefaultAndApply": "Save default and apply",
       "preparing": "Preparing",
       "switching": "Switching",
-      "fallback": { "performance": "FPS protection", "unsupported": "Device limit", "failed": "Enhancement failed" }
+      "fallback": {
+        "performance": "Frame drops",
+        "unsupported": "Device limit",
+        "failed": "Rendering error"
+      },
+      "compatibilityRendering": "Rendering fallback enabled",
+      "compatibilityTitle": "Compatibility",
+      "compatibility": "Rendering fallback",
+      "compatibilityHint": "Enable only for a black screen, flicker, visual errors, or persistent rendering frame drops. SR, sharpening, and styles pause while enabled. Turn off to restore your settings.",
+      "effectsPaused": "Rendering fallback pauses picture processing and preserves your settings.",
+      "retryRendering": "Retry picture processing",
+      "srAtTarget": "SR · Target reached",
+      "performanceWarning": "Rendering is dropping frames. Reduce sharpening, turn off SR, or enable rendering fallback for visual errors."
     },
     "aria": {
       "groups": "Setting groups",

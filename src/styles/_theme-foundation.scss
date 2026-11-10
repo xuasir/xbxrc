@@ -214,3 +214,18 @@ $ui-login-overlay-gradient-top-light: rgba($color-login-overlay-gradient-top-lig
 $ui-login-overlay-gradient-bottom-light: rgba($color-login-overlay-gradient-bottom-light-base, $alpha-44);
 
 $ui-motion-fast: 140ms ease;
+
+// 轻流动动效节奏：快起缓收曲线 + 分档时长（页面 / 弹层 / 焦点飞行）与背景慢漂移参数。
+$ui-motion-ease-settle: cubic-bezier(0.2, 0.75, 0.25, 1);
+$ui-motion-ease-travel: cubic-bezier(0.25, 0.6, 0.3, 1);
+$ui-motion-duration-page: 280ms;
+$ui-motion-duration-panel: 220ms;
+$ui-motion-distance-page: 48px;
+$ui-motion-distance-panel: 24px;
+$ui-motion-duration-overlay-in: 180ms;
+$ui-motion-duration-overlay-out: 120ms;
+$ui-motion-duration-focus-flight: 220ms;
+$ui-motion-duration-focus-fade: 100ms;
+$ui-ambient-drift-x: 24px;
+$ui-ambient-drift-y: 12px;
+$ui-ambient-period: 36s;

@@ -13,6 +13,7 @@ import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
+import UiMotionTransition from '../components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import SettingConfirmSheet from '../components/settings/SettingConfirmSheet.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
@@ -32,6 +33,7 @@ type SettingGroupMap = Awaited<ReturnType<typeof rpc.config.getGroups>>
 const pageRef = ref<HTMLElement | null>(null)
 const { t, te } = useI18n()
 const activeTabKey = ref<SettingTabKey>('general')
+const panelDirection = ref<'forward' | 'back'>('forward')
 const groupState = ref<SettingGroupMap | null>(null)
 const isLoading = ref(true)
 const loadError = ref('')
@@ -215,10 +217,11 @@ async function handleTabChange(key: string) {
   if (!SETTING_PAGE_ORDER.includes(key as SettingPageKey) || key === activeTabKey.value)
     return
   scrollPositions.set(activeTabKey.value, panelRef.value?.scrollTop ?? 0)
+  panelDirection.value = SETTING_PAGE_ORDER.indexOf(key as SettingPageKey) > SETTING_PAGE_ORDER.indexOf(activeTabKey.value as SettingPageKey) ? 'forward' : 'back'
   activeTabKey.value = key as SettingTabKey
   statusMessage.value = ''
   await nextTick()
-  if (panelRef.value)
+  if (activeTabKey.value === key && panelRef.value)
     panelRef.value.scrollTop = scrollPositions.get(key) ?? 0
 }
 async function persistRowValue(row: SettingIndexedRow, value: string | number | boolean): Promise<boolean> {
@@ -366,7 +369,7 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
             {{ activeLabel }}
           </h1>
         </header>
-        <div ref="panelRef" class="setting-panel__content" data-nav-scroll-container>
+        <div ref="panelRef" class="setting-panel__content ui-motion-stack" data-nav-scroll-container>
           <div v-if="loadError" class="setting-panel__state">
             <p role="alert">
               {{ loadError }}
@@ -381,8 +384,12 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
                 {{ t('setting.experience.restartNow') }}
               </Focusable>
             </div>
-            <SettingSectionList :key="activeTabKey" v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="customTurnOpen = true" />
-            <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
+            <UiMotionTransition kind="panel" :direction="panelDirection">
+              <div :key="activeTabKey">
+                <SettingSectionList v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="customTurnOpen = true" />
+                <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
+              </div>
+            </UiMotionTransition>
           </template>
         </div>
       </section>

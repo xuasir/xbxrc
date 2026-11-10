@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { useUiMediaMotion } from '@/app/ui-motion'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable } from '@/navigation/core/vue'
 
@@ -13,6 +14,7 @@ const container = ref<HTMLElement | null>(null)
 const video = ref<HTMLVideoElement | null>(null)
 const playing = ref(false)
 const playBusy = ref(false)
+useUiMediaMotion(() => playing.value || playBusy.value)
 const currentTime = ref(0)
 const duration = ref(0)
 const volume = ref(1)

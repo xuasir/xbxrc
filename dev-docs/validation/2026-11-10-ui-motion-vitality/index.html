@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XBXRC 真实 Vue 轻流动验证</title>
+    <style>
+      #motion-tools { position: fixed; top: 4px; right: 4px; z-index: 5000; padding: 4px; background: #14211deb; color: #eef7f0; font: 11px system-ui; border-radius: 4px; }
+      #motion-tools button { padding: 4px 8px; color: inherit; background: #31463a; border: 1px solid #708579; border-radius: 4px; }
+      #motion-results { max-height: 220px; max-width: 360px; overflow: auto; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <pre id="project-validation-results" hidden></pre>
+    <aside id="motion-tools">
+      <button id="motion-run">运行动效回归</button>
+      <button id="motion-hide">收起验证工具</button>
+      <pre id="motion-results">准备就绪</pre>
+    </aside>
+    <script type="module" src="./fixture.ts"></script>
+  </body>
+</html>

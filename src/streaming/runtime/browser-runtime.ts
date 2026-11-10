@@ -1369,7 +1369,7 @@ export function createBrowserRuntime(options: {
       }),
       eventBus.on('stats.collectionState', state => playbackTrace.collectionState(state)),
       eventBus.on('media.resourcesObserved', (payload) => {
-        const state = observeRenderState(payload.resources)
+        const state = { ...observeRenderState(payload.resources), warning: renderHealth.warning }
         const digest = JSON.stringify(state)
         if (digest !== renderStateDigest) {
           renderStateDigest = digest
@@ -1471,7 +1471,7 @@ export function createBrowserRuntime(options: {
     clientGeneration++
     appliedRendererDigest = undefined
     renderStateDigest = undefined
-    emit({ type: 'renderStateChanged', state: { mode: null, pending: false } })
+    emit({ type: 'renderStateChanged', state: { engine: null, superResolution: false, pending: false } })
     lastBrowserRendererPlan = null
     renderHealth.reset()
     networkPolicy.reset()
@@ -1855,15 +1855,14 @@ export function createBrowserRuntime(options: {
           recordRuntimeTraceEvent('qualityActionEffectEvaluated', () => ({ result: networkPolicy.effect, reason: networkPolicy.reason, sampleId: stats.statsSampleId }))
       }).catch(() => networkPolicy.complete(networkAction, 'failed', stats, previousLevel, monotonicNowMs()))
     }
-    const previousRenderEffect = renderHealth.effect
-    const previousRenderEvidence = renderHealth.effectEvidence
+    const previousRenderWarning = renderHealth.warning
     const renderAction = renderHealth.observe(stats, now, warmupUntilMs)
+    if (previousRenderWarning !== renderHealth.warning && client)
+      emit({ type: 'renderStateChanged', state: { ...observeRenderState(client.snapshotMediaResources()), warning: renderHealth.warning } })
     if (renderAction) {
       recordRuntimeTraceEvent('renderLocalActionPlanned', () => ({ ...renderAction, rendererGeneration: stats.rendererGeneration, sampleId: stats.statsSampleId }))
-      void applyRenderPolicy(renderAction.reason)
+      // 持续吞吐不足保留诊断建议；兼容迁移由手动意图与硬故障驱动。
     }
-    if (previousRenderEffect !== renderHealth.effect || previousRenderEvidence !== renderHealth.effectEvidence)
-      recordRuntimeTraceEvent('renderLocalActionEffectEvaluated', () => ({ result: renderHealth.effect, ...renderHealth.effectEvidence, rendererGeneration: stats.rendererGeneration, sampleId: stats.statsSampleId }))
     recoveryCause = classifyRecoveryCause(channelHealth.state, channelHealth.sendFailBurst ?? 0)
     senderPolicyCause = recoveryCause === 'networkCongestion' ? 'networkCongestion' : 'none'
     decisionDigest = buildDecisionDigest()
@@ -1883,6 +1882,7 @@ export function createBrowserRuntime(options: {
       rendererGeneration: stats.rendererGeneration,
       rendererKind: stats.rendererKind,
       rendererFrameSource: stats.rendererFrameSource,
+      rendererDecodedFrameSupply: stats.rendererDecodedFrameSupply,
       rendererTargetFps: stats.rendererTargetFps,
       trackingSource: frameObservation.renderFrameTrackingSource,
       sourceFpsEstimate: frameObservation.renderFrameSourceFpsEstimate ?? null,
@@ -2303,6 +2303,7 @@ export function createBrowserRuntime(options: {
     },
     applyDisplayState(state) {
       const previousUiSuperResolution = resolveSuperResolutionIntent()
+      const restoringEffects = currentDisplayState?.render.pipelinePreference === 'video' && state.render.pipelinePreference !== 'video'
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(state.displayOptions),
         render: state.render,
@@ -2313,7 +2314,7 @@ export function createBrowserRuntime(options: {
         const srIntent = resolveSuperResolutionIntent()
         updateSuperResolutionRuntimeState({
           retryAfterExplicitEnable:
-            previousUiSuperResolution !== true
+            (previousUiSuperResolution !== true || restoringEffects)
             && srIntent,
           freezeFromLatestVideoIfAvailable: srIntent,
         })
@@ -2381,6 +2382,19 @@ export function createBrowserRuntime(options: {
     pressHome(durationMs) {
       client?.pressButton('home', durationMs)
     },
+    retryRendering() {
+      const retryClient = client
+      const generation = resourceGeneration
+      if (!retryClient || (retryClient.snapshotMediaResources().pendingRenderers ?? 0) > 0)
+        return
+      srState.attachFailed = false
+      srState.fallbackReason = null
+      appliedRendererDigest = undefined
+      void applyRenderPolicy('userRenderRetry').then(() => {
+        if (client === retryClient && generation === resourceGeneration)
+          retryClient.retryRendering()
+      })
+    },
     snapshotStats: async () => {
       const stats = await readBrowserObservation('panel')
       const resources = assertClient().snapshotMediaResources()
@@ -2392,7 +2406,11 @@ export function createBrowserRuntime(options: {
       const observedPolicySource = plan?.source ?? rendererProjection.renderPolicySource
       const observedProcessing = resources.actualProcessing ?? (plan ? projectRenderProcessingFromPlan(plan) : rendererProjection.renderProcessing)
       const observedProcessingMode = resources.actualProcessingMode ?? plan?.sharpening.processingMode ?? rendererProjection.renderProcessingMode
-      const observedShaderPath = observedPipelineType === 'video' ? 'none' : plan ? projectRenderShaderPathFromPlan(plan) : rendererProjection.renderShaderPath
+      const observedShaderPath = observedPipelineType === 'video' || resources.actualSharpness === 0
+        ? 'none'
+        : resources.actualProcessing === 'usm' || resources.actualProcessing === 'cas'
+          ? resources.actualProcessing
+          : plan ? projectRenderShaderPathFromPlan(plan) : rendererProjection.renderShaderPath
       const observedFpsBudget = resources.actualTargetFps ?? plan?.targetFps ?? rendererProjection.renderFpsBudget
       const observedPresentTarget = plan?.presentTarget
       const snapshot = normalizeObservedPresentationStats({
@@ -2476,7 +2494,7 @@ export function createBrowserRuntime(options: {
         renderSourceWidth: stats.renderSourceWidth ?? observedPresentTarget?.sourceWidth,
         renderSourceHeight: stats.renderSourceHeight ?? observedPresentTarget?.sourceHeight,
         renderSuperResolutionEnabled: resolveSuperResolutionIntent(),
-        renderSuperResolutionActive: observedPipelineType === 'webgl2_sr' && (stats.renderActualOutputWidth ?? 0) > 0,
+        renderSuperResolutionActive: observedPipelineType === 'webgl2_sr' && resources.actualSuperResolutionActive === true,
         renderSuperResolutionAlgorithm: resolveSuperResolutionIntent()
           ? 'fsr1'
           : undefined,
@@ -2484,17 +2502,14 @@ export function createBrowserRuntime(options: {
         renderSuperResolutionOutputTarget: observedPipelineType === 'webgl2_sr' && stats.renderActualOutputWidth !== undefined && stats.renderActualOutputHeight !== undefined
           ? resolveSuperResolutionOutputTierLabelFromDimensions(stats.renderActualOutputWidth, stats.renderActualOutputHeight)
           : undefined,
-        renderSuperResolutionRcasStops: resolveSuperResolutionIntent()
-          ? srState.rcasStopsEffective
-          : undefined,
+        // 保留旧预设配置口径；当前共享锐化阶段由用户选择 USM/CAS。
+        renderSuperResolutionRcasStops: undefined,
         renderSuperResolutionRcasBaseStops: resolveSuperResolutionIntent()
           ? srState.rcasStopsBase
           : undefined,
         renderSuperResolutionFallbackReason: renderHealth.fallback ? renderHealth.fallbackReason : srState.fallbackReason,
-        renderSharpenMode: observedPipelineType === 'webgl2_sr'
-          ? 'fsr1_rcas'
-          : (observedShaderPath ?? 'none'),
-        renderSharpenStrength: plan?.sharpening.strength,
+        renderSharpenMode: observedShaderPath ?? 'none',
+        renderSharpenStrength: observedShaderPath === 'none' ? 0 : plan?.sharpening.strength,
         icePolicyMode,
         icePolicyDigest,
         frontEndProfileBaseline: runtimeProfileClassification.baseline,

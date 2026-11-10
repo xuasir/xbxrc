@@ -1,0 +1,11 @@
+{
+  "qualification": "最终源码包含实机timestamp=0修正；先前浏览器对照为修正前版本，修正分支由5项定向回归覆盖。",
+  "files": {
+    "src/player/infra/render/decoded-video-frame-reader.ts": "62d4a4e7adfabc702bfefb13ff4decea1efcdcf930c0180df43c7a571ec2bb5c",
+    "src/player/infra/render/decoded-video-frame-worker.ts": "6ddd5663e10c5ab5e03e7aec3de60ced28f67be9b22ef18f29092b43fc07a78d",
+    "src/player/infra/render/video-frame-source.ts": "22859fd6b5f167d5a466ca7c192b46f3bafa576fa4705cd6cf4f1a66bc2b8422",
+    "src/player/infra/render/Renderers.ts": "40f89fbe697e42a3741f71369ae9525d2d8134793470c4adb59d283c0d59655c",
+    "src/player/infra/render/SuperResolutionWebGL2Renderer.ts": "d572ebdbfbfca55eaef7f1220e715e9fc82701d3e4b1047af76bca6178a4087e",
+    "src/streaming/runtime/browser-render-health.ts": "95f917c17d2dbf1dbb8932cb235389d58f6df2e3689098f6a36f33435e7daedc"
+  }
+}

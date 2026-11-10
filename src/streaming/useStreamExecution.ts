@@ -301,7 +301,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         iceCandidatePolicy,
       },
       render: projectRenderControls(execution.render, renderControlsState.active.value),
-      clientExperimentalSuperResolution: renderControlsState.active.value.mode === 'sr',
+      clientExperimentalSuperResolution: renderControlsState.active.value.superResolution,
     }
   })
 
@@ -957,6 +957,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       powerOffAndDisconnect,
       sendText: sendTextToConsole,
       saveRenderControls,
+      retryRendering: () => runtimeHost.retryRendering(),
       previewRenderControls,
       cancelRenderPreview: renderControlsState.clearTransient,
       restoreRenderDefaults: renderControlsState.restoreDefaults,

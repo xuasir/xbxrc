@@ -1,3 +1,4 @@
+import type { DecodedFrameSupplyObservation } from '../../domain/media'
 import type { DecodedFrameFallback, DecodedFrameMode } from './decoded-video-frame-reader'
 import type { GpuFrameTimer } from './gpu-frame-timer'
 import type { ObservedVideoFrameMetadata } from './video-frame-source'
@@ -25,9 +26,11 @@ export interface RendererResources {
   renderFrameSource?: DecodedFrameMode
   renderFrameFallbackReason?: DecodedFrameFallback
   decodedFramesReceived?: number
+  decodedFrameSupply?: DecodedFrameSupplyObservation
   lastDrawAtMs?: number
   outputWidth?: number
   outputHeight?: number
+  superResolutionActive?: boolean
   gpuErrorChecks?: number
   latestOverwriteCount?: number
   rateLimitDropCount?: number
@@ -77,6 +80,8 @@ export class RenderObservation {
   private readonly upload = new LatencyWindow()
   private readonly submit = new LatencyWindow()
   private readonly interval = new LatencyWindow()
+  private readonly receiveToSubmit = new LatencyWindow()
+  private readonly readToSubmit = new LatencyWindow()
   private previousDrawAtMs?: number
   private lastDrawSequence?: number
   private drawCount = 0
@@ -130,6 +135,10 @@ export class RenderObservation {
     }
     else {
       const atMs = performance.now()
+      if (frame?.receivedAtMs !== undefined)
+        this.receiveToSubmit.record(atMs - frame.receivedAtMs)
+      if (frame?.readFinishedAtEpochMs !== undefined)
+        this.readToSubmit.record(performance.timeOrigin + atMs - frame.readFinishedAtEpochMs)
       this.duration.record(durationMs)
       if (uploadMs !== undefined)
         this.upload.record(uploadMs)
@@ -161,7 +170,7 @@ export class RenderObservation {
   }
 
   snapshot() {
-    const timing = { duration: this.duration.snapshot(), upload: this.upload.snapshot(), submit: this.submit.snapshot(), interval: this.interval.snapshot() }
+    const timing = { duration: this.duration.snapshot(), upload: this.upload.snapshot(), submit: this.submit.snapshot(), interval: this.interval.snapshot(), receiveToSubmit: this.receiveToSubmit.snapshot(), readToSubmit: this.readToSubmit.snapshot() }
     return { timing, drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: 0, rateLimitDropCount: this.rateLimitDropCount, submitFailureCount: this.submitFailureCount, preparation: { ...this.preparation } }
   }
 }

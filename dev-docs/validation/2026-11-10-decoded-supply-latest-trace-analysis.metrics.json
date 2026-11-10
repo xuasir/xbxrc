@@ -1,0 +1,1446 @@
+{
+  "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794280647769-1.jsonl",
+  "snapshot": "/tmp/xbxrc-2026-11-10-latest-after-sampling.jsonl",
+  "sha256": "66be2ef3c70c17cc61f7464ccf81b0c0803e68bdd69ecf398cf7705b53f13af3",
+  "rows": 3954,
+  "bytes": 8793323,
+  "timeRange": [
+    "2026-11-10T11:17:27.769+08:00",
+    "2026-11-10T11:22:56.128+08:00"
+  ],
+  "profileCounts": {
+    "dev": 3954
+  },
+  "traceBudgetNoticeCount": 0,
+  "build": {
+    "buildTimestampUnixMs": "1794280632326",
+    "cargoProfile": "debug",
+    "edition": "browser",
+    "gitCommitShort": "76a1ea69",
+    "sourceFingerprintSha256": "6be9987d2344adba8fdbc95a0ab849dc6ce1a5869f2d205ff211f655f4072383",
+    "workspaceDirty": true
+  },
+  "sessions": [
+    {
+      "index": 1,
+      "sessionId": "F97470F1-B849-4C55-8248-78064674DBEB",
+      "startTime": "2026-11-10T11:19:04.887+08:00",
+      "endTime": "2026-11-10T11:21:20.978+08:00",
+      "stats": 417,
+      "telemetry": 100,
+      "segments": [
+        {
+          "index": 1,
+          "label": "SR开关开启（同尺寸跳过重建） + USM 3",
+          "generation": 1,
+          "state": {
+            "actualBrightness": 100,
+            "actualContrast": 100,
+            "actualPipeline": "webgl2_sr",
+            "actualProcessing": "usm",
+            "actualProcessingMode": "quality",
+            "actualSaturation": 100,
+            "actualSharpness": 3,
+            "actualSuperResolutionActive": false,
+            "actualTargetFps": 60
+          },
+          "startSeq": 467,
+          "endSeq": 1410,
+          "startMs": 112414,
+          "endMs": 169818,
+          "startTime": "2026-11-10T11:19:22.127+08:00",
+          "endTime": "2026-11-10T11:20:19.532+08:00",
+          "durationMs": 57404,
+          "raw": {
+            "samples": 173,
+            "coverageMs": 56426,
+            "framesReceivedDelta": 3382,
+            "framesDecodedDelta": 3382,
+            "framesDroppedDelta": 0,
+            "bytesReceivedDelta": 167831588,
+            "packetsLostDelta": 38,
+            "packetsReceivedDelta": 152969,
+            "nackCountDelta": 36,
+            "pliCountDelta": 0,
+            "firCountDelta": 0,
+            "keyFramesDecodedDelta": 1,
+            "retransmittedPacketsReceivedDelta": 55,
+            "freezeCountDelta": 0,
+            "totalFreezesDurationDelta": 0,
+            "pauseCountDelta": 0,
+            "receivedFps": 59.936908517350155,
+            "decodedFps": 59.936908517350155,
+            "bitrateMbps": 23.794929713252756,
+            "decodeMsAvg": 4.52978681253696,
+            "jitterBufferMsAvg": 7.9240257244234185,
+            "rttMs": {
+              "samples": 173,
+              "min": 0,
+              "p95": 118.0,
+              "max": 118.0
+            },
+            "jitterMs": {
+              "samples": 173,
+              "min": 1.0,
+              "p95": 16.0,
+              "max": 18.0
+            },
+            "receiveEmptyWindows": []
+          },
+          "submission": {
+            "startSeq": 467,
+            "endSeq": 1410,
+            "coverageMs": 57404,
+            "frames": 3435,
+            "fps": 59.83903560727475
+          },
+          "pairedSupply": {
+            "startSeq": 576,
+            "endSeq": 1399,
+            "fromSampleId": "1:31",
+            "toSampleId": "1:182",
+            "coverageMs": 38078,
+            "receivedFrames": 2285,
+            "decodedFrames": 2285,
+            "submittedFrames": 2281,
+            "decodeSubmitDeficitFrames": 4,
+            "receivedFps": 60.00840380272073,
+            "decodedFps": 60.00840380272073,
+            "submittedFps": 59.90335626871159,
+            "counterGapLevels": {
+              "samples": 39,
+              "min": 7,
+              "p95": 12,
+              "max": 12
+            }
+          },
+          "steadySupply": {
+            "full3sSamples": 55,
+            "submitFps": {
+              "samples": 55,
+              "min": 58.44881889763779,
+              "p95": 60.62614379084968,
+              "max": 61.48148148148148
+            },
+            "decodeSubmitFpsDelta": {
+              "samples": 55,
+              "min": -0.3333333333333357,
+              "p95": 1.3333333333333357,
+              "max": 1.3333333333333357
+            },
+            "worst3s": {
+              "seq": 1331,
+              "sampleId": "1:170",
+              "atMs": 166205,
+              "callbackCoverageMs": 3000,
+              "callbackFpsAvg": 53.892388451443566,
+              "decodeCoverageMs": 3000,
+              "decodeDurationMsAvg": 4.23185844861111,
+              "decodeFpsAvg": 59.78215223097112,
+              "durationMs": 3000,
+              "inboundFpsAvg": 60.11548556430446,
+              "jitterBufferCoverageMs": 3000,
+              "jitterBufferMsAvg": 3.805195161111106,
+              "jitterBufferMsFirst": 12.463733333333238,
+              "jitterBufferMsLast": 1.8654666666665305,
+              "jitterCoverageMs": 3000,
+              "jitterMsAvg": 3.304666666666667,
+              "lossAvg": 0.0008158449973330671,
+              "lossCoverageMs": 3000,
+              "presentAgeMsAvg": 10.787333333333333,
+              "receivedCoverageMs": 3000,
+              "renderDrawDurationMsAvg": 0.36467272727272726,
+              "renderSubmitDurationMsAvg": 0.04122424242424242,
+              "renderUploadDurationMsAvg": 0.3234484848484849,
+              "rendererCoverageMs": 3000,
+              "rendererSubmitAgeMsAvg": 10.787333333333333,
+              "rendererSubmitFpsAvg": 58.44881889763779,
+              "repairPacketsPerSecondAvg": 1.6299212598425197,
+              "rttCoverageMs": 3000,
+              "rttMsAvg": 14.841333333333331,
+              "sampleCount": 12,
+              "videoCoverageMs": 3000,
+              "videoPresentFpsAvg": 60.07874015748031
+            }
+          },
+          "rvfcDiagnostic": {
+            "coverageMs": 38152,
+            "callbackCountSinceLastSample": 1916,
+            "presentedFramesAdvancedSinceLastSample": 2293,
+            "callbackGapCountSinceLastSample": 11,
+            "presentedFramesJumpCountSinceLastSample": 364,
+            "callbackFps": 50.220171943803734,
+            "videoPresentProxyFps": 60.10169846928077,
+            "maxCallbackIntervalMs": 167
+          },
+          "localSubmitAgeMs": {
+            "samples": 39,
+            "min": 0,
+            "p95": 48,
+            "max": 56
+          },
+          "retainedTimingWindows": {
+            "qualifiedSnapshots": 59,
+            "capacity": 256,
+            "duration": {
+              "p95AcrossWindowsMs": {
+                "samples": 59,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 2
+            },
+            "upload": {
+              "p95AcrossWindowsMs": {
+                "samples": 59,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 2
+            },
+            "submit": {
+              "p95AcrossWindowsMs": {
+                "samples": 59,
+                "min": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "interval": {
+              "p95AcrossWindowsMs": {
+                "samples": 59,
+                "min": 26,
+                "p95": 71,
+                "max": 72
+              },
+              "maxAcrossWindowsMs": 154
+            }
+          },
+          "finalCounters": {
+            "decodedFramesReceived": 3436,
+            "realtimeDrawCount": 3436,
+            "latestOverwriteCount": 0,
+            "rateLimitDropCount": 0,
+            "submitFailureCount": 0,
+            "duplicateDrawCount": 0
+          },
+          "cpuCostDelta": {
+            "frames": 3435,
+            "drawDurationTotalMs": 1258,
+            "drawDurationMsAvg": 0.36622998544395924,
+            "uploadDurationTotalMs": 1173,
+            "uploadDurationMsAvg": 0.3414847161572052,
+            "submitDurationTotalMs": 76,
+            "submitDurationMsAvg": 0.02212518195050946
+          },
+          "rendererSources": {
+            "worker": 39
+          },
+          "renderCauses": {
+            "renderStable": 37,
+            "frameDeliveryLimited": 2
+          }
+        },
+        {
+          "index": 2,
+          "label": "原画 + USM 3",
+          "generation": 1,
+          "state": {
+            "actualBrightness": 100,
+            "actualContrast": 100,
+            "actualPipeline": "webgl2",
+            "actualProcessing": "usm",
+            "actualProcessingMode": "quality",
+            "actualSaturation": 100,
+            "actualSharpness": 3,
+            "actualSuperResolutionActive": false,
+            "actualTargetFps": 60
+          },
+          "startSeq": 1410,
+          "endSeq": 1433,
+          "startMs": 169818,
+          "endMs": 170734,
+          "startTime": "2026-11-10T11:20:19.532+08:00",
+          "endTime": "2026-11-10T11:20:20.446+08:00",
+          "durationMs": 916,
+          "raw": {
+            "samples": 2,
+            "coverageMs": 505,
+            "framesReceivedDelta": 30,
+            "framesDecodedDelta": 31,
+            "framesDroppedDelta": 0,
+            "bytesReceivedDelta": 915976,
+            "packetsLostDelta": 0,
+            "packetsReceivedDelta": 840,
+            "nackCountDelta": 0,
+            "pliCountDelta": 0,
+            "firCountDelta": 0,
+            "keyFramesDecodedDelta": 0,
+            "retransmittedPacketsReceivedDelta": 0,
+            "freezeCountDelta": 0,
+            "totalFreezesDurationDelta": 0,
+            "pauseCountDelta": 0,
+            "receivedFps": 59.40594059405941,
+            "decodedFps": 61.386138613861384,
+            "bitrateMbps": 14.510510891089108,
+            "decodeMsAvg": 4.2113548387097275,
+            "jitterBufferMsAvg": 1.4950999999999937,
+            "rttMs": {
+              "samples": 2,
+              "min": 21.0,
+              "p95": 21.0,
+              "max": 21.0
+            },
+            "jitterMs": {
+              "samples": 2,
+              "min": 2.0,
+              "p95": 4.0,
+              "max": 4.0
+            },
+            "receiveEmptyWindows": []
+          },
+          "submission": {
+            "startSeq": 1410,
+            "endSeq": 1433,
+            "coverageMs": 916,
+            "frames": 53,
+            "fps": 57.86026200873363
+          },
+          "steadySupply": {
+            "full3sSamples": 0,
+            "submitFps": {
+              "samples": 0,
+              "min": null,
+              "p95": null,
+              "max": null
+            },
+            "decodeSubmitFpsDelta": {
+              "samples": 0,
+              "min": null,
+              "p95": null,
+              "max": null
+            },
+            "worst3s": null
+          },
+          "rvfcDiagnostic": {
+            "coverageMs": 0,
+            "callbackCountSinceLastSample": 0,
+            "presentedFramesAdvancedSinceLastSample": 0,
+            "callbackGapCountSinceLastSample": 0,
+            "presentedFramesJumpCountSinceLastSample": 0,
+            "maxCallbackIntervalMs": null
+          },
+          "localSubmitAgeMs": {
+            "samples": 1,
+            "min": 17,
+            "p95": 17,
+            "max": 17
+          },
+          "retainedTimingWindows": {
+            "qualifiedSnapshots": 0,
+            "capacity": 256,
+            "duration": {
+              "p95AcrossWindowsMs": {
+                "samples": 0,
+                "min": null,
+                "p95": null,
+                "max": null
+              },
+              "maxAcrossWindowsMs": null
+            },
+            "upload": {
+              "p95AcrossWindowsMs": {
+                "samples": 0,
+                "min": null,
+                "p95": null,
+                "max": null
+              },
+              "maxAcrossWindowsMs": null
+            },
+            "submit": {
+              "p95AcrossWindowsMs": {
+                "samples": 0,
+                "min": null,
+                "p95": null,
+                "max": null
+              },
+              "maxAcrossWindowsMs": null
+            },
+            "interval": {
+              "p95AcrossWindowsMs": {
+                "samples": 0,
+                "min": null,
+                "p95": null,
+                "max": null
+              },
+              "maxAcrossWindowsMs": null
+            }
+          },
+          "finalCounters": {
+            "decodedFramesReceived": 3489,
+            "realtimeDrawCount": 3489,
+            "latestOverwriteCount": 0,
+            "rateLimitDropCount": 0,
+            "submitFailureCount": 0,
+            "duplicateDrawCount": 0
+          },
+          "cpuCostDelta": {
+            "frames": 53,
+            "drawDurationTotalMs": 16,
+            "drawDurationMsAvg": 0.3018867924528302,
+            "uploadDurationTotalMs": 15,
+            "uploadDurationMsAvg": 0.2830188679245283,
+            "submitDurationTotalMs": 1,
+            "submitDurationMsAvg": 0.018867924528301886
+          },
+          "rendererSources": {
+            "worker": 1
+          },
+          "renderCauses": {
+            "renderStable": 1
+          }
+        },
+        {
+          "index": 3,
+          "label": "原画",
+          "generation": 1,
+          "state": {
+            "actualBrightness": 100,
+            "actualContrast": 100,
+            "actualPipeline": "webgl2",
+            "actualProcessing": "cas",
+            "actualProcessingMode": "quality",
+            "actualSaturation": 100,
+            "actualSharpness": 0,
+            "actualSuperResolutionActive": false,
+            "actualTargetFps": 60
+          },
+          "startSeq": 1433,
+          "endSeq": 2067,
+          "startMs": 170734,
+          "endMs": 200044,
+          "startTime": "2026-11-10T11:20:20.446+08:00",
+          "endTime": "2026-11-10T11:20:49.758+08:00",
+          "durationMs": 29310,
+          "raw": {
+            "samples": 116,
+            "coverageMs": 29272,
+            "framesReceivedDelta": 1755,
+            "framesDecodedDelta": 1757,
+            "framesDroppedDelta": 0,
+            "bytesReceivedDelta": 62219753,
+            "packetsLostDelta": 11,
+            "packetsReceivedDelta": 56955,
+            "nackCountDelta": 9,
+            "pliCountDelta": 0,
+            "firCountDelta": 0,
+            "keyFramesDecodedDelta": 1,
+            "retransmittedPacketsReceivedDelta": 75,
+            "freezeCountDelta": 1,
+            "totalFreezesDurationDelta": 0.175,
+            "pauseCountDelta": 0,
+            "receivedFps": 59.954905711943155,
+            "decodedFps": 60.02323039081716,
+            "bitrateMbps": 17.004578573380705,
+            "decodeMsAvg": 4.246832100170745,
+            "jitterBufferMsAvg": 4.568772339214572,
+            "rttMs": {
+              "samples": 116,
+              "min": 0,
+              "p95": 107.0,
+              "max": 107.0
+            },
+            "jitterMs": {
+              "samples": 116,
+              "min": 1.0,
+              "p95": 10.0,
+              "max": 14.0
+            },
+            "receiveEmptyWindows": []
+          },
+          "submission": {
+            "startSeq": 1433,
+            "endSeq": 2067,
+            "coverageMs": 29310,
+            "frames": 1759,
+            "fps": 60.01364721937905
+          },
+          "pairedSupply": {
+            "startSeq": 1450,
+            "endSeq": 2055,
+            "fromSampleId": "1:190",
+            "toSampleId": "1:302",
+            "coverageMs": 28264,
+            "receivedFrames": 1694,
+            "decodedFrames": 1695,
+            "submittedFrames": 1695,
+            "decodeSubmitDeficitFrames": 0,
+            "receivedFps": 59.93489951882253,
+            "decodedFps": 59.970280215114634,
+            "submittedFps": 59.970280215114634,
+            "counterGapLevels": {
+              "samples": 29,
+              "min": 12,
+              "p95": 12,
+              "max": 12
+            }
+          },
+          "steadySupply": {
+            "full3sSamples": 40,
+            "submitFps": {
+              "samples": 40,
+              "min": 56.55555555555557,
+              "p95": 60.523809523809526,
+              "max": 61.03174603174604
+            },
+            "decodeSubmitFpsDelta": {
+              "samples": 40,
+              "min": -0.055555555555542924,
+              "p95": 0.0,
+              "max": 0.29117259552041475
+            },
+            "worst3s": {
+              "seq": 1727,
+              "sampleId": "1:240",
+              "atMs": 183881,
+              "callbackCoverageMs": 3000,
+              "callbackFpsAvg": 46.523809523809526,
+              "decodeCoverageMs": 3000,
+              "decodeDurationMsAvg": 4.393637616869586,
+              "decodeFpsAvg": 56.55555555555557,
+              "durationMs": 3000,
+              "inboundFpsAvg": 56.523809523809526,
+              "jitterBufferCoverageMs": 3000,
+              "jitterBufferMsAvg": 9.213901158266935,
+              "jitterBufferMsFirst": 3.6914666666667983,
+              "jitterBufferMsLast": 22.12066666666719,
+              "jitterCoverageMs": 3000,
+              "jitterMsAvg": 7.523333333333333,
+              "lossAvg": 0.0002807467864519622,
+              "lossCoverageMs": 3000,
+              "presentAgeMsAvg": 24.376333333333335,
+              "receivedCoverageMs": 3000,
+              "renderDrawDurationMsAvg": 0.4073080191050779,
+              "renderSubmitDurationMsAvg": 0.01724761904761905,
+              "renderUploadDurationMsAvg": 0.3727502504848093,
+              "rendererCoverageMs": 3000,
+              "rendererSubmitAgeMsAvg": 24.376333333333335,
+              "rendererSubmitFpsAvg": 56.55555555555557,
+              "repairPacketsPerSecondAvg": 0.6666666666666666,
+              "rttCoverageMs": 3000,
+              "rttMsAvg": 15.320666666666666,
+              "sampleCount": 12,
+              "videoCoverageMs": 3000,
+              "videoPresentFpsAvg": 56.85714285714286
+            }
+          },
+          "rvfcDiagnostic": {
+            "coverageMs": 28119,
+            "callbackCountSinceLastSample": 1418,
+            "presentedFramesAdvancedSinceLastSample": 1686,
+            "callbackGapCountSinceLastSample": 4,
+            "presentedFramesJumpCountSinceLastSample": 267,
+            "callbackFps": 50.42853586542907,
+            "videoPresentProxyFps": 59.959458017710446,
+            "maxCallbackIntervalMs": 184
+          },
+          "localSubmitAgeMs": {
+            "samples": 29,
+            "min": 1,
+            "p95": 24,
+            "max": 26
+          },
+          "retainedTimingWindows": {
+            "qualifiedSnapshots": 39,
+            "capacity": 256,
+            "duration": {
+              "p95AcrossWindowsMs": {
+                "samples": 39,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 2
+            },
+            "upload": {
+              "p95AcrossWindowsMs": {
+                "samples": 39,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 2
+            },
+            "submit": {
+              "p95AcrossWindowsMs": {
+                "samples": 39,
+                "min": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "interval": {
+              "p95AcrossWindowsMs": {
+                "samples": 39,
+                "min": 24,
+                "p95": 32,
+                "max": 32
+              },
+              "maxAcrossWindowsMs": 176
+            }
+          },
+          "finalCounters": {
+            "decodedFramesReceived": 5248,
+            "realtimeDrawCount": 5248,
+            "latestOverwriteCount": 0,
+            "rateLimitDropCount": 0,
+            "submitFailureCount": 0,
+            "duplicateDrawCount": 0
+          },
+          "cpuCostDelta": {
+            "frames": 1759,
+            "drawDurationTotalMs": 647,
+            "drawDurationMsAvg": 0.36782262649232517,
+            "uploadDurationTotalMs": 597,
+            "uploadDurationMsAvg": 0.33939738487777144,
+            "submitDurationTotalMs": 43,
+            "submitDurationMsAvg": 0.0244457077885162
+          },
+          "rendererSources": {
+            "worker": 29
+          },
+          "renderCauses": {
+            "renderStable": 29
+          }
+        },
+        {
+          "index": 4,
+          "label": "原画 + USM 3",
+          "generation": 1,
+          "state": {
+            "actualBrightness": 100,
+            "actualContrast": 100,
+            "actualPipeline": "webgl2",
+            "actualProcessing": "usm",
+            "actualProcessingMode": "quality",
+            "actualSaturation": 100,
+            "actualSharpness": 3,
+            "actualSuperResolutionActive": false,
+            "actualTargetFps": 60
+          },
+          "startSeq": 2067,
+          "endSeq": 2715,
+          "startMs": 200044,
+          "endMs": 230834,
+          "startTime": "2026-11-10T11:20:49.758+08:00",
+          "endTime": "2026-11-10T11:21:20.547+08:00",
+          "durationMs": 30790,
+          "raw": {
+            "samples": 121,
+            "coverageMs": 30512,
+            "framesReceivedDelta": 1829,
+            "framesDecodedDelta": 1829,
+            "framesDroppedDelta": 0,
+            "bytesReceivedDelta": 66123438,
+            "packetsLostDelta": 119,
+            "packetsReceivedDelta": 60376,
+            "nackCountDelta": 19,
+            "pliCountDelta": 0,
+            "firCountDelta": 0,
+            "keyFramesDecodedDelta": 1,
+            "retransmittedPacketsReceivedDelta": 119,
+            "freezeCountDelta": 0,
+            "totalFreezesDurationDelta": 0,
+            "pauseCountDelta": 0,
+            "receivedFps": 59.94362873623492,
+            "decodedFps": 59.94362873623492,
+            "bitrateMbps": 17.33703146303094,
+            "decodeMsAvg": 4.255589939857847,
+            "jitterBufferMsAvg": 4.131313832695462,
+            "rttMs": {
+              "samples": 121,
+              "min": 0,
+              "p95": 16.0,
+              "max": 16.0
+            },
+            "jitterMs": {
+              "samples": 121,
+              "min": 1.0,
+              "p95": 8.0,
+              "max": 10.0
+            },
+            "receiveEmptyWindows": []
+          },
+          "submission": {
+            "startSeq": 2067,
+            "endSeq": 2702,
+            "coverageMs": 30677,
+            "frames": 1839,
+            "fps": 59.94719170714216
+          },
+          "pairedSupply": {
+            "startSeq": 2082,
+            "endSeq": 2702,
+            "fromSampleId": "1:306",
+            "toSampleId": "1:425",
+            "coverageMs": 30008,
+            "receivedFrames": 1800,
+            "decodedFrames": 1800,
+            "submittedFrames": 1800,
+            "decodeSubmitDeficitFrames": 0,
+            "receivedFps": 59.984004265529194,
+            "decodedFps": 59.984004265529194,
+            "submittedFps": 59.984004265529194,
+            "counterGapLevels": {
+              "samples": 31,
+              "min": 12,
+              "p95": 12,
+              "max": 12
+            }
+          },
+          "steadySupply": {
+            "full3sSamples": 42,
+            "submitFps": {
+              "samples": 42,
+              "min": 58.85524568393094,
+              "p95": 60.345238095238095,
+              "max": 60.79365079365079
+            },
+            "decodeSubmitFpsDelta": {
+              "samples": 42,
+              "min": 0.0,
+              "p95": 0.0,
+              "max": 0.0
+            },
+            "worst3s": {
+              "seq": 2147,
+              "sampleId": "1:319",
+              "atMs": 203805,
+              "callbackCoverageMs": 3000,
+              "callbackFpsAvg": 50.188579017264274,
+              "decodeCoverageMs": 3000,
+              "decodeDurationMsAvg": 4.02201896527779,
+              "decodeFpsAvg": 58.85524568393094,
+              "durationMs": 3000,
+              "inboundFpsAvg": 58.52191235059761,
+              "jitterBufferCoverageMs": 3000,
+              "jitterBufferMsAvg": 3.837987282611807,
+              "jitterBufferMsFirst": 0.4246666666664585,
+              "jitterBufferMsLast": 0.6454545454546561,
+              "jitterCoverageMs": 3000,
+              "jitterMsAvg": 5.437666666666667,
+              "lossAvg": 0.00024120630057764583,
+              "lossCoverageMs": 3000,
+              "presentAgeMsAvg": 11.433666666666667,
+              "receivedCoverageMs": 3000,
+              "renderDrawDurationMsAvg": 0.3675509920634922,
+              "renderSubmitDurationMsAvg": 0.011222222222222224,
+              "renderUploadDurationMsAvg": 0.35632876984126993,
+              "rendererCoverageMs": 3000,
+              "rendererSubmitAgeMsAvg": 11.433666666666667,
+              "rendererSubmitFpsAvg": 58.85524568393094,
+              "repairPacketsPerSecondAvg": 0.3333333333333333,
+              "rttCoverageMs": 3000,
+              "rttMsAvg": 11.32,
+              "sampleCount": 12,
+              "videoCoverageMs": 3000,
+              "videoPresentFpsAvg": 58.85524568393094
+            }
+          },
+          "rvfcDiagnostic": {
+            "coverageMs": 30119,
+            "callbackCountSinceLastSample": 1528,
+            "presentedFramesAdvancedSinceLastSample": 1806,
+            "callbackGapCountSinceLastSample": 0,
+            "presentedFramesJumpCountSinceLastSample": 273,
+            "callbackFps": 50.73209601912414,
+            "videoPresentProxyFps": 59.96215013778678,
+            "maxCallbackIntervalMs": 83
+          },
+          "localSubmitAgeMs": {
+            "samples": 31,
+            "min": 1,
+            "p95": 30,
+            "max": 36
+          },
+          "retainedTimingWindows": {
+            "qualifiedSnapshots": 40,
+            "capacity": 256,
+            "duration": {
+              "p95AcrossWindowsMs": {
+                "samples": 40,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 2
+            },
+            "upload": {
+              "p95AcrossWindowsMs": {
+                "samples": 40,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 2
+            },
+            "submit": {
+              "p95AcrossWindowsMs": {
+                "samples": 40,
+                "min": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "interval": {
+              "p95AcrossWindowsMs": {
+                "samples": 40,
+                "min": 27,
+                "p95": 34,
+                "max": 36
+              },
+              "maxAcrossWindowsMs": 84
+            }
+          },
+          "finalCounters": {
+            "decodedFramesReceived": 7047,
+            "realtimeDrawCount": 7047,
+            "latestOverwriteCount": 0,
+            "rateLimitDropCount": 0,
+            "submitFailureCount": 0,
+            "duplicateDrawCount": 0
+          },
+          "cpuCostDelta": {
+            "frames": 1799,
+            "drawDurationTotalMs": 620,
+            "drawDurationMsAvg": 0.34463590883824347,
+            "uploadDurationTotalMs": 586,
+            "uploadDurationMsAvg": 0.3257365202890495,
+            "submitDurationTotalMs": 31,
+            "submitDurationMsAvg": 0.017231795441912175
+          },
+          "rendererSources": {
+            "worker": 31
+          },
+          "renderCauses": {
+            "renderStable": 31
+          }
+        }
+      ],
+      "allPlaybackRaw": {
+        "samples": 415,
+        "coverageMs": 117470,
+        "framesReceivedDelta": 7041,
+        "framesDecodedDelta": 7041,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 298080047,
+        "packetsLostDelta": 168,
+        "packetsReceivedDelta": 272055,
+        "nackCountDelta": 64,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 3,
+        "retransmittedPacketsReceivedDelta": 249,
+        "freezeCountDelta": 1,
+        "totalFreezesDurationDelta": 0.175,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.938707755171535,
+        "decodedFps": 59.938707755171535,
+        "bitrateMbps": 20.299994688005448,
+        "decodeMsAvg": 4.383715381337878,
+        "jitterBufferMsAvg": 6.044875443829001,
+        "rttMs": {
+          "samples": 415,
+          "min": 0,
+          "p95": 54.0,
+          "max": 118.0
+        },
+        "jitterMs": {
+          "samples": 415,
+          "min": 1.0,
+          "p95": 11.0,
+          "max": 18.0
+        },
+        "receiveEmptyWindows": []
+      },
+      "measuredSupply": {
+        "fromSampleId": "1:31",
+        "toSampleId": "1:425",
+        "coverageMs": 99373,
+        "decodedFrames": 5959,
+        "submittedFrames": 5955,
+        "decodeSubmitDeficitFrames": 4,
+        "decodedFps": 59.96598673683999,
+        "submittedFps": 59.9257343544021
+      },
+      "traceProducerMax": {
+        "dropped": 0,
+        "droppedEssential": 0,
+        "queueFull": 0,
+        "ipcFailed": 0,
+        "ipcTimedOut": 0,
+        "rowOversized": 0,
+        "ackMissing": 0
+      },
+      "readerSupply": {
+        "snapshots": 54,
+        "counterDifferences": [],
+        "last": {
+          "seq": 2689,
+          "atMs": 230057,
+          "readerFrames": 7047,
+          "submittedFrames": 7047
+        }
+      },
+      "startup": {
+        "connectedSeq": 455,
+        "connectedAtMs": 111615,
+        "committedSeq": 467,
+        "committedAtMs": 112414,
+        "connectedToCommitMs": 799
+      },
+      "finalInboundCounters": {
+        "framesReceived": 7103,
+        "framesDecoded": 7103,
+        "framesDropped": 0,
+        "packetsLost": 168,
+        "packetsReceived": 274939,
+        "nackCount": 64,
+        "pliCount": 2,
+        "firCount": 0,
+        "freezeCount": 1,
+        "totalFreezesDuration": 0.175,
+        "pauseCount": 0
+      },
+      "cleanEndingResources": {
+        "currentRenderers": 0,
+        "pendingRenderers": 0,
+        "decodedFrameReaders": 0,
+        "retainedDecodedFrames": 0,
+        "frameRequests": 0,
+        "nativeFrameCallbacks": 0,
+        "animationCallbacks": 0,
+        "videoElements": 0,
+        "audioElements": 0,
+        "pixelProbeGpuReads": 0,
+        "readyTimers": 0
+      },
+      "assertions": {
+        "rawSampleIdsUnique": true,
+        "monotonicSubmission": true,
+        "monotonicFailures": [],
+        "readerEqualsSubmitted": true
+      }
+    },
+    {
+      "index": 2,
+      "sessionId": "BB06D0CB-79C6-4477-9835-9B3F405F8114",
+      "startTime": "2026-11-10T11:21:44.859+08:00",
+      "endTime": "2026-11-10T11:22:43.079+08:00",
+      "stats": 195,
+      "telemetry": 48,
+      "segments": [
+        {
+          "index": 1,
+          "label": "SR开关开启（同尺寸跳过重建） + USM 3",
+          "generation": 1,
+          "state": {
+            "actualBrightness": 100,
+            "actualContrast": 100,
+            "actualPipeline": "webgl2_sr",
+            "actualProcessing": "usm",
+            "actualProcessingMode": "quality",
+            "actualSaturation": 100,
+            "actualSharpness": 3,
+            "actualSuperResolutionActive": false,
+            "actualTargetFps": 60
+          },
+          "startSeq": 2884,
+          "endSeq": 3906,
+          "startMs": 263866,
+          "endMs": 312915,
+          "startTime": "2026-11-10T11:21:53.580+08:00",
+          "endTime": "2026-11-10T11:22:42.628+08:00",
+          "durationMs": 49049,
+          "raw": {
+            "samples": 193,
+            "coverageMs": 48655,
+            "framesReceivedDelta": 2917,
+            "framesDecodedDelta": 2916,
+            "framesDroppedDelta": 0,
+            "bytesReceivedDelta": 102443967,
+            "packetsLostDelta": 23,
+            "packetsReceivedDelta": 93688,
+            "nackCountDelta": 116,
+            "pliCountDelta": 0,
+            "firCountDelta": 0,
+            "keyFramesDecodedDelta": 1,
+            "retransmittedPacketsReceivedDelta": 121,
+            "freezeCountDelta": 0,
+            "totalFreezesDurationDelta": 0,
+            "pauseCountDelta": 0,
+            "receivedFps": 59.95272839379303,
+            "decodedFps": 59.93217552152913,
+            "bitrateMbps": 16.844142143664577,
+            "decodeMsAvg": 4.231677297668038,
+            "jitterBufferMsAvg": 4.103465546794652,
+            "rttMs": {
+              "samples": 193,
+              "min": 0,
+              "p95": 87.0,
+              "max": 87.0
+            },
+            "jitterMs": {
+              "samples": 193,
+              "min": 1.0,
+              "p95": 8.0,
+              "max": 13.0
+            },
+            "receiveEmptyWindows": []
+          },
+          "submission": {
+            "startSeq": 2884,
+            "endSeq": 3876,
+            "coverageMs": 48103,
+            "frames": 2884,
+            "fps": 59.95468058125273
+          },
+          "pairedSupply": {
+            "startSeq": 2902,
+            "endSeq": 3874,
+            "fromSampleId": "3:24",
+            "toSampleId": "3:212",
+            "coverageMs": 47387,
+            "receivedFrames": 2841,
+            "decodedFrames": 2840,
+            "submittedFrames": 2840,
+            "decodeSubmitDeficitFrames": 0,
+            "receivedFps": 59.95315170827442,
+            "decodedFps": 59.9320488741638,
+            "submittedFps": 59.9320488741638,
+            "counterGapLevels": {
+              "samples": 48,
+              "min": -1,
+              "p95": 0,
+              "max": 0
+            }
+          },
+          "steadySupply": {
+            "full3sSamples": 52,
+            "submitFps": {
+              "samples": 52,
+              "min": 58.85902503293808,
+              "p95": 60.47089947089947,
+              "max": 61.06349206349206
+            },
+            "decodeSubmitFpsDelta": {
+              "samples": 52,
+              "min": -0.3333333333333357,
+              "p95": 0.042160737812906746,
+              "max": 0.30399999999999494
+            },
+            "worst3s": {
+              "seq": 3131,
+              "sampleId": "3:68",
+              "atMs": 275605,
+              "callbackCoverageMs": 3000,
+              "callbackFpsAvg": 55.192358366271414,
+              "decodeCoverageMs": 3000,
+              "decodeDurationMsAvg": 4.196303815476189,
+              "decodeFpsAvg": 58.85902503293808,
+              "durationMs": 3000,
+              "inboundFpsAvg": 58.85902503293808,
+              "jitterBufferCoverageMs": 3000,
+              "jitterBufferMsAvg": 3.879737543560607,
+              "jitterBufferMsFirst": 7.5028000000000095,
+              "jitterBufferMsLast": 0.5271818181818282,
+              "jitterCoverageMs": 3000,
+              "jitterMsAvg": 3.968,
+              "lossAvg": 0.000484901917566674,
+              "lossCoverageMs": 3000,
+              "presentAgeMsAvg": 14.428333333333333,
+              "receivedCoverageMs": 3000,
+              "renderDrawDurationMsAvg": 0.4090994047619048,
+              "renderSubmitDurationMsAvg": 0.010666666666666666,
+              "renderUploadDurationMsAvg": 0.3928549603174603,
+              "rendererCoverageMs": 3000,
+              "rendererSubmitAgeMsAvg": 14.428333333333333,
+              "rendererSubmitFpsAvg": 58.85902503293808,
+              "repairPacketsPerSecondAvg": 3.3333333333333335,
+              "rttCoverageMs": 3000,
+              "rttMsAvg": 54.744,
+              "sampleCount": 12,
+              "videoCoverageMs": 3000,
+              "videoPresentFpsAvg": 59.462450592885375
+            }
+          },
+          "rvfcDiagnostic": {
+            "coverageMs": 47187,
+            "callbackCountSinceLastSample": 2433,
+            "presentedFramesAdvancedSinceLastSample": 2828,
+            "callbackGapCountSinceLastSample": 1,
+            "presentedFramesJumpCountSinceLastSample": 390,
+            "callbackFps": 51.560811240384005,
+            "videoPresentProxyFps": 59.931760866340305,
+            "maxCallbackIntervalMs": 151
+          },
+          "localSubmitAgeMs": {
+            "samples": 48,
+            "min": 0,
+            "p95": 20,
+            "max": 46
+          },
+          "retainedTimingWindows": {
+            "qualifiedSnapshots": 66,
+            "capacity": 256,
+            "duration": {
+              "p95AcrossWindowsMs": {
+                "samples": 66,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 5
+            },
+            "upload": {
+              "p95AcrossWindowsMs": {
+                "samples": 66,
+                "min": 1,
+                "p95": 1,
+                "max": 1
+              },
+              "maxAcrossWindowsMs": 5
+            },
+            "submit": {
+              "p95AcrossWindowsMs": {
+                "samples": 66,
+                "min": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "maxAcrossWindowsMs": 1
+            },
+            "interval": {
+              "p95AcrossWindowsMs": {
+                "samples": 66,
+                "min": 26,
+                "p95": 32,
+                "max": 32
+              },
+              "maxAcrossWindowsMs": 149
+            }
+          },
+          "finalCounters": {
+            "decodedFramesReceived": 2885,
+            "realtimeDrawCount": 2885,
+            "latestOverwriteCount": 0,
+            "rateLimitDropCount": 0,
+            "submitFailureCount": 0,
+            "duplicateDrawCount": 0
+          },
+          "cpuCostDelta": {
+            "frames": 2884,
+            "drawDurationTotalMs": 1007,
+            "drawDurationMsAvg": 0.34916782246879335,
+            "uploadDurationTotalMs": 946,
+            "uploadDurationMsAvg": 0.32801664355062415,
+            "submitDurationTotalMs": 56,
+            "submitDurationMsAvg": 0.019417475728155338
+          },
+          "rendererSources": {
+            "worker": 48
+          },
+          "renderCauses": {
+            "renderStable": 48
+          }
+        }
+      ],
+      "allPlaybackRaw": {
+        "samples": 193,
+        "coverageMs": 48655,
+        "framesReceivedDelta": 2917,
+        "framesDecodedDelta": 2916,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 102443967,
+        "packetsLostDelta": 23,
+        "packetsReceivedDelta": 93688,
+        "nackCountDelta": 116,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 1,
+        "retransmittedPacketsReceivedDelta": 121,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.95272839379303,
+        "decodedFps": 59.93217552152913,
+        "bitrateMbps": 16.844142143664577,
+        "decodeMsAvg": 4.231677297668038,
+        "jitterBufferMsAvg": 4.103465546794652,
+        "rttMs": {
+          "samples": 193,
+          "min": 0,
+          "p95": 87.0,
+          "max": 87.0
+        },
+        "jitterMs": {
+          "samples": 193,
+          "min": 1.0,
+          "p95": 8.0,
+          "max": 13.0
+        },
+        "receiveEmptyWindows": []
+      },
+      "measuredSupply": {
+        "fromSampleId": "3:24",
+        "toSampleId": "3:212",
+        "coverageMs": 47387,
+        "decodedFrames": 2840,
+        "submittedFrames": 2840,
+        "decodeSubmitDeficitFrames": 0,
+        "decodedFps": 59.9320488741638,
+        "submittedFps": 59.9320488741638
+      },
+      "traceProducerMax": {
+        "dropped": 0,
+        "droppedEssential": 0,
+        "queueFull": 0,
+        "ipcFailed": 0,
+        "ipcTimedOut": 0,
+        "rowOversized": 0,
+        "ackMissing": 0
+      },
+      "readerSupply": {
+        "snapshots": 24,
+        "counterDifferences": [],
+        "last": {
+          "seq": 3876,
+          "atMs": 311969,
+          "readerFrames": 2885,
+          "submittedFrames": 2885
+        }
+      },
+      "startup": {
+        "connectedSeq": 2866,
+        "connectedAtMs": 263535,
+        "committedSeq": 2884,
+        "committedAtMs": 263866,
+        "connectedToCommitMs": 331
+      },
+      "finalInboundCounters": {
+        "framesReceived": 2930,
+        "framesDecoded": 2929,
+        "framesDropped": 0,
+        "packetsLost": 23,
+        "packetsReceived": 94533,
+        "nackCount": 117,
+        "pliCount": 1,
+        "firCount": 0,
+        "freezeCount": 0,
+        "totalFreezesDuration": 0,
+        "pauseCount": 0
+      },
+      "cleanEndingResources": {
+        "currentRenderers": 0,
+        "pendingRenderers": 0,
+        "decodedFrameReaders": 0,
+        "retainedDecodedFrames": 0,
+        "frameRequests": 0,
+        "nativeFrameCallbacks": 0,
+        "animationCallbacks": 0,
+        "videoElements": 0,
+        "audioElements": 0,
+        "pixelProbeGpuReads": 0,
+        "readyTimers": 0
+      },
+      "assertions": {
+        "rawSampleIdsUnique": true,
+        "monotonicSubmission": true,
+        "monotonicFailures": [],
+        "readerEqualsSubmitted": true
+      }
+    }
+  ],
+  "anomalies": [
+    {
+      "event": "renderCause",
+      "sessionId": "F97470F1-B849-4C55-8248-78064674DBEB",
+      "seq": 1333,
+      "time": "2026-11-10T11:20:16.173+08:00",
+      "sampleId": "1:170",
+      "sampledAtMs": 166205,
+      "renderCause": "frameDeliveryLimited",
+      "decodeFps": 55.6,
+      "rendererSubmitFps": 59.523809523809526,
+      "callbackFps": 59.523809523809526,
+      "rendererSubmitAgeMs": 56,
+      "rendererFrameSource": "worker"
+    },
+    {
+      "event": "renderCause",
+      "sessionId": "F97470F1-B849-4C55-8248-78064674DBEB",
+      "seq": 1354,
+      "time": "2026-11-10T11:20:17.176+08:00",
+      "sampleId": "1:174",
+      "sampledAtMs": 167223,
+      "renderCause": "frameDeliveryLimited",
+      "decodeFps": 57.3,
+      "rendererSubmitFps": 57.25190839694657,
+      "callbackFps": 49.61832061068702,
+      "rendererSubmitAgeMs": 39,
+      "rendererFrameSource": "worker"
+    },
+    {
+      "event": "freeze",
+      "sessionId": "F97470F1-B849-4C55-8248-78064674DBEB",
+      "seq": 1732,
+      "time": "2026-11-10T11:20:33.848+08:00",
+      "atMs": 184133,
+      "delta": {
+        "bytesReceivedDelta": 661208,
+        "elapsedMs": 252,
+        "firCountDelta": 0,
+        "framesAssembledFromMultiplePacketsDelta": 21,
+        "framesDecodedDelta": 21,
+        "framesDroppedDelta": 0,
+        "framesReceivedDelta": 21,
+        "freezeCountDelta": 1,
+        "headerBytesReceivedDelta": 16972,
+        "jitterBufferDelayDelta": 0.5320459999999976,
+        "jitterBufferEmittedCountDelta": 21,
+        "jitterBufferMinimumDelayDelta": 0.722362000000004,
+        "jitterBufferTargetDelayDelta": 0.722362000000004,
+        "keyFramesDecodedDelta": 0,
+        "nackCountDelta": 0,
+        "packetsLostDelta": 0,
+        "packetsReceivedDelta": 605,
+        "pauseCountDelta": 0,
+        "pliCountDelta": 0,
+        "retransmittedBytesReceivedDelta": 0,
+        "retransmittedPacketsReceivedDelta": 0,
+        "totalAssemblyTimeDelta": 0.25418200000000013,
+        "totalDecodeTimeDelta": 0.08803499999999786,
+        "totalFreezesDurationDelta": 0.175,
+        "totalInterFrameDelayDelta": 0.35899999999999466,
+        "totalPausesDurationDelta": 0,
+        "totalProcessingDelayDelta": 0.6205970000000036,
+        "totalSquaredInterFrameDelayDelta": 0.03246500000000019
+      },
+      "rttMs": 107.0,
+      "jitterMs": 14.0
+    }
+  ],
+  "browserReports": [
+    {
+      "input": "/tmp/xbxrc-latest-session-1.behavior.json",
+      "behaviorGate": "FAIL",
+      "failures": [
+        "browser runtime stability evidence is MISSING"
+      ],
+      "stability": {
+        "gate": "MISSING",
+        "failures": [],
+        "missingEvidence": [
+          "sharedSamples"
+        ],
+        "evidence": {
+          "resourceEvents": 59,
+          "collectionEvents": 417,
+          "shaderDrawEvents": 54,
+          "observationEvents": 149,
+          "frameChainSamples": 149,
+          "actualDimensionSamples": 149,
+          "freshObservationEvents": 149,
+          "telemetryEvents": 100,
+          "traceBudgetSamples": 100,
+          "gpuBudgetSamples": 100,
+          "closedClients": 1,
+          "sharedSamples": 0
+        }
+      }
+    },
+    {
+      "input": "/tmp/xbxrc-latest-session-2.behavior.json",
+      "behaviorGate": "PASS",
+      "failures": [],
+      "stability": {
+        "gate": "PASS",
+        "failures": [],
+        "missingEvidence": [],
+        "evidence": {
+          "resourceEvents": 29,
+          "observationEvents": 72,
+          "collectionEvents": 195,
+          "shaderDrawEvents": 24,
+          "frameChainSamples": 55,
+          "actualDimensionSamples": 71,
+          "freshObservationEvents": 71,
+          "telemetryEvents": 48,
+          "traceBudgetSamples": 48,
+          "gpuBudgetSamples": 48,
+          "closedClients": 1,
+          "sharedSamples": 16
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    "RTC decode and cached submit deltas pair by sessionId/sampleId/sampledAtMs.",
+    "Worker reader counters and renderer counters pair inside the same live resource snapshot.",
+    "RVFC accepted/decodedFrame identity counters describe presentation diagnostics only.",
+    "Fully covered 3s windows stay in the same actual effect segment and renderer generation.",
+    "256-frame CPU/interval P95 windows are retained snapshots; overlapping windows do not establish a global P95.",
+    "GPU timing is unavailable; screenPresentState is unavailable. Submit age is local last-submit age.",
+    "VideoFrame timestamp remains zero in this WKWebView trace; no decode-frame age or scanout latency can be reconstructed.",
+    "Browser ReferenceChain/cleanAnchorCommitted/DisplayStable and per-request NACK effectiveness are capability-limited."
+  ],
+  "currentSource": {
+    "sha256": "58bf3bc3bad13348610cbe6330acb5bca04dc0559ce4c4bc6d8b95c5090ef526",
+    "files": 555,
+    "matchesRuntime": false
+  },
+  "sourceVerification": {
+    "runtimeBuildFingerprint": {
+      "buildTimestampUnixMs": "1794280632326",
+      "cargoProfile": "debug",
+      "edition": "browser",
+      "gitCommitShort": "76a1ea69",
+      "sourceFingerprintSha256": "6be9987d2344adba8fdbc95a0ab849dc6ce1a5869f2d205ff211f655f4072383",
+      "workspaceDirty": true
+    },
+    "earlierSourceVerification": {
+      "sha256": "6be9987d2344adba8fdbc95a0ab849dc6ce1a5869f2d205ff211f655f4072383",
+      "files": 555,
+      "matchesRuntime": true,
+      "evidence": "首次按src-tauri/build.rs复核的工具stdout；后续工作区整体指纹随其他编辑变化。"
+    },
+    "samplingSourceVerification": {
+      "src/player/infra/render/fsr1-reconstruction-pass.ts": {
+        "sha256": "acaad11889d4bee1da6a7fb83d684f30b4ff19536001d794bb356bace14a0f7d",
+        "matchesPixelFixture": true
+      },
+      "src/player/infra/render/Renderers.ts": {
+        "sha256": "211e046090de73708878860785ad61eb8bf53cc9d88ebc93f6f6145496acd954",
+        "matchesPixelFixture": true
+      },
+      "src/player/infra/render/sharpening-tuning.ts": {
+        "sha256": "19d70be1928b9d2a3eb0f98e3c1c2defa8dc766e4802c2071b9be5b764545538",
+        "matchesPixelFixture": true
+      },
+      "src/player/infra/render/sharpening-math.ts": {
+        "sha256": "1cce4aef641f3788a81de35a8f33eb7c674e58e4021bc272f3a97dfb92d1ef68",
+        "matchesPixelFixture": true
+      },
+      "src/player/infra/render/fsr1-cpu.ts": {
+        "sha256": "f3d19e5560632dc24153070a1eaef443a7982d482765a8d8870b64797eacf0a7",
+        "matchesPixelFixture": true
+      }
+    },
+    "qualification": "首次整体源码校验与日志构建一致；后续其他源码编辑改变工作区整体指纹。性能结论绑定日志构建身份，采样相关五个源文件与像素夹具指纹一致。"
+  }
+}

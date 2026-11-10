@@ -1,0 +1,260 @@
+{
+  "evidence": "deterministic-synthetic-replay",
+  "sourceFps": 60,
+  "transferMs": 2,
+  "ackDeliveryMs": 1,
+  "consumeMs": 1,
+  "scope": "current Worker/reader versus explicit legacy scheduling model; no network, GPU or physical presentation measurements",
+  "sourceIdentity": [
+    {
+      "file": "src/player/infra/render/decoded-video-frame-worker-source.ts",
+      "sha256": "606ef5c122eae90db7f3bf07ac8b8cb778b214b314f36142de36d7d95d486eb9"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-reader.ts",
+      "sha256": "1a1017073b0e809353e47016c0d1a5b9dde884f0316d935c249654f04925a212"
+    }
+  ],
+  "runs": [
+    {
+      "before": {
+        "policy": "ack-then-read-model",
+        "stallMs": 80,
+        "generatedFrames": 30,
+        "submittedFrames": 27,
+        "processorReads": 28,
+        "staleSubmissions": 1,
+        "sourceAgeMaxMs": 81,
+        "freshAfterStallMs": 5,
+        "maxSubmitGapMs": 94.667
+      },
+      "after": {
+        "policy": "current",
+        "stallMs": 80,
+        "generatedFrames": 30,
+        "submittedFrames": 26,
+        "processorReads": 31,
+        "staleSubmissions": 0,
+        "sourceAgeMaxMs": 17.333,
+        "freshAfterStallMs": 4,
+        "maxSubmitGapMs": 97.667,
+        "decodedSupply": {
+          "schemaVersion": 1,
+          "clockDomain": "performanceEpoch",
+          "observedAtMs": 100504,
+          "receivedMessages": 27,
+          "deliveredFrames": 26,
+          "staleFrameDropCount": 1,
+          "invalidClockCount": 0,
+          "deliveryBudgetMs": 50,
+          "workerReadFrames": 30,
+          "workerSentFrames": 27,
+          "workerOverwriteCount": 3,
+          "workerAckCount": 26,
+          "lastReadSequence": 30,
+          "receiveAgeMs": 2,
+          "workerObservationAgeMs": 4,
+          "timing": {
+            "readWait": {
+              "count": 27,
+              "retained": 27,
+              "capacity": 256,
+              "maxObservedMs": 17.333333333328483,
+              "meanMs": 16.62962962962963,
+              "p50Ms": 16.666666666671517,
+              "p95Ms": 16.666666666671517,
+              "p99Ms": 17.333333333328483,
+              "maxMs": 17.333333333328483
+            },
+            "pendingWait": {
+              "count": 27,
+              "retained": 27,
+              "capacity": 256,
+              "maxObservedMs": 14.333333333328483,
+              "meanMs": 0.5679012345677216,
+              "p50Ms": 0,
+              "p95Ms": 1,
+              "p99Ms": 14.333333333328483,
+              "maxMs": 14.333333333328483
+            },
+            "transfer": {
+              "count": 27,
+              "retained": 27,
+              "capacity": 256,
+              "maxObservedMs": 80,
+              "meanMs": 4.888888888888889,
+              "p50Ms": 2,
+              "p95Ms": 2,
+              "p99Ms": 80,
+              "maxMs": 80
+            },
+            "consume": {
+              "count": 26,
+              "retained": 26,
+              "capacity": 256,
+              "maxObservedMs": 1,
+              "meanMs": 1,
+              "p50Ms": 1,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "maxMs": 1
+            },
+            "receiveInterval": {
+              "count": 26,
+              "retained": 26,
+              "capacity": 256,
+              "maxObservedMs": 94.66666666666666,
+              "meanMs": 18.58974358974359,
+              "p50Ms": 16.666666666666668,
+              "p95Ms": 16.666666666666686,
+              "p99Ms": 94.66666666666666,
+              "maxMs": 94.66666666666666
+            },
+            "ackRoundTrip": {
+              "count": 26,
+              "retained": 26,
+              "capacity": 256,
+              "maxObservedMs": 81,
+              "meanMs": 6.961538461538462,
+              "p50Ms": 4,
+              "p95Ms": 4,
+              "p99Ms": 81,
+              "maxMs": 81
+            },
+            "ackDelivery": {
+              "count": 26,
+              "retained": 26,
+              "capacity": 256,
+              "maxObservedMs": 1,
+              "meanMs": 1,
+              "p50Ms": 1,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "maxMs": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "before": {
+        "policy": "ack-then-read-model",
+        "stallMs": 175,
+        "generatedFrames": 30,
+        "submittedFrames": 21,
+        "processorReads": 22,
+        "staleSubmissions": 1,
+        "sourceAgeMaxMs": 176,
+        "freshAfterStallMs": 5,
+        "maxSubmitGapMs": 189.667
+      },
+      "after": {
+        "policy": "current",
+        "stallMs": 175,
+        "generatedFrames": 30,
+        "submittedFrames": 20,
+        "processorReads": 31,
+        "staleSubmissions": 0,
+        "sourceAgeMaxMs": 12.333,
+        "freshAfterStallMs": 4,
+        "maxSubmitGapMs": 192.667,
+        "decodedSupply": {
+          "schemaVersion": 1,
+          "clockDomain": "performanceEpoch",
+          "observedAtMs": 100504,
+          "receivedMessages": 21,
+          "deliveredFrames": 20,
+          "staleFrameDropCount": 1,
+          "invalidClockCount": 0,
+          "deliveryBudgetMs": 50,
+          "workerReadFrames": 30,
+          "workerSentFrames": 21,
+          "workerOverwriteCount": 9,
+          "workerAckCount": 20,
+          "lastReadSequence": 30,
+          "receiveAgeMs": 2,
+          "workerObservationAgeMs": 4,
+          "timing": {
+            "readWait": {
+              "count": 21,
+              "retained": 21,
+              "capacity": 256,
+              "maxObservedMs": 16.666666666671517,
+              "meanMs": 16.61904761904762,
+              "p50Ms": 16.666666666671517,
+              "p95Ms": 16.666666666671517,
+              "p99Ms": 16.666666666671517,
+              "maxMs": 16.666666666671517
+            },
+            "pendingWait": {
+              "count": 21,
+              "retained": 21,
+              "capacity": 256,
+              "maxObservedMs": 9.333333333328483,
+              "meanMs": 0.44444444444421344,
+              "p50Ms": 0,
+              "p95Ms": 0,
+              "p99Ms": 9.333333333328483,
+              "maxMs": 9.333333333328483
+            },
+            "transfer": {
+              "count": 21,
+              "retained": 21,
+              "capacity": 256,
+              "maxObservedMs": 175,
+              "meanMs": 10.238095238095237,
+              "p50Ms": 2,
+              "p95Ms": 2,
+              "p99Ms": 175,
+              "maxMs": 175
+            },
+            "consume": {
+              "count": 20,
+              "retained": 20,
+              "capacity": 256,
+              "maxObservedMs": 1,
+              "meanMs": 1,
+              "p50Ms": 1,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "maxMs": 1
+            },
+            "receiveInterval": {
+              "count": 20,
+              "retained": 20,
+              "capacity": 256,
+              "maxObservedMs": 189.66666666666666,
+              "meanMs": 24.166666666666668,
+              "p50Ms": 16.666666666666686,
+              "p95Ms": 16.666666666666686,
+              "p99Ms": 189.66666666666666,
+              "maxMs": 189.66666666666666
+            },
+            "ackRoundTrip": {
+              "count": 20,
+              "retained": 20,
+              "capacity": 256,
+              "maxObservedMs": 176,
+              "meanMs": 12.6,
+              "p50Ms": 4,
+              "p95Ms": 4,
+              "p99Ms": 176,
+              "maxMs": 176
+            },
+            "ackDelivery": {
+              "count": 20,
+              "retained": 20,
+              "capacity": 256,
+              "maxObservedMs": 1,
+              "meanMs": 1,
+              "p50Ms": 1,
+              "p95Ms": 1,
+              "p99Ms": 1,
+              "maxMs": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

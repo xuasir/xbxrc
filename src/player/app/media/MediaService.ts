@@ -88,6 +88,8 @@ export class MediaService {
     return this.playbackService.captureRenderedFrame(signal)
   }
 
+  retryRendering(): void { this.playbackService.retryRendering() }
+
   snapshotResources() {
     return { ...this.playbackService.snapshotResources(), ...this.microphoneService.snapshotResources(), ...this.audioEffectsService.snapshotResources() }
   }

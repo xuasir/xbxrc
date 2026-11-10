@@ -1,4 +1,5 @@
 import type { PlayerEvents } from '../../api/events'
+import type { PlayerClientOptions } from '../../domain/config'
 import type { GamepadFrame } from '../../domain/input'
 import type { MediaService } from '../media/MediaService'
 import { inputController } from '@shared/gamepad/runtime'
@@ -43,6 +44,9 @@ class FakePeer extends EventTarget {
   addTransceiver = vi.fn()
   getTransceivers = () => []
   getReceivers = () => []
+  createOffer = vi.fn(async () => ({ type: 'offer' as const, sdp: 'v=0\r\nm=audio 9 RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 useinbandfec=1\r\nm=video 9 RTP/SAVPF 98 99\r\na=recvonly\r\na=rtpmap:98 H264/90000\r\na=fmtp:98 profile-level-id=42e01f;packetization-mode=1\r\na=rtpmap:99 rtx/90000\r\na=fmtp:99 apt=98\r\n' }))
+  setLocalDescription = vi.fn(async (_offer: RTCSessionDescriptionInit) => {})
+  setRemoteDescription = vi.fn(async (_answer: RTCSessionDescriptionInit) => {})
   close = vi.fn(() => {
     this.connectionState = 'closed'
     for (const channel of this.channels.values())
@@ -83,7 +87,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-function fixture() {
+function fixture(options: PlayerClientOptions = DEFAULT_PLAYER_OPTIONS()) {
   const emitter = new TypedEventEmitter<PlayerEvents>()
   const driver = {
     start: vi.fn(),
@@ -93,13 +97,15 @@ function fixture() {
   const input = new InputService(driver, emitter)
   const rumble = vi.spyOn(input, 'handleRumble')
   const media = { destroy: vi.fn(), attachVideoStream: vi.fn(), attachAudioStream: vi.fn() }
-  const session = new SessionService(DEFAULT_PLAYER_OPTIONS(), input, media as unknown as MediaService, emitter)
+  const session = new SessionService(options, input, media as unknown as MediaService, emitter)
   sessions.add(session)
   const timeline = vi.fn()
   const candidates = vi.fn()
   emitter.on('stats.browserWebRtcTimeline', timeline)
   emitter.on('transport.iceCandidate', candidates)
-  return { session, input, driver, rumble, media, timeline, candidates }
+  const sdp = vi.fn()
+  emitter.on('transport.sdpObserved', sdp)
+  return { session, input, driver, rumble, media, timeline, candidates, sdp }
 }
 
 function dispatchLateEvents(peer: FakePeer): void {
@@ -120,6 +126,41 @@ function dispatchLateEvents(peer: FakePeer): void {
 }
 
 describe('browser session replacement', () => {
+  it.each([[1280, 720, 3600], [1920, 1080, 8160], [2560, 1440, 14400]])('applies %i×%i receive constraints to the actual offer and ICE restart', async (width, height, maxFrameSize) => {
+    const options = DEFAULT_PLAYER_OPTIONS()
+    Object.assign(options.transport, { targetVideoWidth: width, targetVideoHeight: height })
+    const f = fixture(options)
+    f.session.bind()
+    const peer = FakePeer.instances[0]
+    const offer = await f.session.createOffer()
+    expect(offer.sdp).toContain(`a=imageattr:98 recv [x=[1:${width}],y=[1:${height}]]`)
+    expect(offer.sdp).toContain(`max-fs=${maxFrameSize};max-fr=60`)
+    expect(offer.sdp).toContain('a=fmtp:99 apt=98')
+    expect(peer.setLocalDescription).toHaveBeenCalledWith(offer)
+    expect(f.sdp.mock.calls.at(-1)?.[0]).toMatchObject({ stage: 'localOfferAfterPatch', videoImageAttributes: [`a=imageattr:98 recv [x=[1:${width}],y=[1:${height}]]`] })
+    expect(f.sdp.mock.calls.at(-1)?.[0]).toMatchObject({ videoImageConstraints: [{ payloadType: '98', allPayloads: false, direction: 'recv', minWidth: 1, maxWidth: width, minHeight: 1, maxHeight: height }] })
+    expect(await f.session.createOffer({ iceRestart: true })).toEqual(offer)
+    expect(peer.createOffer).toHaveBeenLastCalledWith(expect.objectContaining({ iceRestart: true }))
+  })
+
+  it('preserves the SDP-patch opt-out on the actual offer', async () => {
+    const options = DEFAULT_PLAYER_OPTIONS()
+    options.transport.enableSdpPatch = false
+    const f = fixture(options)
+    f.session.bind()
+    const offer = await f.session.createOffer()
+    expect(offer.sdp).not.toContain('imageattr:')
+    expect(offer.sdp).not.toContain('max-fs=')
+    expect(FakePeer.instances[0].setLocalDescription).toHaveBeenCalledWith(offer)
+  })
+
+  it('keeps remote send dimensions distinct from local receive constraints in safe trace summaries', async () => {
+    const f = fixture()
+    f.session.bind()
+    await f.session.createOffer()
+    await f.session.setRemoteAnswer('v=0\nm=video 9 RTP/SAVPF 98\na=rtpmap:98 H264/90000\na=fmtp:98 profile-level-id=42e01f\na=imageattr:98 send [x=[0:2560],y=[0:1440],fps=[0:60]]\n')
+    expect(f.sdp.mock.calls.at(-1)?.[0]).toMatchObject({ stage: 'remoteAnswer', hasVideo: true, videoImageConstraints: [{ payloadType: '98', allPayloads: false, direction: 'send', minWidth: 0, maxWidth: 2560, minHeight: 0, maxHeight: 1440 }] })
+  })
   it('flushes input directly on the live data channel drain event and cleans up its listener', () => {
     const f = fixture()
     f.session.bind()

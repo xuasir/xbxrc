@@ -123,11 +123,8 @@ export function resolveRendererPresentTargetFps(input: {
 
 export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): BrowserRendererPlan {
   const sharpness = Math.max(0, input.displayOptions.sharpness)
-  const neutralDisplay = sharpness === 0 && input.displayOptions.brightness === 100
-    && input.displayOptions.contrast === 100 && input.displayOptions.saturation === 100
-  // 中性auto直接复用浏览器呈现，显式增强和管线选择继续按用户意图装配。
+  // 原画与效果共用直通引擎，video 由兼容选择和能力/硬故障驱动。
   const wantsWebgl = input.pipelineOverride !== 'video'
-    && !(input.pipelineOverride === 'auto' && neutralDisplay && !input.superResolutionUserIntent)
   const srFailed = input.superResolutionUserIntent && input.superResolutionAttachFailed
   const webgl = wantsWebgl && input.webgl2Supported && !input.localFallback && !srFailed
   const srActive = webgl && input.superResolutionUserIntent && !input.superResolutionAttachFailed
@@ -144,16 +141,16 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
     kind,
     source,
     targetFps: resolveRendererPresentTargetFps(input),
-    sharpness: kind === 'webgl2' ? sharpness : 0,
+    sharpness: webgl ? sharpness : 0,
     display: {
       format: input.format,
-      brightness: input.displayOptions.brightness,
-      contrast: input.displayOptions.contrast,
-      saturation: input.displayOptions.saturation,
+      brightness: webgl ? input.displayOptions.brightness : 100,
+      contrast: webgl ? input.displayOptions.contrast : 100,
+      saturation: webgl ? input.displayOptions.saturation : 100,
     },
     sharpening: {
-      mode: kind === 'webgl2' ? input.processing : 'none',
-      strength: kind === 'webgl2' ? Math.min(100, sharpness * 20) : 0,
+      mode: webgl && sharpness > 0 ? input.processing : 'none',
+      strength: webgl ? Math.min(100, sharpness * 20) : 0,
       processingMode: 'quality',
     },
     superResolutionRcasStopsForPatch: srActive ? rcasStops : undefined,
@@ -194,9 +191,9 @@ export function resolveBrowserRendererPlan(input: BrowserRendererPolicyInput): B
   return plan
 }
 
-/** 标准 webgl2 锐化路径观测；SR / video 管线返回 none。 */
+/** 原画与 SR 共用用户选择的锐化阶段，零锐化返回 none。 */
 export function projectRenderShaderPathFromPlan(plan: BrowserRendererPlan): 'usm' | 'cas' | 'none' {
-  if (plan.kind === 'video' || plan.kind === 'webgl2_sr') {
+  if (plan.kind === 'video' || plan.sharpening.mode === 'none') {
     return 'none'
   }
   return plan.sharpening.mode === 'usm' || plan.sharpening.mode === 'cas'
@@ -204,9 +201,9 @@ export function projectRenderShaderPathFromPlan(plan: BrowserRendererPlan): 'usm
     : 'cas'
 }
 
-/** 仅标准 webgl2 写入 USM/CAS；SR 与 video 不写锐化后处理类型。 */
+/** 原画与 SR 共用 USM/CAS；兼容呈现暂停锐化。 */
 export function projectRenderProcessingFromPlan(plan: BrowserRendererPlan): 'usm' | 'cas' | undefined {
-  if (plan.kind !== 'webgl2') {
+  if (plan.kind === 'video' || plan.sharpening.mode === 'none') {
     return undefined
   }
   return plan.sharpening.mode === 'usm' || plan.sharpening.mode === 'cas'

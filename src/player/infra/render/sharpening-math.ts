@@ -14,6 +14,7 @@ import {
   CAS_RING_BLEND,
   CAS_RING_PAD,
   USM_GAIN_SCALE,
+  USM_NOISE_FLOOR,
 } from './sharpening-tuning'
 
 export interface Rgb {
@@ -128,12 +129,24 @@ export function sharpenCasPixel(
   }
 }
 
-/** USM 分支参考实现（3×3 高斯差分），用于确认强度映射没有外推。 */
-export function sharpenUsmPixel(center: Rgb, blur: Rgb, strength: number): Rgb {
-  const scale = clamp01(strength) * USM_GAIN_SCALE
+/** USM参考实现：边界来自同一高斯采样，软门限与邻域约束保护编码噪声及轮廓。 */
+export function sharpenUsmPixel(center: Rgb, blur: Rgb, strength: number, neighborhood: { min: Rgb, max: Rgb }): Rgb {
+  const residual: Rgb = { r: center.r - blur.r, g: center.g - blur.g, b: center.b - blur.b }
+  const residualLuma = luma(residual)
+  const gate = smoothstep(USM_NOISE_FLOOR, USM_NOISE_FLOOR * CAS_GATE_RAMP, Math.abs(residualLuma))
+  const scale = clamp01(strength) * USM_GAIN_SCALE * gate
+  const channel = (key: keyof Rgb) => {
+    const shaped = residual[key] + (residualLuma - residual[key]) * CAS_CHROMA_BLEND
+    const value = center[key] + shaped * scale
+    const range = neighborhood.max[key] - neighborhood.min[key]
+    const lo = neighborhood.min[key] - range * CAS_RING_PAD - 1e-4
+    const hi = neighborhood.max[key] + range * CAS_RING_PAD + 1e-4
+    const limited = Math.min(hi, Math.max(lo, value))
+    return clamp01(value + (limited - value) * CAS_RING_BLEND)
+  }
   return {
-    r: clamp01(center.r + (center.r - blur.r) * scale),
-    g: clamp01(center.g + (center.g - blur.g) * scale),
-    b: clamp01(center.b + (center.b - blur.b) * scale),
+    r: channel('r'),
+    g: channel('g'),
+    b: channel('b'),
   }
 }

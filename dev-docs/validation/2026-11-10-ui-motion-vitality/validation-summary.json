@@ -1,0 +1,84 @@
+{
+  "date": "2026-11-10",
+  "status": "code-and-local-validation-complete-native-acceptance-pending",
+  "browserRuns": [
+    {
+      "file": "browser-wide.json",
+      "passed": 35,
+      "errors": [],
+      "maxRecordedAlignmentDeltaPx": 0.0078125,
+      "maxSteadyAlignmentDeltaPx": 0.0078125,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "panelAxis": "Y",
+      "pageAxis": "Y"
+    },
+    {
+      "file": "browser-narrow.json",
+      "passed": 35,
+      "errors": [],
+      "maxRecordedAlignmentDeltaPx": 0.0078125,
+      "maxSteadyAlignmentDeltaPx": 0.0078125,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "panelAxis": "X",
+      "pageAxis": "X"
+    }
+  ],
+  "testFiles": 13,
+  "testsPassed": 119,
+  "interactiveSites": 174,
+  "navigationCoverageViolations": [],
+  "checks": [
+    "pnpm lint:fix",
+    "pnpm typecheck",
+    "pnpm build",
+    "git diff --check"
+  ],
+  "sourceSha256": {
+    "src/App.vue": "1a064dbf7151d7e067ebe6969b1476f2cc844e25adcebcf337a124202b11d29c",
+    "src/main.ts": "33f363505aacf2e91e5baa41d0deab7cd75a919ccdbad247d1671ddc5491146c",
+    "src/app/ui-motion.ts": "5f2a0e4d5d29a7fc5a4453e1cbb54c477763145f1752e311c43d42b96acc62a7",
+    "src/app/ui-motion.test.ts": "ab628488eaf8f6e53b975293a7209b9ee15cbd6626959e37b5562e2ccfb5dd6e",
+    "src/app/page-motion.ts": "8dc2e14ce5dada86980b398b8c18a8f3bb5bb703f372e938798a9c6117e84240",
+    "src/app/page-motion.test.ts": "39552fd98eb0db55f854e3430228b6c70fa5d4b3a9846376ae94aa29fa3ad0fb",
+    "src/components/common/UiMotionTransition.vue": "b2c2a0ff6d38dfe8556ee742bd19741183e72074d500d64ed096022dffb08806",
+    "src/components/navigation/FocusFlowLayer.vue": "e9d5c8580752fe870f99348d2c7df57e96aeee0c64ea3042a0d7af0873ce18c9",
+    "src/components/layout/AppShellLayout.vue": "8ab4c9d072853430ccc25f14009dea2d06cb0cb256a597825dd6b4dae4a458e2",
+    "src/components/navigation/UserProfileMenu.vue": "0673d26f8b0b3c50717c686556553c225ba1739e7966471331dd5cdd00b24c80",
+    "src/components/settings/SettingModalShell.vue": "1d81664172f30aa4369e6a24c70dbada7b988c9eaef4631b31c8922a321cd2ad",
+    "src/navigation/focus-flow.ts": "840db9bb1ae5b47364abcf748517bd838f38ed0fe6656d332fbb4f9348cd0af8",
+    "src/navigation/focus-flow.test.ts": "4591227812b17b3ff57f4dc0cd73f1e3412da438e5a65fde9f8a63bf14450e53",
+    "src/navigation/core/__tests__/vue-focus.ts": "0c09473b06058c73e94c871ecc3cda046b6b0e442808cc5ed644a7c10be3a834",
+    "src/pages/Controller.vue": "74950fa25f5e397627ce27bf0d89a41bed87ca021f734b2236dba06b9852bb09",
+    "src/pages/Home.vue": "d6b3d7f36cc1b4f39b4aa811c23bf4cc8afffe6d0941a3a2b9f4293d7543494b",
+    "src/pages/My.vue": "43036e49de763c479d5e85c087c503609d0aff734742eb4985e03361c3b1c927",
+    "src/pages/Setting.vue": "7ac29281d5bf39e0659c1cf397c13726e48507c9a1c96fc1bd722a627e724b3d",
+    "src/pages/library/AlbumVideoPlayer.vue": "942abdbd33a5fb57667d4796eaf428d1db50ebea1376cd3309c532f7dd666ee4",
+    "src/styles/base.css": "da5351b8872eefc5bc7d0a3b6bafda0dddbce1368d7580cd871e52c7d9b2d645",
+    "src/styles/_theme-foundation.scss": "6382ec59de0fdb0445055bf625cdcc1be350c592d3e5e87cb0afb03166a7c326",
+    "src/styles/_theme-semantic.scss": "60f74dd918316bbb99136acb4eb4fb448f394c54f7dacc0ab60d31aceaadfa78"
+  },
+  "fixtureSha256": "96443b5dbf0849eb154d0bbb1d1ba2fb3913b18d0e9e90b2cedb474efe60e1fa",
+  "manualAcceptance": [
+    "physical-gamepad",
+    "native-window-focus-and-reduced-motion",
+    "low-power-WKWebView-animation-cost",
+    "paired-stream-supply-and-present-cost"
+  ],
+  "motionTuning": {
+    "pageDurationMs": 280,
+    "pageDistancePx": 48,
+    "panelDurationMs": 220,
+    "panelDistancePx": 24,
+    "panelAxis": "category-menu-layout",
+    "focusFlightDurationMs": 220,
+    "travelEasing": "cubic-bezier(0.25, 0.6, 0.3, 1)",
+    "pageAxis": "primary-navigation-layout",
+    "detailAxis": "X"
+  }
+}

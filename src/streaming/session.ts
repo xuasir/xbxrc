@@ -67,7 +67,7 @@ export const STREAM_POLICY_CONFIG_KEYS = [
   'codec',
   'video_format',
   'display_options',
-  'render_mode',
+  'render_compatibility_mode',
   'super_resolution_experimental',
   'ice_policy_enabled',
   'ice_policy_prefer_ipv6',

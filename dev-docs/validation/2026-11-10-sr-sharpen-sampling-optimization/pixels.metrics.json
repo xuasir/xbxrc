@@ -1,0 +1,168 @@
+{
+  "pass": true,
+  "easu": [
+    {
+      "source": [
+        7,
+        5
+      ],
+      "output": [
+        7,
+        5
+      ],
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "source": [
+        8,
+        6
+      ],
+      "output": [
+        12,
+        9
+      ],
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "source": [
+        7,
+        5
+      ],
+      "output": [
+        14,
+        10
+      ],
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "source": [
+        13,
+        9
+      ],
+      "output": [
+        18,
+        13
+      ],
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    }
+  ],
+  "usm": [
+    {
+      "name": "flatNoise",
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "name": "fineDetail",
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "name": "stepEdge",
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "name": "diagonal",
+      "maxCodeValue": 1,
+      "meanCodeValue": 0.13095238095238096,
+      "pass": true
+    },
+    {
+      "name": "rgbDetail",
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "name": "scaledUSM",
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    }
+  ],
+  "srUsm": [
+    {
+      "strength": 0,
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "strength": 0.6,
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    },
+    {
+      "strength": 1,
+      "maxCodeValue": 0,
+      "meanCodeValue": 0,
+      "pass": true
+    }
+  ],
+  "noiseEvidence": {
+    "baseline": {
+      "maxCodeValue": 1,
+      "meanCodeValue": 0.4523809523809524
+    },
+    "optimized": {
+      "maxCodeValue": 0,
+      "meanCodeValue": 0
+    },
+    "pass": true
+  },
+  "detailEvidence": {
+    "optimized": {
+      "maxCodeValue": 1,
+      "meanCodeValue": 0.75
+    },
+    "pass": true
+  },
+  "haloEvidence": {
+    "baseline": {
+      "maxCodeValue": 13,
+      "meanCodeValue": 2.1666666666666665
+    },
+    "optimized": {
+      "maxCodeValue": 12,
+      "meanCodeValue": 2
+    },
+    "pass": true
+  },
+  "strongHaloEvidence": {
+    "baseline": {
+      "maxCodeValue": 21,
+      "meanCodeValue": 3.5
+    },
+    "optimized": {
+      "maxCodeValue": 13,
+      "meanCodeValue": 2.1666666666666665
+    },
+    "pass": true
+  },
+  "bypass": {
+    "maxCodeValue": 0,
+    "meanCodeValue": 0
+  },
+  "casUnchanged": {
+    "maxCodeValue": 0,
+    "meanCodeValue": 0
+  },
+  "environment": {
+    "browser": "headless Chromium",
+    "renderer": "ANGLE SwiftShader",
+    "qualification": "Actual WebGL2 shader compilation and RGBA8 readback; software GPU, performance and physical scanout require device evidence"
+  }
+}

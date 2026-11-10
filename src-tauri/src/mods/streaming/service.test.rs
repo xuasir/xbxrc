@@ -133,7 +133,7 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
             brightness: 105,
         },
         super_resolution_experimental: true,
-        render_mode: "sr".to_string(),
+        render_compatibility_mode: false,
     };
 
     apply_streaming_preferences(&mut config, &snapshot);
@@ -158,7 +158,7 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
     assert_eq!(config.runtime.home_fallback_turn, true);
     assert!(config.render.enable_audio_control);
     assert_eq!(config.render.video_format.as_deref(), Some("Zoom"));
-    assert_eq!(config.render.display_options.sharpness, 0);
+    assert_eq!(config.render.display_options.sharpness, 5);
     assert_eq!(
         config.render.super_resolution_preference,
         SuperResolutionRenderPreference::Fsr1Experimental
@@ -168,7 +168,7 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
         xbox_streaming::PipelineRenderPreference::Webgl2
     );
     let mut video_snapshot = snapshot.clone();
-    video_snapshot.render_mode = "video".to_string();
+    video_snapshot.render_compatibility_mode = true;
     apply_streaming_preferences(&mut config, &video_snapshot);
     assert_eq!(
         config.render.pipeline_preference,
@@ -176,11 +176,11 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
     );
     assert_eq!(
         config.render.super_resolution_preference,
-        SuperResolutionRenderPreference::Off
+        SuperResolutionRenderPreference::Fsr1Experimental
     );
-    assert_eq!(config.render.display_options.sharpness, 0);
+    assert_eq!(config.render.display_options.sharpness, 5);
     let mut sharpen_snapshot = snapshot.clone();
-    sharpen_snapshot.render_mode = "sharpen".to_string();
+    sharpen_snapshot.super_resolution_experimental = false;
     apply_streaming_preferences(&mut config, &sharpen_snapshot);
     assert_eq!(
         config.render.pipeline_preference,

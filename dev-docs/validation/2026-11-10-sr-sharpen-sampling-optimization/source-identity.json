@@ -1,0 +1,14 @@
+{
+  "qualification": "实际WebGL2软件GPU像素验证；记录当前shader/参考实现/基线/夹具指纹。硬件吞吐与物理上屏由新设备样本验收。",
+  "files": {
+    "src/player/infra/render/fsr1-reconstruction-pass.ts": "acaad11889d4bee1da6a7fb83d684f30b4ff19536001d794bb356bace14a0f7d",
+    "src/player/infra/render/Renderers.ts": "211e046090de73708878860785ad61eb8bf53cc9d88ebc93f6f6145496acd954",
+    "src/player/infra/render/sharpening-tuning.ts": "19d70be1928b9d2a3eb0f98e3c1c2defa8dc766e4802c2071b9be5b764545538",
+    "src/player/infra/render/sharpening-math.ts": "1cce4aef641f3788a81de35a8f33eb7c674e58e4021bc272f3a97dfb92d1ef68",
+    "src/player/infra/render/fsr1-cpu.ts": "f3d19e5560632dc24153070a1eaef443a7982d482765a8d8870b64797eacf0a7",
+    "dev-docs/validation/2026-11-10-sr-sharpen-sampling-optimization/baseline-easu.txt": "5f98d693ba736632e12a91a25f196a1f4212e42739cc34bb44fc7d3982414b8c",
+    "dev-docs/validation/2026-11-10-sr-sharpen-sampling-optimization/baseline-sharpen.frag.template.txt": "e6cf759c98308f40f1215ce8d5dc55d0bb222a0c935d1aa4b0aaf32823743f48",
+    "dev-docs/validation/2026-11-10-sr-sharpen-sampling-optimization/fixture.js": "599fe487d7d7afc248e3f810c1b79d2b43e7a2580a21f179cad4a6095f3d2f8a",
+    "dev-docs/validation/2026-11-10-sr-sharpen-sampling-optimization/run-pixels.mjs": "3c9b736d8f85926959415d6a82aa3e6a69d4ff0f3133ae27d1765ce7110422c9"
+  }
+}

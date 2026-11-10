@@ -17,7 +17,7 @@ const { t } = useI18n()
 const panelVisible = computed(() => props.visible && props.mount.phase === 'mounted')
 const rows = computed(() => RUNTIME_METRIC_KEYS.map(key => ({ key, value: experienceMetricValue(props.model, key) })))
 const notice = computed(() => !props.suppressNotice && props.model.notice ? t(`streamPage.experience.notices.${props.model.notice}`) : '')
-const renderLabel = computed(() => renderStateLabel(props.renderState ?? { mode: null, pending: false }, t))
+const renderLabel = computed(() => renderStateLabel(props.renderState ?? { engine: null, superResolution: false, pending: false }, t))
 </script>
 
 <template>

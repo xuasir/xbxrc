@@ -7,6 +7,7 @@ import { vi } from 'vitest'
 import * as vue from 'vue'
 import { createI18n } from 'vue-i18n'
 import { compileScript, compileTemplate, parse } from 'vue/compiler-sfc'
+import UiMotionTransition from '@/components/common/UiMotionTransition.vue'
 import { navigationEngine } from '../engine'
 import { focusFixture } from './focus-dom'
 
@@ -26,6 +27,7 @@ export function enableClientTemplate(component: object, filename: URL) {
 }
 
 export function vueFocusFixture() {
+  enableClientTemplate(UiMotionTransition, new URL('../../../components/common/UiMotionTransition.vue', import.meta.url))
   const f = focusFixture()
   for (const key of ['focusElement', 'updateActiveScope', 'getCurrentFocus', 'getLastFocusFailure', 'cancelPendingRecovery', 'isTopmostScope', 'forgetFocus'] as const) {
     // 组件的共享单例使用同一受控 DOM 与引擎，保持真实 Scope 合同。

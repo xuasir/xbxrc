@@ -1,4 +1,5 @@
 import type { PlayerEvents } from '../../player/api/events'
+import type { BrowserPlaybackStats } from '../../player/domain/media'
 
 export type PlaybackObservation = PlayerEvents['stats.browserObservation']
 export const COUNTERS = ['received', 'decoded', 'videoPresent', 'callbacks', 'rendererSubmit', 'framesDropped', 'freezeCount', 'callbackGaps', 'presentedJumps', 'overwrites', 'rateLimitDrops', 'duplicates', 'submitFailures', 'packetsReceived', 'bytesReceived', 'keyframes', 'pli', 'fir', 'nack'] as const
@@ -77,6 +78,37 @@ export function compactTimings(observation: PlaybackObservation): Record<string,
   return {
     timing: { duration: timing(stats.rendererTiming?.duration), upload: timing(stats.rendererTiming?.upload), submit: timing(stats.rendererTiming?.submit), interval: timing(stats.rendererTiming?.interval) },
     gpuTiming: { state: stats.rendererGpuTiming?.state, queryCount: stats.rendererGpuTiming?.queryCount, disjointCount: stats.rendererGpuTiming?.disjointCount, duration: timing(stats.rendererGpuTiming?.duration) },
+    timingScope: 'retainedSamples',
+  }
+}
+
+export function compactDecodedSupply(stats: BrowserPlaybackStats): Record<string, unknown> {
+  const supply = stats.rendererDecodedFrameSupply
+  return {
+    rendererKind: stats.rendererKind,
+    rendererGeneration: stats.rendererGeneration,
+    rendererFrameSource: stats.rendererFrameSource,
+    sampleId: stats.statsSampleId,
+    sampledAtMs: stats.statsSampledAtMs,
+    sampleAgeMs: stats.statsSampledAtMs === undefined ? undefined : measured(performance.now() - stats.statsSampledAtMs),
+    timing: { receiveToSubmit: timing(stats.rendererTiming?.receiveToSubmit), readToSubmit: timing(stats.rendererTiming?.readToSubmit) },
+    decodedSupply: supply
+      ? {
+          read: supply.workerReadFrames,
+          sent: supply.workerSentFrames,
+          overwrites: supply.workerOverwriteCount,
+          acks: supply.workerAckCount,
+          received: supply.receivedMessages,
+          delivered: supply.deliveredFrames,
+          staleDrops: supply.staleFrameDropCount,
+          invalidClocks: supply.invalidClockCount,
+          lastSequence: supply.lastReadSequence,
+          receiveAgeMs: measured(supply.receiveAgeMs),
+          workerObservationAgeMs: measured(supply.workerObservationAgeMs),
+          deliveryBudgetMs: supply.deliveryBudgetMs,
+          ...Object.fromEntries(Object.entries(supply.timing).flatMap(([key, value]) => [[`${key}P95Ms`, measured(value.p95Ms)], [`${key}MaxMs`, measured(value.maxMs)]])),
+        }
+      : undefined,
     timingScope: 'retainedSamples',
   }
 }

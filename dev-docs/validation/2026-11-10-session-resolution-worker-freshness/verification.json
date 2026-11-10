@@ -1,0 +1,94 @@
+{
+  "recordedAt": "2026-11-10T12:14:42.071104+08:00",
+  "scope": "session-resolution-and-worker-freshness; local code and automated verification; manual streaming pending",
+  "checks": {
+    "frontendRelated": {
+      "files": 20,
+      "passed": 318
+    },
+    "xboxStreamingLib": {
+      "passed": 146
+    },
+    "rustTraceContract": {
+      "passed": 4
+    },
+    "productionBudget": {
+      "passed": 2
+    },
+    "cargoFmt": "PASS",
+    "lintFix": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "diffCheck": "PASS"
+  },
+  "sourceIdentity": [
+    {
+      "file": "src-tauri/src/mods/streaming/context.rs",
+      "sha256": "662bb8e7cef009e9b5ca1a1e5108e141d6a1099aff2262eff30b73881e88a1dc"
+    },
+    {
+      "file": "src-tauri/src/mods/runtime_trace/trace_contract.rs",
+      "sha256": "00bd6f94a266eb30a269fd5426bdefc6c33489300ecbd143828140298b1c90dd"
+    },
+    {
+      "file": "crates/xbox-streaming/src/policy/session/compiler.rs",
+      "sha256": "282b7cc21b89aefee29546125e69547a0ade5f43060a97fa41814536f41e7974"
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/api/session.rs",
+      "sha256": "b9841df1458afd5b9ddb929ddf1387e1b627d3c50ddd4a14b65dc94474021e63"
+    },
+    {
+      "file": "src/player/app/session/SessionService.ts",
+      "sha256": "68a84730df75cc4eb52e6ef2224059e178d16c12b68bc18e53e0d239f43cd8ad"
+    },
+    {
+      "file": "src/player/infra/webrtc/SdpManipulator.ts",
+      "sha256": "e9acb12ee47b13c06c7b50e4a931c1dbef7f820461338c61a75807dbdd634601"
+    },
+    {
+      "file": "src/player/infra/webrtc/sdp-image-attributes.ts",
+      "sha256": "c963c832e75bf2b7177b8d7545205e7d0d5226920ec0cc7b48a7b19fa3eb5620"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-worker-source.ts",
+      "sha256": "606ef5c122eae90db7f3bf07ac8b8cb778b214b314f36142de36d7d95d486eb9"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-worker.ts",
+      "sha256": "7433e753760ed6ac87f434f8aa084724fc8c2d15924630b875910738e05b9ffd"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-reader.ts",
+      "sha256": "1a1017073b0e809353e47016c0d1a5b9dde884f0316d935c249654f04925a212"
+    },
+    {
+      "file": "src/player/infra/render/video-frame-source.ts",
+      "sha256": "8aa8bd2c44637f06a7bd2d859789de270b60b3e8deeb8d9c733ac2b2c15a2c15"
+    },
+    {
+      "file": "src/player/infra/render/render-observation.ts",
+      "sha256": "ffceb1d5c2a476b8ba6a5b01fbf11eded21896b08e3baa26cc887cc1930e84a1"
+    },
+    {
+      "file": "src/player/app/stats/StatsService.ts",
+      "sha256": "75f0b32c1f016a9fc71982f74972f4644aa20fc3a0716f20af68849d882d801a"
+    },
+    {
+      "file": "src/shared/diagnostics/production-trace-contract.json",
+      "sha256": "f328e7e1cd2fc20f2e3eb1154f529d1b704a3251755c7180857f831a81dccd6e"
+    },
+    {
+      "file": "src/streaming/runtime/browser-playback-trace.ts",
+      "sha256": "813404ab8ca81ae81d2b75396157da6f8c0f39f405019ba0bfad42fd9988bfce"
+    },
+    {
+      "file": "src/streaming/runtime/playback-health.ts",
+      "sha256": "2779b93c971f421231425b4467178eeeae3414c56266a976a5e2fd3992448a47"
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime.ts",
+      "sha256": "942efff8ed30807f861b7f0f3a2babc4770b420a98ef551c3936a45bfb795833"
+    }
+  ]
+}

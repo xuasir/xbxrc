@@ -1,0 +1,146 @@
+{
+  "traceSnapshot": "/tmp/xbxrc-2026-11-10-render-effects-trace.jsonl",
+  "traceSha256": "4f2939390f10309d080d7ec9e49027463abc5f08e19dae0b212827c8ac52e45f",
+  "buildSourceFingerprintSha256": "10c0e6a97f0dd6aff486f1978344c7a298260d05a4b19b34ddbe9ac0e4030bf4",
+  "currentSourceFingerprintSha256": "10c0e6a97f0dd6aff486f1978344c7a298260d05a4b19b34ddbe9ac0e4030bf4",
+  "readerSourceSha256": "62d4a4e7adfabc702bfefb13ff4decea1efcdcf930c0180df43c7a571ec2bb5c",
+  "readerStartupIntervalMs": [
+    160694,
+    160697
+  ],
+  "readerDeadlineIntervalMsInferred": [
+    162694,
+    162697
+  ],
+  "transportConnectedMs": 167454,
+  "firstDecodedMs": 168185,
+  "firstPresentedMs": 168186,
+  "timeline": [
+    {
+      "seq": 345,
+      "tsMs": 1794275635765,
+      "event": "browserWebRtcTimelineObserved",
+      "observedAtMs": 160673,
+      "reason": "trackReceived"
+    },
+    {
+      "seq": 347,
+      "tsMs": 1794275635808,
+      "event": "browserMediaResourcesObserved",
+      "observedAtMs": 160675,
+      "reason": "rendererPending",
+      "resources": {
+        "renderFrameSource": "presentation",
+        "renderFrameFallbackReason": null,
+        "decodedFramesReceived": 0,
+        "decodedFrameReaders": 0,
+        "retainedDecodedFrames": 0
+      }
+    },
+    {
+      "seq": 348,
+      "tsMs": 1794275635808,
+      "event": "browserWebRtcTimelineObserved",
+      "observedAtMs": 160697,
+      "reason": "remoteAnswerSet"
+    },
+    {
+      "seq": 376,
+      "tsMs": 1794275642249,
+      "event": "browserWebRtcTimelineObserved",
+      "observedAtMs": 167157,
+      "reason": "iceConnectionStateChanged"
+    },
+    {
+      "seq": 382,
+      "tsMs": 1794275642517,
+      "event": "browserWebRtcTimelineObserved",
+      "observedAtMs": 167424,
+      "reason": "iceConnectionStateChanged"
+    },
+    {
+      "seq": 385,
+      "tsMs": 1794275642546,
+      "event": "browserWebRtcTimelineObserved",
+      "observedAtMs": 167454,
+      "reason": "connectionStateChanged",
+      "connectionState": "connected"
+    },
+    {
+      "seq": 391,
+      "tsMs": 1794275643269,
+      "event": "browserMediaResourcesObserved",
+      "observedAtMs": 168177,
+      "reason": "rendererUpdated",
+      "resources": {
+        "renderFrameSource": "presentation",
+        "renderFrameFallbackReason": "initializationTimeout",
+        "decodedFramesReceived": 0,
+        "decodedFrameReaders": 0,
+        "retainedDecodedFrames": 0
+      }
+    },
+    {
+      "seq": 393,
+      "tsMs": 1794275643277,
+      "event": "firstFrameStageChanged",
+      "observedAtMs": 168185,
+      "reason": "frameDecoded"
+    },
+    {
+      "seq": 395,
+      "tsMs": 1794275643277,
+      "event": "browserWebRtcTimelineObserved",
+      "observedAtMs": 168186,
+      "reason": "firstPresented"
+    },
+    {
+      "seq": 396,
+      "tsMs": 1794275643285,
+      "event": "browserMediaResourcesObserved",
+      "observedAtMs": 168193,
+      "reason": "rendererCommitted",
+      "resources": {
+        "renderFrameSource": "presentation",
+        "renderFrameFallbackReason": "initializationTimeout",
+        "decodedFramesReceived": 0,
+        "decodedFrameReaders": 0,
+        "retainedDecodedFrames": 0
+      }
+    }
+  ],
+  "reproduction": {
+    "gate": "PASS",
+    "meaning": "reproduced existing premature timeout and terminal disposal",
+    "tests": [
+      {
+        "case": "media-starts-after-two-second-deadline",
+        "mode": "presentation",
+        "fallback": "initializationTimeout",
+        "consumed": 0,
+        "receivedFrames": 0,
+        "cloneStops": 1,
+        "readerCancels": 1,
+        "frameCloses": 1
+      },
+      {
+        "case": "first-frame-before-deadline",
+        "mode": "main-thread",
+        "receivedFrames": 1,
+        "consumed": 1,
+        "cloneStops": 0,
+        "readerCancels": 0,
+        "frameCloses": 1
+      },
+      {
+        "case": "worker-ready-before-media",
+        "mode": "presentation",
+        "fallback": "initializationTimeout",
+        "workerMessages": [
+          "start",
+          "stop"
+        ]
+      }
+    ]
+  }
+}

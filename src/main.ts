@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import { applyTheme } from './app/theme'
+import { installUiMotionInput } from './app/ui-motion'
 import { i18n, setUiLocale } from './i18n'
 
 import { ensureShellGamepadListening } from './navigation/core'
@@ -18,6 +19,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function bootstrap(): Promise<void> {
+  installUiMotionInput()
   ensureShellGamepadListening()
   installKeyboardFallbackBridge()
   void initializeGamepadInput().catch(error => devWarn('[gamepad] initialization failed:', error))

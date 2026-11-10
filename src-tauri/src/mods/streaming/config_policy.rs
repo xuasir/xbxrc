@@ -27,21 +27,17 @@ pub(super) fn apply_streaming_preferences(
     config.render.enable_audio_control = snapshot.enable_audio_control;
     config.render.video_format = normalize_optional(&snapshot.video_format);
     config.render.display_options = DomainDisplayOptions {
-        sharpness: if snapshot.render_mode == "sharpen" {
-            snapshot.display_options.sharpness
-        } else {
-            0
-        },
+        sharpness: snapshot.display_options.sharpness,
         saturation: snapshot.display_options.saturation,
         contrast: snapshot.display_options.contrast,
         brightness: snapshot.display_options.brightness,
     };
-    config.render.pipeline_preference = if snapshot.render_mode == "video" {
+    config.render.pipeline_preference = if snapshot.render_compatibility_mode {
         PipelineRenderPreference::Video
     } else {
         PipelineRenderPreference::Webgl2
     };
-    config.render.super_resolution_preference = if snapshot.render_mode == "sr" {
+    config.render.super_resolution_preference = if snapshot.super_resolution_experimental {
         SuperResolutionRenderPreference::Fsr1Experimental
     } else {
         SuperResolutionRenderPreference::Off

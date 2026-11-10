@@ -71,7 +71,7 @@ afterEach(() => {
 })
 
 describe('渲染控制与可开关顶部指标栏', () => {
-  it('触屏、鼠标与手柄通过同一三档控件互斥调整 SR 和锐化，颜色独立', async () => {
+  it('触屏、鼠标与手柄独立调整 SR、锐化和颜色', async () => {
     const f = fixture()
     const change = vi.fn()
     const close = vi.fn()
@@ -82,26 +82,63 @@ describe('渲染控制与可开关顶部指标栏', () => {
     expect(f.engine.getCurrentFocus()?.id).toBe('render.sr')
     inputDispatcher.dispatch(NavigationIntent.Action)
     await settle()
-    expect(change.mock.calls.at(-1)?.[0].mode).toBe('sr')
+    expect(change.mock.calls.at(-1)?.[0].superResolution).toBe(true)
     f.fireClick(f.find('render.sharpening.clear'), 'touch')
     await settle()
-    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ mode: 'sharpen', displayOptions: { sharpness: 3 } })
+    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ superResolution: true, displayOptions: { sharpness: 3 } })
     f.find('render.sharpening.soft').getBoundingClientRect = () => ({ left: 450, right: 550, top: 250, bottom: 290, width: 100, height: 40 })
     f.focus(f.find('render.sharpening.clear'))
     inputDispatcher.dispatch(NavigationIntent.Right)
     expect(f.engine.getCurrentFocus()?.id).toBe('render.sharpening.soft')
     inputDispatcher.dispatch(NavigationIntent.Action)
     await settle()
-    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ mode: 'sharpen', displayOptions: { sharpness: 1 } })
+    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ superResolution: true, displayOptions: { sharpness: 1 } })
     f.fireClick(f.find('render.preset.clear'), 'mouse')
     await settle()
-    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ mode: 'sharpen', displayOptions: { sharpness: 1, saturation: 105 } })
+    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ superResolution: true, displayOptions: { sharpness: 1, saturation: 105 } })
     f.fireClick(f.find('render.video'), 'touch')
     await settle()
-    expect(change.mock.calls.at(-1)?.[0].mode).toBe('video')
+    expect(change.mock.calls.at(-1)?.[0].superResolution).toBe(false)
     inputDispatcher.dispatch(NavigationIntent.Back)
     await settle()
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('渲染降级保留组合配置、暂停效果控件并移动焦点，关闭后恢复操作', async () => {
+    const f = fixture()
+    const compatibilityActive = ref(false)
+    const value = normalizeRenderControls({ render_compatibility_mode: false, super_resolution_experimental: true, display_options: { sharpness: 3, saturation: 105, contrast: 105, brightness: 100 } })
+    const change = vi.fn()
+    const retry = vi.fn()
+    f.render(h(defineComponent(() => () => h(SettingDisplayOptionsSheet, { open: true, scopeId: 'render', title: '画面', currentValue: value, compatibilityActive: compatibilityActive.value, onChange: change, onRetryRendering: retry }))))
+    f.mutation()
+    await settle()
+    f.focus(f.find('render.sharpening.clear'))
+    compatibilityActive.value = true
+    await settle()
+    expect(f.engine.getCurrentFocus()?.id).toBe('render.compatibility')
+    for (const id of ['render.sr', 'render.sharpening.clear', 'render.preset.clear']) {
+      expect(f.find(id).disabled).toBe(true)
+      f.fireClick(f.find(id), 'touch')
+    }
+    expect(change).not.toHaveBeenCalled()
+    f.fireClick(f.find('render.retry'), 'mouse')
+    expect(retry).toHaveBeenCalledOnce()
+    compatibilityActive.value = false
+    await settle()
+
+    f.focus(f.find('render.compatibility'))
+    inputDispatcher.dispatch(NavigationIntent.Action)
+    await settle()
+    expect(change.mock.calls.at(-1)?.[0]).toEqual({ ...value, compatibilityMode: true })
+    expect(f.find('render.sr').disabled).toBe(true)
+    inputDispatcher.dispatch(NavigationIntent.Action)
+    await settle()
+    expect(change.mock.calls.at(-1)?.[0]).toEqual(value)
+    expect(f.find('render.sr').disabled).toBe(false)
+    f.fireClick(f.find('render.sharpening.soft'), 'touch')
+    await settle()
+    expect(change.mock.calls.at(-1)?.[0]).toMatchObject({ superResolution: true, displayOptions: { sharpness: 1, saturation: 105, contrast: 105 } })
   })
 
   it('本次应用与显式默认保存分开提交，busy 期间保持焦点并吸收重复操作', async () => {
@@ -133,15 +170,15 @@ describe('渲染控制与可开关顶部指标栏', () => {
   it('实际模式与回退原因随顶部指标栏开关显示，SR 候选等待时保持已提交模式', async () => {
     const f = fixture()
     const visible = ref(true)
-    const state = ref<StreamRenderState>({ mode: 'video', pending: true })
+    const state = ref<StreamRenderState>({ engine: 'compatibility', superResolution: false, pending: true })
     f.render(h(defineComponent(() => () => h(StreamExperiencePanel, { visible: visible.value, mount: { phase: 'mounted' } as any, model: { notice: undefined } as StreamExperienceMetricsViewModel, renderState: state.value }))))
     await settle()
     const renderCells = () => Array.from(document.querySelectorAll('span')).filter(node => document.contains(node) && (node as unknown as FocusNode).attrs.get('class')?.includes('stream-runtime-bar__render')) as unknown as FocusNode[]
     expect(renderCells()[0]?.attrs.get('text')).toContain('setting.renderControls.switching')
-    state.value = { mode: 'sr', pending: false }
+    state.value = { engine: 'passthrough', superResolution: true, pending: false }
     await settle()
     expect(renderCells()[0]?.attrs.get('text')).toBe('SR')
-    state.value = { mode: 'video', pending: false, fallbackReason: 'performance' }
+    state.value = { engine: 'compatibility', superResolution: false, pending: false, fallbackReason: 'performance' }
     await settle()
     expect(renderCells()[0]?.attrs.get('text')).toContain('setting.renderControls.fallback.performance')
     visible.value = false

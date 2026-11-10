@@ -819,7 +819,7 @@ pub struct StreamingConfigSnapshot {
     pub video_format: String,
     pub display_options: StreamingDisplayOptionsValue,
     pub super_resolution_experimental: bool,
-    pub render_mode: String,
+    pub render_compatibility_mode: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

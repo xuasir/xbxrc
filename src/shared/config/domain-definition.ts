@@ -182,6 +182,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
           'xhome_turn_fallback',
           'display_options',
           'super_resolution_experimental',
+          'render_compatibility_mode',
         ],
       },
       {
@@ -407,6 +408,10 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'Rendering and picture',
     description: 'Set the default rendering mode and picture for new streams.',
     control: 'singleSelect',
+  },
+  render_compatibility_mode: {
+    label: 'Compatibility rendering',
+    control: 'toggle',
   },
   super_resolution_experimental: {
     label: 'Super Resolution (Experimental)',

@@ -2,6 +2,22 @@
   "version": 1,
   "events": [
     {
+      "event": "decodedFrameSupplyObserved",
+      "dimension": "media_supply",
+      "importance": "key",
+      "category": "snapshot",
+      "intervalMs": 1000,
+      "maxRowBytes": 2048
+    },
+    {
+      "event": "sessionVideoConstraintsResolved",
+      "dimension": "network",
+      "importance": "key",
+      "category": "event",
+      "intervalMs": 0,
+      "maxRowBytes": 1024
+    },
+    {
       "event": "playbackObservationManifest",
       "dimension": "presentation",
       "importance": "key",
@@ -339,7 +355,8 @@
       "iceGatheringState",
       "trackKind",
       "presentedFrames",
-      "mediaTime"
+      "mediaTime",
+      "videoImageConstraints"
     ],
     "executionCleanupObserved": [
       "reason",
@@ -352,6 +369,27 @@
       "stage",
       "status",
       "trace"
+    ],
+    "sessionVideoConstraintsResolved": [
+      "targetType",
+      "configuredResolution",
+      "deviceKind",
+      "deviceWidth",
+      "deviceHeight",
+      "deviceOs",
+      "headerDisplayWidth",
+      "headerDisplayHeight"
+    ],
+    "decodedFrameSupplyObserved": [
+      "rendererKind",
+      "rendererGeneration",
+      "sampleId",
+      "sampledAtMs",
+      "timing",
+      "decodedSupply",
+      "timingScope",
+      "rendererFrameSource",
+      "sampleAgeMs"
     ]
   },
   "children": {
@@ -465,13 +503,16 @@
       "rateLimitDropCount",
       "submitFailureCount",
       "duplicateDrawCount",
-      "screenPresentState"
+      "screenPresentState",
+      "decodedSupply"
     ],
     "timing": [
       "duration",
       "upload",
       "submit",
-      "interval"
+      "interval",
+      "receiveToSubmit",
+      "readToSubmit"
     ],
     "gpuTiming": [
       "state",
@@ -941,6 +982,71 @@
       "runtimeStopped",
       "remoteClosed",
       "startupCancelled"
+    ],
+    "videoImageConstraints": [
+      "payloadType",
+      "allPayloads",
+      "direction",
+      "minWidth",
+      "maxWidth",
+      "minHeight",
+      "maxHeight"
+    ],
+    "receiveToSubmit": [
+      "capacity",
+      "count",
+      "retained",
+      "meanMs",
+      "p50Ms",
+      "p95Ms",
+      "p99Ms",
+      "maxMs",
+      "maxObservedMs",
+      "windowMs",
+      "startedAtMs",
+      "endedAtMs"
+    ],
+    "readToSubmit": [
+      "capacity",
+      "count",
+      "retained",
+      "meanMs",
+      "p50Ms",
+      "p95Ms",
+      "p99Ms",
+      "maxMs",
+      "maxObservedMs",
+      "windowMs",
+      "startedAtMs",
+      "endedAtMs"
+    ],
+    "decodedSupply": [
+      "read",
+      "sent",
+      "overwrites",
+      "acks",
+      "received",
+      "delivered",
+      "staleDrops",
+      "invalidClocks",
+      "lastSequence",
+      "receiveAgeMs",
+      "deliveryBudgetMs",
+      "readWaitP95Ms",
+      "readWaitMaxMs",
+      "pendingWaitP95Ms",
+      "pendingWaitMaxMs",
+      "transferP95Ms",
+      "transferMaxMs",
+      "consumeP95Ms",
+      "consumeMaxMs",
+      "receiveIntervalP95Ms",
+      "receiveIntervalMaxMs",
+      "ackRoundTripP95Ms",
+      "ackRoundTripMaxMs",
+      "ackDeliveryP95Ms",
+      "ackDeliveryMaxMs",
+      "workerObservationAgeMs"
     ]
   },
   "enums": [
@@ -1258,6 +1364,17 @@
     "clarityL1",
     "clarityL2",
     "clarityL3",
-    "screenFrameRate"
+    "screenFrameRate",
+    "send",
+    "recv",
+    "home",
+    "cloud",
+    "android",
+    "windows",
+    "tizen",
+    "worker",
+    "main-thread",
+    "presentation",
+    "initializing"
   ]
 }

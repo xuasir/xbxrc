@@ -11,6 +11,7 @@ import {
 import {
   CAS_GAIN_MAX,
   CAS_NOISE_FLOOR,
+  USM_NOISE_FLOOR,
 } from './sharpening-tuning'
 
 const rgb = (value: number): Rgb => ({ r: value, g: value, b: value })
@@ -76,7 +77,7 @@ describe('cas sharpening math', () => {
   it('never lets USM strength extrapolate past the legacy maximum', () => {
     const center = rgb(0.6)
     const blur = rgb(0.4)
-    const output = sharpenUsmPixel(center, blur, 1)
+    const output = sharpenUsmPixel(center, blur, 1, { min: rgb(0), max: rgb(1) })
     // 旧实现 sharpenFactor=4 时增益为 4/3，这里必须一致而不是无限外推。
     expect(output.r - center.r).toBeCloseTo((center.r - blur.r) * (4 / 3), 6)
   })
@@ -128,5 +129,46 @@ describe('cas sharpening math', () => {
     expect(source).not.toContain('mix(center, outColor')
     expect(source).not.toContain('qualityWeight')
     expect(CAS_NOISE_FLOOR).toBeCloseTo(DEFAULT_SHARPEN_TUNING.noiseFloor, 8)
+    expect(source).toContain('USM_NOISE_FLOOR.toFixed(6)')
+  })
+})
+
+describe('usm sharpening protection', () => {
+  it.each([0.08, 0.5, 0.92])('preserves sub-threshold coding noise at brightness %s', (background) => {
+    for (const sign of [-1, 1]) {
+      const center = rgb(background + sign * 0.9 / 255)
+      const output = sharpenUsmPixel(center, rgb(background), 1, { min: rgb(background - 2 / 255), max: rgb(background + 2 / 255) })
+      expect(output.r).toBeCloseTo(center.r, 10)
+    }
+  })
+
+  it('keeps real low-contrast detail above the soft threshold', () => {
+    const center = rgb(0.5 + 3 / 255)
+    const output = sharpenUsmPixel(center, rgb(0.5), 0.6, { min: rgb(0.5), max: center })
+    expect(output.r).toBeGreaterThan(center.r + 0.5 / 255)
+    expect(output.r - center.r).toBeLessThan(1.5 / 255)
+  })
+
+  it.each([1, -1])('bounds bright/dark edge halos with polarity %s', (sign) => {
+    const center = rgb(0.5 + sign * 0.1)
+    const blur = rgb(0.5 - sign * 0.1)
+    const output = sharpenUsmPixel(center, blur, 1, { min: rgb(0.4), max: rgb(0.6) })
+    const enhancement = (output.r - center.r) * sign
+    expect(enhancement).toBeGreaterThan(0)
+    expect(enhancement).toBeLessThanOrEqual(0.2 * 0.6)
+  })
+
+  it('keeps disabled sharpening and flat colors unchanged', () => {
+    const center = { r: 0.7, g: 0.5, b: 0.3 }
+    expect(sharpenUsmPixel(center, rgb(0.4), 0, { min: rgb(0.1), max: rgb(0.9) })).toEqual(center)
+    expect(sharpenUsmPixel(center, center, 1, { min: center, max: center })).toEqual(center)
+  })
+
+  it('limits chroma enhancement while retaining luminance detail', () => {
+    const center = { r: 0.6, g: 0.5, b: 0.4 }
+    const output = sharpenUsmPixel(center, rgb(0.45), 1, { min: rgb(0), max: rgb(1) })
+    expect(output.g).toBeGreaterThan(center.g)
+    expect(output.r - output.b - (center.r - center.b)).toBeLessThan(0.05)
+    expect(USM_NOISE_FLOOR).toBeCloseTo(1 / 255, 8)
   })
 })

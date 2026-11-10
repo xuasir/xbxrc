@@ -1,6 +1,6 @@
 import type { BrowserTraceRecordOptions } from './browser-runtime-trace'
 import type { Counter, Counters, PlaybackObservation, PlaybackTraceFacts } from './playback-health'
-import { counterIdentity, COUNTERS, measured, observationIdentity, PlaybackHealthWindow, readCounters } from './playback-health'
+import { compactDecodedSupply, counterIdentity, COUNTERS, measured, observationIdentity, PlaybackHealthWindow, readCounters } from './playback-health'
 
 interface Episode {
   id: string
@@ -93,6 +93,8 @@ export function createBrowserPlaybackTrace(input: {
   }
 
   function publishHealth(at: number, partial = false): void {
+    if (latest?.stats.rendererDecodedFrameSupply)
+      emit('decodedFrameSupplyObserved', compactDecodedSupply(latest.stats))
     const payload = window.payload(at, input.facts(), ++healthSequence, input.trace(), partial, { pending: collecting, startedAtMs: collectingAtMs })
     const coverage = payload.coverage as { validMs: number, elapsedMs: number, ratio: number }
     if (emit('browserPlaybackHealthObserved', payload)) {

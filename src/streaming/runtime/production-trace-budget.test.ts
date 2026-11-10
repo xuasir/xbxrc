@@ -38,12 +38,30 @@ describe('production trace full-path budgets', () => {
     const timer = new LatencyWindow()
     for (let i = 0; i < 256; i++) timer.record(0.5 + i / 256)
     const distribution = timer.snapshot()
-    const timing = { duration: distribution, upload: distribution, submit: distribution, interval: distribution }
+    const timing = { duration: distribution, upload: distribution, submit: distribution, interval: distribution, receiveToSubmit: distribution, readToSubmit: distribution }
+    const decodedSupply = {
+      schemaVersion: 1 as const,
+      clockDomain: 'performanceEpoch' as const,
+      observedAtMs: 1800000,
+      receivedMessages: 108000,
+      deliveredFrames: 107000,
+      staleFrameDropCount: 1000,
+      invalidClockCount: 0,
+      deliveryBudgetMs: 50,
+      workerReadFrames: 110000,
+      workerSentFrames: 108000,
+      workerOverwriteCount: 2000,
+      workerAckCount: 107999,
+      lastReadSequence: 110000,
+      receiveAgeMs: 100,
+      workerObservationAgeMs: 1800000,
+      timing: { readWait: distribution, pendingWait: distribution, transfer: distribution, consume: distribution, receiveInterval: distribution, ackRoundTrip: distribution, ackDelivery: distribution },
+    }
     const backend = { writtenRows: 500000, writtenBytes: 16777216, flushedSequence: 500000, sequence: 500001, ioFailures: 0, pendingRows: 1, pendingBytes: 4096, peakPendingRows: 8192, peakPendingBytes: 8388608, essentialDropped: 0, keyDropped: 0, debugDropped: 0, rawDropped: 0, oversizedDropped: 0, configurationDropped: 0, ioDropped: 0 }
     const trace = createBrowserPlaybackTrace({ enabled: () => true, now: () => at, facts: () => facts, trace: () => ({ ...producer.snapshot(), backend, backendSampleAgeMs: 29000 }), write: (event, payload, options) => producer.record(event, payload, options) })
     trace.begin()
     for (at = 0; at <= 1800000; at += 250) {
-      const current = observation(at, { rendererTiming: timing, rendererGpuTiming: { source: 'EXT_disjoint_timer_query_webgl2', state: 'ready', queryCount: 108000, disjointCount: 0, duration: distribution }, browserStatsWindows: { short: { sampleCount: 12, durationMs: 3000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 3000, decodeCoverageMs: 3000, videoCoverageMs: 3000, callbackCoverageMs: 3000, rendererCoverageMs: 3000 }, long: { sampleCount: 60, durationMs: 15000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 15000, decodeCoverageMs: 15000, videoCoverageMs: 15000, callbackCoverageMs: 15000, rendererCoverageMs: 15000 } }, maxCallbackIntervalMs: at >= 900000 ? 150 : 16.67, renderCause: 'healthy', videoPresentAgeMs: 5, rendererSubmitAgeMs: 5, renderDrawDurationMsAvg: 1, renderUploadDurationMsAvg: 0.5 })
+      const current = observation(at, { rendererTiming: timing, rendererDecodedFrameSupply: decodedSupply, rendererFrameSource: 'worker', rendererGpuTiming: { source: 'EXT_disjoint_timer_query_webgl2', state: 'ready', queryCount: 108000, disjointCount: 0, duration: distribution }, browserStatsWindows: { short: { sampleCount: 12, durationMs: 3000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 3000, decodeCoverageMs: 3000, videoCoverageMs: 3000, callbackCoverageMs: 3000, rendererCoverageMs: 3000 }, long: { sampleCount: 60, durationMs: 15000, inboundFpsAvg: 60, decodeFpsAvg: 60, videoPresentFpsAvg: 60, callbackFpsAvg: 60, rendererSubmitFpsAvg: 60, receivedCoverageMs: 15000, decodeCoverageMs: 15000, videoCoverageMs: 15000, callbackCoverageMs: 15000, rendererCoverageMs: 15000 } }, maxCallbackIntervalMs: at >= 900000 ? 150 : 16.67, renderCause: 'healthy', videoPresentAgeMs: 5, rendererSubmitAgeMs: 5, renderDrawDurationMsAvg: 1, renderUploadDurationMsAvg: 0.5 })
       const start = process.hrtime.bigint()
       trace.observe(current)
       trace.tick()

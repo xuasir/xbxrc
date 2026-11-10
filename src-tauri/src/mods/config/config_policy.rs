@@ -57,10 +57,11 @@ fn normalize_display_options(key: &str, value: &Value, fallback: &Value) -> Valu
         return fallback.clone();
     };
 
-    // 独立锐化只开放柔和(1)与清晰(3)，关闭状态由 render_mode 表达。
+    // 锐化独立于 SR 和兼容引擎，0/1/3 分别表示关闭/柔和/清晰。
     let sharpness = match map.get("sharpness").and_then(Value::as_i64) {
         Some(1..=2) => 1,
-        _ => 3,
+        Some(3..) => 3,
+        _ => 0,
     };
     let saturation = if let Some(val) = map.get("saturation").and_then(Value::as_i64) {
         val.clamp(0, 200)
@@ -194,6 +195,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "performance_style"
         | "background_keepalive"
         | "super_resolution_experimental"
+        | "render_compatibility_mode"
         | "ui_haptics"
         | "ui_audio"
         | "debug" => {
@@ -226,7 +228,6 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         }
         "runtime_trace_mode" => normalize_runtime_trace_mode(value, fallback),
         "display_options" => normalize_display_options(key, value, fallback),
-        "render_mode" => normalize_string_enum(key, value, "video", &["video", "sharpen", "sr"]),
         "gamepad_background_policy" => {
             normalize_string_enum(key, value, "keep-active", &["keep-active", "follow-app"])
         }
@@ -240,29 +241,24 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
 }
 
 pub fn normalize_config(source: Map<String, Value>) -> Map<String, Value> {
-    // 在注入默认值之前迁移旧意图，明确关闭拥有完整覆盖效力。
-    let render_mode = source
-        .get("render_mode")
-        .and_then(Value::as_str)
-        .filter(|mode| ["video", "sharpen", "sr"].contains(mode))
-        .unwrap_or_else(|| {
-            if source
+    // 原始兼容键区分新合同与旧模式，迁移后独立保存每项效果。
+    let legacy = !source.contains_key("render_compatibility_mode");
+    let legacy_mode = source.get("render_mode").and_then(Value::as_str);
+    let sr = if legacy {
+        match legacy_mode {
+            Some("video" | "sharpen") => false,
+            Some("sr") => true,
+            _ => source
                 .get("super_resolution_experimental")
                 .and_then(Value::as_bool)
-                == Some(true)
-            {
-                "sr"
-            } else if source
-                .get("display_options")
-                .and_then(|value| value.get("sharpness"))
-                .and_then(Value::as_i64)
-                .is_some_and(|sharpness| sharpness > 0)
-            {
-                "sharpen"
-            } else {
-                "video"
-            }
-        });
+                .unwrap_or(false),
+        }
+    } else {
+        source
+            .get("super_resolution_experimental")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    };
     let defaults = default_config_map();
     let mut normalized = Map::new();
 
@@ -271,11 +267,10 @@ pub fn normalize_config(source: Map<String, Value>) -> Map<String, Value> {
         normalized.insert(key.to_string(), normalize_value(key, candidate, fallback));
     }
 
-    normalized.insert("render_mode".to_string(), Value::from(render_mode));
-    normalized.insert(
-        "super_resolution_experimental".to_string(),
-        Value::from(render_mode == "sr"),
-    );
+    normalized.insert("super_resolution_experimental".to_string(), Value::from(sr));
+    if legacy && (matches!(legacy_mode, Some("video" | "sr")) || (legacy_mode.is_none() && sr)) {
+        normalized["display_options"]["sharpness"] = Value::from(0);
+    }
     normalized
 }
 
@@ -284,24 +279,6 @@ pub fn filter_patch(patch: &Map<String, Value>) -> Map<String, Value> {
     for (key, value) in patch {
         if allowed_key(key) {
             filtered_patch.insert(key.to_string(), value.clone());
-        }
-    }
-    // 兼容旧入口的写入；新入口以一个 patch 同时提交模式与完整画面配置。
-    if !patch.contains_key("render_mode") {
-        let legacy_mode = if let Some(enabled) = patch
-            .get("super_resolution_experimental")
-            .and_then(Value::as_bool)
-        {
-            Some(if enabled { "sr" } else { "video" })
-        } else {
-            patch
-                .get("display_options")
-                .and_then(|value| value.get("sharpness"))
-                .and_then(Value::as_i64)
-                .map(|sharpness| if sharpness > 0 { "sharpen" } else { "video" })
-        };
-        if let Some(mode) = legacy_mode {
-            filtered_patch.insert("render_mode".to_string(), Value::from(mode));
         }
     }
     filtered_patch
@@ -318,58 +295,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn render_controls_migrate_raw_legacy_intent_and_preserve_explicit_mode() {
-        for (source, mode, sharpness) in [
-            (json!({}), "video", 3),
-            (json!({"display_options": {"sharpness": 0}}), "video", 3),
-            (json!({"display_options": {"sharpness": 2}}), "sharpen", 1),
-            (json!({"display_options": {"sharpness": 3}}), "sharpen", 3),
-            (json!({"display_options": {"sharpness": 10}}), "sharpen", 3),
-            (
-                json!({"super_resolution_experimental": true, "display_options": {"sharpness": 3}}),
-                "sr",
-                3,
-            ),
+    fn render_controls_migrate_legacy_and_preserve_independent_effects() {
+        for (source, sr, sharpness) in [
+            (json!({}), false, 0),
+            (json!({"display_options": {"sharpness": 0}}), false, 0),
+            (json!({"display_options": {"sharpness": 2}}), false, 1),
+            (json!({"display_options": {"sharpness": 10}}), false, 3),
             (
                 json!({"render_mode": "video", "super_resolution_experimental": true, "display_options": {"sharpness": 3}}),
-                "video",
-                3,
+                false,
+                0,
             ),
             (
-                json!({"render_mode": "sharpen", "super_resolution_experimental": true, "display_options": {"sharpness": 1}}),
-                "sharpen",
-                1,
+                json!({"render_mode": "sr", "display_options": {"sharpness": 3}}),
+                true,
+                0,
+            ),
+            (
+                json!({"render_compatibility_mode": false, "super_resolution_experimental": true, "display_options": {"sharpness": 3}}),
+                true,
+                3,
             ),
         ] {
             let normalized = normalize_config(source.as_object().unwrap().clone());
-            assert_eq!(normalized["render_mode"], mode);
             assert_eq!(normalized["display_options"]["sharpness"], sharpness);
-            assert_eq!(normalized["super_resolution_experimental"], mode == "sr");
+            assert_eq!(normalized["super_resolution_experimental"], sr);
+            assert_eq!(normalized["render_compatibility_mode"], false);
+            assert!(!normalized.contains_key("render_mode"));
         }
     }
 
     #[test]
-    fn render_patch_keeps_new_mode_authoritative_and_adapts_legacy_writes() {
-        let patch = |value: Value| filter_patch(value.as_object().unwrap());
-        assert_eq!(
-            patch(json!({"super_resolution_experimental": true}))["render_mode"],
-            "sr"
-        );
-        assert_eq!(
-            patch(json!({"super_resolution_experimental": false}))["render_mode"],
-            "video"
-        );
-        assert_eq!(
-            patch(json!({"display_options": {"sharpness": 3}}))["render_mode"],
-            "sharpen"
-        );
-        let video = patch(
-            json!({"render_mode": "video", "display_options": {"sharpness": 3}, "super_resolution_experimental": true}),
-        );
-        assert_eq!(video["render_mode"], "video");
-        let normalized = normalize_config(video);
-        assert_eq!(normalized["super_resolution_experimental"], false);
+    fn render_patch_preserves_combined_effects_and_compatibility_intent() {
+        let patch = filter_patch(json!({"render_compatibility_mode": true, "super_resolution_experimental": true, "display_options": {"sharpness": 3, "brightness": 102}}).as_object().unwrap());
+        let normalized = normalize_config(patch);
+        assert_eq!(normalized["render_compatibility_mode"], true);
+        assert_eq!(normalized["super_resolution_experimental"], true);
         assert_eq!(normalized["display_options"]["sharpness"], 3);
+        assert_eq!(normalized["display_options"]["brightness"], 102);
+        assert!(!filter_patch(
+            json!({"super_resolution_experimental": false})
+                .as_object()
+                .unwrap()
+        )
+        .contains_key("display_options"));
     }
 
     #[test]

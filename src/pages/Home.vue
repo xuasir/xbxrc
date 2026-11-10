@@ -9,6 +9,7 @@ import seriesXImage from '../assets/console/series-x-transparent.png'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import ConsoleStatusCard from '../components/common/ConsoleStatusCard.vue'
 import PageUnavailable from '../components/common/PageUnavailable.vue'
+import UiMotionTransition from '../components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
@@ -255,8 +256,8 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
       <BrandedLoading :label="t('homePage.loading')" />
     </div>
     <template v-else-if="selectedCard">
-      <div class="home-page__hero-edge">
-        <Transition name="panel-slide" mode="out-in">
+      <div class="home-page__hero-edge ui-motion-stack">
+        <UiMotionTransition kind="panel">
           <section :key="selectedCard.hostKey" class="home-page__hero" :aria-label="selectedCard.title">
             <div class="home-page__hero-copy">
               <p class="home-page__eyebrow">
@@ -282,7 +283,7 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
             </div>
             <img class="home-page__console-art" :src="selectedCard.imageSrc" :alt="selectedCard.consoleType">
           </section>
-        </Transition>
+        </UiMotionTransition>
       </div>
       <section v-if="hostCards.length > 1" class="home-page__devices" :aria-label="t('homePage.hero.switch')">
         <header class="home-page__devices-header">

@@ -1,6 +1,5 @@
 import type {
   StreamingDisplayOptionsValue,
-  StreamingRenderMode,
   StreamingRenderProjection,
   StreamingRuntimeProjection,
   StreamingSessionCapabilitiesProjection,
@@ -600,7 +599,7 @@ export interface StreamConfigSnapshot {
   codec?: string
   video_format?: string
   display_options?: DisplayOptionsValue
-  render_mode?: StreamingRenderMode
+  render_compatibility_mode?: boolean
   super_resolution_experimental?: boolean
   performance_style?: boolean
   stream_runtime_mode?: 'webrtc-direct' | 'rust-owned'

@@ -36,7 +36,7 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "xhome_turn_fallback",
             "performance_style",
             "display_options",
-            "render_mode",
+            "render_compatibility_mode",
             "super_resolution_experimental"
         ]),
         "host": pick_group_values(config, &[]),
