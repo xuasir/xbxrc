@@ -69,6 +69,8 @@
   --ui-hover-top: #484e58;
   --ui-hover-bottom: #25282c;
   --ui-ambient-color: #566a57;
+  --ui-ambient-strength: 60%;
+  --ui-ambient-layer-filter: none;
   --ui-accent-glow: #1a9282;
   --ui-border-hover: rgba(155, 158, 164, .4);
   --ui-material-edge: rgba(255, 255, 255, .05);
@@ -581,12 +583,14 @@
 
   --ui-icon-text: #3b414b;
   --ui-panel-top: #ffffff;
-  --ui-panel-bottom: #e8ebef;
+  --ui-panel-bottom: #f5f6f8;
   --ui-selected-top: #e8f1ff;
   --ui-selected-bottom: #cadbf5;
   --ui-hover-top: #e8f1ff;
   --ui-hover-bottom: #cadbf5;
   --ui-ambient-color: #8acdb1;
+  --ui-ambient-strength: 8%;
+  --ui-ambient-layer-filter: opacity(.35);
   --ui-accent-glow: #9effdd;
   --ui-focus-ring-start: color-mix(in srgb, var(--ui-brand-border) 70%, #63766b);
   --ui-focus-ring-end: color-mix(in srgb, var(--ui-brand-edge-end) 55%, #637780);
@@ -594,7 +598,10 @@
   --ui-choice-selected-bg: rgba(22, 44, 70, .18);
   --ui-choice-selected-border: rgba(22, 44, 70, .2);
   --ui-material-hover: rgba(22, 44, 70, .05);
-  --ui-settings-item-bg: rgba(22, 44, 70, .035);
+  // 浅色表面以白色覆盖率建立层次，环境色只保留少量透入。
+  --ui-material-glass: linear-gradient(165deg, rgba(255, 255, 255, .96), rgba(255, 255, 255, .92));
+  --ui-material-overlay: radial-gradient(ellipse 120% 110% at 0% 0%, color-mix(in srgb, var(--ui-ambient-color) 3%, transparent), transparent 75%), linear-gradient(165deg, rgba(255, 255, 255, .98), rgba(255, 255, 255, .96));
+  --ui-settings-item-bg: rgba(255, 255, 255, .92);
   --ui-settings-choice-bg: rgba(22, 44, 70, .05);
   --ui-settings-switch-off-bg: rgba(22, 44, 70, .12);
   --ui-border-hover: rgba(96, 123, 156, .4);
@@ -602,7 +609,7 @@
   --ui-shadow-low: 0 4px 12px rgba(22, 44, 70, .08);
   --ui-shadow-medium: 0 8px 20px rgba(22, 44, 70, .11), 0 16px 36px rgba(22, 44, 70, .06);
   --ui-shadow-material: 0 12px 32px -12px rgba(22, 44, 70, .12);
-  --ui-console-hero-bg: radial-gradient(ellipse at 10% 0%, rgba(111, 220, 148, .1), transparent 70%), radial-gradient(ellipse at 100% 100%, rgba(0, 110, 165, .05), transparent 75%), var(--ui-material-glass);
+  --ui-console-hero-bg: radial-gradient(ellipse at 10% 0%, rgba(111, 220, 148, .04), transparent 70%), radial-gradient(ellipse at 100% 100%, rgba(0, 110, 165, .025), transparent 75%), var(--ui-material-glass);
 
   --ui-surface-panel: #{$ui-surface-panel-light};
   --ui-surface-panel-strong: #{$ui-surface-panel-strong-light};

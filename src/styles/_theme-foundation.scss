@@ -2,7 +2,7 @@ $color-neutral-0: #ffffff;
 $color-neutral-1000: #000000;
 
 // 基础色板：只保留可复用的原始色，不直接绑定具体组件或页面
-$color-slate-50: #eef1f5;
+$color-slate-50: #f8f9fb;
 $color-slate-820: #17191b;
 $color-slate-950: #07090b;
 
@@ -176,8 +176,8 @@ $ui-page-glow-light: rgba($color-page-glow-light-base, $alpha-28);
 $ui-page-glow-soft-light: rgba($color-page-glow-soft-light-base, $alpha-18);
 $ui-page-glow-strong-light: rgba($color-page-glow-strong-light-base, $alpha-28);
 
-$ui-surface-panel-light: rgba($color-panel-surface-light-base, $alpha-72);
-$ui-surface-panel-strong-light: rgba($color-panel-surface-light-base, $alpha-86);
+$ui-surface-panel-light: rgba($color-panel-surface-light-base, $alpha-92);
+$ui-surface-panel-strong-light: rgba($color-panel-surface-light-base, 0.98);
 $ui-border-panel-light: rgba($color-panel-border-light-base, $alpha-18);
 
 $ui-focus-border-light: #176376;

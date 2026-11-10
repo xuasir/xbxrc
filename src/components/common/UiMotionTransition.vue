@@ -110,7 +110,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Transition :css="false" @before-leave="beforeLeave" @enter="(element, done) => animate(element, done, true)" @leave="(element, done) => animate(element, done, false)" @enter-cancelled="cancel" @leave-cancelled="cancel" @after-enter="emit('afterEnter')">
+  <!-- 弹窗随编辑项 key 重建时，首次挂载也沿用进入过渡。 -->
+  <Transition :css="false" :appear="props.kind === 'overlay'" @before-leave="beforeLeave" @enter="(element, done) => animate(element, done, true)" @leave="(element, done) => animate(element, done, false)" @enter-cancelled="cancel" @leave-cancelled="cancel" @after-enter="emit('afterEnter')">
     <slot />
   </Transition>
 </template>

@@ -2,6 +2,8 @@
 
 日期：2026-11-10。三个实施阶段已交付，用户实机验收保留在[实施 RFC](../../../docs/rfcs/2026-11-10-ui-motion-vitality.md)。
 
+后续弹窗反馈补充：验证入口新增设置单选 / 数值编辑项的首次挂载、重复打开、关闭来源恢复及减少动态效果场景。原有 35 项证据保留为此任务初次验证快照；最新回归结果见[弹窗首次进入修复](../2026-11-10-overlay-mount-enter-motion/README.md)。
+
 ## 实际装配与检查
 
 [验证入口](index.html)通过生产 `/src/main.ts` 加载完整 App、Vue Router、KeepAlive、FocusScope、navigationEngine、InputController、实际 HTMLVideoElement 和 WAAPI。Rust RPC 复用已有[离线数据](../2026-11-09-gamepad-focus-action-completion/project-fixture.js)。窗口背景事实由测试直接投影到 InputController，系统减少动态效果由入口模拟 MediaQueryList；原生窗口与真实系统偏好列入实机验收。原生输入外层使用短暂加入页面 Scope 的隔离 DOM 夹具。

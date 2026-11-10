@@ -187,6 +187,26 @@ button.onclick = async () => {
     await settle(150)
     check('返回源导航，弹层退出 120ms 后释放 DOM', navigationEngine.getCurrentFocus()?.id === 'top-nav.profile' && !document.querySelector('.user-menu-layer') && animations.some(item => item.duration === 120), snapshot())
 
+    node('setting.tabs.streamingExperience').click()
+    await settle()
+    for (const field of ['xhome_resolution', 'xhome_bitrate', 'xcloud_bitrate', 'xhome_resolution']) {
+      const source = node(`setting.items.streamingExperience.${field}`)
+      navigationEngine.focusElement(source, false)
+      await settle()
+      const start = animations.length
+      source.click()
+      await frame()
+      await frame()
+      const panel = document.querySelector<HTMLElement>('.setting-modal-shell__panel')!
+      const enter = animations.slice(start).find(item => item.target === panel && item.duration === 160 && item.delay === 20)
+      check(`${field} 重建后首次进入执行 180ms/6px 动效`, !!enter && (enter.frames as Keyframe[])[0].transform === 'translateY(6px)', { animation: enter, panelTransform: getComputedStyle(panel).transform })
+      await settle()
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await settle(150)
+      check(`${field} 关闭恢复来源并释放弹窗`, !document.querySelector('.setting-modal-shell') && navigationEngine.getCurrentFocus()?.id === source.id, snapshot())
+    }
+    node('setting.tabs.general').click()
+    await settle()
     navigationEngine.focusElement(node('setting.content.general.inlineSelect.setting.items.general.theme.option.0'), false)
     await settle()
     const scroll = document.querySelector<HTMLElement>('.setting-panel__content')!
@@ -231,6 +251,17 @@ button.onclick = async () => {
     reducedPreference.dispatchEvent(new Event('change'))
     await frame()
     check('减少动态效果保留逻辑焦点与静态 fallback', snapshot().motion === 'static' && ring().hidden && !!navigationEngine.getCurrentFocus(), snapshot())
+    node('setting.tabs.streamingExperience').click()
+    await settle(120)
+    const staticStart = animations.length
+    node('setting.items.streamingExperience.xhome_resolution').click()
+    await settle(120)
+    const staticPanel = document.querySelector('.setting-modal-shell__panel')!
+    check('首次挂载弹窗遵循减少动态效果并保持可操作焦点', !!staticPanel && !animations.slice(staticStart).some(item => staticPanel === item.target || item.target.contains(staticPanel)) && snapshot().motion === 'static' && navigationEngine.getCurrentFocus()?.id?.includes('.option.') === true, snapshot())
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await settle(120)
+    node('setting.tabs.general').click()
+    await settle(120)
     reducedPreference.matches = false
     reducedPreference.dispatchEvent(new Event('change'))
     await settle(120)
