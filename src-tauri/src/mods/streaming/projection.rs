@@ -107,6 +107,7 @@ pub(super) fn to_domain_ice_candidate(candidate: &StreamingIceCandidate) -> Doma
         sdp_mid: candidate.sdp_mid.clone(),
         username_fragment: candidate.username_fragment.clone(),
         message_type: candidate.message_type.clone(),
+        source: candidate.source.clone(),
     }
 }
 
@@ -117,6 +118,7 @@ pub(super) fn from_domain_ice_candidate(candidate: DomainIceCandidate) -> Stream
         sdp_mid: candidate.sdp_mid,
         username_fragment: candidate.username_fragment,
         message_type: candidate.message_type,
+        source: candidate.source,
     }
 }
 

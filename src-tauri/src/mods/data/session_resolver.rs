@@ -142,10 +142,32 @@ impl DataSessionResolver {
             }
             result = request(session.clone()).await;
         }
-        if !self.is_current_session(&session) {
+        let current = if scope.stream_key().is_some() {
+            self.is_current_streaming_session(&session, scope)
+        } else {
+            self.is_current_session(&session)
+        };
+        if !current {
             return Err(WebApiError::parse("登录状态已更新，请重新查询"));
         }
         result
+    }
+
+    pub fn is_current_streaming_session(
+        &self,
+        session: &DataSessionContext,
+        scope: AuthTokenScope,
+    ) -> bool {
+        self.is_current_session(session)
+            && self
+                .current_session()
+                .ok()
+                .flatten()
+                .is_some_and(|current| {
+                    scope.stream_key().is_some_and(|key| {
+                        current.streaming_tokens.get(key) == session.streaming_tokens.get(key)
+                    })
+                })
     }
 
     pub fn is_current_session(&self, session: &DataSessionContext) -> bool {

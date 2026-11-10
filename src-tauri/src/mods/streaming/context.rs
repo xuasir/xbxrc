@@ -13,6 +13,7 @@ struct ResolvedRemotePlayContext {
     remote_management_enabled: Option<bool>,
     console_streaming_enabled: Option<bool>,
     console_addrs: Vec<DomainHostAddr>,
+    discovery_region_name: Option<String>,
 }
 
 impl StreamingService {
@@ -68,10 +69,17 @@ impl StreamingService {
 
         let access_context = parse_session_access_context(&token)
             .map_err(|error| AppError::Streaming(error.to_string()))?;
+        domain_config.session.force_region_ip = None;
+        if !target.is_home() {
+            let name = self
+                .config_provider
+                .resolve_cloud_region_preference(&access_context.regions);
+            domain_config.session.preferred_region_name = (!name.is_empty()).then_some(name);
+        }
 
         let context = self
             .build_domain_context(target, target_id, target_type.as_str(), access_context)
-            .await;
+            .await?;
         self.runtime_trace.record_snapshot(
             "streaming",
             "contextSnapshot",
@@ -147,11 +155,17 @@ impl StreamingService {
         target_id: &str,
         target_type: &str,
         session: DomainSessionAccessContext,
-    ) -> DomainContext {
+    ) -> Result<DomainContext, AppError> {
         let title_capability = self.resolve_title_capabilities(target, target_id).await;
-        let remote_play = self.resolve_remote_play_context(target, target_id).await;
+        let remote_play = self.resolve_remote_play_context(target, target_id).await?;
+        let mut session = session;
+        if let Some(name) = &remote_play.discovery_region_name {
+            session
+                .regions
+                .retain(|region| region.name.eq_ignore_ascii_case(name));
+        }
 
-        DomainContext {
+        Ok(DomainContext {
             target,
             target_id: target_id.to_string(),
             session,
@@ -171,7 +185,7 @@ impl StreamingService {
                 console_streaming_enabled: remote_play.console_streaming_enabled,
                 console_addrs: remote_play.console_addrs,
             },
-        }
+        })
     }
 
     async fn resolve_fallback_turn_server(&self, target_type: &str) -> Option<TurnServer> {
@@ -227,29 +241,26 @@ impl StreamingService {
         &self,
         target: DomainTarget,
         target_id: &str,
-    ) -> ResolvedRemotePlayContext {
+    ) -> Result<ResolvedRemotePlayContext, AppError> {
         if !target.is_home() || target_id.trim().is_empty() {
-            return ResolvedRemotePlayContext::default();
+            return Ok(ResolvedRemotePlayContext::default());
         }
 
-        let consoles = match self.data_provider.get_remote_consoles().await {
+        let console = match self.data_provider.find_remote_console(target_id).await {
             Ok(value) => value,
             Err(error) => {
                 log::warn!("streaming console addrs resolve failed: {error}");
-                return ResolvedRemotePlayContext::default();
+                return Err(AppError::Streaming(error.to_string()));
             }
         };
 
-        let Some(console) = consoles.into_iter().find(|item| {
-            item.server_id.as_deref() == Some(target_id)
-                || item.id.as_deref() == Some(target_id)
-                || item.device_id.as_deref() == Some(target_id)
-        }) else {
-            return ResolvedRemotePlayContext::default();
+        let Some(console) = console else {
+            return Ok(ResolvedRemotePlayContext::default());
         };
 
-        ResolvedRemotePlayContext {
-            configuration_resolved: true,
+        Ok(ResolvedRemotePlayContext {
+            configuration_resolved: false,
+            discovery_region_name: console.discovery_region_name,
             remote_management_enabled: console.remote_management_enabled,
             console_streaming_enabled: console.console_streaming_enabled,
             console_addrs: console
@@ -261,7 +272,7 @@ impl StreamingService {
                     port: item.port,
                 })
                 .collect(),
-        }
+        })
     }
 }
 

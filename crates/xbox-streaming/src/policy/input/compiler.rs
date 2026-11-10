@@ -21,6 +21,7 @@ pub fn compile_input(
         owner: runtime.input,
         mode,
         polling_rate_hz: config.input.polling_rate_hz.max(1),
+        prevent_resolution_drops: config.input.prevent_resolution_drops,
         vibration: config.input.vibration,
         mouse: matches!(mode, InputMode::NativeMkb),
         keyboard: matches!(mode, InputMode::NativeMkb),

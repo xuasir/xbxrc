@@ -67,6 +67,23 @@ pub trait DataProvider: Send + Sync {
     async fn get_user_profile(&self) -> Result<DataUserProfile, DataError>;
     async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, DataError>;
     async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, DataError>;
+    async fn find_remote_console(
+        &self,
+        target: &str,
+    ) -> Result<Option<DataHostSummary>, DataError> {
+        Ok(self.get_remote_consoles().await?.into_iter().find(|item| {
+            [&item.server_id, &item.id, &item.device_id]
+                .into_iter()
+                .flatten()
+                .any(|identity| identity == target)
+        }))
+    }
+    async fn get_streaming_regions(
+        &self,
+        _target: xbox_streaming::Target,
+    ) -> Result<DataStreamingRegions, DataError> {
+        Ok(DataStreamingRegions::default())
+    }
     async fn get_streaming_title_input_config(
         &self,
         xbox_title_id: &str,

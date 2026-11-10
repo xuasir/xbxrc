@@ -98,15 +98,6 @@ pub fn pick_region<'a>(regions: &'a [Region], config: &Config) -> Result<&'a Reg
         return Err(CompileError::MissingRegions);
     }
 
-    if let Some(force_region_ip) = normalize_optional_string(&config.session.force_region_ip) {
-        if let Some(region) = regions
-            .iter()
-            .find(|item| item.base_uri.contains(&force_region_ip))
-        {
-            return Ok(region);
-        }
-    }
-
     if let Some(preferred_region_name) =
         normalize_optional_string(&config.session.preferred_region_name)
     {
@@ -124,6 +115,15 @@ pub fn pick_region<'a>(regions: &'a [Region], config: &Config) -> Result<&'a Reg
         }
     }
 
+    if let Some(force_region_ip) = normalize_optional_string(&config.session.force_region_ip) {
+        if let Some(region) = regions
+            .iter()
+            .find(|item| item.base_uri.contains(&force_region_ip))
+        {
+            return Ok(region);
+        }
+    }
+
     regions
         .iter()
         .find(|item| item.is_default)
@@ -131,19 +131,31 @@ pub fn pick_region<'a>(regions: &'a [Region], config: &Config) -> Result<&'a Reg
         .ok_or(CompileError::NoUsableRegion)
 }
 
-fn normalize_base_url(base_uri: &str) -> Option<String> {
-    let trimmed = base_uri.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let normalized = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        trimmed.to_string()
+pub fn normalize_base_url(base_uri: &str) -> Option<String> {
+    let trimmed = base_uri.trim();
+    let normalized = if trimmed.contains("://") {
+        trimmed.to_owned()
     } else {
         format!("https://{trimmed}")
     };
-
-    (normalized != "https://" && normalized != "http://").then_some(normalized)
+    let url = reqwest::Url::parse(&normalized).ok()?;
+    let loopback = url.host_str().is_some_and(|host| {
+        host == "localhost"
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback())
+    });
+    if (url.scheme() != "https" && !(url.scheme() == "http" && loopback))
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    Some(url.as_str().trim_end_matches('/').to_owned())
 }
 
 fn normalize_locale(locale: &str) -> String {
@@ -438,6 +450,44 @@ mod tests {
             base_url: "https://example.com".to_string(),
             region: None,
         }
+    }
+
+    #[test]
+    fn explicit_region_precedes_legacy_and_automatic_consumes_default() {
+        let regions = vec![
+            Region {
+                name: "first".into(),
+                base_uri: "https://first.example".into(),
+                ..Default::default()
+            },
+            Region {
+                name: "second".into(),
+                base_uri: "https://second.example".into(),
+                is_default: true,
+                ..Default::default()
+            },
+        ];
+        let mut config = Config::default();
+        config.session.force_region_ip = Some("first".into());
+        config.session.preferred_region_name = Some("SECOND".into());
+        assert_eq!(pick_region(&regions, &config).unwrap().name, "second");
+        config.session.force_region_ip = None;
+        config.session.preferred_region_name = Some("expired".into());
+        assert_eq!(pick_region(&regions, &config).unwrap().name, "second");
+        config.session.preferred_region_name = None;
+        assert_eq!(pick_region(&regions, &config).unwrap().name, "second");
+        for url in [
+            "https://user:pass@example.com",
+            "https://example.com/path",
+            "https://example.com?q=token",
+            "http://example.com",
+        ] {
+            assert!(normalize_base_url(url).is_none());
+        }
+        assert_eq!(
+            normalize_base_url("https://example.com/"),
+            Some("https://example.com".into())
+        );
     }
 
     #[test]

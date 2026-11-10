@@ -5,6 +5,7 @@ import type { ObservedVideoFrameMetadata } from './video-frame-source'
 import { FrameCaptureQueue } from './frame-capture-queue'
 import { FramePacer } from './frame-pacer'
 import { Fsr1ReconstructionPass } from './fsr1-reconstruction-pass'
+import { createFullscreenVertexShader } from './fullscreen-triangle'
 import { RenderObservation } from './render-observation'
 import { observeRenderSurface } from './render-surface-observation'
 import {
@@ -294,6 +295,7 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private hasDrawnFrame = false
   private contextListenersBound = false
   private outputResolutionUniform: WebGLUniformLocation | null = null
+  private sourceTexelSizeUniform: WebGLUniformLocation | null = null
   private sourceResolutionUniform: WebGLUniformLocation | null = null
   private filterIdUniform: WebGLUniformLocation | null = null
   private applyColorUniform: WebGLUniformLocation | null = null
@@ -311,10 +313,9 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private onFrameReady?: () => void
   private drewToScreenThisFrame = false
   private readonly shaders: WebGLShader[] = []
-  private vertexBuffer: WebGLBuffer | null = null
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, superResolutionActive: this.usesReconstruction(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: (this.reconstruction?.gpuObjects ?? 0) + [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, this.vertexBuffer, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, superResolutionActive: this.usesReconstruction(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: (this.reconstruction?.gpuObjects ?? 0) + [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -419,22 +420,16 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
       this.contextListenersBound = true
     }
     gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
-    const vShader = gl.createShader(gl.VERTEX_SHADER)!
+    const vShader = createFullscreenVertexShader(gl)
     this.shaders.push(vShader)
-    gl.shaderSource(vShader, `#version 300 es
-layout(location=0) in vec4 position;
-void main(){ gl_Position = position; }`)
-    gl.compileShader(vShader)
-    if (!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)) {
-      throw new Error(`webgl2VertexShaderCompileFailed:${gl.getShaderInfoLog(vShader) ?? 'unknown'}`)
-    }
     const fShader = gl.createShader(gl.FRAGMENT_SHADER)!
     this.shaders.push(fShader)
     gl.shaderSource(fShader, `#version 300 es
 precision highp float;
-uniform sampler2D data;
+uniform highp sampler2D data;
 uniform vec2 outputResolution;
 uniform vec2 sourceResolution;
+uniform vec2 sourceTexelSize;
 uniform int filterId;
 uniform bool applyColor;
 uniform float sharpenFactor;
@@ -452,7 +447,7 @@ const float CAS_CHROMA_BLEND = ${CAS_CHROMA_BLEND.toFixed(4)};
 const float USM_GAIN_SCALE = ${USM_GAIN_SCALE.toFixed(4)};
 const float USM_NOISE_FLOOR = ${USM_NOISE_FLOOR.toFixed(6)};
 vec3 usmBoost(vec2 uv, vec3 center) {
-  vec2 texel = 1.0 / sourceResolution.xy;
+  vec2 texel = sourceTexelSize;
   vec3 blur;
   vec3 neighborhoodMin;
   vec3 neighborhoodMax;
@@ -496,7 +491,7 @@ vec3 usmBoost(vec2 uv, vec3 center) {
 // 原式等价于 out = center + (center - mean4) * G，平坦区 G=3.33 会把编码噪声放大成颗粒，
 // 强边缘 G->0 又让轮廓保持糊；这里给 G 加上限、给低对比残差加软门限，并限制过冲。
 vec3 casBoost(vec2 uv, vec3 center) {
-  vec2 texel = 1.0 / sourceResolution.xy;
+  vec2 texel = sourceTexelSize;
   vec3 b = texture(data, uv + texel * vec2(0.0, 1.0)).rgb;
   vec3 d = texture(data, uv + texel * vec2(-1.0, 0.0)).rgb;
   vec3 f = texture(data, uv + texel * vec2(1.0, 0.0)).rgb;
@@ -549,7 +544,9 @@ void main() {
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       throw new Error(`webgl2ProgramLinkFailed:${gl.getProgramInfoLog(program) ?? 'unknown'}`)
     }
+    this.releaseLinkedShaders(gl, program)
     gl.useProgram(program)
+    this.sourceTexelSizeUniform = gl.getUniformLocation(program, 'sourceTexelSize')
     this.outputResolutionUniform = gl.getUniformLocation(program, 'outputResolution')
     this.sourceResolutionUniform = gl.getUniformLocation(program, 'sourceResolution')
     this.filterIdUniform = gl.getUniformLocation(program, 'filterId')
@@ -561,12 +558,6 @@ void main() {
 
     gl.useProgram(program)
     gl.activeTexture?.(gl.TEXTURE0)
-    const buffer = gl.createBuffer()!
-    this.vertexBuffer = buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, 3.0, -1.0, -1.0, 3.0]), gl.STATIC_DRAW)
-    gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
     const texture = gl.createTexture()!
     this.videoTexture = texture
     gl.bindTexture(gl.TEXTURE_2D, texture)
@@ -581,15 +572,24 @@ void main() {
     this.guard?.check(performance.now(), true)
   }
 
+  private releaseLinkedShaders(gl: WebGL2RenderingContext, program: WebGLProgram): void {
+    for (const shader of this.shaders.splice(0)) {
+      gl.detachShader?.(program, shader)
+      gl.deleteShader?.(shader)
+    }
+  }
+
   private ensurePresentProgram(gl: WebGL2RenderingContext): void {
     if (this.presentProgram !== null)
       return
     // 呈现 pass：只做升采样 + 色彩，锐化已经在源尺寸 FBO 上按 1:1 完成。
+    const vertex = createFullscreenVertexShader(gl)
+    this.shaders.push(vertex)
     const presentShader = gl.createShader(gl.FRAGMENT_SHADER)!
     this.shaders.push(presentShader)
     gl.shaderSource(presentShader, `#version 300 es
 precision highp float;
-uniform sampler2D data;
+uniform highp sampler2D data;
 uniform vec2 outputResolution;
 uniform float brightness;
 uniform float contrast;
@@ -613,12 +613,13 @@ void main() {
     }
     const presentProgram = gl.createProgram()!
     this.presentProgram = presentProgram
-    gl.attachShader(presentProgram, this.shaders[0]!)
+    gl.attachShader(presentProgram, vertex)
     gl.attachShader(presentProgram, presentShader)
     gl.linkProgram(presentProgram)
     if (!gl.getProgramParameter(presentProgram, gl.LINK_STATUS)) {
       throw new Error(`webgl2PresentProgramLinkFailed:${gl.getProgramInfoLog(presentProgram) ?? 'unknown'}`)
     }
+    this.releaseLinkedShaders(gl, presentProgram)
     gl.useProgram(presentProgram)
     this.presentOutputResolutionUniform = gl.getUniformLocation(presentProgram, 'outputResolution')
     this.presentBrightnessUniform = gl.getUniformLocation(presentProgram, 'brightness')
@@ -653,6 +654,7 @@ void main() {
     }
     gl.uniform2f(this.outputResolutionUniform, sourcePass ? width : this.currentOutputWidth, sourcePass ? height : this.currentOutputHeight)
     gl.uniform2f(this.sourceResolutionUniform, width, height)
+    gl.uniform2f(this.sourceTexelSizeUniform, 1 / width, 1 / height)
     gl.uniform1i(this.filterIdUniform, this.toFilterId(this.options.processing))
     gl.uniform1i(this.applyColorUniform, !sourcePass && applyColor ? 1 : 0)
     gl.uniform1f(this.sharpenFactorUniform, this.options.sharpness)
@@ -762,7 +764,7 @@ void main() {
       }
       uploadFinishedAtMs = performance.now()
       if (this.usesReconstruction()) {
-        this.reconstruction ??= new Fsr1ReconstructionPass(gl, this.shaders[0]!)
+        this.reconstruction ??= new Fsr1ReconstructionPass(gl)
         const rebuilt = this.reconstruction.render(this.videoTexture!, sourceWidth, sourceHeight, this.currentOutputWidth, this.currentOutputHeight)
         gl.bindTexture(gl.TEXTURE_2D, rebuilt)
       }
@@ -928,12 +930,10 @@ void main() {
         gl.deleteProgram?.(this.program)
       if (this.presentProgram)
         gl.deleteProgram?.(this.presentProgram)
-      if (this.vertexBuffer)
-        gl.deleteBuffer?.(this.vertexBuffer)
       for (const shader of this.shaders.splice(0)) gl.deleteShader?.(shader)
     }
     this.shaders.length = 0
-    this.vertexBuffer = this.videoTexture = this.program = this.presentProgram = this.gl = null
+    this.videoTexture = this.program = this.presentProgram = this.gl = null
     this.guard?.timer.dispose()
     this.guard = undefined
   }

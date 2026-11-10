@@ -462,6 +462,7 @@ export interface StreamExperienceMetricsViewModel {
 
 /** webrtc-direct 内部诊断面板 */
 export interface StreamBrowserDiagnosticsViewModel {
+  resolutionFeedback: string
   rtt: string
   jitter: string
   packetLoss: string

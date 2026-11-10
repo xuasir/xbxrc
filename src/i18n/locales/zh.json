@@ -250,7 +250,14 @@
           "transportPath": "连接路径",
           "serverHost": "服务器",
           "sampleAge": "采样距今",
-          "senderPolicyCause": "发送策略归因"
+          "senderPolicyCause": "发送策略归因",
+          "resolutionFeedback": "分辨率保持策略"
+        },
+        "feedbackStates": {
+          "disabled": "已关闭",
+          "active": "已生效",
+          "awaiting-metadata": "等待帧反馈能力",
+          "metadata-unavailable": "当前帧反馈能力不可用"
         }
       },
       "rust": {
@@ -1431,10 +1438,10 @@
         }
       },
       "force_region_ip": {
-        "label": "云游戏地区",
+        "label": "登录地区",
         "options": {
           "empty": {
-            "label": "默认",
+            "label": "自动",
             "description": "使用系统默认的区域路由策略。"
           },
           "203_41_44_20": {
@@ -1462,7 +1469,7 @@
             "label": "印度中部"
           }
         },
-        "description": "选择云游戏连接使用的地区。"
+        "description": "用于获取云服务授权。所在地未开放云游戏时可选择已开放地区，保存后刷新云游戏页面。串流服务器区域在云游戏设置中选择。"
       },
       "codec": {
         "label": "视频编码档位偏好",
@@ -1595,6 +1602,14 @@
             "description": "详细"
           }
         }
+      },
+      "prevent_resolution_drops": {
+        "label": "防止分辨率下降（实验性）",
+        "description": "优先保持清晰度；设备压力较高时可能增加卡顿。实际画质随网络和服务端策略变化。"
+      },
+      "xcloud_region_name": {
+        "label": "云服务器区域",
+        "description": "选择下一次云串流使用的服务器区域。"
       }
     },
     "experience": {
@@ -1637,7 +1652,7 @@
         "streamingAdvanced": "高级 · 编码与码率",
         "cloudPreferences": "云游戏偏好",
         "network": "连接策略",
-        "connectionAdvanced": "高级 · 自定义中继",
+        "connectionAdvanced": "高级连接设置",
         "diagnostics": "日志与诊断"
       },
       "turn": {
@@ -1679,6 +1694,16 @@
         "clear": "清空",
         "done": "完成"
       }
+    },
+    "cloudRegions": {
+      "automatic": "自动（服务推荐）",
+      "loading": "正在获取可用服务器区域…",
+      "unavailable": "云服务授权和可用区域暂未取得。可在高级设置的云服务登录兼容中调整登录地区后重试。",
+      "savedUnavailable": "{name}（暂不可用，连接时自动回退）",
+      "loginCompatibility": "云服务登录兼容",
+      "loginHint": "用于获取云服务授权；所在地未开放云游戏时可选择已开放登录地区。",
+      "saved": "{name}（已保存）",
+      "empty": "当前服务没有返回可用服务器区域，可重新打开此项刷新。"
     }
   },
   "controllerPage": {

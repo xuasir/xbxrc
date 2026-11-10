@@ -40,9 +40,11 @@ pub fn parse_session_access_context(token: &Value) -> Result<SessionAccessContex
         .and_then(Value::as_array)
         .ok_or(CompileError::MissingRegions)?;
 
+    let mut seen = std::collections::BTreeSet::new();
     let regions = raw_regions
         .iter()
         .filter_map(parse_region)
+        .filter(|region| seen.insert(region.name.to_ascii_lowercase()))
         .collect::<Vec<_>>();
     if regions.is_empty() {
         return Err(CompileError::MissingRegions);
@@ -74,17 +76,15 @@ pub fn resolve_session_access_from_token(
 
 fn parse_region(value: &Value) -> Option<Region> {
     let object = value.as_object()?;
+    let name = object.get("name")?.as_str()?.trim();
+    if name.is_empty() || name.len() > 128 || name.chars().any(char::is_control) {
+        return None;
+    }
+    let base_uri =
+        crate::policy::session::compiler::normalize_base_url(object.get("baseUri")?.as_str()?)?;
     Some(Region {
-        name: object
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
-        base_uri: object
-            .get("baseUri")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
+        name: name.to_owned(),
+        base_uri,
         is_default: object
             .get("isDefault")
             .and_then(Value::as_bool)
@@ -150,5 +150,19 @@ mod tests {
 
         assert_eq!(access.gs_token, "gs-token");
         assert_eq!(access.base_url, "https://west.example.com");
+    }
+    #[test]
+    fn service_regions_drop_invalid_origins_and_deduplicate_stable_names() {
+        let token = serde_json::json!({"gsToken":"token", "offeringSettings":{"regions":[
+            {"name":" WestUS ","baseUri":"https://wus.example/","isDefault":true},
+            {"name":"westus","baseUri":"https://duplicate.example"},
+            {"name":"","baseUri":"https://empty.example"},
+            {"name":"unsafe","baseUri":"https://user:pass@unsafe.example"},
+            {"name":"JapanEast","baseUri":"https://jp.example"}
+        ]}});
+        let access = parse_session_access_context(&token).unwrap();
+        assert_eq!(access.regions.len(), 2);
+        assert_eq!(access.regions[0].name, "WestUS");
+        assert_eq!(access.regions[0].base_uri, "https://wus.example");
     }
 }

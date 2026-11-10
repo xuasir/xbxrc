@@ -110,3 +110,105 @@ fn permits_same_candidates_when_fresh_answer_reuses_remote_credentials() {
     state.apply_media_answer(&answer("same"));
     assert_eq!(state.filter_ice(Some(candidates.clone())), Some(candidates));
 }
+
+fn bound_state() -> SessionSignalingState {
+    let mut state = SessionSignalingState::default();
+    state.apply_media_answer(&AnswerPayload {
+        sdp: "v=0\nm=video 9 UDP/TLS/RTP/SAVPF 96\na=mid:video\na=ice-ufrag:current\n".into(),
+        message_type: None,
+    });
+    state
+}
+#[test]
+fn config_can_supply_empty_ice_and_rebind_after_restart() {
+    let mut state = bound_state();
+    let config = serde_json::json!({"serverDetails":{"ipAddress":"192.0.2.1","port":5000}});
+    state.observe_configuration(Some(&config), false);
+    let first = state.supplement_home_ice(None, &[], false).unwrap();
+    assert_eq!(first.len(), 2);
+    assert!(state.supplement_home_ice(None, &[], false).is_none());
+    state.apply_media_answer(&AnswerPayload {
+        sdp: "v=0\nm=video 9 UDP/TLS/RTP/SAVPF 96\na=mid:video\na=ice-ufrag:current\n".into(),
+        message_type: None,
+    });
+    assert!(state.supplement_home_ice(None, &[], false).is_none());
+    state.begin_media_ice(vec!["new-local".into()], None);
+    state.apply_media_answer(&AnswerPayload {
+        sdp: "v=0\nm=video 9 UDP/TLS/RTP/SAVPF 96\na=mid:new-video\na=ice-ufrag:new\n".into(),
+        message_type: None,
+    });
+    state.observe_configuration(Some(&config), false);
+    assert!(state
+        .supplement_home_ice(None, &[], false)
+        .unwrap()
+        .iter()
+        .all(
+            |candidate| candidate.username_fragment.as_deref() == Some("new")
+                && candidate.sdp_mid.as_deref() == Some("new-video")
+        ));
+}
+#[test]
+fn remote_endpoint_wins_dedup_and_config_budget_releases_end_marker() {
+    let mut state = bound_state();
+    let mut remote = candidate(Some("current"));
+    remote.sdp_mid = Some("video".into());
+    state.observe_configuration(
+        Some(&serde_json::json!({"serverDetails":{"ipAddress":"192.0.2.1","port":5000}})),
+        false,
+    );
+    let candidates = state
+        .supplement_home_ice(
+            Some(vec![remote, end()]),
+            &[HostAddr {
+                ip: "192.0.2.1".into(),
+                port: 5000,
+            }],
+            false,
+        )
+        .unwrap();
+    assert_eq!(candidates.len(), 3);
+    assert!(candidates[0].source.is_none());
+    let mut state = bound_state();
+    state
+        .begin_configuration_poll(tokio::time::Instant::now() - std::time::Duration::from_secs(11));
+    assert!(state
+        .supplement_home_ice(Some(vec![end()]), &[], false)
+        .is_some());
+    assert!(!state.configuration_pending());
+}
+
+#[test]
+fn pending_end_markers_keep_each_current_unbundled_transport() {
+    let mut state = bound_state();
+    state.apply_media_answer(&AnswerPayload {
+        sdp: "v=0\nm=video 9 UDP/TLS/RTP/SAVPF 96\na=mid:video\na=ice-ufrag:current\nm=audio 9 UDP/TLS/RTP/SAVPF 111\na=mid:audio\na=ice-ufrag:voice\n".into(),
+        message_type: None,
+    });
+    let mut video_end = end();
+    video_end.sdp_mid = Some("video".into());
+    video_end.sdp_m_line_index = Some(0);
+    video_end.username_fragment = Some("current".into());
+    let mut audio_end = end();
+    audio_end.sdp_mid = Some("audio".into());
+    audio_end.sdp_m_line_index = Some(1);
+    audio_end.username_fragment = Some("voice".into());
+    let filtered = state.filter_ice(Some(vec![
+        video_end.clone(),
+        audio_end.clone(),
+        audio_end.clone(),
+    ]));
+    assert!(state.supplement_home_ice(filtered, &[], false).is_none());
+    state.observe_configuration(None, true);
+    let released = state.supplement_home_ice(None, &[], false).unwrap();
+    assert_eq!(released, vec![video_end, audio_end]);
+    assert!(state.supplement_home_ice(None, &[], false).is_none());
+}
+
+#[test]
+fn rejects_end_marker_with_explicit_old_remote_credentials() {
+    let mut state = bound_state();
+    let mut old_end = end();
+    old_end.username_fragment = Some("old".into());
+    assert!(state.filter_ice(Some(vec![old_end])).is_none());
+    assert!(state.filter_ice(Some(vec![end()])).is_some());
+}

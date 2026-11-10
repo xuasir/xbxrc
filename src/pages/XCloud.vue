@@ -53,6 +53,7 @@ let loadMoreObserver: IntersectionObserver | null = null
 let disposeTabSwitch: (() => void) | undefined
 let disposeCatalogUpdated: (() => void) | undefined
 let disposeAuthChanged: (() => void) | undefined
+let pageActive = false
 const catalogRequests = new CatalogRequestState()
 const pageFocus = usePageFocus(() => pageRef.value, () => 'catalog', () => SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud)
 
@@ -347,6 +348,7 @@ async function loadTitles(forceRefresh = false): Promise<void> {
 }
 
 onMounted(() => {
+  pageActive = true
   handleResize()
   window.addEventListener('resize', handleResize)
   disposeCatalogUpdated = events.on('data.xcloudCatalogUpdated', (payload) => {
@@ -355,9 +357,10 @@ onMounted(() => {
   })
   disposeAuthChanged = events.on('auth.stateChanged', (state) => {
     appLevel.value = state.appLevel
-    if (!state.isAuthenticated || state.isAuthenticating)
+    if (!state.isAuthenticated)
       clearCatalog()
-    else
+    // 静默续期保留在途目录请求，完成云授权后允许刷新。
+    else if (!state.isAuthenticating && pageActive && state.appLevel >= 2)
       void loadTitles()
   })
   void loadTitles()
@@ -367,6 +370,7 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  pageActive = true
   if (!isLoading.value) {
     void loadTitles()
   }
@@ -376,12 +380,14 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
+  pageActive = false
   contentScroller?.removeEventListener('scroll', handleContentScroll)
   loadMoreObserver?.disconnect()
   unregisterTabSwitch()
 })
 
 onBeforeUnmount(() => {
+  pageActive = false
   contentScroller?.removeEventListener('scroll', handleContentScroll)
   window.removeEventListener('resize', handleResize)
   loadMoreObserver?.disconnect()

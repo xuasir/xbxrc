@@ -18,6 +18,23 @@ use xbox_webapi::{ConsoleApi, WebApiError};
 pub struct StreamingQueryService {
     config_provider: ConfigProviderRef,
     runtime_trace: RuntimeTraceRecorderRef,
+    discovery_cache: std::sync::Mutex<Option<DiscoveryCache>>,
+}
+
+struct DiscoveryCache {
+    scope: u64,
+    created: std::time::Instant,
+    regions: std::collections::BTreeMap<String, String>,
+}
+fn discovery_scope(session: &DataSessionContext, token: &Value, route: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    resolve_web_token_claims(&session.web_token)
+        .map(|claims| claims.account_scope().to_owned())
+        .hash(&mut hash);
+    token.to_string().hash(&mut hash);
+    route.hash(&mut hash);
+    hash.finish()
 }
 
 impl StreamingQueryService {
@@ -25,55 +42,156 @@ impl StreamingQueryService {
         Self {
             config_provider,
             runtime_trace,
+            discovery_cache: std::sync::Mutex::new(None),
         }
     }
 
-    pub async fn get_remote_consoles(
+    pub fn get_streaming_regions(
         &self,
         session: &DataSessionContext,
+        target: DomainTarget,
+    ) -> Result<crate::mods::data::types::DataStreamingRegions, WebApiError> {
+        let token = session
+            .streaming_tokens
+            .get(if target.is_home() {
+                "xHomeToken"
+            } else {
+                "xCloudToken"
+            })
+            .ok_or_else(|| WebApiError::auth("请先登录 Xbox 账户"))?;
+        let access = parse_session_access_context(token)
+            .map_err(|_| WebApiError::parse("服务区域响应暂不可用"))?;
+        let preferred_region_name = if target.is_home() {
+            String::new()
+        } else {
+            self.config_provider
+                .resolve_cloud_region_preference(&access.regions)
+        };
+        Ok(crate::mods::data::types::DataStreamingRegions {
+            regions: access
+                .regions
+                .into_iter()
+                .map(|region| crate::mods::data::types::DataStreamingRegion {
+                    name: region.name,
+                    display_name: region.display_name,
+                    short_name: region.short_name,
+                    continent: region.continent,
+                    is_default: region.is_default,
+                })
+                .collect(),
+            updated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+            preferred_region_name,
+        })
+    }
+
+    pub async fn discover_remote_consoles<C: Fn() -> bool>(
+        &self,
+        session: &DataSessionContext,
+        target: Option<&str>,
+        current: C,
     ) -> Result<Vec<DataHostSummary>, WebApiError> {
-        let Some(api) = self.create_home_session_api(session).await? else {
+        let Some(token) = resolve_xhome_token(session) else {
             return Ok(Vec::new());
         };
-
-        let consoles = api.get_remote_consoles().await?;
-
+        let access = parse_session_access_context(token)
+            .map_err(|_| WebApiError::parse("主机串流凭据响应暂不可用"))?;
+        let config_snapshot = self.config_provider.get_streaming_config();
+        let key = discovery_scope(session, token, &config_snapshot.force_region_ip);
+        let cached = self.discovery_cache.lock().ok().and_then(|cache| {
+            cache
+                .as_ref()
+                .filter(|cache| cache.scope == key && cache.created.elapsed().as_secs() < 300)
+                .and_then(|cache| target.and_then(|target| cache.regions.get(target).cloned()))
+        });
+        let regions = xbox_streaming::session::discovery::ordered_home_regions(
+            &access.regions,
+            cached.as_deref(),
+        );
+        let streaming_token = xbox_streaming::StreamingToken::parse(token)
+            .map_err(|_| WebApiError::parse("主机串流凭据响应暂不可用"))?;
+        let result = xbox_streaming::session::discovery::discover_home(
+            &regions,
+            target,
+            |region| {
+                let mut config = DomainStreamingConfig::new_home_config(
+                    config_snapshot.preferred_game_language.clone(),
+                    String::new(),
+                    config_snapshot.xhome_resolution,
+                );
+                config.session.preferred_region_name = Some(region.name.clone());
+                let context = DomainContext {
+                    target: DomainTarget::Home,
+                    session: access.clone(),
+                    ..Default::default()
+                };
+                let token = streaming_token.clone();
+                async move {
+                    let output = compile_plan(DomainCompilerInput { config, context })
+                        .map_err(|_| WebApiError::parse("主机区域配置暂不可用"))?;
+                    WebApiSessionGateway::new(output.plan, token)
+                        .get_remote_consoles()
+                        .await
+                }
+            },
+            || {
+                current()
+                    && self.config_provider.get_force_region_ip() == config_snapshot.force_region_ip
+            },
+        )
+        .await?;
+        if !current()
+            || self.config_provider.get_force_region_ip() != config_snapshot.force_region_ip
+        {
+            return Err(WebApiError::parse("主机发现状态已更新，请重新查询"));
+        }
+        let Some((region, consoles)) = result else {
+            return Ok(Vec::new());
+        };
         let mut summaries = Vec::new();
+        let mut seen = BTreeSet::new();
         for console in consoles {
             if let Ok(mut summary) = serde_json::from_value::<DataHostSummary>(console.clone()) {
-                if summary.console_addrs.is_none() {
-                    summary.console_addrs = extract_console_addrs(&console);
-                }
-                let remote_management_enabled =
-                    describe_json_value(console.get("remoteManagementEnabled"));
-                let console_streaming_enabled =
-                    describe_json_value(console.get("consoleStreamingEnabled"));
-                let console_addrs_count = summary
-                    .console_addrs
+                let identity = summary
+                    .server_id
                     .as_ref()
-                    .map(|items| items.len())
-                    .unwrap_or(0);
-                let needs_review = needs_remote_play_capability_review(&console);
-                // 只有在能力字段缺失、null 或类型异常时才展开原始 payload，避免 trace 过大。
-                self.runtime_trace.record_snapshot(
-                    "data",
-                    "remoteConsoleCapabilitySnapshot",
-                    None,
-                    json!({
-                        "id": summary.id.clone(),
-                        "serverId": summary.server_id.clone(),
-                        "powerState": summary.power_state.clone(),
-                        "remoteManagementEnabled": remote_management_enabled.clone(),
-                        "consoleStreamingEnabled": console_streaming_enabled.clone(),
-                        "consoleAddrsCount": console_addrs_count,
-                        "needsReview": needs_review,
-                        "rawPayload": needs_review.then_some(console),
-                    }),
-                );
+                    .or(summary.id.as_ref())
+                    .or(summary.device_id.as_ref());
+                if identity.is_none_or(|identity| {
+                    identity.trim().is_empty() || !seen.insert(identity.clone())
+                }) {
+                    continue;
+                }
+                summary.console_addrs = extract_console_addrs(&console).or(summary.console_addrs);
+                summary.discovery_region_name = Some(region.name.clone());
                 summaries.push(summary);
             }
         }
-
+        if let Ok(mut cache) = self.discovery_cache.lock() {
+            if cache
+                .as_ref()
+                .is_none_or(|cache| cache.scope != key || cache.created.elapsed().as_secs() >= 300)
+            {
+                *cache = Some(DiscoveryCache {
+                    scope: key,
+                    created: std::time::Instant::now(),
+                    regions: Default::default(),
+                });
+            }
+            if let Some(cache) = cache.as_mut() {
+                for summary in &summaries {
+                    for identity in [&summary.server_id, &summary.id, &summary.device_id]
+                        .into_iter()
+                        .flatten()
+                    {
+                        cache.regions.insert(identity.clone(), region.name.clone());
+                    }
+                }
+            }
+        }
+        self.runtime_trace.record_event("data", "remoteConsoleRegionDiscovered", None, json!({"regionName":region.name,"consoleCount":summaries.len(),"targeted":target.is_some()}));
         Ok(summaries)
     }
 

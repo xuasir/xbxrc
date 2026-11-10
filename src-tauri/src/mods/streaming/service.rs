@@ -1049,6 +1049,11 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         );
 
         Ok(StreamingPollIceResult {
+            configuration_pending: self
+                .inner
+                .flow
+                .home_configuration_pending(&params.session_id)
+                .await,
             candidates: remote_candidates
                 .into_iter()
                 .map(from_domain_ice_candidate)

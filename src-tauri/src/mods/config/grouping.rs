@@ -18,6 +18,8 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "resolution",
             "xhome_resolution",
             "force_region_ip",
+            "xcloud_region_name",
+            "prevent_resolution_drops",
             "xhome_bitrate_mode",
             "xhome_bitrate",
             "xcloud_bitrate_mode",

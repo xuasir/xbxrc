@@ -9,6 +9,7 @@ export type SessionState
     | 'failed'
 
 export interface IceCandidateLike {
+  source?: string | null
   candidate: string
   sdpMid?: string | null
   sdpMLineIndex?: number | null

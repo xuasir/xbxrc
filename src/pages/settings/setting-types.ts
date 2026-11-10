@@ -45,6 +45,7 @@ export interface SettingSectionEntryAction {
   actionId: string
   nodeId: string
   label: string
+  description?: string
   variant: 'default' | 'danger'
   value?: string
   index: number

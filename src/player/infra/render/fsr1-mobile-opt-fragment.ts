@@ -8,7 +8,7 @@ export const FSR1_MOBILE_OPT_SINGLE_PASS_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
 
-uniform sampler2D inputTexture;
+uniform highp sampler2D inputTexture;
 uniform vec2 inputTextureSize;
 uniform vec2 outputTextureSize;
 uniform float uHdrToneMap;

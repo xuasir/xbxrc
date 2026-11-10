@@ -44,6 +44,7 @@ const testState = vi.hoisted(() => {
     })
 
     private transportConfig = { maxVideoBitrateKbps: 24000, maxAudioBitrateKbps: 0, forceMonoAudio: false, targetVideoWidth: 1920, targetVideoHeight: 1080 }
+    readonly getResolutionFeedbackState = vi.fn(() => 'disabled' as const)
     readonly getTransportConfig = vi.fn(() => ({ ...this.transportConfig }))
     readonly getRemoteVideoBitrateCapKbps = vi.fn((): number | undefined => this.transportConfig.maxVideoBitrateKbps)
     readonly hasLocalVideoSender = vi.fn(() => true)

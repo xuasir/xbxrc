@@ -59,6 +59,8 @@ pub struct DataHostSummary {
     pub out_of_home_warning: Option<bool>,
     pub storage_devices: Option<Vec<DataHostStorageDeviceSummary>>,
     pub console_addrs: Option<Vec<DataHostAddr>>,
+    #[serde(default)]
+    pub discovery_region_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,4 +197,21 @@ pub struct DataConsoleLibrary {
 pub struct DataMediaSaveResult {
     pub saved: bool,
     pub canceled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DataStreamingRegion {
+    pub name: String,
+    pub display_name: Option<String>,
+    pub short_name: Option<String>,
+    pub continent: Option<String>,
+    pub is_default: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DataStreamingRegions {
+    pub regions: Vec<DataStreamingRegion>,
+    pub updated_at: u64,
+    pub preferred_region_name: String,
 }

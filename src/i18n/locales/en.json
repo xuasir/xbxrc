@@ -250,7 +250,14 @@
           "transportPath": "Connection path",
           "serverHost": "Server",
           "sampleAge": "Sample age",
-          "senderPolicyCause": "Sender policy cause"
+          "senderPolicyCause": "Sender policy cause",
+          "resolutionFeedback": "Resolution feedback"
+        },
+        "feedbackStates": {
+          "disabled": "Off",
+          "active": "Active",
+          "awaiting-metadata": "Waiting for frame feedback",
+          "metadata-unavailable": "Frame feedback unavailable"
         }
       },
       "rust": {
@@ -1431,10 +1438,10 @@
         }
       },
       "force_region_ip": {
-        "label": "Cloud gaming region",
+        "label": "Sign-in region",
         "options": {
           "empty": {
-            "label": "Default",
+            "label": "Automatic",
             "description": "Use the default regional routing strategy."
           },
           "203_41_44_20": {
@@ -1462,7 +1469,7 @@
             "label": "Central India"
           }
         },
-        "description": "Choose the region used for cloud gaming connections."
+        "description": "Used for cloud service authorization. If cloud gaming is unavailable in your location, try a supported sign-in region, then refresh the cloud gaming page. Choose streaming servers in Cloud server region."
       },
       "codec": {
         "label": "Preferred video codec tier",
@@ -1595,6 +1602,14 @@
             "description": "Detailed"
           }
         }
+      },
+      "prevent_resolution_drops": {
+        "label": "Prevent resolution drops (experimental)",
+        "description": "Prioritize clarity. Device pressure may increase stuttering; network and service policies determine actual quality."
+      },
+      "xcloud_region_name": {
+        "label": "Cloud server region",
+        "description": "Choose the server region for your next cloud stream."
       }
     },
     "experience": {
@@ -1637,7 +1652,7 @@
         "streamingAdvanced": "Advanced · Codec and bitrate",
         "cloudPreferences": "Cloud gaming preferences",
         "network": "Connection policy",
-        "connectionAdvanced": "Advanced · Custom relay",
+        "connectionAdvanced": "Advanced connection settings",
         "diagnostics": "Logs and diagnostics"
       },
       "turn": {
@@ -1679,6 +1694,16 @@
         "clear": "Clear",
         "done": "Done"
       }
+    },
+    "cloudRegions": {
+      "automatic": "Automatic (service recommended)",
+      "loading": "Loading available server regions…",
+      "unavailable": "Cloud authorization and available regions could not be loaded. Try adjusting the sign-in region under Advanced settings > Cloud sign-in compatibility.",
+      "savedUnavailable": "{name} (unavailable; uses fallback)",
+      "loginCompatibility": "Cloud sign-in compatibility",
+      "loginHint": "Used for cloud authorization; try a supported sign-in region if cloud gaming is unavailable in your location.",
+      "saved": "{name} (saved)",
+      "empty": "The service returned no available regions. Reopen this setting to refresh."
     }
   },
   "controllerPage": {

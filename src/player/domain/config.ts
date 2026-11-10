@@ -19,6 +19,7 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
     uiSystem: [10, 19, 31, 27, 32, -41],
     uiVersion: [0, 2, 0],
     input: {
+      preventResolutionDrops: false,
       vibrationEnabled: true,
       vibrationStrength: 'realistic',
     },

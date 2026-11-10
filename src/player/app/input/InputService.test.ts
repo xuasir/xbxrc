@@ -117,6 +117,7 @@ function reliabilityFixture() {
     sent,
     attempts,
     stats,
+    emitter,
     unsubscribe,
     writable: () => writable?.(),
     capturedWritable: () => writable,
@@ -398,5 +399,42 @@ describe('input delivery under pressure', () => {
     vi.advanceTimersByTime(1000)
     expect(replacement).toHaveLength(count)
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('resolution feedback on the wire', () => {
+  it.each([false, true])('keeps raw observations and applies the explicit preference %s', (enabled) => {
+    const f = reliabilityFixture()
+    f.service.updateConfig({ preventResolutionDrops: enabled })
+    const raw = Object.freeze({ serverDataKey: 42, firstFramePacketArrivalTimeMs: 100, frameSubmittedTimeMs: 101, frameDecodedTimeMs: 130, frameRenderedTimeMs: 135 })
+    const processed = vi.fn()
+    f.emitter.on('stats.videoFrameProcessed', processed)
+    f.service.start(f.transport)
+    f.service.addProcessedFrame(raw)
+    f.queue(1)
+    const packet = f.sent.at(-1)!
+    expect(packet.getUint8(14)).toBe(1)
+    expect(packet.getUint32(15, true)).toBe(42)
+    expect(packet.getUint32(27, true)).toBe(enabled ? 111 : 130)
+    expect(packet.getUint32(31, true)).toBe(enabled ? 116 : 135)
+    expect(processed).toHaveBeenCalledTimes(1)
+    expect(processed.mock.calls[0]![0]).toMatchObject(raw)
+    expect(raw.frameDecodedTimeMs).toBe(130)
+  })
+  it('defaults to standard feedback and retains stats when metadata capability is unavailable', () => {
+    const f = reliabilityFixture()
+    const processed = vi.fn()
+    f.emitter.on('stats.videoFrameProcessed', processed)
+    f.service.start(f.transport)
+    f.service.addProcessedFrame({ serverDataKey: 1, firstFramePacketArrivalTimeMs: 1, frameSubmittedTimeMs: 2, frameDecodedTimeMs: 30, frameRenderedTimeMs: 35 })
+    f.queue(1)
+    expect(f.sent.at(-1)!.getUint32(27, true)).toBe(30)
+    f.service.updateConfig({ preventResolutionDrops: true })
+    f.service.addProcessedFrame({ serverDataKey: 0, firstFramePacketArrivalTimeMs: 1, frameSubmittedTimeMs: 2, frameDecodedTimeMs: 3, frameRenderedTimeMs: 4, feedbackEligible: false })
+    f.queue(0)
+    expect(f.sent.at(-1)!.getUint16(0, true) & 1).toBe(0)
+    expect(processed).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(100)
+    expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'resolutionFeedbackObserved', payload: expect.objectContaining({ effective: false, reason: 'metadata-unavailable' }) }))
   })
 })

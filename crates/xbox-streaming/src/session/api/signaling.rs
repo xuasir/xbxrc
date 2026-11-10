@@ -103,6 +103,7 @@ impl WebApiSignalingGateway {
                 sdp_m_line_index: candidate.sdp_m_line_index,
                 username_fragment: candidate.username_fragment,
                 message_type: candidate.message_type,
+                source: None,
             })
             .collect::<Vec<_>>();
         self.ice_policy.normalize(&raw)

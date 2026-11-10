@@ -20,6 +20,12 @@ pub trait ConfigProvider: Send + Sync {
         patch: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<serde_json::Value, String>;
     fn get_groups(&self) -> Result<serde_json::Value, String>;
+    fn resolve_cloud_region_preference(
+        &self,
+        _regions: &[xbox_streaming::policy::types::Region],
+    ) -> String {
+        self.get_streaming_config().xcloud_region_name
+    }
 }
 
 pub type ConfigProviderRef = Arc<dyn ConfigProvider>;

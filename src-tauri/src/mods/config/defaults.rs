@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 38] = [
+pub const APP_CONFIG_KEYS: [&str; 41] = [
     "locale",
     "theme",
     "fullscreen",
@@ -16,6 +16,9 @@ pub const APP_CONFIG_KEYS: [&str; 38] = [
     "enable_audio_control",
     "preferred_game_language",
     "force_region_ip",
+    "xcloud_region_name",
+    "xcloud_region_migrated",
+    "prevent_resolution_drops",
     "codec",
     "vibration",
     "vibration_strength",
@@ -64,6 +67,9 @@ pub fn default_config_map() -> Map<String, Value> {
         "enable_audio_control": false,
         "preferred_game_language": "en-US",
         "force_region_ip": "",
+        "xcloud_region_name": "",
+        "xcloud_region_migrated": false,
+        "prevent_resolution_drops": false,
         "codec": "",
         "vibration": true,
         "vibration_strength": "realistic",

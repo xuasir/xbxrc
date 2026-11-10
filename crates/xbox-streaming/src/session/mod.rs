@@ -1,5 +1,6 @@
 pub mod access;
 pub mod api;
+pub mod discovery;
 pub mod flow;
 pub mod lifecycle;
 pub mod monitor;

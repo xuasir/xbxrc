@@ -411,13 +411,16 @@ export class PlaybackService {
         if (meta)
           loop(at, meta)
       })
+      this.inputService.observeFrameFeedbackAvailability(metadata.trackingSource === 'videoFrameCallback')
       if (metadata.trackingSource === 'videoFrameCallback') {
         this.inputService.addProcessedFrame({
           serverDataKey: metadata.rtpTimestamp ?? 0,
-          firstFramePacketArrivalTimeMs: metadata.receiveTime ?? performance.now(),
-          frameSubmittedTimeMs: metadata.receiveTime ?? performance.now(),
-          frameDecodedTimeMs: metadata.expectedDisplayTime ?? performance.now(),
-          frameRenderedTimeMs: metadata.expectedDisplayTime ?? performance.now(),
+          firstFramePacketArrivalTimeMs: metadata.receiveTime ?? now,
+          frameSubmittedTimeMs: metadata.receiveTime ?? now,
+          frameDecodedTimeMs: metadata.expectedDisplayTime ?? now,
+          frameRenderedTimeMs: now,
+          feedbackEligible: Number.isFinite(metadata.rtpTimestamp) && Number.isFinite(metadata.receiveTime),
+          observation: { callbackTimeMs: now, receiveTime: metadata.receiveTime, expectedDisplayTime: metadata.expectedDisplayTime, presentationTime: metadata.presentationTime, processingDuration: metadata.processingDuration },
         })
       }
       const hadPriorMediaTime = lastMediaTime !== undefined

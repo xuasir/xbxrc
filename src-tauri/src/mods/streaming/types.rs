@@ -132,6 +132,8 @@ pub struct StreamingIceCandidate {
     pub sdp_mid: Option<String>,
     pub username_fragment: Option<String>,
     pub message_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -240,6 +242,8 @@ pub struct StreamingRuntimeProjection {
     pub video_pipeline: StreamingRuntimeVideoPipelineProjection,
     pub recovery: StreamingRuntimeRecoveryProjection,
     pub polling_rate_hz: u16,
+    #[serde(default)]
+    pub prevent_resolution_drops: bool,
     pub vibration: bool,
     pub vibration_strength: String,
 }
@@ -375,6 +379,7 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
                 stall_recovery_cooldown_ms: projection.recovery.stall_recovery_cooldown_ms,
             },
             polling_rate_hz: projection.polling_rate_hz,
+            prevent_resolution_drops: projection.prevent_resolution_drops,
             vibration: projection.vibration,
             vibration_strength: "realistic".to_string(),
         }
@@ -738,6 +743,7 @@ pub struct StreamingPollIceParams {
 #[serde(rename_all = "camelCase")]
 pub struct StreamingPollIceResult {
     pub candidates: Vec<StreamingIceCandidate>,
+    pub configuration_pending: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -799,6 +805,10 @@ pub struct StreamingConfigSnapshot {
     pub preferred_game_language: String,
     pub ipv6: bool,
     pub force_region_ip: String,
+    #[serde(default)]
+    pub xcloud_region_name: String,
+    #[serde(default)]
+    pub prevent_resolution_drops: bool,
     pub xhome_bitrate_mode: String,
     pub xhome_bitrate: i64,
     pub xcloud_bitrate_mode: String,

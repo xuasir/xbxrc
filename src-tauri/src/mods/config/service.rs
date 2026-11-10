@@ -1,19 +1,21 @@
 use serde_json::{Map, Value};
 use tauri::AppHandle;
 
-use super::config_policy::{filter_patch, normalize_config, split_groups};
+use super::config_policy::{cloud_region_migration, filter_patch, normalize_config, split_groups};
 use super::storage_repository::ConfigStorageRepository;
 use super::ConfigProvider;
 use crate::mods::streaming::types::{StreamingConfigSnapshot, StreamingDisplayOptionsValue};
 
 pub struct ConfigService {
     storage_repository: ConfigStorageRepository,
+    mutation: std::sync::Mutex<()>,
 }
 
 impl ConfigService {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
             storage_repository: ConfigStorageRepository::new(app_handle),
+            mutation: std::sync::Mutex::new(()),
         }
     }
 
@@ -31,7 +33,11 @@ impl ConfigService {
     }
 
     pub fn set_by_patch(&self, patch: &Map<String, Value>) -> Result<Value, String> {
-        let filtered_patch = filter_patch(patch);
+        let _mutation = self.mutation.lock().map_err(|_| "配置写入暂不可用")?;
+        let mut filtered_patch = filter_patch(patch);
+        if filtered_patch.contains_key("xcloud_region_name") {
+            filtered_patch.insert("xcloud_region_migrated".into(), Value::Bool(true));
+        }
 
         if !filtered_patch.is_empty() {
             self.storage_repository.set_by_patch(&filtered_patch)?;
@@ -51,6 +57,34 @@ impl ConfigService {
 }
 
 impl ConfigProvider for ConfigService {
+    fn resolve_cloud_region_preference(
+        &self,
+        regions: &[xbox_streaming::policy::types::Region],
+    ) -> String {
+        let Ok(_mutation) = self.mutation.lock() else {
+            return self.get_streaming_config().xcloud_region_name;
+        };
+        let Ok(raw) = self.storage_repository.get_all_settings() else {
+            return String::new();
+        };
+        let Some(name) = cloud_region_migration(&raw, regions) else {
+            return raw
+                .get("xcloud_region_name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+        };
+        // 与显式配置写入共享锁，首次迁移只负责保存旧服务器意图。
+        let patch = serde_json::json!({"xcloud_region_name": name, "xcloud_region_migrated": true});
+        if let Err(error) = self
+            .storage_repository
+            .set_by_patch(patch.as_object().unwrap())
+        {
+            log::warn!("cloud region migration deferred: {error}");
+        }
+        name
+    }
+
     fn get_force_region_ip(&self) -> String {
         self.get_normalized_config()
             .ok()
@@ -89,6 +123,15 @@ impl ConfigProvider for ConfigService {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
+            xcloud_region_name: normalized
+                .get("xcloud_region_name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            prevent_resolution_drops: normalized
+                .get("prevent_resolution_drops")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             xhome_bitrate_mode: normalized
                 .get("xhome_bitrate_mode")
                 .and_then(Value::as_str)

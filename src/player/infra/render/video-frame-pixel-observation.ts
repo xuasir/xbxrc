@@ -81,7 +81,7 @@ void main() {
 }`
 const FRAGMENT = `#version 300 es
 precision mediump float;
-uniform sampler2D videoTexture;
+uniform highp sampler2D videoTexture;
 in vec2 uv;
 out vec4 color;
 void main() { color = texture(videoTexture, uv); }`

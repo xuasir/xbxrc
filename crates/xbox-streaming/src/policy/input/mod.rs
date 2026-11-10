@@ -17,6 +17,8 @@ pub struct InputConfig {
     /// 输入轮询频率，单位 Hz。
     pub polling_rate_hz: u16,
     /// 是否允许震动输出。
+    #[serde(default)]
+    pub prevent_resolution_drops: bool,
     pub vibration: bool,
     /// 麦克风启用策略。
     pub microphone: MicrophonePreference,
@@ -30,6 +32,7 @@ impl Default for InputConfig {
             virtual_mkb: false,
             touch: TouchPreference::FollowTitle,
             polling_rate_hz: 250,
+            prevent_resolution_drops: false,
             vibration: true,
             microphone: MicrophonePreference::Off,
         }
@@ -122,6 +125,8 @@ pub struct InputPlan {
     pub owner: Owner,
     pub mode: InputMode,
     pub polling_rate_hz: u16,
+    #[serde(default)]
+    pub prevent_resolution_drops: bool,
     pub vibration: bool,
     pub mouse: bool,
     pub keyboard: bool,

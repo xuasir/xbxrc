@@ -193,6 +193,7 @@ export function createBrowserNegotiation(context: {
     let flushInFlight = false
     let gatheringComplete = activePeer.iceGatheringState === 'complete'
     let remoteGatheringComplete = false
+    let remoteConfigurationPending = input.spec.targetType === 'home'
     // 完整 SDP 也可携带本轮候选；与增量 ICE 使用同一可用性判据。
     let hasUsableRemoteCandidates = /(?:^|\n)a=candidate:/i.test(activePeer.remoteDescription?.sdp ?? '')
     let resolvePromise: () => void = () => {}
@@ -269,7 +270,7 @@ export function createBrowserNegotiation(context: {
 
     // restart 期间 peer 可能仍呈现旧连接的 connected；先接住本轮远端候选。
     const remoteExchangeComplete = (): boolean => remoteGatheringComplete
-      || (hasUsableRemoteCandidates && (activePeer.iceConnectionState === 'connected' || activePeer.iceConnectionState === 'completed'))
+      || (!remoteConfigurationPending && hasUsableRemoteCandidates && (activePeer.iceConnectionState === 'connected' || activePeer.iceConnectionState === 'completed'))
 
     const finishIfIdle = (resolve: () => void): boolean => {
       if (settled || flushInFlight || pendingLocalCandidates.length > 0 || !gatheringComplete || !remoteExchangeComplete()) {
@@ -309,6 +310,7 @@ export function createBrowserNegotiation(context: {
             sessionId: input.spec.sessionId,
             restart: input.restart,
           }), 46_000, 'pollIceTimeout')
+          remoteConfigurationPending = remoteCandidates.configurationPending === true
           await applyRemoteCandidates(remoteCandidates.candidates)
         }
         if (!settled && isNegotiationActive(input.negotiation) && (appliedRemoteCandidates.size > 0 || remoteExchangeComplete())) {

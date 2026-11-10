@@ -1,15 +1,15 @@
 import type { LogicalButtonDto } from '@shared/gamepad/contract'
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { GamepadFrame, ProcessedVideoFrameMetadata } from '../../domain/input'
+import type { GamepadFrame, InputRuntimeConfig, ProcessedVideoFrameMetadata } from '../../domain/input'
 import { inputController } from '@shared/gamepad/runtime'
 import { BUTTON_KEYS, clonePadState, neutralState, stateEquals } from '@shared/gamepad/state'
 import { rpc } from '../../../services/rpc'
 import { LatencyWindow } from '../../../shared/latency-window'
 import { InputPacketEncoder } from '../../protocol/input/InputPacketEncoder'
+import { normalizeFrameFeedback } from './frame-feedback'
 import { INPUT_BUFFER_AGE_BUDGET_MS, InputBufferBudget } from './input-buffer-budget'
 import { RumbleService } from './RumbleService'
 
-const MAX_DECODE_TIME_MS = 10
 const MAX_INPUT_BUFFERED_BYTES = 16 * 1024
 const MAX_PENDING_INPUTS = 128
 const MAX_INPUT_AGE_MS = 250
@@ -76,6 +76,14 @@ export class InputService {
   private readonly observationToSend = new LatencyWindow()
   private readonly physicalSampleAge = new LatencyWindow()
   private lastDeliveryTraceAt = Number.NEGATIVE_INFINITY
+  private preventResolutionDrops = false
+  private feedbackStatus = 'awaiting-metadata'
+  private feedbackFrames = 0
+  private adjustedFeedbackFrames = 0
+  private feedbackAdjustmentMs = 0
+  private rawFeedbackDeltaMs = 0
+  private processingDurationMs = 0
+  private processingSamples = 0
   private inputSequenceNum = 0
   private frameMetadataQueue: Array<ProcessedVideoFrameMetadata> = []
   private currentInputTransport?: InputTransport
@@ -99,14 +107,36 @@ export class InputService {
   constructor(
     gamepadDriver: InputDriverLike,
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
+    config?: Partial<InputRuntimeConfig>,
   ) {
     this.gamepadDriver = gamepadDriver
     this.rumbleService = new RumbleService()
+    this.updateConfig(config ?? {})
+  }
+
+  updateConfig(config: Partial<InputRuntimeConfig>): void {
+    if (config.preventResolutionDrops !== undefined)
+      this.preventResolutionDrops = config.preventResolutionDrops
+  }
+
+  observeFrameFeedbackAvailability(available: boolean): void {
+    if (!available)
+      this.feedbackStatus = 'metadata-unavailable'
+  }
+
+  getResolutionFeedbackState(): 'disabled' | 'active' | 'awaiting-metadata' | 'metadata-unavailable' {
+    if (!this.preventResolutionDrops)
+      return 'disabled'
+    return this.feedbackStatus === 'available' ? 'active' : this.feedbackStatus as 'awaiting-metadata' | 'metadata-unavailable'
   }
 
   start(inputTransport: InputTransport): void {
     this.stop()
     this.inputSequenceNum = 0
+    this.feedbackStatus = 'awaiting-metadata'
+    this.feedbackFrames = this.adjustedFeedbackFrames = this.feedbackAdjustmentMs = this.rawFeedbackDeltaMs = 0
+    this.processingDurationMs = this.processingSamples = 0
+    this.lastDeliveryTraceAt = Number.NEGATIVE_INFINITY
     this.frameMetadataQueue = []
     this.currentInputTransport = inputTransport
     const generation = ++this.generation
@@ -326,6 +356,20 @@ export class InputService {
     if (now - this.lastDeliveryTraceAt < 1000)
       return
     this.lastDeliveryTraceAt = now
+    recordInputTrace('resolutionFeedbackObserved', {
+      mode: this.preventResolutionDrops ? 'prevent-drops' : 'standard',
+      effective: this.preventResolutionDrops && this.feedbackStatus === 'available',
+      reason: this.preventResolutionDrops ? this.feedbackStatus : 'disabled',
+      frameCount: this.feedbackFrames,
+      adjustedCount: this.adjustedFeedbackFrames,
+      adjustmentMs: this.feedbackAdjustmentMs,
+      rawFeedbackDeltaMs: this.rawFeedbackDeltaMs,
+      decodeTimingSource: 'expected-presentation-proxy',
+      processingDurationMs: this.processingSamples ? this.processingDurationMs / this.processingSamples : null,
+      processingSamples: this.processingSamples,
+    })
+    this.feedbackFrames = this.adjustedFeedbackFrames = this.feedbackAdjustmentMs = this.rawFeedbackDeltaMs = 0
+    this.processingDurationMs = this.processingSamples = 0
     recordInputTrace('gamepadInputDeliveryObserved', {
       ...this.bufferBudget.snapshot(now),
       pendingInputs: this.pendingInputs.length,
@@ -356,35 +400,34 @@ export class InputService {
   }
 
   addProcessedFrame(frame: ProcessedVideoFrameMetadata): void {
-    const normalizedFrame = this.normalizeFrameMetadata(frame)
-    this.frameMetadataQueue.push(normalizedFrame)
+    // 诊断取得原始副本，策略只改变发送副本。
+    this.emitter.emit('stats.videoFrameProcessed', { ...frame, observation: frame.observation ? { ...frame.observation } : undefined })
+    if (frame.feedbackEligible === false) {
+      this.feedbackStatus = 'metadata-unavailable'
+      return
+    }
+    this.feedbackStatus = 'available'
+    const { wire, adjustmentMs, rawDeltaMs } = normalizeFrameFeedback(frame, this.preventResolutionDrops, performance.now())
+    this.feedbackFrames++
+    this.rawFeedbackDeltaMs += rawDeltaMs
+    if (adjustmentMs > 0) {
+      this.adjustedFeedbackFrames++
+      this.feedbackAdjustmentMs += adjustmentMs
+    }
+    const processing = frame.observation?.processingDuration
+    if (processing !== undefined && Number.isFinite(processing) && processing >= 0) {
+      this.processingDurationMs += processing * 1000
+      this.processingSamples++
+    }
+    this.frameMetadataQueue.push(wire)
     if (this.frameMetadataQueue.length > MAX_PENDING_METADATA) {
       this.frameMetadataQueue.splice(0, this.frameMetadataQueue.length - MAX_PENDING_METADATA)
       recordInputTrace('inputMetadataBackpressure', { reason: 'latest-window-retained', retained: MAX_PENDING_METADATA })
     }
-    this.emitter.emit('stats.videoFrameProcessed', normalizedFrame)
 
     // 重试/心跳负责常规提交；队列接近水位时立即尝试释放。
     if (this.frameMetadataQueue.length > 30) {
       this.flush()
     }
-  }
-
-  private normalizeFrameMetadata(frame: ProcessedVideoFrameMetadata): ProcessedVideoFrameMetadata {
-    const normalizedFrame = {
-      ...frame,
-      frameRenderedTimeMs: performance.now(),
-    }
-
-    // 浏览器 requestVideoFrameCallback 在抖动时可能给出偏大的 decode/render 时间，
-    // 远端会把这类 metadata 解释成“客户端解码吃不消”，从而主动降到 720p。
-    const decodedDelta = normalizedFrame.frameDecodedTimeMs - normalizedFrame.frameSubmittedTimeMs
-    if (decodedDelta > MAX_DECODE_TIME_MS) {
-      const renderDelta = normalizedFrame.frameRenderedTimeMs - normalizedFrame.frameDecodedTimeMs
-      normalizedFrame.frameDecodedTimeMs = normalizedFrame.frameSubmittedTimeMs + MAX_DECODE_TIME_MS
-      normalizedFrame.frameRenderedTimeMs = normalizedFrame.frameDecodedTimeMs + Math.max(0, renderDelta)
-    }
-
-    return normalizedFrame
   }
 }

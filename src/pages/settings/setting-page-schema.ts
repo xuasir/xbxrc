@@ -11,7 +11,7 @@ export type SettingPageKey
     | 'connectionHost'
     | 'advancedDiagnostics'
 
-export type SettingActionId = 'customTurn'
+export type SettingActionId = 'customTurn' | 'cloudLoginCompatibility'
 
 export type SettingEffect = 'instant' | 'nextConnection' | 'nextLaunch'
 
@@ -56,6 +56,8 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   super_resolution_experimental: 'streaming',
   codec: 'streaming',
   force_region_ip: 'streaming',
+  xcloud_region_name: 'streaming',
+  prevent_resolution_drops: 'streaming',
   preferred_game_language: 'streaming',
   ipv6: 'streaming',
   xhome_turn_fallback: 'streaming',
@@ -106,6 +108,7 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
   { key: 'resolution', labelKey: 'setting.experience.sections.resolution', items: [
     { kind: 'field', fieldKey: 'xhome_resolution' },
     { kind: 'field', fieldKey: 'resolution' },
+    { kind: 'field', fieldKey: 'prevent_resolution_drops' },
   ] },
   { key: 'picture', labelKey: 'setting.experience.sections.picture', items: [
     { kind: 'field', fieldKey: 'video_format' },
@@ -127,7 +130,7 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
 
 const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
   { key: 'cloud', labelKey: 'setting.experience.sections.cloudPreferences', items: [
-    { kind: 'field', fieldKey: 'force_region_ip' },
+    { kind: 'field', fieldKey: 'xcloud_region_name' },
     { kind: 'field', fieldKey: 'preferred_game_language' },
   ] },
   { key: 'network', labelKey: 'setting.experience.sections.network', items: [
@@ -136,6 +139,7 @@ const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
   ] },
   { key: 'advanced', labelKey: 'setting.experience.sections.connectionAdvanced', collapsible: true, items: [
     { kind: 'action', actionId: 'customTurn' },
+    { kind: 'action', actionId: 'cloudLoginCompatibility' },
   ] },
 ]
 

@@ -36,7 +36,7 @@ function effect(row: SettingIndexedRow) {
         <template v-for="(entry, i) in section.entries" :key="entry.kind === 'field' ? entry.row.key : i">
           <template v-if="entry.kind === 'field'">
             <SettingToggleRow v-if="entry.row.control === 'toggle'" :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :effect-label="effect(entry.row)" :enabled="entry.row.value === true" :busy="props.pendingActionKey !== null" @confirm="emit('rowConfirm', entry.row)" />
-            <div v-else-if="entry.row.control === 'singleSelect' && entry.row.options && entry.row.options.length <= 3" class="setting-panel__inline-field">
+            <div v-else-if="entry.row.control === 'singleSelect' && entry.row.key !== 'xcloud_region_name' && entry.row.options && entry.row.options.length <= 3" class="setting-panel__inline-field">
               <h3 class="setting-panel__inline-label">
                 {{ entry.row.label }}
               </h3>
@@ -50,7 +50,7 @@ function effect(row: SettingIndexedRow) {
             </div>
             <SettingRow v-else :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :value="entry.row.valueText" :effect-label="effect(entry.row)" :busy="props.pendingActionKey !== null" select @click="emit('rowConfirm', entry.row)" />
           </template>
-          <SettingRow v-else-if="entry.kind === 'action'" :id="entry.nodeId" :scope-id="props.scopeId" :label="entry.label" :value="entry.value" :busy="props.pendingActionKey !== null" select @click="emit('actionClick', entry.actionId)" />
+          <SettingRow v-else-if="entry.kind === 'action'" :id="entry.nodeId" :scope-id="props.scopeId" :label="entry.label" :description="entry.description" :value="entry.value" :busy="props.pendingActionKey !== null" select @click="emit('actionClick', entry.actionId)" />
           <p v-else-if="entry.kind === 'notice'" class="setting-panel__notice">
             {{ entry.body }}
           </p>

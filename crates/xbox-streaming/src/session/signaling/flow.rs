@@ -194,22 +194,74 @@ where
                         .await?;
                     self.ensure_ice_generation(session_id, generation).await?;
                     let api = self.create_signaling_api(&record.plan).await?;
-                    let response = api
-                        .get_ice_exchange_response(session_id)
-                        .await
-                        .map_err(map_webapi_error)?;
-                    let response = self
-                        .filter_polled_ice_response(
-                            session_id,
-                            &record.cancelled,
-                            response,
-                            generation,
-                        )
-                        .await?;
+                    let poll_started_at = tokio::time::Instant::now();
+                    let needs_configuration = if record.plan.session.target.is_home() {
+                        // 请求前只读取状态；旧会话的迟到响应无法创建或覆盖新状态。
+                        self.inner.signaling.read().await.get(session_id).cloned()
+                            .unwrap_or_default().begin_configuration_poll(poll_started_at)
+                    } else { false };
+                    let (response, configuration) = tokio::join!(
+                        api.get_ice_exchange_response(session_id),
+                        async {
+                            if !needs_configuration { return Ok(None); }
+                            let session_api = self.create_session_api(&record.plan).await?;
+                            match tokio::time::timeout(std::time::Duration::from_millis(1500), session_api.get_configuration(session_id)).await {
+                                Ok(result) => result.map_err(map_webapi_error),
+                                Err(_) => Ok(None),
+                            }
+                        }
+                    );
+                    let response = response.map_err(map_webapi_error)?;
+                    if let Err(error) = &configuration {
+                        if matches!(error.status, Some(401 | 403)) { return Err(error.clone()); }
+                    }
+                    // 会话读锁与信令写锁共同保护每次响应提交，包括配置事实与补候选。
+                    let sessions = self.inner.sessions.read().await;
+                    ensure_record_current(&sessions, session_id, &record.cancelled)?;
+                    let mut signaling = self.inner.signaling.write().await;
+                    let state = signaling.entry(session_id.to_owned()).or_default();
+                    if state.generation != generation {
+                        return Err(SessionFlowError::message("signalingSuperseded"));
+                    }
+                    let response = state.filter_ice(response);
+                    let response = if record.plan.session.target.is_home() {
+                        let was_pending = state.configuration_pending();
+                        state.begin_configuration_poll(poll_started_at);
+                        let unavailable = configuration.as_ref().err().is_some_and(|error| matches!(error.status, Some(404 | 405 | 501)));
+                        if needs_configuration {
+                            state.observe_configuration(configuration.as_ref().ok().and_then(Option::as_ref), unavailable);
+                        }
+                        if needs_configuration || was_pending != state.configuration_pending() {
+                            self.inner.provider.on_session_lifecycle_event("homeConfigurationObserved", Some(session_id), serde_json::json!({
+                                "generation": generation, "configurationGeneration": state.configuration_generation,
+                                "configurationResolved": state.home_configuration.is_some(), "configurationPending": state.configuration_pending(),
+                                "addressCount": state.home_configuration.as_ref().map_or(0, |config| config.addresses.len()),
+                                "invalidAddressCount": state.home_configuration.as_ref().map_or(0, |config| config.invalid_addresses),
+                                "source": if state.home_configuration.is_some() { "session-configuration" } else if state.configuration_pending() { "pending" } else { "console-list" },
+                                "reason": if state.home_configuration.is_some() { "resolved" } else if unavailable { "unsupported" } else if !state.configuration_pending() { "deadline" } else if configuration.is_err() { "request-failed" } else { "pending" },
+                            }));
+                        }
+                        let fallback = if record.plan.negotiation.inject_console_addrs { record.plan.negotiation.console_addrs.as_slice() } else { &[] };
+                        state.supplement_home_ice(response, fallback, record.plan.negotiation.prefer_ipv6)
+                    } else { response };
                     resolve_polled_ice_result(session_id, response, true)
                 },
             )
             .await
+    }
+
+    pub async fn home_configuration_pending(&self, session_id: &str) -> bool {
+        let home = self
+            .get_session_record(session_id)
+            .await
+            .is_some_and(|record| record.plan.session.target.is_home());
+        home && self
+            .inner
+            .signaling
+            .read()
+            .await
+            .get(session_id)
+            .is_some_and(|state| state.configuration_pending())
     }
 
     async fn ensure_current_session(
@@ -218,23 +270,6 @@ where
         cancelled: &SessionCancelToken,
     ) -> Result<(), SessionFlowError> {
         ensure_record_current(&*self.inner.sessions.read().await, session_id, cancelled)
-    }
-
-    async fn filter_polled_ice_response(
-        &self,
-        session_id: &str,
-        cancelled: &SessionCancelToken,
-        response: Option<Vec<IceCandidate>>,
-        generation: u64,
-    ) -> Result<Option<Vec<IceCandidate>>, SessionFlowError> {
-        let sessions = self.inner.sessions.read().await;
-        ensure_record_current(&sessions, session_id, cancelled)?;
-        let mut signaling = self.inner.signaling.write().await;
-        let state = signaling.entry(session_id.to_owned()).or_default();
-        if state.generation != generation {
-            return Err(SessionFlowError::message("signalingSuperseded"));
-        }
-        Ok(state.filter_ice(response))
     }
 
     async fn ice_generation(&self, session_id: &str) -> u64 {

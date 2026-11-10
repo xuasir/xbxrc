@@ -144,6 +144,30 @@
       "category": "state",
       "intervalMs": 0,
       "maxRowBytes": 2048
+    },
+    {
+      "event": "resolutionFeedbackObserved",
+      "dimension": "input",
+      "importance": "key",
+      "category": "snapshot",
+      "intervalMs": 1000,
+      "maxRowBytes": 1024
+    },
+    {
+      "event": "homeConfigurationObserved",
+      "dimension": "network",
+      "importance": "key",
+      "category": "snapshot",
+      "intervalMs": 1000,
+      "maxRowBytes": 1024
+    },
+    {
+      "event": "remoteConsoleRegionDiscovered",
+      "dimension": "network",
+      "importance": "key",
+      "category": "event",
+      "intervalMs": 0,
+      "maxRowBytes": 1024
     }
   ],
   "common": [
@@ -393,6 +417,33 @@
       "timingScope",
       "rendererFrameSource",
       "sampleAgeMs"
+    ],
+    "resolutionFeedbackObserved": [
+      "mode",
+      "effective",
+      "reason",
+      "frameCount",
+      "adjustedCount",
+      "adjustmentMs",
+      "rawFeedbackDeltaMs",
+      "decodeTimingSource",
+      "processingDurationMs",
+      "processingSamples"
+    ],
+    "homeConfigurationObserved": [
+      "generation",
+      "configurationGeneration",
+      "configurationResolved",
+      "configurationPending",
+      "addressCount",
+      "invalidAddressCount",
+      "source",
+      "reason"
+    ],
+    "remoteConsoleRegionDiscovered": [
+      "regionName",
+      "consoleCount",
+      "targeted"
     ]
   },
   "children": {
@@ -759,7 +810,9 @@
       "displayRefreshHz",
       "requestedWidth",
       "requestedHeight",
-      "displayRefreshSource"
+      "displayRefreshSource",
+      "preventResolutionDrops",
+      "resolutionFeedbackState"
     ],
     "capabilities": [
       "mediaBackend",
@@ -1059,13 +1112,55 @@
       "ackDeliveryMaxMs",
       "workerObservationAgeMs"
     ],
-    "supplyClock": ["state", "samples", "rejected", "offsetMs", "uncertaintyMs", "ageMs"],
-    "invalidClockReasons": ["outsideCalibration", "workerOrderOrNonFinite"],
-    "diagnostics": ["count", "suppressed", "taskState", "lastAnomaly"],
-    "lastAnomaly": ["sequence", "atMs", "startup", "reasons", "times", "offsetMs", "uncertaintyMs", "longTasks"],
-    "longTasks": ["atMs", "durationMs"],
-    "completion": ["state", "fenceCount", "completed", "timeouts", "insertionCpuMaxMs", "failureReason", "latest"],
-    "latest": ["submittedAtMs", "insertedAtMs", "observedAtMs", "lowerBoundMs", "upperBoundMs", "polls"]
+    "supplyClock": [
+      "state",
+      "samples",
+      "rejected",
+      "offsetMs",
+      "uncertaintyMs",
+      "ageMs"
+    ],
+    "invalidClockReasons": [
+      "outsideCalibration",
+      "workerOrderOrNonFinite"
+    ],
+    "diagnostics": [
+      "count",
+      "suppressed",
+      "taskState",
+      "lastAnomaly"
+    ],
+    "lastAnomaly": [
+      "sequence",
+      "atMs",
+      "startup",
+      "reasons",
+      "times",
+      "offsetMs",
+      "uncertaintyMs",
+      "longTasks"
+    ],
+    "longTasks": [
+      "atMs",
+      "durationMs"
+    ],
+    "completion": [
+      "state",
+      "fenceCount",
+      "completed",
+      "timeouts",
+      "insertionCpuMaxMs",
+      "failureReason",
+      "latest"
+    ],
+    "latest": [
+      "submittedAtMs",
+      "insertedAtMs",
+      "observedAtMs",
+      "lowerBoundMs",
+      "upperBoundMs",
+      "polls"
+    ]
   },
   "enums": [
     "NV12",

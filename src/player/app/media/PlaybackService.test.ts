@@ -69,7 +69,7 @@ function fixture(fallback = false) {
     return video
   } })
   const emitter = new TypedEventEmitter<PlayerEvents>()
-  const input = { addProcessedFrame: vi.fn() }
+  const input = { addProcessedFrame: vi.fn(), observeFrameFeedbackAvailability: vi.fn() }
   const service = new PlaybackService(() => ({ appendChild: vi.fn() } as unknown as HTMLElement), input as unknown as InputService, emitter, config, deriveRendererAttachSpec(config))
   const stream = {} as MediaStream
   return { elements, emitter, service, input, stream }

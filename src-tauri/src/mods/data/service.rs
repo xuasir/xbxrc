@@ -1,4 +1,4 @@
-use crate::mods::auth::AuthProviderRef;
+use crate::mods::auth::{AuthProviderRef, AuthTokenScope};
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::mods::data::events;
@@ -97,10 +97,10 @@ impl DataService {
             host_service: HostService::new(),
             profile_service: ProfileService::new(),
             streaming_query_service: StreamingQueryService::new(
-                config_provider,
+                config_provider.clone(),
                 runtime_trace.clone(),
             ),
-            xcloud_service: Arc::new(XcloudService::new()),
+            xcloud_service: Arc::new(XcloudService::with_config(config_provider.clone())),
             runtime_trace,
         }
     }
@@ -600,12 +600,70 @@ impl DataProvider for DataService {
                 crate::mods::auth::AuthTokenScope::Home,
                 |session| async move {
                     self.streaming_query_service
-                        .get_remote_consoles(&session)
+                        .discover_remote_consoles(&session, None, || {
+                            self.session_resolver
+                                .is_current_streaming_session(&session, AuthTokenScope::Home)
+                        })
                         .await
                 },
             )
             .await
             .map_err(DataError::from)
+    }
+
+    async fn find_remote_console(
+        &self,
+        target: &str,
+    ) -> Result<Option<DataHostSummary>, DataError> {
+        self.session_resolver
+            .run_scoped_query(
+                crate::mods::auth::AuthTokenScope::Home,
+                |session| async move {
+                    let items = self
+                        .streaming_query_service
+                        .discover_remote_consoles(&session, Some(target), || {
+                            self.session_resolver
+                                .is_current_streaming_session(&session, AuthTokenScope::Home)
+                        })
+                        .await?;
+                    Ok(items.into_iter().find(|item| {
+                        [&item.server_id, &item.id, &item.device_id]
+                            .into_iter()
+                            .flatten()
+                            .any(|identity| identity == target)
+                    }))
+                },
+            )
+            .await
+            .map_err(DataError::from)
+    }
+    async fn get_streaming_regions(
+        &self,
+        target: xbox_streaming::Target,
+    ) -> Result<super::types::DataStreamingRegions, DataError> {
+        let scope = if target.is_home() {
+            crate::mods::auth::AuthTokenScope::Home
+        } else {
+            crate::mods::auth::AuthTokenScope::Cloud
+        };
+        let started = std::time::Instant::now();
+        let result = self
+            .session_resolver
+            .run_scoped_query(scope, |session| async move {
+                self.streaming_query_service
+                    .get_streaming_regions(&session, target)
+            })
+            .await;
+        self.record_http_result(
+            if target.is_home() {
+                "homeRegions"
+            } else {
+                "cloudRegions"
+            },
+            started,
+            result.as_ref().err(),
+        );
+        result.map_err(catalog_data_error)
     }
 
     async fn get_streaming_title_input_config(

@@ -38,9 +38,19 @@ export interface ProcessedVideoFrameMetadata {
   frameSubmittedTimeMs: number
   frameDecodedTimeMs: number
   frameRenderedTimeMs: number
+  /** 原始 rVFC 时间，仅用于观测；预计呈现时间属于解码完成代理。 */
+  observation?: {
+    callbackTimeMs: number
+    receiveTime?: number
+    expectedDisplayTime?: number
+    presentationTime?: number
+    processingDuration?: number
+  }
+  feedbackEligible?: boolean
 }
 
 export interface InputRuntimeConfig {
+  preventResolutionDrops: boolean
   vibrationEnabled: boolean
   vibrationStrength: VibrationStrengthPreset
 }

@@ -901,6 +901,7 @@ fn home_server_registration_retry_exhausted_is_terminal_host_issue() {
 struct HttpTestProvider {
     fail_access: Arc<std::sync::atomic::AtomicBool>,
     events: Arc<(Mutex<Vec<String>>, tokio::sync::Notify)>,
+    event_payloads: Arc<Mutex<Vec<(String, Value)>>>,
     credential_error: Arc<Mutex<Option<SessionFlowError>>>,
     transfer_error: Arc<Mutex<Option<SessionFlowError>>>,
     renewed_token: Arc<Mutex<Option<Result<Value, xbox_webapi::WebApiError>>>>,
@@ -990,8 +991,12 @@ impl SessionFlowProvider for HttpTestProvider {
         }
         Ok("transfer".to_owned())
     }
-    fn on_session_lifecycle_event(&self, event: &str, _: Option<&str>, _: Value) {
+    fn on_session_lifecycle_event(&self, event: &str, _: Option<&str>, payload: Value) {
         self.events.0.lock().unwrap().push(event.to_owned());
+        self.event_payloads
+            .lock()
+            .unwrap()
+            .push((event.to_owned(), payload));
         self.events.1.notify_waiters();
     }
 }
@@ -1284,7 +1289,8 @@ async fn late_ice_from_a_replaced_session_cannot_write_signaling_state() {
 async fn ice_snapshot_dedup_preserves_new_end_markers_across_restart() {
     let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let counter = requests.clone();
-    let server = TestServer::new(move |_| {
+    let server = TestServer::new(move |request| {
+        if !request.contains("/ice ") { return (200, serde_json::json!({}), None); }
         let mut candidates = vec![serde_json::json!({"candidate":"candidate:1 1 UDP 1 127.0.0.1 5000 typ host", "sdpMid":"0", "sdpMLineIndex":0})];
         if counter.fetch_add(1, Ordering::SeqCst) >= 2 { candidates.push(serde_json::json!({"candidate":"end-of-candidates", "sdpMid":"0", "sdpMLineIndex":0})); }
         (200, serde_json::json!({"exchangeResponse": serde_json::to_string(&candidates).unwrap()}), None)
@@ -1759,4 +1765,224 @@ async fn concurrent_failed_closes_share_one_result_and_a_later_retry_uses_fresh_
     assert_eq!(server.count("DELETE"), 1);
     assert!(flow.close_session("session").await.is_err());
     assert_eq!(server.count("DELETE"), 2);
+}
+
+#[tokio::test]
+async fn home_configuration_late_after_end_marker_supplies_current_transport_once() {
+    let reads = Arc::new(AtomicUsize::new(0));
+    let counter = reads.clone();
+    let server = TestServer::new(move |request| {
+        if request.contains("/configuration ") {
+            return if counter.fetch_add(1, Ordering::SeqCst) == 0 {
+                (204, serde_json::json!(null), None)
+            } else {
+                (200, serde_json::json!({"serverDetails":{"ipV4Address":"192.0.2.3","ipV4Port":5000}}), None)
+            };
+        }
+        let candidates = vec![serde_json::json!({"candidate":"end-of-candidates", "sdpMid":"video", "sdpMLineIndex":1, "usernameFragment":"current"})];
+        (200, serde_json::json!({"exchangeResponse":serde_json::to_string(&candidates).unwrap()}), None)
+    }).await;
+    let flow = http_test_flow(HttpTestProvider::default());
+    install_http_record(&flow, &server.base_url).await;
+    let mut state = SessionSignalingState::default();
+    state.apply_media_answer(&crate::session::api::signaling::AnswerPayload { sdp: "v=0\nm=audio 0 UDP/TLS/RTP/SAVPF 111\na=mid:audio\nm=video 9 UDP/TLS/RTP/SAVPF 96\na=mid:video\na=ice-ufrag:current\n".into(), message_type: None });
+    flow.inner
+        .signaling
+        .write()
+        .await
+        .insert("session".into(), state);
+    assert!(flow.poll_ice("session", false).await.unwrap().is_empty());
+    assert!(flow.home_configuration_pending("session").await);
+    let candidates = flow.poll_ice("session", false).await.unwrap();
+    assert_eq!(candidates.len(), 3);
+    assert_eq!(
+        candidates[0].source.as_deref(),
+        Some("session-configuration")
+    );
+    assert_eq!(
+        candidates[1].source.as_deref(),
+        Some("session-configuration:compatibility-9002")
+    );
+    assert_eq!(candidates[2].candidate, "a=end-of-candidates");
+    assert!(candidates
+        .iter()
+        .all(|candidate| candidate.sdp_mid.as_deref() == Some("video")
+            && candidate.sdp_m_line_index == Some(1)
+            && candidate.username_fragment.as_deref() == Some("current")));
+    assert!(!flow.home_configuration_pending("session").await);
+    assert!(flow.poll_ice("session", false).await.unwrap().is_empty());
+    flow.close_session("session").await.unwrap();
+}
+
+#[tokio::test]
+async fn discovered_region_drives_creation_configuration_signaling_and_cleanup_origin() {
+    use crate::policy::types::{Region, Target};
+    use crate::session::api::{session::WebApiSessionGateway, signaling::WebApiSignalingGateway};
+    use crate::{CompilerInput, Config, Context};
+    let first = TestServer::new(|_| (200, serde_json::json!({"results":[]}), None)).await;
+    let second = TestServer::new(|request| {
+        let body = if request.contains("/v6/servers/") {
+            serde_json::json!({"results":[{"serverId":"console"}]})
+        } else if request.starts_with("POST /v5/sessions/home/play ") {
+            serde_json::json!({"sessionPath":"/v5/sessions/home/session"})
+        } else if request.contains("/state ") {
+            serde_json::json!({"state":"ReadyToConnect"})
+        } else if request.contains("/configuration ") {
+            serde_json::json!({"serverDetails":{"ipAddress":"192.0.2.1","port":5000}})
+        } else if request.starts_with("GET") && request.contains("/ice ") {
+            serde_json::json!({"exchangeResponse":"[]"})
+        } else {
+            serde_json::json!({})
+        };
+        (200, body, None)
+    })
+    .await;
+    let transport = xbox_webapi::transport::HttpTransport::with_client(
+        reqwest::Client::builder()
+            .no_proxy()
+            .timeout(HTTP_TEST_TIMEOUT)
+            .build()
+            .unwrap(),
+    );
+    let regions = vec![
+        Region {
+            name: "first".into(),
+            base_uri: first.base_url.clone(),
+            is_default: true,
+            ..Default::default()
+        },
+        Region {
+            name: "second".into(),
+            base_uri: second.base_url.clone(),
+            ..Default::default()
+        },
+    ];
+    let context = Context {
+        target: Target::Home,
+        target_id: "console".into(),
+        session: crate::policy::session::SessionAccessContext {
+            gs_token: Some("token".into()),
+            regions: regions.clone(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let token = crate::StreamingToken::parse(&serde_json::json!({"gsToken":"token"})).unwrap();
+    let found = crate::session::discovery::discover_home(
+        &regions,
+        Some("console"),
+        |region| {
+            let mut config = Config::default();
+            config.session.preferred_region_name = Some(region.name);
+            let plan = crate::compile(CompilerInput {
+                config,
+                context: context.clone(),
+            })
+            .unwrap()
+            .plan;
+            let token = token.clone();
+            let transport = transport.clone();
+            async move {
+                WebApiSessionGateway::with_transport(transport, plan, token)
+                    .get_remote_consoles()
+                    .await
+            }
+        },
+        || true,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let mut config = Config::default();
+    config.session.preferred_region_name = Some(found.0.name);
+    let plan = crate::compile(CompilerInput { config, context })
+        .unwrap()
+        .plan;
+    assert_eq!(plan.session.base_url, second.base_url);
+    let session =
+        WebApiSessionGateway::with_transport(transport.clone(), plan.clone(), token.clone());
+    assert_eq!(
+        session.start_stream().await.unwrap(),
+        "/v5/sessions/home/session"
+    );
+    assert_eq!(
+        session
+            .get_stream_state("session")
+            .await
+            .unwrap()
+            .0
+            .as_deref(),
+        Some("ReadyToConnect")
+    );
+    assert!(session
+        .get_configuration("session")
+        .await
+        .unwrap()
+        .is_some());
+    let signaling = WebApiSignalingGateway::with_transport(transport, plan, token);
+    signaling.send_sdp("session", "v=0").await.unwrap();
+    signaling.send_ice("session", &[]).await.unwrap();
+    signaling
+        .get_ice_exchange_response("session")
+        .await
+        .unwrap();
+    session.send_keepalive("session").await.unwrap();
+    session.stop_stream("session").await.unwrap();
+    assert_eq!(first.count("GET"), 1);
+    assert_eq!(first.count("POST"), 0);
+    for path in [
+        "POST /v5/sessions/home/play ",
+        "GET /v5/sessions/home/session/state",
+        "GET /v5/sessions/home/session/configuration",
+        "POST /v5/sessions/home/session/sdp",
+        "POST /v5/sessions/home/session/ice",
+        "GET /v5/sessions/home/session/ice",
+        "POST /v5/sessions/home/session/keepalive",
+        "DELETE /v5/sessions/home/session",
+    ] {
+        assert!(second.count(path) > 0, "missing {path}");
+    }
+}
+
+#[tokio::test]
+async fn configuration_deadline_releases_end_marker_and_records_fallback_reason() {
+    let server = TestServer::new(|_| {
+        (
+            200,
+            serde_json::json!({"exchangeResponse":"[{\"candidate\":\"end-of-candidates\"}]"}),
+            None,
+        )
+    })
+    .await;
+    let provider = HttpTestProvider::default();
+    let flow = http_test_flow(provider.clone());
+    install_http_record(&flow, &server.base_url).await;
+    tokio::time::pause();
+    let mut state = SessionSignalingState::default();
+    assert!(state.begin_configuration_poll(tokio::time::Instant::now()));
+    flow.inner
+        .signaling
+        .write()
+        .await
+        .insert("session".into(), state);
+    tokio::time::advance(std::time::Duration::from_secs(11)).await;
+    // 网络回放恢复实时时钟，配置期限保留已推进的单调时间事实。
+    tokio::time::resume();
+    let candidates = flow.poll_ice("session", false).await.unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].candidate, "a=end-of-candidates");
+    assert!(!flow.home_configuration_pending("session").await);
+    assert_eq!(
+        server.count("GET /v5/sessions/home/session/configuration"),
+        0
+    );
+    let payloads = provider.event_payloads.lock().unwrap();
+    let payload = &payloads
+        .iter()
+        .find(|(event, _)| event == "homeConfigurationObserved")
+        .unwrap()
+        .1;
+    assert_eq!(payload["reason"], "deadline");
+    assert_eq!(payload["source"], "console-list");
+    assert_eq!(payload["configurationPending"], false);
 }

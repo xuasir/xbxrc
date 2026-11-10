@@ -224,6 +224,7 @@ function createPlayerClient(
   return new BrowserPlayerClient({
     container: playerElementId,
     input: {
+      preventResolutionDrops: spec.runtime.preventResolutionDrops,
       vibrationEnabled: spec.runtime.vibration,
       vibrationStrength: spec.runtime.vibrationStrength,
     },
@@ -462,6 +463,8 @@ export function createBrowserRuntime(options: {
         controlChannelState: client?.getControlChannelHealthSnapshot().state ?? 'unavailable',
         actionPending: pendingActionEffectProbe !== undefined,
         configuration: {
+          preventResolutionDrops: currentSpec?.runtime.preventResolutionDrops,
+          resolutionFeedbackState: client?.getResolutionFeedbackState(),
           requestedFps: currentSpec?.render.initialTargetFps ?? 60,
           expectedFps: expectedContentFpsResolved,
           requestedWidth: currentSpec?.runtime.targetVideoWidth,
@@ -2415,6 +2418,7 @@ export function createBrowserRuntime(options: {
       const observedPresentTarget = plan?.presentTarget
       const snapshot = normalizeObservedPresentationStats({
         ...stats,
+        resolutionFeedbackState: client?.getResolutionFeedbackState(),
         streamLifecyclePhase: runtimePhase,
         sessionPhase: runtimePhase,
         transportState,

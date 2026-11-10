@@ -98,3 +98,4 @@ pub struct NegotiationPlan {
     pub console_addrs: Vec<HostAddr>,
 }
 pub mod compiler;
+pub mod console;

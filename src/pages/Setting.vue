@@ -21,6 +21,7 @@ import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleS
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { getConfigFieldValue, getSectionsForPage, getSettingEffect, isSettingFieldVisible, SETTING_PAGE_LABEL_KEYS, SETTING_PAGE_ORDER } from './settings/setting-page-schema'
 import SettingAppUpdateSection from './settings/SettingAppUpdateSection.vue'
@@ -56,6 +57,74 @@ const currentExpanded = computed({
 })
 let disposeTabSwitch: (() => void) | undefined
 let pageActive = true
+const cloudRegions = ref<Awaited<ReturnType<typeof rpc.data.getStreamingRegions>>['regions']>([])
+const regionsLoading = ref(false)
+const regionsLoaded = ref(false)
+const regionsError = ref('')
+let regionsGeneration = 0
+let selectEditorGeneration = 0
+let configMutationRevision = 0
+let regionsRequest: Promise<void> | undefined
+let disposeAuthState: (() => void) | undefined
+let disposeAuthReady: (() => void) | undefined
+
+function invalidateRegions() {
+  regionsGeneration++
+  cloudRegions.value = []
+  regionsError.value = ''
+  regionsLoaded.value = false
+  regionsLoading.value = false
+  regionsRequest = undefined
+  if (activeSingleSelectRow.value?.key === 'xcloud_region_name')
+    activeSingleSelectRow.value = null
+}
+async function loadCloudRegions(): Promise<void> {
+  if (regionsRequest)
+    return regionsRequest
+  const generation = ++regionsGeneration
+  const configRevision = configMutationRevision
+  regionsLoading.value = true
+  regionsError.value = ''
+  regionsRequest = (async () => {
+    try {
+      const response = await rpc.data.getStreamingRegions({ targetType: 'cloud' })
+      if (!pageActive || generation !== regionsGeneration)
+        return
+      cloudRegions.value = response.regions
+      regionsLoaded.value = true
+      if (groupState.value && configRevision === configMutationRevision)
+        groupState.value.streaming.xcloud_region_name = response.preferredRegionName
+      if (pageActive && generation === regionsGeneration && activeSingleSelectRow.value?.key === 'xcloud_region_name') {
+        activeSingleSelectRow.value = cloudRegionRow()
+      }
+    }
+    catch (error) {
+      if (pageActive && generation === regionsGeneration)
+        regionsError.value = error instanceof Error && error.message ? error.message : t('setting.cloudRegions.unavailable')
+    }
+    finally {
+      if (generation === regionsGeneration) {
+        regionsLoading.value = false
+        regionsRequest = undefined
+      }
+    }
+  })()
+  return regionsRequest
+}
+function cloudRegionRow(): SettingIndexedRow {
+  const definition = getTranslatedFieldDefinition('xcloud_region_name')
+  const value = getConfigFieldValue(groupState.value, 'xcloud_region_name')
+  return { ...definition, key: 'xcloud_region_name', value, valueText: formatConfigValue('xcloud_region_name', value, definition.options), nodeId: 'setting.items.connectionHost.xcloud_region_name', index: 0, effect: 'nextConnection' }
+}
+function handleAction(actionId: string) {
+  if (actionId === 'customTurn') {
+    customTurnOpen.value = true
+    return
+  }
+  const definition = getTranslatedFieldDefinition('force_region_ip')
+  const value = getConfigFieldValue(groupState.value, 'force_region_ip')
+  activeSingleSelectRow.value = { ...definition, key: 'force_region_ip', value, valueText: formatConfigValue('force_region_ip', value, definition.options), nodeId: 'setting.loginCompatibility', index: 0, effect: 'nextConnection' }
+}
 
 function translateOrFallback(key: string, fallback: string): string {
   return te(key) ? t(key) : fallback
@@ -70,12 +139,20 @@ function normalizeOptionValueForKey(value: string | number): string {
 }
 
 function getTranslatedFieldDefinition(configKey: string): SettingFieldDefinition {
-  const fieldDefinition = CONFIG_FIELD_DEFINITIONS[configKey]
+  const fieldDefinition = { ...CONFIG_FIELD_DEFINITIONS[configKey] }
+  if (configKey === 'xcloud_region_name') {
+    const selected = String(getConfigFieldValue(groupState.value, configKey) ?? '')
+    fieldDefinition.options = [
+      { value: '', label: t('setting.cloudRegions.automatic') },
+      ...cloudRegions.value.map(region => ({ value: selected && region.name.toLowerCase() === selected.toLowerCase() ? selected : region.name, label: region.displayName || region.shortName || region.name })),
+      ...(selected && !cloudRegions.value.some(region => region.name.toLowerCase() === selected.toLowerCase()) ? [{ value: selected, label: t(regionsLoaded.value ? 'setting.cloudRegions.savedUnavailable' : 'setting.cloudRegions.saved', { name: selected }) }] : []),
+    ]
+  }
 
   return {
     ...fieldDefinition,
     label: translateOrFallback(`setting.fields.${configKey}.label`, fieldDefinition.label),
-    description: translateOrFallback(`setting.fields.${configKey}.description`, fieldDefinition.description ?? ''),
+    description: configKey === 'xcloud_region_name' && (regionsLoading.value || regionsError.value || (regionsLoaded.value && cloudRegions.value.length === 0)) ? (regionsLoading.value ? t('setting.cloudRegions.loading') : regionsError.value || t('setting.cloudRegions.empty')) : translateOrFallback(`setting.fields.${configKey}.description`, fieldDefinition.description ?? ''),
     options: fieldDefinition.options?.map((option) => {
       const optionValueKey = normalizeOptionValueForKey(option.value)
       return {
@@ -131,8 +208,9 @@ const activeSections = computed<SettingIndexedSection[]>(() => {
         } })
       }
       else if (item.kind === 'action') {
+        const login = item.actionId === 'cloudLoginCompatibility'
         const configured = !!turnConfig.value.server_url && !!turnConfig.value.server_username && !!turnConfig.value.server_credential
-        entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t('setting.experience.turn.title'), value: t(configured ? 'setting.experience.turn.custom' : 'setting.experience.turn.default'), variant: 'default', index: index++ })
+        entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t(login ? 'setting.cloudRegions.loginCompatibility' : 'setting.experience.turn.title'), description: login ? t('setting.cloudRegions.loginHint') : undefined, value: login ? formatConfigValue('force_region_ip', getConfigFieldValue(groupState.value, 'force_region_ip'), getTranslatedFieldDefinition('force_region_ip').options) : t(configured ? 'setting.experience.turn.custom' : 'setting.experience.turn.default'), variant: 'default', index: index++ })
       }
     }
     return { key: section.key, label: t(section.labelKey), collapsible: section.collapsible, entries }
@@ -218,7 +296,10 @@ async function handleTabChange(key: string) {
     return
   scrollPositions.set(activeTabKey.value, panelRef.value?.scrollTop ?? 0)
   panelDirection.value = SETTING_PAGE_ORDER.indexOf(key as SettingPageKey) > SETTING_PAGE_ORDER.indexOf(activeTabKey.value as SettingPageKey) ? 'forward' : 'back'
+  closeEditors()
   activeTabKey.value = key as SettingTabKey
+  if (key === 'connectionHost')
+    void loadCloudRegions()
   statusMessage.value = ''
   await nextTick()
   if (activeTabKey.value === key && panelRef.value)
@@ -227,6 +308,7 @@ async function handleTabChange(key: string) {
 async function persistRowValue(row: SettingIndexedRow, value: string | number | boolean): Promise<boolean> {
   if (pendingActionKey.value || row.value === value)
     return false
+  configMutationRevision++
   pendingActionKey.value = row.key
   statusMessage.value = t('setting.experience.saving')
   statusError.value = false
@@ -240,6 +322,8 @@ async function persistRowValue(row: SettingIndexedRow, value: string | number | 
     if (row.key === 'fullscreen')
       restartPending.value = true
     statusMessage.value = t(`setting.experience.saved.${row.effect ?? 'instant'}`)
+    if (row.key === 'force_region_ip')
+      invalidateRegions()
     if (row.key === 'preferred_game_language' || row.key === 'force_region_ip') {
       try {
         await rpc.auth.clearAuthCache({ scope: 'ephemeral' })
@@ -260,7 +344,15 @@ async function handleRowConfirm(row: SettingIndexedRow) {
     return
   statusMessage.value = ''
   statusError.value = false
-  if (row.key === 'display_options') {
+  if (row.key === 'xcloud_region_name') {
+    const editorGeneration = ++selectEditorGeneration
+    const request = loadCloudRegions()
+    const generation = regionsGeneration
+    await request
+    if (pageActive && editorGeneration === selectEditorGeneration && generation === regionsGeneration && activeTabKey.value === 'connectionHost')
+      activeSingleSelectRow.value = cloudRegionRow()
+  }
+  else if (row.key === 'display_options') {
     renderEditorGeneration++
     renderSheetOpen.value = true
   }
@@ -324,6 +416,7 @@ async function restart() {
   finally { pendingActionKey.value = null }
 }
 function closeEditors() {
+  selectEditorGeneration++
   renderEditorGeneration++
   renderSheetOpen.value = false
   activeSingleSelectRow.value = null
@@ -332,6 +425,12 @@ function closeEditors() {
   restartConfirm.value = false
 }
 onMounted(() => {
+  disposeAuthState = events.on('auth.stateChanged', () => invalidateRegions())
+  disposeAuthReady = events.on('auth.sessionReady', () => {
+    invalidateRegions()
+    if (pageActive && activeTabKey.value === 'connectionHost')
+      void loadCloudRegions()
+  })
   void loadConfigGroups()
   disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
     if (!pageActive || !navigationEngine.isTopmostScope(SPATIAL_NAV_SCOPE_IDS.appShell))
@@ -348,12 +447,20 @@ onActivated(() => {
   pageActive = true
   if (groupState.value)
     void refreshConfig()
+  if (activeTabKey.value === 'connectionHost')
+    void loadCloudRegions()
 })
 onDeactivated(() => {
   pageActive = false
+  invalidateRegions()
   closeEditors()
 })
-onUnmounted(() => disposeTabSwitch?.())
+onUnmounted(() => {
+  invalidateRegions()
+  disposeTabSwitch?.()
+  disposeAuthState?.()
+  disposeAuthReady?.()
+})
 
 usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey.value])
 </script>
@@ -386,7 +493,7 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
             </div>
             <UiMotionTransition kind="panel" :direction="panelDirection">
               <div :key="activeTabKey">
-                <SettingSectionList v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="customTurnOpen = true" />
+                <SettingSectionList v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="handleAction" />
                 <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
               </div>
             </UiMotionTransition>
@@ -399,7 +506,7 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
     </div>
     <SettingValueSheet :key="activeValueEditorRow?.nodeId" :open="!!activeValueEditorRow" :scope-id="`setting.editor.${activeValueEditorRow?.key ?? 'idle'}`" :title="activeValueEditorRow?.label ?? ''" :hint="activeValueEditorRow?.description" :mode="activeValueEditorRow?.control === 'numberInput' ? 'number' : 'text'" :current-value="(activeValueEditorRow?.value as string | number) ?? null" :min="activeValueEditorRow?.input?.min" :max="activeValueEditorRow?.input?.max" :step="activeValueEditorRow?.input?.step" :busy="!!pendingActionKey" :error="statusError ? statusMessage : ''" @close="activeValueEditorRow = null" @submit="submitValue" />
     <SettingDisplayOptionsSheet :open="renderSheetOpen" scope-id="setting.render-sheet" :title="t('setting.renderControls.title')" :hint="t('setting.renderControls.defaultHint')" :current-value="renderControls" :loading="pendingActionKey === 'display_options'" :error="statusError ? statusMessage : ''" @close="renderSheetOpen = false" @submit="saveRenderDefault" />
-    <SettingSingleSelectPopupSheet :key="activeSingleSelectRow?.nodeId" :open="!!activeSingleSelectRow" :scope-id="SPATIAL_NAV_SCOPE_IDS.settingSingleSelect" :title="activeSingleSelectRow?.label ?? ''" :hint="activeSingleSelectRow?.description" :options="activeSingleSelectRow?.options ?? []" :current-value="(activeSingleSelectRow?.value as string | number) ?? null" :busy="!!pendingActionKey" :error="statusError ? statusMessage : ''" @close="activeSingleSelectRow = null" @select="value => activeSingleSelectRow && selectRow(activeSingleSelectRow, value)" />
+    <SettingSingleSelectPopupSheet :key="activeSingleSelectRow?.nodeId" :open="!!activeSingleSelectRow" :scope-id="`${SPATIAL_NAV_SCOPE_IDS.settingSingleSelect}.${activeSingleSelectRow?.key ?? 'idle'}`" :title="activeSingleSelectRow?.label ?? ''" :hint="activeSingleSelectRow?.description" :options="activeSingleSelectRow?.options ?? []" :current-value="(activeSingleSelectRow?.value as string | number) ?? null" :busy="!!pendingActionKey" :error="activeSingleSelectRow?.key === 'xcloud_region_name' ? regionsError : (statusError ? statusMessage : '')" @close="activeSingleSelectRow = null" @select="value => activeSingleSelectRow && selectRow(activeSingleSelectRow, value)" />
     <SettingCustomTurnSheet :open="customTurnOpen" :config="turnConfig" @close="customTurnOpen = false" @saved="refreshConfig" />
     <SettingConfirmSheet :open="restartConfirm" scope-id="setting.restart.confirm" :title="t('setting.experience.restartNow')" :message="t('setting.experience.restartHint')" :busy="pendingActionKey === '__restart__'" @close="restartConfirm = false" @confirm="restart" />
   </section>

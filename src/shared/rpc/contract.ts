@@ -176,6 +176,7 @@ export interface XBoxRpcSchema {
         outOfHomeWarning?: boolean
       }>
     >
+    getStreamingRegions: RpcMethod<{ targetType: 'cloud' | 'home' }, { regions: Array<{ name: string, displayName: string | null, shortName: string | null, continent: string | null, isDefault: boolean }>, updatedAt: number, preferredRegionName: string }>
     getStreamingTitleInputConfig: RpcMethod<
       { xboxTitleId: string },
       { xboxTitleId: string, config: Record<string, unknown> }

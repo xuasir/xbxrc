@@ -174,6 +174,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "theme"
         | "preferred_game_language"
         | "force_region_ip"
+        | "xcloud_region_name"
         | "codec"
         | "video_format"
         | "server_url"
@@ -188,6 +189,8 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         }
         "fullscreen"
         | "xhome_turn_fallback"
+        | "xcloud_region_migrated"
+        | "prevent_resolution_drops"
         | "enable_audio_control"
         | "vibration"
         | "power_on"
@@ -274,6 +277,29 @@ pub fn normalize_config(source: Map<String, Value>) -> Map<String, Value> {
     normalized
 }
 
+pub fn cloud_region_migration(
+    raw: &Map<String, Value>,
+    regions: &[xbox_streaming::policy::types::Region],
+) -> Option<String> {
+    if raw.get("xcloud_region_migrated").and_then(Value::as_bool) == Some(true)
+        || raw.contains_key("xcloud_region_name")
+    {
+        return None;
+    }
+    let legacy = raw
+        .get("force_region_ip")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+    Some(
+        regions
+            .iter()
+            .find(|region| !legacy.is_empty() && region.base_uri.contains(legacy))
+            .map(|region| region.name.clone())
+            .unwrap_or_default(),
+    )
+}
+
 pub fn filter_patch(patch: &Map<String, Value>) -> Map<String, Value> {
     let mut filtered_patch = Map::new();
     for (key, value) in patch {
@@ -293,6 +319,48 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn explicit_automatic_selection_and_migrated_preferences_survive_reload() {
+        let regions = vec![xbox_streaming::policy::types::Region {
+            name: "WestUS".into(),
+            base_uri: "https://wus.example".into(),
+            ..Default::default()
+        }];
+        let raw = serde_json::json!({"force_region_ip":"wus"});
+        assert_eq!(
+            cloud_region_migration(raw.as_object().unwrap(), &regions),
+            Some("WestUS".into())
+        );
+        for raw in [
+            serde_json::json!({"force_region_ip":"wus","xcloud_region_name":""}),
+            serde_json::json!({"force_region_ip":"wus","xcloud_region_migrated":true}),
+        ] {
+            assert_eq!(
+                cloud_region_migration(raw.as_object().unwrap(), &regions),
+                None
+            );
+        }
+        assert_eq!(
+            cloud_region_migration(&Map::new(), &regions),
+            Some(String::new())
+        );
+    }
+
+    #[test]
+    fn resolution_feedback_defaults_off_and_preserves_explicit_choices() {
+        assert_eq!(
+            normalize_config(Map::new())["prevent_resolution_drops"],
+            false
+        );
+        for value in [true, false] {
+            let raw = serde_json::json!({"prevent_resolution_drops": value});
+            assert_eq!(
+                normalize_config(raw.as_object().unwrap().clone())["prevent_resolution_drops"],
+                value
+            );
+        }
+    }
 
     #[test]
     fn render_controls_migrate_legacy_and_preserve_independent_effects() {

@@ -18,11 +18,19 @@ pub(crate) struct XcloudCatalogRefreshOutcome {
     pub missing_product_count: usize,
 }
 
-pub struct XcloudService;
+pub struct XcloudService {
+    config: Option<crate::mods::config::ConfigProviderRef>,
+}
 
 impl XcloudService {
     pub fn new() -> Self {
-        Self
+        Self { config: None }
+    }
+
+    pub fn with_config(config: crate::mods::config::ConfigProviderRef) -> Self {
+        Self {
+            config: Some(config),
+        }
     }
 
     pub fn resolve_cache_scope(
@@ -31,7 +39,7 @@ impl XcloudService {
         catalog_scope: &CloudCatalogScope,
     ) -> Option<XcloudCatalogCacheScope> {
         let claims = resolve_web_token_claims(&session.web_token)?;
-        let region = Self::resolve_xcloud_region(session)?;
+        let region = self.resolve_xcloud_region(session)?;
         let account_id = claims
             .xid
             .as_deref()
@@ -69,7 +77,7 @@ impl XcloudService {
         cache_repository: &DataCacheRepository,
         _force_refresh: bool,
     ) -> Result<XcloudCatalogRefreshOutcome, WebApiError> {
-        let Some(region) = Self::resolve_xcloud_region(session) else {
+        let Some(region) = self.resolve_xcloud_region(session) else {
             return Ok(XcloudCatalogRefreshOutcome {
                 payload: DataXcloudCatalogPayload {
                     scope_key: Some(DataCacheRepository::scoped_cache_key(scope)),
@@ -201,37 +209,27 @@ impl XcloudService {
         }
     }
 
-    fn resolve_xcloud_region(session: &DataSessionContext) -> Option<ResolvedXcloudRegion> {
+    fn resolve_xcloud_region(&self, session: &DataSessionContext) -> Option<ResolvedXcloudRegion> {
         let token = session
             .streaming_tokens
             .get("xCloudToken")
             .or_else(|| session.streaming_tokens.get("xcloudToken"))?;
-        let data = token.get("data").unwrap_or(token);
-
-        let bearer_token = data.get("gsToken").and_then(|value| value.as_str())?;
-        let regions = data
-            .get("offeringSettings")
-            .and_then(|value| value.get("regions"))
-            .and_then(|value| value.as_array())?;
-
-        let region = regions
-            .iter()
-            .find(|item| item.get("isDefault").and_then(|value| value.as_bool()) == Some(true))
-            .or_else(|| regions.first())?;
-
-        let base_uri = region.get("baseUri").and_then(|value| value.as_str())?;
-        let host = base_uri
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .trim_end_matches('/');
-
-        if host.is_empty() {
-            return None;
+        let access = xbox_streaming::parse_session_access_context(token).ok()?;
+        let mut config = xbox_streaming::Config::default();
+        if let Some(provider) = &self.config {
+            let name = provider.resolve_cloud_region_preference(&access.regions);
+            config.session.preferred_region_name = (!name.is_empty()).then_some(name);
         }
-
+        let region =
+            xbox_streaming::policy::session::compiler::pick_region(&access.regions, &config)
+                .ok()?;
         Some(ResolvedXcloudRegion {
-            host: host.to_string(),
-            bearer_token: bearer_token.to_string(),
+            host: region
+                .base_uri
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .to_owned(),
+            bearer_token: access.gs_token?,
         })
     }
 
@@ -314,6 +312,7 @@ mod tests {
                         "gsToken": "token",
                         "offeringSettings": {
                             "regions": [{
+                                "name": "WestUS",
                                 "isDefault": true,
                                 "baseUri": "https://wus.core.gssv-play-prod.xboxlive.com"
                             }]

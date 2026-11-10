@@ -137,6 +137,8 @@ pub struct RuntimePlanProjection {
     pub video_pipeline: RuntimeVideoPipelineProjection,
     pub recovery: RuntimeRecoveryProjection,
     pub polling_rate_hz: u16,
+    #[serde(default)]
+    pub prevent_resolution_drops: bool,
     pub vibration: bool,
 }
 
@@ -199,6 +201,7 @@ pub fn project_runtime_plan(plan: &Plan) -> RuntimePlanProjection {
         video_pipeline: project_video_pipeline(&plan.runtime.video_pipeline),
         recovery: project_recovery(&plan.runtime.recovery),
         polling_rate_hz: plan.input.polling_rate_hz,
+        prevent_resolution_drops: plan.input.prevent_resolution_drops,
         vibration: plan.input.vibration,
     }
 }
@@ -261,6 +264,10 @@ pub fn project_session_capabilities(
             .unwrap_or(false),
         effective_remote_play_capability_source: if context.remote_play.configuration_resolved {
             "configuration".to_string()
+        } else if context.remote_play.console_streaming_enabled.is_some()
+            || context.remote_play.remote_management_enabled.is_some()
+        {
+            "console-list".to_string()
         } else {
             "fallback".to_string()
         },
@@ -356,7 +363,9 @@ fn project_input_capability_source(source: InputCapabilitySource) -> String {
 }
 
 fn resolve_remote_play_streaming_allowed(context: &Context) -> bool {
-    if context.remote_play.configuration_resolved {
+    if context.remote_play.configuration_resolved
+        || context.remote_play.console_streaming_enabled.is_some()
+    {
         return context
             .remote_play
             .console_streaming_enabled

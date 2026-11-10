@@ -339,6 +339,17 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     control: 'singleSelect',
     options: PREFERRED_GAME_LANGUAGE_OPTIONS,
   },
+  prevent_resolution_drops: {
+    label: 'Prevent resolution drops (experimental)',
+    description: 'Prioritize clarity. Device pressure may increase stuttering; network and service policies determine actual quality.',
+    control: 'toggle',
+  },
+  xcloud_region_name: {
+    label: 'Cloud server region',
+    description: 'Choose the server region for your next cloud stream.',
+    control: 'singleSelect',
+    options: [{ value: '', label: 'Automatic (service recommended)' }],
+  },
   force_region_ip: {
     label: 'Region routing override',
     control: 'singleSelect',

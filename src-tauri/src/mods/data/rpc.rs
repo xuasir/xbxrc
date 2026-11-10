@@ -58,6 +58,10 @@ pub enum DataCommand {
     GetHosts,
     GetRemoteConsoles,
     #[serde(rename_all = "camelCase")]
+    GetStreamingRegions {
+        target_type: xbox_streaming::Target,
+    },
+    #[serde(rename_all = "camelCase")]
     GetStreamingTitleInputConfig {
         xbox_title_id: String,
     },
@@ -152,6 +156,9 @@ pub async fn handle_rpc(
         DataCommand::GetRemoteConsoles => {
             Ok(serde_json::to_value(data.get_remote_consoles().await?)?)
         }
+        DataCommand::GetStreamingRegions { target_type } => Ok(serde_json::to_value(
+            data.get_streaming_regions(target_type).await?,
+        )?),
         DataCommand::GetStreamingTitleInputConfig { xbox_title_id } => {
             if xbox_title_id.trim().is_empty() {
                 return Err(crate::error::AppError::Internal(

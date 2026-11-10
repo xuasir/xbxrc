@@ -16,6 +16,30 @@ pub(super) struct EventContract {
 
 const EVENTS: &[EventContract] = &[
     EventContract {
+        event: "resolutionFeedbackObserved",
+        dimension: TraceDimension::Input,
+        importance: TraceImportance::Key,
+        category: "snapshot",
+        interval_ms: 1000,
+        max_row_bytes: 1024,
+    },
+    EventContract {
+        event: "homeConfigurationObserved",
+        dimension: TraceDimension::Network,
+        importance: TraceImportance::Key,
+        category: "snapshot",
+        interval_ms: 1000,
+        max_row_bytes: 1024,
+    },
+    EventContract {
+        event: "remoteConsoleRegionDiscovered",
+        dimension: TraceDimension::Network,
+        importance: TraceImportance::Key,
+        category: "event",
+        interval_ms: 0,
+        max_row_bytes: 1024,
+    },
+    EventContract {
         event: "decodedFrameSupplyObserved",
         dimension: TraceDimension::MediaSupply,
         importance: TraceImportance::Key,

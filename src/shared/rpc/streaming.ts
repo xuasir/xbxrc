@@ -92,6 +92,7 @@ export interface StreamingAnswerPayload {
 }
 
 export interface StreamingIceCandidate {
+  source?: string | null
   candidate: string
   sdpMLineIndex?: number | null
   sdpMid?: string | null
@@ -172,6 +173,7 @@ export interface StreamingRuntimeProjection {
   videoPipeline: StreamingRuntimeVideoPipelineProjection
   recovery: StreamingRuntimeRecoveryProjection
   pollingRateHz: number
+  preventResolutionDrops: boolean
   vibration: boolean
   vibrationStrength: 'realistic' | 'enhanced' | 'full'
 }
@@ -333,6 +335,7 @@ export interface StreamingPollIceParams {
 }
 
 export interface StreamingPollIceResult {
+  configurationPending?: boolean
   candidates: StreamingIceCandidate[]
 }
 

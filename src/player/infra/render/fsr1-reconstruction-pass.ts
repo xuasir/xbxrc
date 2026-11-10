@@ -1,4 +1,5 @@
 import { computeFsrEasuCon } from './fsr1-cpu'
+import { createFullscreenVertexShader } from './fullscreen-triangle'
 
 // AMD GPUOpen FSR1 EASU 的现有 GLSL 实现，保持 textureGather 兼容入口。
 export function buildEasuFragmentSource(useCompatGather: boolean): string {
@@ -36,7 +37,7 @@ void FsrEasuGatherRGB(vec2 p, out vec4 r, out vec4 g, out vec4 b){
   return `#version 300 es
 precision highp float;
 precision highp int;
-uniform sampler2D easuTex;
+uniform highp sampler2D easuTex;
 uniform vec4 con0;
 uniform vec4 con1;
 uniform vec4 con2;
@@ -190,7 +191,7 @@ export class Fsr1ReconstructionPass {
   private sourceWidth = 0
   private sourceHeight = 0
 
-  constructor(private readonly gl: WebGL2RenderingContext, private readonly vertex: WebGLShader) {}
+  constructor(private readonly gl: WebGL2RenderingContext) {}
 
   get gpuObjects(): number {
     return [this.program, this.texture, this.framebuffer, ...this.shaders].filter(Boolean).length
@@ -209,15 +210,21 @@ export class Fsr1ReconstructionPass {
         throw error
       shader = this.compile(EASU_FRAGMENT_COMPAT)
     }
+    const vertex = createFullscreenVertexShader(gl)
+    this.shaders.push(vertex)
     const program = gl.createProgram()
     if (!program)
       throw new Error('srProgramAllocationFailed')
     this.program = program
-    gl.attachShader(program, this.vertex)
+    gl.attachShader(program, vertex)
     gl.attachShader(program, shader)
     gl.linkProgram(program)
     if (!gl.getProgramParameter(program, gl.LINK_STATUS))
       throw new Error(`srProgramLinkFailed:${gl.getProgramInfoLog(program) ?? 'unknown'}`)
+    for (const linked of this.shaders.splice(0)) {
+      gl.detachShader?.(program, linked)
+      gl.deleteShader(linked)
+    }
     this.uniforms = ['con0', 'con1', 'con2', 'con3'].map(name => gl.getUniformLocation(program, name))
     gl.useProgram(program)
     gl.uniform1i(gl.getUniformLocation(program, 'easuTex'), 0)

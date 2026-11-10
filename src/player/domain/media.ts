@@ -320,6 +320,8 @@ export interface RendererRuntimeConfig {
 
 /** 浏览器共享快照与五段帧链；控制、面板与导出使用同一合同。 */
 export interface BrowserPlaybackStats {
+  resolutionFeedbackState?: 'disabled' | 'active' | 'awaiting-metadata' | 'metadata-unavailable'
+
   inboundVideoFps?: number
   decodeFps?: number
   statsVideoGeneration?: number

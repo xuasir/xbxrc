@@ -96,6 +96,7 @@ export function buildStreamBrowserDiagnosticsViewModel(input: {
     : `${(openRatio * 100).toFixed(0)}%`
 
   return {
+    resolutionFeedback: s?.resolutionFeedbackState ? t(`streamPage.diagnosticsPanel.browser.feedbackStates.${s.resolutionFeedbackState}`) : unavailable,
     rtt: formatPanelMs(panelNumericValue(s?.networkRttMs ?? s?.rtt)),
     jitter: formatPanelMs(panelNumericValue(s?.networkJitterMs ?? s?.jit)),
     packetLoss: stringOrDash(s?.pl === undefined ? undefined : String(s.pl)),
@@ -172,7 +173,7 @@ export type StreamDiagnosticGroup = typeof DIAGNOSTIC_GROUPS[number]
 
 const DIAGNOSTIC_KEYS: Record<StreamDiagnosticGroup, readonly (keyof StreamBrowserDiagnosticsViewModel)[]> = {
   network: ['rtt', 'rttBaseline', 'rttDelta', 'jitter', 'packetLoss', 'qualityObserved', 'totalBitrate', 'qualityRequested', 'qualityNegotiated', 'qualityEffect', 'bandwidthState', 'bandwidthAction', 'controlChannelState', 'controlChannelError', 'controlChannelOpenRatio', 'controlChannelBufferedTrend'],
-  display: ['receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'callbackDeliveryFps', 'sourceSize', 'outputSize', 'submitAge', 'submitCost', 'uploadCost', 'glSubmitCost', 'submitIntervalTail', 'uploadTail', 'gpuCost', 'gpuTail', 'renderPipelineType', 'srRuntime', 'srSetting', 'renderProcessing', 'renderShaderPath', 'renderCause', 'renderEffect', 'frameCauses'],
+  display: ['resolutionFeedback', 'receivedFps', 'decodedFps', 'videoAdvancementFps', 'rendererSubmitFps', 'callbackDeliveryFps', 'sourceSize', 'outputSize', 'submitAge', 'submitCost', 'uploadCost', 'glSubmitCost', 'submitIntervalTail', 'uploadTail', 'gpuCost', 'gpuTail', 'renderPipelineType', 'srRuntime', 'srSetting', 'renderProcessing', 'renderShaderPath', 'renderCause', 'renderEffect', 'frameCauses'],
   recovery: ['presentationMilestone', 'recoveryCause', 'recoveryEffect', 'keyframeSuccessRate'],
   session: ['connectedElapsed', 'mediaReadyElapsed', 'transportState', 'transportPath', 'serverHost', 'frameWindow', 'observation', 'sampleAge', 'frontEndProfileBaseline', 'frontEndProfileDynamic', 'frontEndPolicyPreset', 'qualityLadderLevel', 'senderPolicyCause', 'decisionDigest'],
 }

@@ -165,6 +165,21 @@ describe('browser remote ICE polling', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('waits for late home configuration while an existing candidate connects', async () => {
+    const h = setup()
+    const supplement = { ...candidate('192.0.2.8'), usernameFragment: 'current', source: 'session-configuration' }
+    rpc.streaming.pollIce.mockResolvedValueOnce({ candidates: [candidate()], configurationPending: true })
+      .mockResolvedValueOnce({ candidates: [supplement, end], configurationPending: false })
+    const launch = h.start()
+    await vi.advanceTimersByTimeAsync(60)
+    h.peer.connect()
+    await vi.advanceTimersByTimeAsync(1100)
+    await launch
+    expect(rpc.streaming.pollIce).toHaveBeenCalledTimes(2)
+    expect(h.client.addIceCandidates).toHaveBeenLastCalledWith([supplement, end])
+    expectListenersReleased(h.peer)
+  })
+
   it('submits late local candidates while waiting for remote readiness', async () => {
     const h = setup('gathering')
     const late = candidate('192.0.2.4')

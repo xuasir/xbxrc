@@ -1,0 +1,25 @@
+{
+  "pass": true,
+  "cases": 120,
+  "maxCodeValue": 0,
+  "source": "CUA in-app browser, visible fixture result",
+  "coverage": [
+    "black",
+    "near-black",
+    "orientation",
+    "text",
+    "color-lines",
+    "noise",
+    "1:1",
+    "3x",
+    "downscale",
+    "USM",
+    "CAS",
+    "EASU+sharpen"
+  ],
+  "environment": {
+    "browser": "Codex in-app browser (WebKit)",
+    "readback": "actual WebGL2 RGBA8",
+    "performance": "device cost and physical scanout pending"
+  }
+}

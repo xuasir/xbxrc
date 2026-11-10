@@ -17,6 +17,7 @@ pub(super) fn apply_streaming_preferences(
     config.negotiation.audio_channels = AudioChannels::Auto;
 
     config.input.polling_rate_hz = snapshot.polling_rate.clamp(1, u16::MAX as i64) as u16;
+    config.input.prevent_resolution_drops = snapshot.prevent_resolution_drops;
     config.input.vibration = snapshot.vibration;
     config.session.power_on = snapshot.power_on;
 

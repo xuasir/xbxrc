@@ -164,6 +164,7 @@ fn to_host_summary(value: &Value) -> Option<DataHostSummary> {
         out_of_home_warning: object.get("outOfHomeWarning").and_then(Value::as_bool),
         storage_devices,
         console_addrs: None,
+        discovery_region_name: None,
     })
 }
 

@@ -9,6 +9,8 @@ pub struct IceCandidate {
     pub sdp_mid: Option<String>,
     pub username_fragment: Option<String>,
     pub message_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// 候选归一化策略：清洗并做稳定排序，尽量不改写服务端原始 candidate 语义。
@@ -33,17 +35,17 @@ impl IcePolicy {
 
     pub fn normalize(&self, candidates: &[IceCandidate]) -> Vec<IceCandidate> {
         let mut parsed = Vec::new();
-        let mut saw_end_of_candidates = false;
+        let mut end_of_candidates = Vec::new();
 
         for (original_index, candidate) in candidates.iter().enumerate() {
             let raw = candidate.candidate.trim();
-            if raw.is_empty() {
-                continue;
-            }
-            if raw.eq_ignore_ascii_case("a=end-of-candidates")
+            if raw.is_empty()
+                || raw.eq_ignore_ascii_case("a=end-of-candidates")
                 || raw.eq_ignore_ascii_case("end-of-candidates")
             {
-                saw_end_of_candidates = true;
+                if !end_of_candidates.contains(candidate) {
+                    end_of_candidates.push(candidate.clone());
+                }
                 continue;
             }
 
@@ -80,14 +82,13 @@ impl IcePolicy {
             .map(|entry| entry.candidate)
             .collect::<Vec<_>>();
 
-        if saw_end_of_candidates {
-            normalized.push(IceCandidate {
-                candidate: "a=end-of-candidates".to_string(),
-                sdp_m_line_index: Some(0),
-                sdp_mid: Some("0".to_string()),
-                username_fragment: None,
-                message_type: Some("iceCandidate".to_string()),
-            });
+        for mut end in end_of_candidates {
+            end.candidate = "a=end-of-candidates".to_owned();
+            end.sdp_mid.get_or_insert_with(|| "0".to_owned());
+            end.sdp_m_line_index.get_or_insert(0);
+            end.message_type
+                .get_or_insert_with(|| "iceCandidate".to_owned());
+            normalized.push(end);
         }
 
         normalized
@@ -147,6 +148,7 @@ fn parse_candidate(
             sdp_m_line_index: source.sdp_m_line_index.or(Some(0)),
             sdp_mid: source.sdp_mid.clone().or(Some("0".to_string())),
             username_fragment: source.username_fragment.clone(),
+            source: source.source.clone(),
             message_type: source
                 .message_type
                 .clone()
@@ -211,6 +213,7 @@ fn derive_teredo_ipv4_candidates(source: &ParsedCandidate) -> Vec<ParsedCandidat
             sdp_mid: source.candidate.sdp_mid.clone(),
             username_fragment: source.candidate.username_fragment.clone(),
             message_type: source.candidate.message_type.clone(),
+            source: Some("teredo-derived".into()),
         };
         derived.push(ParsedCandidate {
             ip: client_ipv4.to_string(),
@@ -289,6 +292,7 @@ mod tests {
                 sdp_mid: Some("0".to_string()),
                 username_fragment: None,
                 message_type: None,
+                source: None,
             },
             IceCandidate {
                 candidate: "a=candidate:2 1 UDP 1 203.0.113.10 9002 typ host".to_string(),
@@ -296,6 +300,7 @@ mod tests {
                 sdp_mid: Some("0".to_string()),
                 username_fragment: None,
                 message_type: None,
+                source: None,
             },
         ]);
 

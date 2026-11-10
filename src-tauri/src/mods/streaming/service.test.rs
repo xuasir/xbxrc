@@ -108,6 +108,8 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
         preferred_game_language: "en-US".to_string(),
         ipv6: false,
         force_region_ip: String::new(),
+        xcloud_region_name: String::new(),
+        prevent_resolution_drops: false,
         xhome_bitrate_mode: "Custom".to_string(),
         xhome_bitrate: 35,
         xcloud_bitrate_mode: "Custom".to_string(),

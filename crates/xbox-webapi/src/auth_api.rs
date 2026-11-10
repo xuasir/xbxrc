@@ -3,7 +3,7 @@ use crate::error::WebApiError;
 use crate::transport::HttpTransport;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use p256::ecdsa::SigningKey;
-use reqwest::header::HeaderValue;
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -532,26 +532,7 @@ impl AuthApi {
             "offeringId": offering
         });
 
-        let mut headers = HttpTransport::create_header_map(&[
-            ("Content-Type", "application/json"),
-            ("Cache-Control", "no-store, must-revalidate, no-cache"),
-            ("x-gssv-client", "XboxComBrowser"),
-        ])?;
-
-        if !force_region_ip.trim().is_empty() {
-            headers.insert(
-                "x-cosmos-ip",
-                HeaderValue::from_str(force_region_ip.trim())
-                    .map_err(|e| WebApiError::parse(e.to_string()))?,
-            );
-        }
-
-        let payload_str = serde_json::to_string(&payload)?;
-        headers.insert(
-            "Content-Length",
-            HeaderValue::from_str(&payload_str.len().to_string())
-                .map_err(|e| WebApiError::parse(e.to_string()))?,
-        );
+        let headers = streaming_login_headers(offering, force_region_ip, &payload)?;
 
         let url = format!(
             "https://{}.gssv-play-prod.xboxlive.com/v2/login/user",
@@ -570,6 +551,34 @@ impl Default for AuthApi {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn streaming_login_headers(
+    offering: &str,
+    force_region_ip: &str,
+    payload: &Value,
+) -> Result<HeaderMap, WebApiError> {
+    let mut headers = HttpTransport::create_header_map(&[
+        ("Content-Type", "application/json"),
+        ("Cache-Control", "no-store, must-revalidate, no-cache"),
+        ("x-gssv-client", "XboxComBrowser"),
+    ])?;
+    let route = force_region_ip.trim();
+    if !route.is_empty() {
+        let value = HeaderValue::from_str(route)
+            .map_err(|_| WebApiError::parse("Invalid streaming sign-in region"))?;
+        headers.insert("x-cosmos-ip", value.clone());
+        // 云游戏登录兼容使用 Web 客户端的转发地区头，现有主机登录头继续保留。
+        if matches!(offering, "xgpuweb" | "xgpuwebf2p") {
+            headers.insert("X-Forwarded-For", value);
+        }
+    }
+    headers.insert(
+        "Content-Length",
+        HeaderValue::from_str(&serde_json::to_string(payload)?.len().to_string())
+            .map_err(|error| WebApiError::parse(error.to_string()))?,
+    );
+    Ok(headers)
 }
 
 fn parse_cloud_transfer_response(

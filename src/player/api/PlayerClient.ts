@@ -86,7 +86,7 @@ export class PlayerClient {
     }
     const nextInputDriver = this.resolveInputDriverOption(options.inputDriver)
     this.gamepadDriver = this.createInputDriver(nextInputDriver)
-    this.inputService = new InputService(this.gamepadDriver, this.emitter)
+    this.inputService = new InputService(this.gamepadDriver, this.emitter, this.options.input)
     if (nextInputDriver && typeof nextInputDriver.setApplication === 'function') {
       nextInputDriver.setApplication(this)
     }
@@ -205,8 +205,13 @@ export class PlayerClient {
     })
   }
 
+  getResolutionFeedbackState() {
+    return this.inputService.getResolutionFeedbackState()
+  }
+
   updateInputConfig(config: Partial<InputRuntimeConfig>): void {
     this.options.input = { ...this.options.input, ...config }
+    this.inputService.updateConfig(config)
   }
 
   updateAudioConfig(config: Partial<AudioRuntimeConfig>): void {
