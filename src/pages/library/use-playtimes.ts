@@ -1,5 +1,6 @@
 import type { Playtime, QueryResult } from '@/shared/rpc/library'
 import { onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue'
+import { diagnosticIssueId, retainDiagnosticIssue } from '@/services/diagnostics'
 import { rpc } from '@/services/rpc'
 import { formatMinutes } from './library-view'
 import { libraryAccountId, libraryEpoch } from './use-library-query'
@@ -10,10 +11,12 @@ export function usePlaytimes(ids: () => string[], target: () => string, enabled:
   const values = ref(new Map<string, number | null>())
   const failures = ref(new Map<string, string>())
   const loading = ref(false)
+  const issueId = ref<string>()
   const error = ref('')
   let active = true
   let generation = 0
   let pending: Promise<void> | null = null
+  let retainingIssue = false
 
   function cancel() {
     generation++
@@ -25,6 +28,7 @@ export function usePlaytimes(ids: () => string[], target: () => string, enabled:
     values.value.clear()
     failures.value.clear()
     error.value = ''
+    issueId.value = undefined
   }
   function load(): Promise<void> {
     if (!active || !enabled() || !ids().length)
@@ -58,6 +62,13 @@ export function usePlaytimes(ids: () => string[], target: () => string, enabled:
               if (item?.error) {
                 failures.value.set(id, item.error)
                 error.value = item.error
+                if (!issueId.value && !retainingIssue) {
+                  retainingIssue = true
+                  void retainDiagnosticIssue(undefined, 'library').then((id) => {
+                    if (current())
+                      issueId.value = id
+                  }).finally(() => { retainingIssue = false })
+                }
               }
               else {
                 values.value.set(id, item?.minutes ?? null)
@@ -69,6 +80,7 @@ export function usePlaytimes(ids: () => string[], target: () => string, enabled:
             if (!current())
               return
             const message = cause instanceof Error ? cause.message : '时长查询暂不可用'
+            issueId.value = diagnosticIssueId(cause)
             error.value = message
             for (const id of batch) failures.value.set(id, message)
           }
@@ -106,5 +118,5 @@ export function usePlaytimes(ids: () => string[], target: () => string, enabled:
   }
   onDeactivated(deactivate)
   onUnmounted(deactivate)
-  return { values, loading, error, failures, load, reset, label }
+  return { issueId, values, loading, error, failures, load, reset, label }
 }

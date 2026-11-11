@@ -1,3 +1,5 @@
+#[path = "cloud_queries.rs"]
+mod cloud_queries;
 use crate::mods::auth::{AuthProviderRef, AuthTokenScope};
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
@@ -29,6 +31,7 @@ pub struct DataService {
     session_resolver: DataSessionResolver,
     cache_repository: Arc<DataCacheRepository>,
     runtime_state: Arc<DataRuntimeState>,
+    cloud_queries: cloud_queries::CloudQueryState,
     host_service: HostService,
     profile_service: ProfileService,
     streaming_query_service: StreamingQueryService,
@@ -94,6 +97,7 @@ impl DataService {
             session_resolver: DataSessionResolver::new(auth_provider),
             cache_repository,
             runtime_state: Arc::new(DataRuntimeState::new()),
+            cloud_queries: cloud_queries::CloudQueryState::new(),
             host_service: HostService::new(),
             profile_service: ProfileService::new(),
             streaming_query_service: StreamingQueryService::new(
@@ -144,26 +148,26 @@ impl DataService {
         )>,
         xbox_webapi::WebApiError,
     > {
-        let session = self
-            .session_resolver
-            .ensure_session_for(crate::mods::auth::AuthTokenScope::Cloud)
-            .await?;
-        let Some(session) = session else {
-            return Ok(None);
-        };
-
+        let session = self.session_resolver.current_session()?.unwrap_or(
+            crate::mods::data::types::DataSessionContext {
+                provider: "xbox".into(),
+                app_level: 0,
+                web_token: serde_json::json!({}),
+                streaming_tokens: serde_json::json!({}),
+            },
+        );
         let catalog_scope = self
             .catalog_scope()
             .map_err(|_| xbox_webapi::WebApiError::parse("invalid catalog configuration"))?;
-        let Some(scope) = self
+        let scope = self
             .xcloud_service
             .resolve_cache_scope(&session, &catalog_scope)
-        else {
-            if let Some(error) = XcloudService::unavailable_error(&session) {
-                return Err(error);
-            }
-            return Ok(None);
-        };
+            .unwrap_or(XcloudCatalogCacheScope {
+                account_id: "anonymous".into(),
+                region_host: "public".into(),
+                market: catalog_scope.market,
+                language: catalog_scope.language,
+            });
 
         Ok(Some((session, scope)))
     }
@@ -193,11 +197,37 @@ impl DataService {
 
         match loaded_snapshot.cache_state {
             DataXcloudCatalogCacheState::Miss => {
-                self.await_xcloud_refresh(session, scope, reason, false)
-                    .await
+                self.spawn_xcloud_refresh(session, scope.clone(), reason.into(), false);
+                Ok(DataXcloudCatalogPayload {
+                    sources: Default::default(),
+                    access: if scope.region_host == "public" {
+                        "browse"
+                    } else {
+                        "account"
+                    }
+                    .into(),
+                    error: None,
+                    scope_key: Some(cache_key),
+                    titles: Vec::new(),
+                    cache_state: DataXcloudCatalogCacheState::Miss,
+                    updated_at: None,
+                    refreshing: true,
+                })
             }
             DataXcloudCatalogCacheState::Fresh | DataXcloudCatalogCacheState::Stale => {
                 let payload = DataXcloudCatalogPayload {
+                    sources: self
+                        .cache_repository
+                        .read_cloud_value(&format!("{}.status", cache_key))?
+                        .unwrap_or_default(),
+                    access: if scope.region_host == "public" {
+                        "browse"
+                    } else {
+                        "account"
+                    }
+                    .into(),
+                    error: None,
+
                     scope_key: Some(cache_key.clone()),
                     titles: loaded_snapshot.titles.clone(),
                     cache_state: loaded_snapshot.cache_state.clone(),
@@ -323,86 +353,169 @@ impl DataService {
         force_refresh: bool,
     ) -> Result<DataXcloudCatalogPayload, DataError> {
         let started_at = std::time::Instant::now();
-        let catalog_scope = Self::catalog_scope_for(&context.config_provider)?;
-        let query_context = &context;
-        let expected_scope = &scope;
-        let requested_catalog = &catalog_scope;
-        let result = context
-            .session_resolver
-            .run_scoped_query(
-                crate::mods::auth::AuthTokenScope::Cloud,
-                |session| async move {
-                    let active_scope = query_context
-                        .xcloud_service
-                        .resolve_cache_scope(&session, requested_catalog)
-                        .ok_or_else(|| {
-                            XcloudService::unavailable_error(&session).unwrap_or_else(|| {
-                                xbox_webapi::WebApiError::parse(
-                                    "云游戏访问凭据响应暂不可用，请重试",
-                                )
-                            })
-                        })?;
-                    if active_scope != *expected_scope {
-                        return Err(xbox_webapi::WebApiError::parse(
-                            "登录或目录设置已更新，请刷新",
-                        ));
+        let emit = |mut payload: DataXcloudCatalogPayload| {
+            // 后台结果只发布到仍然有效的账户、语言和区域范围。
+            let current = context.session_resolver.current_session().ok().flatten();
+            let current_catalog = Self::catalog_scope_for(&context.config_provider).ok();
+            let same = current_catalog
+                .as_ref()
+                .is_some_and(|c| c.market == scope.market && c.language == scope.language)
+                && if scope.account_id == "anonymous" {
+                    current.is_none()
+                } else {
+                    current
+                        .as_ref()
+                        .and_then(|session| {
+                            context
+                                .xcloud_service
+                                .resolve_cache_scope(session, current_catalog.as_ref()?)
+                        })
+                        .as_ref()
+                        == Some(&scope)
+                };
+            if !same {
+                return;
+            }
+            let event = DataXcloudCatalogUpdatedEvent {
+                scope_key: DataCacheRepository::scoped_cache_key(&scope),
+                titles: std::mem::take(&mut payload.titles),
+                cache_state: payload.cache_state,
+                updated_at: payload.updated_at,
+                refreshing: payload.refreshing,
+                sources: payload.sources,
+                access: payload.access,
+                error: payload.error,
+                reason: reason.clone(),
+            };
+            let _ = events::emit_xcloud_catalog_updated(&context.app_handle, &event);
+        };
+        let result = if scope.region_host == "public" {
+            context
+                .xcloud_service
+                .refresh_catalog(
+                    &_session,
+                    &scope,
+                    &context.cache_repository,
+                    force_refresh,
+                    &emit,
+                )
+                .await
+        } else {
+            context
+                .session_resolver
+                .run_scoped_query(AuthTokenScope::Cloud, |session| {
+                    let emit = &emit;
+                    let context = &context;
+                    let scope = &scope;
+                    async move {
+                        let catalog =
+                            Self::catalog_scope_for(&context.config_provider).map_err(|_| {
+                                xbox_webapi::WebApiError::parse("invalid catalog scope")
+                            })?;
+                        if context
+                            .xcloud_service
+                            .resolve_cache_scope(&session, &catalog)
+                            .as_ref()
+                            != Some(scope)
+                        {
+                            return Err(xbox_webapi::WebApiError::parse(
+                                "登录或目录设置已更新，请刷新",
+                            ));
+                        }
+                        context
+                            .xcloud_service
+                            .refresh_catalog(
+                                &session,
+                                scope,
+                                &context.cache_repository,
+                                force_refresh,
+                                emit,
+                            )
+                            .await
                     }
-                    query_context
-                        .xcloud_service
-                        .refresh_catalog(
-                            &session,
-                            expected_scope,
-                            &query_context.cache_repository,
-                            force_refresh,
-                        )
-                        .await
-                },
-            )
-            .await;
+                })
+                .await
+        };
         record_data_http_result(
             &context.runtime_trace,
             "cloudCatalog",
             started_at,
             result.as_ref().err(),
         );
-        let outcome = result.map_err(catalog_data_error)?;
-        let current = context
-            .session_resolver
-            .current_session()
-            .map_err(DataError::from)?
-            .ok_or("登录状态已更新，请刷新")?;
-        let current_scope = Self::catalog_scope_for(&context.config_provider)?;
-        if context
-            .xcloud_service
-            .resolve_cache_scope(&current, &current_scope)
-            .as_ref()
-            != Some(&scope)
-        {
-            return Err("登录或目录设置已更新，请刷新".into());
+        match result {
+            Ok(outcome) => {
+                log::debug!(
+                    "[Data][xcloud] hydrated candidates={}",
+                    outcome.missing_product_count
+                );
+                emit(outcome.payload.clone());
+                Ok(outcome.payload)
+            }
+            Err(error) => {
+                let loaded = context
+                    .cache_repository
+                    .load_xcloud_catalog(&scope)
+                    .map_err(DataError::from)?;
+                if loaded.titles.is_empty() && scope.region_host != "public" {
+                    let public_scope = XcloudCatalogCacheScope {
+                        region_host: "public".into(),
+                        ..scope.clone()
+                    };
+                    let progress = |mut payload: DataXcloudCatalogPayload| {
+                        payload.scope_key = Some(DataCacheRepository::scoped_cache_key(&scope));
+                        emit(payload);
+                    };
+                    if let Ok(mut outcome) = context
+                        .xcloud_service
+                        .refresh_catalog(
+                            &_session,
+                            &public_scope,
+                            &context.cache_repository,
+                            force_refresh,
+                            progress,
+                        )
+                        .await
+                    {
+                        outcome.payload.scope_key =
+                            Some(DataCacheRepository::scoped_cache_key(&scope));
+                        outcome.payload.error = Some(XcloudService::catalog_error(&error));
+                        emit(outcome.payload.clone());
+                        return Ok(outcome.payload);
+                    }
+                }
+                let payload = DataXcloudCatalogPayload {
+                    scope_key: Some(DataCacheRepository::scoped_cache_key(&scope)),
+                    titles: loaded.titles,
+                    cache_state: loaded.cache_state,
+                    updated_at: loaded.updated_at,
+                    refreshing: false,
+                    access: if scope.region_host == "public" {
+                        "browse"
+                    } else {
+                        "unavailable"
+                    }
+                    .into(),
+                    sources: context
+                        .cache_repository
+                        .read_cloud_value(&format!(
+                            "{}.status",
+                            DataCacheRepository::scoped_cache_key(&scope)
+                        ))?
+                        .unwrap_or_default(),
+                    error: Some(XcloudService::catalog_error(&error)),
+                };
+                emit(payload.clone());
+                Ok(payload)
+            }
         }
-        log::info!(
-            "[Data][xcloud] refresh duration={}ms titles={} missingProductCount={}",
-            started_at.elapsed().as_millis(),
-            outcome.payload.titles.len(),
-            outcome.missing_product_count
-        );
-        let event_payload = DataXcloudCatalogUpdatedEvent {
-            scope_key: DataCacheRepository::scoped_cache_key(&scope),
-            titles: outcome.payload.titles.clone(),
-            cache_state: outcome.payload.cache_state.clone(),
-            updated_at: outcome.payload.updated_at,
-            refreshing: false,
-            reason,
-        };
-        if let Err(error) = events::emit_xcloud_catalog_updated(&context.app_handle, &event_payload)
-        {
-            log::warn!("[Data][xcloud] emit catalog updated failed: {}", error);
-        }
-        Ok(outcome.payload)
     }
 
     fn empty_catalog_payload(cache_state: DataXcloudCatalogCacheState) -> DataXcloudCatalogPayload {
         DataXcloudCatalogPayload {
+            sources: Default::default(),
+            access: String::new(),
+            error: None,
+
             scope_key: None,
             titles: Vec::new(),
             cache_state,
@@ -414,6 +527,59 @@ impl DataService {
 
 #[async_trait]
 impl DataProvider for DataService {
+    async fn validate_cloud_stream(&self, stream: &str) -> Result<(), DataError> {
+        let title = self.cloud_title(stream, "titleId").await?;
+        if !title.entitlement_known {
+            return Err("游玩资格待确认，请刷新后重试".into());
+        }
+        if !title.has_entitlement {
+            return Err("当前账户缺少游玩资格".into());
+        }
+        Ok(())
+    }
+
+    async fn get_cloud_detail(
+        &self,
+        product: &str,
+    ) -> Result<super::types::DataCloudDetail, DataError> {
+        self.cloud_detail(product).await
+    }
+    async fn get_cloud_preferences(
+        &self,
+    ) -> Result<(String, super::types::DataCloudPreferences), DataError> {
+        self.cloud_preferences()
+    }
+    async fn set_cloud_preferences(
+        &self,
+        scope: &str,
+        preferences: super::types::DataCloudPreferences,
+    ) -> Result<super::types::DataCloudPreferences, DataError> {
+        self.save_cloud_preferences(scope, preferences)
+    }
+    async fn resolve_cloud_title(
+        &self,
+        product: &str,
+    ) -> Result<super::types::DataXcloudTitleSummary, DataError> {
+        self.cloud_title(product, "productId").await
+    }
+    async fn get_cloud_wait(
+        &self,
+        product: &str,
+        request: &str,
+    ) -> Result<super::types::DataCloudWait, DataError> {
+        self.cloud_wait(product, request).await
+    }
+    async fn cancel_cloud_wait_query(&self, request: &str) -> Result<bool, DataError> {
+        self.cancel_cloud_wait(request).await;
+        Ok(true)
+    }
+    async fn get_cloud_input_config(
+        &self,
+        stream: &str,
+    ) -> Result<DataStreamingTitleInputConfig, DataError> {
+        self.cloud_input(stream).await
+    }
+
     async fn get_library_game(
         &self,
         target: Option<String>,

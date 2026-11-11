@@ -446,7 +446,7 @@ export function createBrowserRuntime(options: {
   let latestTraceStats: StreamStats | undefined
   let disposeInputTrace: (() => void) | undefined
   const playbackTrace = createBrowserPlaybackTrace({
-    enabled: () => runtimeTrace.snapshot().profile === 'production',
+    enabled: () => runtimeTrace.snapshot().profile !== 'off',
     write: (event, payload, options) => runtimeTrace.record(event, payload, options),
     trace: () => ({ ...runtimeTrace.snapshot(), backend: backendTraceState, backendSampleAgeMs: backendTraceState ? Math.round(monotonicNowMs() - backendTraceObservedAtMs) : undefined }),
     facts: () => {

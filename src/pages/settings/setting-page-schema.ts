@@ -102,6 +102,7 @@ const PAGE_GENERAL: SettingSchemaSectionDef[] = [
     { kind: 'field', fieldKey: 'fullscreen' },
   ] },
   { key: 'feedback', labelKey: 'setting.experience.sections.feedback', items: [
+    { kind: 'field', fieldKey: 'ui_haptics' },
     { kind: 'field', fieldKey: 'ui_audio' },
   ] },
 ]
@@ -148,12 +149,7 @@ const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
   ] },
 ]
 
-const PAGE_ADVANCED: SettingSchemaSectionDef[] = [
-  { key: 'diagnostics', labelKey: 'setting.experience.sections.diagnostics', items: [
-    { kind: 'field', fieldKey: 'runtime_trace_mode' },
-    { kind: 'field', fieldKey: 'debug' },
-  ] },
-]
+const PAGE_ADVANCED: SettingSchemaSectionDef[] = []
 
 const PAGE_SECTIONS: Record<SettingPageKey, SettingSchemaSectionDef[]> = {
   general: PAGE_GENERAL,

@@ -1,0 +1,38 @@
+[
+  {
+    "contentBorders": [
+      {
+        "border": "0px",
+        "section": "pad-targets"
+      },
+      {
+        "border": "0px",
+        "section": "pad-extras"
+      }
+    ],
+    "footerBorder": "1px",
+    "scrollable": true,
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "contentBorders": [
+      {
+        "border": "0px",
+        "section": "pad-targets"
+      },
+      {
+        "border": "0px",
+        "section": "pad-extras"
+      }
+    ],
+    "footerBorder": "1px",
+    "scrollable": true,
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  }
+]

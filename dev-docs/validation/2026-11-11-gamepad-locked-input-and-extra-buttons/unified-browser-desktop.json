@@ -1,0 +1,236 @@
+[
+  {
+    "name": "single mapping entry and always available test",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox output title and source picker",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "20px title with top actions",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "17 targets and 8 direct stick directions",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "callouts stay separated",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "input held for south",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "automatic release and focus for south",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "B is input for output A",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "capture stays in original diagram",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "input held for home",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "automatic release and focus for home",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "chord labels appear on Xbox target",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "input held for south",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "automatic release and focus for south",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "rear input shown on output A",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "toggle shows enable action when disabled",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "toggle shows disable action when enabled",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard held keeps recording",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard release restores A focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "chord waits for all keys released",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard chord shown on Xbox",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "direction restores original focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "switch preserves gamepad draft",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "both sources persist independently",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "saved chord reloads",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "nonstandard source begins unbound",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "input held for south",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "automatic release and focus for south",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "nonstandard button index 24 maps to A",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "axis held keeps recording",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "axis completes and label updates",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "full trigger axis captures from rest -1",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "two device profiles survive save",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "reset affects selected source only",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test locks with no source chooser",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test auto detects keyboard A",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard stick appears in test",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test auto detects physical rear input and mapped Xbox A",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "UI and stream neutral during testing",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test auto detects raw controller and exposes all raw inputs",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard test works with hardware disconnected",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test exit clears observers and restores entry focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "physical Menu/View long hold exits auto test",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "geometric navigation reaches all controls",
+    "pass": true,
+    "detail": {
+      "width": 1280,
+      "height": 720,
+      "nodes": 4,
+      "unreachable": [],
+      "overlap": false,
+      "overflow": false
+    }
+  },
+  {
+    "name": "global menu suppressed during capture and test",
+    "pass": true,
+    "detail": {
+      "menuRequests": 0
+    }
+  }
+]

@@ -7371,6 +7371,7 @@ dependencies = [
  "xbox-cloud-catalog-flow",
  "xbox-streaming",
  "xbox-webapi",
+ "zip",
 ]
 
 [[package]]

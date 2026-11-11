@@ -11,6 +11,7 @@ function debugLog(..._args: Array<unknown>): void {}
 export interface RpcCallError extends Error {
   code?: string
   details?: unknown
+  diagnosticIssueId?: string
 }
 
 type RpcErrorListener = (request: RpcInvokePayload, error: RpcCallError) => void
@@ -47,6 +48,7 @@ async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
       const error = new Error(envelope.error?.message ?? 'Unknown RPC error') as RpcCallError
       error.code = envelope.error?.code
       error.details = envelope.error?.details
+      error.diagnosticIssueId = envelope.error?.diagnosticIssueId
 
       for (const listener of errorListeners) {
         try {

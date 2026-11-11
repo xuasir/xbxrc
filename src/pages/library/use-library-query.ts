@@ -1,8 +1,9 @@
 import type { LibraryPage, QueryResult } from '@/shared/rpc/library'
 import { computed, onActivated, onDeactivated, reactive, ref, watch } from 'vue'
+import { diagnosticIssueId, retainDiagnosticIssue } from '@/services/diagnostics'
 import { events } from '@/services/events'
 
-interface QueryState<T> { value: T | null, loading: boolean, error: string, updatedAt: number, request: number }
+interface QueryState<T> { value: T | null, loading: boolean, error: string, issueId?: string, updatedAt: number, request: number }
 const cache = reactive(new Map<string, QueryState<unknown>>())
 const pageDepths = new Map<string, number>()
 export const libraryEpoch = ref(0)
@@ -47,6 +48,7 @@ export function useLibraryQuery<T>(key: () => string, loader: () => Promise<Quer
     const request = ++record.request
     record.loading = true
     record.error = ''
+    record.issueId = undefined
     try {
       const result = await fetcher()
       if (epoch !== libraryEpoch.value || request !== record.request)
@@ -61,8 +63,16 @@ export function useLibraryQuery<T>(key: () => string, loader: () => Promise<Quer
       return true
     }
     catch (error) {
-      if (epoch === libraryEpoch.value && request === record.request)
+      if (epoch === libraryEpoch.value && request === record.request) {
+        record.issueId = diagnosticIssueId(error)
         record.error = error instanceof Error ? error.message : '查询暂不可用，请稍后刷新'
+        if (!record.issueId) {
+          void retainDiagnosticIssue(error, 'library').then((id) => {
+            if (epoch === libraryEpoch.value && request === record.request)
+              record.issueId = id
+          })
+        }
+      }
       return false
     }
     finally {

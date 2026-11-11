@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { DiagnosticCapture } from '@shared/rpc/runtimeTrace'
+
 import type { RenderControlsValue } from '../shared/config/render-controls'
 import type { StreamDiagnosticGroup } from '../streaming/stream-panel-view-models'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -346,6 +348,7 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   return items
 })
 
+const diagnosticCapture = ref<DiagnosticCapture | null>(null)
 const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   const items: StreamMenuActionViewModel[] = []
   if (ability.canToggleExperienceMetrics.value) {
@@ -374,6 +377,7 @@ const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
       disabled: renderState.value.engine !== 'passthrough' || renderState.value.pending || renderControls.value.compatibilityMode,
     })
   }
+  items.push({ id: 'captureRuntimeTrace', label: t(diagnosticCapture.value?.state === 'active' ? 'diagnostics.stopExport' : 'diagnostics.start'), busy: operations.pending.traceExport === true })
   items.push({ id: 'exportRuntimeTrace', label: t(operations.pending.traceExport ? 'streamPage.diagnosticsMenu.exportingRuntimeTrace' : 'streamPage.diagnosticsMenu.exportRuntimeTrace'), busy: operations.pending.traceExport === true })
   return items
 })
@@ -504,6 +508,10 @@ function closeActionSheet(): void {
 }
 
 function openDiagnosticsMenu(): void {
+  void rpc.runtimeTrace.getStatus().then((status) => {
+    if (!pageDisposed)
+      diagnosticCapture.value = status.diagnostics.capture
+  }).catch(() => {})
   openSheet('diagnosticsMenu')
 }
 
@@ -514,7 +522,12 @@ function closeDiagnosticsMenu(): void {
   void moveStreamSpatialNavFocusToPostOverlaySink()
 }
 
-function handleStreamMenuToggleRequested(): void {
+function handleStreamMenuToggleRequested(event: Event): void {
+  if ((event as CustomEvent).detail?.target === 'diagnostics') {
+    if (canUseDiagnosticsMenu.value && !isDiagnosticsMenuSheetOpen.value)
+      openDiagnosticsMenu()
+    return
+  }
   // 组合键语义固定为“打开菜单”，关闭由 Back/B 键走各弹窗自身 close 流程处理。
   if (isMenuSheetOpen.value) {
     return
@@ -563,7 +576,8 @@ async function disconnectStream(options?: { navigateBack?: boolean, reason?: str
 async function handleFailedSheetAction(id = 'stream.failure.exit'): Promise<void> {
   revealChrome()
   if (id === 'stream.failure.exportTrace') {
-    await operations.run('traceExport', current => exportStreamRuntimeTrace(() => !pageDisposed && current()))
+    const issueId = pageFailure.value?.error.diagnosticIssueId
+    await operations.run('traceExport', current => exportStreamRuntimeTrace(() => !pageDisposed && current(), issueId ? { issueId } : {}))
     return
   }
   if (id === 'stream.failure.powerOff') {
@@ -886,6 +900,20 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 async function handleDiagnosticsMenuAction(id: string): Promise<void> {
+  if (id === 'captureRuntimeTrace') {
+    await operations.run('traceExport', async (current) => {
+      const status = await rpc.runtimeTrace.getStatus()
+      if (pageDisposed || !current())
+        return
+      if (status.diagnostics.capture?.state === 'active') {
+        const captureId = status.diagnostics.capture.id
+        diagnosticCapture.value = await rpc.runtimeTrace.stopCapture({ captureId })
+        return exportStreamRuntimeTrace(() => !pageDisposed && current(), { captureId })
+      }
+      diagnosticCapture.value = await rpc.runtimeTrace.startCapture()
+    })
+    return
+  }
   if (id === 'exportRuntimeTrace') {
     await operations.run('traceExport', current => exportStreamRuntimeTrace(() => !pageDisposed && current()))
     return

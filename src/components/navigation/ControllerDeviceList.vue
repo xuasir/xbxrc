@@ -10,7 +10,7 @@ const { t } = useI18n()
 
 <template>
   <div class="gamepad-devices" role="radiogroup" :aria-label="t('gamepadSettings.device')">
-    <Focusable v-for="device in props.snapshot.devices" :id="`${props.navNodeBaseId}.device.${device.id}`" :key="device.id" as="button" :scope-id="props.scopeId" :disabled="!device.standard" role="radio" :aria-checked="device.id === props.snapshot.activeDeviceId" :class="{ 'gamepad-devices__selected': device.id === props.snapshot.activeDeviceId }" @click="inputController.selectDevice(device.id)">
+    <Focusable v-for="device in props.snapshot.devices" :id="`${props.navNodeBaseId}.device.${device.id}`" :key="device.id" as="button" :scope-id="props.scopeId" role="radio" :aria-checked="device.id === props.snapshot.activeDeviceId" :class="{ 'gamepad-devices__selected': device.id === props.snapshot.activeDeviceId }" @click="inputController.selectDevice(device.id)">
       <span>{{ device.name }}</span>
       <span class="gamepad-devices__status">{{ device.id === props.snapshot.activeDeviceId ? t('gamepadSettings.selected') : device.standard ? t('gamepadSettings.select') : t('gamepadSettings.nonstandard') }}</span>
     </Focusable>

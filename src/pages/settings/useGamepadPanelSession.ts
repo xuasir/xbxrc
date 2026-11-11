@@ -1,31 +1,26 @@
 import type { GamepadKeyboardControlDto } from '@shared/gamepad/contract'
+import type { InputController } from '@shared/gamepad/input-controller'
 import type { ButtonKey } from '@shared/gamepad/state'
+import { createLockedInputSession } from '@shared/gamepad/locked-input-session'
 import { nextTick, ref } from 'vue'
 
-type Pane = 'layout' | 'sticks' | 'keyboard' | 'test' | 'advanced' | 'reset'
+export type GamepadTool = 'layout' | 'sticks' | 'keyboard' | 'vibration' | 'test' | 'advanced' | 'reset'
+type Pane = GamepadTool
 type CaptureTarget = ButtonKey | GamepadKeyboardControlDto
 
-interface PanelInput {
-  setUiCapture: (id: string, active: boolean, exclusive?: boolean) => void
-  stopRumble: () => Promise<void>
-}
-
-/** 面板会话拥有输入捕获和期限，退出时统一释放；异步结果按会话身份提交。 */
-export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target: string) => void) {
+/** 面板与锁定子页共享会话身份，退出统一释放占用并恢复来源焦点。 */
+export function useGamepadPanelSession(input: Pick<InputController, 'getSnapshot' | 'subscribe' | 'setUiCapture' | 'stopRumble'> & Partial<Pick<InputController, 'setKeyboardObservation'>>, restoreFocus: (target: string) => void) {
   const pane = ref<Pane | null>(null)
   const capturing = ref<CaptureTarget | null>(null)
-  const captureCountdown = ref(0)
-  const testCountdown = ref(0)
-  const testNavigation = ref(false)
-  let testDeadline = 0
-  let testRemainingMs = 0
-  let captureDevice: string | null = null
-  let testDevice: string | null = null
-  let captureTimer: ReturnType<typeof setInterval> | undefined
-  let testTimer: ReturnType<typeof setInterval> | undefined
+  const captureFinished = ref(false)
   let revision = 0
   let focusRevision = 0
   let disposed = false
+  const lock = createLockedInputSession(input, () => {
+    if (pane.value === 'test')
+      close()
+    else stopCapture()
+  })
 
   function isCurrent(token: number): boolean {
     return !disposed && token === revision
@@ -34,15 +29,14 @@ export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target:
   function stopCapture(restore = true): void {
     const target = capturing.value
     capturing.value = null
-    captureDevice = null
-    captureCountdown.value = 0
-    clearInterval(captureTimer)
-    captureTimer = undefined
+    captureFinished.value = false
+    lock.release()
     const focusToken = ++focusRevision
     const token = revision
-    input.setUiCapture('settings:capture', false)
     if (target && restore) {
-      void nextTick(() => {
+      void nextTick(async () => {
+        // 子视图切换先挂载 DOM，再等待 FocusScope 完成注册。
+        await nextTick()
         if (isCurrent(token) && focusToken === focusRevision && pane.value && !capturing.value)
           restoreFocus(target)
       })
@@ -53,13 +47,7 @@ export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target:
     ++revision
     const wasOpen = pane.value !== null
     pane.value = null
-    testDevice = null
-    clearInterval(testTimer)
-    testTimer = undefined
-    testCountdown.value = 0
-    testNavigation.value = false
     stopCapture(false)
-    input.setUiCapture('settings:test', false)
     input.setUiCapture('settings:panel', false)
     if (wasOpen)
       void input.stopRumble()
@@ -70,78 +58,26 @@ export function useGamepadPanelSession(input: PanelInput, restoreFocus: (target:
       return
     close()
     pane.value = next
-    testDevice = next === 'test' ? deviceId : null
     input.setUiCapture('settings:panel', true)
-    if (next === 'test') {
-      if (!deviceId) {
-        close()
-        return
-      }
-      const token = revision
-      testRemainingMs = 20_000
-      testDeadline = performance.now() + testRemainingMs
-      testCountdown.value = 20
-      testTimer = setInterval(() => {
-        if (!isCurrent(token) || testNavigation.value)
-          return
-        testCountdown.value = Math.max(0, Math.ceil((testDeadline - performance.now()) / 1000))
-        if (!testCountdown.value)
-          close()
-      }, 250)
-      input.setUiCapture('settings:test', true, true)
-    }
-  }
-
-  function toggleTestNavigation(): void {
-    if (disposed || pane.value !== 'test')
-      return
-    testNavigation.value = !testNavigation.value
-    if (testNavigation.value) {
-      testRemainingMs = Math.max(0, testDeadline - performance.now())
-      input.setUiCapture('settings:test', false)
-      const token = revision
-      void nextTick(() => {
-        if (isCurrent(token) && testNavigation.value)
-          restoreFocus('finishTest')
-      })
-    }
-    else {
-      testDeadline = performance.now() + testRemainingMs
-      input.setUiCapture('settings:test', true, true)
-    }
-  }
-
-  function startCapture(target: CaptureTarget, deviceId: string | null): void {
-    if (disposed || (pane.value !== 'layout' && pane.value !== 'keyboard'))
-      return
-    stopCapture(false)
-    capturing.value = target
-    captureDevice = pane.value === 'layout' ? deviceId : null
-    const token = revision
-    const focusToken = ++focusRevision
-    const deadline = performance.now() + 10_000
-    captureCountdown.value = 10
-    captureTimer = setInterval(() => {
-      if (!isCurrent(token) || focusToken !== focusRevision)
-        return
-      captureCountdown.value = Math.max(0, Math.ceil((deadline - performance.now()) / 1000))
-      if (!captureCountdown.value)
-        stopCapture()
-    }, 250)
-    input.setUiCapture('settings:capture', true, true)
-  }
-
-  function updateDevice(deviceId: string | null): void {
-    if (pane.value === 'test' && testDevice !== deviceId)
+    if (next === 'test' && !lock.enter(deviceId, false, true, true))
       close()
-    else if (pane.value === 'layout' && capturing.value && captureDevice !== deviceId)
+  }
+
+  function startCapture(target: CaptureTarget, _deviceId: string | null): void {
+    if (disposed || lock.locked.value || (pane.value !== 'layout' && pane.value !== 'keyboard'))
+      return
+    capturing.value = target
+    captureFinished.value = false
+    ++focusRevision
+    if (!lock.enter(null, false, false))
       stopCapture()
   }
 
   function dispose(): void {
     disposed = true
     close()
+    lock.dispose()
   }
 
-  return { pane, capturing, captureCountdown, testCountdown, testNavigation, toggleTestNavigation, open, close, startCapture, stopCapture, updateDevice, dispose, isCurrent, getRevision: () => revision }
+  return { pane, capturing, captureFinished, locked: lock.locked, exitProgress: lock.exitProgress, exitLock: lock.exit, open, close, startCapture, stopCapture, dispose, isCurrent, getRevision: () => revision }
 }

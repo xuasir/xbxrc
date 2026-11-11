@@ -108,7 +108,7 @@ pub async fn fetch_cloud_catalog(
                     .map(|value| value.categories.clone())
                     .unwrap_or_default(),
                 supported_input_types: entry.supported_input_types,
-                has_entitlement: Some(entry.has_entitlement),
+                has_entitlement: entry.entitlement_known.then_some(entry.has_entitlement),
                 is_recently_played: Some(entry.is_recently_played),
                 is_new: Some(entry.is_new),
             }

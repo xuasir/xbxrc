@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Focusable } from '@/navigation/core/vue'
+import ExportDiagnosticsButton from './ExportDiagnosticsButton.vue'
 
-const props = withDefaults(defineProps<{ id: string, title: string, body: string, actionLabel: string, busy?: boolean, error?: boolean }>(), { busy: false, error: false })
+const props = withDefaults(defineProps<{ id: string, title: string, body: string, actionLabel: string, busy?: boolean, error?: boolean, issueId?: string }>(), { busy: false, error: false })
 const emit = defineEmits<{ retry: [] }>()
 
 function retry(): void {
@@ -22,6 +23,7 @@ function retry(): void {
     <Focusable :id="id" as="button" type="button" scope-id="app.shell" class="page-unavailable__action ui-action-button ui-action-button--brand" :busy="busy" @click="retry">
       {{ actionLabel }}
     </Focusable>
+    <ExportDiagnosticsButton v-if="error" :id="`${id}.export`" scope-id="app.shell" :issue-id="issueId" />
   </section>
 </template>
 

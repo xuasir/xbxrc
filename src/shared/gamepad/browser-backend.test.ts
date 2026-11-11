@@ -30,6 +30,34 @@ function fixture() {
 afterEach(() => vi.useRealTimers())
 
 describe('browserGamepadBackend', () => {
+  it.each(['standard', ''])('publishes independent extra button and axis changes for mapping %s', async (mapping) => {
+    const f = fixture()
+    const input = pad()
+    input.mapping = mapping
+    input.buttons = Array.from({ length: 21 }, () => ({ value: 0, pressed: false }))
+    input.axes = [0, 0, 0, 0, 0]
+    f.setPads([input])
+    await f.backend.start(s => f.snapshots.push(s))
+    const first = f.snapshots[0]
+    input.buttons[20].value = 1
+    f.tick()
+    expect(f.snapshots).toHaveLength(2)
+    expect(f.snapshots[1].samples[0].raw?.buttons[20]).toBe(1)
+    expect(first.samples[0].raw?.buttons[20]).toBe(0)
+    input.axes = [0, 0, 0, 0, -0.6]
+    f.tick()
+    expect(f.snapshots[2].samples[0].raw?.axes[4]).toBe(-0.6)
+    f.setPads([])
+    f.tick()
+    f.setPads([input])
+    f.tick()
+    expect(f.snapshots.at(-1)?.devices[0].id).not.toBe(first.devices[0].id)
+    expect(f.snapshots.at(-1)?.devices[0].layoutKey).toBe(first.devices[0].layoutKey)
+    input.buttons = [...input.buttons, { value: 0, pressed: false }]
+    f.tick()
+    expect(f.snapshots.at(-1)?.devices[0].layoutKey).not.toBe(first.devices[0].layoutKey)
+    await f.backend.stop()
+  })
   it('reuses stable device/state records and separates 250Hz polls from ten Hz heartbeats', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
@@ -160,6 +188,30 @@ describe('browserGamepadBackend', () => {
     complete('complete')
     expect(await result).toBe('failed')
     expect(reset).toHaveBeenCalled()
+  })
+  it('sends all four motors through the advertised trigger-rumble capability', async () => {
+    const f = fixture()
+    const input = pad()
+    const playEffect = vi.fn(async () => 'complete')
+    input.vibrationActuator = { effects: ['dual-rumble', 'trigger-rumble'], playEffect }
+    f.setPads([input])
+    await f.backend.start(s => f.snapshots.push(s))
+    const device = f.snapshots[0].devices[0]
+    expect(device.triggerRumble).toBe(true)
+    expect(await f.backend.rumble(device.id, { durationMs: 200, startDelayMs: 0, strongMagnitude: 0.1, weakMagnitude: 0.2, leftTrigger: 0.3, rightTrigger: 2, repeat: 0 })).toBe('applied')
+    expect(playEffect).toHaveBeenCalledWith('trigger-rumble', expect.objectContaining({ strongMagnitude: 0.1, weakMagnitude: 0.2, leftTrigger: 0.3, rightTrigger: 1 }))
+    await f.backend.stop()
+  })
+  it('reports trigger-only testing as unsupported when only handle motors are exposed', async () => {
+    const f = fixture()
+    const input = pad()
+    const playEffect = vi.fn(async () => 'complete')
+    input.vibrationActuator = { type: 'dual-rumble', playEffect }
+    f.setPads([input])
+    await f.backend.start(s => f.snapshots.push(s))
+    expect(await f.backend.rumble(f.snapshots[0].devices[0].id, { durationMs: 200, startDelayMs: 0, strongMagnitude: 0, weakMagnitude: 0, leftTrigger: 1, rightTrigger: 0, repeat: 0 })).toBe('unsupported')
+    expect(playEffect).not.toHaveBeenCalled()
+    await f.backend.stop()
   })
 
   it('keeps stationary snapshots at heartbeat cadence while resampling every 4ms', async () => {

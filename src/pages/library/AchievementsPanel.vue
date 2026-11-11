@@ -2,6 +2,7 @@
 import type { LibraryAchievement } from '@/shared/rpc/library'
 import { computed, onDeactivated, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ExportDiagnosticsButton from '@/components/common/ExportDiagnosticsButton.vue'
 import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingInputControl from '@/components/settings/SettingInputControl.vue'
 import SettingModalShell from '@/components/settings/SettingModalShell.vue'
@@ -58,8 +59,10 @@ async function more() {
     </div>
     <p v-if="own.state.value.error" class="library-notice" role="alert">
       我的：{{ own.state.value.error }}
+      <ExportDiagnosticsButton id="achievements.own.export" scope-id="app.shell" :issue-id="own.state.value.issueId" />
     </p><p v-if="targetXuid && friend.state.value.error" class="library-notice" role="alert">
       好友：{{ friend.state.value.error }}
+      <ExportDiagnosticsButton id="achievements.friend.export" scope-id="app.shell" :issue-id="friend.state.value.issueId" />
     </p>
     <div class="library-toolbar">
       <SettingInputControl id="game.achievements.search" v-model="search" scope-id="app.shell" label="搜索成就" placeholder="搜索成就" /><LibrarySelectControl id="game.achievements.filter" v-model="filter" label="成就状态" :options="[{ value: 'all', label: '全部' }, { value: 'locked', label: '待解锁' }, { value: 'unlocked', label: '已解锁' }]" />

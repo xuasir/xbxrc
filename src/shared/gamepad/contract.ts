@@ -126,4 +126,5 @@ export interface GamepadKeyboardBindingDto {
 
 export interface GamepadKeyboardMappingDto {
   bindings: GamepadKeyboardBindingDto[]
+  chords?: { keys: GamepadKeyboardKeyDto[], control: GamepadKeyboardControlDto }[]
 }

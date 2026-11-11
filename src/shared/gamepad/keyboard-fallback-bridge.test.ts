@@ -65,6 +65,34 @@ async function fixture() {
 }
 
 describe('keyboard game controls', () => {
+  it('observes keyboard test input while gamepad is configured and keeps navigation and stream output neutral', async () => {
+    const { c, key, configure } = await fixture()
+    configure({ gamepad_control_source: 'gamepad' })
+    c.setUiCapture('test', true, true)
+    c.setKeyboardObservation('test', true)
+    key('keydown', 'KeyJ')
+    expect(c.getSnapshot().keyboardState.buttons.south).toBe(1)
+    expect(c.getSnapshot().uiState).toEqual(neutralState())
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+    key('keyup', 'KeyJ')
+    expect(c.getSnapshot().keyboardState.buttons.south).toBe(0)
+    c.setUiCapture('test', false)
+    c.setKeyboardObservation('test', false)
+  })
+
+  it('outputs simultaneous keyboard chords and absorbs constituent single actions until a key releases', async () => {
+    const { c, key, configure } = await fixture()
+    configure({ gamepad_keyboard_mapping: { bindings: [{ key: 'keyJ', control: 'south' }, { key: 'keyK', control: 'east' }], chords: [{ keys: ['keyJ', 'keyK'], control: 'home' }] } })
+    key('keydown', 'KeyJ')
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 1, east: 0, home: 0 })
+    key('keydown', 'KeyK')
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 0, home: 1 })
+    key('keyup', 'KeyJ')
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 1, home: 0 })
+    key('keyup', 'KeyK')
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+  })
+
   it('updates hints with the input source and keeps them aligned with fixed menu actions after remapping games', async () => {
     const { c, key, configure } = await fixture()
     c.setStreamReady(false)

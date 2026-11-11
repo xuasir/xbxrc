@@ -46,6 +46,10 @@ fn production_and_dev_retain_safe_http_failure_diagnostics() {
 fn cloud_catalog_rpc_and_event_match_optional_timestamp_contract() {
     for updated_at in [None, Some(0), Some(1_790_000_000_000)] {
         let payload = serde_json::to_value(DataXcloudCatalogPayload {
+            sources: Default::default(),
+            access: String::new(),
+            error: None,
+
             scope_key: None,
             titles: vec![],
             cache_state: DataXcloudCatalogCacheState::Miss,
@@ -54,6 +58,10 @@ fn cloud_catalog_rpc_and_event_match_optional_timestamp_contract() {
         })
         .unwrap();
         let event = serde_json::to_value(DataXcloudCatalogUpdatedEvent {
+            sources: Default::default(),
+            access: String::new(),
+            error: None,
+
             scope_key: "account-region-language-market".to_string(),
             titles: vec![],
             cache_state: DataXcloudCatalogCacheState::Miss,

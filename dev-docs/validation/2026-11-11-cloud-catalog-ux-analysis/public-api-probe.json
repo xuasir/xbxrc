@@ -1,0 +1,749 @@
+{
+  "observedDate": "2026-11-11",
+  "timezone": "Asia/Shanghai",
+  "source": "public HTTP reads; current workspace source audit",
+  "workspaceBranch": "main",
+  "workspaceHead": "74d3caee1fba2e82f8c84d870f6f9e87eea58abc",
+  "scope": "Public catalog schemas and small samples. Authenticated titles, MRU, inputconfigs and waittime were checked in source.",
+  "requestHeaders": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "ms-cv": "1.0",
+    "calling-app-name": "Xbox Cloud Gaming Web",
+    "calling-app-version": "24.17.63"
+  },
+  "collections": [
+    {
+      "source": "newest",
+      "siglId": "f13cf6b4-57e6-4459-89df-6aec18cf0538",
+      "method": "GET",
+      "endpoint": "https://catalog.gamepass.com/sigls/v2",
+      "query": {
+        "id": "f13cf6b4-57e6-4459-89df-6aec18cf0538",
+        "market": "US",
+        "language": "zh-TW"
+      },
+      "title": "最近新增",
+      "productIds": [
+        "9N5DDTDLTWCL",
+        "9MZZWGTF7V65",
+        "9NRBW3FJSJWT",
+        "9P743P6195Q5",
+        "9N74KFV7253H",
+        "9N8RS7CW8CGL",
+        "9N8RKWJT32L4",
+        "9N9K5QP9G3GL",
+        "9MW4MFG0192L",
+        "9PBG4MTM3JJC",
+        "9PKFL1XJT73S",
+        "9PGSDFM3JD85",
+        "9MVNCSJ14754",
+        "9NRQVQ7ZRM7Z",
+        "9PNRLJNDPP4G",
+        "9NK039GWVTVC",
+        "9P7S9F02293J",
+        "9PKZRN4RJRC9",
+        "9NQVHHW88XW9",
+        "9P861V1542BL",
+        "9P2FF14JZLL3",
+        "9PPF72ZH6RP8",
+        "9N72DFC6GL91",
+        "9NFB47H2SDRX",
+        "9P5QV5XX8S9H",
+        "9N4PT8HGCDHQ",
+        "9PM3J18QM4Q3",
+        "9N944N1WP67T",
+        "9PLH7R84GJWP",
+        "9PJ6FV3130QZ",
+        "9NXSNQR7CM1Q",
+        "9PK0DZ68LGC0",
+        "9PK8PHLCQDF6",
+        "9P402RWR63H4",
+        "9P9GX5D8H9DW"
+      ]
+    },
+    {
+      "source": "cloud-newest",
+      "siglId": "44a55037-770f-4bbf-bde5-a9fa27dba1da",
+      "method": "GET",
+      "endpoint": "https://catalog.gamepass.com/sigls/v2",
+      "query": {
+        "id": "44a55037-770f-4bbf-bde5-a9fa27dba1da",
+        "market": "US",
+        "language": "zh-TW"
+      },
+      "title": "最近新增",
+      "productIds": [
+        "9N5DDTDLTWCL",
+        "9MZZWGTF7V65",
+        "9NRBW3FJSJWT",
+        "9P743P6195Q5",
+        "9N74KFV7253H",
+        "9N8RS7CW8CGL",
+        "9N9K5QP9G3GL",
+        "9MW4MFG0192L",
+        "9PBG4MTM3JJC",
+        "9PKFL1XJT73S",
+        "9PGSDFM3JD85",
+        "9MVNCSJ14754",
+        "9PNRLJNDPP4G",
+        "9NK039GWVTVC",
+        "9P7S9F02293J",
+        "9PKZRN4RJRC9",
+        "9NQVHHW88XW9",
+        "9P1303FCXW6X",
+        "9P861V1542BL",
+        "9P2FF14JZLL3",
+        "9PPF72ZH6RP8",
+        "9N72DFC6GL91",
+        "9NFB47H2SDRX",
+        "9P5QV5XX8S9H",
+        "9N4PT8HGCDHQ",
+        "9N944N1WP67T",
+        "9PLH7R84GJWP",
+        "9PJ6FV3130QZ",
+        "9NXSNQR7CM1Q",
+        "9PK0DZ68LGC0",
+        "9PK8PHLCQDF6",
+        "9P402RWR63H4"
+      ]
+    },
+    {
+      "source": "popular",
+      "siglId": "e7590b22-e299-44db-ae22-25c61405454c",
+      "method": "GET",
+      "endpoint": "https://catalog.gamepass.com/sigls/v2",
+      "query": {
+        "id": "e7590b22-e299-44db-ae22-25c61405454c",
+        "market": "US",
+        "language": "zh-TW"
+      },
+      "title": "雲端上的最熱門項目",
+      "productIds": [
+        "9N8KMNW6942X",
+        "9NKX70BBCDRN",
+        "9P9FTXPKQ35P",
+        "BXBJQ1932138",
+        "9NG07QJNK38J",
+        "9NKV34XDW014",
+        "9NP1P1WFS0LB",
+        "9NMB4T25W817",
+        "BNKDKQXMXRR2",
+        "9P2VGCTBMM52",
+        "9P2N57MC619K",
+        "9N7TFFRRZCC9",
+        "9NL9QN69HCL7",
+        "9P33VJGVPHVP",
+        "9NCJSXWZTP88",
+        "9PLKVSWR299F",
+        "9N0FWWQ94X62",
+        "9PBNGCVBGML0",
+        "C27XPR5XDMFT",
+        "9NNPSTWT06VM",
+        "BWHFZNSL0PB5",
+        "9N8FQ28Z6QX3",
+        "9PMQDM08SNK9",
+        "9N436FQM30HX",
+        "9P0T51BDDWVT",
+        "BW9TWC8L4JCS",
+        "9PLVVTDHS1P0",
+        "9P4NJFH17MRT",
+        "9N9PDJ7Z8S2R",
+        "9MX7DMHK13SC"
+      ]
+    },
+    {
+      "source": "leaving",
+      "siglId": "393f05bf-e596-4ef6-9487-6d4fa0eab987",
+      "method": "GET",
+      "endpoint": "https://catalog.gamepass.com/sigls/v2",
+      "query": {
+        "id": "393f05bf-e596-4ef6-9487-6d4fa0eab987",
+        "market": "US",
+        "language": "zh-TW"
+      },
+      "title": "即將離開",
+      "productIds": [
+        "9NMNZ4CK59DM",
+        "9N21ZCV0JW6V",
+        "9N36BLQF3FX6",
+        "9N6639H7VGH4",
+        "9NBZ7Z3JRXQ8",
+        "9ND3HTTQ0GKB",
+        "9NPDN9R45JX4",
+        "9NRHQLZX3900",
+        "9P0NPLQ9P1DB",
+        "9P81K2C8RBF4",
+        "9P8XJRLCLH2P",
+        "9PHTX5QZ035T",
+        "BRJNRZ9N734V",
+        "BX03760D0QGN"
+      ]
+    },
+    {
+      "source": "mkb",
+      "siglId": "8fa264dd-124f-4af3-97e8-596fcdf4b486",
+      "method": "GET",
+      "endpoint": "https://catalog.gamepass.com/sigls/v2",
+      "query": {
+        "id": "8fa264dd-124f-4af3-97e8-596fcdf4b486",
+        "market": "US",
+        "language": "zh-TW"
+      },
+      "title": "使用滑鼠和鍵盤玩遊戲",
+      "productIds": [
+        "9NK039GWVTVC",
+        "9P2FF14JZLL3",
+        "9N4PT8HGCDHQ",
+        "9PK8PHLCQDF6",
+        "9N0QWXC09MPT",
+        "9N6J4RNFPKKL",
+        "9N1N0NQNGK9W",
+        "9NQQ8B4PJR25",
+        "9MW53ZKZH168",
+        "9PDC9X7BKZR3",
+        "9MZZZCHZ26NK",
+        "9ND19JDMBS3R",
+        "9PK5WS0HXQKQ",
+        "9NJ67TQQ51Z0",
+        "9PDC8J1BSV8B",
+        "9PL89B9HCZ9W",
+        "9PD9SZGNCMDZ",
+        "9NF6XPSBTTGB",
+        "9PFNXM9G4N83",
+        "9N8H4RRSRV2S",
+        "9P86LLDCL5CC",
+        "9PPP5344B3LS",
+        "9P8FBXKMCLWC",
+        "9N7P8GVMF6SS",
+        "9NZCJF5VF1NV",
+        "9PCJT6TLCGGV",
+        "9N8KMNW6942X",
+        "9N36BLQF3FX6",
+        "9MT5NJ5W7B8Z",
+        "9NK4NTBFWW81",
+        "9P4LSLG7B8CT",
+        "9P4NJFH17MRT",
+        "BX1DTCBD1HXJ",
+        "9NC7NRD0CM11",
+        "9MW715J1P29D",
+        "9P77PG7DK0W2",
+        "9NLZZ74TFD7P",
+        "9PNGFSX7S117",
+        "9P4NV23Q6QC2",
+        "9NL4714VTLRS",
+        "9P0NPLQ9P1DB",
+        "9PFRTPRQ569Q",
+        "9NNFG8BQRCXL",
+        "9NV8W1KJSQLL",
+        "9NPKGVXPFRSX",
+        "9P47S7NJGWZL",
+        "9P33VJGVPHVP",
+        "9P9VNSQK1W3K",
+        "9P7L9H478GGV",
+        "9P8XJRLCLH2P",
+        "9NF0D13RPX5L",
+        "9MZ4GBWX9GND",
+        "9NX6K9HN4F4K",
+        "9PLFD17M47K3",
+        "9NBLGGH43KZB",
+        "BTNPS60N3114",
+        "C4GH8N6ZXG5L",
+        "9N5JRWWGMS1R",
+        "9NP1P1WFS0LB",
+        "9P1Z43KRNQD4",
+        "9MXND4PQLK3W",
+        "9NN3HCKW5TPC",
+        "9PJTHRNVH62H",
+        "9NT4X7P8B9NB",
+        "9MT8PTGVHX2P",
+        "9P2N57MC619K"
+      ]
+    }
+  ],
+  "newestComparison": {
+    "genericProducts": 35,
+    "cloudProducts": 32,
+    "intersection": 31,
+    "genericOnly": [
+      "9N8RKWJT32L4",
+      "9NRQVQ7ZRM7Z",
+      "9P9GX5D8H9DW",
+      "9PM3J18QM4Q3"
+    ],
+    "cloudOnly": [
+      "9P1303FCXW6X"
+    ]
+  },
+  "hydrationProfiles": [
+    {
+      "hydration": "RemoteLowJade0",
+      "method": "POST",
+      "endpoint": "https://catalog.gamepass.com/v3/products",
+      "query": {
+        "market": "US",
+        "language": "zh-TW",
+        "hydration": "RemoteLowJade0"
+      },
+      "body": {
+        "Products": [
+          "9N5DDTDLTWCL",
+          "9MZZWGTF7V65",
+          "9NRBW3FJSJWT",
+          "9P743P6195Q5",
+          "9N74KFV7253H"
+        ]
+      },
+      "responseBytes": 10061,
+      "productCount": 5,
+      "fieldKeys": [
+        "ProductTitle",
+        "PublisherName",
+        "XCloudTitleId",
+        "Image_Tile",
+        "Image_Poster",
+        "Streamability",
+        "Categories",
+        "LocalizedCategories",
+        "XCloudOfferings",
+        "XboxTitleId",
+        "ChildXboxTitleIds",
+        "StoreId"
+      ],
+      "fieldCoverage": {
+        "ProductDescription": 0,
+        "DeveloperName": 0,
+        "Image_Hero": 0,
+        "Screenshots": 0,
+        "Trailers": 0,
+        "OriginalReleaseDate": 0,
+        "LanguageSupport": 0,
+        "ContentRating": 0,
+        "Attributes": 0,
+        "AccessibilityFeatures": 0,
+        "AvailablePlatforms": 0
+      }
+    },
+    {
+      "hydration": "RemoteHighSapphire0",
+      "method": "POST",
+      "endpoint": "https://catalog.gamepass.com/v3/products",
+      "query": {
+        "market": "US",
+        "language": "zh-TW",
+        "hydration": "RemoteHighSapphire0"
+      },
+      "body": {
+        "Products": [
+          "9N5DDTDLTWCL",
+          "9MZZWGTF7V65",
+          "9NRBW3FJSJWT",
+          "9P743P6195Q5",
+          "9N74KFV7253H"
+        ]
+      },
+      "responseBytes": 52013,
+      "productCount": 5,
+      "fieldKeys": [
+        "ProductTitle",
+        "ProductDescription",
+        "ProductDescriptionShort",
+        "PublisherName",
+        "DeveloperName",
+        "XCloudTitleId",
+        "RequiresXboxLiveGold",
+        "Image_Tile",
+        "Image_Poster",
+        "Image_Hero",
+        "Image_TitledHero",
+        "Screenshots",
+        "Trailers",
+        "Categories",
+        "LocalizedCategories",
+        "Attributes",
+        "Streamability",
+        "ContentRating",
+        "XCloudOfferings",
+        "PrivacyPolicyUri",
+        "PrivacyPolicyLabel",
+        "RequiresGoldDisclaimer",
+        "RequiresGoldForMultiplayerDisclaimer",
+        "OriginalReleaseDate",
+        "CodeOfConductUrl",
+        "CodeOfConductLabel",
+        "TermsOfTransactionUrl",
+        "TermsOfTransactionLabel",
+        "LanguageSupport",
+        "AccessibilityFeatures",
+        "AnonymousPrice",
+        "InAppPurchaseDisclaimer",
+        "XboxTitleId",
+        "ChildXboxTitleIds",
+        "CompareEditions",
+        "PassMetadataByPassProductId",
+        "Actions",
+        "AvailablePlatforms",
+        "StoreId"
+      ],
+      "fieldCoverage": {
+        "ProductDescription": 5,
+        "DeveloperName": 5,
+        "Image_Hero": 5,
+        "Screenshots": 5,
+        "Trailers": 5,
+        "OriginalReleaseDate": 5,
+        "LanguageSupport": 5,
+        "ContentRating": 5,
+        "Attributes": 5,
+        "AccessibilityFeatures": 5,
+        "AvailablePlatforms": 5
+      }
+    }
+  ],
+  "languageComparison": [
+    {
+      "productId": "9N5DDTDLTWCL",
+      "zhTW": "《Football Manager 27》主機版",
+      "zhCN": "《足球经理27 主机版》"
+    },
+    {
+      "productId": "9MZZWGTF7V65",
+      "zhTW": "Warhammer Survivors",
+      "zhCN": "Warhammer Survivors"
+    },
+    {
+      "productId": "9NRBW3FJSJWT",
+      "zhTW": "TANUKI: Pon's Summer",
+      "zhCN": "TANUKI: Pon's Summer"
+    },
+    {
+      "productId": "9P743P6195Q5",
+      "zhTW": "Escape Academy 2: Back 2 School",
+      "zhCN": "Escape Academy 2: Back 2 School"
+    },
+    {
+      "productId": "9N74KFV7253H",
+      "zhTW": "MySims™",
+      "zhCN": "MySims™"
+    }
+  ],
+  "detailSamples": [
+    {
+      "productId": "9N5DDTDLTWCL",
+      "name": "《Football Manager 27》主機版",
+      "attributes": [
+        {
+          "Name": "XblOnlineMultiPlayer",
+          "LocalizedName": "線上多人遊戲 (2-32)"
+        },
+        {
+          "Name": "BroadcastSupport",
+          "LocalizedName": ""
+        },
+        {
+          "Name": "XblCrossPlatformMultiPlayer",
+          "LocalizedName": "Xbox 跨平台多人遊戲"
+        },
+        {
+          "Name": "Capability4k",
+          "LocalizedName": "4K Ultra HD"
+        },
+        {
+          "Name": "SinglePlayer",
+          "LocalizedName": "單一玩家"
+        },
+        {
+          "Name": "XboxLiveCrossGenMP",
+          "LocalizedName": "Xbox 跨世代多人遊戲"
+        },
+        {
+          "Name": "60fps",
+          "LocalizedName": "60fps+"
+        },
+        {
+          "Name": "ConsoleGen9Optimized",
+          "LocalizedName": "Xbox Series X|S 性能强化"
+        },
+        {
+          "Name": "XblAchievements",
+          "LocalizedName": "Xbox 成就"
+        },
+        {
+          "Name": "XblCloudSaves",
+          "LocalizedName": "Xbox 雲端儲存"
+        },
+        {
+          "Name": "XPA",
+          "LocalizedName": "Xbox Play Anywhere"
+        },
+        {
+          "Name": "XboxLive",
+          "LocalizedName": "Xbox Live"
+        }
+      ],
+      "languageSupportChinese": {
+        "zh-CN": {
+          "InterfaceLanguageSupport": 1,
+          "GamePlayAudioLanguageSupport": 2,
+          "SubtitlesLanguageSupport": 2
+        }
+      },
+      "contentRating": {
+        "RatingSystem": "ESRB",
+        "LongName": "所有人",
+        "Age": 1
+      },
+      "availablePlatforms": [
+        "PC",
+        "XboxSeriesX",
+        "XCloud",
+        "Handheld"
+      ],
+      "passMetadataFieldKeys": [
+        "EntryDateUTC"
+      ]
+    },
+    {
+      "productId": "9MZZWGTF7V65",
+      "name": "Warhammer Survivors",
+      "attributes": [
+        {
+          "Name": "BroadcastSupport",
+          "LocalizedName": ""
+        },
+        {
+          "Name": "SinglePlayer",
+          "LocalizedName": "單一玩家"
+        },
+        {
+          "Name": "ConsoleGen9Optimized",
+          "LocalizedName": "Xbox Series X|S 性能强化"
+        },
+        {
+          "Name": "XblAchievements",
+          "LocalizedName": "Xbox 成就"
+        },
+        {
+          "Name": "XblCloudSaves",
+          "LocalizedName": "Xbox 雲端儲存"
+        },
+        {
+          "Name": "XPA",
+          "LocalizedName": "Xbox Play Anywhere"
+        },
+        {
+          "Name": "XboxLive",
+          "LocalizedName": "Xbox Live"
+        }
+      ],
+      "languageSupportChinese": {
+        "zh-CN": {
+          "InterfaceLanguageSupport": 1,
+          "GamePlayAudioLanguageSupport": 2,
+          "SubtitlesLanguageSupport": 2
+        }
+      },
+      "contentRating": {
+        "RatingSystem": "ESRB",
+        "LongName": "一般觀眾 10 歲 (含) 以上",
+        "Age": 10
+      },
+      "availablePlatforms": [
+        "PC",
+        "XboxSeriesX",
+        "XCloud",
+        "Handheld"
+      ],
+      "passMetadataFieldKeys": [
+        "EntryDateUTC"
+      ]
+    },
+    {
+      "productId": "9NRBW3FJSJWT",
+      "name": "TANUKI: Pon's Summer",
+      "attributes": [
+        {
+          "Name": "BroadcastSupport",
+          "LocalizedName": ""
+        },
+        {
+          "Name": "SinglePlayer",
+          "LocalizedName": "單一玩家"
+        },
+        {
+          "Name": "ConsoleGen9Optimized",
+          "LocalizedName": "Xbox Series X|S 性能强化"
+        },
+        {
+          "Name": "ConsoleCrossGen",
+          "LocalizedName": "智慧傳遞"
+        },
+        {
+          "Name": "XblAchievements",
+          "LocalizedName": "Xbox 成就"
+        },
+        {
+          "Name": "XblClubs",
+          "LocalizedName": "Xbox 俱樂部"
+        },
+        {
+          "Name": "XblCloudSaves",
+          "LocalizedName": "Xbox 雲端儲存"
+        },
+        {
+          "Name": "XPA",
+          "LocalizedName": "Xbox Play Anywhere"
+        },
+        {
+          "Name": "XboxLive",
+          "LocalizedName": "Xbox Live"
+        }
+      ],
+      "languageSupportChinese": {
+        "zh-CN": {
+          "InterfaceLanguageSupport": 1,
+          "GamePlayAudioLanguageSupport": 2,
+          "SubtitlesLanguageSupport": 1
+        },
+        "zh-TW": {
+          "InterfaceLanguageSupport": 1,
+          "GamePlayAudioLanguageSupport": 2,
+          "SubtitlesLanguageSupport": 1
+        }
+      },
+      "contentRating": {
+        "RatingSystem": "ESRB",
+        "LongName": "所有人",
+        "Age": 1
+      },
+      "availablePlatforms": [
+        "XboxOne",
+        "XboxSeriesX",
+        "PC",
+        "XCloud",
+        "Handheld"
+      ],
+      "passMetadataFieldKeys": [
+        "EntryDateUTC"
+      ]
+    },
+    {
+      "productId": "9P743P6195Q5",
+      "name": "Escape Academy 2: Back 2 School",
+      "attributes": [
+        {
+          "Name": "XblLocalCoop",
+          "LocalizedName": "Xbox 本機合作遊戲 (2)"
+        },
+        {
+          "Name": "XblOnlineCoop",
+          "LocalizedName": "線上合作玩家  (2)"
+        },
+        {
+          "Name": "BroadcastSupport",
+          "LocalizedName": ""
+        },
+        {
+          "Name": "Capability4k",
+          "LocalizedName": "4K Ultra HD"
+        },
+        {
+          "Name": "SinglePlayer",
+          "LocalizedName": "單一玩家"
+        },
+        {
+          "Name": "SharedSplitScreen",
+          "LocalizedName": "分享/分割畫面"
+        },
+        {
+          "Name": "XblCrossPlatformCoop",
+          "LocalizedName": "Xbox 跨平台合作遊戲"
+        },
+        {
+          "Name": "ConsoleGen9Optimized",
+          "LocalizedName": "Xbox Series X|S 性能强化"
+        },
+        {
+          "Name": "XblAchievements",
+          "LocalizedName": "Xbox 成就"
+        },
+        {
+          "Name": "XblCloudSaves",
+          "LocalizedName": "Xbox 雲端儲存"
+        },
+        {
+          "Name": "XboxLive",
+          "LocalizedName": "Xbox Live"
+        }
+      ],
+      "languageSupportChinese": {
+        "zh-CN": {
+          "InterfaceLanguageSupport": 1,
+          "GamePlayAudioLanguageSupport": 2,
+          "SubtitlesLanguageSupport": 1
+        }
+      },
+      "contentRating": {
+        "RatingSystem": "ESRB",
+        "LongName": "所有人",
+        "Age": 1
+      },
+      "availablePlatforms": [
+        "PC",
+        "XboxSeriesX",
+        "XCloud",
+        "Handheld"
+      ],
+      "passMetadataFieldKeys": [
+        "EntryDateUTC"
+      ]
+    },
+    {
+      "productId": "9N74KFV7253H",
+      "name": "MySims™",
+      "attributes": [
+        {
+          "Name": "BroadcastSupport",
+          "LocalizedName": ""
+        },
+        {
+          "Name": "Capability4k",
+          "LocalizedName": "4K Ultra HD"
+        },
+        {
+          "Name": "60fps",
+          "LocalizedName": "60fps+"
+        },
+        {
+          "Name": "SpatialSound",
+          "LocalizedName": "空間音效"
+        },
+        {
+          "Name": "DolbyAtmos",
+          "LocalizedName": "Dolby Atmos"
+        },
+        {
+          "Name": "ConsoleGen9Optimized",
+          "LocalizedName": "Xbox Series X|S 性能强化"
+        },
+        {
+          "Name": "XboxLive",
+          "LocalizedName": "Xbox Live"
+        }
+      ],
+      "languageSupportChinese": {},
+      "contentRating": {
+        "RatingSystem": "ESRB",
+        "LongName": "所有人",
+        "Age": 1
+      },
+      "availablePlatforms": [
+        "XboxSeriesX",
+        "XCloud"
+      ],
+      "passMetadataFieldKeys": [
+        "EntryDateUTC"
+      ]
+    }
+  ]
+}

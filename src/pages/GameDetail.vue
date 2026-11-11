@@ -35,7 +35,7 @@ const tabs = GAME_SECTIONS.map(key => ({ key, label: GAME_LABELS[key], nodeId: `
 function select(key: string) {
   void router.replace({ name: route.name, params: route.params, query: { ...route.query, tab: key } })
 }
-const nav = useLibraryNavigation(() => panel.value, () => `${target.value || 'self'}:${consoleKey.value}:${route.params.installedItemKey || titleId.value}:${active.value}`, () => GAME_SECTIONS, () => active.value, select, () => consoleKey.value ? `/xhome/${encodeURIComponent(consoleKey.value)}/games` : '/my/achievements')
+const nav = useLibraryNavigation(() => panel.value, () => `${target.value || 'self'}:${consoleKey.value}:${route.params.installedItemKey || titleId.value}:${active.value}`, () => GAME_SECTIONS, () => active.value, select, () => typeof route.query.sourceProductId === 'string' ? `/xcloud/games/${encodeURIComponent(route.query.sourceProductId)}` : consoleKey.value ? `/xhome/${encodeURIComponent(consoleKey.value)}/games` : '/my/achievements')
 useShellPageHints(() => ({ regionLabel: '分类', status: GAME_LABELS[active.value], error: !!gameQuery.state.value.error }))
 async function refresh() {
   await Promise.allSettled([...(titleId.value ? [gameQuery.refresh()] : []), ...(consoleKey.value ? [installedQuery.refresh(), consoleState.refresh()] : []), ...(titleId.value && ['overview', 'statistics'].includes(active.value) ? [times.refresh()] : [])])

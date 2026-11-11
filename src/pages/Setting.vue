@@ -6,6 +6,7 @@ import type { SettingPageKey } from './settings/setting-page-schema'
 import type { SettingIndexedRow, SettingIndexedSection, SettingSectionEntry, SettingTabNavItem } from './settings/setting-types'
 import { CONFIG_FIELD_DEFINITIONS } from '@shared/config/domain-definition'
 import { normalizeRenderControls, renderControlsLabel, renderControlsPatch } from '@shared/config/render-controls'
+import { gamepadConfig, saveGamepadConfig } from '@shared/gamepad/runtime'
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
@@ -13,6 +14,7 @@ import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
+import ExportDiagnosticsButton from '../components/common/ExportDiagnosticsButton.vue'
 import UiMotionTransition from '../components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import SettingConfirmSheet from '../components/settings/SettingConfirmSheet.vue'
@@ -21,13 +23,16 @@ import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleS
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { diagnosticIssueId } from '../services/diagnostics'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { getConfigFieldValue, getSectionsForPage, getSettingEffect, isSettingFieldVisible, SETTING_PAGE_LABEL_KEYS, SETTING_PAGE_ORDER } from './settings/setting-page-schema'
 import SettingAppUpdateSection from './settings/SettingAppUpdateSection.vue'
 import SettingCustomTurnSheet from './settings/SettingCustomTurnSheet.vue'
+import SettingDiagnosticsSection from './settings/SettingDiagnosticsSection.vue'
 import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
+import SettingStreamShortcutsSection from './settings/SettingStreamShortcutsSection.vue'
 
 type SettingGroupMap = Awaited<ReturnType<typeof rpc.config.getGroups>>
 
@@ -38,6 +43,9 @@ const panelDirection = ref<'forward' | 'back'>('forward')
 const groupState = ref<SettingGroupMap | null>(null)
 const isLoading = ref(true)
 const loadError = ref('')
+const loadIssueId = ref<string>()
+const statusIssueId = ref<string>()
+const regionsIssueId = ref<string>()
 const pendingActionKey = ref<string | null>(null)
 const statusMessage = ref('')
 const statusError = ref(false)
@@ -99,8 +107,10 @@ async function loadCloudRegions(): Promise<void> {
       }
     }
     catch (error) {
-      if (pageActive && generation === regionsGeneration)
+      if (pageActive && generation === regionsGeneration) {
+        regionsIssueId.value = diagnosticIssueId(error)
         regionsError.value = error instanceof Error && error.message ? error.message : t('setting.cloudRegions.unavailable')
+      }
     }
     finally {
       if (generation === regionsGeneration) {
@@ -286,7 +296,8 @@ async function refreshConfig() {
     groupState.value = await rpc.config.getGroups()
     applyAppearance()
   }
-  catch {
+  catch (error) {
+    statusIssueId.value = diagnosticIssueId(error)
     statusError.value = true
     statusMessage.value = t('setting.experience.loadFailed')
   }
@@ -298,7 +309,10 @@ async function loadConfigGroups() {
     groupState.value = await rpc.config.getGroups()
     applyAppearance()
   }
-  catch { loadError.value = t('setting.experience.loadFailed') }
+  catch (error) {
+    loadIssueId.value = diagnosticIssueId(error)
+    loadError.value = t('setting.experience.loadFailed')
+  }
   finally { isLoading.value = false }
 }
 async function handleTabChange(key: string) {
@@ -323,7 +337,9 @@ async function persistRowValue(row: SettingIndexedRow, value: string | number | 
   statusMessage.value = t('setting.experience.saving')
   statusError.value = false
   try {
-    const saved = await rpc.config.set({ patch: { [row.key]: value } }) as Record<string, unknown>
+    if (row.key === 'ui_haptics')
+      await saveGamepadConfig({ ui_haptics: value })
+    const saved = row.key === 'ui_haptics' ? gamepadConfig() : await rpc.config.set({ patch: { [row.key]: value } }) as Record<string, unknown>
     // 使用写入返回的规范化结果同步展示，保存结果与第二次读取相互独立。
     if (groupState.value) {
       groupState.value = Object.fromEntries(Object.entries(groupState.value).map(([group, bucket]) => [group, Object.fromEntries(Object.keys(bucket as object).map(key => [key, saved[key]]))])) as SettingGroupMap
@@ -342,7 +358,8 @@ async function persistRowValue(row: SettingIndexedRow, value: string | number | 
     }
     return true
   }
-  catch {
+  catch (error) {
+    statusIssueId.value = diagnosticIssueId(error)
     statusError.value = true
     statusMessage.value = t('setting.experience.saveFailed')
     return false
@@ -394,8 +411,9 @@ async function saveRenderDefault(value: RenderControlsValue): Promise<void> {
     renderSheetOpen.value = false
     statusMessage.value = t('setting.experience.saved.nextConnection')
   }
-  catch {
+  catch (error) {
     if (pageActive && generation === renderEditorGeneration) {
+      statusIssueId.value = diagnosticIssueId(error)
       statusError.value = true
       statusMessage.value = t('setting.experience.saveFailed')
     }
@@ -419,7 +437,8 @@ async function restart() {
     restartConfirm.value = false
     restartPending.value = false
   }
-  catch {
+  catch (error) {
+    statusIssueId.value = diagnosticIssueId(error)
     statusError.value = true
     statusMessage.value = t('setting.experience.restartFailed')
   }
@@ -494,8 +513,15 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
             <Focusable id="setting.retry" as="button" :scope-id="panelScope" class="setting-panel__action" @click="loadConfigGroups">
               {{ t('setting.experience.retry') }}
             </Focusable>
+            <ExportDiagnosticsButton id="setting.load.export" :scope-id="panelScope" :issue-id="loadIssueId" />
           </div>
           <template v-else-if="!isLoading">
+            <div v-if="statusError && !activeSingleSelectRow && !activeValueEditorRow && !renderSheetOpen" class="setting-panel__feedback">
+              <p role="alert">
+                {{ statusMessage }}
+              </p>
+              <ExportDiagnosticsButton id="setting.error.export" :scope-id="panelScope" :issue-id="statusIssueId" />
+            </div>
             <div v-if="restartPending" class="setting-panel__feedback">
               <Focusable v-if="restartPending" id="setting.restart" as="button" :scope-id="panelScope" class="setting-panel__action" :busy="!!pendingActionKey" @click="restartConfirm = true">
                 {{ t('setting.experience.restartNow') }}
@@ -504,7 +530,9 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
             <UiMotionTransition kind="panel" :direction="panelDirection">
               <div :key="activeTabKey">
                 <SettingSectionList v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="handleAction" />
+                <SettingStreamShortcutsSection v-if="activeTabKey === 'general'" :scope-id="panelScope" />
                 <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
+                <SettingDiagnosticsSection v-if="activeTabKey === 'advancedDiagnostics'" :scope-id="panelScope" />
               </div>
             </UiMotionTransition>
           </template>
@@ -514,9 +542,9 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
         <BrandedLoading :label="t('setting.states.loading')" size="lg" />
       </div>
     </div>
-    <SettingValueSheet :key="activeValueEditorRow?.nodeId" :open="!!activeValueEditorRow" :scope-id="`setting.editor.${activeValueEditorRow?.key ?? 'idle'}`" :title="activeValueEditorRow?.label ?? ''" :hint="activeValueEditorRow?.description" :mode="activeValueEditorRow?.control === 'numberInput' ? 'number' : 'text'" :current-value="(activeValueEditorRow?.value as string | number) ?? null" :min="activeValueEditorRow?.input?.min" :max="activeValueEditorRow?.input?.max" :step="activeValueEditorRow?.input?.step" :busy="!!pendingActionKey" :error="statusError ? statusMessage : ''" @close="activeValueEditorRow = null" @submit="submitValue" />
-    <SettingDisplayOptionsSheet :open="renderSheetOpen" scope-id="setting.render-sheet" :title="t('setting.renderControls.title')" :hint="t('setting.renderControls.defaultHint')" :current-value="renderControls" :loading="pendingActionKey === 'display_options'" :error="statusError ? statusMessage : ''" @close="renderSheetOpen = false" @submit="saveRenderDefault" />
-    <SettingSingleSelectPopupSheet :key="activeSingleSelectRow?.nodeId" :open="!!activeSingleSelectRow" :scope-id="`${SPATIAL_NAV_SCOPE_IDS.settingSingleSelect}.${activeSingleSelectRow?.key ?? 'idle'}`" :title="activeSingleSelectRow?.label ?? ''" :hint="activeSingleSelectRow?.description" :options="activeSingleSelectRow?.options ?? []" :current-value="(activeSingleSelectRow?.value as string | number) ?? null" :busy="!!pendingActionKey" :error="activeSingleSelectRow?.key === 'xcloud_region_name' ? regionsError : (statusError ? statusMessage : '')" @close="activeSingleSelectRow = null" @select="value => activeSingleSelectRow && selectRow(activeSingleSelectRow, value)" />
+    <SettingValueSheet :key="activeValueEditorRow?.nodeId" :open="!!activeValueEditorRow" :scope-id="`setting.editor.${activeValueEditorRow?.key ?? 'idle'}`" :title="activeValueEditorRow?.label ?? ''" :hint="activeValueEditorRow?.description" :mode="activeValueEditorRow?.control === 'numberInput' ? 'number' : 'text'" :current-value="(activeValueEditorRow?.value as string | number) ?? null" :min="activeValueEditorRow?.input?.min" :max="activeValueEditorRow?.input?.max" :step="activeValueEditorRow?.input?.step" :busy="!!pendingActionKey" :diagnostic-issue-id="statusIssueId" :error="statusError ? statusMessage : ''" @close="activeValueEditorRow = null" @submit="submitValue" />
+    <SettingDisplayOptionsSheet :open="renderSheetOpen" scope-id="setting.render-sheet" :title="t('setting.renderControls.title')" :hint="t('setting.renderControls.defaultHint')" :current-value="renderControls" :loading="pendingActionKey === 'display_options'" :diagnostic-issue-id="statusIssueId" :error="statusError ? statusMessage : ''" @close="renderSheetOpen = false" @submit="saveRenderDefault" />
+    <SettingSingleSelectPopupSheet :key="activeSingleSelectRow?.nodeId" :open="!!activeSingleSelectRow" :scope-id="`${SPATIAL_NAV_SCOPE_IDS.settingSingleSelect}.${activeSingleSelectRow?.key ?? 'idle'}`" :title="activeSingleSelectRow?.label ?? ''" :hint="activeSingleSelectRow?.description" :options="activeSingleSelectRow?.options ?? []" :current-value="(activeSingleSelectRow?.value as string | number) ?? null" :busy="!!pendingActionKey" :diagnostic-issue-id="activeSingleSelectRow?.key === 'xcloud_region_name' ? regionsIssueId : statusIssueId" :error="activeSingleSelectRow?.key === 'xcloud_region_name' ? regionsError : (statusError ? statusMessage : '')" @close="activeSingleSelectRow = null" @select="value => activeSingleSelectRow && selectRow(activeSingleSelectRow, value)" />
     <SettingCustomTurnSheet :open="customTurnOpen" :config="turnConfig" @close="customTurnOpen = false" @saved="refreshConfig" />
     <SettingConfirmSheet :open="restartConfirm" scope-id="setting.restart.confirm" :title="t('setting.experience.restartNow')" :message="t('setting.experience.restartHint')" :busy="pendingActionKey === '__restart__'" @close="restartConfirm = false" @confirm="restart" />
   </section>

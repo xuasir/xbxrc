@@ -1,0 +1,92 @@
+[
+  {
+    "mode": "mapping",
+    "theme": "dark",
+    "locale": "zh",
+    "callouts": 17,
+    "label": "原按键 Xbox，映射为 Xbox",
+    "maxAnchorError": 0.00853101415971903,
+    "overlap": false,
+    "size": {
+      "height": 720,
+      "width": 1280
+    },
+    "textOverflow": [],
+    "unreachable": []
+  },
+  {
+    "mode": "mapping",
+    "theme": "dark",
+    "locale": "en",
+    "callouts": 17,
+    "label": "Original button Xbox, mapped to Xbox",
+    "maxAnchorError": null,
+    "overlap": false,
+    "size": {
+      "height": 844,
+      "width": 390
+    },
+    "textOverflow": [],
+    "unreachable": []
+  },
+  {
+    "mode": "mapping",
+    "theme": "light",
+    "locale": "zh",
+    "callouts": 17,
+    "label": "原按键 Xbox，映射为 Xbox",
+    "maxAnchorError": 0.007785781232340115,
+    "overlap": false,
+    "size": {
+      "height": 600,
+      "width": 800
+    },
+    "textOverflow": [],
+    "unreachable": []
+  },
+  {
+    "mode": "keyboard",
+    "theme": "light",
+    "locale": "zh",
+    "callouts": 17,
+    "label": "原按键 Xbox，映射为 O",
+    "maxAnchorError": 0.007785781232340115,
+    "overlap": false,
+    "size": {
+      "height": 600,
+      "width": 800
+    },
+    "textOverflow": [],
+    "unreachable": []
+  },
+  {
+    "mode": "sticks",
+    "theme": "light",
+    "locale": "zh",
+    "callouts": 2,
+    "label": "原按键 LS，映射为 死区 10%",
+    "maxAnchorError": 0.0073972399839130195,
+    "overlap": false,
+    "size": {
+      "height": 600,
+      "width": 800
+    },
+    "textOverflow": [],
+    "unreachable": []
+  },
+  {
+    "mode": "vibration",
+    "theme": "light",
+    "locale": "zh",
+    "callouts": 2,
+    "label": "原按键 L，映射为 轻",
+    "maxAnchorError": 0.008741301998805837,
+    "overlap": false,
+    "size": {
+      "height": 600,
+      "width": 800
+    },
+    "textOverflow": [],
+    "unreachable": []
+  }
+]

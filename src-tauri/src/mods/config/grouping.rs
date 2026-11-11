@@ -13,7 +13,7 @@ fn pick_group_values(config: &Map<String, Value>, keys: &[&str]) -> Value {
 pub fn split_config_groups(config: &Map<String, Value>) -> Value {
     // 分组键保持与 renderer 端一致；streaming 组明确承载 policy + view 配置。
     json!({
-        "app": pick_group_values(config, &["locale", "theme", "fullscreen", "background_keepalive", "ui_haptics", "ui_audio", "debug", "runtime_trace_mode"]),
+        "app": pick_group_values(config, &["locale", "theme", "fullscreen", "background_keepalive", "ui_haptics", "ui_audio", "stream_menu_shortcuts", "diagnostics_lightweight", "runtime_trace_mode"]),
         "streaming": pick_group_values(config, &[
             "resolution",
             "xhome_resolution",
@@ -47,6 +47,7 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
         "input": pick_group_values(config, &[
             "vibration",
             "vibration_strength",
+            "vibration_channels",
             "gamepad_background_policy",
             "gamepad_control_source",
             "gamepad_game_controls",

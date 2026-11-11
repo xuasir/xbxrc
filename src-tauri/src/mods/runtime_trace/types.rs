@@ -4,6 +4,7 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub enum TraceRecordDisposition {
     Enqueued,
+    Buffered,
     Filtered,
     QueueFull,
     RowOversized,

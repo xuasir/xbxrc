@@ -30,6 +30,69 @@ impl XcloudApi {
         format!("Bearer {}", self.bearer_token)
     }
 
+    fn headers(&self) -> Result<HeaderMap, WebApiError> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&self.authorization_header())
+                .map_err(|_| WebApiError::parse("invalid cloud authorization"))?,
+        );
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        Ok(headers)
+    }
+
+    pub async fn get_titles_by_ids(
+        &self,
+        ids: &[String],
+        id_type: &str,
+    ) -> Result<Value, WebApiError> {
+        if !matches!(id_type, "productId" | "titleId") || ids.is_empty() || ids.len() > 75 {
+            return Err(WebApiError::parse("invalid cloud title query"));
+        }
+        self.transport
+            .post_query(
+                &titles_url(&self.host)?,
+                serde_json::json!({"ids": ids, "idType": id_type}),
+                Some(self.headers()?),
+            )
+            .await
+    }
+
+    pub async fn input_configs(&self, xbox_title_id: &str) -> Result<Value, WebApiError> {
+        if xbox_title_id
+            .parse::<u64>()
+            .ok()
+            .filter(|id| *id > 0)
+            .is_none()
+        {
+            return Err(WebApiError::parse("invalid Xbox title identity"));
+        }
+        let mut url = normalized_origin(&self.host)?;
+        url.set_path("/v2/titles/inputconfigs");
+        self.transport
+            .post_query(
+                url.as_str(),
+                serde_json::json!({
+                    "titleIds": [xbox_title_id], "titleIdType": "xboxTitleId"
+                }),
+                Some(self.headers()?),
+            )
+            .await
+    }
+
+    pub async fn get_waiting_time(&self, stream_title_id: &str) -> Result<Value, WebApiError> {
+        if stream_title_id.trim().is_empty() || stream_title_id.len() > 256 {
+            return Err(WebApiError::parse("invalid stream title identity"));
+        }
+        let mut url = normalized_origin(&self.host)?;
+        url.path_segments_mut()
+            .map_err(|_| WebApiError::parse("invalid cloud origin"))?
+            .extend(["v1", "waittime", stream_title_id]);
+        self.transport
+            .get(url.as_str(), Some(self.headers()?))
+            .await
+    }
+
     pub async fn get_titles(&self) -> Result<Value, WebApiError> {
         let mut headers = HeaderMap::new();
         headers.insert(

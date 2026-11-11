@@ -103,11 +103,17 @@ pub async fn handle_rpc(
             let patch = apply_release_runtime_trace_patch_clamp(patch);
             let touch_runtime_trace = patch.contains_key("runtime_trace_mode")
                 || patch.contains_key("runtime_trace_dimensions");
+            let lightweight = patch
+                .get("diagnostics_lightweight")
+                .and_then(Value::as_bool);
             let result = service
                 .set_by_patch(&patch)
                 .map_err(crate::error::AppError::from)?;
             if touch_runtime_trace {
                 apply_runtime_trace_config_live(&app_handle, &result)?;
+            }
+            if let Some(enabled) = lightweight {
+                state.runtime_trace.apply_lightweight(enabled);
             }
             Ok(result)
         }

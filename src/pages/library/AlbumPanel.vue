@@ -2,6 +2,7 @@
 import type { LibraryMedia, LibraryPage, MediaKind, QueryResult } from '@/shared/rpc/library'
 import { computed, onDeactivated, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ExportDiagnosticsButton from '@/components/common/ExportDiagnosticsButton.vue'
 import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingModalShell from '@/components/settings/SettingModalShell.vue'
 import { Focusable } from '@/navigation/core/vue'
@@ -144,7 +145,7 @@ function openGame() {
     </header>
     <template v-for="(source, index) in [screenshots.state.value, clips.state.value]" :key="index">
       <p v-if="source.error" class="library-notice" role="alert">
-        {{ index ? '录像' : '截图' }}：{{ source.error }} <LibraryRefresh :id="`album.retry.${index}`" :busy="source.loading" @refresh="index ? clips.refresh() : screenshots.refresh()" />
+        {{ index ? '录像' : '截图' }}：{{ source.error }} <ExportDiagnosticsButton :id="`album.error.export.${index}`" scope-id="app.shell" :issue-id="source.issueId" /> <LibraryRefresh :id="`album.retry.${index}`" :busy="source.loading" @refresh="index ? clips.refresh() : screenshots.refresh()" />
       </p>
     </template>
     <div class="library-toolbar">

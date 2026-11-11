@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::time::{timeout_at, Instant};
 use xbox_webapi::{GamePassApi, WebApiError, XcloudApi};
 
-pub const GAME_PASS_NEWEST_SIGL_ID: &str = "f13cf6b4-57e6-4459-89df-6aec18cf0538";
+pub const GAME_PASS_NEWEST_SIGL_ID: &str = "44a55037-770f-4bbf-bde5-a9fa27dba1da";
 pub const DEFAULT_RECENT_TITLE_LIMIT: u32 = 25;
 pub const PRODUCT_HYDRATION_CHUNK_SIZE: usize = 75;
 
@@ -44,6 +44,12 @@ pub struct CloudCatalogOverlayEntry {
     pub fallback_name: String,
     pub supported_input_types: Vec<String>,
     pub has_entitlement: bool,
+    #[serde(default)]
+    pub entitlement_known: bool,
+    #[serde(default)]
+    pub recent_rank: Option<usize>,
+    #[serde(default)]
+    pub new_rank: Option<usize>,
     pub is_recently_played: bool,
     pub is_new: bool,
 }
@@ -243,7 +249,7 @@ where
     load
 }
 
-fn build_overlay_load(
+pub fn build_overlay_load(
     streaming_response: &Value,
     recent_response: &Value,
     newest_response: &Value,
@@ -325,8 +331,8 @@ fn build_live_title_map(streaming_titles: &[Value]) -> HashMap<String, Value> {
 fn build_overlay_entry(
     product_id: &str,
     live_title: Option<&Value>,
-    recent_product_ids: &HashSet<String>,
-    newest_product_ids: &HashSet<String>,
+    recent_product_ids: &[String],
+    newest_product_ids: &[String],
 ) -> CloudCatalogOverlayEntry {
     CloudCatalogOverlayEntry {
         product_id: product_id.to_string(),
@@ -372,13 +378,20 @@ fn build_overlay_entry(
             .and_then(|title| title.get("details"))
             .and_then(|details| details.get("hasEntitlement"))
             .and_then(Value::as_bool)
-            .unwrap_or(true),
-        is_recently_played: recent_product_ids.contains(product_id),
-        is_new: newest_product_ids.contains(product_id),
+            .unwrap_or(false),
+        entitlement_known: live_title
+            .and_then(|title| title.get("details"))
+            .and_then(|details| details.get("hasEntitlement"))
+            .and_then(Value::as_bool)
+            .is_some(),
+        recent_rank: recent_product_ids.iter().position(|id| id == product_id),
+        new_rank: newest_product_ids.iter().position(|id| id == product_id),
+        is_recently_played: recent_product_ids.iter().any(|id| id == product_id),
+        is_new: newest_product_ids.iter().any(|id| id == product_id),
     }
 }
 
-fn extract_recent_product_ids(raw_response: &Value) -> HashSet<String> {
+fn extract_recent_product_ids(raw_response: &Value) -> Vec<String> {
     raw_response
         .get("results")
         .and_then(Value::as_array)
@@ -394,7 +407,7 @@ fn extract_recent_product_ids(raw_response: &Value) -> HashSet<String> {
         .collect()
 }
 
-fn extract_newest_product_ids(raw_response: &Value) -> HashSet<String> {
+pub fn extract_newest_product_ids(raw_response: &Value) -> Vec<String> {
     raw_response
         .as_array()
         .into_iter()
@@ -403,7 +416,7 @@ fn extract_newest_product_ids(raw_response: &Value) -> HashSet<String> {
         .collect()
 }
 
-fn extract_product_entries(raw_response: &Value) -> HashMap<String, CloudCatalogBaseEntry> {
+pub fn extract_product_entries(raw_response: &Value) -> HashMap<String, CloudCatalogBaseEntry> {
     let Some(products) = raw_response.get("Products") else {
         return HashMap::new();
     };
@@ -546,6 +559,107 @@ fn chunk_product_ids(values: &[String], size: usize) -> Vec<Vec<String>> {
     values.chunks(size).map(<[String]>::to_vec).collect()
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudProductDetail {
+    pub product: CloudCatalogBaseEntry,
+    pub developer: String,
+    pub release_date: String,
+    pub rating: String,
+    pub attributes: Vec<String>,
+    pub screenshots: Vec<String>,
+    pub platforms: Vec<String>,
+    pub languages: Vec<CloudLanguageSupport>,
+    pub accessibility: Vec<String>,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudLanguageSupport {
+    pub locale: String,
+    pub interface: Option<u64>,
+    pub audio: Option<u64>,
+    pub subtitles: Option<u64>,
+}
+pub fn extract_product_detail(raw: &Value, id: &str) -> Option<CloudProductDetail> {
+    let product = raw.get("Products")?.get(id)?;
+    let base = map_product_entry(Some(id), product)?;
+    let strings = |key: &str| {
+        product
+            .get(key)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let languages = product
+        .get("LanguageSupport")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .map(|(locale, value)| CloudLanguageSupport {
+            locale: locale.clone(),
+            interface: value
+                .get("InterfaceLanguageSupport")
+                .and_then(Value::as_u64),
+            audio: value
+                .get("GamePlayAudioLanguageSupport")
+                .and_then(Value::as_u64),
+            subtitles: value
+                .get("SubtitlesLanguageSupport")
+                .and_then(Value::as_u64),
+        })
+        .collect();
+    let accessibility = product
+        .get("AccessibilityFeatures")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .flat_map(|(_, group)| group.as_object().into_iter().flatten())
+        .filter_map(|(name, value)| {
+            value
+                .get("LocalizedName")
+                .and_then(Value::as_str)
+                .or_else(|| value.as_str())
+                .map(str::to_string)
+                .or_else(|| (value.as_bool() == Some(true)).then(|| name.clone()))
+        })
+        .filter(|name| !name.is_empty())
+        .collect();
+    Some(CloudProductDetail {
+        product: base,
+        developer: product_string(product, None, "DeveloperName"),
+        release_date: product_string(product, None, "OriginalReleaseDate"),
+        rating: product
+            .get("ContentRating")
+            .and_then(|v| v.get("LongName"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .into(),
+        attributes: product
+            .get("Attributes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.get("LocalizedName").and_then(Value::as_str))
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .collect(),
+        screenshots: product
+            .get("Screenshots")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|v| resolve_image_url(v.get("URL").and_then(Value::as_str)))
+            .filter(|v| !v.is_empty())
+            .collect(),
+        platforms: strings("AvailablePlatforms"),
+        languages,
+        accessibility,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -653,3 +767,46 @@ mod tests {
 #[cfg(test)]
 #[path = "hydration.test.rs"]
 mod hydration_tests;
+
+#[cfg(test)]
+mod ux_tests {
+    use super::*;
+    #[test]
+    fn preserves_order_and_unknown_entitlement() {
+        let titles = json!({"results":[{"titleId":"a","details":{"productId":"A"}},
+            {"titleId":"b","details":{"productId":"B","hasEntitlement":false}},
+            {"titleId":"c","details":{"productId":"C","hasEntitlement":true}}]});
+        let recent =
+            json!({"results":[{"details":{"productId":"C"}},{"details":{"productId":"A"}}]});
+        let load = build_overlay_load(
+            &titles,
+            &recent,
+            &json!([{"id":"B"},{"id":"A"}]),
+            true,
+            true,
+        )
+        .unwrap();
+        assert_eq!(load.entries[0].recent_rank, Some(1));
+        assert_eq!(load.entries[2].recent_rank, Some(0));
+        assert_eq!(load.entries[0].new_rank, Some(1));
+        assert!(!load.entries[0].entitlement_known);
+        assert!(!load.entries[0].has_entitlement);
+        assert!(load.entries[1].entitlement_known);
+        assert!(!load.entries[1].has_entitlement);
+        assert!(load.entries[2].has_entitlement);
+    }
+    #[test]
+    fn reads_observed_rich_product_schema() {
+        let raw: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/product-rich.json")).unwrap();
+        let id = raw["Products"].as_object().unwrap().keys().next().unwrap();
+        let detail = extract_product_detail(&raw, id).unwrap();
+        assert!(!detail.product.description.is_empty());
+        assert!(!detail.product.hero_image_url.is_empty());
+        assert!(!detail.developer.is_empty());
+        assert!(!detail.languages.is_empty());
+        assert!(!detail.screenshots.is_empty());
+        assert!(!detail.attributes.is_empty());
+        assert!(detail.platforms.iter().any(|p| p == "XCloud"));
+    }
+}

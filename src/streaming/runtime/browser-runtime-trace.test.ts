@@ -56,7 +56,7 @@ describe('browser trace budget', () => {
     trace.record('browserPlaybackHealthObserved', payload)
     trace.configure('dev')
     trace.record('browserPlaybackHealthObserved', payload)
-    expect(payload).toHaveBeenCalledTimes(3)
+    expect(payload).toHaveBeenCalledTimes(4)
   })
 
   it('keeps production samples within IPC and queue budgets and gives hard faults priority', async () => {

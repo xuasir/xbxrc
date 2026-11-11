@@ -19,6 +19,7 @@ import type {
 } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { streamInputRouteController } from '../pages/stream/stream-input-route-controller'
+import { retainDiagnosticIssue } from '../services/diagnostics'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { copyRenderControls, projectRenderControls } from '../shared/config/render-controls'
@@ -395,6 +396,14 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       : isConnected.value ? 'firstFrame' : 'startup'
     const snapshot = captureStreamFailure({ error: resolved, phase, targetType: routeState.targetType.value, stats: runtimeHost.performanceSnapshot.value })
     dispatchViewAction({ type: 'resolvedError', resolved, failure: snapshot })
+    if (!resolved.diagnosticIssueId) {
+      void retainDiagnosticIssue(resolved, 'stream').then((id) => {
+        if (!disposed && failure.value?.occurredAt === snapshot.occurredAt && id) {
+          resolved.diagnosticIssueId = id
+          dispatchViewAction({ type: 'resolvedError', resolved, failure: { ...snapshot, error: { ...resolved } } })
+        }
+      })
+    }
   }
 
   function disposeStartupEventSubscription(): void {

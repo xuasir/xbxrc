@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ExportDiagnosticsButton from '@/components/common/ExportDiagnosticsButton.vue'
 import GameCard from '@/components/common/GameCard.vue'
 import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingInputControl from '@/components/settings/SettingInputControl.vue'
@@ -59,6 +60,7 @@ async function refresh() {
     </p>
     <p v-if="state.error || timeError" class="library-notice" role="alert">
       {{ state.error || timeError }}
+      <ExportDiagnosticsButton id="history.error.export" scope-id="app.shell" :issue-id="state.issueId || times.issueId.value" />
     </p>
     <div v-if="mode === 'statistics'" class="library-metrics">
       <div class="library-metric">

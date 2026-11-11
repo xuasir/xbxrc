@@ -83,6 +83,7 @@ async fn build_services(
             .get_by_keys(&[
                 "runtime_trace_mode".to_string(),
                 "runtime_trace_dimensions".to_string(),
+                "diagnostics_lightweight".to_string(),
             ])
             .ok()
             .unwrap_or_default();
@@ -135,6 +136,13 @@ async fn build_services(
             }
         }
     };
+    runtime_trace.apply_lightweight(
+        config_service
+            .get_by_keys(&["diagnostics_lightweight".into()])
+            .ok()
+            .and_then(|config| config["diagnostics_lightweight"].as_bool())
+            .unwrap_or(false),
+    );
     if let Some(path) = runtime_trace.path() {
         log::info!(
             "Runtime trace recorder initialized at {} (mode={})",

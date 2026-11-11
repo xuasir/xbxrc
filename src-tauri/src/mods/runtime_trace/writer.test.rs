@@ -169,6 +169,10 @@ fn failed_write_conservatively_charges_the_entire_row_to_file_budget() {
     std::fs::write(&path, "").unwrap();
     let file = File::open(&path).unwrap();
     let mut writer = TraceWriter {
+        records: super::super::diagnostic_records::RecordFiles::new(
+            root.clone(),
+            "io-failure-test".into(),
+        ),
         root: root.clone(),
         trace_run_id: "io-failure-test".to_string(),
         queue: Arc::new(QueueBudget::default()),

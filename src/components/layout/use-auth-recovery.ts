@@ -1,6 +1,7 @@
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
 import { computed, onScopeDispose, ref } from 'vue'
 import { loginRecoveryAction } from '../../pages/login-recovery'
+import { diagnosticIssueId } from '../../services/diagnostics'
 import { onRpcError, rpc } from '../../services/rpc'
 import { devWarn } from '../../shared/dev-log'
 
@@ -11,12 +12,14 @@ export function useAuthRecovery(options: {
 }) {
   const open = ref(false)
   const busy = ref(false)
+  const issueId = ref<string>()
   const failureMessage = ref('')
   const message = computed(() => failureMessage.value || options.t('login.reauthenticateHelp'))
 
   // Rust 已完成自动续期和一次恢复重试；此处只承接最终鉴权失效。
   onScopeDispose(onRpcError((request, error) => {
     if (request.namespace === 'data' && loginRecoveryAction(error) === 'login' && !busy.value) {
+      issueId.value = diagnosticIssueId(error)
       failureMessage.value = ''
       open.value = true
     }
@@ -45,6 +48,7 @@ export function useAuthRecovery(options: {
       open.value = false
     }
     catch (error) {
+      issueId.value = diagnosticIssueId(error)
       devWarn('[Auth] open reauthentication failed:', error)
       failureMessage.value = options.t('login.reauthenticateFailed')
     }
@@ -53,5 +57,5 @@ export function useAuthRecovery(options: {
     }
   }
 
-  return { open, busy, message, cancel, confirm }
+  return { open, busy, message, issueId, cancel, confirm }
 }

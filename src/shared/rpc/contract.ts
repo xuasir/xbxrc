@@ -1,6 +1,10 @@
 import type { RuntimeFeatureCapabilities } from '../config/runtime-features'
+import type { CloudCatalog, CloudDetail, CloudPreferences, CloudTitle, CloudWait } from './cloud'
 import type { ConsoleLibrary, LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage, MediaKind, PersonalAccount, Playtime, QueryResult } from './library'
 import type {
+  DiagnosticCapture,
+  DiagnosticSaveParams,
+  DiagnosticSaveResult,
   RuntimeTraceAckResult,
   RuntimeTraceExport,
   RuntimeTraceFlushResult,
@@ -187,56 +191,14 @@ export interface XBoxRpcSchema {
       { consoleId: string, text: string },
       { consoleId: string, accepted: boolean }
     >
-    getXcloudTitles: RpcMethod<
-      void,
-      {
-        titles: Array<{
-          id: string
-          name: string
-          productId: string
-          titleId: string
-          xboxTitleId?: number
-          publisherName: string
-          description: string
-          tileImageUrl: string
-          posterImageUrl: string
-          categories: string[]
-          supportedInputTypes: string[]
-          hasEntitlement: boolean
-          isRecentlyPlayed: boolean
-          isNew: boolean
-        }>
-        scopeKey?: string
-        cacheState: 'miss' | 'fresh' | 'stale'
-        updatedAt?: number
-        refreshing: boolean
-      }
-    >
-    refreshXcloudTitles: RpcMethod<
-      void,
-      {
-        titles: Array<{
-          id: string
-          name: string
-          productId: string
-          titleId: string
-          xboxTitleId?: number
-          publisherName: string
-          description: string
-          tileImageUrl: string
-          posterImageUrl: string
-          categories: string[]
-          supportedInputTypes: string[]
-          hasEntitlement: boolean
-          isRecentlyPlayed: boolean
-          isNew: boolean
-        }>
-        scopeKey?: string
-        cacheState: 'miss' | 'fresh' | 'stale'
-        updatedAt?: number
-        refreshing: boolean
-      }
-    >
+    getXcloudTitles: RpcMethod<void, CloudCatalog>
+    refreshXcloudTitles: RpcMethod<void, CloudCatalog>
+    getCloudDetail: RpcMethod<{ productId: string }, CloudDetail>
+    getCloudPreferences: RpcMethod<void, [string, CloudPreferences]>
+    setCloudPreferences: RpcMethod<{ scopeKey: string, preferences: CloudPreferences }, CloudPreferences>
+    resolveCloudTitle: RpcMethod<{ productId: string }, CloudTitle>
+    getCloudWait: RpcMethod<{ productId: string, requestId: string }, CloudWait>
+    cancelCloudWait: RpcMethod<{ requestId: string }, boolean>
     primeXcloudTitles: RpcMethod<void, boolean>
   }
   streaming: {
@@ -257,6 +219,12 @@ export interface XBoxRpcSchema {
     decideRecovery: RpcMethod<StreamingDecideRecoveryParams, StreamingDecideRecoveryResult>
   }
   runtimeTrace: {
+    startCapture: RpcMethod<void, DiagnosticCapture>
+    stopCapture: RpcMethod<{ captureId: string }, DiagnosticCapture | null>
+    saveBundle: RpcMethod<DiagnosticSaveParams, DiagnosticSaveResult>
+    reportIssue: RpcMethod<{ operation: 'login' | 'settings' | 'update' | 'library' | 'stream' }, { issueId: string }>
+    openDevTools: RpcMethod<void, void>
+    openLogDirectory: RpcMethod<void, void>
     recordEvent: RpcMethod<RuntimeTraceRecordEventParams, RuntimeTraceAckResult>
     getPolicy: RpcMethod<void, RuntimeTraceProducerPolicy>
     flush: RpcMethod<void, RuntimeTraceFlushResult>

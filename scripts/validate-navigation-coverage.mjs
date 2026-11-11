@@ -74,6 +74,10 @@ for (const component of components.values()) {
       if (['input', 'textarea'].includes(site.as) && !handlers.some(handler => handler.name === 'nav-action'))
         issue(site, '输入入口需要 A 确认的编辑合同')
     }
+    else if (attr(node, 'data-pointer-only') && value(node, 'tabindex') === '-1' && handlers.some(handler => handler.name === 'keydown')) {
+      // 用户指定的锁定观察页触屏出口，保持手柄按键完整用于采集。
+      site.navigation = '锁定观察页指针出口'
+    }
     else if (attr(node, 'data-focusable') || owners.some(owner => owner.tag === 'Focusable')) {
       site.navigation = '共享导航节点'
     }

@@ -4,7 +4,7 @@ interface MotionRoute {
   name?: unknown
   meta: Record<string, unknown>
 }
-const DETAIL_DEPTH: Record<string, number> = { 'my-friend': 1, 'my-game': 1, 'console-games': 1, 'console-game': 2 }
+const DETAIL_DEPTH: Record<string, number> = { 'my-friend': 1, 'my-game': 1, 'console-games': 1, 'console-game': 2, 'controller-tool': 1 }
 
 interface PageMotion {
   direction: 'forward' | 'back' | 'fade'

@@ -1,5 +1,6 @@
 import type { StreamingSessionError, StreamingStartupBoundedRetry, StreamingStartupErrorKind, StreamingStartupPhase, StreamingTargetType } from '@shared/rpc/streaming'
 import type { StreamErrorKind, StreamingSessionProgress, StreamPerformanceSnapshot } from './types'
+import { diagnosticIssueId } from '../services/diagnostics'
 import { isRecord, normalizeErrorMessage } from './utils'
 
 export type StreamFailurePhase = 'startup' | 'firstFrame' | 'playback' | 'recovery'
@@ -12,6 +13,7 @@ export interface ResolvedStreamError {
   code: string
   retryable: boolean
   phase?: StreamingStartupPhase
+  diagnosticIssueId?: string
   diagnosticSummary?: string
   boundedRetry?: StreamingStartupBoundedRetry
 }
@@ -88,7 +90,7 @@ function resolveStructured(error: StreamingSessionError & { phase?: StreamingSta
   }
 }
 
-export function resolveStreamError(input: { error: unknown, t: Translate }): ResolvedStreamError {
+function resolveStreamErrorValue(input: { error: unknown, t: Translate }): ResolvedStreamError {
   const structured = structuredError(input.error)
   if (structured)
     return resolveStructured(structured, input.t)
@@ -100,6 +102,12 @@ export function resolveStreamError(input: { error: unknown, t: Translate }): Res
   if (known)
     return { ...known, code: message, message: input.t(`streamPage.errors.${known.message}`) }
   return { kind: 'unknown', code: 'unclassified', retryable: false, message: input.t('streamPage.errors.unknown') }
+}
+
+export function resolveStreamError(input: { error: unknown, t: Translate }): ResolvedStreamError {
+  const resolved = resolveStreamErrorValue(input)
+  const id = diagnosticIssueId(input.error)
+  return id ? { ...resolved, diagnosticIssueId: id } : resolved
 }
 
 export function resolveProgressError(progress: StreamingSessionProgress, t: Translate): ResolvedStreamError {

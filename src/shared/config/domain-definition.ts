@@ -73,11 +73,11 @@ const FORCE_REGION_IP_OPTIONS = [
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const CODEC_OPTIONS = [
-  { value: '', label: 'Auto', description: 'Automatic' },
-  { value: 'video/H264-64', label: 'H.264 High', description: 'Sharper' },
-  { value: 'video/H264-4d', label: 'H.264 Main', description: 'Balanced' },
-  { value: 'video/H264-42e', label: 'H.264 Constrained Baseline', description: 'More compatible' },
-  { value: 'video/H264-420', label: 'H.264 Baseline', description: 'Most compatible' },
+  { value: '', label: 'Auto (recommended)', description: 'Let your device and server choose.' },
+  { value: 'video/H264-64', label: 'Ultra High' },
+  { value: 'video/H264-4d', label: 'High' },
+  { value: 'video/H264-42e', label: 'Standard' },
+  { value: 'video/H264-420', label: 'Low' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const RUNTIME_TRACE_MODE_OPTIONS = [
@@ -132,7 +132,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'runtime',
         label: 'Runtime',
-        keys: ['background_keepalive', 'debug', 'runtime_trace_mode'],
+        keys: ['background_keepalive', 'diagnostics_lightweight'],
       },
       {
         key: 'navigation',
@@ -357,7 +357,7 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     options: FORCE_REGION_IP_OPTIONS,
   },
   codec: {
-    label: 'Preferred video codec tier',
+    label: 'Bitrate tier',
     control: 'singleSelect',
     options: CODEC_OPTIONS,
   },
@@ -438,8 +438,8 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'UI sound feedback',
     control: 'toggle',
   },
-  debug: {
-    label: 'Debug mode',
+  diagnostics_lightweight: {
+    label: 'Lightweight background capture',
     control: 'toggle',
   },
   runtime_trace_mode: {

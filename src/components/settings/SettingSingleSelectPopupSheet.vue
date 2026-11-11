@@ -3,22 +3,26 @@ import type { SettingSelectOptionDefinition } from '@shared/config/domain-defini
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
+import ExportDiagnosticsButton from '../common/ExportDiagnosticsButton.vue'
 import SettingModalShell from './SettingModalShell.vue'
 
 interface SettingSingleSelectPopupSheetProps {
   open: boolean
   scopeId: string
   title: string
+  eyebrow?: string
   hint?: string
   options: readonly SettingSelectOptionDefinition[]
   currentValue: string | number | null
   maxListHeight?: string
   busy?: boolean
+  diagnosticIssueId?: string
   error?: string
 }
 
 const props = withDefaults(defineProps<SettingSingleSelectPopupSheetProps>(), {
   hint: '',
+  eyebrow: '',
   maxListHeight: '640px',
 })
 
@@ -46,6 +50,7 @@ function handleClose(): void {
     :busy="props.busy"
     :scope-id="props.scopeId"
     :title="props.title"
+    :eyebrow="props.eyebrow"
     :hint="props.hint"
     :default-focus-id="defaultFocusId"
     width="min(100%, 640px)"
@@ -94,6 +99,7 @@ function handleClose(): void {
     </p>
     <p v-if="props.error" class="setting-panel__status setting-panel__status--error" role="alert">
       {{ props.error }}
+      <ExportDiagnosticsButton :id="`${props.scopeId}.export`" :scope-id="props.scopeId" :issue-id="props.diagnosticIssueId" />
     </p>
   </SettingModalShell>
 </template>

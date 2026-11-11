@@ -99,6 +99,18 @@ pub struct DataSendTextResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudTitleSummary {
+    #[serde(default)]
+    pub entitlement_known: bool,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    #[serde(default)]
+    pub recent_rank: Option<usize>,
+    #[serde(default)]
+    pub new_rank: Option<usize>,
+    #[serde(default)]
+    pub popular_rank: Option<usize>,
+    #[serde(default)]
+    pub leaving_rank: Option<usize>,
     pub id: String,
     pub name: String,
     pub product_id: String,
@@ -126,6 +138,12 @@ pub enum DataXcloudCatalogCacheState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudCatalogPayload {
+    #[serde(default)]
+    pub sources: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub access: String,
+    #[serde(default)]
+    pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope_key: Option<String>,
     pub titles: Vec<DataXcloudTitleSummary>,
@@ -138,6 +156,12 @@ pub struct DataXcloudCatalogPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudCatalogUpdatedEvent {
+    #[serde(default)]
+    pub sources: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub access: String,
+    #[serde(default)]
+    pub error: Option<String>,
     pub scope_key: String,
     pub titles: Vec<DataXcloudTitleSummary>,
     pub cache_state: DataXcloudCatalogCacheState,
@@ -214,4 +238,27 @@ pub struct DataStreamingRegions {
     pub regions: Vec<DataStreamingRegion>,
     pub updated_at: u64,
     pub preferred_region_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCloudPreferences {
+    pub favorites: Vec<DataXcloudTitleSummary>,
+    pub pinned: Vec<String>,
+    pub section: String,
+    pub category: String,
+    pub sort: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCloudDetail {
+    pub detail: xbox_cloud_catalog_flow::CloudProductDetail,
+    pub updated_at: u64,
+    pub stale: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCloudWait {
+    pub seconds: Option<u64>,
+    pub updated_at: u64,
 }

@@ -1,3 +1,6 @@
+mod diagnostic_export;
+mod diagnostic_records;
+mod diagnostics_state;
 mod export;
 pub mod policy;
 pub mod rpc;
@@ -27,9 +30,12 @@ pub fn default_stored_trace_mode() -> String {
     }
 }
 
-/// 实际生效的 trace 模式：发行构建会把 `dev` 降级为受预算约束的 `production`。
-pub fn effective_runtime_trace_mode(stored: &str) -> String {
-    policy::RuntimeTraceProfile::effective_from_stored_mode(stored)
-        .as_str()
-        .to_string()
+/// 构建确定模式；开发启动可用 XBX_TRACE_MODE=production 复验生产成本。
+pub fn effective_runtime_trace_mode(_stored: &str) -> String {
+    if cfg!(debug_assertions)
+        && std::env::var("XBX_TRACE_MODE").is_ok_and(|mode| mode == "production")
+    {
+        return "production".into();
+    }
+    default_stored_trace_mode()
 }

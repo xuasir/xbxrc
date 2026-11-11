@@ -5,6 +5,7 @@ import type {
   LogicalPadStateDto,
 } from './contract'
 import defaultKeyboardMapping from './keyboard-defaults.json'
+import { parseKeyboardMapping } from './keyboard-mapping'
 import { inputController, subscribeGamepadConfig } from './runtime'
 import { neutralState } from './state'
 
@@ -83,7 +84,7 @@ export function installKeyboardFallbackBridge(): () => void {
     return uninstall
   const disposeConfig = subscribeGamepadConfig((config) => {
     const stored = config.gamepad_keyboard_mapping as GamepadKeyboardMappingDto | undefined
-    const next = stored?.bindings?.length ? stored : DEFAULT_KEYBOARD_MAPPING
+    const next = parseKeyboardMapping(stored, DEFAULT_KEYBOARD_MAPPING)
     if (JSON.stringify(mapping) !== JSON.stringify(next) || controlSource !== config.gamepad_control_source)
       clearPressedKeys()
     mapping = structuredClone(next)
@@ -132,14 +133,14 @@ if (import.meta.hot)
 
 function handleKeyDown(event: KeyboardEvent): void {
   const snapshot = inputController.getSnapshot()
-  if (snapshot.preferences.controlSource !== 'keyboard' || snapshot.exclusiveCapture
+  if ((snapshot.preferences.controlSource !== 'keyboard' && !snapshot.keyboardObserving) || (snapshot.exclusiveCapture && !snapshot.keyboardObserving)
     || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
     return
   }
   const key = KEY_CODE_TO_DTO[event.code]
   if (key === undefined || isEditableTarget(event.target))
     return
-  const gameBinding = mapping.bindings.some(binding => binding.key === key)
+  const gameBinding = mapping.bindings.some(binding => binding.key === key) || mapping.chords?.some(binding => binding.keys.includes(key))
   const uiBinding = DEFAULT_KEYBOARD_MAPPING.bindings.find(binding => binding.key === key)
   if (!gameBinding && !uiBinding)
     return
@@ -179,12 +180,15 @@ function submitCurrentState(): void {
 
 function buildState(bindings: GamepadKeyboardMappingDto): LogicalPadStateDto {
   const state = neutralState()
+  const activeChords = (bindings.chords ?? []).filter(binding => binding.keys.every(key => pressedKeys.has(key)))
+  const consumed = new Set(activeChords.flatMap(binding => binding.keys))
   for (const binding of bindings.bindings) {
-    if (!pressedKeys.has(binding.key)) {
+    if (!pressedKeys.has(binding.key) || consumed.has(binding.key)) {
       continue
     }
     applyControl(state, binding.control)
   }
+  for (const binding of activeChords) applyControl(state, binding.control)
   state.leftStick.x = clampAxis(state.leftStick.x)
   state.leftStick.y = clampAxis(state.leftStick.y)
   state.rightStick.x = clampAxis(state.rightStick.x)

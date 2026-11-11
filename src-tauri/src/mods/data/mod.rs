@@ -17,6 +17,45 @@ use std::sync::Arc;
 
 #[async_trait]
 pub trait DataProvider: Send + Sync {
+    async fn validate_cloud_stream(&self, _stream: &str) -> Result<(), DataError> {
+        Ok(())
+    }
+    async fn get_cloud_detail(&self, _product: &str) -> Result<DataCloudDetail, DataError> {
+        Err("云详情暂不可用".into())
+    }
+    async fn get_cloud_preferences(&self) -> Result<(String, DataCloudPreferences), DataError> {
+        Ok((String::new(), Default::default()))
+    }
+    async fn set_cloud_preferences(
+        &self,
+        _scope: &str,
+        _preferences: DataCloudPreferences,
+    ) -> Result<DataCloudPreferences, DataError> {
+        Err("收藏暂不可用".into())
+    }
+    async fn resolve_cloud_title(
+        &self,
+        _product: &str,
+    ) -> Result<DataXcloudTitleSummary, DataError> {
+        Err("云游戏访问暂不可用".into())
+    }
+    async fn get_cloud_wait(
+        &self,
+        _product: &str,
+        _request: &str,
+    ) -> Result<DataCloudWait, DataError> {
+        Err("等待时间暂不可用".into())
+    }
+    async fn cancel_cloud_wait_query(&self, _request: &str) -> Result<bool, DataError> {
+        Ok(true)
+    }
+    async fn get_cloud_input_config(
+        &self,
+        _stream: &str,
+    ) -> Result<DataStreamingTitleInputConfig, DataError> {
+        Err("云输入配置暂不可用".into())
+    }
+
     async fn get_library_game(
         &self,
         target: Option<String>,

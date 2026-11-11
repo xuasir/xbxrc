@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ExportDiagnosticsButton from '@/components/common/ExportDiagnosticsButton.vue'
 import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingInputControl from '@/components/settings/SettingInputControl.vue'
 import { Focusable } from '@/navigation/core/vue'
@@ -31,6 +32,7 @@ useLibraryFocusFallback(() => ['my.friends.filter', ...friends.value.map(p => `m
     </header>
     <p v-if="state.error" class="library-notice" role="alert">
       {{ state.error }}
+      <ExportDiagnosticsButton id="account.error.export" scope-id="app.shell" :issue-id="state.issueId" />
     </p>
     <p v-for="notice in state.value?.notices" :key="notice" class="library-notice" role="status">
       {{ notice }}

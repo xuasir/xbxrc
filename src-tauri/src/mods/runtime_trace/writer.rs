@@ -38,7 +38,11 @@ struct QueuedRow {
 }
 
 enum WriterCommand {
+    WriteContext(QueuedRow),
+    OpenRecord(QueuedRow),
+    CloseRecord(QueuedRow),
     Write(QueuedRow),
+    SaveDiagnosticIndex(QueuedRow),
     Configure(OutputConfig, &'static str, Sender<io::Result<()>>),
     Sync(bool, Sender<io::Result<()>>),
     Shutdown,
@@ -54,6 +58,62 @@ pub(super) struct WriterHandle {
 }
 
 impl WriterHandle {
+    pub fn diagnostic_window(&self, window: super::diagnostic_records::RecordWindow) {
+        if let Ok(bytes) = serde_json::to_vec(&window) {
+            self.record_command(bytes, true);
+        }
+    }
+    pub fn close_diagnostic_window(&self, id: &str) {
+        self.record_command(id.as_bytes().to_vec(), false);
+    }
+    fn record_command(&self, bytes: Vec<u8>, open: bool) {
+        let Some(reservation) = self
+            .queue
+            .reserve(bytes.capacity(), TraceImportance::Essential)
+        else {
+            self.note_drop(TraceImportance::Essential, DropReason::QueuePressure);
+            return;
+        };
+        let row = QueuedRow {
+            bytes,
+            generation: 0,
+            importance: TraceImportance::Essential,
+            _reservation: reservation,
+        };
+        if self
+            .tx
+            .try_send(if open {
+                WriterCommand::OpenRecord(row)
+            } else {
+                WriterCommand::CloseRecord(row)
+            })
+            .is_err()
+        {
+            self.note_drop(TraceImportance::Essential, DropReason::QueuePressure);
+        }
+    }
+    pub fn save_diagnostic_index(&self, bytes: Vec<u8>) {
+        let Some(reservation) = self
+            .queue
+            .reserve(bytes.capacity(), TraceImportance::Essential)
+        else {
+            self.note_drop(TraceImportance::Essential, DropReason::QueuePressure);
+            return;
+        };
+        let row = QueuedRow {
+            bytes,
+            generation: 0,
+            importance: TraceImportance::Essential,
+            _reservation: reservation,
+        };
+        if self
+            .tx
+            .try_send(WriterCommand::SaveDiagnosticIndex(row))
+            .is_err()
+        {
+            self.note_drop(TraceImportance::Essential, DropReason::QueuePressure);
+        }
+    }
     pub fn new(root: PathBuf, trace_run_id: String) -> io::Result<Self> {
         // payload受行数/字节账本约束，控制指令另外保留固定槽位。
         let (tx, rx) = mpsc::sync_channel(QUEUE_MAX_ROWS + CONTROL_CAPACITY);
@@ -62,6 +122,10 @@ impl WriterHandle {
         let path = Arc::new(Mutex::new(None));
         let progress = Arc::new(Mutex::new(WriterProgress::default()));
         let mut writer = TraceWriter {
+            records: super::diagnostic_records::RecordFiles::new(
+                root.clone(),
+                trace_run_id.clone(),
+            ),
             root,
             trace_run_id,
             queue: queue.clone(),
@@ -101,6 +165,15 @@ impl WriterHandle {
         generation: u64,
         importance: TraceImportance,
     ) -> TraceRecordDisposition {
+        self.try_write_context(bytes, generation, importance, false)
+    }
+    pub fn try_write_context(
+        &self,
+        bytes: Vec<u8>,
+        generation: u64,
+        importance: TraceImportance,
+        context_only: bool,
+    ) -> TraceRecordDisposition {
         let Some(reservation) = self.queue.reserve(bytes.capacity(), importance) else {
             self.note_drop(importance, DropReason::QueuePressure);
             return TraceRecordDisposition::QueueFull;
@@ -111,7 +184,11 @@ impl WriterHandle {
             importance,
             _reservation: reservation,
         };
-        match self.tx.try_send(WriterCommand::Write(row)) {
+        match self.tx.try_send(if context_only {
+            WriterCommand::WriteContext(row)
+        } else {
+            WriterCommand::Write(row)
+        }) {
             Ok(()) => TraceRecordDisposition::Enqueued,
             Err(TrySendError::Full(_)) => {
                 self.note_drop(importance, DropReason::QueuePressure);
@@ -202,6 +279,7 @@ impl Drop for WriterHandle {
 }
 
 struct TraceWriter {
+    records: super::diagnostic_records::RecordFiles,
     root: PathBuf,
     trace_run_id: String,
     queue: Arc<QueueBudget>,
@@ -254,6 +332,52 @@ impl TraceWriter {
 
     fn handle(&mut self, command: WriterCommand) -> bool {
         match command {
+            WriterCommand::WriteContext(row) => {
+                if self.config.map(|config| config.generation) != Some(row.generation) {
+                    self.drops.note(row.importance, DropReason::Configuration);
+                } else if self.records.append(&row.bytes, 0).is_err() {
+                    self.drops.note(row.importance, DropReason::Io);
+                }
+            }
+            WriterCommand::OpenRecord(row) => {
+                let result = serde_json::from_slice(&row.bytes)
+                    .map_err(io::Error::other)
+                    .and_then(|window| {
+                        self.records.open(
+                            window,
+                            self.sequence,
+                            self.config
+                                .map(|config| config.profile.as_str())
+                                .unwrap_or("off"),
+                        )
+                    });
+                if result.is_err() {
+                    self.drops.note(TraceImportance::Essential, DropReason::Io);
+                }
+            }
+            WriterCommand::CloseRecord(row) => {
+                if self
+                    .records
+                    .close(&String::from_utf8_lossy(&row.bytes))
+                    .is_err()
+                {
+                    self.drops.note(TraceImportance::Essential, DropReason::Io);
+                }
+            }
+            WriterCommand::SaveDiagnosticIndex(row) => {
+                let result = (|| -> io::Result<()> {
+                    create_dir_all(&self.root)?;
+                    let temporary = self.root.join("diagnostics-index.tmp");
+                    std::fs::write(&temporary, &row.bytes)?;
+                    std::fs::rename(temporary, self.root.join("diagnostics-index.json"))
+                })();
+                if result.is_err() {
+                    self.drops.note(TraceImportance::Essential, DropReason::Io);
+                    if let Ok(mut progress) = self.progress.lock() {
+                        progress.io_failures += 1;
+                    }
+                }
+            }
             WriterCommand::Write(row) => {
                 if self.config.map(|config| config.generation) != Some(row.generation) {
                     self.drops.note(row.importance, DropReason::Configuration);
@@ -425,6 +549,9 @@ impl TraceWriter {
                 }
             }
         }
+        if self.records.append(bytes, self.sequence).is_err() {
+            self.drops.note(TraceImportance::Essential, DropReason::Io);
+        }
         Ok(())
     }
 
@@ -441,7 +568,11 @@ impl TraceWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        let result = self.file.as_mut().map_or(Ok(()), |file| file.flush());
+        let result = self
+            .file
+            .as_mut()
+            .map_or(Ok(()), |file| file.flush())
+            .and_then(|_| self.records.flush());
         if let Ok(mut progress) = self.progress.lock() {
             if result.is_ok() {
                 progress.flushed_sequence = self.sequence;

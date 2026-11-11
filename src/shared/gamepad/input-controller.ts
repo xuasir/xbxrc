@@ -1,8 +1,10 @@
-import type { GamepadBackend, GamepadSnapshot, InputDevice, InputSamplingObservation, RumbleResult } from './backend'
+import type { DeviceSample, GamepadBackend, GamepadSnapshot, InputDevice, InputSamplingObservation, RawPadState, RumbleResult } from './backend'
 import type { GamepadRumbleEffectDto, LogicalPadStateDto } from './contract'
 import type { GamepadPreferences, InputOwner } from './preferences'
 import { emptyGamepadSnapshot } from './backend'
-import { applyGameControls, deriveInputOwner, parseGamepadPreferences } from './preferences'
+import { applyDeviceMapping, defaultDeviceMapping, deviceAxisRest } from './device-mapping'
+import { applyGameControls, defaultGameControls, deriveInputOwner, parseGamepadPreferences } from './preferences'
+import { RawButtonReleaseBarrier } from './raw-input'
 import { gameRumbleEffect } from './rumble'
 import { BUTTON_KEYS, clonePadState, mergePadStates, neutralState, PadReleaseBarrier } from './state'
 
@@ -15,8 +17,12 @@ export interface InputSnapshot {
   streamReady: boolean
   uiCapturing: boolean
   exclusiveCapture: boolean
+  keyboardObserving: boolean
+  keyboardState: LogicalPadStateDto
   isBackground: boolean | undefined
   physicalState: LogicalPadStateDto
+  physicalRaw?: RawPadState
+  deviceSamples: DeviceSample[]
   uiState: LogicalPadStateDto
   gameState: LogicalPadStateDto
   sequence: number
@@ -35,6 +41,7 @@ export class InputController {
   private streamReady = false
   private isBackground: boolean | undefined
   private captures = new Map<string, boolean>()
+  private keyboardObservers = new Set<string>()
   private keyboard = neutralState()
   private keyboardUi = neutralState()
   private virtual = neutralState()
@@ -42,13 +49,16 @@ export class InputController {
   private uiBarrier = new PadReleaseBarrier()
   private keyboardUiBarrier = new PadReleaseBarrier()
   private gameBarrier = new PadReleaseBarrier()
+  private virtualBarrier = new PadReleaseBarrier()
+  private rawGameBarrier = new RawButtonReleaseBarrier()
   private owner: InputOwner = 'ui'
   private generation = 0
   private starting: Promise<void> | undefined
   private stopping: Promise<void> | undefined
   private listeners = new Set<(snapshot: InputSnapshot) => void>()
-  private menuListeners = new Set<() => void>()
+  private menuListeners = new Set<(target: 'menu' | 'diagnostics') => void>()
   private comboHeld = false
+  private diagnosticsComboHeld = false
   private publishing = false
   private revision = 0
   private current: InputSnapshot = this.buildSnapshot()
@@ -63,7 +73,7 @@ export class InputController {
     return () => this.listeners.delete(listener)
   }
 
-  onMenuRequested(listener: () => void): () => void {
+  onMenuRequested(listener: (target: 'menu' | 'diagnostics') => void): () => void {
     this.menuListeners.add(listener)
     return () => this.menuListeners.delete(listener)
   }
@@ -115,6 +125,7 @@ export class InputController {
     this.virtual = neutralState()
     this.systemHome = false
     this.comboHeld = false
+    this.diagnosticsComboHeld = false
     this.rearm()
     this.publish()
     // 初始化可能仍在等待原生监听注册；完成后再关闭，防止迟到的监听泄漏。
@@ -137,6 +148,10 @@ export class InputController {
     this.preferences = preferences
     if (old.controlSource !== preferences.controlSource
       || JSON.stringify(old.gameControls) !== JSON.stringify(preferences.gameControls)) {
+      this.rearm()
+    }
+    if (JSON.stringify(old.streamShortcuts) !== JSON.stringify(preferences.streamShortcuts)) {
+      this.comboHeld = this.diagnosticsComboHeld = false
       this.rearm()
     }
     if ((old.vibration && !preferences.vibration) || (old.uiHaptics && !preferences.uiHaptics))
@@ -173,13 +188,23 @@ export class InputController {
     this.publish()
   }
 
+  setKeyboardObservation(key: string, active: boolean): void {
+    if (this.keyboardObservers.has(key) === active)
+      return
+    if (active)
+      this.keyboardObservers.add(key)
+    else this.keyboardObservers.delete(key)
+    this.publish()
+  }
+
   selectDevice(id: string): boolean {
-    if (!this.raw.devices.some(device => device.id === id && device.standard))
+    if (!this.raw.devices.some(device => device.id === id))
       return false
     if (this.selectedId !== id) {
       void this.stopRumble()
       this.selectedId = id
       this.comboHeld = false
+      this.diagnosticsComboHeld = false
       this.rearm()
       this.publish()
     }
@@ -214,7 +239,7 @@ export class InputController {
       return 'unsupported'
     if (source === 'test' && owner !== 'ui')
       return 'unsupported'
-    return this.backend.rumble(activeDeviceId, source === 'ui' ? effect : gameRumbleEffect(effect, this.preferences.vibrationStrength))
+    return this.backend.rumble(activeDeviceId, source === 'ui' ? effect : gameRumbleEffect(effect, this.preferences.vibrationStrength, this.preferences.vibrationChannels))
   }
 
   async stopRumble(): Promise<void> {
@@ -223,11 +248,14 @@ export class InputController {
   }
 
   private physical(): LogicalPadStateDto {
-    return this.raw.samples.find(sample => sample.deviceId === this.selectedId)?.state ?? neutralState()
+    const sample = this.raw.samples.find(sample => sample.deviceId === this.selectedId)
+    const device = this.raw.devices.find(device => device.id === this.selectedId)
+    const mapping = this.preferences.gameControls.deviceMappings.find(item => item.layout === device?.layoutKey) ?? (device && !device.standard ? defaultDeviceMapping(device.layoutKey ?? '', false, this.preferences.gameControls.buttons) : undefined)
+    return device && !device.standard && mapping ? applyDeviceMapping(sample?.state ?? neutralState(), sample?.raw, mapping, false) : sample?.state ?? neutralState()
   }
 
   private gameInput(): LogicalPadStateDto {
-    return mergePadStates(this.preferences.controlSource === 'keyboard' ? this.keyboard : this.physical(), this.virtual)
+    return this.preferences.controlSource === 'keyboard' ? this.keyboard : this.physical()
   }
 
   private keyboardUiInput(): LogicalPadStateDto {
@@ -243,6 +271,15 @@ export class InputController {
       this.preferences.gameControls.rightDeadzone,
     )
     this.gameBarrier.capture(this.gameInput())
+    this.virtualBarrier.capture(this.virtual)
+    const device = this.raw.devices.find(device => device.id === this.selectedId)
+    const mapping = this.preferences.gameControls.deviceMappings.find(item => item.layout === device?.layoutKey) ?? (device?.standard ? defaultDeviceMapping(device.layoutKey ?? '', true, this.preferences.gameControls.buttons) : undefined)
+    const thresholds = new Map<number, number>()
+    for (const binding of mapping?.bindings ?? []) {
+      if (binding.kind === 'axis')
+        thresholds.set(binding.axis, binding.range === 'signed' ? Math.max(0.03, binding.target.startsWith('left') ? this.preferences.gameControls.leftDeadzone : this.preferences.gameControls.rightDeadzone) : binding.range === 'full' ? 0.06 : 0.03)
+    }
+    this.rawGameBarrier.capture(this.raw.samples.find(sample => sample.deviceId === this.selectedId)?.raw, deviceAxisRest(mapping), thresholds)
   }
 
   private accept(snapshot: GamepadSnapshot): void {
@@ -250,7 +287,7 @@ export class InputController {
     const previousId = this.selectedId
     const previouslyConnected = previous.devices.some(device => device.id === previousId)
     this.raw = snapshot
-    const devices = snapshot.devices.filter(device => device.standard)
+    const devices = snapshot.devices
     if (this.selectedId === null && devices.length === 1) {
       this.selectedId = devices[0].id
     }
@@ -259,13 +296,17 @@ export class InputController {
       const activated = devices.find((device) => {
         const before = previous.samples.find(sample => sample.deviceId === device.id)?.state
         const after = snapshot.samples.find(sample => sample.deviceId === device.id)?.state
-        return before && after && BUTTON_KEYS.some(key => key !== 'l2' && key !== 'r2'
-          && before.buttons[key] <= 0.5 && after.buttons[key] > 0.5)
+        const beforeRaw = previous.samples.find(sample => sample.deviceId === device.id)?.raw
+        const afterRaw = snapshot.samples.find(sample => sample.deviceId === device.id)?.raw
+        return before && after && (BUTTON_KEYS.some(key => key !== 'l2' && key !== 'r2' && before.buttons[key] <= 0.5 && after.buttons[key] > 0.5) || !!afterRaw?.buttons.some((value, index) => value > 0.5 && (beforeRaw?.buttons[index] ?? 0) <= 0.5))
       })
       if (activated)
         this.selectedId = activated.id
     }
-    if (previousId !== this.selectedId || (previouslyConnected && !devices.some(device => device.id === previousId))) {
+    const layoutChanged = previous.devices.find(device => device.id === previousId)?.layoutKey
+      !== snapshot.devices.find(device => device.id === this.selectedId)?.layoutKey
+      || previous.devices.find(device => device.id === previousId)?.standard !== snapshot.devices.find(device => device.id === this.selectedId)?.standard
+    if (previousId !== this.selectedId || layoutChanged || (previouslyConnected && !devices.some(device => device.id === previousId))) {
       if (previousId)
         void this.backend?.stopRumble(previousId)
       this.rearm()
@@ -275,15 +316,21 @@ export class InputController {
   }
 
   private checkMenuCombo(allowTrigger: boolean): void {
-    const sources = [this.physical()]
+    const device = this.raw.devices.find(device => device.id === this.selectedId)
+    const raw = this.raw.samples.find(sample => sample.deviceId === this.selectedId)?.raw
+    const sources = [this.streamReady ? applyGameControls(this.physical(), this.preferences.gameControls, raw, device?.layoutKey, device?.standard) : this.physical()]
     if (this.preferences.controlSource === 'keyboard')
       sources.push(this.keyboard)
-    if (sources.every(state => state.buttons.menu <= 0.5 && state.buttons.view <= 0.5))
-      this.comboHeld = false
-    if (sources.some(state => state.buttons.menu > 0.5 && state.buttons.view > 0.5) && !this.comboHeld) {
-      this.comboHeld = true
-      if (allowTrigger && this.owner !== 'blocked' && !this.current.exclusiveCapture) {
-        for (const listener of this.menuListeners) this.notify(listener, undefined)
+    for (const target of ['menu', 'diagnostics'] as const) {
+      const keys = this.preferences.streamShortcuts[target]
+      const field = target === 'menu' ? 'comboHeld' : 'diagnosticsComboHeld'
+      if (!keys.length || sources.every(state => keys.every(key => state.buttons[key] <= 0.5)))
+        this[field] = false
+      if (keys.length && sources.some(state => keys.every(key => state.buttons[key] > 0.5)) && !this[field]) {
+        this[field] = true
+        if (allowTrigger && this.owner !== 'blocked' && !this.current.exclusiveCapture) {
+          for (const listener of this.menuListeners) this.notify(listener, target)
+        }
       }
     }
   }
@@ -293,11 +340,17 @@ export class InputController {
     const physicalState = clonePadState(this.physical())
     const ui = mergePadStates(this.uiBarrier.apply(physicalState), this.keyboardUiBarrier.apply(this.keyboardUiInput()))
     const gameInput = this.gameBarrier.apply(this.gameInput())
-    if (this.comboHeld) {
-      ui.buttons.menu = ui.buttons.view = 0
-      gameInput.buttons.menu = gameInput.buttons.view = 0
+    const raw = this.raw.samples.find(sample => sample.deviceId === this.selectedId)?.raw
+    const device = this.raw.devices.find(device => device.id === this.selectedId)
+    const game = mergePadStates(applyGameControls(gameInput, this.preferences.controlSource === 'keyboard' ? defaultGameControls() : this.preferences.gameControls, this.preferences.controlSource === 'gamepad' ? this.rawGameBarrier.apply(raw) : undefined, device?.layoutKey, device?.standard), this.virtualBarrier.apply(this.virtual))
+    const consumed = [...(this.comboHeld ? this.preferences.streamShortcuts.menu : []), ...(this.diagnosticsComboHeld ? this.preferences.streamShortcuts.diagnostics : [])]
+    for (const key of consumed) {
+      ui.buttons[key] = game.buttons[key] = 0
+      if (key === 'l2')
+        ui.leftTrigger = game.leftTrigger = 0
+      if (key === 'r2')
+        ui.rightTrigger = game.rightTrigger = 0
     }
-    const game = applyGameControls(gameInput, this.preferences.gameControls)
     const gameState = this.owner === 'stream' ? game : neutralState()
     if (this.streamReady && this.owner !== 'blocked' && !exclusive && this.systemHome)
       gameState.buttons.home = 1
@@ -305,13 +358,17 @@ export class InputController {
       backend: this.backend?.kind ?? null,
       preferences: this.preferences,
       devices: this.raw.devices,
-      activeDeviceId: this.raw.devices.some(device => device.id === this.selectedId) ? this.selectedId : null,
+      activeDeviceId: device ? this.selectedId : null,
       owner: this.owner,
       streamReady: this.streamReady,
       uiCapturing: this.captures.size > 0,
       exclusiveCapture: exclusive,
+      keyboardObserving: this.keyboardObservers.size > 0,
+      keyboardState: clonePadState(this.keyboard),
       isBackground: this.isBackground,
       physicalState,
+      physicalRaw: raw ? { buttons: [...raw.buttons], axes: [...raw.axes] } : undefined,
+      deviceSamples: this.raw.samples,
       uiState: this.owner === 'ui' && !exclusive ? ui : neutralState(),
       gameState,
       sequence: this.raw.sequence,

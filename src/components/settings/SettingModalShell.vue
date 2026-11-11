@@ -18,6 +18,7 @@ interface SettingModalShellProps {
   trap?: boolean
   restoreFocus?: boolean
   busy?: boolean
+  locked?: boolean
 }
 
 const props = withDefaults(defineProps<SettingModalShellProps>(), {
@@ -35,12 +36,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-useShellOverlayHints(() => props.open, () => ({ title: props.title, busy: props.busy }))
+useShellOverlayHints(() => props.open, () => ({ title: props.title, busy: props.busy, exitHint: props.locked ? t('gamepadSettings.lockedExit') : undefined }))
 
 const closeNodeId = computed(() => `${props.scopeId}.close`)
 
 function handleClose(): void {
-  if (!props.busy)
+  if (!props.busy && !props.locked)
     emit('close')
 }
 
@@ -82,6 +83,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             }"
             :aria-label="props.title"
             role="dialog" aria-modal="true" :aria-busy="props.busy"
+            :data-input-locked="props.locked || undefined"
+            @nav-back="props.locked && $event.preventDefault()"
           >
             <header class="setting-modal-shell__header">
               <div class="setting-modal-shell__header-copy">
@@ -104,6 +107,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
               </div>
 
               <Focusable
+                v-if="!props.locked"
                 :id="closeNodeId"
                 as="button"
                 type="button"

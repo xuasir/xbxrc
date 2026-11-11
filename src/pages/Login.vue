@@ -5,8 +5,10 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
+import ExportDiagnosticsButton from '../components/common/ExportDiagnosticsButton.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { createAuthTraceOperationId, recordAuthTrace } from '../services/auth-trace'
+import { retainDiagnosticIssue } from '../services/diagnostics'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { loginRecoveryAction } from './login-recovery'
@@ -18,6 +20,8 @@ const route = useRoute()
 type LoginViewState = 'checking' | 'idle' | 'submitting'
 
 const viewState = ref<LoginViewState>('checking')
+const failureIssueId = ref<string>()
+const loginFailed = ref(false)
 const recoveryAction = ref<'retry' | 'login' | null>(null)
 const loginTraceId = createAuthTraceOperationId()
 
@@ -132,6 +136,8 @@ async function bootstrapLoginState(): Promise<void> {
       trace('loginAuthCheckCompleted', { outcome: 'success' })
     }
     catch (error) {
+      failureIssueId.value = await retainDiagnosticIssue(error, 'login')
+      loginFailed.value = true
       recoveryAction.value = loginRecoveryAction(error)
       viewState.value = 'idle'
       trace('loginRestoreCompleted', { outcome: 'failed', error, durationMs: Math.round(performance.now() - startedAt) })
@@ -149,6 +155,8 @@ async function bootstrapLoginState(): Promise<void> {
     applyAuthStateView(nextState)
   }
   catch (error) {
+    failureIssueId.value = await retainDiagnosticIssue(error, 'login')
+    loginFailed.value = true
     recoveryAction.value = loginRecoveryAction(error)
     viewState.value = 'idle'
     trace('loginRestoreFailed', { error, durationMs: Math.round(performance.now() - startedAt) })
@@ -166,41 +174,36 @@ async function handleLoginAction(): Promise<void> {
 }
 
 async function handleSignIn(): Promise<void> {
-  // 防止重复触发登录流程，也避免与静默恢复并发
-  if (viewState.value !== 'idle') {
+  if (viewState.value !== 'idle')
     return
-  }
-
-  const authState = await rpc.auth.getState()
-  if (authState.isAuthenticated) {
-    await redirectIfAuthenticated()
-    return
-  }
-  if (authState.isAuthenticating) {
-    viewState.value = 'checking'
-    return
-  }
-
   viewState.value = 'submitting'
+  loginFailed.value = false
   recoveryAction.value = null
   const startedAt = performance.now()
   trace('loginSignInStarted', { trigger: 'sign-in' })
   try {
+    const authState = await rpc.auth.getState()
+    if (authState.isAuthenticated) {
+      await redirectIfAuthenticated()
+      return
+    }
+    if (authState.isAuthenticating) {
+      viewState.value = 'checking'
+      return
+    }
     await rpc.auth.login()
     trace('loginSignInCompleted', { outcome: 'success', durationMs: Math.round(performance.now() - startedAt) })
     await redirectIfAuthenticated('sign-in')
+    const finalState = await rpc.auth.getState()
+    if (!finalState.isAuthenticating && !finalState.isAuthenticated)
+      viewState.value = 'idle'
   }
   catch (error) {
+    failureIssueId.value = await retainDiagnosticIssue(error, 'login')
+    loginFailed.value = true
+    recoveryAction.value = loginRecoveryAction(error)
     trace('loginSignInFailed', { error, durationMs: Math.round(performance.now() - startedAt) })
     viewState.value = 'idle'
-  }
-  finally {
-    // 如果 login 调用返回后仍未跳转（例如打开了 OAuth 窗口），状态会由事件通知维护
-    // 如果没有打开窗口且未认证，则重置为 idle
-    const finalState = await rpc.auth.getState()
-    if (!finalState.isAuthenticating && !finalState.isAuthenticated) {
-      viewState.value = 'idle'
-    }
   }
 }
 
@@ -266,6 +269,10 @@ onUnmounted(() => {
         >
           {{ loginActionLabel }}
         </Focusable>
+        <p v-if="loginFailed" role="alert" class="login-content__desc">
+          {{ t('diagnostics.loginFailed') }}
+        </p>
+        <ExportDiagnosticsButton v-if="loginFailed" id="login.error.export" :scope-id="SPATIAL_NAV_SCOPE_IDS.login" :issue-id="failureIssueId" />
       </main>
     </FocusScope>
   </section>

@@ -56,8 +56,8 @@ export function initializeGamepadInput(): Promise<void> {
       inputController.setInitializationError(`configReadFailed: ${String(error)}`)
     }
     applySavedConfig()
-    disposeMenu = inputController.onMenuRequested(() => {
-      window.dispatchEvent(new CustomEvent('stream-menu-toggle-requested', { detail: { source: 'gamepad', combo: 'menu+view' } }))
+    disposeMenu = inputController.onMenuRequested((target) => {
+      window.dispatchEvent(new CustomEvent('stream-menu-toggle-requested', { detail: { source: 'gamepad', target } }))
     })
     // 应用活动状态只消费 Tauri 窗口焦点事件；keep-active 策略在公共层忽略它。
     const appWindow = getCurrentWindow()

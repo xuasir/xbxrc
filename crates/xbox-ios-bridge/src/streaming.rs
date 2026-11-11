@@ -655,6 +655,7 @@ impl XboxStreamSession {
         let candidates = candidates
             .into_iter()
             .map(|candidate| IceCandidate {
+                source: None,
                 candidate: candidate.candidate,
                 sdp_m_line_index: candidate.sdp_m_line_index,
                 sdp_mid: candidate.sdp_mid,
@@ -1246,6 +1247,7 @@ fn console_address_ice_candidates(plan: &Plan) -> impl Iterator<Item = IceCandid
         .filter_map(|(index, address)| {
             address.ip.parse::<IpAddr>().ok()?;
             (address.port > 0).then(|| IceCandidate {
+                source: None,
                 candidate: format!(
                     "a=candidate:{} 1 UDP 1 {} {} typ host",
                     index.saturating_add(1),

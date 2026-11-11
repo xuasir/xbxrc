@@ -16,6 +16,8 @@ pub struct RpcError {
     pub code: String,
     pub message: String,
     pub details: Option<serde_json::Value>,
+    #[serde(rename = "diagnosticIssueId", skip_serializing_if = "Option::is_none")]
+    pub diagnostic_issue_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -39,6 +41,7 @@ impl RpcEnvelope {
             ok: false,
             data: None,
             error: Some(RpcError {
+                diagnostic_issue_id: None,
                 code: error.code().to_string(),
                 message: match &error {
                     crate::error::AppError::Data(message)
@@ -103,13 +106,40 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
                 .state::<crate::shell::state::AppState>()
                 .runtime_trace
                 .clone();
-            mods::runtime_trace::rpc::handle_rpc(
-                payload.method.as_str(),
-                payload.params,
-                runtime_trace,
-            )
-            .await
-            .map_err(Into::into)
+            if matches!(payload.method.as_str(), "openDevTools" | "openLogDirectory") {
+                diagnostic_developer_tool(&app_handle, &payload.method)
+            } else if payload.method == "saveBundle" {
+                let configuration = app_handle
+                    .state::<crate::shell::state::AppState>()
+                    .config
+                    .get_by_keys(
+                        &[
+                            "resolution",
+                            "xhome_resolution",
+                            "xhome_bitrate",
+                            "xcloud_bitrate",
+                            "audio_bitrate",
+                            "ipv6",
+                            "enable_audio_control",
+                            "prevent_resolution_drops",
+                            "background_keepalive",
+                            "diagnostics_lightweight",
+                            "display_options",
+                        ]
+                        .map(str::to_owned),
+                    )
+                    .unwrap_or_default();
+                mods::runtime_trace::rpc::save_bundle(payload.params, runtime_trace, configuration)
+                    .await
+            } else {
+                mods::runtime_trace::rpc::handle_rpc(
+                    payload.method.as_str(),
+                    payload.params,
+                    runtime_trace,
+                )
+                .await
+                .map_err(Into::into)
+            }
         }
         "system" => mods::app_state::rpc::handle_system_rpc(
             payload.method.as_str(),
@@ -143,6 +173,23 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
             RpcEnvelope::success(data)
         }
         Err(error) => {
+            let diagnostic_issue_id = if namespace != "runtimeTrace" {
+                let operation = diagnostic_rpc_operation(&namespace, &method);
+                Some(
+                    app_handle
+                        .state::<crate::shell::state::AppState>()
+                        .runtime_trace
+                        .record_request_failure(
+                            &operation,
+                            error.code(),
+                            mods::runtime_trace::service::now_ms().saturating_sub(duration_ms),
+                            duration_ms,
+                            diagnostic_rpc_error(&error),
+                        ),
+                )
+            } else {
+                None
+            };
             log::error!(
                 "[RPC][OUT] {}.{} err code={} message={} duration={}ms",
                 namespace,
@@ -151,7 +198,144 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
                 error.to_string(),
                 duration_ms
             );
-            RpcEnvelope::fail(error)
+            let mut envelope = RpcEnvelope::fail(error);
+            if let Some(error) = envelope.error.as_mut() {
+                error.diagnostic_issue_id = diagnostic_issue_id;
+            }
+            envelope
+        }
+    }
+}
+
+fn diagnostic_developer_tool(
+    app: &tauri::AppHandle,
+    method: &str,
+) -> crate::error::AppResult<serde_json::Value> {
+    #[cfg(debug_assertions)]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        if method == "openDevTools" {
+            let window = app.get_webview_window("main").ok_or_else(|| {
+                crate::error::AppError::Internal("Main window unavailable".into())
+            })?;
+            window.open_devtools();
+        } else {
+            let path = mods::runtime_trace::service::trace_root_dir();
+            app.opener()
+                .open_path(path.to_string_lossy(), None::<&str>)
+                .map_err(|error| crate::error::AppError::Internal(error.to_string()))?;
+        }
+        Ok(serde_json::Value::Null)
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = (app, method);
+        Err(crate::error::AppError::InvalidParams(
+            "Developer tools require a development build".into(),
+        ))
+    }
+}
+
+fn diagnostic_rpc_operation(namespace: &str, method: &str) -> String {
+    let namespace = if matches!(
+        namespace,
+        "app" | "config" | "auth" | "data" | "streaming" | "system" | "updater"
+    ) {
+        namespace
+    } else {
+        "other"
+    };
+    const METHODS: &[&str] = &[
+        "getVersion",
+        "ping",
+        "isFullscreen",
+        "toggleFullscreen",
+        "enterFullscreen",
+        "exitFullscreen",
+        "getStartupFlags",
+        "resetAutoConnect",
+        "clearUserData",
+        "clearData",
+        "saveBinaryFile",
+        "quit",
+        "restart",
+        "getState",
+        "checkAuthentication",
+        "login",
+        "clearAuthCache",
+        "logout",
+        "getRuntimeFeatures",
+        "get",
+        "set",
+        "getGroups",
+        "getLibraryGame",
+        "getPersonalAccount",
+        "getGameHistory",
+        "getAchievements",
+        "getPlaytimes",
+        "getConsoleLibrary",
+        "getMedia",
+        "resolveMedia",
+        "saveMedia",
+        "getUserProfile",
+        "getHosts",
+        "getRemoteConsoles",
+        "getStreamingRegions",
+        "getStreamingTitleInputConfig",
+        "powerOnConsole",
+        "powerOffConsole",
+        "sendTextToConsole",
+        "getXcloudTitles",
+        "refreshXcloudTitles",
+        "primeXcloudTitles",
+        "startSession",
+        "cancelStartup",
+        "getSessionProgress",
+        "closeSession",
+        "exchangeOffer",
+        "submitIce",
+        "pollIce",
+        "listActiveSessions",
+        "decideRecovery",
+        "openExternal",
+        "getChannel",
+        "setChannel",
+        "check",
+        "downloadAndInstall",
+        "relaunch",
+    ];
+    format!(
+        "{namespace}.{}",
+        if METHODS.contains(&method) {
+            method
+        } else {
+            "other"
+        }
+    )
+}
+
+fn diagnostic_rpc_error(error: &crate::error::AppError) -> serde_json::Value {
+    match error {
+        crate::error::AppError::WebApi(error) => error.safe_summary(),
+        _ => {
+            let mut safe = serde_json::Map::new();
+            if let Some(detail) = error.details() {
+                for key in [
+                    "status",
+                    "statusCode",
+                    "retryable",
+                    "requiresLogin",
+                    "durationMs",
+                ] {
+                    if let Some(value) = detail
+                        .get(key)
+                        .filter(|value| value.is_number() || value.is_boolean())
+                    {
+                        safe.insert(key.into(), value.clone());
+                    }
+                }
+            }
+            serde_json::Value::Object(safe)
         }
     }
 }

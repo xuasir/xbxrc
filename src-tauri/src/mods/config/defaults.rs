@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 41] = [
+pub const APP_CONFIG_KEYS: [&str; 44] = [
     "locale",
     "theme",
     "fullscreen",
@@ -22,6 +22,8 @@ pub const APP_CONFIG_KEYS: [&str; 41] = [
     "codec",
     "vibration",
     "vibration_strength",
+    "vibration_channels",
+    "stream_menu_shortcuts",
     "power_on",
     "video_format",
     "ipv6",
@@ -38,6 +40,7 @@ pub const APP_CONFIG_KEYS: [&str; 41] = [
     "debug",
     "runtime_trace_mode",
     "runtime_trace_dimensions",
+    "diagnostics_lightweight",
     "gamepad_background_policy",
     "gamepad_control_source",
     "gamepad_game_controls",
@@ -73,6 +76,8 @@ pub fn default_config_map() -> Map<String, Value> {
         "codec": "",
         "vibration": true,
         "vibration_strength": "realistic",
+        "vibration_channels": null,
+        "stream_menu_shortcuts": { "menu": ["menu", "view"], "diagnostics": [] },
         "power_on": false,
         "video_format": "",
         "ipv6": false,
@@ -94,9 +99,10 @@ pub fn default_config_map() -> Map<String, Value> {
         "debug": false,
         "runtime_trace_mode": null,
         "runtime_trace_dimensions": "",
+        "diagnostics_lightweight": false,
         "gamepad_background_policy": "keep-active",
         "gamepad_control_source": "gamepad",
-        "gamepad_game_controls": { "buttons": {}, "leftDeadzone": 0.1, "rightDeadzone": 0.1, "invertRightY": false },
+        "gamepad_game_controls": { "buttons": {}, "leftDeadzone": 0.1, "rightDeadzone": 0.1, "invertLeftY": false, "invertRightY": false, "extraButtons": [], "deviceMappings": [] },
         "gamepad_keyboard_mapping": default_keyboard_mapping_value()
     });
 

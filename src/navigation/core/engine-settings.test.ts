@@ -96,6 +96,32 @@ describe('sticky header focus', () => {
 })
 
 describe('settings modal focus recovery', () => {
+  it('lets a slider consume horizontal adjustment and keep vertical geometric navigation', () => {
+    const { engine, node, focus } = fixture()
+    const field = node('slider')
+    const below = node('below')
+    field.getBoundingClientRect = () => ({ left: 100, right: 300, top: 100, bottom: 140, width: 200, height: 40 })
+    below.getBoundingClientRect = () => ({ left: 100, right: 300, top: 180, bottom: 220, width: 200, height: 40 })
+    const adjust = vi.fn()
+    field.dispatchEvent.mockImplementation((event) => {
+      if (event.type === 'nav-direction' && ['left', 'right'].includes((event as CustomEvent).detail.direction)) {
+        adjust((event as CustomEvent).detail.direction)
+        return false
+      }
+      return true
+    })
+    focus(field)
+    engine.start()
+    try {
+      inputDispatcher.dispatch(NavigationIntent.Right)
+      inputDispatcher.dispatch(NavigationIntent.Left)
+      expect(adjust.mock.calls).toEqual([['right'], ['left']])
+      expect(engine.getCurrentFocus()).toBe(field)
+      inputDispatcher.dispatch(NavigationIntent.Down)
+      expect(engine.getCurrentFocus()).toBe(below)
+    }
+    finally { engine.stop() }
+  })
   it('allows a focused input to consume controller activation before the native click fallback', () => {
     const { engine, node } = fixture()
     const field = node('field')

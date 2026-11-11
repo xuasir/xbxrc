@@ -1,5 +1,6 @@
 import type { UpdaterProgressEvent } from '@shared/events/updater'
 import { computed, ref } from 'vue'
+import { diagnosticIssueId } from '../services/diagnostics'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 
@@ -23,6 +24,8 @@ function createAppUpdater() {
   const releaseNotes = ref<string | null>(null)
   const releaseDate = ref<string | null>(null)
   const checkedAt = ref<number | null>(null)
+  const channelIssueId = ref<string>()
+  const errorIssueId = ref<string>()
   const channelError = ref<string | null>(null)
   const channelLoading = ref(false)
   const channelReady = ref(false)
@@ -85,8 +88,10 @@ function createAppUpdater() {
       channelError.value = null
     }
     catch (error) {
-      if (revision === channelRevision)
+      if (revision === channelRevision) {
+        channelIssueId.value = diagnosticIssueId(error)
         channelError.value = error instanceof Error ? error.message : String(error)
+      }
     }
     finally { channelLoading.value = false }
   }
@@ -100,6 +105,7 @@ function createAppUpdater() {
       await rpc.updater.setChannel({ channel: next })
     }
     catch (error) {
+      channelIssueId.value = diagnosticIssueId(error)
       channelError.value = error instanceof Error ? error.message : String(error)
       throw error
     }
@@ -140,6 +146,7 @@ function createAppUpdater() {
       state.value = 'available'
     }
     catch (error) {
+      errorIssueId.value = diagnosticIssueId(error)
       errorMessage.value = error instanceof Error ? error.message : String(error)
       state.value = 'error'
     }
@@ -176,6 +183,7 @@ function createAppUpdater() {
       state.value = 'installed'
     }
     catch (error) {
+      errorIssueId.value = diagnosticIssueId(error)
       errorMessage.value = error instanceof Error ? error.message : String(error)
       state.value = 'error'
     }
@@ -186,7 +194,10 @@ function createAppUpdater() {
     try {
       await rpc.updater.relaunch()
     }
-    catch (error) { errorMessage.value = error instanceof Error ? error.message : String(error) }
+    catch (error) {
+      errorIssueId.value = diagnosticIssueId(error)
+      errorMessage.value = error instanceof Error ? error.message : String(error)
+    }
   }
 
   // 更新任务拥有应用级状态，分类组件仅展示，进度订阅跨页面持续存在。
@@ -199,6 +210,8 @@ function createAppUpdater() {
     state,
     busy,
     channelError,
+    channelIssueId,
+    errorIssueId,
     channelLoading,
     channelReady,
     channelSaving,

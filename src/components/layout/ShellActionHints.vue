@@ -12,6 +12,7 @@ defineProps<{
   exclusive?: boolean
   busy?: boolean
   back?: boolean
+  exitHint?: string
 }>()
 const emit = defineEmits<{ resize: [height: number] }>()
 const { t } = useI18n()
@@ -32,7 +33,8 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 <template>
   <footer ref="root" class="shell-hints" :aria-label="t('shell.hints.label')">
-    <div v-if="available && !exclusive && !busy" class="shell-hints__actions">
+    <span v-if="exitHint" class="shell-hints__ownership">{{ exitHint }}</span>
+    <div v-else-if="available && !exclusive && !busy" class="shell-hints__actions">
       <span class="shell-hints__action"><kbd>{{ buttons.south }}</kbd>{{ t('shell.hints.confirm') }}</span>
       <span v-if="overlay || back" class="shell-hints__action"><kbd>{{ buttons.east }}</kbd>{{ t(overlay ? 'shell.hints.close' : 'shell.hints.back') }}</span>
       <template v-if="!overlay">

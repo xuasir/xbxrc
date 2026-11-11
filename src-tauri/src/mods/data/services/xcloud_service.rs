@@ -3,12 +3,9 @@ use crate::mods::data::cache_repository::{
 };
 use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::types::{
-    DataSessionContext, DataXcloudCatalogCacheState, DataXcloudCatalogPayload,
-    XcloudCatalogCacheScope,
+    DataSessionContext, DataXcloudCatalogPayload, XcloudCatalogCacheScope,
 };
-use xbox_cloud_catalog_flow::{
-    CloudCatalogBaseEntry, CloudCatalogOverlayEntry, CloudCatalogScope, XboxCloudCatalogFlow,
-};
+use xbox_cloud_catalog_flow::{CloudCatalogBaseEntry, CloudCatalogOverlayEntry, CloudCatalogScope};
 use xbox_webapi::WebApiError;
 
 const XCLOUD_CATALOG_DEFAULT_MARKET: &str = "US";
@@ -39,7 +36,10 @@ impl XcloudService {
         catalog_scope: &CloudCatalogScope,
     ) -> Option<XcloudCatalogCacheScope> {
         let claims = resolve_web_token_claims(&session.web_token)?;
-        let region = self.resolve_xcloud_region(session)?;
+        let region_host = self
+            .resolve_xcloud_region(session)
+            .map(|r| r.host)
+            .unwrap_or_else(|| "public".into());
         let account_id = claims
             .xid
             .as_deref()
@@ -48,7 +48,7 @@ impl XcloudService {
             .unwrap_or(&claims.uhs);
         Some(XcloudCatalogCacheScope {
             account_id: account_id.to_string(),
-            region_host: region.host,
+            region_host,
             language: catalog_scope.language.clone(),
             market: catalog_scope.market.clone(),
         })
@@ -75,117 +75,257 @@ impl XcloudService {
         session: &DataSessionContext,
         scope: &XcloudCatalogCacheScope,
         cache_repository: &DataCacheRepository,
-        _force_refresh: bool,
+        force_refresh: bool,
+        progress: impl Fn(DataXcloudCatalogPayload) + Send + Sync,
     ) -> Result<XcloudCatalogRefreshOutcome, WebApiError> {
-        let Some(region) = self.resolve_xcloud_region(session) else {
-            return Ok(XcloudCatalogRefreshOutcome {
-                payload: DataXcloudCatalogPayload {
-                    scope_key: Some(DataCacheRepository::scoped_cache_key(scope)),
-                    titles: Vec::new(),
-                    cache_state: DataXcloudCatalogCacheState::Miss,
-                    updated_at: None,
-                    refreshing: false,
-                },
-                missing_product_count: 0,
-            });
-        };
-
         let catalog_scope = CloudCatalogScope {
             market: scope.market.clone(),
             language: scope.language.clone(),
         };
-        let catalog_flow = XboxCloudCatalogFlow::new(region.host, region.bearer_token);
-        let overlay_load = catalog_flow
-            .load_overlay(&catalog_scope)
-            .await
-            .map_err(|error| match error {
-                xbox_cloud_catalog_flow::CloudCatalogFlowError::WebApi(error) => error,
-            })?;
-
-        for failure in &overlay_load.source_failures {
-            log::warn!(
-                "[Data][xcloud] source={} error={}",
-                failure.source,
-                failure.error
-            );
-        }
-        if !overlay_load.recent_source_available {
-            log::warn!("[Data][xcloud] recent titles source unavailable; continuing without MRU");
-        }
-        if !overlay_load.newest_source_available {
-            log::warn!("[Data][xcloud] Game Pass newest source unavailable; continuing without new markers");
-        }
-
-        let cached_base_snapshot = cache_repository
-            .get_xcloud_catalog_base_snapshot(scope)
-            .map_err(|_| WebApiError::parse("目录缓存读取失败，请重试"))?
-            .filter(|snapshot| !snapshot.entries.is_empty())
-            .unwrap_or_default();
-        let missing_product_ids = if cached_base_snapshot.entries.is_empty() {
-            overlay_load.product_ids.clone()
-        } else {
-            overlay_load
-                .product_ids
-                .iter()
-                .filter(|product_id| !cached_base_snapshot.entries.contains_key(*product_id))
-                .cloned()
-                .collect::<Vec<_>>()
-        };
-
-        let hydration_load = catalog_flow
-            .hydrate_products(&catalog_scope, &missing_product_ids)
-            .await;
-        for failure in &hydration_load.source_failures {
-            log::warn!(
-                "[Data][xcloud] source={} error={}",
-                failure.source,
-                failure.error
-            );
-        }
-        if hydration_load.failed_chunk_count > 0 {
-            log::warn!(
-                "[Data][xcloud] Game Pass products hydration failed chunks={}",
-                hydration_load.failed_chunk_count
-            );
-        }
-
-        let mut merged_base_entries = cached_base_snapshot.entries;
-        merged_base_entries.extend(
-            hydration_load
-                .entries
+        let public = scope.region_host == "public";
+        let api = xbox_webapi::GamePassApi::new();
+        let region = self.resolve_xcloud_region(session);
+        let cloud = region.map(|r| xbox_webapi::XcloudApi::new(r.host, r.bearer_token));
+        let previous = cache_repository
+            .load_xcloud_catalog(scope)
+            .map_err(|_| WebApiError::parse("目录缓存读取失败"))?;
+        let mut entries = if public {
+            let raw = api
+                .get_sigl(
+                    "ce573635-7c18-4d0c-9d68-90b932393470",
+                    &scope.market,
+                    &scope.language,
+                )
+                .await?;
+            if !raw.is_array() {
+                return Err(WebApiError::parse("invalid public catalog response"));
+            }
+            xbox_cloud_catalog_flow::extract_newest_product_ids(&raw)
                 .into_iter()
-                .map(|(product_id, entry)| (product_id, Self::to_cached_base_entry(entry))),
-        );
-        let overlay_entries = overlay_load
+                .map(|id| CachedXcloudCatalogOverlayEntry {
+                    fallback_name: id.clone(),
+                    product_id: id,
+                    ..Default::default()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            let raw = cloud
+                .as_ref()
+                .ok_or_else(|| WebApiError::parse("云游戏访问凭据暂缺"))?
+                .get_titles()
+                .await?;
+            xbox_cloud_catalog_flow::build_overlay_load(
+                &raw,
+                &serde_json::json!({"results":[]}),
+                &serde_json::json!([]),
+                false,
+                false,
+            )?
             .entries
             .into_iter()
             .map(Self::to_cached_overlay_entry)
-            .collect();
-
-        cache_repository
-            .save_xcloud_catalog_base(scope, merged_base_entries)
-            .map_err(|_| WebApiError::parse("目录缓存写入失败，请检查存储空间"))?;
-        cache_repository
-            .save_xcloud_catalog_overlay(scope, overlay_entries)
-            .map_err(|_| WebApiError::parse("目录缓存写入失败，请检查存储空间"))?;
-
-        let loaded_snapshot = cache_repository
-            .load_xcloud_catalog(scope)
-            .map_err(|_| WebApiError::parse("目录缓存读取失败，请重试"))?;
-        Ok(XcloudCatalogRefreshOutcome {
-            payload: DataXcloudCatalogPayload {
+            .collect()
+        };
+        let status_key = format!("{}.status", DataCacheRepository::scoped_cache_key(scope));
+        let mut sources = std::collections::HashMap::<String, String>::new();
+        sources.insert("catalog".into(), "fresh".into());
+        sources.insert("products".into(), "loading".into());
+        let access = if public { "browse" } else { "account" }.to_string();
+        let save = |entries: Vec<CachedXcloudCatalogOverlayEntry>,
+                    sources: &std::collections::HashMap<String, String>,
+                    refreshing: bool|
+         -> Result<DataXcloudCatalogPayload, WebApiError> {
+            cache_repository
+                .save_xcloud_catalog_overlay(scope, entries)
+                .map_err(|_| WebApiError::parse("目录缓存写入失败"))?;
+            cache_repository
+                .write_cloud_value(&status_key, sources)
+                .map_err(|_| WebApiError::parse("目录缓存写入失败"))?;
+            let loaded = cache_repository
+                .load_xcloud_catalog(scope)
+                .map_err(|_| WebApiError::parse("目录缓存读取失败"))?;
+            Ok(DataXcloudCatalogPayload {
                 scope_key: Some(DataCacheRepository::scoped_cache_key(scope)),
-                titles: loaded_snapshot.titles,
-                cache_state: loaded_snapshot.cache_state,
-                updated_at: loaded_snapshot.updated_at,
-                refreshing: false,
-            },
-            missing_product_count: loaded_snapshot.missing_product_ids.len(),
+                titles: loaded.titles,
+                cache_state: loaded.cache_state,
+                updated_at: loaded.updated_at,
+                refreshing,
+                sources: sources.clone(),
+                access: access.clone(),
+                error: None,
+            })
+        };
+        progress(save(entries.clone(), &sources, true)?);
+        let cached = cache_repository
+            .get_xcloud_catalog_base_snapshot(scope)
+            .map_err(|_| WebApiError::parse("目录缓存读取失败"))?
+            .unwrap_or_default();
+        let now = DataCacheRepository::now_ms();
+        let ids = entries
+            .iter()
+            .filter(|e| {
+                force_refresh
+                    || cached.entries.get(&e.product_id).is_none_or(|b| {
+                        now.saturating_sub(if b.fetched_at == 0 {
+                            cached.updated_at
+                        } else {
+                            b.fetched_at
+                        }) > 24 * 60 * 60 * 1000
+                    })
+            })
+            .map(|e| e.product_id.clone())
+            .collect::<Vec<_>>();
+        // 先补首批轻量资料，再并行读取栏目和剩余商品。
+        let first = xbox_cloud_catalog_flow::hydrate_catalog_products(
+            &api,
+            &catalog_scope,
+            &ids[..ids.len().min(75)],
+        )
+        .await;
+        cache_repository
+            .save_xcloud_catalog_base(
+                scope,
+                first
+                    .entries
+                    .into_iter()
+                    .map(|(id, b)| (id, Self::to_cached_base_entry(b)))
+                    .collect(),
+            )
+            .map_err(|_| WebApiError::parse("商品缓存写入失败"))?;
+        progress(save(entries.clone(), &sources, true)?);
+        let recent_query = async {
+            match &cloud {
+                Some(cloud) => cloud.get_recent_titles(25).await,
+                None => Ok(serde_json::json!({"results":[]})),
+            }
+        };
+        let (recent, newest, popular, leaving, rest) = tokio::join!(
+            recent_query,
+            api.get_sigl(
+                "44a55037-770f-4bbf-bde5-a9fa27dba1da",
+                &scope.market,
+                &scope.language
+            ),
+            api.get_sigl(
+                "e7590b22-e299-44db-ae22-25c61405454c",
+                &scope.market,
+                &scope.language
+            ),
+            api.get_sigl(
+                "393f05bf-e596-4ef6-9487-6d4fa0eab987",
+                &scope.market,
+                &scope.language
+            ),
+            xbox_cloud_catalog_flow::hydrate_catalog_products(
+                &api,
+                &catalog_scope,
+                &ids[ids.len().min(75)..]
+            )
+        );
+        let recent = recent.and_then(|v| {
+            v.get("results")
+                .and_then(serde_json::Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|v| v.get("details")?.get("productId")?.as_str())
+                        .map(str::to_uppercase)
+                        .collect::<Vec<_>>()
+                })
+                .ok_or_else(|| WebApiError::parse("invalid recent titles"))
+        });
+        for (key, result) in [
+            ("newest", newest),
+            ("popular", popular),
+            ("leaving", leaving),
+        ] {
+            let result = result.and_then(|v| {
+                if v.is_array() {
+                    Ok(xbox_cloud_catalog_flow::extract_newest_product_ids(&v))
+                } else {
+                    Err(WebApiError::parse("invalid discovery collection"))
+                }
+            });
+            sources.insert(
+                key.into(),
+                if result.is_ok() {
+                    "fresh"
+                } else {
+                    "unavailable"
+                }
+                .into(),
+            );
+            for entry in &mut entries {
+                let previous = previous
+                    .titles
+                    .iter()
+                    .find(|t| t.product_id == entry.product_id);
+                let rank = match &result {
+                    Ok(ids) => ids.iter().position(|id| id == &entry.product_id),
+                    Err(_) => previous.and_then(|t| match key {
+                        "newest" => t.new_rank,
+                        "popular" => t.popular_rank,
+                        _ => t.leaving_rank,
+                    }),
+                };
+                match key {
+                    "newest" => {
+                        entry.new_rank = rank;
+                        entry.is_new = rank.is_some();
+                    }
+                    "popular" => entry.popular_rank = rank,
+                    _ => entry.leaving_rank = rank,
+                }
+            }
+        }
+        sources.insert(
+            "recent".into(),
+            if recent.is_ok() {
+                "fresh"
+            } else {
+                "unavailable"
+            }
+            .into(),
+        );
+        for entry in &mut entries {
+            entry.recent_rank = match &recent {
+                Ok(ids) => ids.iter().position(|id| id == &entry.product_id),
+                Err(_) => previous
+                    .titles
+                    .iter()
+                    .find(|t| t.product_id == entry.product_id)
+                    .and_then(|t| t.recent_rank),
+            };
+            entry.is_recently_played = entry.recent_rank.is_some();
+        }
+        sources.insert(
+            "products".into(),
+            if first.failed_chunk_count + rest.failed_chunk_count == 0 {
+                "fresh"
+            } else {
+                "unavailable"
+            }
+            .into(),
+        );
+        cache_repository
+            .save_xcloud_catalog_base(
+                scope,
+                rest.entries
+                    .into_iter()
+                    .map(|(id, b)| (id, Self::to_cached_base_entry(b)))
+                    .collect(),
+            )
+            .map_err(|_| WebApiError::parse("商品缓存写入失败"))?;
+        Ok(XcloudCatalogRefreshOutcome {
+            payload: save(entries, &sources, false)?,
+            missing_product_count: ids.len(),
         })
     }
 
     fn to_cached_base_entry(entry: CloudCatalogBaseEntry) -> CachedXcloudCatalogBaseEntry {
         CachedXcloudCatalogBaseEntry {
+            fetched_at: 0,
+
             product_id: entry.product_id,
             name: entry.name,
             publisher_name: entry.publisher_name,
@@ -198,6 +338,12 @@ impl XcloudService {
 
     fn to_cached_overlay_entry(entry: CloudCatalogOverlayEntry) -> CachedXcloudCatalogOverlayEntry {
         CachedXcloudCatalogOverlayEntry {
+            entitlement_known: entry.entitlement_known,
+            recent_rank: entry.recent_rank,
+            new_rank: entry.new_rank,
+            popular_rank: None,
+            leaving_rank: None,
+
             product_id: entry.product_id,
             title_id: entry.stream_title_id,
             xbox_title_id: entry.xbox_title_id,
@@ -209,7 +355,10 @@ impl XcloudService {
         }
     }
 
-    fn resolve_xcloud_region(&self, session: &DataSessionContext) -> Option<ResolvedXcloudRegion> {
+    pub(crate) fn resolve_xcloud_region(
+        &self,
+        session: &DataSessionContext,
+    ) -> Option<ResolvedXcloudRegion> {
         let token = session
             .streaming_tokens
             .get("xCloudToken")
@@ -247,9 +396,9 @@ impl XcloudService {
 }
 
 #[derive(Debug, Clone)]
-struct ResolvedXcloudRegion {
-    host: String,
-    bearer_token: String,
+pub(crate) struct ResolvedXcloudRegion {
+    pub host: String,
+    pub bearer_token: String,
 }
 
 #[cfg(test)]
@@ -365,6 +514,10 @@ mod tests {
             categories: vec!["Action".to_string()],
         });
         let overlay = XcloudService::to_cached_overlay_entry(CloudCatalogOverlayEntry {
+            entitlement_known: false,
+            recent_rank: None,
+            new_rank: None,
+
             product_id: "9ABC".to_string(),
             stream_title_id: "stream-alpha".to_string(),
             xbox_title_id: Some(123),

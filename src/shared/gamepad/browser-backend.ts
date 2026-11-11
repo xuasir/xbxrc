@@ -1,17 +1,20 @@
-import type { DeviceSample, GamepadBackend, GamepadSnapshot, InputDevice, InputSamplingObservation, RumbleResult } from './backend'
+import type { DeviceSample, GamepadBackend, GamepadSnapshot, InputDevice, InputSamplingObservation, RawPadState, RumbleResult } from './backend'
 import type { GamepadRumbleEffectDto, LogicalPadStateDto } from './contract'
 import type { ButtonKey } from './state'
 import { LatencyWindow } from '../latency-window'
+import { MAX_RAW_AXES, MAX_RAW_BUTTONS } from './raw-input'
 import { axisValue, buttonValue, neutralState } from './state'
 
 interface BrowserActuator {
   effects?: readonly string[]
   type?: string
-  playEffect?: (type: 'dual-rumble', parameters: {
+  playEffect?: (type: 'dual-rumble' | 'trigger-rumble', parameters: {
     duration: number
     startDelay: number
     strongMagnitude: number
     weakMagnitude: number
+    leftTrigger?: number
+    rightTrigger?: number
   }) => Promise<string>
   reset?: () => Promise<string>
 }
@@ -75,21 +78,32 @@ export function browserPadState(pad: BrowserPad): LogicalPadStateDto {
 function supportsRumble(pad: BrowserPad): boolean {
   const actuator = pad.vibrationActuator
   return typeof actuator?.playEffect === 'function'
-    && (actuator.effects?.includes('dual-rumble') === true || actuator.type === 'dual-rumble')
+    && (actuator.effects?.includes('dual-rumble') === true || actuator.type === 'dual-rumble' || actuator.effects?.includes('trigger-rumble') === true)
 }
 
-function padMatches(pad: BrowserPad, state: LogicalPadStateDto): boolean {
-  if (pad.mapping !== 'standard')
-    return true
-  return STANDARD_BUTTONS.every((key, index) => state.buttons[key] === buttonValue(pad.buttons[index]?.value))
-    && state.leftStick.x === axisValue(pad.axes[0]) && state.leftStick.y === axisValue(pad.axes[1])
-    && state.rightStick.x === axisValue(pad.axes[2]) && state.rightStick.y === axisValue(pad.axes[3])
+function browserRawState(pad: BrowserPad): RawPadState {
+  return {
+    buttons: Array.from({ length: Math.min(pad.buttons.length, MAX_RAW_BUTTONS) }, (_, index) => buttonValue(pad.buttons[index]?.value)),
+    axes: Array.from({ length: Math.min(pad.axes.length, MAX_RAW_AXES) }, (_, index) => axisValue(pad.axes[index])),
+  }
+}
+
+function browserLayoutKey(pad: BrowserPad): string {
+  return JSON.stringify(['browser', pad.id.slice(0, 256), pad.mapping.slice(0, 32), Math.min(pad.buttons.length, MAX_RAW_BUTTONS), Math.min(pad.axes.length, MAX_RAW_AXES)])
+}
+
+function padMatches(pad: BrowserPad, raw?: RawPadState): boolean {
+  return !!raw && raw.buttons.length === Math.min(pad.buttons.length, MAX_RAW_BUTTONS)
+    && raw.axes.length === Math.min(pad.axes.length, MAX_RAW_AXES)
+    && raw.buttons.every((value, index) => value === buttonValue(pad.buttons[index]?.value))
+    && raw.axes.every((value, index) => value === axisValue(pad.axes[index]))
 }
 
 interface BrowserDevice {
   id: string
   name: string
   pad: BrowserPad
+  mapping: string
   device: InputDevice
   sample: DeviceSample
 }
@@ -198,21 +212,28 @@ export class BrowserGamepadBackend implements GamepadBackend {
         }
         const standard = pad.mapping === 'standard'
         const rumble = supportsRumble(pad)
+        const triggerRumble = pad.vibrationActuator?.effects?.includes('trigger-rumble') === true
+        const layoutKey = previous?.mapping === pad.mapping
+          && previous.sample.raw?.buttons.length === Math.min(pad.buttons.length, MAX_RAW_BUTTONS)
+          && previous.sample.raw?.axes.length === Math.min(pad.axes.length, MAX_RAW_AXES)
+          ? previous.device.layoutKey
+          : browserLayoutKey(pad)
         if (!previous) {
           const id = `browser:${pad.index}:${++this.deviceGeneration}`
-          this.devices.set(pad.index, { id, name: pad.id, pad, device: { id, name: pad.id, standard, rumble }, sample: { deviceId: id, state: browserPadState(pad) } })
+          this.devices.set(pad.index, { id, name: pad.id, pad, mapping: pad.mapping, device: { id, name: pad.id, standard, rumble, triggerRumble, layoutKey }, sample: { deviceId: id, state: browserPadState(pad), raw: browserRawState(pad) } })
           changed = true
           continue
         }
         previous.pad = pad
-        if (previous.device.standard !== standard || previous.device.rumble !== rumble) {
-          previous.device = { ...previous.device, standard, rumble }
-          previous.sample = { deviceId: previous.id, state: browserPadState(pad) }
+        previous.mapping = pad.mapping
+        if (previous.device.standard !== standard || previous.device.rumble !== rumble || previous.device.triggerRumble !== triggerRumble || previous.device.layoutKey !== layoutKey) {
+          previous.device = { ...previous.device, standard, rumble, triggerRumble, layoutKey }
+          previous.sample = { deviceId: previous.id, state: browserPadState(pad), raw: browserRawState(pad) }
           changed = true
         }
-        else if (!padMatches(pad, previous.sample.state)) {
+        else if (!padMatches(pad, previous.sample.raw)) {
           // 状态保持不可变，消费者可以安全复用上一帧作为边沿基线。
-          previous.sample = { deviceId: previous.id, state: browserPadState(pad) }
+          previous.sample = { deviceId: previous.id, state: browserPadState(pad), raw: browserRawState(pad) }
           changed = true
         }
       }
@@ -259,13 +280,16 @@ export class BrowserGamepadBackend implements GamepadBackend {
     const device = [...this.devices.values()].find(device => device.id === deviceId)
     if (!device || !supportsRumble(device.pad))
       return 'unsupported'
+    if (!device.device.triggerRumble && (effect.leftTrigger > 0 || effect.rightTrigger > 0) && effect.strongMagnitude === 0 && effect.weakMagnitude === 0)
+      return 'unsupported'
     const generation = this.generation
     try {
-      const result = await device.pad.vibrationActuator!.playEffect!('dual-rumble', {
+      const result = await device.pad.vibrationActuator!.playEffect!(device.device.triggerRumble ? 'trigger-rumble' : 'dual-rumble', {
         startDelay: Number.isFinite(effect.startDelayMs) ? Math.max(0, Math.min(1000, effect.startDelayMs)) : 0,
         duration: Number.isFinite(effect.durationMs) ? Math.max(0, Math.min(1000, effect.durationMs)) : 0,
         strongMagnitude: buttonValue(effect.strongMagnitude),
         weakMagnitude: buttonValue(effect.weakMagnitude),
+        ...(device.device.triggerRumble ? { leftTrigger: buttonValue(effect.leftTrigger), rightTrigger: buttonValue(effect.rightTrigger) } : {}),
       })
       return generation === this.generation && this.devices.get(device.pad.index)?.id === deviceId
         && result === 'complete'
@@ -283,7 +307,7 @@ export class BrowserGamepadBackend implements GamepadBackend {
       if (actuator?.reset)
         await actuator.reset()
       else if (actuator?.playEffect)
-        await actuator.playEffect('dual-rumble', { startDelay: 0, duration: 0, strongMagnitude: 0, weakMagnitude: 0 })
+        await actuator.playEffect(actuator.effects?.includes('trigger-rumble') ? 'trigger-rumble' : 'dual-rumble', { startDelay: 0, duration: 0, strongMagnitude: 0, weakMagnitude: 0, leftTrigger: 0, rightTrigger: 0 })
     }
     catch {
       // 设备断开时停止震动可失败，输入生命周期仍继续关闭。

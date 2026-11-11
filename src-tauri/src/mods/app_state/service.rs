@@ -88,7 +88,9 @@ impl AppStateProvider for AppStateService {
             .entries()
             .into_iter()
             .filter_map(|(key, _)| {
-                if key.starts_with(DataCacheRepository::dynamic_cache_prefix()) {
+                if key.starts_with(DataCacheRepository::dynamic_cache_prefix())
+                    || key.starts_with("data.cloudDetail.v1.")
+                {
                     Some(key.to_string())
                 } else {
                     None

@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable } from '@/navigation/core/vue'
+import ExportDiagnosticsButton from '../common/ExportDiagnosticsButton.vue'
 import SettingModalShell from './SettingModalShell.vue'
 import SettingToggleRow from './SettingToggleRow.vue'
 
@@ -17,6 +18,7 @@ interface SettingDisplayOptionsSheetProps {
   configurationScope?: 'default' | 'session'
   valueSource?: 'default' | 'session'
   loading?: boolean
+  diagnosticIssueId?: string
   error?: string
   compatibilityActive?: boolean
   performanceWarning?: boolean
@@ -278,6 +280,7 @@ watch(effectsDisabled, (disabled) => {
     <template #footer>
       <p v-if="props.error" class="setting-display-options-sheet__error" role="alert">
         {{ props.error }}
+        <ExportDiagnosticsButton :id="`${props.scopeId}.export`" :scope-id="props.scopeId" :issue-id="props.diagnosticIssueId" />
       </p>
       <div class="setting-panel__actions">
         <Focusable

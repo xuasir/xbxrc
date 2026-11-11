@@ -12,6 +12,7 @@ import PageUnavailable from '../components/common/PageUnavailable.vue'
 import UiMotionTransition from '../components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { diagnosticIssueId } from '../services/diagnostics'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
@@ -38,6 +39,7 @@ const isLoading = ref(false)
 const hosts = ref<HostSummary[]>([])
 const selectedHostKey = ref('')
 const loadError = ref('')
+const loadIssueId = ref<string>()
 const hasLoaded = ref(false)
 let loadGeneration = 0
 let pageActive = true
@@ -170,8 +172,10 @@ async function loadHosts(): Promise<void> {
   }
   catch (error) {
     devWarn('[Home] load hosts failed:', error)
-    if (generation === loadGeneration && pageActive)
+    if (generation === loadGeneration && pageActive) {
+      loadIssueId.value = diagnosticIssueId(error)
       loadError.value = error instanceof Error && error.message ? error.message : t('homePage.hero.error')
+    }
   }
   finally {
     if (generation === loadGeneration && pageActive) {
@@ -294,7 +298,7 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
         </div>
       </section>
     </template>
-    <PageUnavailable v-else :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" :title="loadError ? t('homePage.errorTitle') : t('homePage.hero.title')" :body="loadError || t('homePage.empty')" :action-label="t('homePage.refresh')" :busy="isLoading" :error="!!loadError" @retry="handleRefresh" />
+    <PageUnavailable v-else :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" :title="loadError ? t('homePage.errorTitle') : t('homePage.hero.title')" :body="loadError || t('homePage.empty')" :action-label="t('homePage.refresh')" :busy="isLoading" :error="!!loadError" :issue-id="loadIssueId" @retry="handleRefresh" />
   </section>
 </template>
 

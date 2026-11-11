@@ -1,0 +1,583 @@
+{
+  "date": "2026-11-11",
+  "layouts": [
+    {
+      "name": "800-mapping",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 414.6875,
+        "height": 167.6953125,
+        "right": 566.796875,
+        "width": 241.796875,
+        "x": 325,
+        "y": 246.9921875
+      },
+      "calloutOverlaps": [],
+      "editor": null,
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 17,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.00976086739044267,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 600,
+        "width": 800
+      }
+    },
+    {
+      "name": "800-mapping-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 361.6875,
+        "height": 167.6953125,
+        "right": 566.796875,
+        "width": 241.796875,
+        "x": 325,
+        "y": 193.9921875
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 549.1953125,
+        "height": 130,
+        "right": 702,
+        "width": 520,
+        "x": 182,
+        "y": 419.1953125
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.009766831919475983,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 600,
+        "width": 800
+      }
+    },
+    {
+      "name": "320-mapping",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 366.5,
+        "height": 210,
+        "right": 296,
+        "width": 272,
+        "x": 24,
+        "y": 156.5
+      },
+      "calloutOverlaps": [],
+      "editor": null,
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 17,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.008089086914394084,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 720,
+        "width": 320
+      }
+    },
+    {
+      "name": "320-mapping-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 415,
+        "height": 210,
+        "right": 296,
+        "width": 272,
+        "x": 24,
+        "y": 205
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 711,
+        "height": 238,
+        "right": 296,
+        "width": 272,
+        "x": 24,
+        "y": 473
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.008089086914394084,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 720,
+        "width": 320
+      }
+    },
+    {
+      "name": "390-english-mapping",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 400,
+        "height": 210,
+        "right": 372.3451290130615,
+        "width": 342,
+        "x": 30.345129013061523,
+        "y": 190
+      },
+      "calloutOverlaps": [],
+      "editor": null,
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 17,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.01105399025215258,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "name": "390-english-mapping-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 167.5,
+        "height": 210,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": -42.5
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 463.5,
+        "height": 238,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 225.5
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.011051731668545691,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "name": "390-english-keyboard",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 518,
+        "height": 210,
+        "right": 372.44161224365234,
+        "width": 342,
+        "x": 30.441612243652344,
+        "y": 308
+      },
+      "calloutOverlaps": [],
+      "editor": null,
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 17,
+        "nodes": 37,
+        "reachable": 37,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.011047843401049468,
+      "route": "#/controller/keyboard",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "name": "390-english-keyboard-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 461,
+        "height": 210,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 251
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 835,
+        "height": 166,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 669
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 26,
+        "reachable": 26,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.01105399025215258,
+      "route": "#/controller/keyboard",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "name": "800-english-keyboard-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 402.6875,
+        "height": 167.6953125,
+        "right": 566.796875,
+        "width": 241.796875,
+        "x": 325,
+        "y": 234.9921875
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 590.1953125,
+        "height": 130,
+        "right": 702,
+        "width": 520,
+        "x": 182,
+        "y": 460.1953125
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 26,
+        "reachable": 26,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.00976086739044267,
+      "route": "#/controller/keyboard",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 600,
+        "width": 800
+      }
+    },
+    {
+      "name": "800-sticks-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 386.890625,
+        "height": 167.6953125,
+        "right": 566.796875,
+        "width": 241.796875,
+        "x": 325,
+        "y": 219.1953125
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 623,
+        "height": 202,
+        "right": 702,
+        "width": 520,
+        "x": 182,
+        "y": 421
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 15,
+        "reachable": 15,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.009424757541028284,
+      "route": "#/controller/sticks",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 600,
+        "width": 800
+      }
+    },
+    {
+      "name": "390-sticks-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 463,
+        "height": 210,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 253
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 759,
+        "height": 238,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 521
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 15,
+        "reachable": 15,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.01105399025215258,
+      "route": "#/controller/sticks",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "name": "390-vibration-editor",
+      "actionsInHeader": false,
+      "art": {
+        "bottom": 378,
+        "height": 210,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 168
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 707,
+        "height": 271,
+        "right": 366,
+        "width": 342,
+        "x": 24,
+        "y": 436
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 4,
+        "reachable": 4,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.005659673897966628,
+      "route": "#/controller/vibration",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "name": "800-vibration-editor",
+      "actionsInHeader": false,
+      "art": {
+        "bottom": 349.890625,
+        "height": 167.6953125,
+        "right": 566.796875,
+        "width": 241.796875,
+        "x": 325,
+        "y": 182.1953125
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 655,
+        "height": 271,
+        "right": 702,
+        "width": 520,
+        "x": 182,
+        "y": 384
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 4,
+        "reachable": 4,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.004967081553063357,
+      "route": "#/controller/vibration",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 600,
+        "width": 800
+      }
+    },
+    {
+      "name": "1280-mapping",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 479.390625,
+        "height": 206.3984375,
+        "right": 840.1649780273438,
+        "width": 297.59368896484375,
+        "x": 542.5712890625,
+        "y": 272.9921875
+      },
+      "calloutOverlaps": [],
+      "editor": null,
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 17,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.0104522705078125,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "name": "1280-mapping-editor",
+      "actionsInHeader": true,
+      "art": {
+        "bottom": 470.890625,
+        "height": 206.3984375,
+        "right": 835.59375,
+        "width": 297.59375,
+        "x": 538,
+        "y": 264.4921875
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 668.8984375,
+        "height": 130,
+        "right": 1002,
+        "width": 640,
+        "x": 362,
+        "y": 538.8984375
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 40,
+        "reachable": 40,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.0104522705078125,
+      "route": "#/controller/layout",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "name": "1280-vibration-editor",
+      "actionsInHeader": false,
+      "art": {
+        "bottom": 405.796875,
+        "height": 206.3984375,
+        "right": 835.59375,
+        "width": 297.59375,
+        "x": 538,
+        "y": 199.3984375
+      },
+      "calloutOverlaps": [],
+      "editor": {
+        "bottom": 716,
+        "height": 271,
+        "right": 1002,
+        "width": 640,
+        "x": 362,
+        "y": 445
+      },
+      "editorOverlapsCallouts": [],
+      "editorOverlapsImage": false,
+      "footer": false,
+      "graph": {
+        "hotspots": 0,
+        "nodes": 4,
+        "reachable": 4,
+        "unreachable": []
+      },
+      "hotspotMaxError": 0.007565359320854356,
+      "route": "#/controller/vibration",
+      "textOverflow": [],
+      "titleSize": "20px",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      }
+    }
+  ],
+  "backFromEditor": {
+    "route": "#/controller/layout",
+    "editorOpen": false,
+    "sourceFocused": true
+  }
+}

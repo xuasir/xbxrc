@@ -9,16 +9,21 @@ import { usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
+import ExportDiagnosticsButton from '../components/common/ExportDiagnosticsButton.vue'
 import GameCard from '../components/common/GameCard.vue'
 import HorizontalListRail from '../components/common/HorizontalListRail.vue'
-import PageUnavailable from '../components/common/PageUnavailable.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import SettingInputControl from '../components/settings/SettingInputControl.vue'
+import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleSelectPopupSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { diagnosticIssueId } from '../services/diagnostics'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { devWarn } from '../shared/dev-log'
 import { CatalogRequestState } from './xcloud-catalog-state'
+import { cloudNode, collectionTitles, entitlement, mergeFavorites, normalizeSearch, queryTitles, restoredWindow } from './xcloud/catalog-model'
+import { useCloudPreferences } from './xcloud/use-cloud-preferences'
+import { useCloudWait } from './xcloud/use-cloud-wait'
 
 type XcloudCatalogPayload = Awaited<ReturnType<typeof rpc.data.getXcloudTitles>>
 type XcloudTitle = XcloudCatalogPayload['titles'][number]
@@ -33,6 +38,18 @@ const pageRef = ref<HTMLElement | null>(null)
 const { t, locale } = useI18n()
 const router = useRouter()
 
+const prefs = useCloudPreferences()
+const wait = useCloudWait()
+const selectedProduct = ref('')
+const access = ref('browse')
+const sources = ref<Record<string, string>>({})
+const category = ref('')
+const sort = ref('name')
+const filterSheet = ref<'category' | 'sort' | ''>('')
+const starting = ref(false)
+let disposeFocus: (() => void) | undefined
+let searchRenderCount = 0
+let anchorProduct = ''
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const appLevel = ref(0)
@@ -40,6 +57,7 @@ const titles = ref<XcloudTitle[]>([])
 const cacheState = ref<XcloudCatalogPayload['cacheState']>('miss')
 const updatedAt = ref<number | undefined>(undefined)
 const loadError = ref('')
+const loadIssueId = ref<string>()
 const hasLoaded = ref(false)
 const searchKeyword = ref('')
 const contentRef = ref<HTMLElement | null>(null)
@@ -58,13 +76,14 @@ const catalogRequests = new CatalogRequestState()
 const pageFocus = usePageFocus(() => pageRef.value, () => 'catalog', () => SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud)
 
 // LT/RT 区域导航的 section 标识符
-const XCLOUD_SECTION_IDS = ['xcloud-recent', 'xcloud-new', 'xcloud-all'] as const
+const XCLOUD_SECTION_IDS = ['xcloud-recent', 'xcloud-favorites', 'xcloud-new', 'xcloud-popular', 'xcloud-leaving', 'xcloud-all'] as const
 
-const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
+const normalizedSearchKeyword = computed(() => normalizeSearch(searchKeyword.value))
 const isSearching = computed(() => normalizedSearchKeyword.value !== '')
+const isFiltered = computed(() => isSearching.value || category.value !== '')
 const hasFullAccess = computed(() => appLevel.value >= 2)
 const uiDensity = computed(() => resolveUiDensity(viewportWidth.value))
-const showInitialLoading = computed(() => isLoading.value && titles.value.length === 0 && !hasLoaded.value)
+const showInitialLoading = computed(() => !hasLoaded.value && (isLoading.value || isRefreshing.value) && titles.value.length === 0)
 const updatedAtLabel = computed(() => {
   if (updatedAt.value === undefined) {
     return ''
@@ -93,55 +112,45 @@ function resolveTitleImage(title: XcloudTitle): string {
   return title.tileImageUrl || title.posterImageUrl || ''
 }
 
-function titleMatchesSearch(title: XcloudTitle, keyword: string): boolean {
-  if (keyword === '') {
-    return true
-  }
-
-  const searchableText = [title.name, title.publisherName, title.description, ...title.categories]
-    .join(' ')
-    .toLowerCase()
-
-  return searchableText.includes(keyword)
+const favoriteTitles = computed(() => mergeFavorites(titles.value, prefs.preferences.value.favorites, prefs.preferences.value.pinned))
+const categories = computed(() => [...new Set(titles.value.flatMap(title => title.categories))].sort())
+const filterOptions = computed(() => filterSheet.value === 'category'
+  ? [{ value: '', label: t('xcloudUx.allCategories') }, ...categories.value.map(value => ({ value, label: value }))]
+  : ['name', 'recent', 'newest'].map(value => ({ value, label: t(`xcloudUx.sort.${value}`) })))
+const selectedTitle = computed(() => titles.value.find(title => title.productId === selectedProduct.value) ?? favoriteTitles.value.find(title => title.productId === selectedProduct.value))
+const searchedTitles = computed(() => queryTitles(titles.value, searchKeyword.value, category.value, sort.value))
+const recentTitles = computed(() => collectionTitles(titles.value, 'recentRank'))
+const newTitles = computed(() => collectionTitles(titles.value, 'newRank'))
+const rails = computed(() => [
+  { id: 'xcloud-recent', label: t('xcloudPage.sections.recent.title'), titles: recentTitles.value },
+  { id: 'xcloud-favorites', label: t('xcloudUx.favorites'), titles: favoriteTitles.value },
+  { id: 'xcloud-new', label: t('xcloudPage.sections.new.title'), titles: newTitles.value },
+  { id: 'xcloud-popular', label: t('xcloudUx.popular'), titles: collectionTitles(titles.value, 'popularRank') },
+  { id: 'xcloud-leaving', label: t('xcloudUx.leaving'), titles: collectionTitles(titles.value, 'leavingRank') },
+].filter(rail => rail.titles.length))
+function badge(title: XcloudTitle) {
+  if (!titles.value.some(item => item.productId === title.productId))
+    return t('xcloudUx.catalogMissing')
+  return entitlement(title) === 'denied' ? t('xcloudUx.accessRequired') : ''
 }
-
-const searchedTitles = computed(() =>
-  titles.value.filter(title => titleMatchesSearch(title, normalizedSearchKeyword.value)),
-)
-
-const recentTitles = computed(() => titles.value.filter(title => title.isRecentlyPlayed))
-const newTitles = computed(() => titles.value.filter(title => title.isNew))
-
+function waitLabel() {
+  if (wait.loading.value)
+    return t('xcloudUx.waitLoading')
+  if (wait.error.value)
+    return t('xcloudUx.waitFailed')
+  return wait.seconds.value == null ? t('xcloudUx.waitUnknown') : wait.seconds.value === 0 ? t('xcloudUx.waitReady') : t('xcloudUx.waitSeconds', { seconds: wait.seconds.value })
+}
 const initialRenderCount = computed(() => gridColumnCount.value * 4)
 const loadMoreBatchSize = computed(() => gridColumnCount.value * 3)
 
-const gridSourceTitles = computed(() => isSearching.value ? searchedTitles.value : titles.value)
+const gridSourceTitles = computed(() => searchedTitles.value)
 const renderedGridTitles = computed(() => gridSourceTitles.value.slice(0, renderedTitleCount.value))
 
-const gridCards = computed<XcloudGridCardViewModel[]>(() =>
-  renderedGridTitles.value.map((title, index) => ({
-    title,
-    imageUrl: resolveTitleImage(title),
-    nodeId: `xcloud.grid.all.${index}.${title.productId}`,
-  })),
-)
-
-const recentCards = computed<XcloudGridCardViewModel[]>(() =>
-  recentTitles.value.map((title, index) => ({
-    title,
-    imageUrl: resolveTitleImage(title),
-    nodeId: `xcloud.rail.recent.${index}.${title.productId}`,
-  })),
-)
-
-const newCards = computed<XcloudGridCardViewModel[]>(() =>
-  newTitles.value.map((title, index) => ({
-    title,
-    imageUrl: resolveTitleImage(title),
-    nodeId: `xcloud.rail.new.${index}.${title.productId}`,
-  })),
-)
-
+const gridCards = computed<XcloudGridCardViewModel[]>(() => renderedGridTitles.value.map(title => ({
+  title,
+  imageUrl: resolveTitleImage(title),
+  nodeId: cloudNode('all', title.productId),
+})))
 const resultCountLabel = computed(() =>
   t('xcloudPage.resultsCount', {
     count: gridSourceTitles.value.length,
@@ -153,8 +162,11 @@ const hasMoreTitles = computed(() => renderedTitleCount.value < gridSourceTitles
 watch(
   [gridSourceTitles, gridColumnCount],
   async () => {
-    renderedTitleCount.value = Math.min(gridSourceTitles.value.length, initialRenderCount.value)
+    const focusId = navigationEngine.getCurrentFocus()?.closest('[data-cloud-product]') ? navigationEngine.getCurrentFocus()?.id : ''
+    renderedTitleCount.value = restoredWindow(renderedTitleCount.value, initialRenderCount.value, gridSourceTitles.value, anchorProduct)
     await nextTick()
+    if (focusId && pageFocus.isActive())
+      navigationEngine.focusElement(document.getElementById(focusId), false, true)
     setupLoadMoreObserver()
   },
   { immediate: true },
@@ -195,12 +207,19 @@ function jumpToSection(id: string): void {
   if (first)
     navigationEngine.focusElement(first, false, true)
   activeSection.value = id
+  void prefs.update({ section: id })
 }
 watch(contentRef, setupContentScroller, { flush: 'post' })
 // 进入搜索时同步保存位置，恢复安排在列表 DOM 更新完成后。
 watch(isSearching, (searching) => {
-  if (searching && contentScroller)
+  if (searching && contentScroller) {
     searchScroll = contentScroller.scrollTop
+    searchRenderCount = renderedTitleCount.value
+    renderedTitleCount.value = initialRenderCount.value
+  }
+  else if (!searching) {
+    renderedTitleCount.value = Math.max(searchRenderCount, initialRenderCount.value)
+  }
 }, { flush: 'sync' })
 watch(isSearching, async (searching) => {
   await nextTick()
@@ -233,7 +252,7 @@ function setupLoadMoreObserver(): void {
     return
   }
 
-  const scrollRoot = document.querySelector('.app-shell__content')
+  const scrollRoot = contentRef.value
   loadMoreObserver = new IntersectionObserver(
     (entries) => {
       if (entries.some(entry => entry.isIntersecting)) {
@@ -249,29 +268,56 @@ function setupLoadMoreObserver(): void {
   loadMoreObserver.observe(sentinelElement)
 }
 
-function startStream(title: XcloudTitle): void {
-  if (title.titleId.trim() === '') {
-    return
-  }
-
-  void router.push({
-    name: 'xcloud-stream',
-    params: {
-      targetId: title.titleId,
-    },
-    query: {
-      name: title.name,
-    },
-  })
+function openDetail(title: XcloudTitle): void {
+  anchorProduct = title.productId
+  pageFocus.save()
+  void router.push({ name: 'cloud-game', params: { productId: title.productId } })
 }
-
+async function startStream(title: XcloudTitle): Promise<void> {
+  if (starting.value)
+    return
+  starting.value = true
+  loadError.value = ''
+  const generation = catalogRequests.capture()
+  try {
+    const auth = await rpc.auth.getState()
+    if (!auth.isAuthenticated) {
+      await router.push({ name: 'login' })
+      return
+    }
+    const current = await rpc.data.resolveCloudTitle({ productId: title.productId })
+    if (!catalogRequests.isCurrent(generation))
+      return
+    if (entitlement(current) !== 'allowed') {
+      loadError.value = t(`xcloudUx.${entitlement(current)}`)
+      return
+    }
+    anchorProduct = title.productId
+    pageFocus.save()
+    await router.push({ name: 'xcloud-stream', params: { targetId: current.titleId }, query: { name: title.name } })
+  }
+  catch (cause) {
+    if (catalogRequests.isCurrent(generation))
+      loadError.value = cause instanceof Error ? cause.message : String(cause)
+  }
+  finally { starting.value = false }
+}
+function setFilter(value: string | number) {
+  if (filterSheet.value === 'category')
+    category.value = String(value)
+  else sort.value = String(value)
+  filterSheet.value = ''
+  void prefs.update({ category: category.value, sort: sort.value })
+}
 function clearSearch(): void {
   searchKeyword.value = ''
 }
 
 function handlePrimaryAction(): void {
-  if (normalizedSearchKeyword.value !== '') {
+  if (isFiltered.value) {
     clearSearch()
+    category.value = ''
+    void prefs.update({ category: '' })
     return
   }
   void loadTitles(true)
@@ -283,11 +329,21 @@ function applyCatalogPayload(payload: XcloudCatalogPayload): void {
   updatedAt.value = payload.updatedAt
   isRefreshing.value = payload.refreshing
   hasLoaded.value = true
-  loadError.value = ''
+  loadError.value = payload.error ?? ''
+  if (!anchorProduct && prefs.preferences.value.section && payload.titles.length && !isSearching.value) {
+    void nextTick(() => {
+      if (pageFocus.isActive() && !anchorProduct)
+        jumpToSection(prefs.preferences.value.section)
+    })
+  }
+  access.value = payload.access ?? 'browse'
+  sources.value = payload.sources ?? {}
 }
 
 function clearCatalog(): void {
   catalogRequests.clear()
+  wait.cancel()
+  selectedProduct.value = ''
   titles.value = []
   cacheState.value = 'miss'
   updatedAt.value = undefined
@@ -303,11 +359,11 @@ watch(locale, () => {
 })
 
 async function loadTitles(forceRefresh = false): Promise<void> {
-  if (isLoading.value || (forceRefresh && isRefreshing.value)) {
+  if (isLoading.value) {
     return
   }
 
-  const shouldBlock = titles.value.length === 0
+  const shouldBlock = !hasLoaded.value && titles.value.length === 0
   if (shouldBlock) {
     isLoading.value = true
   }
@@ -319,9 +375,12 @@ async function loadTitles(forceRefresh = false): Promise<void> {
   try {
     const [catalogPayload] = await Promise.allSettled([forceRefresh ? rpc.data.refreshXcloudTitles() : rpc.data.getXcloudTitles()])
     const authState = await rpc.auth.getState()
+    await prefs.load()
     if (!catalogRequests.isCurrent(generation))
       return
     appLevel.value = authState.appLevel
+    category.value = prefs.preferences.value.category
+    sort.value = prefs.preferences.value.sort || 'name'
     if (catalogPayload.status === 'rejected')
       throw catalogPayload.reason
     if (catalogRequests.acceptResponse(generation, catalogPayload.value))
@@ -331,6 +390,7 @@ async function loadTitles(forceRefresh = false): Promise<void> {
     if (!catalogRequests.isCurrent(generation))
       return
     devWarn('[XCloud] load titles failed:', error)
+    loadIssueId.value = diagnosticIssueId(error)
     loadError.value = error instanceof Error && error.message ? error.message : t('xcloudPage.loadFailed')
     if (titles.value.length === 0) {
       titles.value = []
@@ -357,11 +417,28 @@ onMounted(() => {
   })
   disposeAuthChanged = events.on('auth.stateChanged', (state) => {
     appLevel.value = state.appLevel
-    if (!state.isAuthenticated)
+    if (!state.isAuthenticated) {
       clearCatalog()
-    // 静默续期保留在途目录请求，完成云授权后允许刷新。
-    else if (!state.isAuthenticating && pageActive && state.appLevel >= 2)
       void loadTitles()
+    }
+    // 静默续期保留在途目录请求，完成云授权后允许刷新。
+    else if (!state.isAuthenticating && pageActive) {
+      void loadTitles()
+    }
+  })
+  disposeFocus = navigationEngine.onFocusChange((element) => {
+    if (!pageFocus.isActive())
+      return
+    const id = element?.closest<HTMLElement>('[data-cloud-product]')?.dataset.cloudProduct
+    if (id) {
+      selectedProduct.value = id
+      anchorProduct = id
+      const title = selectedTitle.value
+      wait.focus(id, access.value === 'account' && entitlement(title) === 'allowed')
+    }
+    else {
+      wait.cancel()
+    }
   })
   void loadTitles()
   void nextTick(setupLoadMoreObserver)
@@ -397,6 +474,7 @@ onBeforeUnmount(() => {
     disposeCatalogUpdated = undefined
   }
   disposeAuthChanged?.()
+  disposeFocus?.()
   unregisterTabSwitch()
 })
 
@@ -454,18 +532,13 @@ function unregisterTabSwitch(): void {
       <BrandedLoading :label="t('xcloudPage.loading')" />
     </div>
 
-    <PageUnavailable
-      v-else-if="!hasFullAccess"
-      :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud"
-      :title="t('xcloudPage.limitedTitle')"
-      :body="loadError || t('xcloudPage.limitedBody')"
-      :action-label="t('xcloudPage.actions.refresh')"
-      :busy="isLoading || isRefreshing"
-      :error="!!loadError"
-      @retry="handlePrimaryAction"
-    />
-
     <template v-else>
+      <div v-if="loadError && titles.length" class="ui-page-panel">
+        <p role="alert">
+          {{ loadError }}
+        </p>
+        <ExportDiagnosticsButton id="xcloud.cachedError.export" scope-id="app.shell" :issue-id="loadIssueId" />
+      </div>
       <header class="xcloud-page__header">
         <div class="xcloud-page__toolbar">
           <div class="xcloud-page__title-block">
@@ -486,6 +559,7 @@ function unregisterTabSwitch(): void {
               <SettingInputControl
                 id="xcloud.search"
                 v-model="searchKeyword"
+                external-focus
                 scope-id="app.shell"
                 type="search"
                 class="xcloud-page__search-input"
@@ -498,12 +572,26 @@ function unregisterTabSwitch(): void {
             </Focusable>
           </div>
         </div>
-        <nav v-if="!isSearching && titles.length" class="xcloud-page__jumps" :aria-label="t('shell.hints.regions')">
-          <Focusable v-if="recentCards.length" id="xcloud.jump.recent" as="button" type="button" :aria-pressed="activeSection === 'xcloud-recent'" @click="jumpToSection('xcloud-recent')">
-            {{ t('xcloudPage.sections.recent.title') }}
+        <p class="xcloud-page__status" role="status">
+          {{ access === 'account' ? t('xcloudUx.accountCatalog') : t('xcloudUx.browseCatalog') }} · {{ isRefreshing ? t('xcloudPage.refreshingHint') : updatedAtLabel ? t('xcloudPage.cachedHint', { time: updatedAtLabel }) : t('xcloudUx.waitingCatalog') }}
+        </p>
+        <p v-if="Object.values(sources).includes('unavailable')" class="xcloud-page__status" role="status">
+          {{ t('xcloudUx.partialSources') }}
+        </p>
+        <div class="xcloud-page__jumps">
+          <Focusable id="xcloud.filter.category" as="button" @click="filterSheet = 'category'">
+            {{ category || t('xcloudUx.allCategories') }}
           </Focusable>
-          <Focusable v-if="newCards.length" id="xcloud.jump.new" as="button" type="button" :aria-pressed="activeSection === 'xcloud-new'" @click="jumpToSection('xcloud-new')">
-            {{ t('xcloudPage.sections.new.title') }}
+          <Focusable id="xcloud.filter.sort" as="button" @click="filterSheet = 'sort'">
+            {{ t(`xcloudUx.sort.${sort}`) }}
+          </Focusable>
+          <Focusable v-if="isSearching || category" id="xcloud.clear" as="button" @click="searchKeyword = ''; category = ''; prefs.update({ category: '' })">
+            {{ t('xcloudUx.clearFilters') }}
+          </Focusable>
+        </div>
+        <nav v-if="!isSearching && (titles.length || rails.length)" class="xcloud-page__jumps" :aria-label="t('shell.hints.regions')">
+          <Focusable v-for="rail in rails" :id="`xcloud.jump.${rail.id}`" :key="rail.id" as="button" type="button" :aria-pressed="activeSection === rail.id" @click="jumpToSection(rail.id)">
+            {{ rail.label }}
           </Focusable>
           <Focusable id="xcloud.jump.all" as="button" type="button" :aria-pressed="activeSection === 'xcloud-all'" @click="jumpToSection('xcloud-all')">
             {{ t('xcloudPage.sections.all.title') }}
@@ -512,7 +600,7 @@ function unregisterTabSwitch(): void {
       </header>
 
       <section
-        v-if="gridSourceTitles.length === 0"
+        v-if="gridSourceTitles.length === 0 && (isSearching || category || !favoriteTitles.length)"
         class="xcloud-page__state ui-page-panel ui-page-panel--spacious"
       >
         <p class="ui-page-title">
@@ -530,6 +618,7 @@ function unregisterTabSwitch(): void {
           ) }}
         </p>
 
+        <ExportDiagnosticsButton v-if="loadError" id="xcloud.error.export" scope-id="app.shell" :issue-id="loadIssueId" />
         <Focusable
           :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud"
           as="button"
@@ -552,48 +641,9 @@ function unregisterTabSwitch(): void {
       </section>
 
       <div v-else ref="contentRef" class="xcloud-page__content" data-nav-scroll-container>
-        <!-- 横向轨道 (仅非搜索状态显示) -->
-        <template v-if="!isSearching">
-          <HorizontalListRail
-            v-if="recentCards.length > 0"
-            class="xcloud-page__rail"
-            data-nav-section="xcloud-recent"
-            :title="t('xcloudPage.sections.recent.title')"
-            :hint="t('xcloudPage.sections.recent.hint', { count: recentCards.length })"
-            :aria-label="t('xcloudPage.sections.recent.title')"
-          >
-            <GameCard
-              v-for="card in recentCards"
-              :id="card.nodeId"
-              :key="card.nodeId"
-              :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-              :title="card.title.name"
-              :image-url="card.imageUrl"
-              :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
-              :disabled="card.title.titleId.trim() === ''"
-              @select="startStream(card.title)"
-            />
-          </HorizontalListRail>
-
-          <HorizontalListRail
-            v-if="newCards.length > 0"
-            class="xcloud-page__rail"
-            data-nav-section="xcloud-new"
-            :title="t('xcloudPage.sections.new.title')"
-            :hint="t('xcloudPage.sections.new.hint', { count: newCards.length })"
-            :aria-label="t('xcloudPage.sections.new.title')"
-          >
-            <GameCard
-              v-for="card in newCards"
-              :id="card.nodeId"
-              :key="card.nodeId"
-              :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-              :title="card.title.name"
-              :image-url="card.imageUrl"
-              :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
-              :disabled="card.title.titleId.trim() === ''"
-              @select="startStream(card.title)"
-            />
+        <template v-if="!isSearching && !category">
+          <HorizontalListRail v-for="rail in rails" :key="rail.id" class="xcloud-page__rail" :data-nav-section="rail.id" :title="rail.label" :hint="t('xcloudPage.resultsCount', { count: rail.titles.length })" :aria-label="rail.label">
+            <GameCard v-for="title in rail.titles" :id="cloudNode(rail.id, title.productId)" :key="title.productId" scope-id="app.shell" :data-cloud-product="title.productId" :title="title.name" :image-url="title.tileImageUrl" :image-sources="[title.posterImageUrl]" :actions="true" :favorite="prefs.preferences.value.favorites.some(item => item.productId === title.productId)" :play-busy="starting && selectedProduct === title.productId" :play-disabled="entitlement(title) === 'denied'" :play-label="t('xcloudPage.actions.playSelected', { name: title.name })" :favorite-label="t(prefs.preferences.value.favorites.some(item => item.productId === title.productId) ? 'xcloudUx.unfavorite' : 'xcloudUx.favorite')" :meta="wait.product.value === title.productId ? waitLabel() : ''" :badge="badge(title)" :aria-label="t('xcloudUx.detailsFor', { name: title.name })" @play="startStream(title)" @favorite="prefs.favorite(title)" @select="openDetail(title)" />
           </HorizontalListRail>
         </template>
 
@@ -619,9 +669,11 @@ function unregisterTabSwitch(): void {
               :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
               :title="card.title.name"
               :image-url="card.imageUrl"
-              :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
-              :disabled="card.title.titleId.trim() === ''"
-              @select="startStream(card.title)"
+              :aria-label="t('xcloudUx.detailsFor', { name: card.title.name })"
+              :data-cloud-product="card.title.productId"
+              :image-sources="[card.title.posterImageUrl]"
+              :actions="true" :favorite="prefs.preferences.value.favorites.some(item => item.productId === card.title.productId)" :play-busy="starting && selectedProduct === card.title.productId" :play-disabled="entitlement(card.title) === 'denied'" :play-label="t('xcloudPage.actions.playSelected', { name: card.title.name })" :favorite-label="t(prefs.preferences.value.favorites.some(item => item.productId === card.title.productId) ? 'xcloudUx.unfavorite' : 'xcloudUx.favorite')" :meta="wait.product.value === card.title.productId ? waitLabel() : ''" :badge="badge(card.title)" @play="startStream(card.title)" @favorite="prefs.favorite(card.title)"
+              @select="openDetail(card.title)"
             />
 
             <div
@@ -633,11 +685,22 @@ function unregisterTabSwitch(): void {
           </div>
         </section>
       </div>
+      <p v-if="prefs.error.value" role="alert">
+        {{ prefs.error.value }}
+      </p>
     </template>
+    <SettingSingleSelectPopupSheet :open="!!filterSheet" scope-id="xcloud.filter" :eyebrow="t('xcloudPage.toolbar.title')" :title="t(filterSheet === 'category' ? 'xcloudUx.category' : 'xcloudUx.sortLabel')" :options="filterOptions" :current-value="filterSheet === 'category' ? category : sort" @close="filterSheet = ''" @select="setFilter" />
   </section>
 </template>
 
 <style scoped>
+.xcloud-page__status { font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); margin: 0; }
+.xcloud-page__selection { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid var(--color-border-subtle); }
+.xcloud-page__selection strong { font-size: 14px; }
+.xcloud-page__selection p { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+.xcloud-page__selection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media(max-width:700px) { .xcloud-page__selection { flex-direction: column; align-items: stretch; } }
+
 .xcloud-page {
   display: flex;
   flex-direction: column;
@@ -753,6 +816,8 @@ function unregisterTabSwitch(): void {
 }
 
 .xcloud-page__search-shell :deep(.xcloud-page__search-input:focus-visible) { outline: none; }
+/* 搜索图标与输入框共用外层焦点环，内层保留导航和编辑合同。 */
+.xcloud-page__search-shell :deep(.setting-input-control__field[data-focused='true']) { box-shadow: none; }
 
 .xcloud-page__content {
   display: flex;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { navigationEngine } from '@/navigation/core'
 import { usePageFocus } from '@/navigation/core/usePageFocus'
 import UiMotionTransition from '../components/common/UiMotionTransition.vue'
@@ -12,6 +13,7 @@ import SettingSidebar from './settings/SettingSidebar.vue'
 
 const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
+const route = useRoute()
 type ControllerTab = 'connection' | 'settings'
 const activeTab = ref<ControllerTab>('connection')
 const panelDirection = ref<'forward' | 'back'>('forward')
@@ -52,6 +54,8 @@ onMounted(() => {
 })
 onActivated(() => {
   active = true
+  if (route.query.tab === 'settings' || route.query.tab === 'connection')
+    changeTab(route.query.tab)
 })
 onDeactivated(() => {
   active = false
@@ -71,7 +75,7 @@ usePageFocus(() => pageRef.value, () => activeTab.value, () => `controller.tabs.
       </header>
       <div ref="contentRef" class="controller-page__content ui-motion-stack" data-nav-scroll-container>
         <UiMotionTransition kind="panel" :direction="panelDirection">
-          <!-- 设置编辑器包含多个弹层根节点，单根容器承接子页进出动画。 -->
+          <!-- 单根容器承接分类内容的进出动画。 -->
           <div :key="activeTab">
             <ControllerConnectionSection v-if="activeTab === 'connection'" />
             <SettingInputToolsSection v-else scope-id="controller.content" nav-node-base-id="controller.settings" />

@@ -19,7 +19,7 @@ export interface RuntimeTraceRecordEventParams {
 
 export interface RuntimeTraceAckResult {
   accepted: boolean
-  disposition: 'enqueued' | 'filtered' | 'queueFull' | 'rowOversized' | 'writerUnavailable'
+  disposition: 'enqueued' | 'buffered' | 'filtered' | 'queueFull' | 'rowOversized' | 'writerUnavailable'
 }
 
 export interface RuntimeTraceEventDescriptor {
@@ -44,6 +44,60 @@ export interface RuntimeTraceFlushResult {
   backend?: Record<string, unknown>
 }
 
-export interface RuntimeTraceStatus { traceRunId: string, backend: Record<string, unknown> }
+export interface DiagnosticCapture {
+  id: string
+  traceRunId: string
+  startedAtMs: number
+  expiresAtMs: number
+  endedAtMs: number | null
+  state: 'active' | 'completed' | 'interrupted'
+}
+export interface DiagnosticIssue {
+  id: string
+  traceRunId: string
+  source: string
+  operation: string
+  code: string
+  firstAtMs: number
+  lastAtMs: number
+  fromMs: number
+  toMs: number
+  count: number
+}
+export interface DiagnosticSaveParams { issueId?: string, captureId?: string }
+export interface DiagnosticSaveResult { saved: boolean, canceled: boolean }
+export interface DiagnosticRecord {
+  id: string
+  kind: 'issue' | 'capture'
+  traceRunId: string
+  startedAtMs: number
+  endedAtMs: number
+  state: 'active' | 'completed' | 'interrupted'
+  source: string
+  count: number
+  operation?: string
+  code?: string
+  available: boolean
+  bytes: number
+}
+export interface RuntimeTraceStatus {
+  traceRunId: string
+  backend: Record<string, unknown>
+  diagnostics: {
+    effectiveMode: 'development' | 'production'
+    lightweight: boolean
+    recordingAvailable: boolean
+    capture: DiagnosticCapture | null
+    latestIssue: DiagnosticIssue | null
+    records: DiagnosticRecord[]
+    recordRetention: { maxRecords: number, maxBytes: number }
+    bufferedRows: number
+    bufferedBytes: number
+    bufferedTotal: number
+    contextDropped: number
+    replayDropped: number
+    healthPersistenceMs: number
+  }
+}
 
 export interface RuntimeTraceExport { suggestedName: string, dataBase64: string, manifest: Record<string, unknown> }

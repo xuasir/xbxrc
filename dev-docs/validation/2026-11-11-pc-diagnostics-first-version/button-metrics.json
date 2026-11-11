@@ -1,0 +1,32 @@
+[
+  {
+    "fontSize": "13px",
+    "fontWeight": "500",
+    "height": 30,
+    "text": "常规"
+  },
+  {
+    "fontSize": "13px",
+    "fontWeight": "500",
+    "height": 30,
+    "text": "轻量"
+  },
+  {
+    "fontSize": "13px",
+    "fontWeight": "500",
+    "height": 34,
+    "text": "开始采集"
+  },
+  {
+    "fontSize": "13px",
+    "fontWeight": "500",
+    "height": 34,
+    "text": "导出日志"
+  },
+  {
+    "fontSize": "13px",
+    "fontWeight": "500",
+    "height": 34,
+    "text": "导出日志"
+  }
+]

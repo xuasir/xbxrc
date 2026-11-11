@@ -10,6 +10,7 @@ export interface RpcError {
   code: string
   message: string
   details?: unknown
+  diagnosticIssueId?: string
 }
 
 export interface RpcEnvelope {

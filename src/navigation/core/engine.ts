@@ -464,6 +464,9 @@ export class NavigationEngine {
   private move(direction: Direction, isRapid: boolean): boolean {
     if (!this.currentFocus)
       return false
+    // 滑杆等控件消费横向调节；其余方向继续采用几何寻路。
+    if (!this.currentFocus.dispatchEvent(new CustomEvent('nav-direction', { detail: { direction }, bubbles: true, cancelable: true })))
+      return true
     const candidates = this.getFocusableElements(this.getTopmostActiveScope() ?? document)
       .filter(element => element === this.currentFocus || !element.contains(this.currentFocus))
     const currentZoneId = this.getZoneId(this.currentFocus)

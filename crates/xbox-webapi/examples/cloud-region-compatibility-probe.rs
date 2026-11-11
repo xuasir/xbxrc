@@ -68,11 +68,23 @@ async fn main() {
             json!({"stage":"production-titles","success":false,"error":error.safe_summary()})
         ),
     }
-    for region in regions.iter().filter(|region| matches!(region["name"].as_str(), Some("JAPANEAST" | "KOREACENTRAL"))) {
-        let cloud = XcloudApi::new(region["baseUri"].as_str().unwrap().to_owned(), value["gsToken"].as_str().unwrap().to_owned());
+    for region in regions
+        .iter()
+        .filter(|region| matches!(region["name"].as_str(), Some("JAPANEAST" | "KOREACENTRAL")))
+    {
+        let cloud = XcloudApi::new(
+            region["baseUri"].as_str().unwrap().to_owned(),
+            value["gsToken"].as_str().unwrap().to_owned(),
+        );
         match cloud.get_titles().await {
-            Ok(value) => println!("{}",json!({"stage":"alternate-region-titles","region":region["name"],"success":true,"results":value["results"].as_array().map_or(0,Vec::len)})),
-            Err(error) => println!("{}",json!({"stage":"alternate-region-titles","region":region["name"],"success":false,"error":error.safe_summary()})),
+            Ok(value) => println!(
+                "{}",
+                json!({"stage":"alternate-region-titles","region":region["name"],"success":true,"results":value["results"].as_array().map_or(0,Vec::len)})
+            ),
+            Err(error) => println!(
+                "{}",
+                json!({"stage":"alternate-region-titles","region":region["name"],"success":false,"error":error.safe_summary()})
+            ),
         }
     }
 }

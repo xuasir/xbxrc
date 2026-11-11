@@ -78,6 +78,29 @@ pub enum DataCommand {
         console_id: String,
         text: String,
     },
+    #[serde(rename_all = "camelCase")]
+    GetCloudDetail {
+        product_id: String,
+    },
+    GetCloudPreferences,
+    #[serde(rename_all = "camelCase")]
+    SetCloudPreferences {
+        scope_key: String,
+        preferences: super::types::DataCloudPreferences,
+    },
+    #[serde(rename_all = "camelCase")]
+    ResolveCloudTitle {
+        product_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    GetCloudWait {
+        product_id: String,
+        request_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    CancelCloudWait {
+        request_id: String,
+    },
     GetXcloudTitles,
     RefreshXcloudTitles,
     PrimeXcloudTitles,
@@ -101,6 +124,30 @@ pub async fn handle_rpc(
     })?;
 
     match command {
+        DataCommand::GetCloudDetail { product_id } => Ok(serde_json::to_value(
+            data.get_cloud_detail(&product_id).await?,
+        )?),
+        DataCommand::GetCloudPreferences => {
+            Ok(serde_json::to_value(data.get_cloud_preferences().await?)?)
+        }
+        DataCommand::SetCloudPreferences {
+            scope_key,
+            preferences,
+        } => Ok(serde_json::to_value(
+            data.set_cloud_preferences(&scope_key, preferences).await?,
+        )?),
+        DataCommand::ResolveCloudTitle { product_id } => Ok(serde_json::to_value(
+            data.resolve_cloud_title(&product_id).await?,
+        )?),
+        DataCommand::GetCloudWait {
+            product_id,
+            request_id,
+        } => Ok(serde_json::to_value(
+            data.get_cloud_wait(&product_id, &request_id).await?,
+        )?),
+        DataCommand::CancelCloudWait { request_id } => Ok(serde_json::to_value(
+            data.cancel_cloud_wait_query(&request_id).await?,
+        )?),
         DataCommand::GetLibraryGame {
             target_xuid,
             xbox_title_id,

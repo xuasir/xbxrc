@@ -5,7 +5,7 @@ import { Focusable } from '@/navigation/core/vue'
 import SettingKeyboardSheet from './SettingKeyboardSheet.vue'
 
 defineOptions({ inheritAttrs: false })
-const props = withDefaults(defineProps<{ id: string, scopeId: string, label: string, modelValue: string, type?: 'text' | 'password' | 'number' | 'search', disabled?: boolean, busy?: boolean, active?: boolean, selectOnFocus?: boolean }>(), { active: true })
+const props = withDefaults(defineProps<{ id: string, scopeId: string, label: string, modelValue: string, type?: 'text' | 'password' | 'number' | 'search', disabled?: boolean, busy?: boolean, active?: boolean, selectOnFocus?: boolean, externalFocus?: boolean }>(), { active: true })
 const emit = defineEmits<{ 'update:modelValue': [value: string], 'submit': [] }>()
 const attrs = useAttrs()
 const source = shallowRef(inputController.getSnapshot().preferences.controlSource)
@@ -66,7 +66,7 @@ function input(event: Event) {
 
 <template>
   <div class="setting-input-control">
-    <div class="setting-input-control__field-shell ui-focus-outline">
+    <div class="setting-input-control__field-shell" :class="{ 'ui-focus-outline': !props.externalFocus }">
       <Focusable v-bind="attrs" :id="props.id" as="input" :scope-id="props.scopeId" class="setting-input-control__field" :type="props.type ?? 'text'" :disabled="props.disabled" :busy="props.busy" :readonly="readOnly" :value="props.modelValue" :aria-label="props.label" @focus="focus" @pointerdown="directEditing = !unavailable" @blur="directEditing = false" @nav-action="openKeyboard" @nav-back="finishDirectEditing" @keydown.esc="finishDirectEditing" @keydown.enter.prevent="submit" @input="input" />
     </div>
     <SettingKeyboardSheet :open="keyboardOpen" :scope-id="`${props.id}.keyboard`" :title="props.label" :value="props.modelValue" :mode="props.type === 'number' ? 'number' : 'text'" :sensitive="props.type === 'password'" @close="keyboardOpen = false" @submit="apply" />

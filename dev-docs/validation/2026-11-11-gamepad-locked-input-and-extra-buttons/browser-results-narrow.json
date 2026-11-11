@@ -1,0 +1,369 @@
+[
+  {
+    "name": "17 physical callouts include Xbox with original and mapped labels",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "header uses 20px title and contains draft actions",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "mapping uses a routed page",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "callout labels are separated",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "image hotspot opens mapping inside the diagram",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox maps to A and A swaps to Xbox",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox records in locked capture",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox recording restores its diagram focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox swap survives save and editor reload",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "rear button accepts Xbox target in page",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "rear Xbox target survives save and editor reload",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "A maps to B and changed label is highlighted",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "B records without exiting",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "plain Escape preserves locked capture",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "locked capture uses a full page with no return action",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 0 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 1 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 2 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 3 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 4 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 5 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 6 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 7 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 8 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 9 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 10 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 11 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 12 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 13 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 14 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 15 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 16 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "ordinary button 20 preserves lock",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "short combo preserves capture",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "capture returns to source focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "global menu combo suppressed",
+    "pass": true,
+    "detail": {
+      "menuRequests": 0
+    }
+  },
+  {
+    "name": "rear button records and remains locked",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "rear mapping row is present",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "extra binding survives configuration save",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "saved rear binding is restored in editor",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "live observation persists beyond 20 seconds",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "B and rear button are displayed",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "live input publishes neutral UI/game states",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "live observation restores source focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "disconnect releases capture",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "nonstandard buttons remain observable",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard exit releases nonstandard observation",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "final diagram remains editable",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "dirty page requests confirmation",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "canceling discard keeps mapping draft",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "stick settings show two stick annotations on a page",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "stick deadzone is edited within the controller",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "stick precision control adjusts by one percent",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "stick diagram updates deadzone preview",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard settings show binding names on the controller",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard recording stays locked after assignment",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard binding and source focus are restored",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard diagram has exactly one Xbox entry",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox keyboard assignment stays locked",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox keyboard binding and diagram focus restore",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard directions share the stick editor",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard stick recording restores the stick annotation",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard stick direction survives save",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "Xbox keyboard binding survives save",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "keyboard binding survives save",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "vibration settings use grip annotations",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "grip opens vibration settings inside the image",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "unsupported vibration retains a disabled test action",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test page shows B input on the controller",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "test page restores its menu entry focus",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "direct test page shows a device waiting state",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "activating a connected device starts test capture",
+    "pass": true,
+    "detail": {}
+  },
+  {
+    "name": "repeated test entry releases ownership",
+    "pass": true,
+    "detail": {}
+  }
+]

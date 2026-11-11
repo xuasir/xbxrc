@@ -124,6 +124,9 @@ function handleEscapeKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || event.defaultPrevented) {
     return
   }
+  if (gamepadSnapshot.value.exclusiveCapture) {
+    return // 独占录入和测试由当前锁定子页处理出口。
+  }
   if (isProfileMenuOpen.value || authRecovery.open.value) {
     return // 账户弹窗的焦点与返回由弹窗自身处理。
   }
@@ -335,7 +338,8 @@ onUnmounted(() => {
         :error="!shell.overlay.value && shell.page.value.error"
         :overlay="!!shell.overlay.value"
         :back="canGoBack"
-        :busy="shell.overlay.value?.busy"
+        :busy="shell.overlay.value?.busy || shell.page.value.busy"
+        :exit-hint="shell.overlay.value?.exitHint || shell.page.value.exitHint"
         :available="gamepadSnapshot.owner === 'ui'"
         :exclusive="gamepadSnapshot.exclusiveCapture"
         @resize="actionHintsHeight = $event"
@@ -359,6 +363,7 @@ onUnmounted(() => {
       scope-id="auth.recovery"
       :title="t('streamPage.failure.login')"
       :message="authRecovery.message.value"
+      :diagnostic-issue-id="authRecovery.issueId.value"
       :confirm-label="t('streamPage.failure.login')"
       :busy="authRecovery.busy.value"
       @close="authRecovery.cancel"

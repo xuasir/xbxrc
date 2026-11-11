@@ -17,6 +17,8 @@ pub(crate) const XCLOUD_CATALOG_OVERLAY_RENDERABLE_TTL_MS: u64 = 24 * 60 * 60 * 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CachedXcloudCatalogBaseEntry {
+    #[serde(default)]
+    pub fetched_at: u64,
     pub product_id: String,
     pub name: String,
     pub publisher_name: String,
@@ -42,6 +44,16 @@ pub(crate) struct CachedXcloudCatalogOverlayEntry {
     pub fallback_name: String,
     pub supported_input_types: Vec<String>,
     pub has_entitlement: bool,
+    #[serde(default)]
+    pub entitlement_known: bool,
+    #[serde(default)]
+    pub recent_rank: Option<usize>,
+    #[serde(default)]
+    pub new_rank: Option<usize>,
+    #[serde(default)]
+    pub popular_rank: Option<usize>,
+    #[serde(default)]
+    pub leaving_rank: Option<usize>,
     pub is_recently_played: bool,
     pub is_new: bool,
 }
@@ -187,14 +199,57 @@ impl DataCacheRepository {
         Ok(snapshot)
     }
 
+    pub(crate) fn read_cloud_value<T: serde::de::DeserializeOwned>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>, String> {
+        let store = self.settings_store.open_read()?;
+        Ok(store
+            .store()
+            .get(key)
+            .and_then(|v| serde_json::from_value(v).ok()))
+    }
+
+    pub(crate) fn write_cloud_value<T: Serialize>(
+        &self,
+        key: &str,
+        value: &T,
+    ) -> Result<(), String> {
+        let store = self.settings_store.open_write()?;
+        store.store().set(
+            key,
+            serde_json::to_value(value).map_err(|_| "资料保存失败")?,
+        );
+        store.save()
+    }
+
     pub(crate) fn save_xcloud_catalog_base(
         &self,
         scope: &XcloudCatalogCacheScope,
         entries: HashMap<String, CachedXcloudCatalogBaseEntry>,
     ) -> Result<(), String> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let now = Self::now_ms();
+        let mut merged = self
+            .get_xcloud_catalog_base_snapshot(scope)?
+            .unwrap_or_default();
+        for entry in merged.entries.values_mut() {
+            if entry.fetched_at == 0 {
+                entry.fetched_at = merged.updated_at;
+            }
+        }
+        for (id, mut entry) in entries {
+            entry.fetched_at = now;
+            merged.entries.insert(id, entry);
+        }
+        merged.entries.retain(|_, entry| {
+            now.saturating_sub(entry.fetched_at) <= XCLOUD_CATALOG_BASE_RENDERABLE_TTL_MS
+        });
         let snapshot = CachedXcloudCatalogBaseSnapshot {
-            updated_at: Self::now_ms(),
-            entries,
+            updated_at: now,
+            entries: merged.entries,
         };
 
         let store = self.settings_store.open_write()?;
@@ -213,10 +268,6 @@ impl DataCacheRepository {
         scope: &XcloudCatalogCacheScope,
         entries: Vec<CachedXcloudCatalogOverlayEntry>,
     ) -> Result<(), String> {
-        if entries.is_empty() {
-            return Ok(());
-        }
-
         let snapshot = CachedXcloudCatalogOverlaySnapshot {
             updated_at: Self::now_ms(),
             entries,
@@ -260,7 +311,7 @@ impl DataCacheRepository {
             };
         };
 
-        if !Self::is_overlay_renderable(overlay_snapshot) || overlay_snapshot.entries.is_empty() {
+        if !Self::is_overlay_renderable(overlay_snapshot) {
             return LoadedXcloudCatalogSnapshot {
                 titles: Vec::new(),
                 updated_at: None,
@@ -278,7 +329,13 @@ impl DataCacheRepository {
         let mut missing_product_ids = Vec::new();
 
         for overlay in &overlay_snapshot.entries {
-            let base_entry = base_entries.and_then(|entries| entries.get(&overlay.product_id));
+            let base_entry = base_entries
+                .and_then(|entries| entries.get(&overlay.product_id))
+                .filter(|entry| {
+                    entry.fetched_at == 0
+                        || Self::now_ms().saturating_sub(entry.fetched_at)
+                            <= XCLOUD_CATALOG_BASE_RENDERABLE_TTL_MS
+                });
             if base_entry.is_none() {
                 missing_product_ids.push(overlay.product_id.clone());
             }
@@ -297,6 +354,12 @@ impl DataCacheRepository {
                 .unwrap_or_else(|| overlay.product_id.clone());
 
             titles.push(DataXcloudTitleSummary {
+                aliases: vec![overlay.fallback_name.clone()],
+                entitlement_known: overlay.entitlement_known,
+                recent_rank: overlay.recent_rank,
+                new_rank: overlay.new_rank,
+                popular_rank: overlay.popular_rank,
+                leaving_rank: overlay.leaving_rank,
                 id: overlay.product_id.clone(),
                 name,
                 product_id: overlay.product_id.clone(),
@@ -512,9 +575,7 @@ impl DataCacheRepository {
 
     fn is_overlay_snapshot_usable(snapshot: Option<&CachedXcloudCatalogOverlaySnapshot>) -> bool {
         snapshot
-            .filter(|snapshot| {
-                Self::is_overlay_renderable(snapshot) && !snapshot.entries.is_empty()
-            })
+            .filter(|snapshot| Self::is_overlay_renderable(snapshot))
             .is_some()
     }
 
@@ -597,12 +658,82 @@ mod tests {
     use super::*;
 
     #[test]
+    fn successful_empty_catalog_is_a_fresh_authoritative_snapshot() {
+        let empty = CachedXcloudCatalogOverlaySnapshot {
+            updated_at: DataCacheRepository::now_ms(),
+            entries: vec![],
+        };
+        assert!(DataCacheRepository::is_overlay_snapshot_usable(Some(
+            &empty
+        )));
+        let loaded = DataCacheRepository::build_loaded_snapshot(None, Some(&empty), "memory");
+        assert_eq!(loaded.cache_state, DataXcloudCatalogCacheState::Fresh);
+        assert!(!loaded.needs_refresh);
+        assert!(loaded.titles.is_empty());
+    }
+    #[test]
+    fn refreshing_other_metadata_keeps_old_products_expired() {
+        let now = DataCacheRepository::now_ms();
+        let base = CachedXcloudCatalogBaseSnapshot {
+            updated_at: now,
+            entries: HashMap::from([
+                (
+                    "A".into(),
+                    CachedXcloudCatalogBaseEntry {
+                        product_id: "A".into(),
+                        name: "Old".into(),
+                        fetched_at: now - XCLOUD_CATALOG_BASE_RENDERABLE_TTL_MS - 1,
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "B".into(),
+                    CachedXcloudCatalogBaseEntry {
+                        product_id: "B".into(),
+                        name: "New".into(),
+                        fetched_at: now,
+                        ..Default::default()
+                    },
+                ),
+            ]),
+        };
+        let overlay = CachedXcloudCatalogOverlaySnapshot {
+            updated_at: now,
+            entries: vec![
+                CachedXcloudCatalogOverlayEntry {
+                    product_id: "A".into(),
+                    fallback_name: "Service A".into(),
+                    ..Default::default()
+                },
+                CachedXcloudCatalogOverlayEntry {
+                    product_id: "B".into(),
+                    ..Default::default()
+                },
+            ],
+        };
+        let loaded =
+            DataCacheRepository::build_loaded_snapshot(Some(&base), Some(&overlay), "memory");
+        assert_eq!(loaded.missing_product_ids, vec!["A"]);
+        assert_eq!(
+            loaded
+                .titles
+                .iter()
+                .find(|t| t.product_id == "A")
+                .unwrap()
+                .name,
+            "Service A"
+        );
+    }
+
+    #[test]
     fn stale_overlay_stays_renderable_and_marks_missing_products() {
         let base_snapshot = CachedXcloudCatalogBaseSnapshot {
             updated_at: DataCacheRepository::now_ms(),
             entries: HashMap::from([(
                 "A".to_string(),
                 CachedXcloudCatalogBaseEntry {
+                    fetched_at: 0,
+
                     product_id: "A".to_string(),
                     name: "Alpha".to_string(),
                     publisher_name: String::new(),
@@ -617,6 +748,12 @@ mod tests {
             updated_at: DataCacheRepository::now_ms() - (XCLOUD_CATALOG_OVERLAY_FRESH_TTL_MS + 1),
             entries: vec![
                 CachedXcloudCatalogOverlayEntry {
+                    entitlement_known: false,
+                    recent_rank: None,
+                    new_rank: None,
+                    popular_rank: None,
+                    leaving_rank: None,
+
                     product_id: "A".to_string(),
                     title_id: "title-a".to_string(),
                     xbox_title_id: Some(1),
@@ -627,6 +764,12 @@ mod tests {
                     is_new: false,
                 },
                 CachedXcloudCatalogOverlayEntry {
+                    entitlement_known: false,
+                    recent_rank: None,
+                    new_rank: None,
+                    popular_rank: None,
+                    leaving_rank: None,
+
                     product_id: "B".to_string(),
                     title_id: "title-b".to_string(),
                     xbox_title_id: Some(2),
@@ -669,6 +812,8 @@ mod tests {
                     entries: HashMap::from([(
                         "NEW".to_string(),
                         CachedXcloudCatalogBaseEntry {
+                            fetched_at: 0,
+
                             product_id: "NEW".to_string(),
                             name: "Newest".to_string(),
                             publisher_name: String::new(),
@@ -685,6 +830,12 @@ mod tests {
                 serde_json::json!(CachedXcloudCatalogOverlaySnapshot {
                     updated_at: now - 10,
                     entries: vec![CachedXcloudCatalogOverlayEntry {
+                        entitlement_known: false,
+                        recent_rank: None,
+                        new_rank: None,
+                        popular_rank: None,
+                        leaving_rank: None,
+
                         product_id: "OLD".to_string(),
                         title_id: "old-title".to_string(),
                         xbox_title_id: None,
@@ -701,6 +852,12 @@ mod tests {
                 serde_json::json!(CachedXcloudCatalogOverlaySnapshot {
                     updated_at: now,
                     entries: vec![CachedXcloudCatalogOverlayEntry {
+                        entitlement_known: false,
+                        recent_rank: None,
+                        new_rank: None,
+                        popular_rank: None,
+                        leaving_rank: None,
+
                         product_id: "NEW".to_string(),
                         title_id: "new-title".to_string(),
                         xbox_title_id: None,
@@ -717,6 +874,12 @@ mod tests {
                 serde_json::json!(CachedXcloudCatalogOverlaySnapshot {
                     updated_at: now + 1,
                     entries: vec![CachedXcloudCatalogOverlayEntry {
+                        entitlement_known: false,
+                        recent_rank: None,
+                        new_rank: None,
+                        popular_rank: None,
+                        leaving_rank: None,
+
                         product_id: "OTHER".to_string(),
                         title_id: "other-title".to_string(),
                         xbox_title_id: None,

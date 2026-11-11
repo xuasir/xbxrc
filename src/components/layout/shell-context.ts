@@ -5,11 +5,14 @@ export interface ShellPageHints {
   regionLabel?: string
   status?: string
   error?: boolean
+  exitHint?: string
+  busy?: boolean
 }
 
 export interface ShellOverlayHints {
   title: string
   busy?: boolean
+  exitHint?: string
 }
 
 interface ShellContext {

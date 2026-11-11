@@ -1,0 +1,677 @@
+{
+  "nestedButtons": 0,
+  "state": {
+    "counters": {
+      "auth.getState": 5,
+      "config.get": 3,
+      "data.getCloudPreferences": 2,
+      "data.getUserProfile": 1,
+      "data.getXcloudTitles": 2,
+      "data.primeXcloudTitles": 1,
+      "data.refreshXcloudTitles": 1
+    },
+    "current": {
+      "busy": [],
+      "marked": [
+        "xcloud.refresh"
+      ],
+      "native": "xcloud.refresh",
+      "pending": [],
+      "route": "#/xcloud",
+      "viewport": {
+        "height": 900,
+        "width": 480
+      }
+    },
+    "graph": {
+      "nodes": [
+        "top-nav.brand",
+        "top-nav.profile",
+        "top-nav.xhome",
+        "top-nav.xcloud",
+        "top-nav.my",
+        "top-nav.controller",
+        "top-nav.setting",
+        "xcloud.cachedError.export",
+        "xcloud.search",
+        "xcloud.refresh",
+        "xcloud.filter.category",
+        "xcloud.filter.sort",
+        "xcloud.jump.xcloud-recent",
+        "xcloud.jump.xcloud-favorites",
+        "xcloud.jump.xcloud-new",
+        "xcloud.jump.xcloud-popular",
+        "xcloud.jump.xcloud-leaving",
+        "xcloud.jump.all",
+        "v-0.next",
+        "xcloud.xcloud-recent.P0003",
+        "xcloud.xcloud-recent.P0003.play",
+        "xcloud.xcloud-recent.P0003.favorite",
+        "xcloud.xcloud-recent.P0002",
+        "xcloud.xcloud-recent.P0002.favorite",
+        "xcloud.xcloud-recent.P0001",
+        "xcloud.xcloud-recent.P0001.play",
+        "xcloud.xcloud-recent.P0001.favorite",
+        "xcloud.xcloud-recent.P0000",
+        "xcloud.xcloud-recent.P0000.play",
+        "xcloud.xcloud-recent.P0000.favorite",
+        "xcloud.xcloud-favorites.MISSING",
+        "xcloud.xcloud-favorites.MISSING.play",
+        "xcloud.xcloud-favorites.MISSING.favorite",
+        "v-2.next",
+        "xcloud.xcloud-new.P0007",
+        "xcloud.xcloud-new.P0007.play",
+        "xcloud.xcloud-new.P0007.favorite",
+        "xcloud.xcloud-new.P0006",
+        "xcloud.xcloud-new.P0006.play",
+        "xcloud.xcloud-new.P0006.favorite",
+        "xcloud.xcloud-new.P0005",
+        "xcloud.xcloud-new.P0005.play",
+        "xcloud.xcloud-new.P0005.favorite",
+        "xcloud.xcloud-new.P0004",
+        "xcloud.xcloud-new.P0004.play",
+        "xcloud.xcloud-new.P0004.favorite",
+        "v-3.next",
+        "xcloud.xcloud-popular.P0011",
+        "xcloud.xcloud-popular.P0011.play",
+        "xcloud.xcloud-popular.P0011.favorite",
+        "xcloud.xcloud-popular.P0010",
+        "xcloud.xcloud-popular.P0010.play",
+        "xcloud.xcloud-popular.P0010.favorite",
+        "xcloud.xcloud-popular.P0009",
+        "xcloud.xcloud-popular.P0009.play",
+        "xcloud.xcloud-popular.P0009.favorite",
+        "xcloud.xcloud-popular.P0008",
+        "xcloud.xcloud-popular.P0008.play",
+        "xcloud.xcloud-popular.P0008.favorite",
+        "v-4.next",
+        "xcloud.xcloud-leaving.P0015",
+        "xcloud.xcloud-leaving.P0015.play",
+        "xcloud.xcloud-leaving.P0015.favorite",
+        "xcloud.xcloud-leaving.P0014",
+        "xcloud.xcloud-leaving.P0014.play",
+        "xcloud.xcloud-leaving.P0014.favorite",
+        "xcloud.xcloud-leaving.P0013",
+        "xcloud.xcloud-leaving.P0013.play",
+        "xcloud.xcloud-leaving.P0013.favorite",
+        "xcloud.xcloud-leaving.P0012",
+        "xcloud.xcloud-leaving.P0012.play",
+        "xcloud.xcloud-leaving.P0012.favorite",
+        "xcloud.all.P0002",
+        "xcloud.all.P0002.favorite",
+        "xcloud.all.P0003",
+        "xcloud.all.P0003.play",
+        "xcloud.all.P0003.favorite",
+        "xcloud.all.P0004",
+        "xcloud.all.P0004.play",
+        "xcloud.all.P0004.favorite",
+        "xcloud.all.P0005",
+        "xcloud.all.P0005.play",
+        "xcloud.all.P0005.favorite",
+        "xcloud.all.P0006",
+        "xcloud.all.P0006.play",
+        "xcloud.all.P0006.favorite",
+        "xcloud.all.P0007",
+        "xcloud.all.P0007.play",
+        "xcloud.all.P0007.favorite",
+        "xcloud.all.P0008",
+        "xcloud.all.P0008.play",
+        "xcloud.all.P0008.favorite",
+        "xcloud.all.P0009",
+        "xcloud.all.P0009.play",
+        "xcloud.all.P0009.favorite"
+      ],
+      "reachable": [
+        "xcloud.refresh",
+        "v-0.next",
+        "xcloud.xcloud-recent.P0000",
+        "xcloud.xcloud-recent.P0000.play",
+        "xcloud.xcloud-recent.P0000.favorite",
+        "xcloud.xcloud-recent.P0001.favorite",
+        "xcloud.xcloud-recent.P0001.play",
+        "xcloud.xcloud-recent.P0001",
+        "xcloud.xcloud-recent.P0002.favorite",
+        "xcloud.xcloud-recent.P0002",
+        "xcloud.xcloud-recent.P0003.favorite",
+        "xcloud.xcloud-recent.P0003.play",
+        "xcloud.xcloud-recent.P0003",
+        "xcloud.jump.all",
+        "xcloud.jump.xcloud-favorites",
+        "xcloud.jump.xcloud-new",
+        "xcloud.jump.xcloud-popular",
+        "xcloud.jump.xcloud-leaving",
+        "xcloud.search",
+        "xcloud.filter.sort",
+        "xcloud.filter.category",
+        "top-nav.brand",
+        "top-nav.profile",
+        "top-nav.xhome",
+        "xcloud.xcloud-favorites.MISSING",
+        "xcloud.xcloud-favorites.MISSING.play",
+        "xcloud.xcloud-favorites.MISSING.favorite",
+        "top-nav.xcloud",
+        "top-nav.my",
+        "top-nav.controller",
+        "top-nav.setting",
+        "v-2.next",
+        "xcloud.xcloud-new.P0004",
+        "xcloud.xcloud-new.P0004.play",
+        "xcloud.xcloud-new.P0004.favorite",
+        "xcloud.xcloud-new.P0005.favorite",
+        "xcloud.xcloud-new.P0005.play",
+        "xcloud.xcloud-new.P0005",
+        "xcloud.xcloud-new.P0006.favorite",
+        "xcloud.xcloud-new.P0006.play",
+        "xcloud.xcloud-new.P0006",
+        "xcloud.xcloud-new.P0007.favorite",
+        "xcloud.xcloud-new.P0007.play",
+        "xcloud.xcloud-new.P0007",
+        "xcloud.xcloud-popular.P0011.play",
+        "xcloud.xcloud-popular.P0011.favorite",
+        "xcloud.xcloud-popular.P0010",
+        "xcloud.xcloud-popular.P0010.play",
+        "xcloud.xcloud-popular.P0010.favorite",
+        "xcloud.xcloud-popular.P0009",
+        "xcloud.xcloud-popular.P0009.play",
+        "xcloud.xcloud-popular.P0009.favorite",
+        "xcloud.xcloud-popular.P0008",
+        "xcloud.xcloud-popular.P0008.play",
+        "xcloud.xcloud-popular.P0008.favorite",
+        "xcloud.xcloud-leaving.P0012.play",
+        "xcloud.xcloud-leaving.P0012.favorite",
+        "xcloud.xcloud-leaving.P0012",
+        "xcloud.xcloud-leaving.P0013.favorite",
+        "xcloud.xcloud-leaving.P0013.play",
+        "xcloud.xcloud-leaving.P0013",
+        "xcloud.xcloud-leaving.P0014.favorite",
+        "xcloud.xcloud-leaving.P0014.play",
+        "xcloud.xcloud-leaving.P0014",
+        "xcloud.xcloud-leaving.P0015.favorite",
+        "xcloud.xcloud-leaving.P0015.play",
+        "xcloud.xcloud-leaving.P0015",
+        "xcloud.all.P0002",
+        "xcloud.all.P0002.favorite",
+        "xcloud.all.P0003",
+        "xcloud.all.P0003.play",
+        "xcloud.all.P0003.favorite",
+        "xcloud.all.P0005.play",
+        "xcloud.all.P0005.favorite",
+        "xcloud.all.P0005",
+        "xcloud.all.P0004.favorite",
+        "xcloud.all.P0004.play",
+        "xcloud.all.P0004",
+        "xcloud.all.P0006.play",
+        "xcloud.all.P0006.favorite",
+        "xcloud.all.P0007",
+        "xcloud.all.P0007.play",
+        "xcloud.all.P0007.favorite",
+        "xcloud.all.P0009.play",
+        "xcloud.all.P0009.favorite",
+        "xcloud.all.P0009",
+        "xcloud.all.P0008.favorite",
+        "xcloud.all.P0008.play",
+        "xcloud.all.P0008",
+        "xcloud.all.P0006",
+        "xcloud.xcloud-popular.P0011",
+        "v-4.next",
+        "v-3.next",
+        "xcloud.cachedError.export",
+        "xcloud.jump.xcloud-recent"
+      ],
+      "scope": "app.shell",
+      "unreachable": []
+    },
+    "instanceId": "69c44921-80af-416a-96f5-a47c41f8dab5",
+    "keys": [],
+    "timeline": [
+      {
+        "atMs": 173,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 231,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "config.get"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 260,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "config.get",
+          "data.getXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 265,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "config.get",
+          "data.getXcloudTitles",
+          "auth.getState"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 265,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "config.get",
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 270,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "",
+        "pending": [
+          "config.get",
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 274,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "config.get",
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 280,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 290,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 292,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.getUserProfile"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 292,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 305,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 307,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.primeXcloudTitles",
+          "auth.getState"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 311,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 312,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.primeXcloudTitles",
+          "data.getCloudPreferences"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 327,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.getCloudPreferences"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 333,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 402,
+        "busy": [],
+        "marked": [
+          "xcloud.search"
+        ],
+        "native": "",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 414,
+        "busy": [],
+        "marked": [
+          "xcloud.search"
+        ],
+        "native": "xcloud.search",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22421,
+        "busy": [],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22478,
+        "busy": [],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [
+          "data.refreshXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22498,
+        "busy": [
+          "xcloud.refresh"
+        ],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [
+          "data.refreshXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22742,
+        "busy": [
+          "xcloud.refresh"
+        ],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22751,
+        "busy": [
+          "xcloud.refresh"
+        ],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [
+          "auth.getState"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22781,
+        "busy": [
+          "xcloud.refresh"
+        ],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22789,
+        "busy": [
+          "xcloud.refresh"
+        ],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [
+          "data.getCloudPreferences"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22818,
+        "busy": [
+          "xcloud.refresh"
+        ],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 22909,
+        "busy": [],
+        "marked": [
+          "xcloud.refresh"
+        ],
+        "native": "xcloud.refresh",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      }
+    ]
+  },
+  "status": "账户云目录 · 当前显示缓存目录，最后更新于 17:43"
+}

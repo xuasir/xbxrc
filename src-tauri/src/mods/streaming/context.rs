@@ -156,6 +156,12 @@ impl StreamingService {
         target_type: &str,
         session: DomainSessionAccessContext,
     ) -> Result<DomainContext, AppError> {
+        if !target.is_home() {
+            self.data_provider
+                .validate_cloud_stream(target_id)
+                .await
+                .map_err(|error| AppError::Streaming(error.to_string()))?;
+        }
         let title_capability = self.resolve_title_capabilities(target, target_id).await;
         let remote_play = self.resolve_remote_play_context(target, target_id).await?;
         let mut session = session;
@@ -212,11 +218,7 @@ impl StreamingService {
 
         let mut capabilities = resolve_min_title_capabilities(target_id);
         let mut input_capability = DomainInputCapabilityContext::default();
-        match self
-            .data_provider
-            .get_streaming_title_input_config(target_id)
-            .await
-        {
+        match self.data_provider.get_cloud_input_config(target_id).await {
             Ok(config) => {
                 let parsed = parse_title_capabilities_from_input_config(&config.config);
                 input_capability.input_config_resolved = true;

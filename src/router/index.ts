@@ -52,11 +52,12 @@ const routes: RouteRecordRaw[] = [
     name: 'xcloud',
     component: () => import('../pages/XCloud.vue'),
     meta: {
-      requiresAuth: true,
+      requiresAuth: false,
       layout: 'shell',
       keepAlive: true,
     },
   },
+  { path: '/xcloud/games/:productId', name: 'cloud-game', component: () => import('../pages/CloudGameDetail.vue'), meta: { layout: 'shell', navPage: 'xcloud' } },
   { path: '/my', redirect: '/my/account' },
   { path: '/my/:section(account|achievements|statistics|album)', name: 'my', component: () => import('../pages/My.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'my' } },
   { path: '/my/account/friends/:targetXuid', name: 'my-friend', component: () => import('../pages/FriendDetail.vue'), meta: { requiresAuth: true, layout: 'shell', navPage: 'my' } },
@@ -72,6 +73,13 @@ const routes: RouteRecordRaw[] = [
       layout: 'shell',
       keepAlive: true,
     },
+  },
+  {
+    path: '/controller/:tool(layout|sticks|keyboard|vibration|test|advanced|reset|live)',
+    name: 'controller-tool',
+    component: () => import('../pages/controller/ControllerToolPage.vue'),
+    props: true,
+    meta: { requiresAuth: true, layout: 'shell', navPage: 'controller' },
   },
   {
     path: '/controller',

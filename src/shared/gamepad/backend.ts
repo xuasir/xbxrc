@@ -22,11 +22,20 @@ export interface InputDevice {
   name: string
   standard: boolean
   rumble: boolean
+  triggerRumble?: boolean
+  /** 同型号同布局复用扩展按钮配置，连接期身份仍使用 id。 */
+  layoutKey?: string
+}
+
+export interface RawPadState {
+  buttons: number[]
+  axes: number[]
 }
 
 export interface DeviceSample {
   deviceId: string
   state: LogicalPadStateDto
+  raw?: RawPadState
 }
 
 export interface GamepadSnapshot {

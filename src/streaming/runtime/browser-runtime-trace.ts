@@ -36,7 +36,7 @@ export function createBrowserRuntimeTrace(input: {
   let payloadFailed = 0
   let producerRowOversized = 0
   let ackMissing = 0
-  const backend = { enqueued: 0, filtered: 0, queueFull: 0, rowOversized: 0, writerUnavailable: 0 }
+  const backend = { enqueued: 0, buffered: 0, filtered: 0, queueFull: 0, rowOversized: 0, writerUnavailable: 0 }
   const sampled = new Map<string, number>()
   const pending: Array<{ params: RuntimeTraceRecordEventParams, bytes: number }> = []
   const idleWaiters = new Set<() => void>()
@@ -113,7 +113,7 @@ export function createBrowserRuntimeTrace(input: {
     record(event: string, payload: BrowserTracePayload, options: BrowserTraceRecordOptions = {}): boolean {
       const observation = OBSERVATION_EVENTS.has(event)
       const playbackHealth = event === 'browserPlaybackHealthObserved'
-      if (profile === 'off' || (profile === 'production' && observation) || (playbackHealth && profile !== 'production')) {
+      if (profile === 'off' || (profile === 'production' && observation)) {
         profileFiltered++
         return false
       }

@@ -17,6 +17,32 @@ pub struct RecordEventParams {
     importance: Option<String>,
 }
 
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveBundleParams {
+    issue_id: Option<String>,
+    capture_id: Option<String>,
+}
+
+pub async fn save_bundle(
+    params: Option<Value>,
+    runtime_trace: RuntimeTraceRecorderRef,
+    configuration: Value,
+) -> AppResult<Value> {
+    let params: SaveBundleParams = serde_json::from_value(params.unwrap_or_else(|| json!({})))
+        .map_err(|error| AppError::InvalidParams(error.to_string()))?;
+    tokio::task::spawn_blocking(move || {
+        runtime_trace.save_diagnostic_bundle(
+            params.issue_id.as_deref(),
+            params.capture_id.as_deref(),
+            configuration,
+        )
+    })
+    .await
+    .map_err(|error| AppError::Internal(error.to_string()))?
+    .map_err(|error| AppError::Internal(error.to_string()))
+}
+
 #[cfg(test)]
 #[path = "rpc.test.rs"]
 mod tests;
@@ -27,6 +53,40 @@ pub async fn handle_rpc(
     runtime_trace: RuntimeTraceRecorderRef,
 ) -> AppResult<Value> {
     match method {
+        "reportIssue" => {
+            let operation = params
+                .as_ref()
+                .and_then(|params| params["operation"].as_str())
+                .filter(|operation| {
+                    matches!(
+                        *operation,
+                        "login" | "settings" | "update" | "library" | "stream"
+                    )
+                })
+                .ok_or_else(|| AppError::InvalidParams("Invalid diagnostic operation".into()))?;
+            let id = runtime_trace.record_request_failure(
+                &format!("frontend.{operation}"),
+                "FRONTEND_ERROR",
+                super::service::now_ms(),
+                0,
+                json!({}),
+            );
+            Ok(json!({"issueId":id}))
+        }
+        "startCapture" => runtime_trace
+            .start_capture()
+            .map(|capture| json!(capture))
+            .map_err(|error| AppError::Internal(error.to_string())),
+        "stopCapture" => {
+            let id = params
+                .as_ref()
+                .and_then(|params| params["captureId"].as_str())
+                .ok_or_else(|| AppError::InvalidParams("Missing captureId".into()))?;
+            runtime_trace
+                .stop_capture(id)
+                .map(|capture| json!(capture))
+                .map_err(|error| AppError::Internal(error.to_string()))
+        }
         "recordEvent" => {
             let params = params.ok_or_else(|| {
                 AppError::InvalidParams("Missing runtimeTrace.recordEvent params".to_string())

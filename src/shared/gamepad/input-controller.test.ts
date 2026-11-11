@@ -1,4 +1,4 @@
-import type { GamepadBackend, GamepadSnapshot } from './backend'
+import type { GamepadBackend, GamepadSnapshot, RawPadState } from './backend'
 import type { LogicalPadStateDto } from './contract'
 import { describe, expect, it, vi } from 'vitest'
 import { InputController } from './input-controller'
@@ -16,9 +16,9 @@ function fixture() {
     rumble: vi.fn(async () => 'applied' as const),
     stopRumble: vi.fn(async () => {}),
   }
-  const send = (states: Record<string, LogicalPadStateDto>) => accept({
-    devices: Object.keys(states).map(id => ({ id, name: id, standard: true, rumble: true })),
-    samples: Object.entries(states).map(([deviceId, state]) => ({ deviceId, state })),
+  const send = (states: Record<string, LogicalPadStateDto>, raws?: Record<string, RawPadState>, layoutKey = 'layout:1', standard = true) => accept({
+    devices: Object.keys(states).map(id => ({ id, name: id, standard, rumble: true, ...(raws?.[id] ? { layoutKey } : {}) })),
+    samples: Object.entries(states).map(([deviceId, state]) => ({ deviceId, state, raw: raws?.[deviceId] })),
     sequence: ++sequence,
     observedAt: sequence,
     error: null,
@@ -26,13 +26,220 @@ function fixture() {
   return { controller, backend, send }
 }
 
-function pressed(key: 'south' | 'east' | 'menu' | 'view'): LogicalPadStateDto {
+function pressed(key: 'south' | 'east' | 'menu' | 'view' | 'home'): LogicalPadStateDto {
   const state = neutralState()
   state.buttons[key] = 1
   return state
 }
 
 describe('inputController', () => {
+  it('routes distinct custom stream and diagnostics shortcuts once and consumes their output buttons', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ stream_menu_shortcuts: { menu: ['l1', 'r1'], diagnostics: ['l2', 'r2'] } }))
+    await c.start(backend)
+    send({ a: neutralState() })
+    c.setStreamReady(true)
+    const requested = vi.fn()
+    c.onMenuRequested(requested)
+    const state = neutralState()
+    state.buttons.l1 = 1
+    send({ a: structuredClone(state) })
+    expect(requested).not.toHaveBeenCalled()
+    state.buttons.r1 = 1
+    send({ a: structuredClone(state) })
+    send({ a: structuredClone(state) })
+    expect(requested.mock.calls).toEqual([['menu']])
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ l1: 0, r1: 0 })
+    send({ a: neutralState() })
+    const triggers = neutralState()
+    triggers.buttons.l2 = triggers.buttons.r2 = triggers.leftTrigger = triggers.rightTrigger = 1
+    send({ a: triggers })
+    expect(requested.mock.calls).toEqual([['menu'], ['diagnostics']])
+    expect(c.getSnapshot().gameState).toMatchObject({ leftTrigger: 0, rightTrigger: 0, buttons: { l2: 0, r2: 0 } })
+  })
+  it('projects nonstandard navigation, applies chords and rearms raw axes and analog buttons across capture', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ gamepad_game_controls: { leftDeadzone: 0.03, deviceMappings: [{ layout: 'raw', bindings: [
+      { target: 'south', kind: 'buttons', buttons: [20], mode: 'all' },
+      { target: 'home', kind: 'buttons', buttons: [4, 5], mode: 'all' },
+      { target: 'leftStickX', kind: 'axis', axis: 2, range: 'signed' },
+      { target: 'l2', kind: 'buttons', buttons: [7], mode: 'all' },
+    ] }] } }))
+    await c.start(backend)
+    const raw = { buttons: Array.from({ length: 21 }, () => 0), axes: [0, 0, 0] }
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+    raw.buttons[20] = 1
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+    expect(c.getSnapshot().uiState.buttons.south).toBe(1)
+    c.setStreamReady(true)
+    expect(c.getSnapshot().gameState.buttons.south).toBe(0)
+    raw.buttons[20] = 0
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+    raw.buttons[4] = raw.buttons[5] = 1
+    raw.buttons[7] = 0.2
+    raw.axes[2] = 0.1
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+    expect(c.getSnapshot().gameState.buttons.home).toBe(1)
+    expect(c.getSnapshot().gameState.leftTrigger).toBe(0.2)
+    c.setUiCapture('capture', true, true)
+    c.setUiCapture('capture', false)
+    for (let i = 0; i < 2; i++) {
+      send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+      expect(c.getSnapshot().gameState).toEqual(neutralState())
+    }
+    raw.buttons.fill(0)
+    raw.axes.fill(0)
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+    raw.buttons[20] = 1
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'raw', false)
+    expect(c.getSnapshot().gameState.buttons.south).toBe(1)
+  })
+
+  it('uses a configured Menu/View chord as an Xbox output and keeps virtual targets independent', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ gamepad_game_controls: { deviceMappings: [{ layout: 'a', bindings: [{ target: 'home', kind: 'buttons', buttons: [8, 9], mode: 'all' }] }] } }))
+    await c.start(backend)
+    const raw = { buttons: Array.from({ length: 17 }, () => 0), axes: [0, 0, 0, 0] }
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'a')
+    c.setStreamReady(true)
+    const menu = vi.fn()
+    c.onMenuRequested(menu)
+    raw.buttons[8] = raw.buttons[9] = 1
+    const state = pressed('menu')
+    state.buttons.view = 1
+    send({ a: state }, { a: raw }, 'a')
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ home: 1, menu: 0, view: 0 })
+    expect(menu).not.toHaveBeenCalled()
+    c.setVirtualState(pressed('south'))
+    expect(c.getSnapshot().gameState.buttons.south).toBe(1)
+  })
+
+  it('routes physical Xbox swaps through stream ownership and rearms held Home after exclusive capture', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ gamepad_game_controls: { buttons: { south: 'home', home: 'south' } } }))
+    await c.start(backend)
+    send({ a: neutralState() })
+    c.setStreamReady(true)
+    send({ a: pressed('home') })
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 1, home: 0 })
+    expect(c.getSnapshot().physicalState.buttons.home).toBe(1)
+    c.setUiCapture('capture', true, true)
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+    c.setUiCapture('capture', false)
+    send({ a: pressed('home') })
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, home: 0 })
+    send({ a: neutralState() })
+    send({ a: pressed('home') })
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 1, home: 0 })
+    send({ a: neutralState() })
+    send({ a: pressed('south') })
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, home: 1 })
+    send({ a: neutralState() })
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+    c.setSystemHome(true)
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, home: 1 })
+    c.setSystemHome(false)
+    expect(c.getSnapshot().gameState.buttons.home).toBe(0)
+  })
+
+  it('merges a rear Xbox binding with a remapped standard source and releases each independently', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ gamepad_game_controls: {
+      buttons: { south: 'home', home: 'south' },
+      extraButtons: [{ layout: 'layout:1', button: 17, target: 'home' }],
+    } }))
+    await c.start(backend)
+    const raw = (value = 0) => ({ buttons: Array.from({ length: 21 }, (_, index) => index === 17 ? value : 0), axes: [] })
+    send({ a: neutralState() }, { a: raw() })
+    c.setStreamReady(true)
+    send({ a: neutralState() }, { a: raw(0.8) })
+    expect(c.getSnapshot().gameState.buttons.home).toBe(0.8)
+    send({ a: pressed('south') }, { a: raw(0.8) })
+    expect(c.getSnapshot().gameState.buttons.home).toBe(1)
+    send({ a: pressed('south') }, { a: raw() })
+    expect(c.getSnapshot().gameState.buttons.home).toBe(1)
+    send({ a: neutralState() }, { a: raw() })
+    expect(c.getSnapshot().gameState.buttons.home).toBe(0)
+  })
+
+  it('routes rear buttons through game ownership, unions standard input and rearms held sources after capture/configuration', async () => {
+    const { controller: c, backend, send } = fixture()
+    const prefs = parseGamepadPreferences({ gamepad_game_controls: { extraButtons: [{ layout: 'layout:1', button: 17, target: 'east' }] } })
+    c.configure(prefs)
+    await c.start(backend)
+    const raw = (pressed = 0) => ({ buttons: Array.from({ length: 21 }, (_, index) => index === 17 ? pressed : 0), axes: [0, 0, 0, 0] })
+    send({ a: neutralState() }, { a: raw() })
+    c.setStreamReady(true)
+    send({ a: neutralState() }, { a: raw(1) })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(1)
+    expect(c.getSnapshot().physicalState.buttons.east).toBe(0)
+    expect(c.getSnapshot().physicalRaw?.buttons[17]).toBe(1)
+    c.setUiCapture('test', true, true)
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+    c.setUiCapture('test', false)
+    expect(c.getSnapshot().gameState.buttons.east).toBe(0)
+    send({ a: neutralState() }, { a: raw() })
+    send({ a: pressed('east') }, { a: raw(1) })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(1)
+    send({ a: pressed('east') }, { a: raw() })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(1)
+    send({ a: neutralState() }, { a: raw() })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(0)
+    send({ a: neutralState() }, { a: raw(1) })
+    const nextPrefs = structuredClone(prefs)
+    nextPrefs.gameControls.extraButtons[0].target = 'south'
+    c.configure(nextPrefs)
+    // 配置交接吸收当前按住的独立背键。
+    expect(c.getSnapshot().gameState.buttons.south).toBe(0)
+    send({ a: neutralState() }, { a: raw() })
+    send({ a: neutralState() }, { a: raw(1) })
+    expect(c.getSnapshot().gameState.buttons.south).toBe(1)
+    send({ a: neutralState() }, { a: raw(1) }, 'layout:2')
+    expect(c.getSnapshot().gameState.buttons.south).toBe(0)
+    c.setStreamReady(false)
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+  })
+
+  it('ignores physical rear bindings while keyboard owns game input and releases on disconnection', async () => {
+    const { controller: c, backend, send } = fixture()
+    const prefs = parseGamepadPreferences({ gamepad_game_controls: { extraButtons: [{ layout: 'layout:1', button: 17, target: 'east' }] } })
+    c.configure(prefs)
+    await c.start(backend)
+    const raw = { buttons: Array.from({ length: 21 }, () => 0), axes: [] }
+    send({ a: neutralState() }, { a: raw })
+    c.setStreamReady(true)
+    raw.buttons[17] = 1
+    send({ a: neutralState() }, { a: structuredClone(raw) })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(1)
+    send({})
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+    prefs.controlSource = 'keyboard'
+    c.configure(prefs)
+    raw.buttons[17] = 0
+    send({ a: neutralState() }, { a: structuredClone(raw) })
+    raw.buttons[17] = 1
+    send({ a: neutralState() }, { a: structuredClone(raw) })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(0)
+  })
+
+  it('keeps unconfigured nonstandard sources selectable and raw samples observable', async () => {
+    const { controller: c, backend, send } = fixture()
+    c.configure(parseGamepadPreferences({ gamepad_game_controls: { extraButtons: [{ layout: 'layout:1', button: 17, target: 'east' }] } }))
+    await c.start(backend)
+    const raw = { buttons: Array.from({ length: 21 }, () => 0), axes: [] }
+    send({ a: neutralState() }, { a: structuredClone(raw) })
+    c.setStreamReady(true)
+    raw.buttons[17] = 1
+    send({ a: neutralState() }, { a: structuredClone(raw) })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(1)
+    send({ a: neutralState() }, { a: structuredClone(raw) }, 'layout:1', false)
+    expect(c.getSnapshot().activeDeviceId).toBe('a')
+    expect(c.getSnapshot().deviceSamples[0].raw?.buttons[17]).toBe(1)
+    expect(c.getSnapshot().gameState).toEqual(neutralState())
+    send({ a: neutralState() }, { a: structuredClone(raw) })
+    expect(c.getSnapshot().gameState.buttons.east).toBe(0)
+  })
+
   it('suppresses remapped combination sources and supports keyboard menu requests', async () => {
     const { controller: c, backend, send } = fixture()
     const preferences = parseGamepadPreferences({ gamepad_control_source: 'keyboard' })
@@ -262,7 +469,7 @@ describe('inputController', () => {
     c.setKeyboardState(neutralState())
     c.setStreamReady(true)
     c.setKeyboardState(pressed('east'), pressed('south'))
-    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 0, west: 1 })
+    expect(c.getSnapshot().gameState.buttons).toMatchObject({ south: 0, east: 1, west: 0 })
     c.configure(parseGamepadPreferences({ gamepad_control_source: 'gamepad' }))
     c.setStreamReady(false)
     expect(c.getSnapshot().uiState).toEqual(neutralState())

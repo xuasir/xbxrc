@@ -3,6 +3,7 @@ import type { UpdateChannel } from '../../composables/useAppUpdater'
 import { computed, onDeactivated, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
+import ExportDiagnosticsButton from '../../components/common/ExportDiagnosticsButton.vue'
 import SettingConfirmSheet from '../../components/settings/SettingConfirmSheet.vue'
 import SettingInlineSingleSelect from '../../components/settings/SettingInlineSingleSelect.vue'
 import { useAppUpdater } from '../../composables/useAppUpdater'
@@ -111,6 +112,7 @@ async function confirmed() {
         </Focusable>
         <p v-if="updater.channelError.value" role="alert" class="setting-panel__status setting-panel__status--error">
           {{ updater.channelError.value }}
+          <ExportDiagnosticsButton :id="`${props.navNodeBaseId}.channelExport`" :scope-id="props.scopeId" :issue-id="updater.channelIssueId.value" />
         </p>
       </div>
       <div class="setting-app-update__footer">
@@ -138,6 +140,7 @@ async function confirmed() {
           </template>
           <p v-if="updater.errorMessage.value" role="alert" class="setting-panel__status setting-panel__status--error">
             {{ updater.errorMessage.value }}
+            <ExportDiagnosticsButton :id="`${props.navNodeBaseId}.errorExport`" :scope-id="props.scopeId" :issue-id="updater.errorIssueId.value" />
           </p>
           <div v-if="updater.releaseNotes.value" class="setting-app-update__notes">
             <h3>{{ t('setting.experience.update.notes') }}</h3><p>{{ updater.releaseNotes.value }}</p>

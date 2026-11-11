@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
 import { validateSettingNumber } from '../../pages/settings/setting-validation'
+import ExportDiagnosticsButton from '../common/ExportDiagnosticsButton.vue'
 import SettingInputControl from './SettingInputControl.vue'
 import SettingModalShell from './SettingModalShell.vue'
 
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<{
   max?: number
   step?: number
   busy?: boolean
+  diagnosticIssueId?: string
   error?: string
 }>(), { hint: '' })
 const emit = defineEmits<{ close: [], submit: [value: string] }>()
@@ -66,6 +68,7 @@ watch(() => props.open, (open) => {
       </p>
       <p v-if="props.error" class="setting-panel__status setting-panel__status--error" role="alert">
         {{ props.error }}
+        <ExportDiagnosticsButton :id="`${props.scopeId}.export`" :scope-id="props.scopeId" :issue-id="props.diagnosticIssueId" />
       </p>
     </div>
     <template #footer>
