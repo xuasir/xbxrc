@@ -53,6 +53,8 @@ export interface SettingSectionEntryAction {
 
 export interface SettingSectionEntryNotice {
   kind: 'notice'
+  label?: string
+  value?: string
   body: string
   index: number
 }

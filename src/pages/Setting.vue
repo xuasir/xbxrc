@@ -117,13 +117,8 @@ function cloudRegionRow(): SettingIndexedRow {
   return { ...definition, key: 'xcloud_region_name', value, valueText: formatConfigValue('xcloud_region_name', value, definition.options), nodeId: 'setting.items.connectionHost.xcloud_region_name', index: 0, effect: 'nextConnection' }
 }
 function handleAction(actionId: string) {
-  if (actionId === 'customTurn') {
+  if (actionId === 'customTurn')
     customTurnOpen.value = true
-    return
-  }
-  const definition = getTranslatedFieldDefinition('force_region_ip')
-  const value = getConfigFieldValue(groupState.value, 'force_region_ip')
-  activeSingleSelectRow.value = { ...definition, key: 'force_region_ip', value, valueText: formatConfigValue('force_region_ip', value, definition.options), nodeId: 'setting.loginCompatibility', index: 0, effect: 'nextConnection' }
 }
 
 function translateOrFallback(key: string, fallback: string): string {
@@ -138,21 +133,34 @@ function normalizeOptionValueForKey(value: string | number): string {
   return normalizedValue.length > 0 ? normalizedValue : 'empty'
 }
 
+function formatCloudRegionName(name: string, fallback = name): string {
+  const key = `setting.cloudRegions.names.${name.toUpperCase()}`
+  return te(key) ? t(key) : fallback
+}
+
 function getTranslatedFieldDefinition(configKey: string): SettingFieldDefinition {
   const fieldDefinition = { ...CONFIG_FIELD_DEFINITIONS[configKey] }
+  const description = translateOrFallback(`setting.fields.${configKey}.description`, fieldDefinition.description ?? '')
+  let regionStatus = ''
   if (configKey === 'xcloud_region_name') {
     const selected = String(getConfigFieldValue(groupState.value, configKey) ?? '')
+    const recommended = cloudRegions.value.find(region => region.isDefault)
+    const fallback = cloudRegions.value[0]
+    const automaticRegion = recommended ?? fallback
+    const automaticLabel = automaticRegion ? t('setting.cloudRegions.automaticSelected', { name: formatCloudRegionName(automaticRegion.name, automaticRegion.displayName || automaticRegion.shortName || automaticRegion.name) }) : t('setting.cloudRegions.automatic')
     fieldDefinition.options = [
-      { value: '', label: t('setting.cloudRegions.automatic') },
-      ...cloudRegions.value.map(region => ({ value: selected && region.name.toLowerCase() === selected.toLowerCase() ? selected : region.name, label: region.displayName || region.shortName || region.name })),
-      ...(selected && !cloudRegions.value.some(region => region.name.toLowerCase() === selected.toLowerCase()) ? [{ value: selected, label: t(regionsLoaded.value ? 'setting.cloudRegions.savedUnavailable' : 'setting.cloudRegions.saved', { name: selected }) }] : []),
+      { value: '', label: automaticLabel, description: t(recommended || !fallback ? 'setting.cloudRegions.automaticHint' : 'setting.cloudRegions.automaticFallbackHint') },
+      ...cloudRegions.value.map(region => ({ value: selected && region.name.toLowerCase() === selected.toLowerCase() ? selected : region.name, label: formatCloudRegionName(region.name, region.displayName || region.shortName || region.name) })),
+      ...(selected && !cloudRegions.value.some(region => region.name.toLowerCase() === selected.toLowerCase()) ? [{ value: selected, label: t(regionsLoaded.value ? 'setting.cloudRegions.savedUnavailable' : 'setting.cloudRegions.saved', { name: formatCloudRegionName(selected) }) }] : []),
     ]
+    regionStatus = regionsLoading.value ? t('setting.cloudRegions.loading') : (regionsError.value ? t('setting.cloudRegions.unavailable') : (regionsLoaded.value && cloudRegions.value.length === 0 ? t('setting.cloudRegions.empty') : ''))
   }
 
   return {
     ...fieldDefinition,
     label: translateOrFallback(`setting.fields.${configKey}.label`, fieldDefinition.label),
-    description: configKey === 'xcloud_region_name' && (regionsLoading.value || regionsError.value || (regionsLoaded.value && cloudRegions.value.length === 0)) ? (regionsLoading.value ? t('setting.cloudRegions.loading') : regionsError.value || t('setting.cloudRegions.empty')) : translateOrFallback(`setting.fields.${configKey}.description`, fieldDefinition.description ?? ''),
+    // 加载与失败状态追加在用途后，选择弹窗持续保留地区含义。
+    description: [description, regionStatus].filter(Boolean).join(' '),
     options: fieldDefinition.options?.map((option) => {
       const optionValueKey = normalizeOptionValueForKey(option.value)
       return {
@@ -208,9 +216,11 @@ const activeSections = computed<SettingIndexedSection[]>(() => {
         } })
       }
       else if (item.kind === 'action') {
-        const login = item.actionId === 'cloudLoginCompatibility'
         const configured = !!turnConfig.value.server_url && !!turnConfig.value.server_username && !!turnConfig.value.server_credential
-        entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t(login ? 'setting.cloudRegions.loginCompatibility' : 'setting.experience.turn.title'), description: login ? t('setting.cloudRegions.loginHint') : undefined, value: login ? formatConfigValue('force_region_ip', getConfigFieldValue(groupState.value, 'force_region_ip'), getTranslatedFieldDefinition('force_region_ip').options) : t(configured ? 'setting.experience.turn.custom' : 'setting.experience.turn.default'), variant: 'default', index: index++ })
+        entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t('setting.experience.turn.title'), value: t(configured ? 'setting.experience.turn.custom' : 'setting.experience.turn.default'), variant: 'default', index: index++ })
+      }
+      else if (item.kind === 'notice') {
+        entries.push({ kind: 'notice', label: item.labelKey ? t(item.labelKey) : undefined, value: item.valueKey ? t(item.valueKey) : undefined, body: t(item.noticeKey), index: index++ })
       }
     }
     return { key: section.key, label: t(section.labelKey), collapsible: section.collapsible, entries }

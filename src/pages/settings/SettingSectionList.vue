@@ -48,12 +48,16 @@ function effect(row: SettingIndexedRow) {
               </p>
               <SettingInlineSingleSelect open :scope-id="props.scopeId" :row-node-id="entry.row.nodeId" :label="entry.row.label" :options="entry.row.options" :current-value="typeof entry.row.value === 'object' ? entry.row.options.find(option => option.label === entry.row.valueText)?.value ?? null : (entry.row.value as string | number)" :busy="props.pendingActionKey !== null" @select="emit('rowSelect', entry.row, $event)" />
             </div>
-            <SettingRow v-else :id="entry.row.nodeId" :scope-id="props.scopeId" :label="entry.row.label" :description="entry.row.description" :value="entry.row.valueText" :effect-label="effect(entry.row)" :busy="props.pendingActionKey !== null" select @click="emit('rowConfirm', entry.row)" />
+            <SettingRow v-else :id="entry.row.nodeId" :scope-id="props.scopeId" :class="{ 'setting-panel__region-field': entry.row.key === 'force_region_ip' || entry.row.key === 'xcloud_region_name' }" :label="entry.row.label" :description="entry.row.description" :value="entry.row.valueText" :effect-label="effect(entry.row)" :busy="props.pendingActionKey !== null" select @click="emit('rowConfirm', entry.row)" />
           </template>
           <SettingRow v-else-if="entry.kind === 'action'" :id="entry.nodeId" :scope-id="props.scopeId" :label="entry.label" :description="entry.description" :value="entry.value" :busy="props.pendingActionKey !== null" select @click="emit('actionClick', entry.actionId)" />
-          <p v-else-if="entry.kind === 'notice'" class="setting-panel__notice">
-            {{ entry.body }}
-          </p>
+          <div v-else-if="entry.kind === 'notice'" class="setting-panel__notice" :class="{ 'setting-panel__notice--card': entry.label }" role="note" :aria-label="entry.label">
+            <div v-if="entry.label" class="setting-panel__notice-heading">
+              <h3>{{ entry.label }}</h3>
+              <span v-if="entry.value">{{ entry.value }}</span>
+            </div>
+            <p>{{ entry.body }}</p>
+          </div>
         </template>
       </div>
     </section>
@@ -66,4 +70,10 @@ function effect(row: SettingIndexedRow) {
 .setting-panel__inline-field { padding: var(--ui-space-md) 0 0; border-radius: var(--ui-radius-md); background: var(--ui-settings-item-bg); }
 .setting-panel__inline-label { margin: 0 0 var(--ui-space-xs); padding: 0 var(--ui-settings-control-padding); font-size: var(--ui-settings-row-label-size); color: var(--color-text-primary); font-weight: var(--ui-font-weight-medium); }
 .setting-panel__inline-field > .setting-panel__status { padding: 0 var(--ui-settings-control-padding); font-size: var(--ui-settings-row-description-size); }
+.setting-panel__region-field :deep(.setting-row__copy) { flex: 1 1 0; }
+.setting-panel__notice--card { padding: var(--ui-settings-row-padding); border-radius: var(--settings-item-radius); background: var(--ui-settings-item-bg); }
+.setting-panel__notice-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--ui-space-sm); margin-bottom: var(--ui-space-xs); }
+.setting-panel__notice-heading h3 { margin: 0; font-size: var(--ui-settings-row-label-size); font-weight: var(--ui-font-weight-medium); color: var(--color-text-primary); }
+.setting-panel__notice-heading span { font-size: var(--ui-settings-row-value-size); }
+.setting-panel__notice p { margin: 0; font-size: var(--ui-settings-row-description-size); }
 </style>

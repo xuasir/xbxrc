@@ -8,6 +8,7 @@
 
 | ID | Task | Status | Started On | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-11-11-cloud-region-settings-clarity | 简化地区配置并明确三种用途 | Done | 2026-11-11 | simple；“授权地区 / 串流地区 / 目录市场”集中展示，用途各一句；当前网络、自动实际区域、固定美国市场和授权生效提示明确，19区名称本地化。lint:fix / typecheck / build / 174项导航覆盖 / diff check通过；模拟RPC设置页验证独立保存、错误引导、推荐与首项回退、中英文深浅色及800×600布局。 |
 | 2026-11-10-cloud-login-region-compatibility | 修复云授权地区兼容与查询重试循环，分析两份实机日志 | In Progress | 2026-11-10 | simple；最新17:43日志云授权两offering持续403，第二新17:35日志确认防降档策略生效且源尺寸1440p。真实同凭据对照补X-Forwarded-For后两offering成功并返回19区；修复显式云登录兼容请求头、Home/Web事件触发的目录重试、区域查询安全诊断和说明。 |
 | 2026-11-10-better-xcloud-selected-streaming-improvements | 完成四项 better-xcloud 串流改进 | Done | 2026-11-10 | complex；M0–M5完成。默认关闭分辨率保持，raw/wire与状态诊断贯通；WebGL2精度/顶点/texel/链接资源优化；动态云服务器区域与高级登录兼容、旧偏好迁移；xHome跨区发现和当前configuration到ICE、EOC与代次消费闭环。Rust162+Tauri142+前端890+trace2项通过，WebKit120组像素对照误差0，设置浏览器验收通过；功耗、物理上屏和实际网络路径由用户实机验收。[RFC](rfcs/2026-11-10-better-xcloud-selected-streaming-improvements.md) · [Report](reports/2026-11-10-better-xcloud-selected-streaming-improvements.md)。 |
 | 2026-11-10-better-xcloud-streaming-reference-audit | 深查 better-xcloud 六方向串流能力与可借鉴实现 | Done | 2026-11-10 | simple 源码审计；核对v6.7.13、质量/后处理/网络/输入/触控震动/xHome，区分已有覆盖与候选。优先xHome跨区发现及configuration地址到ICE消费、渲染精度资源细节和按游戏配置；鼠标模拟/触控/合作分阶段，WebGPU与A/V合并保留研究。原始metadata、标准候选和公共owner约束明确，接入依据与六维验收见[报告](reports/2026-11-10-better-xcloud-streaming-reference-audit.md)。 |

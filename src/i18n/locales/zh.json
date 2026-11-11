@@ -1438,11 +1438,11 @@
         }
       },
       "force_region_ip": {
-        "label": "登录地区",
+        "label": "授权地区",
         "options": {
           "empty": {
-            "label": "自动",
-            "description": "使用系统默认的区域路由策略。"
+            "label": "当前网络",
+            "description": "使用当前网络授权。"
           },
           "203_41_44_20": {
             "label": "澳大利亚"
@@ -1469,7 +1469,7 @@
             "label": "印度中部"
           }
         },
-        "description": "用于获取云服务授权。所在地未开放云游戏时可选择已开放地区，保存后刷新云游戏页面。串流服务器区域在云游戏设置中选择。"
+        "description": "用于云服务登录授权。"
       },
       "codec": {
         "label": "视频编码档位偏好",
@@ -1608,8 +1608,8 @@
         "description": "优先保持清晰度；设备压力较高时可能增加卡顿。实际画质随网络和服务端策略变化。"
       },
       "xcloud_region_name": {
-        "label": "云服务器区域",
-        "description": "选择下一次云串流使用的服务器区域。"
+        "label": "串流地区",
+        "description": "选择云游戏服务器，自动采用服务推荐。"
       }
     },
     "experience": {
@@ -1629,11 +1629,13 @@
       "range": "允许范围 {min}–{max}，步长 {step}。",
       "effects": {
         "instant": "立即生效",
+        "nextAuthorization": "下次授权生效",
         "nextConnection": "下次连接生效",
         "nextLaunch": "下次启动生效"
       },
       "saved": {
         "instant": "已保存并生效。",
+        "nextAuthorization": "已保存，下次授权生效。",
         "nextConnection": "已保存，下次连接生效。",
         "nextLaunch": "已保存，下次启动生效。"
       },
@@ -1696,14 +1698,40 @@
       }
     },
     "cloudRegions": {
-      "automatic": "自动（服务推荐）",
+      "automatic": "自动",
       "loading": "正在获取可用服务器区域…",
-      "unavailable": "云服务授权和可用区域暂未取得。可在高级设置的云服务登录兼容中调整登录地区后重试。",
+      "unavailable": "服务器列表暂不可用，请检查网络或调整“授权地区”后重试。",
       "savedUnavailable": "{name}（暂不可用，连接时自动回退）",
-      "loginCompatibility": "云服务登录兼容",
-      "loginHint": "用于获取云服务授权；所在地未开放云游戏时可选择已开放登录地区。",
       "saved": "{name}（已保存）",
-      "empty": "当前服务没有返回可用服务器区域，可重新打开此项刷新。"
+      "empty": "当前服务没有返回可用服务器区域，可重新打开此项刷新。",
+      "title": "云游戏地区",
+      "automaticHint": "优先采用服务推荐。",
+      "catalogMarketLabel": "目录市场",
+      "catalogMarketValue": "美国（固定）",
+      "catalogMarketHint": "决定游戏列表与介绍的市场。",
+      "names": {
+        "AUSTRALIAEAST": "澳大利亚东部",
+        "AUSTRALIASOUTHEAST": "澳大利亚东南部",
+        "BRAZILSOUTH": "巴西南部",
+        "CENTRALINDIA": "印度中部",
+        "CHILECENTRAL": "智利中部",
+        "EASTUS": "美国东部",
+        "EASTUS2": "美国东部 2",
+        "JAPANEAST": "日本东部",
+        "KOREACENTRAL": "韩国中部",
+        "MEXICOCENTRAL": "墨西哥中部",
+        "NORTHCENTRALUS": "美国中北部",
+        "SOUTHINDIA": "印度南部",
+        "SOUTHCENTRALUS": "美国中南部",
+        "SWEDENCENTRAL": "瑞典中部",
+        "UKSOUTH": "英国南部",
+        "WESTEUROPE": "欧洲西部",
+        "WESTUS": "美国西部",
+        "WESTUS2": "美国西部 2",
+        "WESTUS3": "美国西部 3"
+      },
+      "automaticSelected": "自动 · {name}",
+      "automaticFallbackHint": "使用服务器列表首项。"
     }
   },
   "controllerPage": {

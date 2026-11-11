@@ -61,7 +61,7 @@ const PREFERRED_GAME_LANGUAGE_OPTIONS = [
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const FORCE_REGION_IP_OPTIONS = [
-  { value: '', label: 'Default', description: 'Use the default regional routing strategy' },
+  { value: '', label: 'Current network', description: 'Authorize through the current network.' },
   { value: '203.41.44.20', label: 'Australia' },
   { value: '200.221.11.101', label: 'Brazil' },
   { value: '194.25.0.68', label: 'Europe' },
@@ -345,13 +345,14 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     control: 'toggle',
   },
   xcloud_region_name: {
-    label: 'Cloud server region',
-    description: 'Choose the server region for your next cloud stream.',
+    label: 'Stream region',
+    description: 'Choose a cloud gaming server. Auto uses the service recommendation.',
     control: 'singleSelect',
-    options: [{ value: '', label: 'Automatic (service recommended)' }],
+    options: [{ value: '', label: 'Auto' }],
   },
   force_region_ip: {
-    label: 'Region routing override',
+    label: 'Authorization region',
+    description: 'Used for cloud service authorization.',
     control: 'singleSelect',
     options: FORCE_REGION_IP_OPTIONS,
   },

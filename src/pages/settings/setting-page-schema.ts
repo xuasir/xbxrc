@@ -11,14 +11,14 @@ export type SettingPageKey
     | 'connectionHost'
     | 'advancedDiagnostics'
 
-export type SettingActionId = 'customTurn' | 'cloudLoginCompatibility'
+export type SettingActionId = 'customTurn'
 
-export type SettingEffect = 'instant' | 'nextConnection' | 'nextLaunch'
+export type SettingEffect = 'instant' | 'nextAuthorization' | 'nextConnection' | 'nextLaunch'
 
 export type SettingSchemaItemDef
   = | { kind: 'field', fieldKey: string }
     | { kind: 'action', actionId: SettingActionId }
-    | { kind: 'notice', noticeKey: string }
+    | { kind: 'notice', noticeKey: string, labelKey?: string, valueKey?: string }
     | { kind: 'groupSummary', summaryId: string }
 
 export interface SettingSchemaSectionDef {
@@ -72,6 +72,8 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
 export function getSettingEffect(fieldKey: string): SettingEffect {
   if (fieldKey === 'fullscreen')
     return 'nextLaunch'
+  if (fieldKey === 'force_region_ip')
+    return 'nextAuthorization'
   if (CONFIG_FIELD_RPC_GROUP[fieldKey] === 'streaming')
     return 'nextConnection'
   return 'instant'
@@ -129,8 +131,12 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
 ]
 
 const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
-  { key: 'cloud', labelKey: 'setting.experience.sections.cloudPreferences', items: [
+  { key: 'cloud', labelKey: 'setting.cloudRegions.title', items: [
+    { kind: 'field', fieldKey: 'force_region_ip' },
     { kind: 'field', fieldKey: 'xcloud_region_name' },
+    { kind: 'notice', noticeKey: 'setting.cloudRegions.catalogMarketHint', labelKey: 'setting.cloudRegions.catalogMarketLabel', valueKey: 'setting.cloudRegions.catalogMarketValue' },
+  ] },
+  { key: 'cloudPreferences', labelKey: 'setting.experience.sections.cloudPreferences', items: [
     { kind: 'field', fieldKey: 'preferred_game_language' },
   ] },
   { key: 'network', labelKey: 'setting.experience.sections.network', items: [
@@ -139,7 +145,6 @@ const PAGE_CONNECTION: SettingSchemaSectionDef[] = [
   ] },
   { key: 'advanced', labelKey: 'setting.experience.sections.connectionAdvanced', collapsible: true, items: [
     { kind: 'action', actionId: 'customTurn' },
-    { kind: 'action', actionId: 'cloudLoginCompatibility' },
   ] },
 ]
 

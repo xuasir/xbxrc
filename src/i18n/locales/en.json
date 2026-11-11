@@ -1438,11 +1438,11 @@
         }
       },
       "force_region_ip": {
-        "label": "Sign-in region",
+        "label": "Authorization region",
         "options": {
           "empty": {
-            "label": "Automatic",
-            "description": "Use the default regional routing strategy."
+            "label": "Current network",
+            "description": "Authorize through the current network."
           },
           "203_41_44_20": {
             "label": "Australia"
@@ -1469,7 +1469,7 @@
             "label": "Central India"
           }
         },
-        "description": "Used for cloud service authorization. If cloud gaming is unavailable in your location, try a supported sign-in region, then refresh the cloud gaming page. Choose streaming servers in Cloud server region."
+        "description": "Used for cloud service authorization."
       },
       "codec": {
         "label": "Preferred video codec tier",
@@ -1608,8 +1608,8 @@
         "description": "Prioritize clarity. Device pressure may increase stuttering; network and service policies determine actual quality."
       },
       "xcloud_region_name": {
-        "label": "Cloud server region",
-        "description": "Choose the server region for your next cloud stream."
+        "label": "Stream region",
+        "description": "Choose a cloud gaming server. Auto uses the service recommendation."
       }
     },
     "experience": {
@@ -1629,11 +1629,13 @@
       "range": "Range {min}–{max}, step {step}.",
       "effects": {
         "instant": "Applies immediately",
+        "nextAuthorization": "Applies on next authorization",
         "nextConnection": "Applies on next connection",
         "nextLaunch": "Applies on next launch"
       },
       "saved": {
         "instant": "Saved and applied.",
+        "nextAuthorization": "Saved. Applies on next authorization.",
         "nextConnection": "Saved. Applies on next connection.",
         "nextLaunch": "Saved. Applies on next launch."
       },
@@ -1696,14 +1698,40 @@
       }
     },
     "cloudRegions": {
-      "automatic": "Automatic (service recommended)",
+      "automatic": "Auto",
       "loading": "Loading available server regions…",
-      "unavailable": "Cloud authorization and available regions could not be loaded. Try adjusting the sign-in region under Advanced settings > Cloud sign-in compatibility.",
+      "unavailable": "Server list unavailable. Check your network or adjust Authorization region, then retry.",
       "savedUnavailable": "{name} (unavailable; uses fallback)",
-      "loginCompatibility": "Cloud sign-in compatibility",
-      "loginHint": "Used for cloud authorization; try a supported sign-in region if cloud gaming is unavailable in your location.",
       "saved": "{name} (saved)",
-      "empty": "The service returned no available regions. Reopen this setting to refresh."
+      "empty": "The service returned no available regions. Reopen this setting to refresh.",
+      "title": "Cloud gaming regions",
+      "automaticHint": "Prefer the service recommendation.",
+      "catalogMarketLabel": "Catalog market",
+      "catalogMarketValue": "US (fixed)",
+      "catalogMarketHint": "Sets the market for game listings and descriptions.",
+      "names": {
+        "AUSTRALIAEAST": "Australia East",
+        "AUSTRALIASOUTHEAST": "Australia Southeast",
+        "BRAZILSOUTH": "Brazil South",
+        "CENTRALINDIA": "Central India",
+        "CHILECENTRAL": "Chile Central",
+        "EASTUS": "East US",
+        "EASTUS2": "East US 2",
+        "JAPANEAST": "Japan East",
+        "KOREACENTRAL": "Korea Central",
+        "MEXICOCENTRAL": "Mexico Central",
+        "NORTHCENTRALUS": "North Central US",
+        "SOUTHINDIA": "South India",
+        "SOUTHCENTRALUS": "South Central US",
+        "SWEDENCENTRAL": "Sweden Central",
+        "UKSOUTH": "UK South",
+        "WESTEUROPE": "West Europe",
+        "WESTUS": "West US",
+        "WESTUS2": "West US 2",
+        "WESTUS3": "West US 3"
+      },
+      "automaticSelected": "Auto · {name}",
+      "automaticFallbackHint": "Use the first server in the list."
     }
   },
   "controllerPage": {
