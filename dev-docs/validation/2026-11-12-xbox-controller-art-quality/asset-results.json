@@ -1,0 +1,145 @@
+{
+  "sourcePage": "https://www.microsoft.com/en-us/d/xbox-wireless-controller/8xn59crbsqgz",
+  "sourceUrl": "https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/gldn-Xbox-Cntrl-Black-b00?fmt=png-alpha&wid=2000",
+  "sourceSize": [
+    2000,
+    2000
+  ],
+  "sourceBytes": 1148460,
+  "sourceSha256": "a74424b98edfdfc49239ea680a45c0d775651a3177674b2f8ae68bfede0aa47a",
+  "cropBox": [
+    219,
+    455,
+    1781,
+    1539
+  ],
+  "outputSize": [
+    1488,
+    1032
+  ],
+  "originalSize": [
+    372,
+    258
+  ],
+  "outputBytes": 1036419,
+  "outputSha256": "648cebcf267a6790ffa0b0976d39b5a956458e16cf47aef08f1e2c2143e93657",
+  "resize": "Pillow 13.0.0 LANCZOS, RGBA (premultiplied alpha resampling)",
+  "hotspots": [
+    [
+      "home",
+      186,
+      35
+    ],
+    [
+      "l2",
+      104,
+      6
+    ],
+    [
+      "l1",
+      83,
+      16
+    ],
+    [
+      "l3",
+      90,
+      74
+    ],
+    [
+      "view",
+      159,
+      72
+    ],
+    [
+      "dpadUp",
+      137,
+      115
+    ],
+    [
+      "dpadLeft",
+      117,
+      133
+    ],
+    [
+      "dpadDown",
+      137,
+      151
+    ],
+    [
+      "dpadRight",
+      157,
+      133
+    ],
+    [
+      "r2",
+      268,
+      6
+    ],
+    [
+      "r1",
+      289,
+      16
+    ],
+    [
+      "north",
+      281,
+      49
+    ],
+    [
+      "west",
+      257,
+      73
+    ],
+    [
+      "east",
+      307,
+      74
+    ],
+    [
+      "south",
+      282,
+      98
+    ],
+    [
+      "menu",
+      213,
+      72
+    ],
+    [
+      "r3",
+      233,
+      131
+    ]
+  ],
+  "originalAlpha": {
+    "transparent": 29481,
+    "opaque": 66495,
+    "semitransparent": 0,
+    "semitransparentNearWhite": 0
+  },
+  "outputAlpha": {
+    "transparent": 336316,
+    "opaque": 1032357,
+    "semitransparent": 166943,
+    "semitransparentNearWhite": 50
+  },
+  "hotspotAlpha": {
+    "home": 255,
+    "l2": 255,
+    "l1": 255,
+    "l3": 255,
+    "view": 255,
+    "dpadUp": 255,
+    "dpadLeft": 255,
+    "dpadDown": 255,
+    "dpadRight": 255,
+    "r2": 255,
+    "r1": 255,
+    "north": 255,
+    "west": 255,
+    "east": 255,
+    "south": 255,
+    "menu": 255,
+    "r3": 255
+  }
+}

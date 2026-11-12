@@ -1,0 +1,284 @@
+{
+  "current": {
+    "viewport": {
+      "width": 320,
+      "height": 720
+    },
+    "category": {
+      "left": 20,
+      "top": 159.6015625,
+      "right": 150.4296875,
+      "bottom": 195.6015625,
+      "width": 130.4296875
+    },
+    "sort": {
+      "left": 154.4296875,
+      "top": 159.6015625,
+      "right": 237.6875,
+      "bottom": 195.6015625,
+      "width": 83.2578125
+    },
+    "search": {
+      "left": 20,
+      "top": 207.6015625,
+      "right": 252,
+      "bottom": 249.6015625,
+      "width": 232
+    },
+    "refresh": {
+      "left": 264,
+      "top": 210.6015625,
+      "right": 300,
+      "bottom": 246.6015625,
+      "width": 36
+    },
+    "refreshBusy": null,
+    "categoryRail": {
+      "left": 12,
+      "right": 308,
+      "scrollLeft": 0,
+      "clientWidth": 296,
+      "scrollWidth": 697,
+      "rows": [
+        262
+      ],
+      "buttons": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "left": 20,
+          "top": 261.6015625,
+          "right": 142.28125,
+          "bottom": 293.6015625,
+          "width": 122.28125
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "left": 146.28125,
+          "top": 261.6015625,
+          "right": 227.0078125,
+          "bottom": 293.6015625,
+          "width": 80.7265625
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "left": 231.0078125,
+          "top": 261.6015625,
+          "right": 341.6640625,
+          "bottom": 293.6015625,
+          "width": 110.65625
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "left": 345.6640625,
+          "top": 261.6015625,
+          "right": 461.6484375,
+          "bottom": 293.6015625,
+          "width": 115.984375
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "left": 465.6484375,
+          "top": 261.6015625,
+          "right": 571.3203125,
+          "bottom": 293.6015625,
+          "width": 105.671875
+        },
+        {
+          "id": "xcloud.jump.all",
+          "left": 575.3203125,
+          "top": 261.6015625,
+          "right": 701.09375,
+          "bottom": 293.6015625,
+          "width": 125.7734375
+        }
+      ]
+    },
+    "categories": [
+      {
+        "id": "xcloud.jump.xcloud-recent",
+        "label": "Recently Played"
+      },
+      {
+        "id": "xcloud.jump.xcloud-favorites",
+        "label": "Favorites"
+      },
+      {
+        "id": "xcloud.jump.xcloud-new",
+        "label": "New on Cloud"
+      },
+      {
+        "id": "xcloud.jump.xcloud-popular",
+        "label": "Popular games"
+      },
+      {
+        "id": "xcloud.jump.xcloud-leaving",
+        "label": "Leaving soon"
+      },
+      {
+        "id": "xcloud.jump.all",
+        "label": "All Cloud Games"
+      }
+    ],
+    "sections": [
+      "xcloud-recent",
+      "xcloud-favorites",
+      "xcloud-new",
+      "xcloud-popular",
+      "xcloud-leaving",
+      "xcloud-all"
+    ],
+    "overflow": false,
+    "selectedCategory": "All categories",
+    "selectedSort": "Name"
+  },
+  "observations": [
+    {
+      "atMs": 229,
+      "viewport": {
+        "width": 320,
+        "height": 720
+      },
+      "category": null,
+      "sort": null,
+      "search": null,
+      "refresh": null,
+      "categoryRail": null,
+      "categories": [],
+      "sections": [],
+      "overflow": false
+    },
+    {
+      "atMs": 284,
+      "viewport": {
+        "width": 320,
+        "height": 720
+      },
+      "category": {
+        "left": 20,
+        "top": 159.6015625,
+        "right": 150.4296875,
+        "bottom": 195.6015625,
+        "width": 130.4296875
+      },
+      "sort": {
+        "left": 154.4296875,
+        "top": 159.6015625,
+        "right": 237.6875,
+        "bottom": 195.6015625,
+        "width": 83.2578125
+      },
+      "search": {
+        "left": 20,
+        "top": 207.6015625,
+        "right": 252,
+        "bottom": 249.6015625,
+        "width": 232
+      },
+      "refresh": {
+        "left": 264,
+        "top": 210.6015625,
+        "right": 300,
+        "bottom": 246.6015625,
+        "width": 36
+      },
+      "refreshBusy": null,
+      "categoryRail": {
+        "left": 12,
+        "right": 308,
+        "scrollLeft": 0,
+        "clientWidth": 296,
+        "scrollWidth": 697,
+        "rows": [
+          262
+        ],
+        "buttons": [
+          {
+            "id": "xcloud.jump.xcloud-recent",
+            "left": 20,
+            "top": 261.6015625,
+            "right": 142.28125,
+            "bottom": 293.6015625,
+            "width": 122.28125
+          },
+          {
+            "id": "xcloud.jump.xcloud-favorites",
+            "left": 146.28125,
+            "top": 261.6015625,
+            "right": 227.0078125,
+            "bottom": 293.6015625,
+            "width": 80.7265625
+          },
+          {
+            "id": "xcloud.jump.xcloud-new",
+            "left": 231.0078125,
+            "top": 261.6015625,
+            "right": 341.6640625,
+            "bottom": 293.6015625,
+            "width": 110.65625
+          },
+          {
+            "id": "xcloud.jump.xcloud-popular",
+            "left": 345.6640625,
+            "top": 261.6015625,
+            "right": 461.6484375,
+            "bottom": 293.6015625,
+            "width": 115.984375
+          },
+          {
+            "id": "xcloud.jump.xcloud-leaving",
+            "left": 465.6484375,
+            "top": 261.6015625,
+            "right": 571.3203125,
+            "bottom": 293.6015625,
+            "width": 105.671875
+          },
+          {
+            "id": "xcloud.jump.all",
+            "left": 575.3203125,
+            "top": 261.6015625,
+            "right": 701.09375,
+            "bottom": 293.6015625,
+            "width": 125.7734375
+          }
+        ]
+      },
+      "categories": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "label": "Recently Played"
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "label": "Favorites"
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "label": "New on Cloud"
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "label": "Popular games"
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "label": "Leaving soon"
+        },
+        {
+          "id": "xcloud.jump.all",
+          "label": "All Cloud Games"
+        }
+      ],
+      "sections": [
+        "xcloud-recent",
+        "xcloud-favorites",
+        "xcloud-new",
+        "xcloud-popular",
+        "xcloud-leaving",
+        "xcloud-all"
+      ],
+      "overflow": false,
+      "selectedCategory": "All categories",
+      "selectedSort": "Name"
+    }
+  ]
+}

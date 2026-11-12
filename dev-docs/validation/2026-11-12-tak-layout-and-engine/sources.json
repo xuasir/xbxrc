@@ -1,0 +1,118 @@
+{
+  "inspectionDate": "2026-11-12",
+  "site": "play.xbox.com",
+  "discoveryRuntime": "https://assets.play.xbox.com/playxbox/static/js/client.909e27db.js",
+  "formatting": {
+    "tool": "terser 5.46.0",
+    "compress": false,
+    "mangle": false,
+    "beautify": true
+  },
+  "sources": [
+    {
+      "file": "2871.36f50502.chunk.js",
+      "role": "TAK core: layout, input, hit testing",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/2871.36f50502.chunk.js",
+      "sha256": "c83ea789fd64ea3fe7fbc4acbc086bf9d2f56beb3f917a939f08298eb2fcbff0",
+      "bytes": 498778,
+      "readableFile": "2871.36f50502.readable.js",
+      "localRawFile": "/private/tmp/xbxrc-tak-audit-20261112/2871.36f50502.chunk.js",
+      "localReadableFile": "/private/tmp/xbxrc-tak-audit-20261112/2871.36f50502.readable.js",
+      "readableSha256": "e74a0b6cc45ee8597376240ced787153ca2447cbfb9b496121ce60990d25d8e6",
+      "readableLines": 17156
+    },
+    {
+      "file": "2879.4921609f.chunk.js",
+      "role": "Babylon ThinEngine and TAK renderer",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/2879.4921609f.chunk.js",
+      "sha256": "6a89b3639e8d1bb639e7dc489bf32b056d6ee9e496a611b789cdeb357be11d52",
+      "bytes": 363813,
+      "readableFile": "2879.4921609f.readable.js",
+      "localRawFile": "/private/tmp/xbxrc-tak-audit-20261112/2879.4921609f.chunk.js",
+      "localReadableFile": "/private/tmp/xbxrc-tak-audit-20261112/2879.4921609f.readable.js",
+      "readableSha256": "320e7d00de8da12d18f2ca47044d5513adc0225d94a516deaae9ae23f7667ec5",
+      "readableLines": 11583
+    },
+    {
+      "file": "touch-adaptation-kit.03ac9169.chunk.js",
+      "role": "React host integration and browser touch events",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/touch-adaptation-kit.03ac9169.chunk.js",
+      "sha256": "b4eef7d0cc39ad92eb513800ff55c469341cdd2dac3f715a364341400c8ca9de",
+      "bytes": 46803,
+      "readableFile": "touch-adaptation-kit.03ac9169.readable.js",
+      "localRawFile": "/private/tmp/xbxrc-tak-audit-20261112/touch-adaptation-kit.03ac9169.chunk.js",
+      "localReadableFile": "/private/tmp/xbxrc-tak-audit-20261112/touch-adaptation-kit.03ac9169.readable.js",
+      "readableSha256": "7f7198cd738f3bdc1bd180e9e9723afcf99ed8e4e1728ec39527171d62769edf",
+      "readableLines": 1650
+    },
+    {
+      "file": "touch-adaptation-kit-validation.d399c792.chunk.js",
+      "role": "Layout schema validators",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/touch-adaptation-kit-validation.d399c792.chunk.js",
+      "sha256": "9ffca4a4f4e9c45cb8bf6958e169141afaa18aef7893aabfc0ddc90efb997d48",
+      "bytes": 828721,
+      "readableFile": "touch-adaptation-kit-validation.d399c792.readable.js",
+      "localRawFile": "/private/tmp/xbxrc-tak-audit-20261112/touch-adaptation-kit-validation.d399c792.chunk.js",
+      "localReadableFile": "/private/tmp/xbxrc-tak-audit-20261112/touch-adaptation-kit-validation.d399c792.readable.js",
+      "readableSha256": "b29739a29fc6d7f1c2857edfabf94ce9caf756753563ac6894b789fa35634c7d",
+      "readableLines": 41594
+    },
+    {
+      "file": "game-stream.42236acb.chunk.js",
+      "role": "Streaming session input bridge",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/game-stream.42236acb.chunk.js",
+      "sha256": "277ad66491c60c2ceb6efb70615b712f00223de75a05f0f0baeebd76d051615e",
+      "bytes": 285280,
+      "readableFile": "game-stream.42236acb.readable.js",
+      "localRawFile": "/private/tmp/xbxrc-tak-audit-20261112/game-stream.42236acb.chunk.js",
+      "localReadableFile": "/private/tmp/xbxrc-tak-audit-20261112/game-stream.42236acb.readable.js",
+      "readableSha256": "1c2c1d142e5f29bc7d5d792bb94043ae31eeb4e8e7b378ba146253d6c089c636",
+      "readableLines": 8496
+    },
+    {
+      "file": "8128.1aca8038.chunk.js",
+      "role": "Session message routing and Base64 touch-control commands",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+      "readableFile": "8128.1aca8038.readable.js",
+      "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2",
+      "bytes": 177333,
+      "localRawFile": "/private/tmp/xbxrc-20261112-official-assets/8128.1aca8038.chunk.js",
+      "localReadableFile": "/private/tmp/xbxrc-tak-audit-20261112/8128.1aca8038.readable.js",
+      "readableSha256": "4d136ea9a3357127701ab8b36ec1671ba4245b397d5a2b07be7968e439834e84",
+      "readableLines": 4927
+    }
+  ],
+  "evidenceKind": "Public release JavaScript; static inspection and isolated method replay",
+  "betterXcloud": {
+    "repository": "https://github.com/redphx/better-xcloud",
+    "codeCommit": "76db611e610c45ea996f6d35a9df5f980e8f0f85",
+    "layoutsCommit": "d66bd2925ee4518a955955b0b52890a407575285"
+  },
+  "examples": [
+    {
+      "file": "examples/forza-title.json",
+      "url": "https://github.com/redphx/better-xcloud/blob/d66bd2925ee4518a955955b0b52890a407575285/touch-layouts/2030093255.json",
+      "sourceSha256": "5ac62534ce1ab53e70111670bc3f4200850f6e680635b8bf7b85adb9360adf46"
+    },
+    {
+      "file": "examples/halo-title.json",
+      "url": "https://github.com/redphx/better-xcloud/blob/d66bd2925ee4518a955955b0b52890a407575285/touch-layouts/2043073184.json",
+      "sourceSha256": "2de8408506ebb0aa87715802227ba8a2a40760e5a2864d320d5d9063aa540f7e"
+    },
+    {
+      "file": "examples/forza-layouts.json",
+      "url": "https://github.com/redphx/better-xcloud/blob/d66bd2925ee4518a955955b0b52890a407575285/touch-layouts/layouts/forza.json",
+      "sourceSha256": "e5c4c5fca0c9c82cc79c0cc0106e353418534fc7cf1d1e1892e2879ac47ff5d1"
+    },
+    {
+      "file": "examples/halo-layouts.json",
+      "url": "https://github.com/redphx/better-xcloud/blob/d66bd2925ee4518a955955b0b52890a407575285/touch-layouts/layouts/halo-infinite.json",
+      "sourceSha256": "81c9e3abd9f9356144513bd19ccada46a9b6cbea4f2da0f73a43e66ce0f0525a"
+    }
+  ],
+  "sourceExcerpts": {
+    "indexFile": "source-excerpts/index.json",
+    "sectionCount": 36,
+    "description": "关键方法按原可读源码行区间冻结；每段包含源文件、行号和 SHA-256。"
+  }
+}

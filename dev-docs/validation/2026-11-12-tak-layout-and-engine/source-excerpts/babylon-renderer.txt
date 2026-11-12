@@ -1,0 +1,747 @@
+// 官方公开发布脚本源码摘录：2879.4921609f.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/2879.4921609f.chunk.js
+// 原件 SHA-256：6a89b3639e8d1bb639e7dc489bf32b056d6ee9e496a611b789cdeb357be11d52
+// 格式化文件 SHA-256：320e7d00de8da12d18f2ca47044d5513adc0225d94a516deaae9ae23f7667ec5
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// application-resource-owner-and-node-tree | 原可读文件第 4810–5080 行
+            }
+        }
+        class G {
+            constructor(t, e, i) {
+                this.renderer = t, this.animationStore = e, this.enableAnimations = !0, this.loader = new V(t.engine, i);
+            }
+            async initialize(t, e) {
+                return !(null === e || void 0 === e ? void 0 : e()) && (await this.loader.loadIcons(t, e), 
+                !(null === e || void 0 === e ? void 0 : e()) || (this.dispose(), !1));
+            }
+            createAnimation(t) {
+                let e = t;
+                return this.enableAnimations || (e = Object.assign(Object.assign({}, t), {
+                    easing: "linear",
+                    duration: 0
+                })), this.animationStore.createAnimation(e);
+            }
+            removeFromAnimations(t) {
+                this.animationStore.removeTargets(t);
+            }
+            setVisible(t) {
+                this.renderer.rootControlsNode.setVisible(t);
+            }
+            setSize(t, e, i) {
+                this.renderer.setSize(t, e, i);
+            }
+            setCutout(t) {
+                this.renderer.setCutout(t);
+            }
+            dispose() {
+                this.renderer.dispose(), this.loader.unloadIcons(), this.loader.unloadAssets();
+            }
+        }
+        class W {
+            constructor() {
+                this.updateFlag = -1, this._data = new Float32Array(16);
+            }
+            setValues(t, e, i, r, s, n, o, a, h, l, u, c, _, d, p, f) {
+                const g = this._data;
+                return g[0] = t, g[1] = e, g[2] = i, g[3] = r, g[4] = s, g[5] = n, g[6] = o, g[7] = a, 
+                g[8] = h, g[9] = l, g[10] = u, g[11] = c, g[12] = _, g[13] = d, g[14] = p, g[15] = f, 
+                this.updateFlag = W.UpdateFlagSeed++, this;
+            }
+            identity() {
+                return this.setValues(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1), this;
+            }
+            orthoOffCenterLH(t, e, i, r, s, n) {
+                const o = 2 / (e - t), a = 2 / (r - i), h = 2 / (n - s), l = -(n + s) / (n - s), u = (t + e) / (t - e), c = (r + i) / (i - r);
+                return this.setValues(o, 0, 0, 0, 0, a, 0, 0, 0, 0, h, 0, u, c, l, 1), this;
+            }
+            roll(t) {
+                const e = .5 * t, i = Math.sin(e), r = i * i, s = i * Math.cos(e), n = 1 - 2 * r, o = 2 * s, a = -2 * s, h = 1 - 2 * r;
+                return this.setValues(n, o, 0, 0, a, h, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1), this;
+            }
+            compose(t, e, i) {
+                const r = .5 * e, s = Math.sin(r), n = Math.cos(r), o = s + s, a = 0 * o, h = 0 * o, l = s * o, u = 0 * n, c = 0 * n, _ = n * o, d = t.x, p = t.y, f = (1 - (0 + l)) * d, g = (0 + _) * d, m = (a - c) * d, y = (0 - _) * p, x = (1 - (0 + l)) * p, b = (h + u) * p, S = 1 * (a + c), v = 1 * (h - u), R = i.x, T = i.y;
+                return this.setValues(f, g, m, 0, y, x, b, 0, S, v, 1, 0, R, T, 0, 1), this;
+            }
+            multiply(t) {
+                const e = this._data, i = t._data, r = e[0], s = e[1], n = e[2], o = e[3], a = e[4], h = e[5], l = e[6], u = e[7], c = e[8], _ = e[9], d = e[10], p = e[11], f = e[12], g = e[13], m = e[14], y = e[15], x = i[0], b = i[1], S = i[2], v = i[3], R = i[4], T = i[5], w = i[6], C = i[7], E = i[8], A = i[9], F = i[10], I = i[11], P = i[12], D = i[13], M = i[14], O = i[15], B = r * x + s * R + n * E + o * P, k = r * b + s * T + n * A + o * D, L = r * S + s * w + n * F + o * M, N = r * v + s * C + n * I + o * O, U = a * x + h * R + l * E + u * P, z = a * b + h * T + l * A + u * D, V = a * S + h * w + l * F + u * M, G = a * v + h * C + l * I + u * O, W = c * x + _ * R + d * E + p * P, H = c * b + _ * T + d * A + p * D, X = c * S + _ * w + d * F + p * M, j = c * v + _ * C + d * I + p * O, q = f * x + g * R + m * E + y * P, Y = f * b + g * T + m * A + y * D, K = f * S + g * w + m * F + y * M, Z = f * v + g * C + m * I + y * O;
+                return this.setValues(B, k, L, N, U, z, V, G, W, H, X, j, q, Y, K, Z), this;
+            }
+            rotationPerspective(t, e, i) {
+                const r = Math.sin(-e), s = Math.cos(-e), n = 1 - s, o = -1 / i, a = Math.sqrt(t.x * t.x + t.y * t.y + t.z * t.z);
+                t.x /= a, t.y /= a, t.z /= a;
+                const h = t.x * t.x * n + s, l = t.x * t.y * n - t.z * r, u = t.x * t.z * n + t.y * r, c = 0 + u * o, _ = t.y * t.x * n + t.z * r, d = t.y * t.y * n + s, p = t.y * t.z * n - t.x * r, f = 0 + p * o, g = t.z * t.x * n - t.y * r, m = t.z * t.y * n + t.x * r, y = t.z * t.z * n + s, x = 0 + y * o, b = 1 + 0 * o;
+                return this.setValues(h, l, u, c, _, d, p, f, g, m, y, x, 0, 0, 0, b), this;
+            }
+            toArray() {
+                return this._data;
+            }
+        }
+        W.UpdateFlagSeed = 0;
+        class H {
+            constructor(t, e) {
+                this._renderer = t, this._position = {
+                    x: 0,
+                    y: 0
+                }, this._rotation = 0, this._scale = {
+                    x: 1,
+                    y: 1
+                }, this._worldMatrix = new W, this._visible = !0, this._globalVisibility = !0, this._opacity = 1, 
+                this._globalOpacity = 1, this._isDirty = !0, this._children = [], this._weight = 1, 
+                e ? (this._parent = e, e._children.push(this), this._parent._incrementDescendantsCount(), 
+                this._renderingGroup = e._renderingGroup) : (this._parent = void 0, this._renderingGroup = 0), 
+                this.shouldRender();
+            }
+            get position() {
+                return this._position;
+            }
+            get rotation() {
+                return this._rotation;
+            }
+            get scale() {
+                return this._scale;
+            }
+            get worldMatrix() {
+                return this._worldMatrix;
+            }
+            get visible() {
+                return this._globalVisibility;
+            }
+            get globalOpacity() {
+                return this._globalOpacity;
+            }
+            get opacity() {
+                return this._opacity;
+            }
+            get renderingGroup() {
+                return this._renderingGroup;
+            }
+            get parent() {
+                return this._parent;
+            }
+            get weight() {
+                return this._weight;
+            }
+            setPosition(t, e) {
+                t === this._position.x && e === this._position.y || (this._position.x = t, this._position.y = e, 
+                this._isDirty = !0, this._renderer.shouldUpdate(this));
+            }
+            setScale(t, e = t) {
+                t === this._scale.x && e === this._scale.y || (this._scale.x = t, this._scale.y = e, 
+                this._isDirty = !0, this._renderer.shouldUpdate(this));
+            }
+            setRotation(t) {
+                t !== this._rotation && (this._rotation = t, this._isDirty = !0, this._renderer.shouldUpdate(this));
+            }
+            setVisible(t) {
+                t !== this._visible && (this._visible = t, this._renderer.shouldUpdate(this));
+            }
+            setOpacity(t) {
+                t !== this._opacity && (this._opacity = t, this._renderer.shouldUpdate(this));
+            }
+            setDirty() {
+                this._isDirty = !0, this._renderer.shouldUpdate(this);
+            }
+            shouldRender() {
+                this._renderer.shouldRender();
+            }
+            setRenderingGroup(t) {
+                if (this._renderingGroup !== t) {
+                    for (let e = 0; e < this._children.length; e++) this._children[e].setRenderingGroup(t);
+                    this._renderingGroup = t, this._renderer.updateRenderingGroups();
+                }
+            }
+            update(t, e, i, r) {
+                if (e && (this._isDirty = !0), this._globalOpacity = this._opacity * i, this._updateVisibility(r), 
+                !this._globalVisibility) return;
+                const s = this._updateWorldMatrix(t);
+                this._updateChildren(s);
+            }
+            dispose() {
+                this._release(), this._detach();
+            }
+            _release() {
+                for (let t = 0; t < this._children.length; t++) this._children[t]._release();
+            }
+            _detach() {
+                if (!this._parent) return;
+                const t = this._parent._children.indexOf(this);
+                t > -1 && this._parent._children.splice(t, 1), this._parent._decrementDescendantsCount(this._weight), 
+                this.shouldRender(), this._parent = void 0;
+            }
+            _hideBranch() {
+                this._globalVisibility = !1;
+                for (let t = 0; t < this._children.length; t++) this._children[t]._hideBranch();
+            }
+            _updateVisibility(t) {
+                const e = this._globalVisibility;
+                this._globalVisibility = this._globalOpacity > 0 && this._visible && t, this._globalVisibility || e !== this._globalVisibility && this._hideBranch();
+            }
+            _updateWorldMatrix(t) {
+                return !!this._isDirty && (this._worldMatrix.compose(this._scale, this._rotation, this._position), 
+                this._worldMatrix.multiply(t), this._isDirty = !1, !0);
+            }
+            _updateChildren(t) {
+                for (let e = 0; e < this._children.length; e++) this._children[e].update(this._worldMatrix, t, this._globalOpacity, this._globalVisibility);
+            }
+            _incrementDescendantsCount() {
+                this._weight++, this._parent && this._parent._incrementDescendantsCount();
+            }
+            _decrementDescendantsCount(t) {
+                this._weight -= t, this._parent && this._parent._decrementDescendantsCount(t);
+            }
+        }
+        class X {
+            constructor(t, e) {
+                this._application = e, this._mainNode = new H(e.renderer, t);
+            }
+            set visible(t) {
+                this.mainNode.setVisible(t);
+            }
+            get opacity() {
+                return this.mainNode.opacity;
+            }
+            set opacity(t) {
+                this.mainNode.setOpacity(t);
+            }
+            get mainNode() {
+                return this._mainNode;
+            }
+            dispose() {
+                this._mainNode.dispose();
+            }
+        }
+        class j extends X {
+            constructor(t, e) {
+                super(t, e), this._animatedOpacity = 0, this._interactionOpacityStartingValue = 1, 
+                this._interactionOpacityTargetValue = 1, this._interactionOpacityProgress = 1, this._animatedOpacityAnimationEnergy = L.Lt.Slowest, 
+                super.mainNode.setOpacity(0), this._wrapperNode = new H(e.renderer, super.mainNode), 
+                this._fadeInAnimation = e.createAnimation({
+                    targets: [ this ],
+                    _animatedOpacity: 1,
+                    easing: "easeInOutExpo",
+                    duration: 700,
+                    update: () => {
+                        super.mainNode.setOpacity(this._animatedOpacity);
+                    },
+                    complete: () => {
+                        super.mainNode.setOpacity(1);
+                    }
+                }), this._animatedOpacityAnimation = this.createOpacityAnimation();
+            }
+            get position() {
+                return super.mainNode.position;
+            }
+            get mainNode() {
+                return this._wrapperNode;
+            }
+            dispose() {
+                this._application.removeFromAnimations(this), this._wrapperNode.dispose(), super.dispose();
+            }
+            update(t) {
+                super.mainNode.setPosition(t.x, t.y), super.mainNode.setRotation(t.rotation), t.opacity.energy === L.Lt.Instant ? (this._animatedOpacityAnimation.pause(), 
+                this._wrapperNode.setOpacity(t.opacity.value)) : (this._animatedOpacityAnimationEnergy !== t.opacity.energy && (this._animatedOpacityAnimationEnergy = t.opacity.energy, 
+                this._animatedOpacityAnimation.remove(this), this._animatedOpacityAnimation = this.createOpacityAnimation()), 
+                this._interactionOpacityTargetValue = t.opacity.value, this._animatedOpacityAnimation.restart());
+            }
+            beginDispose() {
+                this._fadeInAnimation.pause(), this._animatedOpacityAnimation.pause(), this._application.createAnimation({
+                    targets: [ this ],
+                    _animatedOpacity: 0,
+                    easing: "easeInOutExpo",
+                    duration: 700,
+                    update: () => {
+                        super.mainNode.setOpacity(this._animatedOpacity);
+                    },
+                    complete: () => {
+                        super.mainNode.setOpacity(0), this.dispose();
+                    },
+                    autoplay: !0
+                });
+            }
+            createOpacityAnimation() {
+                return this._application.createAnimation({
+                    targets: [ this ],
+                    _interactionOpacityProgress: [ 0, 1 ],
+                    easing: "easeOutExpo",
+                    duration: this._animatedOpacityAnimationEnergy,
+                    begin: () => {
+                        this._interactionOpacityStartingValue = this._wrapperNode.opacity;
+                    },
+                    update: () => {
+                        this._wrapperNode.setOpacity((1 - this._interactionOpacityProgress) * this._interactionOpacityStartingValue + this._interactionOpacityProgress * this._interactionOpacityTargetValue);
+                    },
+                    complete: () => {
+                        this._wrapperNode.setOpacity(this._interactionOpacityTargetValue);
+                    },
+                    autoplay: !1
+                });
+
+// sprites-gatherer-and-quad-generator | 原可读文件第 6687–6785 行
+            b: 1,
+            a: 1,
+            string: "#ffffffff"
+        }, jt = {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+            string: "#00000000"
+        }, qt = 2048;
+        class Yt {
+            constructor(t) {
+                this._engine = t.engine, this._spritesInternalTexture = this._engine.createRenderTargetTexture(qt, {
+                    generateDepthBuffer: !1,
+                    generateStencilBuffer: !1,
+                    generateMipMaps: !1,
+                    createMipMaps: !1,
+                    samplingMode: 2
+                }), this._spritesTexture = new U(this._spritesInternalTexture.texture), this._spritesTexture.wrapU = this._spritesTexture.wrapV = 0, 
+                this._spriteSheetMap = {}, this._currentX = 0, this._currentY = 0, this._maxRowHeight = 0, 
+                this._effect = t.effectManager.getEffect(Ht);
+                const e = new Wt;
+                this._renderingData = new et(this._engine, e, Ht.renderingDataMapping), this._worldMatrix = (new W).identity(), 
+                this._uvMatrix = (new W).identity(), this._scaling = {
+                    x: 0,
+                    y: 0
+                }, this._translation = {
+                    x: 0,
+                    y: 0
+                }, this._scalingUV = {
+                    x: 0,
+                    y: 0
+                }, this._translationUV = {
+                    x: 0,
+                    y: 0
+                }, this._engine.bindFramebuffer(this._spritesInternalTexture), this._engine.setState(!1), 
+                this._engine.setDepthBuffer(!1), this._engine.clear(jt, !0, !1, !1), this._engine.unBindFramebuffer(this._spritesInternalTexture);
+            }
+            get texture() {
+                return this._spritesTexture;
+            }
+            getSpriteRuntimeInfo(t) {
+                const e = this._spriteSheetMap;
+                let i = e[t.id];
+                return i || (i = {
+                    xOffset: 0,
+                    yOffset: 0,
+                    width: 0,
+                    height: 0
+                }, i.width = t.sourceSize.w, i.height = t.sourceSize.h, this._currentX > qt - i.width && (this._currentX = 0, 
+                this._currentY += this._maxRowHeight + 1, this._maxRowHeight = 0), i.xOffset = this._currentX / qt, 
+                i.yOffset = this._currentY / qt, this._renderSprite(this._currentX, this._currentY, t), 
+                this._currentX += i.width + 1, this._maxRowHeight = Math.max(this._maxRowHeight, i.height), 
+                e[t.id] = i), i;
+            }
+            fillBabylonSpriteInfo(t, e) {
+                const i = this.getSpriteRuntimeInfo(e);
+                t._xSize = i.width, t._ySize = i.height, t._xOffset = i.xOffset, t._yOffset = i.yOffset;
+            }
+            updateTexture() {}
+            dispose() {
+                this._spritesTexture.dispose(), this._effect.dispose(), this._renderingData.dispose();
+            }
+            _renderSprite(t, e, i) {
+                const r = this._effect;
+                this._engine.enableEffect(r), this._engine.bindFramebuffer(this._spritesInternalTexture), 
+                this._renderingData.bind(r), r.setTexture("sourceAtlasSampler", i.texture);
+                const s = i.texture.getBaseSize();
+                this._scalingUV.x = i.frame.w / s.width, this._scalingUV.y = i.frame.h / s.height, 
+                i.rotated ? (this._translationUV.x = 2 * (i.frame.x + i.frame.h / 2) / s.width - 1, 
+                this._translationUV.y = 2 * (i.frame.y + i.frame.w / 2) / s.height - 1, this._uvMatrix.compose(this._scalingUV, Math.PI / 2, this._translationUV)) : (this._translationUV.x = 2 * (i.frame.x + i.frame.w / 2) / s.width - 1, 
+                this._translationUV.y = 2 * (i.frame.y + i.frame.h / 2) / s.height - 1, this._uvMatrix.compose(this._scalingUV, 0, this._translationUV)), 
+                r.setMatrix("uvMatrix", this._uvMatrix), this._scaling.x = i.frame.w / qt, this._scaling.y = i.frame.h / qt, 
+                this._translation.x = 2 * (t + i.sourceSize.w / 2) / qt - 1, this._translation.y = 2 * (e + i.sourceSize.h / 2) / qt - 1, 
+                this._worldMatrix.compose(this._scaling, 0, this._translation), r.setMatrix("worldMatrix", this._worldMatrix), 
+                r.setFloat4("color", 1, 1, 1, 1), this._engine.drawElementsType(0, 0, 6), this._engine.unBindFramebuffer(this._spritesInternalTexture);
+            }
+        }
+        class Kt {
+            constructor() {
+                this.positions = [], this.uvs = [], this.indices = [];
+            }
+            reset() {
+                this.positions.length = 0, this.uvs.length = 0, this.indices.length = 0;
+            }
+        }
+        class Zt {
+            constructor() {
+                this._geometryData = new Kt;
+            }
+            generate(t) {
+                if (0 === t.width || 0 === t.height) return;
+                this._geometryData.reset();
+                const {_geometryData: {positions: e, uvs: i, indices: r}} = this, {width: s, height: n, runtimeInfo: o} = t;
+                e.push(-s / 2, -n / 2), e.push(s / 2, n / 2), e.push(-s / 2, n / 2), e.push(s / 2, -n / 2);
+                const {xOffset: a, yOffset: h, width: l, height: u} = o, c = l / qt, _ = u / qt;
+                return i.push(a, h), i.push(a + c, h + _), i.push(a, h + _), i.push(a + c, h), r.push(0, 1, 2), 
+                r.push(0, 3, 1), this._geometryData;
+            }
+
+// control-render-factory | 原可读文件第 7870–7930 行
+            constructor(t, e, i, r) {
+                super(i, r);
+                const {renderStream: s} = e;
+                this._control = new t(this.mainNode, r), this._controlRenderStreamSubscription = s.subscribe(t => {
+                    this.update(t);
+                });
+            }
+            get position() {
+                return this._control.position;
+            }
+            update(t) {
+                this.mainNode.shouldRender(), this._control.update(t);
+            }
+            dispose() {
+                this._controlRenderStreamSubscription.unsubscribe(), this._control.dispose(), super.dispose();
+            }
+        }
+        function je(t, e) {
+            const i = e.renderer.rootControlsNode;
+            switch (t.type) {
+              case L.mD.Button:
+                return ((t, e, i) => new Xe(Ae, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+
+              case L.mD.Joystick:
+                return ((t, e, i) => new Xe(Ve, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+
+              case L.mD.DirectionalPad:
+                return ((t, e, i) => new Xe(De, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+
+              case L.mD.Touchpad:
+                return ((t, e, i) => new Xe(He, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+
+              case L.mD.Throttle:
+                return ((t, e, i) => new Xe(We, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+
+              case L.mD.ArcadeButtons:
+                return ((t, e, i) => new Xe(Fe, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+
+              case L.mD.RadialAdjuster:
+                return ((t, e, i) => new Xe(Ge, t, e, i))({
+                    renderStream: t.renderStream
+                }, i, e);
+            }
+        }
+        class qe {
+            static WithinEpsilon(t, e, i = 1401298e-51) {
+                return Math.abs(t - e) <= i;
+            }
+            static ToHex(t) {
+
+// render-layers-groups-and-renderer | 原可读文件第 10590–10892 行
+                this._drawWrapperFogDepth.drawContext && (this._drawWrapperFogDepth.drawContext.useInstancing = this._useInstancing);
+                const s = this._pixelPerfect ? "#define PIXEL_PERFECT\n" : "";
+                this._drawWrapperBase.effect = this._engine.createEffect("sprites", [ tt.PositionKind, "options", "offsets", "inverts", "cellInfo", tt.ColorKind ], [ "view", "projection", "textureInfos", "alphaTest" ], [ "diffuseSampler" ], s), 
+                this._drawWrapperDepth.effect = this._drawWrapperBase.effect, this._drawWrapperDepth.materialContext = this._drawWrapperBase.materialContext, 
+                this._scene && (this._drawWrapperFog.effect = this._scene.getEngine().createEffect("sprites", [ tt.PositionKind, "options", "offsets", "inverts", "cellInfo", tt.ColorKind ], [ "view", "projection", "textureInfos", "alphaTest", "vFogInfos", "vFogColor" ], [ "diffuseSampler" ], s + "#define FOG"), 
+                this._drawWrapperFogDepth.effect = this._drawWrapperFog.effect, this._drawWrapperFogDepth.materialContext = this._drawWrapperFog.materialContext);
+            }
+            render(t, e, i, r, s = null) {
+                if (!this.texture || !this.texture.isReady() || !t.length) return;
+                let n = this._drawWrapperBase, o = this._drawWrapperDepth, a = !1;
+                this.fogEnabled && this._scene && this._scene.fogEnabled && 0 !== this._scene.fogMode && (n = this._drawWrapperFog, 
+                o = this._drawWrapperFogDepth, a = !0);
+                const h = n.effect;
+                if (!h.isReady()) return;
+                const l = this._engine, u = !(!this._scene || !this._scene.useRightHandedSystem), c = this.texture.getBaseSize(), _ = Math.min(this._capacity, t.length);
+                let d = 0, p = !0;
+                for (let y = 0; y < _; y++) {
+                    const i = t[y];
+                    i && i.isVisible && (p = !1, i._animate(e), this._appendSpriteVertex(d++, i, 0, 0, c, u, s), 
+                    this._useInstancing || (this._appendSpriteVertex(d++, i, 1, 0, c, u, s), this._appendSpriteVertex(d++, i, 1, 1, c, u, s), 
+                    this._appendSpriteVertex(d++, i, 0, 1, c, u, s)));
+                }
+                if (p) return;
+                this._buffer.update(this._vertexData);
+                const f = !!l.depthCullingState.cull, g = l.depthCullingState.zOffset, m = l.depthCullingState.zOffsetUnits;
+                if (l.setState(f, g, !1, !1, void 0, void 0, m), l.enableEffect(n), h.setTexture("diffuseSampler", this.texture), 
+                h.setMatrix("view", i), h.setMatrix("projection", r), a) {
+                    const t = this._scene;
+                    h.setFloat4("vFogInfos", t.fogMode, t.fogStart, t.fogEnd, t.fogDensity), h.setColor3("vFogColor", t.fogColor);
+                }
+                this._useVAO ? (this._vertexArrayObject || (this._vertexArrayObject = l.recordVertexArrayObject(this._vertexBuffers, this._indexBuffer, h)), 
+                l.bindVertexArrayObject(this._vertexArrayObject, this._indexBuffer)) : l.bindBuffers(this._vertexBuffers, this._indexBuffer, h), 
+                l.depthCullingState.depthFunc = l.useReverseDepthBuffer ? 518 : 515, this.disableDepthWrite || (h.setBool("alphaTest", !0), 
+                l.setColorWrite(!1), l.enableEffect(o), this._useInstancing ? l.drawArraysType(7, 0, 4, d) : l.drawElementsType(0, 0, d / 4 * 6), 
+                l.enableEffect(n), l.setColorWrite(!0), h.setBool("alphaTest", !1)), l.setAlphaMode(this.blendMode), 
+                this._useInstancing ? l.drawArraysType(7, 0, 4, d) : l.drawElementsType(0, 0, d / 4 * 6), 
+                this.autoResetAlpha && l.setAlphaMode(0), u && this._scene.getEngine().setState(f, g, !1, !0, void 0, void 0, m), 
+                l.unbindInstanceAttributes();
+            }
+            _appendSpriteVertex(t, e, i, r, s, n, o) {
+                let a = t * this._vertexBufferSize;
+                if (0 === i ? i = this._epsilon : 1 === i && (i = 1 - this._epsilon), 0 === r ? r = this._epsilon : 1 === r && (r = 1 - this._epsilon), 
+                o) o(e, s); else {
+                    e.cellIndex || (e.cellIndex = 0);
+                    const t = s.width / this.cellWidth, i = e.cellIndex / t | 0;
+                    e._xOffset = (e.cellIndex - i * t) * this.cellWidth / s.width, e._yOffset = i * this.cellHeight / s.height, 
+                    e._xSize = this.cellWidth, e._ySize = this.cellHeight;
+                }
+                this._vertexData[a] = e.position.x, this._vertexData[a + 1] = e.position.y, this._vertexData[a + 2] = e.position.z, 
+                this._vertexData[a + 3] = e.angle, this._vertexData[a + 4] = e.width, this._vertexData[a + 5] = e.height, 
+                this._useInstancing ? a -= 2 : (this._vertexData[a + 6] = i, this._vertexData[a + 7] = r), 
+                this._vertexData[a + 8] = n ? e.invertU ? 0 : 1 : e.invertU ? 1 : 0, this._vertexData[a + 9] = e.invertV ? 1 : 0, 
+                this._vertexData[a + 10] = e._xOffset, this._vertexData[a + 11] = e._yOffset, this._vertexData[a + 12] = e._xSize / s.width, 
+                this._vertexData[a + 13] = e._ySize / s.height, this._vertexData[a + 14] = e.color.r, 
+                this._vertexData[a + 15] = e.color.g, this._vertexData[a + 16] = e.color.b, this._vertexData[a + 17] = e.color.a;
+            }
+            _buildIndexBuffer() {
+                const t = [];
+                let e = 0;
+                for (let i = 0; i < this._capacity; i++) t.push(e), t.push(e + 1), t.push(e + 2), 
+                t.push(e), t.push(e + 2), t.push(e + 3), e += 4;
+                this._indexBuffer = this._engine.createIndexBuffer(t);
+            }
+            rebuild() {
+                var t;
+                this._indexBuffer && this._buildIndexBuffer(), this._useVAO && (this._vertexArrayObject = void 0), 
+                this._buffer._rebuild();
+                for (const e in this._vertexBuffers) {
+                    this._vertexBuffers[e]._rebuild();
+                }
+                null === (t = this._spriteBuffer) || void 0 === t || t._rebuild();
+            }
+            dispose() {
+                this._buffer && (this._buffer.dispose(), this._buffer = null), this._spriteBuffer && (this._spriteBuffer.dispose(), 
+                this._spriteBuffer = null), this._indexBuffer && (this._engine._releaseBuffer(this._indexBuffer), 
+                this._indexBuffer = null), this._vertexArrayObject && (this._engine.releaseVertexArrayObject(this._vertexArrayObject), 
+                this._vertexArrayObject = null), this.texture && (this.texture.dispose(), this.texture = null), 
+                this._drawWrapperBase.dispose(), this._drawWrapperFog.dispose(), this._drawWrapperDepth.dispose(), 
+                this._drawWrapperFogDepth.dispose();
+            }
+        }
+        class Ui {
+            constructor(t, e) {
+                this._layeredNodeCompare = (t, e) => t.zOffset - e.zOffset, this._customSpriteUpdate = () => {}, 
+                this._engine = t, this._shapes = [], this._sprites = [], this._spriteTexture = e, 
+                this._spritesRenderer = new Ni(this._engine, 10), this._setupRenderer(), this._shapesOrderDirty = !1, 
+                this._spritesOrderDirty = !1;
+            }
+            addShape(t) {
+                this._shapesOrderDirty = !0, this._shapes.push(t);
+            }
+            removeShape(t) {
+                const e = this._shapes.indexOf(t);
+                e > -1 && this._shapes.splice(e, 1);
+            }
+            sortShapes() {
+                this._shapesOrderDirty = !0;
+            }
+            addSprite(t) {
+                this._spritesOrderDirty = !0, this._sprites.push(t);
+            }
+            removeSprite(t) {
+                const e = this._sprites.indexOf(t);
+                e > -1 && this._sprites.splice(e, 1);
+            }
+            sortSprites() {
+                this._spritesOrderDirty = !0;
+            }
+            render(t, e) {
+                this._sortLayers(), this._updateRenderer();
+                let i = !1;
+                for (let r = 0; r < this._shapes.length; r++) this._shapes[r].render(e), this._shapes[r].visible && (i = !0);
+                this._spritesRenderer.render(this._sprites, 0, t, e, this._customSpriteUpdate);
+                for (let r = 0; r < this._sprites.length; r++) if (this._sprites[r].isVisible) {
+                    i = !0;
+                    break;
+                }
+                return i;
+            }
+            dispose() {
+                this._shapes.length = 0, this._sprites.length = 0, this._spritesRenderer.texture = null, 
+                this._spritesRenderer.dispose();
+            }
+            _updateRenderer() {
+                this._spritesRenderer.capacity < this._sprites.length && (this._spritesRenderer.texture = null, 
+                this._spritesRenderer.dispose(), this._spritesRenderer = new Ni(this._engine, this._sprites.length), 
+                this._setupRenderer());
+            }
+            _setupRenderer() {
+                this._spritesRenderer.disableDepthWrite = !0, this._spritesRenderer.autoResetAlpha = !1, 
+                this._spritesRenderer.fogEnabled = !1, this._spritesRenderer.texture = this._spriteTexture;
+            }
+            _sortLayers() {
+                this._shapesOrderDirty && (this._sortNodes(this._shapes), this._shapesOrderDirty = !1), 
+                this._spritesOrderDirty && (this._sortNodes(this._sprites), this._spritesOrderDirty = !1);
+            }
+            _sortNodes(t) {
+                t.sort(this._layeredNodeCompare);
+            }
+        }
+        class zi {
+            constructor(t, e) {
+                this._engine = t, this._texture = e, this._layers = [];
+            }
+            addShape(t) {
+                this._getOrAddLayer(t.layer).addShape(t);
+            }
+            removeShape(t) {
+                var e;
+                null === (e = this._layers[t.layer]) || void 0 === e || e.removeShape(t);
+            }
+            sortShapes(t) {
+                var e;
+                null === (e = this._layers[t]) || void 0 === e || e.sortShapes();
+            }
+            addSprite(t) {
+                this._getOrAddLayer(t.layer).addSprite(t);
+            }
+            removeSprite(t) {
+                var e;
+                null === (e = this._layers[t.layer]) || void 0 === e || e.removeSprite(t);
+            }
+            sortSprites(t) {
+                var e;
+                null === (e = this._layers[t]) || void 0 === e || e.sortSprites();
+            }
+            render(t, e) {
+                let i = !1;
+                for (let r = 0; r < this._layers.length; r++) {
+                    const s = this._layers[r];
+                    if (s) {
+                        const r = s.render(t, e);
+                        i = i || r;
+                    }
+                }
+                return i;
+            }
+            dispose() {
+                var t;
+                for (let e = 0; e < this._layers.length; e++) null === (t = this._layers[e]) || void 0 === t || t.dispose();
+                this._layers.length = 0;
+            }
+            _getOrAddLayer(t) {
+                const {_layers: e} = this;
+                return e[t] || (e[t] = new Ui(this._engine, this._texture)), e[t];
+            }
+        }
+        const Vi = {
+            clearOnRender: !1
+        };
+        class Gi {
+            constructor(t, e, i, r, s, n = {}) {
+                this._shouldRender = !0, this._renderCountSinceLastLog = 0, this._lastRenderLogTimestamp = 0, 
+                this.render = () => {
+                    const {engine: t, spritesGatherer: e, rootNode: i, _worldMatrix: r, _groups: s, _projectionMatrix: n, _updateNodes: o} = this;
+                    if (t.setViewport(this._viewport), this._shouldUpdate) {
+                        if (this._shouldRender = !0, e.updateTexture(), this._shouldUpdateRootNode) i.update(r, !1, 1, !0); else for (let t = 0; t < this._updateNodesIndex; t++) {
+                            const e = o[t].parent;
+                            e && o[t].update(e.worldMatrix, !1, e.globalOpacity, e.visible);
+                        }
+                        this._shouldUpdate = !1, this._shouldUpdateRootNode = !1, this._updateNodesIndex = 0, 
+                        this._updateWeight = 0, 0 === s.length && this._dispatch();
+                    }
+                    if (this._shouldRender) {
+                        this._options.clearOnRender && t.clear(jt, !0, !1, !1), this._shouldRender = !1;
+                        let e = !1;
+                        for (let t = 0; t < s.length; t++) {
+                            const i = s[t];
+                            if (i) {
+                                const t = i.render(r, n);
+                                e = e || t;
+                            }
+                        }
+                        e || t.clear(jt, !0, !1, !1);
+                    }
+                    this._renderCountSinceLastLog++;
+                    const a = Date.now();
+                    a - this._lastRenderLogTimestamp >= 5e3 && (this._logger.log(Gi.TAG, k.LogLevel.Debug, `${this._renderCountSinceLastLog} calls to render touch controls made in the past ${a - this._lastRenderLogTimestamp} milliseconds`), 
+                    this._lastRenderLogTimestamp = a, this._renderCountSinceLastLog = 0);
+                }, this._options = Object.assign(Object.assign({}, Vi), n), this._logger = s, this.engine = t, 
+                this.engine.getCaps().parallelShaderCompile = void 0, this.engine.stencilState.stencilTest = !1, 
+                this.engine.setState(!1), this.engine.setDepthBuffer(!1), this.engine.setAlphaMode(2), 
+                this._projectionMatrix = new W, this._worldMatrix = new W, this._worldMatrix.identity(), 
+                this.rootNode = new H(this), this.rootControlsNode = new H(this, this.rootNode), 
+                this._shapesToSortIntoGroups = [], this._groups = [], this._viewport = new Si(0, 0, 1, 1), 
+                this.effectManager = new Ri(this.engine), this.spritesGatherer = new Yt(this), this._shouldUpdate = !0, 
+                this._shouldUpdateRootNode = !0, this._updateNodes = new Array(128), this._updateNodesIndex = 0, 
+                this._updateWeight = 0, this._canvasBackgroundShape = new nt(this.rootNode, this, 0), 
+                this._canvasBackgroundShape.setVisible(!1), this.setSize(e, i, r), this._logger.log(Gi.TAG, k.LogLevel.Debug, "Completed construction of Babylon's renderer class.");
+            }
+            setSize(t, e, i) {
+                this._logger.log(Gi.TAG, k.LogLevel.Debug, `Setting size of engine to [width: ${e}, height: ${i}, pixelRatio: ${t}]`);
+                const {engine: r, _projectionMatrix: s} = this;
+                this.shouldRender(), r.setSize(e * t, i * t), s.orthoOffCenterLH(0, e, i, 0, -100, 100), 
+                this._canvasBackgroundShape.updateCanvas(0, 0, e, i);
+            }
+            addRenderingShape(t) {
+                const {_shapesToSortIntoGroups: e} = this;
+                -1 === e.indexOf(t) && (e.push(t), this._addRenderingShapeToGroup(t));
+            }
+            removeRenderingShape(t) {
+                const {_shapesToSortIntoGroups: e} = this, i = e.indexOf(t);
+                i > -1 && (e.splice(i, 1), this._removeRenderingShapeFromGroup(t));
+            }
+            sortShapes(t, e) {
+                var i;
+                null === (i = this._groups[t]) || void 0 === i || i.sortShapes(e);
+            }
+            sortSprites(t, e) {
+                var i;
+                null === (i = this._groups[t]) || void 0 === i || i.sortSprites(e);
+            }
+            updateRenderingGroups() {
+                this._groups.length = 0, this._shouldUpdate = !0, this._shouldUpdateRootNode = !0;
+            }
+            shouldUpdate(t) {
+                this._shouldUpdate = !0, (this._updateNodesIndex > this._updateNodes.length || !t.parent) && (this._shouldUpdateRootNode = !0), 
+                this._shouldUpdateRootNode || (this._updateNodes[this._updateNodesIndex] = t, this._updateWeight += t.weight, 
+                this._updateNodesIndex++, this._updateWeight > this.rootNode.weight && (this._shouldUpdateRootNode = !0));
+            }
+            shouldRender() {
+                this._shouldRender = !0;
+            }
+            setCutout(t) {
+                t ? (this._canvasBackgroundShape.setVisible(!0), this._canvasBackgroundShape.updateCutout(t) && (this._canvasBackgroundShape.setDirty(), 
+                this._canvasBackgroundShape.shouldRender())) : this._canvasBackgroundShape.setVisible(!1);
+            }
+            dispose() {
+                this._logger.log(Gi.TAG, k.LogLevel.Debug, "Starting dispose"), this._canvasBackgroundShape.dispose(), 
+                this.rootNode.dispose(), this.spritesGatherer.dispose(), this.effectManager.dispose(), 
+                this._groups.forEach(t => t.dispose()), this._groups.length = 0, this._shapesToSortIntoGroups.length = 0, 
+                this.engine.releaseEffects(), this._logger.log(Gi.TAG, k.LogLevel.Debug, "Completed dispose");
+            }
+            _dispatch() {
+                const {_groups: t, _shapesToSortIntoGroups: e} = this;
+                t.length = 0;
+                for (let i = 0; i < e.length; i++) {
+                    const t = e[i];
+                    this._addRenderingShapeToGroup(t);
+                }
+            }
+            _addRenderingShapeToGroup(t) {
+                const {_groups: e, engine: i, spritesGatherer: r} = this;
+                e[t.renderingGroup] || (e[t.renderingGroup] = new zi(i, r.texture));
+                const s = e[t.renderingGroup];
+                t.type === it ? s.addShape(t) : s.addSprite(t);
+            }
+            _removeRenderingShapeFromGroup(t) {
+                const e = this._groups[t.renderingGroup];
+                e && (t.type === it ? e.removeShape(t) : e.removeSprite(t));
+            }
+        }
+        Gi.TAG = "TouchAdaptationKit/BabylonRendererClass";
+    },
+    754408(t, e, i) {
+        i.d(e, {
+            Y: () => m
+        });
+        class r {
+            constructor() {
+                this.children = [];
+            }
+            isValid(t) {

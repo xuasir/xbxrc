@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/latest/context.json",
+  "state": {
+    "fireEnabled": true,
+    "fireVisible": true
+  },
+  "allowedStateValues": {
+    "fireEnabled": [true, false],
+    "fireVisible": [true, false]
+  }
+}

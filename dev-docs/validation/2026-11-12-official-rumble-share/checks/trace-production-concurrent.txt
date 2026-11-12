@@ -1,0 +1,23 @@
+$ node scripts/validate-production-trace.mjs
+
+ RUN  v4.1.4 /Users/guo.xu/Documents/code/games/xbxrc
+
+ ❯ src/streaming/runtime/production-trace-budget.test.ts (2 tests | 1 failed) 1833ms
+     × publishes complete 30min health and sustained anomaly payloads within JSONL and cost budgets 1510ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/streaming/runtime/production-trace-budget.test.ts > production trace full-path budgets > publishes complete 30min health and sustained anomaly payloads within JSONL and cost budgets
+AssertionError: expected 0.925458 to be less than or equal to 0.5
+ ❯ src/streaming/runtime/production-trace-budget.test.ts:107:21
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  16:22:22
+   Duration  2.33s (transform 196ms, setup 0ms, import 223ms, tests 1.83s, environment 0ms)
+
+[ELIFECYCLE] Command failed with exit code 1.

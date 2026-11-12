@@ -11,6 +11,7 @@ import { findNextFocusable } from './pathfinding'
 export { FOCUSABLE_SELECTOR } from './focus-target'
 export type SwitchDirection = 'prev' | 'next'
 export type SwitchHandler = (direction: SwitchDirection) => void
+type MovePreparation = (direction: Direction, source: HTMLElement) => void | Promise<void>
 
 interface FocusReference {
   element: HTMLElement
@@ -43,8 +44,13 @@ export class NavigationEngine {
   private focusHandlers = new Set<(element: HTMLElement | null) => void>()
   private scopeHandlers = new Set<() => void>()
   private targetHandlers = new Set<() => void>()
-  private focusableCache: HTMLElement[] = []
   private isCacheDirty = true
+  private containerCache = new WeakMap<HTMLElement | Document, HTMLElement[]>()
+  private prepareHandlers = new Set<MovePreparation>()
+  private pendingMove: Promise<void> | null = null
+  private queuedMoves: Array<{ direction: Direction, rapid: boolean }> = []
+  private pendingAction = false
+  private moveEpoch = 0
   private prunedSource: FocusReference | null = null
   private focusPage: HTMLElement | null = null
   private pendingRecovery: FocusReference | null = null
@@ -54,7 +60,9 @@ export class NavigationEngine {
     if (this.unsubscribeInput)
       return
     this.unsubscribeInput = inputDispatcher.subscribe(this.handleIntent)
-    this.focusMutationObserver = new MutationObserver(() => {
+    this.focusMutationObserver = new MutationObserver((records) => {
+      if (records?.length && !records.some(record => this.affectsTargets(record)))
+        return
       this.isCacheDirty = true
       this.reconcileFocus()
       this.targetHandlers.forEach(handler => handler())
@@ -63,6 +71,7 @@ export class NavigationEngine {
       childList: true,
       subtree: true,
       attributes: true,
+      attributeOldValue: true,
       attributeFilter: ['data-focusable', 'disabled', 'aria-disabled', 'hidden', 'inert', 'aria-hidden', 'style', 'class', 'data-nav-page-active', 'data-nav-zone-active'],
     })
     window.addEventListener('keydown', this.handleTab)
@@ -71,6 +80,7 @@ export class NavigationEngine {
   }
 
   stop(): void {
+    this.cancelPreparedMoves()
     this.focusMutationObserver?.disconnect()
     this.focusMutationObserver = null
     this.unsubscribeInput?.()
@@ -84,7 +94,6 @@ export class NavigationEngine {
     this.prunedSource = null
     this.focusPage = null
     this.pendingRecovery = null
-    this.focusableCache = []
     this.isCacheDirty = true
   }
 
@@ -101,6 +110,35 @@ export class NavigationEngine {
   onFocusChange(handler: (element: HTMLElement | null) => void): () => void {
     this.focusHandlers.add(handler)
     return () => this.focusHandlers.delete(handler)
+  }
+
+  /** 虚拟窗口只准备候选挂载，目标继续由同一几何算法选择。 */
+  onPrepareMove(handler: MovePreparation): () => void {
+    this.prepareHandlers.add(handler)
+    return () => this.prepareHandlers.delete(handler)
+  }
+
+  /** 挂载窗口后使容器枚举失效，下一次移动读取本次 DOM。 */
+  invalidateTargets(): void {
+    this.isCacheDirty = true
+  }
+
+  private affectsTargets(record: MutationRecord): boolean {
+    const target = record.target as HTMLElement
+    if (target.closest?.('.focus-flow-layer, .remote-image'))
+      return false
+    if (record.type === 'childList') {
+      return [...record.addedNodes, ...record.removedNodes].some((node) => {
+        const element = node as HTMLElement
+        return element.matches?.('[data-focusable]') || !!element.querySelector?.('[data-focusable]')
+          || element === this.currentFocus || (this.currentFocus && element.contains?.(this.currentFocus))
+      })
+    }
+    if (record.attributeName === 'class') {
+      const normalize = (value: string | null) => (value ?? '').split(/\s+/).filter(value => value && value !== 'is-focused').sort().join(' ')
+      return normalize(record.oldValue) !== normalize(target.getAttribute('class'))
+    }
+    return true
   }
 
   onScopeChange(handler: () => void): () => void {
@@ -160,18 +198,21 @@ export class NavigationEngine {
   }
 
   getFocusableElements(container: HTMLElement | Document): HTMLElement[] {
-    if (this.isCacheDirty || container !== document) {
-      const elements = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-      if (container === document) {
-        this.focusableCache = elements
-        this.isCacheDirty = false
-      }
-      return elements.filter(element => isFocusTarget(element))
+    if (this.isCacheDirty) {
+      this.containerCache = new WeakMap()
+      this.isCacheDirty = false
     }
-    return this.focusableCache.filter(element => isFocusTarget(element))
+    let elements = this.containerCache.get(container)
+    if (!elements) {
+      elements = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      this.containerCache.set(container, elements)
+    }
+    const styles = new Map()
+    return elements.filter(element => isFocusTarget(element, undefined, styles))
   }
 
   updateActiveScope(scopeId: string, active: boolean, options: ScopeOptions = {}): void {
+    this.cancelPreparedMoves()
     if (active)
       this.pruneScopes()
     const index = this.scopeStack.findIndex(state => state.id === scopeId)
@@ -423,15 +464,18 @@ export class NavigationEngine {
     switch (intent) {
       case NavigationIntent.PagePrev:
       case NavigationIntent.PageNext:
+        this.cancelPreparedMoves()
         this.pageSwitchHandlers.forEach(handler => handler(intent === NavigationIntent.PagePrev ? 'prev' : 'next'))
         handled = true
         break
       case NavigationIntent.TabPrev:
       case NavigationIntent.TabNext:
+        this.cancelPreparedMoves()
         this.tabSwitchHandlers.forEach(handler => handler(intent === NavigationIntent.TabPrev ? 'prev' : 'next'))
         handled = true
         break
       case NavigationIntent.Back:
+        this.cancelPreparedMoves()
         if (!this.isAvailable(this.currentFocus))
           this.reconcileFocus()
         handled = this.triggerBack()
@@ -441,7 +485,13 @@ export class NavigationEngine {
         if (!hadFocus)
           this.reconcileFocus()
         if (intent === NavigationIntent.Action) {
-          handled = hadFocus ? this.triggerAction() : true
+          if (this.pendingMove) {
+            this.pendingAction = true
+            handled = true
+          }
+          else {
+            handled = hadFocus ? this.triggerAction() : true
+          }
         }
         else {
           const directions: Partial<Record<NavigationIntent, Direction>> = { [NavigationIntent.Up]: 'up', [NavigationIntent.Down]: 'down', [NavigationIntent.Left]: 'left', [NavigationIntent.Right]: 'right' }
@@ -462,11 +512,59 @@ export class NavigationEngine {
   }
 
   private move(direction: Direction, isRapid: boolean): boolean {
+    if (this.pendingMove) {
+      if (this.queuedMoves.length < 8)
+        this.queuedMoves.push({ direction, rapid: isRapid })
+      return true
+    }
     if (!this.currentFocus)
       return false
     // 滑杆等控件消费横向调节；其余方向继续采用几何寻路。
     if (!this.currentFocus.dispatchEvent(new CustomEvent('nav-direction', { detail: { direction }, bubbles: true, cancelable: true })))
       return true
+    const source = this.currentFocus
+    const scope = this.getTopmostActiveScope()
+    const epoch = this.moveEpoch
+    const preparations = [...this.prepareHandlers].map(handler => handler(direction, source)).filter((value): value is Promise<void> => !!value)
+    if (preparations.length) {
+      const operation = Promise.all(preparations).then(() => {
+        if (epoch === this.moveEpoch && source === this.currentFocus && scope === this.getTopmostActiveScope() && this.isAvailable(source))
+          this.movePrepared(direction, isRapid)
+        else if (epoch === this.moveEpoch)
+          this.cancelPreparedMoves()
+      }).catch(() => {
+        if (epoch === this.moveEpoch)
+          this.cancelPreparedMoves()
+      }).finally(() => {
+        if (this.pendingMove !== operation || epoch !== this.moveEpoch)
+          return
+        this.pendingMove = null
+        let next = this.queuedMoves.shift()
+        while (next && !this.pendingMove) {
+          this.move(next.direction, next.rapid)
+          next = this.pendingMove ? undefined : this.queuedMoves.shift()
+        }
+        if (!this.pendingMove && this.pendingAction) {
+          this.pendingAction = false
+          this.triggerAction()
+        }
+      })
+      this.pendingMove = operation
+      return true
+    }
+    return this.movePrepared(direction, isRapid)
+  }
+
+  private cancelPreparedMoves(): void {
+    this.moveEpoch++
+    this.pendingMove = null
+    this.queuedMoves = []
+    this.pendingAction = false
+  }
+
+  private movePrepared(direction: Direction, isRapid: boolean): boolean {
+    if (!this.currentFocus)
+      return false
     const candidates = this.getFocusableElements(this.getTopmostActiveScope() ?? document)
       .filter(element => element === this.currentFocus || !element.contains(this.currentFocus))
     const currentZoneId = this.getZoneId(this.currentFocus)

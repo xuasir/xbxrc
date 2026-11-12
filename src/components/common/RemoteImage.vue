@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onActivated, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { remoteImageCandidates } from './remote-image-source'
 
-const props = withDefaults(defineProps<{ src?: string | null, sources?: string[], alt?: string, fallback?: string }>(), { src: '', sources: () => [], alt: '', fallback: '' })
-const candidates = computed(() => [...new Set([props.src ?? '', ...props.sources].map(value => value.trim()).filter(Boolean))])
+const props = withDefaults(defineProps<{ src?: string | null, sources?: string[], alt?: string, fallback?: string, size?: number }>(), { src: '', sources: () => [], alt: '', fallback: '', size: 0 })
+const pixelRatio = ref(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1)
+const candidates = computed(() => remoteImageCandidates(props.src ?? '', props.sources, props.size, pixelRatio.value))
 const candidate = ref(0)
 const source = computed(() => candidates.value[candidate.value] ?? '')
 const failed = computed(() => !source.value)
@@ -21,12 +23,32 @@ function imageLoaded(event: Event) {
   if ((event.currentTarget as HTMLElement).dataset.source === source.value)
     loaded.value = true
 }
-onActivated(() => {
+let active = false
+function updatePixelRatio() {
+  if (active)
+    pixelRatio.value = window.devicePixelRatio || 1
+}
+function activate() {
+  if (active)
+    return
+  active = true
+  if (props.size > 0) {
+    updatePixelRatio()
+    window.addEventListener('resize', updatePixelRatio)
+  }
   if (failed.value) {
     candidate.value = 0
     loaded.value = false
   }
-})
+}
+function deactivate() {
+  active = false
+  window.removeEventListener('resize', updatePixelRatio)
+}
+onMounted(activate)
+onActivated(activate)
+onDeactivated(deactivate)
+onBeforeUnmount(deactivate)
 </script>
 
 <template>

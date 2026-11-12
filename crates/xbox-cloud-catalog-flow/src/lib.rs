@@ -184,11 +184,57 @@ pub async fn hydrate_catalog_products_with_budget(
 async fn hydrate_product_chunks_with_budget<F, Fut>(
     product_ids: &[String],
     budget: Duration,
-    mut query: F,
+    query: F,
 ) -> CloudCatalogHydrationLoad
 where
     F: FnMut(Vec<String>) -> Fut,
     Fut: std::future::Future<Output = Result<Value, WebApiError>> + Send + 'static,
+{
+    hydrate_product_chunks_with_progress(product_ids, budget, query, Vec::new, |_| {}).await
+}
+
+pub async fn hydrate_catalog_products_with_progress<P, C>(
+    api: &GamePassApi,
+    scope: &CloudCatalogScope,
+    product_ids: &[String],
+    priorities: P,
+    progress: C,
+) -> CloudCatalogHydrationLoad
+where
+    P: Fn() -> Vec<String> + Send + Sync,
+    C: Fn(&HashMap<String, CloudCatalogBaseEntry>) + Send + Sync,
+{
+    let api = api.clone();
+    let scope = scope.clone();
+    hydrate_product_chunks_with_progress(
+        product_ids,
+        Duration::from_secs(30),
+        move |chunk| {
+            let api = api.clone();
+            let scope = scope.clone();
+            async move {
+                api.get_products(&chunk, &scope.market, &scope.language)
+                    .await
+            }
+        },
+        priorities,
+        progress,
+    )
+    .await
+}
+
+async fn hydrate_product_chunks_with_progress<F, Fut, P, C>(
+    product_ids: &[String],
+    budget: Duration,
+    mut query: F,
+    priorities: P,
+    progress: C,
+) -> CloudCatalogHydrationLoad
+where
+    F: FnMut(Vec<String>) -> Fut,
+    Fut: std::future::Future<Output = Result<Value, WebApiError>> + Send + 'static,
+    P: Fn() -> Vec<String>,
+    C: Fn(&HashMap<String, CloudCatalogBaseEntry>),
 {
     let mut load = CloudCatalogHydrationLoad::default();
     let ids = unique_strings(
@@ -197,17 +243,24 @@ where
             .filter_map(|id| normalize_product_id(Some(id)))
             .collect(),
     );
-    let chunks = chunk_product_ids(&ids, PRODUCT_HYDRATION_CHUNK_SIZE);
+    let mut next = chunk_product_ids(&ids, PRODUCT_HYDRATION_CHUNK_SIZE);
     let deadline = Instant::now() + budget;
     let mut completed = 0;
-    let mut next = chunks.into_iter();
     let total = next.len();
     let mut tasks = tokio::task::JoinSet::new();
     loop {
         while tasks.len() < 4 {
-            let Some(chunk) = next.next() else {
+            if next.is_empty() {
                 break;
-            };
+            }
+            let priorities = priorities()
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>();
+            let index = next
+                .iter()
+                .position(|chunk| chunk.iter().any(|id| priorities.contains(id)))
+                .unwrap_or(0);
+            let chunk = next.remove(index);
             let response = query(chunk);
             tasks.spawn(async move {
                 let response = response.await?;
@@ -236,7 +289,10 @@ where
         };
         completed += 1;
         match result.unwrap_or_else(|_| Err(WebApiError::network("product query canceled"))) {
-            Ok(entries) => load.entries.extend(entries),
+            Ok(entries) => {
+                progress(&entries);
+                load.entries.extend(entries);
+            }
             Err(error) => {
                 load.failed_chunk_count += 1;
                 if load.source_failures.len() < 8 {

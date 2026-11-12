@@ -1,0 +1,52 @@
+{
+  "x": {
+    "sourceSize": [
+      2000,
+      1500
+    ],
+    "sourceSha256": "0adfeaed63cf5c7e18c97f5516a783ff8629632260207f4c8b91d649c6ea932b",
+    "cropBox": [
+      620,
+      141,
+      1637,
+      1346
+    ],
+    "subjectSize": [
+      1017,
+      1205
+    ],
+    "outputSize": [
+      1536,
+      1536
+    ],
+    "alphaCoreThreshold": 248,
+    "edgePadding": 2,
+    "outputSha256": "72aeaa538810977595e6b475c073672a19acaa8a9cf5d9c90db6a327935ee994",
+    "outputBytes": 1388044
+  },
+  "s": {
+    "sourceSize": [
+      2000,
+      1500
+    ],
+    "sourceSha256": "4eef4deda7b5e8b0b1ebab22b00d99c30bfaf546fbb6785dd41fdb44483a2d3c",
+    "cropBox": [
+      469,
+      142,
+      1314,
+      1356
+    ],
+    "subjectSize": [
+      845,
+      1214
+    ],
+    "outputSize": [
+      1536,
+      1536
+    ],
+    "alphaCoreThreshold": 248,
+    "edgePadding": 2,
+    "outputSha256": "46904157909e0b624f16168ece0d45fe5afe0469c304a8670b0a8965a944687b",
+    "outputBytes": 1118246
+  }
+}

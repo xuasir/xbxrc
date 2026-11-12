@@ -170,7 +170,7 @@ describe('browserGamepadBackend', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('bounds effects and reports a late rumble result after disconnect as failed', async () => {
+  it('preserves duration, bounds magnitudes and reports a late result after disconnect as failed', async () => {
     const f = fixture()
     let complete!: (value: string) => void
     const input = pad()
@@ -182,7 +182,7 @@ describe('browserGamepadBackend', () => {
     f.setPads([input])
     await f.backend.start(s => f.snapshots.push(s))
     const result = f.backend.rumble(f.snapshots[0].devices[0].id, { durationMs: 3000, startDelayMs: 0, strongMagnitude: 2, weakMagnitude: -1, leftTrigger: 0, rightTrigger: 0, repeat: 0 })
-    expect(playEffect).toHaveBeenCalledWith('dual-rumble', expect.objectContaining({ duration: 1000, strongMagnitude: 1, weakMagnitude: 0 }))
+    expect(playEffect).toHaveBeenCalledWith('dual-rumble', expect.objectContaining({ duration: 3000, strongMagnitude: 1, weakMagnitude: 0 }))
     f.setPads([])
     f.tick()
     complete('complete')

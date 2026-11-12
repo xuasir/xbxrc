@@ -1,0 +1,284 @@
+{
+  "capturedOn": "2026-11-12",
+  "sources": [
+    {
+      "filename": "8128.1aca8038.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+      "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2"
+    },
+    {
+      "filename": "web-rtc-stream.d6f6b903.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/web-rtc-stream.d6f6b903.chunk.js",
+      "sha256": "0e1d97750113681c7c2d1edfc7910c1b2915055450a7cfde8fc7a0a54fef73d2"
+    }
+  ],
+  "shareButtonId": 11,
+  "gamepadPayloadBytes": 37,
+  "sharePayloadOffset": 12,
+  "sharePacketOffset": 31,
+  "inputGolden": {
+    "file": "dev-docs/validation/2026-11-12-official-rumble-share/unreliable-share-official.json",
+    "versions": [
+      9,
+      10
+    ],
+    "status": "official-generated"
+  },
+  "shareExperiment": {
+    "status": "removed",
+    "remoteAction": "no-response",
+    "source": "user local verification on 2026-11-12"
+  },
+  "rumbleTiming": [
+    {
+      "scenario": {
+        "name": "delay-and-repeat",
+        "actions": [
+          {
+            "atMs": 0,
+            "magnitude": 50,
+            "durationMs": 200,
+            "delayMs": 100,
+            "repeat": 2
+          }
+        ]
+      },
+      "official": [
+        {
+          "atMs": 100,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        },
+        {
+          "atMs": 400,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        },
+        {
+          "atMs": 700,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 100,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 200,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        },
+        {
+          "atMs": 400,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 200,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        },
+        {
+          "atMs": 700,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 200,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ],
+      "match": true
+    },
+    {
+      "scenario": {
+        "name": "long-duration",
+        "actions": [
+          {
+            "atMs": 0,
+            "magnitude": 50,
+            "durationMs": 5000,
+            "delayMs": 0,
+            "repeat": 0
+          }
+        ]
+      },
+      "official": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 5000,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 5000,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ],
+      "match": true
+    },
+    {
+      "scenario": {
+        "name": "short-weak-pulse",
+        "actions": [
+          {
+            "atMs": 0,
+            "magnitude": 1,
+            "durationMs": 4,
+            "delayMs": 0,
+            "repeat": 0
+          }
+        ]
+      },
+      "official": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 4,
+          "startDelay": 0,
+          "strongMagnitude": 0.01,
+          "weakMagnitude": 0.01
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 4,
+          "strongMagnitude": 0.01,
+          "weakMagnitude": 0.01
+        }
+      ],
+      "match": true
+    },
+    {
+      "scenario": {
+        "name": "new-effect-cancels-delay",
+        "actions": [
+          {
+            "atMs": 0,
+            "magnitude": 50,
+            "durationMs": 200,
+            "delayMs": 100,
+            "repeat": 2
+          },
+          {
+            "atMs": 50,
+            "magnitude": 25,
+            "durationMs": 20,
+            "delayMs": 0,
+            "repeat": 0
+          }
+        ]
+      },
+      "official": [
+        {
+          "atMs": 50,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 20,
+          "startDelay": 0,
+          "strongMagnitude": 0.25,
+          "weakMagnitude": 0.25
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 50,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 20,
+          "strongMagnitude": 0.25,
+          "weakMagnitude": 0.25
+        }
+      ],
+      "match": true
+    },
+    {
+      "scenario": {
+        "name": "stop-cancels-repeat",
+        "actions": [
+          {
+            "atMs": 0,
+            "magnitude": 50,
+            "durationMs": 200,
+            "delayMs": 100,
+            "repeat": 2
+          },
+          {
+            "atMs": 200,
+            "magnitude": 0,
+            "durationMs": 200,
+            "delayMs": 100,
+            "repeat": 2
+          }
+        ]
+      },
+      "official": [
+        {
+          "atMs": 100,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 100,
+          "type": "dual-rumble",
+          "leftTrigger": 0,
+          "rightTrigger": 0,
+          "startDelay": 0,
+          "duration": 200,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ],
+      "match": true
+    }
+  ],
+  "rumblePath": "RumbleService -> actual InputController/RumbleScheduler -> BrowserGamepadBackend -> simulated actuator"
+}

@@ -5,8 +5,12 @@ use crate::mods::data::types::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::{Mutex, Notify, Semaphore};
+#[path = "cloud_detail_cache.rs"]
+mod detail_cache;
 
 pub(super) struct CloudQueryState {
+    details: Mutex<detail_cache::DetailSlots<DetailCache>>,
+    detail_capacity: Semaphore,
     titles: Mutex<HashMap<String, Arc<Mutex<Option<(u64, DataXcloudTitleSummary)>>>>>,
     waits: Mutex<HashMap<String, Arc<Mutex<Option<DataCloudWait>>>>>,
     cancellations: Mutex<HashMap<String, Arc<Notify>>>,
@@ -15,6 +19,8 @@ pub(super) struct CloudQueryState {
 impl CloudQueryState {
     pub fn new() -> Self {
         Self {
+            details: Mutex::new(detail_cache::DetailSlots::new(30)),
+            detail_capacity: Semaphore::new(2),
             capacity: Semaphore::new(2),
             titles: Mutex::new(HashMap::new()),
             waits: Mutex::new(HashMap::new()),
@@ -22,7 +28,7 @@ impl CloudQueryState {
         }
     }
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct DetailCache {
     detail: xbox_cloud_catalog_flow::CloudProductDetail,
     updated_at: u64,
@@ -57,9 +63,24 @@ impl DataService {
             "data.cloudDetail.v1.{}.{}.{}",
             scope.market, scope.language, id
         );
-        let cached = self
-            .cache_repository
-            .read_cloud_value::<DetailCache>(&key)?;
+        let slot = self
+            .cloud_queries
+            .details
+            .lock()
+            .await
+            .slot(key.clone())
+            .ok_or("资料查询繁忙，请稍后重试")?;
+        let mut memory = slot.lock().await;
+        if memory.is_none() {
+            let repository = self.cache_repository.clone();
+            let disk_key = key.clone();
+            *memory = tokio::task::spawn_blocking(move || {
+                repository.read_cloud_value::<DetailCache>(&disk_key)
+            })
+            .await
+            .map_err(|_| "资料读取任务中断")??;
+        }
+        let cached = memory.clone();
         let now = DataCacheRepository::now_ms();
         if let Some(cached) = cached
             .as_ref()
@@ -71,6 +92,12 @@ impl DataService {
                 stale: false,
             });
         }
+        let _permit = self
+            .cloud_queries
+            .detail_capacity
+            .acquire()
+            .await
+            .map_err(|_| "资料查询已关闭")?;
         let result = xbox_webapi::GamePassApi::new()
             .get_products_with_hydration(
                 &[id.clone()],
@@ -84,13 +111,16 @@ impl DataService {
                 let detail = xbox_cloud_catalog_flow::extract_product_detail(&raw, &id)
                     .ok_or("游戏资料暂缺，请重试")?;
                 let fetched = DataCacheRepository::now_ms();
-                self.cache_repository.write_cloud_value(
-                    &key,
-                    &DetailCache {
-                        detail: detail.clone(),
-                        updated_at: fetched,
-                    },
-                )?;
+                let value = DetailCache {
+                    detail: detail.clone(),
+                    updated_at: fetched,
+                };
+                let repository = self.cache_repository.clone();
+                let saved = value.clone();
+                tokio::task::spawn_blocking(move || repository.write_cloud_value(&key, &saved))
+                    .await
+                    .map_err(|_| "资料保存任务中断")??;
+                *memory = Some(value);
                 Ok(DataCloudDetail {
                     detail,
                     updated_at: fetched,
@@ -231,13 +261,9 @@ impl DataService {
                         .ok_or_else(|| xbox_webapi::WebApiError::parse("账户访问暂不可用"))?;
                     let cached = self
                         .cache_repository
-                        .load_xcloud_catalog(&cache_scope)
+                        .catalog_view(&cache_scope)
                         .ok()
-                        .and_then(|c| {
-                            c.titles
-                                .into_iter()
-                                .find(|t| t.product_id == entry.product_id)
-                        });
+                        .and_then(|view| view.title(&entry.product_id));
                     Ok(DataXcloudTitleSummary {
                         id: entry.product_id.clone(),
                         name: cached
@@ -427,7 +453,7 @@ impl DataService {
         }
     }
 }
-fn normalized_product(id: &str) -> Result<String, DataError> {
+pub(super) fn normalized_product(id: &str) -> Result<String, DataError> {
     let id = id.trim().to_ascii_uppercase();
     if id.is_empty() || id.len() > 64 || !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return Err("商品标识无效".into());

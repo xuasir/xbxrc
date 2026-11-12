@@ -56,6 +56,8 @@ pub enum DataCommand {
     },
     GetUserProfile,
     GetHosts,
+    GetHostsSnapshot,
+    RefreshHosts,
     GetRemoteConsoles,
     #[serde(rename_all = "camelCase")]
     GetStreamingRegions {
@@ -102,6 +104,15 @@ pub enum DataCommand {
         request_id: String,
     },
     GetXcloudTitles,
+    GetCloudCatalogStatus,
+    #[serde(rename_all = "camelCase")]
+    GetCloudTitleSummary {
+        product_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    PrioritizeCloudTitles {
+        product_ids: Vec<String>,
+    },
     RefreshXcloudTitles,
     PrimeXcloudTitles,
 }
@@ -124,6 +135,15 @@ pub async fn handle_rpc(
     })?;
 
     match command {
+        DataCommand::GetCloudCatalogStatus => Ok(serde_json::to_value(
+            data.get_cloud_catalog_status().await?,
+        )?),
+        DataCommand::GetCloudTitleSummary { product_id } => Ok(serde_json::to_value(
+            data.get_cloud_title_summary(&product_id).await?,
+        )?),
+        DataCommand::PrioritizeCloudTitles { product_ids } => Ok(serde_json::to_value(
+            data.prioritize_cloud_titles(product_ids).await?,
+        )?),
         DataCommand::GetCloudDetail { product_id } => Ok(serde_json::to_value(
             data.get_cloud_detail(&product_id).await?,
         )?),
@@ -200,6 +220,10 @@ pub async fn handle_rpc(
         )?),
         DataCommand::GetUserProfile => Ok(serde_json::to_value(data.get_user_profile().await?)?),
         DataCommand::GetHosts => Ok(serde_json::to_value(data.get_hosts().await?)?),
+        DataCommand::GetHostsSnapshot => {
+            Ok(serde_json::to_value(data.get_hosts_snapshot().await?)?)
+        }
+        DataCommand::RefreshHosts => Ok(serde_json::to_value(data.refresh_hosts().await?)?),
         DataCommand::GetRemoteConsoles => {
             Ok(serde_json::to_value(data.get_remote_consoles().await?)?)
         }

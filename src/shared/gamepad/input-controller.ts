@@ -6,6 +6,7 @@ import { applyDeviceMapping, defaultDeviceMapping, deviceAxisRest } from './devi
 import { applyGameControls, defaultGameControls, deriveInputOwner, parseGamepadPreferences } from './preferences'
 import { RawButtonReleaseBarrier } from './raw-input'
 import { gameRumbleEffect } from './rumble'
+import { RumbleScheduler } from './rumble-scheduler'
 import { BUTTON_KEYS, clonePadState, mergePadStates, neutralState, PadReleaseBarrier } from './state'
 
 export interface InputSnapshot {
@@ -52,6 +53,7 @@ export class InputController {
   private virtualBarrier = new PadReleaseBarrier()
   private rawGameBarrier = new RawButtonReleaseBarrier()
   private owner: InputOwner = 'ui'
+  private readonly rumbleScheduler = new RumbleScheduler()
   private generation = 0
   private starting: Promise<void> | undefined
   private stopping: Promise<void> | undefined
@@ -114,6 +116,7 @@ export class InputController {
     if (this.stopping)
       return this.stopping
     ++this.generation
+    this.rumbleScheduler.cancel()
     const backend = this.backend
     this.backend = undefined
     this.raw = emptyGamepadSnapshot()
@@ -154,8 +157,10 @@ export class InputController {
       this.comboHeld = this.diagnosticsComboHeld = false
       this.rearm()
     }
-    if ((old.vibration && !preferences.vibration) || (old.uiHaptics && !preferences.uiHaptics))
+    if ((old.vibration && !preferences.vibration) || (old.uiHaptics && !preferences.uiHaptics)
+      || old.controlSource !== preferences.controlSource) {
       void this.stopRumble()
+    }
     this.publish()
   }
 
@@ -239,10 +244,16 @@ export class InputController {
       return 'unsupported'
     if (source === 'test' && owner !== 'ui')
       return 'unsupported'
-    return this.backend.rumble(activeDeviceId, source === 'ui' ? effect : gameRumbleEffect(effect, this.preferences.vibrationStrength, this.preferences.vibrationChannels))
+    const backend = this.backend
+    if (source === 'game') {
+      return this.rumbleScheduler.play(effect, value => backend.rumble(activeDeviceId, gameRumbleEffect(value, this.preferences.vibrationStrength, this.preferences.vibrationChannels)))
+    }
+    this.rumbleScheduler.cancel()
+    return backend.rumble(activeDeviceId, source === 'ui' ? effect : gameRumbleEffect(effect, this.preferences.vibrationStrength, this.preferences.vibrationChannels))
   }
 
   async stopRumble(): Promise<void> {
+    this.rumbleScheduler.cancel()
     if (this.backend && this.selectedId)
       await this.backend.stopRumble(this.selectedId)
   }
@@ -307,6 +318,7 @@ export class InputController {
       !== snapshot.devices.find(device => device.id === this.selectedId)?.layoutKey
       || previous.devices.find(device => device.id === previousId)?.standard !== snapshot.devices.find(device => device.id === this.selectedId)?.standard
     if (previousId !== this.selectedId || layoutChanged || (previouslyConnected && !devices.some(device => device.id === previousId))) {
+      this.rumbleScheduler.cancel()
       if (previousId)
         void this.backend?.stopRumble(previousId)
       this.rearm()

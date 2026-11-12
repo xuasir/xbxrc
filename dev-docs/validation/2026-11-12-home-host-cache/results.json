@@ -1,0 +1,359 @@
+{
+  "date": "2026-11-12",
+  "status": "implemented-and-automatically-validated",
+  "scope": "实际 App/router/KeepAlive/Home 与模拟 Rust RPC；Rust 缓存时效和并发合同单独回归",
+  "ttlSeconds": 60,
+  "retryMinimumSeconds": 15,
+  "idleScopeCapacity": 8,
+  "initial": {
+    "requests": {
+      "data.getHostsSnapshot": 1,
+      "data.refreshHosts": 0,
+      "host.http": 1
+    },
+    "home": {
+      "deviceCards": 2,
+      "loading": false,
+      "primaryBusy": "",
+      "primaryDisabled": false,
+      "scrollTop": 0,
+      "status": "可用: 已开机",
+      "title": "客厅 Xbox",
+      "unavailable": ""
+    }
+  },
+  "hotRoundtrips": {
+    "action": "roundtrips",
+    "iterations": 20,
+    "networkDelta": 0,
+    "refreshDelta": 0,
+    "snapshotDelta": 0
+  },
+  "slowRefresh": {
+    "incrementalRequests": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "primaryBusy": null,
+    "primaryDisabled": false,
+    "refreshBusy": "true",
+    "selection": "书房 Xbox"
+  },
+  "coldPendingReturn": {
+    "incrementalRequests": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "pendingScopes": [
+      "fixture-account-a"
+    ]
+  },
+  "coldCompletedReturn": {
+    "incrementalRequests": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 1,
+      "host.http": 1
+    },
+    "home": {
+      "deviceCards": 2,
+      "loading": false,
+      "primaryBusy": "",
+      "primaryDisabled": false,
+      "scrollTop": 0,
+      "status": "可用: 已开机",
+      "title": "客厅 Xbox",
+      "unavailable": ""
+    },
+    "note": "在设置页完成首次请求后返回，原内容直接呈现；此轮等待已超过 TTL，返回追加一次后台刷新"
+  },
+  "refreshFailure": {
+    "incrementalRequests": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "retainedHome": {
+      "deviceCards": 2,
+      "loading": false,
+      "primaryBusy": "",
+      "primaryDisabled": false,
+      "scrollTop": 0,
+      "status": "可用: 已开机",
+      "title": "客厅 Xbox",
+      "unavailable": ""
+    }
+  },
+  "emptyCache": {
+    "role": "status",
+    "incrementalRequests": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "home": {
+      "deviceCards": 0,
+      "loading": false,
+      "primaryBusy": "",
+      "primaryDisabled": null,
+      "scrollTop": 0,
+      "status": "",
+      "title": "",
+      "unavailable": "我的主机暂未发现可用主机，请确认账号下已有启用远程功能的 Xbox 主机。刷新"
+    }
+  },
+  "events": {
+    "foreign": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "sameAccountSession": {
+      "data.getHostsSnapshot": 1,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "acceptedPower": {
+      "data.getHostsSnapshot": 1,
+      "data.refreshHosts": 1,
+      "host.http": 1
+    }
+  },
+  "accountIsolation": {
+    "oldInFlightWhileBIsVisible": [
+      "fixture-account-a"
+    ],
+    "visibleDuringPending": "账户 B 的 Xbox",
+    "visibleAfterOldResult": "账户 B 的 Xbox",
+    "cacheScopesAfterOldResult": [
+      "fixture-account-b"
+    ]
+  },
+  "expiredCache": {
+    "inactiveIncrement": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 0,
+      "host.http": 0
+    },
+    "returnIncrement": {
+      "data.getHostsSnapshot": 0,
+      "data.refreshHosts": 1,
+      "host.http": 1
+    },
+    "home": {
+      "deviceCards": 0,
+      "loading": false,
+      "primaryBusy": "",
+      "primaryDisabled": false,
+      "scrollTop": 0,
+      "status": "可用: 已开机",
+      "title": "账户 B 的 Xbox",
+      "unavailable": ""
+    }
+  },
+  "narrowReturn": {
+    "incrementalRequests": {
+      "snapshot": 0,
+      "refresh": 0,
+      "network": 0
+    },
+    "selectedHost": "书房 Xbox"
+  },
+  "appearance": [
+    {
+      "file": "home-desktop-light.json",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "home": {
+        "deviceCards": 2,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": false,
+        "scrollTop": 0,
+        "status": "可用: 已开机",
+        "title": "客厅 Xbox",
+        "unavailable": ""
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "file": "home-desktop-dark.json",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "home": {
+        "deviceCards": 0,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": false,
+        "scrollTop": 0,
+        "status": "可用: 已开机",
+        "title": "账户 B 的 Xbox",
+        "unavailable": ""
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "file": "home-narrow-light.json",
+      "theme": "light",
+      "viewport": {
+        "height": 850,
+        "width": 540
+      },
+      "home": {
+        "deviceCards": 2,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": false,
+        "scrollTop": 0,
+        "status": "可用: 待机中",
+        "title": "书房 Xbox",
+        "unavailable": ""
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "file": "home-narrow-dark.json",
+      "theme": "dark",
+      "viewport": {
+        "height": 850,
+        "width": 540
+      },
+      "home": {
+        "deviceCards": 2,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": false,
+        "scrollTop": 0,
+        "status": "可用: 已开机",
+        "title": "客厅 Xbox",
+        "unavailable": ""
+      },
+      "horizontalOverflow": false
+    }
+  ],
+  "sourceIntegrity": {
+    "sourceCount": 10,
+    "allMatch": true,
+    "files": [
+      {
+        "file": "src/pages/Home.vue",
+        "sha256": "a8c0d688f987c84241774ef2f3d259b13c9c64752e8597cc7f570ca342a45638",
+        "matches": true
+      },
+      {
+        "file": "src/pages/home/hosts-store.ts",
+        "sha256": "4abee5c0dce59b0c4fdbb41275bf59a93095de1c4ae7eb52beeea32e0790a63b",
+        "matches": true
+      },
+      {
+        "file": "src/pages/home/use-hosts.ts",
+        "sha256": "ab237199b3faacb8ad76f44cbbe9f285228f68e579c65f0a311c400e04e4b233",
+        "matches": true
+      },
+      {
+        "file": "src/shared/rpc/hosts.ts",
+        "sha256": "ba15cb26975d15aa0ece515c08581c79bcf372b6aa152f2441ab5927dc143ee3",
+        "matches": true
+      },
+      {
+        "file": "src/shared/rpc/contract.ts",
+        "sha256": "b710a5afc24c6146e3add395b126809f229fa5a16d35bb4069b41395d1da88e3",
+        "matches": true
+      },
+      {
+        "file": "src/shared/events/contract.ts",
+        "sha256": "4a8a2ba18309f6d8f2b490355971067536c8f1cac3eeaabf9064f93aecd06bb8",
+        "matches": true
+      },
+      {
+        "file": "src/shared/events/data.ts",
+        "sha256": "6f37176071efa0328944f3a361666d3ebca76fbe6db3211519b345b786c16144",
+        "matches": true
+      },
+      {
+        "file": "src/App.vue",
+        "sha256": "58cf0a6d0baf018ff3654b5e2e41a2e2a9a785de0ea8856e417fe9a1439c48cd",
+        "matches": true
+      },
+      {
+        "file": "src/router/index.ts",
+        "sha256": "bd0b75cdd23e4507b03db5e3b4e1d69b4ee3f11bebc360cb657675f5db23daa2",
+        "matches": true
+      },
+      {
+        "file": "src/navigation/core/engine.ts",
+        "sha256": "71edaed3df8ffaf8011ef0790509ff0dd7c36ef8ca036bf2d3625ad3bd9e671e",
+        "matches": true
+      }
+    ]
+  },
+  "checks": {
+    "rustHostCache": {
+      "passed": 8,
+      "failed": 0,
+      "log": "checks/rust-host-cache.txt"
+    },
+    "vueHostCache": {
+      "passed": 13,
+      "failed": 0,
+      "includedIn": "checks/vue-all.txt"
+    },
+    "rustData": {
+      "passed": 63,
+      "failed": 0,
+      "log": "checks/rust-data.txt"
+    },
+    "rustCatalogFlow": {
+      "passed": 11,
+      "failed": 0,
+      "log": "../2026-11-12-cloud-menu-performance-implementation/checks/rust-flow.txt"
+    },
+    "targetedVueCloudNavigation": {
+      "passed": 111,
+      "failed": 0,
+      "log": "../2026-11-12-cloud-menu-performance-implementation/checks/vue-cloud-navigation.txt"
+    },
+    "finalVueAll": {
+      "files": 114,
+      "passed": 985,
+      "failed": 2,
+      "log": "checks/vue-all.txt"
+    },
+    "productionTrace": {
+      "passed": 2,
+      "failed": 0,
+      "log": "../2026-11-12-cloud-menu-performance-implementation/checks/trace-production.txt"
+    },
+    "navigationCoverage": {
+      "supportedSites": 217,
+      "violations": 0,
+      "log": "checks/navigation.txt"
+    },
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed",
+    "rustFormat": "passed",
+    "rustWorkspaceCheck": "passed",
+    "existingFailures": [
+      {
+        "file": "src/pages/settings/setting-validation.test.ts",
+        "detail": "force_region_ip 预期 nextConnection，实际 nextAuthorization"
+      },
+      {
+        "file": "src/streaming/runtime/browser-runtime.test.ts",
+        "detail": "dev.healthSamples 预期 0 条，实际 27 条"
+      }
+    ]
+  },
+  "limitations": [
+    "累计计数包含活动页每 60 秒更新及失败重试，菜单往返与事件判断使用成对阶段增量",
+    "浏览器验证使用受控账户和设备事实，真实主机状态收敛、原生窗口、实际串流和物理手柄由用户验收"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "flowOwner": "true",
+  "innerOutline": "setting-input-control__field-shell",
+  "inputShadow": "none",
+  "owner": "xcloud-page__search-shell",
+  "viewport": {
+    "height": 900,
+    "width": 480
+  }
+}

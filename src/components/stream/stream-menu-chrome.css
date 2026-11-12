@@ -1,0 +1,37 @@
+/* 串流页与快捷键示意图共用按钮位置、尺寸及显隐样式。 */
+.stream-page__chrome-container {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: var(--z-stream-chrome);
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+.stream-page__chrome-container--hidden {
+  opacity: 0;
+  transform: translateX(-20px) scale(0.9);
+}
+.stream-page__diagnostics-container {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  z-index: var(--z-stream-chrome);
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+.stream-page__diagnostics-container--hidden {
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+}
+.stream-page__chrome {
+  pointer-events: auto;
+  width: var(--ui-size-control-xl) !important;
+  height: var(--ui-size-control-xl) !important;
+  background: transparent;
+  border: 1px solid var(--ui-border-subtle);
+}
+.stream-page__chrome :deep(.sn-icon-button__icon-shell),
+.stream-page__chrome :deep(.sn-icon-button__icon) {
+  width: var(--ui-size-icon-lg) !important;
+  height: var(--ui-size-icon-lg) !important;
+}

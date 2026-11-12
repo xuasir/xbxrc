@@ -17,6 +17,10 @@ describe('页面方向遵循导航顺序和详情层级', () => {
     expect(resolvePageMotion(route('my', 'my'), route('my-game', 'my'))).toEqual({ direction: 'back', axis: 'x' })
     expect(resolvePageMotion(route('xhome'), route('my-game', 'my'))).toEqual({ direction: 'back', axis: 'auto' })
   })
+  it('串流快捷键子页进入与返回遵循设置层级', () => {
+    expect(resolvePageMotion(route('setting-stream-shortcuts', 'setting'), route('setting'))).toEqual({ direction: 'forward', axis: 'x' })
+    expect(resolvePageMotion(route('setting'), route('setting-stream-shortcuts', 'setting'))).toEqual({ direction: 'back', axis: 'x' })
+  })
   it('登录、串流和同层未知关系采用淡入', () => {
     expect(resolvePageMotion(route('login'), route('xhome'))).toEqual({ direction: 'fade', axis: 'auto' })
     expect(resolvePageMotion(route('xhome-stream'), route('xhome'))).toEqual({ direction: 'fade', axis: 'auto' })

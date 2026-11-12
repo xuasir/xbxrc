@@ -22,6 +22,7 @@ impl ResolvedSettingsStore {
     }
 }
 
+#[derive(Clone)]
 pub struct SettingsStoreResolver {
     app_handle: AppHandle,
 }

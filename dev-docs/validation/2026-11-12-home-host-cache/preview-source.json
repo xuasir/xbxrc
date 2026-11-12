@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-12",
+  "preview": "/private/tmp/xbxrc-home-host-cache-20261112",
+  "outDir": "/private/tmp/xbxrc-cloud-performance-p0-p2-20261112/dist/home-validation",
+  "browserUrl": "http://127.0.0.1:1435/home-validation/dev-docs/validation/2026-11-12-home-host-cache/index.html",
+  "method": "production Vite build；实际 App/router/页面/导航与模拟 Rust RPC，复用本任务已启动的本地 HTTP 验证服务",
+  "sources": {
+    "src/pages/Home.vue": {
+      "workspace": "a8c0d688f987c84241774ef2f3d259b13c9c64752e8597cc7f570ca342a45638",
+      "preview": "a8c0d688f987c84241774ef2f3d259b13c9c64752e8597cc7f570ca342a45638"
+    },
+    "src/pages/home/hosts-store.ts": {
+      "workspace": "4abee5c0dce59b0c4fdbb41275bf59a93095de1c4ae7eb52beeea32e0790a63b",
+      "preview": "4abee5c0dce59b0c4fdbb41275bf59a93095de1c4ae7eb52beeea32e0790a63b"
+    },
+    "src/pages/home/use-hosts.ts": {
+      "workspace": "ab237199b3faacb8ad76f44cbbe9f285228f68e579c65f0a311c400e04e4b233",
+      "preview": "ab237199b3faacb8ad76f44cbbe9f285228f68e579c65f0a311c400e04e4b233"
+    },
+    "src/shared/rpc/hosts.ts": {
+      "workspace": "ba15cb26975d15aa0ece515c08581c79bcf372b6aa152f2441ab5927dc143ee3",
+      "preview": "ba15cb26975d15aa0ece515c08581c79bcf372b6aa152f2441ab5927dc143ee3"
+    },
+    "src/shared/rpc/contract.ts": {
+      "workspace": "b710a5afc24c6146e3add395b126809f229fa5a16d35bb4069b41395d1da88e3",
+      "preview": "b710a5afc24c6146e3add395b126809f229fa5a16d35bb4069b41395d1da88e3"
+    },
+    "src/shared/events/contract.ts": {
+      "workspace": "4a8a2ba18309f6d8f2b490355971067536c8f1cac3eeaabf9064f93aecd06bb8",
+      "preview": "4a8a2ba18309f6d8f2b490355971067536c8f1cac3eeaabf9064f93aecd06bb8"
+    },
+    "src/shared/events/data.ts": {
+      "workspace": "6f37176071efa0328944f3a361666d3ebca76fbe6db3211519b345b786c16144",
+      "preview": "6f37176071efa0328944f3a361666d3ebca76fbe6db3211519b345b786c16144"
+    },
+    "src/App.vue": {
+      "workspace": "58cf0a6d0baf018ff3654b5e2e41a2e2a9a785de0ea8856e417fe9a1439c48cd",
+      "preview": "58cf0a6d0baf018ff3654b5e2e41a2e2a9a785de0ea8856e417fe9a1439c48cd"
+    },
+    "src/router/index.ts": {
+      "workspace": "bd0b75cdd23e4507b03db5e3b4e1d69b4ee3f11bebc360cb657675f5db23daa2",
+      "preview": "bd0b75cdd23e4507b03db5e3b4e1d69b4ee3f11bebc360cb657675f5db23daa2"
+    },
+    "src/navigation/core/engine.ts": {
+      "workspace": "71edaed3df8ffaf8011ef0790509ff0dd7c36ef8ca036bf2d3625ad3bd9e671e",
+      "preview": "71edaed3df8ffaf8011ef0790509ff0dd7c36ef8ca036bf2d3625ad3bd9e671e"
+    }
+  }
+}

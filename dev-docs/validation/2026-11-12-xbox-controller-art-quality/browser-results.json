@@ -1,0 +1,498 @@
+{
+  "layouts": [
+    {
+      "label": "vibration-default-dark",
+      "boxes": {
+        "footer": {
+          "bottom": 574.25,
+          "centerX": 682,
+          "height": 84,
+          "width": 640,
+          "x": 362,
+          "y": 490.25
+        },
+        "image": {
+          "bottom": 453.4453125,
+          "centerX": 681.9921875,
+          "height": 206.3984375,
+          "width": 297.59375,
+          "x": 533.1953125,
+          "y": 247.046875
+        },
+        "presets": {
+          "bottom": 574.25,
+          "centerX": 682,
+          "height": 36,
+          "width": 198,
+          "x": 583,
+          "y": 538.25
+        },
+        "toggle": {
+          "bottom": 526.25,
+          "centerX": 682,
+          "height": 36,
+          "width": 106,
+          "x": 629,
+          "y": 490.25
+        }
+      },
+      "horizontalOverflow": false,
+      "hotspots": [
+        {
+          "error": 0.005300499606912924,
+          "key": "l2",
+          "x": 104,
+          "y": 6
+        },
+        {
+          "error": 0.006445052116435965,
+          "key": "l3",
+          "x": 76,
+          "y": 180
+        },
+        {
+          "error": 0.0065719108442571575,
+          "key": "r2",
+          "x": 268,
+          "y": 6
+        },
+        {
+          "error": 0.007563400161918424,
+          "key": "r3",
+          "x": 298,
+          "y": 180
+        }
+      ],
+      "imageHref": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+      "mode": "vibration",
+      "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller/vibration",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "label": "mapping-default-dark",
+      "boxes": {
+        "image": {
+          "bottom": 497.4375,
+          "centerX": 681.9921875,
+          "height": 206.3984375,
+          "width": 297.59375,
+          "x": 533.1953125,
+          "y": 291.0390625
+        }
+      },
+      "horizontalOverflow": false,
+      "hotspots": [
+        {
+          "error": 0.008610551075264539,
+          "key": "home",
+          "x": 186,
+          "y": 35
+        },
+        {
+          "error": 0.005300499606936572,
+          "key": "l2",
+          "x": 104,
+          "y": 6
+        },
+        {
+          "error": 0.00424559714746596,
+          "key": "l1",
+          "x": 83,
+          "y": 16
+        },
+        {
+          "error": 0.007938952524994724,
+          "key": "l3",
+          "x": 90,
+          "y": 74
+        },
+        {
+          "error": 0.0067352459752692976,
+          "key": "view",
+          "x": 159,
+          "y": 72
+        },
+        {
+          "error": 0.00826983758406837,
+          "key": "dpadUp",
+          "x": 137,
+          "y": 115
+        },
+        {
+          "error": 0.0043433704223319195,
+          "key": "dpadLeft",
+          "x": 117,
+          "y": 133
+        },
+        {
+          "error": 0.004414280701505749,
+          "key": "dpadDown",
+          "x": 137,
+          "y": 151
+        },
+        {
+          "error": 0.003682129190899549,
+          "key": "dpadRight",
+          "x": 157,
+          "y": 133
+        },
+        {
+          "error": 0.006571910844276231,
+          "key": "r2",
+          "x": 268,
+          "y": 6
+        },
+        {
+          "error": 0.008742716018306255,
+          "key": "r1",
+          "x": 289,
+          "y": 16
+        },
+        {
+          "error": 0.008136930045269579,
+          "key": "north",
+          "x": 281,
+          "y": 49
+        },
+        {
+          "error": 0.0025881973291401864,
+          "key": "west",
+          "x": 257,
+          "y": 73
+        },
+        {
+          "error": 0.004952222030146955,
+          "key": "east",
+          "x": 307,
+          "y": 74
+        },
+        {
+          "error": 0.0019954592607809804,
+          "key": "south",
+          "x": 282,
+          "y": 98
+        },
+        {
+          "error": 0.008654286710599889,
+          "key": "menu",
+          "x": 213,
+          "y": 72
+        },
+        {
+          "error": 0.005928929021155935,
+          "key": "r3",
+          "x": 233,
+          "y": 131
+        }
+      ],
+      "imageHref": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+      "mode": "mapping",
+      "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller/layout",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "label": "sticks-default-dark",
+      "boxes": {
+        "image": {
+          "bottom": 531.1640625,
+          "centerX": 322.9921875,
+          "height": 192.84375,
+          "width": 278.0625,
+          "x": 183.9609375,
+          "y": 338.3203125
+        }
+      },
+      "horizontalOverflow": false,
+      "hotspots": [
+        {
+          "error": 0.012102254711748056,
+          "key": "l3",
+          "x": 90,
+          "y": 74
+        },
+        {
+          "error": 0.006093935258447237,
+          "key": "r3",
+          "x": 233,
+          "y": 131
+        }
+      ],
+      "imageHref": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+      "mode": "sticks",
+      "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller/sticks",
+      "viewport": {
+        "height": 875,
+        "width": 646
+      }
+    },
+    {
+      "label": "live-default-dark",
+      "boxes": {
+        "image": {
+          "bottom": 475.421875,
+          "centerX": 322.9921875,
+          "height": 192.8515625,
+          "width": 278.0625,
+          "x": 183.9609375,
+          "y": 282.5703125
+        }
+      },
+      "horizontalOverflow": false,
+      "hotspots": [
+        {
+          "error": null,
+          "x": 186,
+          "y": 35
+        },
+        {
+          "error": null,
+          "x": 104,
+          "y": 6
+        },
+        {
+          "error": null,
+          "x": 83,
+          "y": 16
+        },
+        {
+          "error": null,
+          "x": 90,
+          "y": 74
+        },
+        {
+          "error": null,
+          "x": 159,
+          "y": 72
+        },
+        {
+          "error": null,
+          "x": 137,
+          "y": 115
+        },
+        {
+          "error": null,
+          "x": 117,
+          "y": 133
+        },
+        {
+          "error": null,
+          "x": 137,
+          "y": 151
+        },
+        {
+          "error": null,
+          "x": 157,
+          "y": 133
+        },
+        {
+          "error": null,
+          "x": 268,
+          "y": 6
+        },
+        {
+          "error": null,
+          "x": 289,
+          "y": 16
+        },
+        {
+          "error": null,
+          "x": 281,
+          "y": 49
+        },
+        {
+          "error": null,
+          "x": 257,
+          "y": 73
+        },
+        {
+          "error": null,
+          "x": 307,
+          "y": 74
+        },
+        {
+          "error": null,
+          "x": 282,
+          "y": 98
+        },
+        {
+          "error": null,
+          "x": 213,
+          "y": 72
+        },
+        {
+          "error": null,
+          "x": 233,
+          "y": 131
+        }
+      ],
+      "imageHref": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+      "mode": "input",
+      "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller/live",
+      "viewport": {
+        "height": 875,
+        "width": 646
+      }
+    },
+    {
+      "label": "vibration-390-light-en",
+      "boxes": {
+        "footer": {
+          "bottom": 682,
+          "centerX": 195,
+          "height": 84,
+          "width": 342,
+          "x": 24,
+          "y": 598
+        },
+        "image": {
+          "bottom": 486,
+          "centerX": 195,
+          "height": 210,
+          "width": 342,
+          "x": 24,
+          "y": 276
+        },
+        "presets": {
+          "bottom": 682,
+          "centerX": 195,
+          "height": 36,
+          "width": 260.03125,
+          "x": 64.984375,
+          "y": 646
+        },
+        "toggle": {
+          "bottom": 634,
+          "centerX": 195,
+          "height": 36,
+          "width": 143.609375,
+          "x": 123.1953125,
+          "y": 598
+        }
+      },
+      "horizontalOverflow": false,
+      "hotspots": [
+        {
+          "error": 0.005884496635432153,
+          "key": "l2",
+          "x": 104,
+          "y": 6
+        },
+        {
+          "error": 0.005658579761049655,
+          "key": "l3",
+          "x": 76,
+          "y": 180
+        },
+        {
+          "error": 0.0021953208527727857,
+          "key": "r2",
+          "x": 268,
+          "y": 6
+        },
+        {
+          "error": 0.004021792082345435,
+          "key": "r3",
+          "x": 298,
+          "y": 180
+        }
+      ],
+      "imageHref": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+      "mode": "vibration",
+      "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller/vibration",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    {
+      "label": "vibration-320-light-en",
+      "boxes": {
+        "footer": {
+          "bottom": 691,
+          "centerX": 160,
+          "height": 84,
+          "width": 272,
+          "x": 24,
+          "y": 607
+        },
+        "image": {
+          "bottom": 495,
+          "centerX": 160,
+          "height": 210,
+          "width": 272,
+          "x": 24,
+          "y": 285
+        },
+        "presets": {
+          "bottom": 691,
+          "centerX": 160,
+          "height": 36,
+          "width": 260.03125,
+          "x": 29.984375,
+          "y": 655
+        },
+        "toggle": {
+          "bottom": 643,
+          "centerX": 160,
+          "height": 36,
+          "width": 143.609375,
+          "x": 88.1953125,
+          "y": 607
+        }
+      },
+      "horizontalOverflow": false,
+      "hotspots": [
+        {
+          "error": 0.004433224059800267,
+          "key": "l2",
+          "x": 104,
+          "y": 6
+        },
+        {
+          "error": 0.007499097414805837,
+          "key": "l3",
+          "x": 76,
+          "y": 180
+        },
+        {
+          "error": 0.004358575863944404,
+          "key": "r2",
+          "x": 268,
+          "y": 6
+        },
+        {
+          "error": 0.0022368156847821907,
+          "key": "r3",
+          "x": 298,
+          "y": 180
+        }
+      ],
+      "imageHref": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+      "mode": "vibration",
+      "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller/vibration",
+      "viewport": {
+        "height": 844,
+        "width": 320
+      }
+    }
+  ],
+  "connectionImageEvidence": {
+    "displaySize": {
+      "height": 124.8359375,
+      "width": 180
+    },
+    "naturalSize": {
+      "height": 1032,
+      "width": 1488
+    },
+    "source": "/src/assets/ctrl/series-ctrl-transparent.png?t=1794456355141",
+    "url": "http://127.0.0.1:8950/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/index.html#/controller?tab=settings"
+  },
+  "consoleErrors": []
+}

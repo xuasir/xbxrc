@@ -1,6 +1,8 @@
 pub mod cache_repository;
+mod catalog_projection;
 pub mod error;
 pub mod events;
+mod host_cache;
 pub mod rpc;
 pub mod runtime_state;
 pub mod service;
@@ -17,6 +19,12 @@ use std::sync::Arc;
 
 #[async_trait]
 pub trait DataProvider: Send + Sync {
+    async fn get_cloud_catalog_status(&self) -> Result<DataCloudCatalogStatus, DataError>;
+    async fn get_cloud_title_summary(
+        &self,
+        product: &str,
+    ) -> Result<DataCloudTitleSummary, DataError>;
+    async fn prioritize_cloud_titles(&self, products: Vec<String>) -> Result<bool, DataError>;
     async fn validate_cloud_stream(&self, _stream: &str) -> Result<(), DataError> {
         Ok(())
     }
@@ -105,6 +113,8 @@ pub trait DataProvider: Send + Sync {
     ) -> Result<DataMediaSaveResult, DataError>;
     async fn get_user_profile(&self) -> Result<DataUserProfile, DataError>;
     async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, DataError>;
+    async fn get_hosts_snapshot(&self) -> Result<DataHostsSnapshot, DataError>;
+    async fn refresh_hosts(&self) -> Result<DataHostsSnapshot, DataError>;
     async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, DataError>;
     async fn find_remote_console(
         &self,

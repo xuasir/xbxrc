@@ -8,7 +8,7 @@ import type { GamepadTool } from '../settings/useGamepadPanelSession'
 import { defaultDeviceMapping, STANDARD_INPUT_BUTTONS } from '@shared/gamepad/device-mapping'
 import { DEFAULT_KEYBOARD_MAPPING, KEY_CODE_TO_DTO } from '@shared/gamepad/keyboard-fallback-bridge'
 import { assignKeyboardInput, parseKeyboardMapping } from '@shared/gamepad/keyboard-mapping'
-import { applyGameControls, defaultGameControls } from '@shared/gamepad/preferences'
+import { applyGameControls, defaultGameControls, RUMBLE_CHANNELS } from '@shared/gamepad/preferences'
 import { STANDARD_BUTTON_COUNT } from '@shared/gamepad/raw-input'
 import { gamepadConfig, inputController, saveGamepadConfig } from '@shared/gamepad/runtime'
 import { assignCapturedGameButton, BUTTON_LABELS, createGamepadCaptureReader, mappingTarget } from '@shared/gamepad/settings-model'
@@ -23,6 +23,7 @@ import GamepadInputReadings from '../../components/settings/GamepadInputReadings
 import GamepadMappingDiagram from '../../components/settings/GamepadMappingDiagram.vue'
 import GamepadToolPage from '../../components/settings/GamepadToolPage.vue'
 import SettingConfirmSheet from '../../components/settings/SettingConfirmSheet.vue'
+import SettingInlineSingleSelect from '../../components/settings/SettingInlineSingleSelect.vue'
 import SettingToggleRow from '../../components/settings/SettingToggleRow.vue'
 import { useGamepadPanelSession } from '../settings/useGamepadPanelSession'
 
@@ -108,6 +109,11 @@ const keyboardLabels = computed(() => Object.fromEntries(BUTTON_KEYS.map(key => 
 const diagramMode = computed<'mapping' | 'sticks' | 'keyboard' | 'vibration'>(() => pane.value === 'sticks' || pane.value === 'keyboard' || pane.value === 'vibration' ? pane.value : 'mapping')
 const rumbleChannel = (key: ButtonKey | number | null): RumbleChannel => key === 'r3' ? 'rightGrip' : key === 'l2' ? 'leftTrigger' : key === 'r2' ? 'rightTrigger' : 'leftGrip'
 const selectedRumbleSupported = computed(() => ['l2', 'r2'].includes(String(choiceSource.value)) ? activeDevice.value?.triggerRumble : activeDevice.value?.rumble)
+const vibrationOptions = computed(() => ['realistic', 'enhanced', 'full'].map((value, index) => ({ value, label: tr(['light', 'normal', 'strong'][index]) })))
+const unifiedVibrationStrength = computed(() => {
+  const strength = prefs.value.vibrationChannels.leftGrip
+  return RUMBLE_CHANNELS.every(channel => prefs.value.vibrationChannels[channel] === strength) ? strength : null
+})
 const diagramLabels = computed(() => pane.value === 'keyboard'
   ? keyboardLabels.value
   : pane.value === 'sticks'
@@ -478,7 +484,14 @@ function inputDeadzone(event: Event): void {
 }
 function chooseGrip(source: ButtonKey): void {
   const channel = rumbleChannel(source)
-  choice.value = { title: tr(channel), current: prefs.value.vibrationChannels[channel], options: ['realistic', 'enhanced', 'full'].map((value, index) => ({ value, label: tr(['light', 'normal', 'strong'][index]) })), apply: value => persist({ vibration_channels: { ...prefs.value.vibrationChannels, [channel]: value } }) }
+  choice.value = { title: tr(channel), current: prefs.value.vibrationChannels[channel], options: vibrationOptions.value, apply: value => persist({ vibration_channels: { ...prefs.value.vibrationChannels, [channel]: value } }) }
+}
+async function setUnifiedVibration(value: string | number): Promise<void> {
+  if (!vibrationOptions.value.some(option => option.value === value))
+    return
+  // 一次写入四路和旧总强度，保持新旧配置读取一致。
+  if (await persist({ vibration_strength: value, vibration_channels: Object.fromEntries(RUMBLE_CHANNELS.map(channel => [channel, value])) }) && choice.value)
+    choice.value.current = value
 }
 async function applyChoice(value: string | number): Promise<void> {
   const selected = choice.value
@@ -583,10 +596,16 @@ function exportDiagnostic(): void {
                 </div>
                 <SettingToggleRow :id="`${paneScope}.invert`" :scope-id="paneScope" :label="tr('invertStickY')" :enabled="choiceSource === 'r3' ? draft.invertRightY : draft.invertLeftY" :busy="saving" @confirm="choiceSource === 'r3' ? draft.invertRightY = !draft.invertRightY : draft.invertLeftY = !draft.invertLeftY" />
               </template>
-              <template v-if="pane === 'vibration'">
-                <SettingToggleRow :id="`${paneScope}.gameVibration`" :scope-id="paneScope" :label="tr('vibration')" :enabled="prefs.vibration" :busy="saving" :disabled="!activeDevice?.rumble" @confirm="persist({ vibration: !prefs.vibration })" />
-              </template>
             </GamepadDiagramEditor>
+          </template>
+          <template v-if="pane === 'vibration'" #extras>
+            <div class="pad-vibration-footer">
+              <SettingToggleRow :id="`${paneScope}.gameVibration`" :scope-id="paneScope" :label="tr('vibration')" :enabled="prefs.vibration" :busy="saving" :disabled="!activeDevice?.rumble" class="pad-vibration-toggle" @confirm="persist({ vibration: !prefs.vibration })" />
+              <div class="pad-vibration-presets">
+                <span>{{ tr('unifiedVibrationStrength') }}</span>
+                <SettingInlineSingleSelect open :scope-id="paneScope" row-node-id="vibrationStrength" :options="vibrationOptions" :current-value="unifiedVibrationStrength" :label="tr('unifiedVibrationStrength')" :busy="saving" :disabled="!activeDevice?.rumble" @select="setUnifiedVibration" @close="requestClosePane" />
+              </div>
+            </div>
           </template>
         </GamepadMappingDiagram>
       </template>
@@ -640,8 +659,16 @@ function exportDiagnostic(): void {
 .pad-editor p { margin: 0; color: var(--color-text-secondary); font-size: var(--ui-text-body-sm); line-height: var(--ui-line-height-relaxed); }
 .pad-editor h2 { margin: 0; font-size: var(--ui-text-body); font-weight: var(--ui-font-weight-semibold); }
 .pad-editor .setting-panel__status--error { color: var(--color-danger); }
-.pad-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-8); }
+.pad-header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-8); }
 .pad-header-actions .setting-panel__action { min-width: 0; min-height: 36px; padding: var(--space-8) var(--space-12); font-size: 12px; }
+.pad-vibration-footer { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); width: 100%; }
+.pad-vibration-toggle { --ui-settings-toggle-track-width: 28px; --ui-settings-toggle-track-height: 16px; --ui-settings-toggle-thumb-size: 10px; --ui-settings-toggle-thumb-offset: 10px; width: auto; min-height: 36px; padding: 6px 8px; }
+.pad-vibration-toggle :deep(.setting-toggle-row__label) { font-size: 12px; }
+.pad-vibration-presets { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-8); max-width: 100%; color: var(--color-text-secondary); font-size: 12px; }
+.pad-vibration-presets :deep(.setting-inline-select) { padding: 0; }
+.pad-vibration-presets :deep(.setting-inline-select__rail) { gap: var(--space-4); }
+.pad-vibration-presets :deep(.setting-inline-select__segment) { flex: 0 0 auto; min-width: 44px; min-height: 36px; padding: 6px 10px; border-radius: var(--ui-radius-sm); }
+.pad-vibration-presets :deep(.setting-inline-select__segment-label) { font-size: 12px; }
 .pad-deadzone { display: flex; align-items: center; gap: 12px; padding: 4px; }
 .pad-deadzone output { flex: 0 0 34px; color: var(--color-text-primary); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .pad-deadzone input { appearance: none; flex: 1; min-width: 0; height: 28px; margin: 0; background: transparent; cursor: pointer; border-radius: var(--ui-radius-sm); }

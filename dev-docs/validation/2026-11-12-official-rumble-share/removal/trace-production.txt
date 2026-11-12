@@ -1,0 +1,10 @@
+$ node scripts/validate-production-trace.mjs
+
+ RUN  v4.1.4 /Users/guo.xu/Documents/code/games/xbxrc
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  16:53:21
+   Duration  707ms (transform 73ms, setup 0ms, import 86ms, tests 535ms, environment 0ms)
+

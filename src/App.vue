@@ -52,6 +52,9 @@ function resolveRouteViewKey(currentRoute: {
     return currentRoute.fullPath
   }
 
+  if (currentRoute.name === 'cloud-game')
+    return 'cloud-game'
+
   if (currentRoute.meta.navPage && currentRoute.name !== 'my')
     return currentRoute.path
 

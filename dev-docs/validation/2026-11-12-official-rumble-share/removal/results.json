@@ -1,0 +1,87 @@
+{
+  "date": "2026-11-12",
+  "status": "passed",
+  "userConfirmation": "远端对 Share 输入无响应，删除该输入",
+  "shareInput": "removed",
+  "rumbleTiming": "official",
+  "rumbleStrength": "configurable per motor",
+  "featureOnlyFilesReversed": 32,
+  "indexUnchangedDuringReversal": true,
+  "frontendTests": 730,
+  "rustTests": 236,
+  "checks": [
+    {
+      "command": "./node_modules/.bin/vitest run src/player src/shared/gamepad src/streaming src/shared/diagnostics",
+      "exitCode": 0,
+      "testFiles": 69,
+      "passed": 730,
+      "output": "vitest.txt"
+    },
+    {
+      "command": "cargo test -p xbox-webapi -p xbox-streaming",
+      "exitCode": 0,
+      "passed": 232,
+      "breakdown": {
+        "xbox-webapi": 70,
+        "xbox-streaming": 162
+      },
+      "output": "rust-protocol.txt"
+    },
+    {
+      "command": "cargo test -p xbxrc --lib trace_contract",
+      "exitCode": 0,
+      "passed": 4,
+      "output": "rust-trace.txt"
+    },
+    {
+      "command": "pnpm test:trace-production",
+      "exitCode": 0,
+      "passed": 2,
+      "execution": "isolated",
+      "output": "trace-production.txt"
+    },
+    {
+      "command": "pnpm lint:fix",
+      "exitCode": 0,
+      "output": "lint.txt"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "output": "typecheck.txt"
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0,
+      "output": "build.txt"
+    },
+    {
+      "command": "cargo fmt --all",
+      "exitCode": 0,
+      "output": "rust-format.txt"
+    },
+    {
+      "command": "cargo check --workspace",
+      "exitCode": 0,
+      "existingDataWarnings": 3,
+      "output": "rust-workspace.txt"
+    },
+    {
+      "command": "official rumble probe",
+      "exitCode": 0,
+      "matchingScenarios": 5,
+      "output": "rumble-probe.txt"
+    },
+    {
+      "command": "Share source and bundle scan",
+      "exitCode": 0,
+      "output": "source-scan.json"
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0,
+      "output": "diff.txt"
+    }
+  ],
+  "failures": []
+}

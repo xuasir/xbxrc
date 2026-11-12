@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "sourceMatches": [],
+  "bundleMatches": [],
+  "removedFiles": [
+    "src/player/app/input/TemporaryShareShortcut.ts",
+    "src/player/app/input/TemporaryShareShortcut.test.ts",
+    "src/player/app/input/UnreliableInputDelivery.test.ts",
+    "src/player/protocol/input/UnreliableGamepadEncoder.ts",
+    "src/player/protocol/input/UnreliableGamepadEncoder.test.ts",
+    "src/player/protocol/input/fixtures/unreliable-share-official.json"
+  ],
+  "remainingFiles": []
+}

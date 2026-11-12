@@ -1,0 +1,12 @@
+{
+  "createdDetails": 1,
+  "createdCatalogs": 1,
+  "stableTitles": true,
+  "stableIndex": true,
+  "statusRequests": 42,
+  "summaryRequests": 22,
+  "catalogRequests": 1,
+  "detailRequests": 22,
+  "emptyProductRequests": 0,
+  "sharedCatalogOwnersAfterUnmount": 1
+}

@@ -1133,6 +1133,8 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   </FocusScope>
 </template>
 
+<style scoped src="../components/stream/stream-menu-chrome.css"></style>
+
 <style scoped>
 .stream-page {
   position: relative;
@@ -1161,52 +1163,6 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   position: absolute;
   inset: 0;
   z-index: 0;
-}
-
-/* 快捷功能按钮：低于弹出层（--z-overlay），避免盖住菜单 / 诊断 ActionSheet */
-.stream-page__chrome-container {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: var(--z-stream-chrome);
-  pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.stream-page__chrome-container--hidden {
-  opacity: 0;
-  transform: translateX(-20px) scale(0.9);
-}
-
-.stream-page__diagnostics-container {
-  position: absolute;
-  bottom: 24px;
-  left: 24px;
-  z-index: var(--z-stream-chrome);
-  pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.stream-page__diagnostics-container--hidden {
-  opacity: 0;
-  transform: translateY(20px) scale(0.9);
-}
-
-.stream-page__chrome {
-  pointer-events: auto;
-  /* 匹配 TopNavBar 的尺寸；与视频叠放时使用透明底，图标靠 --ui-nav-icon-filter 等保证可读 */
-  width: var(--ui-size-control-xl) !important;
-  height: var(--ui-size-control-xl) !important;
-  background: transparent;
-  /* backdrop-filter: blur(20px); */
-  border: 1px solid var(--ui-border-subtle);
-}
-
-.stream-page__chrome :deep(.sn-icon-button__icon-shell),
-.stream-page__chrome :deep(.sn-icon-button__icon) {
-  /* 匹配 TopNavBar 的图标尺寸 */
-  width: var(--ui-size-icon-lg) !important;
-  height: var(--ui-size-icon-lg) !important;
 }
 
 /* 覆盖层 Overlays：默认与 ActionSheet 同级（盖住角标）；加载/连接中加 --keep-chrome 例外 */

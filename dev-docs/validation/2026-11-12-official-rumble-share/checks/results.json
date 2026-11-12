@@ -1,0 +1,123 @@
+{
+  "verifiedOn": "2026-11-12",
+  "branch": "main",
+  "status": "passed",
+  "scope": "official rumble timing and temporary keyboard Share implementation",
+  "checks": [
+    {
+      "command": "./node_modules/.bin/vitest run src/player src/shared/gamepad src/streaming src/shared/diagnostics",
+      "exitCode": 0,
+      "testFiles": 72,
+      "passed": 774,
+      "output": "vitest.txt"
+    },
+    {
+      "command": "cargo test -p xbox-webapi -p xbox-streaming",
+      "exitCode": 0,
+      "passed": 234,
+      "breakdown": {
+        "xbox-webapi": 70,
+        "xbox-streaming": 164
+      },
+      "execution": "outside sandbox after local HTTP listener permission failure",
+      "output": "rust-protocol.txt"
+    },
+    {
+      "command": "cargo test -p xbxrc --lib trace_contract",
+      "exitCode": 0,
+      "passed": 5,
+      "output": "rust-trace.txt"
+    },
+    {
+      "command": "pnpm test:trace-production",
+      "exitCode": 0,
+      "passed": 2,
+      "execution": "isolated after compilation and other tests completed",
+      "healthEncodingP95LimitMs": 0.5,
+      "output": "trace-production.txt"
+    },
+    {
+      "command": "pnpm lint:fix",
+      "exitCode": 0,
+      "output": "lint.txt"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "output": "typecheck.txt"
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0,
+      "output": "build.txt"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exitCode": 0,
+      "output": "rust-format.txt"
+    },
+    {
+      "command": "cargo check --workspace",
+      "exitCode": 0,
+      "existingDataWarnings": 3,
+      "output": "rust-workspace.txt"
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0,
+      "output": "diff.txt"
+    }
+  ],
+  "newFileFormatting": {
+    "files": 10,
+    "failures": []
+  },
+  "officialRumbleReplay": {
+    "results": "../results.json",
+    "scenarios": 5,
+    "matching": 5,
+    "exampleStartsMs": [
+      100,
+      400,
+      700
+    ],
+    "path": "RumbleService -> InputController/RumbleScheduler -> BrowserGamepadBackend -> simulated actuator"
+  },
+  "shareWire": {
+    "versions": [
+      9,
+      10
+    ],
+    "reportType": 512,
+    "ackType": 1024,
+    "shareTransitionIndex": 11,
+    "sharePacketOffset": 31,
+    "packetBytes": {
+      "v9": 60,
+      "v10": 61
+    },
+    "fixture": "src/player/protocol/input/fixtures/unreliable-share-official.json"
+  },
+  "manualValidation": {
+    "owner": "user",
+    "status": "pending",
+    "shortcut": "F9; Fn+F9 on Mac when needed",
+    "requires": "restart application with current source and reconnect stream",
+    "evidence": [
+      "negotiated input model and ready/unavailable notice",
+      "Share press/release sent and real remote ACK",
+      "Xbox capture or other remote Share action",
+      "physical four-motor intensity and timing"
+    ],
+    "ackMeaning": "remote receipt of an input frame; capture action has separate manual evidence"
+  },
+  "preliminaryOutputs": [
+    "vitest-pre-fix.txt",
+    "runtime-trace-isolated.txt",
+    "rust-protocol-sandbox.txt",
+    "trace-production-concurrent.txt"
+  ],
+  "supersededBy": "../removal/results.json",
+  "shareInputState": "removed after user local verification",
+  "archivedShareFixture": "../unreliable-share-official.json"
+}

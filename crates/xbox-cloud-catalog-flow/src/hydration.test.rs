@@ -1,3 +1,4 @@
+use super::hydrate_product_chunks_with_progress;
 use super::{build_overlay_load, hydrate_product_chunks_with_budget, PRODUCT_HYDRATION_CHUNK_SIZE};
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -116,6 +117,46 @@ async fn bounds_concurrency_and_runs_all_normalized_unique_batches() {
 }
 
 struct ActiveQuery(Arc<AtomicUsize>);
+
+#[tokio::test]
+async fn progressive_hydration_prioritizes_current_demand_and_preserves_every_batch() {
+    let ids = (0..75 * 8)
+        .map(|index| format!("P{index}"))
+        .collect::<Vec<_>>();
+    let requested = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let demand = Arc::new(std::sync::Mutex::new(vec!["P525".into()]));
+    let completed = Arc::new(AtomicUsize::new(0));
+    let (query_requested, priorities, next_demand, progress_count) = (
+        requested.clone(),
+        demand.clone(),
+        demand.clone(),
+        completed.clone(),
+    );
+    let load = hydrate_product_chunks_with_progress(
+        &ids,
+        Duration::from_secs(1),
+        move |chunk| {
+            query_requested.lock().unwrap().push(chunk[0].clone());
+            async move {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+                Ok(json!({"Products": [{"ProductId": chunk[0], "ProductTitle": "Batch"}]}))
+            }
+        },
+        move || priorities.lock().unwrap().clone(),
+        move |entries| {
+            assert_eq!(entries.len(), 1);
+            progress_count.fetch_add(1, Ordering::SeqCst);
+            *next_demand.lock().unwrap() = vec!["P450".into()];
+        },
+    )
+    .await;
+    let requested = requested.lock().unwrap();
+    assert_eq!(requested[0], "P525");
+    assert_eq!(requested[4], "P450");
+    assert_eq!(completed.load(Ordering::SeqCst), 8);
+    assert_eq!(load.entries.len(), 8);
+    assert_eq!(load.failed_chunk_count, 0);
+}
 
 impl ActiveQuery {
     fn new(active: Arc<AtomicUsize>) -> Self {

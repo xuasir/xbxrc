@@ -1,0 +1,71 @@
+$ vite build
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 445 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                                   0.61 kB │ gzip:   0.37 kB
+dist/assets/decoded-video-frame-worker-Bf2Wg0Fg.js                                3.21 kB
+dist/assets/series-x-transparent-k_C8uYQC.png                                   109.50 kB
+dist/assets/series-s-transparent-CsIkbMLb.png                                   110.73 kB
+dist/assets/series-ctrl-transparent-DYIGnVj_.png                              1,036.42 kB
+dist/assets/GameDetail-DfBjysgv.css                                               0.41 kB │ gzip:   0.24 kB
+dist/assets/RemoteImage-BX7nUL-K.css                                              0.51 kB │ gzip:   0.28 kB
+dist/assets/LibraryBack-CTfmyUVr.css                                              0.81 kB │ gzip:   0.37 kB
+dist/assets/LibrarySelectControl-Df-aM5Ea.css                                     1.11 kB │ gzip:   0.49 kB
+dist/assets/Login-CbyXauu9.css                                                    1.31 kB │ gzip:   0.50 kB
+dist/assets/use-cloud-wait-GoysDimc.css                                           1.78 kB │ gzip:   0.59 kB
+dist/assets/GamepadToolPage-Cc6DaGMy.css                                          1.92 kB │ gzip:   0.60 kB
+dist/assets/SettingInlineSingleSelect-BJkn9NAy.css                                2.01 kB │ gzip:   0.57 kB
+dist/assets/AlbumPanel-j9gWgKdf.css                                               2.11 kB │ gzip:   0.76 kB
+dist/assets/SettingSidebar-BvPZ_yn7.css                                           2.55 kB │ gzip:   0.72 kB
+dist/assets/SettingRow-BOZwjW-0.css                                               2.62 kB │ gzip:   0.71 kB
+dist/assets/GameCard-BGRJ-khE.css                                                 3.66 kB │ gzip:   1.08 kB
+dist/assets/SettingToggleRow-C4Tb3J_m.css                                         4.23 kB │ gzip:   0.93 kB
+dist/assets/SettingDisplayOptionsSheet-DQtvalv3.css                               5.48 kB │ gzip:   1.12 kB
+dist/assets/SettingInputControl-B5p6McmZ.css                                      5.71 kB │ gzip:   1.20 kB
+dist/assets/SettingSingleSelectPopupSheet-CiPWt-HA.css                            5.96 kB │ gzip:   1.13 kB
+dist/assets/SettingStreamShortcutsEditor-DNQrwGgK.css                             7.05 kB │ gzip:   1.57 kB
+dist/assets/library-Bd5KmSet.css                                                  7.49 kB │ gzip:   1.74 kB
+dist/assets/Home-BBeIuSOq.css                                                     7.56 kB │ gzip:   1.67 kB
+dist/assets/Controller-Rxmhk5ps.css                                               8.00 kB │ gzip:   1.68 kB
+dist/assets/XCloud-CbINaiBt.css                                                   8.29 kB │ gzip:   1.74 kB
+dist/assets/CloudGameDetail-D9AmQpsp.css                                          9.92 kB │ gzip:   2.20 kB
+dist/assets/ControllerToolPage-CNVSH03m.css                                      19.12 kB │ gzip:   3.50 kB
+dist/assets/Stream-DdaeEUIm.css                                                  24.57 kB │ gzip:   4.09 kB
+dist/assets/Setting-hxdqHUsm.css                                                 34.16 kB │ gzip:   2.97 kB
+dist/assets/index-Bli-Jccg.css                                                   68.34 kB │ gzip:  13.23 kB
+dist/assets/series-ctrl-transparent-B3MZSTV9.js                                   0.07 kB │ gzip:   0.09 kB
+dist/assets/stream-diagnostics-BkKtxjZT.js                                        0.52 kB │ gzip:   0.30 kB
+dist/assets/LibraryBack-DuAoTNfR.js                                               0.65 kB │ gzip:   0.47 kB
+dist/assets/SettingSidebar-DBqMMRcm.js                                            1.14 kB │ gzip:   0.60 kB
+dist/assets/use-console-C847P7Ad.js                                               1.36 kB │ gzip:   0.73 kB
+dist/assets/SettingRow-agvXfbTY.js                                                1.39 kB │ gzip:   0.67 kB
+dist/assets/SettingInlineSingleSelect-C27XVYJm.js                                 1.46 kB │ gzip:   0.74 kB
+dist/assets/SettingToggleRow-B1Zme3w9.js                                          1.50 kB │ gzip:   0.69 kB
+dist/assets/RemoteImage-4L-lDLig.js                                               2.50 kB │ gzip:   1.32 kB
+dist/assets/SettingSingleSelectPopupSheet-Q7NZ2oki.js                             2.52 kB │ gzip:   1.11 kB
+dist/assets/LibrarySelectControl-C2GvHlYY.js                                      2.63 kB │ gzip:   1.30 kB
+dist/assets/GameCard-DOJzizTW.js                                                  2.81 kB │ gzip:   1.11 kB
+dist/assets/GamepadToolPage-M5HVKH1z.js                                           3.09 kB │ gzip:   1.36 kB
+dist/assets/FriendDetail-mGB2fSz5.js                                              3.44 kB │ gzip:   1.73 kB
+dist/assets/Login-BruV2xMM.js                                                     5.26 kB │ gzip:   1.80 kB
+dist/assets/My-Dg5tOha1.js                                                        5.58 kB │ gzip:   2.48 kB
+dist/assets/library-BzLxsZg6.js                                                   5.63 kB │ gzip:   2.67 kB
+dist/assets/ConsoleLibrary-DB6-d_dJ.js                                            5.99 kB │ gzip:   2.67 kB
+dist/assets/SettingStreamShortcutsEditor-170xAOYL.js                              6.19 kB │ gzip:   2.46 kB
+dist/assets/SettingInputControl-CH80wdT5.js                                       6.60 kB │ gzip:   2.36 kB
+dist/assets/GameHistoryPanel.vue_vue_type_script_setup_true_lang-Bes4_6o_.js      8.56 kB │ gzip:   3.46 kB
+dist/assets/use-cloud-wait-Dicjj6fE.js                                            9.55 kB │ gzip:   3.60 kB
+dist/assets/SettingDisplayOptionsSheet-DLHAdEEo.js                                9.63 kB │ gzip:   2.76 kB
+dist/assets/Controller-uEGWDqle.js                                               10.58 kB │ gzip:   3.53 kB
+dist/assets/Home-DJuPc-xb.js                                                     10.64 kB │ gzip:   3.90 kB
+dist/assets/GameDetail-kXWu4BDQ.js                                               12.95 kB │ gzip:   4.53 kB
+dist/assets/AlbumPanel-B-LajUnv.js                                               13.54 kB │ gzip:   5.18 kB
+dist/assets/CloudGameDetail-BWzT68s8.js                                          17.35 kB │ gzip:   5.55 kB
+dist/assets/XCloud-CGOk7MpX.js                                                   28.41 kB │ gzip:  10.15 kB
+dist/assets/ControllerToolPage-EgNbvN6m.js                                       37.57 kB │ gzip:  12.40 kB
+dist/assets/Setting-DmtxyCjH.js                                                  55.79 kB │ gzip:  15.72 kB
+dist/assets/index-Dnk2rtes.js                                                   418.48 kB │ gzip: 145.53 kB
+dist/assets/Stream-DJo6RXiW.js                                                  445.04 kB │ gzip: 122.86 kB
+✓ built in 2.61s

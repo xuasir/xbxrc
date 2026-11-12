@@ -1,0 +1,125 @@
+// 官方公开发布脚本源码摘录：8128.1aca8038.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js
+// 原件 SHA-256：b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2
+// 格式化文件 SHA-256：4d136ea9a3357127701ab8b36ec1671ba4245b397d5a2b07be7968e439834e84
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// touch-control-message-handler | 原可读文件第 1529–1607 行
+        class it {
+            constructor(e) {
+                r()(this, "scope", "/streaming/touchcontrols"), r()(this, "touchControlHandler", void 0), 
+                r()(this, "logger", void 0), this.touchControlHandler = e, this.logger = h.r.Instance;
+            }
+            onMessage(e, t) {
+                if (this.touchControlHandler) try {
+                    switch (e.substr(this.scope.length)) {
+                      case "/hide":
+                        this.touchControlHandler.onHideTouchControls();
+                        break;
+
+                      case "/patchstate":
+                        {
+                            const i = JSON.parse(t);
+                            if (!tt(i, "patch", "string", e)) return;
+                            this.touchControlHandler.onUpdateTouchControlState({
+                                patch: i.patch
+                            });
+                            break;
+                        }
+
+                      case "/showlayout":
+                        this.touchControlHandler.onShowTouchControlLayoutV2({
+                            layout: t
+                        });
+                        break;
+
+                      case "/showlayoutv2":
+                        {
+                            const i = JSON.parse(t);
+                            if (!tt(i, "layoutId", "string", e)) return;
+                            this.touchControlHandler.onShowTouchControlLayoutV2({
+                                layout: i.layoutId,
+                                patch: i.patch
+                            });
+                            break;
+                        }
+
+                      case "/showtitledefault":
+                        this.touchControlHandler.onShowTitleDefaultLayout();
+                        break;
+
+                      default:
+                        this.logger.warning(`Wrong touch control message ${t} received from target ${e}`);
+                    }
+                } catch (i) {
+                    this.logger.error(`Failed to handle touch control message ${t} for target ${e}: ${(0, 
+                    m.A)(i)}`);
+                }
+            }
+            onTransaction(e, t, i) {
+                this.logger.info(`Canceled touch control transaction message ${t} for target ${e} because transactions are not expected.`), 
+                i.cancel();
+            }
+        }
+        function nt(e) {
+            return e instanceof HTMLVideoElement && "function" === typeof e.msGetVideoProcessingTypes;
+        }
+        class st {
+            constructor(e) {
+                r()(this, "throttleDurationSeconds", void 0), r()(this, "lastUnthrottledTimestamp", void 0), 
+                this.throttleDurationSeconds = e;
+            }
+            shouldThrottleStrictly() {
+                const e = Date.now();
+                if (!this.lastUnthrottledTimestamp) return this.lastUnthrottledTimestamp = e, !1;
+                const t = 1e3 * this.throttleDurationSeconds;
+                return !(e - this.lastUnthrottledTimestamp >= t) || (this.lastUnthrottledTimestamp = e, 
+                !1);
+            }
+        }
+        class ot {
+            constructor(e, t) {
+                r()(this, "eventThresholdSeconds", void 0), r()(this, "throttler", void 0), r()(this, "eventThresholdMet", !1), 
+                this.eventThresholdSeconds = t, this.throttler = new st(e);
+            }
+            shouldEmitEvent(e) {
+                return !this.eventThresholdMet && (e <= this.eventThresholdSeconds ? (this.eventThresholdMet = !0, 
+
+// touch-version-capability-report | 原可读文件第 2439–2475 行
+            sendTouchInputEnabledMessage(e) {
+                var t;
+                const i = {
+                    touchInputEnabled: null !== e && void 0 !== e && e
+                };
+                null === (t = this.messageChannel) || void 0 === t || t.queueMessage("/streaming/characteristics/touchinputenabledchanged", i);
+            }
+            sendClientDeviceCapabilitiesMessage(e) {
+                var t;
+                const i = {};
+                e.maxTouchBundleLayoutVersion && e.maxTouchBundleManifestVersion && (i.maxTouchBundleLayoutVersion = e.maxTouchBundleLayoutVersion, 
+                i.maxTouchBundleManifestVersion = e.maxTouchBundleManifestVersion), null === (t = this.messageChannel) || void 0 === t || t.queueMessage("/streaming/characteristics/clientdevicecapabilities", i);
+            }
+            sendAbsoluteMouseCapableMessage(e) {
+                var t;
+                e && (null === (t = this.messageChannel) || void 0 === t || t.queueMessage("/streaming/mouse/clientAbsoluteMouseCapable", {}));
+            }
+            calculateVideoDimensionsFromRenderTargetDimensions(e, t) {
+                var i;
+                const n = null === (i = this.stream) || void 0 === i ? void 0 : i.getAspectRatio();
+                return n && isFinite(n) ? e / n <= t ? {
+                    width: e,
+                    height: e / n
+                } : {
+                    width: t * n,
+                    height: t
+                } : {
+                    width: e,
+                    height: t
+                };
+            }
+            updateDimensions(e = !1, t = !1) {
+                var i;
+                const n = null === (i = this.stream) || void 0 === i ? void 0 : i.getRenderTarget();
+                if (n) {
+                    const {width: i, height: s} = this.calculateVideoDimensionsFromRenderTargetDimensions(n.scrollWidth, n.scrollHeight);
+                    (t || this._renderTargetWidth !== n.scrollWidth || this._renderTargetHeight !== n.scrollHeight || this._videoWidth !== i || this._videoHeight !== s) && (this._renderTargetWidth = n.scrollWidth, 

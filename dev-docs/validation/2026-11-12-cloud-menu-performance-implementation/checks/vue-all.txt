@@ -1,0 +1,53 @@
+$ vitest run
+
+ RUN  v4.1.4 /Users/guo.xu/Documents/code/games/xbxrc
+
+ ❯ src/pages/settings/setting-validation.test.ts (24 tests | 1 failed) 13ms
+     × keeps launch and connection effects distinct from immediate settings 6ms
+ ❯ src/streaming/runtime/browser-runtime.test.ts (39 tests | 1 failed) 454ms
+     × keeps the same media decisions with tracing off and dev during healthy high RTT and renderer pressure 136ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/settings/setting-validation.test.ts > settings organization and effect > keeps launch and connection effects distinct from immediate settings
+AssertionError: expected 'nextAuthorization' to be 'nextConnection' // Object.is equality
+
+Expected: "nextConnection"
+Received: "nextAuthorization"
+
+ ❯ src/pages/settings/setting-validation.test.ts:38:49
+     36|     expect(getSettingEffect('fullscreen')).toBe('nextLaunch')
+     37|     expect(getSettingEffect('resolution')).toBe('nextConnection')
+     38|     expect(getSettingEffect('force_region_ip')).toBe('nextConnection')
+       |                                                 ^
+     39|     expect(getSettingEffect('theme')).toBe('instant')
+     40|     expect(getSettingEffect('runtime_trace_mode')).toBe('instant')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/streaming/runtime/browser-runtime.test.ts > browser-runtime super resolution state > keeps the same media decisions with tracing off and dev during healthy high RTT and renderer pressure
+AssertionError: expected [ { …(6) }, { …(6) }, { …(6) }, …(24) ] to have a length of +0 but got 27
+
+- Expected
++ Received
+
+- 0
++ 27
+
+ ❯ src/streaming/runtime/browser-runtime.test.ts:1607:33
+    1605|       })
+    1606|       expect(production.healthSamples.some(entry => 'mediaDiagnostics'…
+    1607|       expect(dev.healthSamples).toHaveLength(0)
+       |                                 ^
+    1608|     }
+    1609|     finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 109 passed (111)
+      Tests  2 failed | 969 passed (971)
+   Start at  11:11:27
+   Duration  4.47s (transform 8.55s, setup 0ms, import 16.85s, tests 7.08s, environment 41ms)
+
+[ELIFECYCLE] Test failed. See above for more details.

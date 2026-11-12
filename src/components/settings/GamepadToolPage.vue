@@ -5,7 +5,7 @@ import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { useShellPageHints } from '../layout/shell-context'
 
-const props = defineProps<{ scopeId: string, title: string, hint?: string, defaultFocusId?: string, locked?: boolean, busy?: boolean, pointerBack?: boolean }>()
+const props = defineProps<{ scopeId: string, title: string, eyebrow?: string, backLabel?: string, hint?: string, defaultFocusId?: string, locked?: boolean, busy?: boolean, pointerBack?: boolean }>()
 const emit = defineEmits<{ back: [], pointerBack: [] }>()
 const { t } = useI18n()
 let pageActive = true
@@ -39,15 +39,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', escape, true))
     <section class="gamepad-tool-page" data-gamepad-page :data-input-locked="locked || undefined" :aria-label="title" :aria-busy="busy" @nav-back.prevent="back">
       <header class="gamepad-tool-page__header">
         <div class="gamepad-tool-page__heading">
-          <button v-if="pointerBack" :id="`${scopeId}.touchBack`" class="gamepad-tool-page__back" data-pointer-only tabindex="-1" :aria-label="t('gamepadSettings.backToSettings')" :disabled="busy" @keydown.prevent.stop @click="emit('pointerBack')">
+          <button v-if="pointerBack" :id="`${scopeId}.touchBack`" class="gamepad-tool-page__back" data-pointer-only tabindex="-1" :aria-label="backLabel ?? t('gamepadSettings.backToSettings')" :disabled="busy" @keydown.prevent.stop @click="emit('pointerBack')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>
           </button>
-          <Focusable v-if="!locked && !pointerBack" :id="`${scopeId}.back`" as="button" :scope-id="scopeId" class="gamepad-tool-page__back" :busy="busy" :aria-label="t('gamepadSettings.backToSettings')" @click="back">
+          <Focusable v-if="!locked && !pointerBack" :id="`${scopeId}.back`" as="button" :scope-id="scopeId" class="gamepad-tool-page__back" :busy="busy" :aria-label="backLabel ?? t('gamepadSettings.backToSettings')" @click="back">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>
           </Focusable>
           <div>
             <p class="gamepad-tool-page__eyebrow">
-              {{ t('controllerPage.settings') }}
+              {{ eyebrow ?? t('controllerPage.settings') }}
             </p>
             <div class="gamepad-tool-page__title-row">
               <h1>{{ title }}</h1><slot name="title-aside" />

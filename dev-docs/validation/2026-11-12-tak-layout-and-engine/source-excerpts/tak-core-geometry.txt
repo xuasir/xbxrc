@@ -1,0 +1,662 @@
+// 官方公开发布脚本源码摘录：2871.36f50502.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/2871.36f50502.chunk.js
+// 原件 SHA-256：c83ea789fd64ea3fe7fbc4acbc086bf9d2f56beb3f917a939f08298eb2fcbff0
+// 格式化文件 SHA-256：e74a0b6cc45ee8597376240ced787153ca2447cbfb9b496121ce60990d25d8e6
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// socket-and-container-models | 原可读文件第 4573–4760 行
+        class Ss extends vs {
+            constructor() {
+                super(...arguments), this._isDirty = !1, this._size = 1, this._collisionRadius = this.size / 2;
+            }
+            get inputScale() {
+                return this._inputScale;
+            }
+            get collisionRadius() {
+                return this._collisionRadius;
+            }
+            get control() {
+                return this._control;
+            }
+            get size() {
+                return this._size;
+            }
+            get childrenVisible() {
+                return void 0 !== this._control && _s(this._control) && this._control.visible;
+            }
+            setAngle(t) {
+                this._angle !== t && (this._angle = t, this._isDirty = !0);
+            }
+            setInputScale(t) {
+                this._inputScale !== t && (this._inputScale = t, this._isDirty = !0);
+            }
+            setScale(t) {
+                this._scale !== t && (this._scale = t, this._isDirty = !0);
+            }
+            setSize(t) {
+                this._size !== t && (this._size = t, this._collisionRadius = this._size / 2, this._isDirty = !0);
+            }
+            setX(t) {
+                this._x !== t && (this._x = t, this._isDirty = !0);
+            }
+            setY(t) {
+                this._y !== t && (this._y = t, this._isDirty = !0);
+            }
+            setUnitSize(t) {
+                this._unitSize !== t && (this._unitSize = t, this._isDirty = !0);
+            }
+            setControl(t) {
+                this._control !== t && (this._control = t, this._isDirty = !0);
+            }
+            notifyControl() {
+                this._control && _s(this._control) && this._isDirty && (this._control.onSocketUpdated(this), 
+                this._isDirty = !1);
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitControlSocket) || void 0 === e || e.call(t, this);
+            }
+            dispose() {
+                super.dispose(), this.clearControl();
+            }
+            clearControl() {
+                const t = this._control;
+                this._control = void 0, null === t || void 0 === t || t.unmount();
+            }
+        }
+        class ks extends vs {
+            constructor() {
+                super(...arguments), this._adjusterSocket = new Ss, this._children = [];
+            }
+            get size() {
+                return this._children.length;
+            }
+            get childrenVisible() {
+                for (let t = 0; t < this._children.length; t++) if (this._children[t].childrenVisible) return !0;
+                return !1;
+            }
+            setUnitSize(t) {
+                super.setUnitSize(t);
+                for (let e = 0; e < this._children.length; e++) this._children[e].setUnitSize(t);
+            }
+            addChild(t, e = this._children.length) {
+                this._children[e] = t;
+            }
+            acceptForChildren(t) {
+                var e;
+                for (let i = 0; i < this._children.length; i++) null === (e = this._children[i]) || void 0 === e || e.accept(t);
+            }
+            acceptForAdjuster(t) {
+                this._adjusterSocket.accept(t);
+            }
+            tryCollision(t, e) {
+                var i, n;
+                return !!this.props && (null !== (n = null === (i = this.collider) || void 0 === i ? void 0 : i.tryCollision(t, e)) && void 0 !== n && n);
+            }
+            clearCollisionZones() {
+                var t;
+                null === (t = this.collider) || void 0 === t || t.clear();
+            }
+            dispose() {
+                super.dispose(), this._adjusterSocket.dispose();
+                for (let t = 0; t < this._children.length; t++) this._children[t].dispose();
+            }
+        }
+        class ws extends ks {}
+        class Ps extends ks {
+            constructor(t = 0, e = void 0, i = 0) {
+                super(i);
+                for (let n = 0; n < t; n++) {
+                    const t = new Ss(n);
+                    this.addChild(t), null === e || void 0 === e || e.push(t);
+                }
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitClusterContainer) || void 0 === e || e.call(t, this);
+            }
+        }
+        var As;
+        !function(t) {
+            t[t.LowerLeft = 1] = "LowerLeft", t[t.LowerRight = 2] = "LowerRight";
+        }(As || (As = {}));
+        class Cs extends ks {
+            constructor(t = void 0) {
+                super();
+                const e = new Ss(0);
+                null === t || void 0 === t || t.push(e);
+                const i = new Ps(20, t, As.LowerLeft), n = new Ps(20, t, As.LowerRight);
+                this.addChild(e), this.addChild(i), this.addChild(n);
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitLowerEdgeContainer) || void 0 === e || e.call(t, this);
+            }
+        }
+        class xs extends ks {
+            constructor(t = void 0) {
+                super(), this.addChild(new Ps(10, t, 0));
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitUpperEdgeContainer) || void 0 === e || e.call(t, this);
+            }
+        }
+        const Is = ho / 8;
+        class Ms extends ws {
+            constructor(t = void 0, e = 0) {
+                super(e);
+                const i = new Ss(e);
+                null === t || void 0 === t || t.push(i), this.addChild(i), this.addChild(new Ps(4, t, e));
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitSocketOrClusterContainer) || void 0 === e || e.call(t, this);
+            }
+        }
+        class Ts extends ks {
+            constructor(t = 0, e = void 0, i = 0) {
+                super(i);
+                for (let n = 0; n < t; n++) this.addChild(new Ms(e, n));
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitOuterRadialContainer) || void 0 === e || e.call(t, this);
+            }
+        }
+        class Os extends ks {
+            constructor(t = void 0) {
+                super(), this.addChild(new Ps(4, t, 0)), this.addChild(new Ts(8, t, 1));
+            }
+            accept(t) {
+                var e;
+                null === (e = t.visitRadialContainer) || void 0 === e || e.call(t, this);
+            }
+        }
+        function Rs(t, e, i = 0) {
+            return t + mo(ys(t) * e + i, 0, 100);
+        }
+        var Ds, js;
+        !function(t) {
+            t[t.Idle = 0] = "Idle", t[t.Moving = 1] = "Moving", t[t.RotatingAndScaling = 2] = "RotatingAndScaling";
+        }(Ds || (Ds = {}));
+        class Es {
+            getInnerRingColor(t) {
+                return t.system_accentPrimary;
+            }
+            getInnerRingOpacity(t) {
+                return t === Ds.Moving ? .9 : .5;
+            }
+            getOuterRingColor(t) {
+                return function(t) {
+                    return t.system_accentSecondary;
+                }(t);
+            }
+            getOuterRingOpacity(t) {
+
+// container-position-visitor | 原可读文件第 6669–6798 行
+        class Ec extends Ic {
+            constructor(t, e, i) {
+                super(), this.surfaceParameters = t, this.settings = e, this.getUnitSizeMultiplier = i, 
+                this.rootX = 0, this.rootY = 0, this.rootAngle = 0, this.rootScale = 1, this.reflected = !1, 
+                this._delta = {
+                    x: 0,
+                    y: 0,
+                    angle: 0,
+                    radius: 0
+                };
+            }
+            get unitSize() {
+                var t;
+                return (null !== (t = this.surfaceParameters.unitControlSize) && void 0 !== t ? t : ms) * this.getUnitSizeMultiplier(this.settings) * this.settings.style.containerUnitSizeMultiplier.global;
+            }
+            reset() {
+                this.rootX = 0, this.rootY = 0, this.rootAngle = 0, this.rootScale = 1;
+            }
+            resetDelta() {
+                0 === this._delta.x && 0 === this._delta.y && 0 === this._delta.angle && 0 === this._delta.radius || (this._delta.x = 0, 
+                this._delta.y = 0, this._delta.angle = 0, this._delta.radius = 0);
+            }
+            addDelta(t, e, i, n) {
+                0 === t && 0 === e && 0 === i && 0 === n || (this._delta.x += t, this._delta.y += e, 
+                this._delta.angle += i, this._delta.radius += n);
+            }
+            updateSurfaceParameters(t) {
+                this.surfaceParameters = t;
+            }
+            updateSettings(t) {
+                this.settings = t;
+            }
+            convertDeltaToSettings() {
+                return {
+                    x: this._delta.x,
+                    y: this._delta.y,
+                    angleInRadians: this._delta.angle,
+                    radius: this._delta.radius
+                };
+            }
+        }
+        class Bc extends Ec {
+            constructor() {
+                super(...arguments), this.reflected = !1, this.rootRadius = 1, this._size = 1;
+            }
+            reset() {
+                super.reset(), this._size = 1, this.rootRadius = 1;
+            }
+            visitClusterContainer(t) {
+                var e, i;
+                this._size = null !== (i = null === (e = t.props) || void 0 === e ? void 0 : e.length) && void 0 !== i ? i : 0, 
+                0 !== this._size && (t.setAngle(this.rootAngle), t.setScale(this.rootScale), t.setX(this.rootX), 
+                t.setY(this.rootY), t.setUnitSize(this.unitSize), t.reflected = this.reflected, 
+                t.acceptForChildren(this));
+            }
+            visitControlSocket(t) {
+                var e;
+                const i = this.getAngularOffset(), n = 1 === this._size ? 0 : this.rootRadius / 2, r = ho / this._size * t.index + i + this.rootAngle, o = So(r, n), s = ko(r, n);
+                t.setX(this.rootX + o * (this.reflected ? -1 : 1)), t.setY(this.rootY + s), t.setUnitSize(this.unitSize), 
+                1 === this._size ? t.setSize(2 * this.rootRadius) : t.setSize(t.unitSize), t.reflected = this.reflected, 
+                (null === (e = t.props) || void 0 === e ? void 0 : e.type) === O.ArcadeButtons && t.setAngle(this.rootAngle);
+            }
+            getAngularOffset() {
+                switch (this._size) {
+                  case 1:
+                  default:
+                    return 0;
+
+                  case 2:
+                    return this.getDuoArrangementAngularOffset();
+
+                  case 3:
+                    return jc;
+                }
+            }
+        }
+        class Fc extends Bc {
+            getDuoArrangementAngularOffset() {
+                return Dc;
+            }
+        }
+        class Lc extends Fc {}
+        class zc extends Bc {
+            getDuoArrangementAngularOffset() {
+                return Rc;
+            }
+        }
+        class Nc extends Ec {
+            constructor(t, e, i, n) {
+                super(t, e, n), this.sliceSize = i, this.offsetX = 0, this.offsetY = 0;
+            }
+            visitClusterContainer(t) {
+                t.reflected = this.reflected, t.acceptForChildren(this);
+            }
+        }
+        class Uc extends Nc {
+            visitControlSocket(t) {
+                const e = Po(this.offsetX, this.offsetY), i = Ao(this.offsetX, this.offsetY), n = e + this.sliceSize / 2 * (this.reflected ? -1 : 1);
+                t.setX(this.rootX + So(n, i + (0 === t.index ? 0 : this.unitSize))), t.setY(this.rootY + ko(n, i + (0 === t.index ? 0 : this.unitSize))), 
+                t.setAngle(0), t.setScale(this.rootScale), t.setUnitSize(this.unitSize), t.setSize(t.unitSize), 
+                t.reflected = !1;
+            }
+        }
+        class Kc extends Nc {
+            visitControlSocket(t) {
+                const e = Po(this.offsetX, this.offsetY), i = Ao(this.offsetX, this.offsetY), n = this.reflected ? -1 : 1, r = e + this.sliceSize * n;
+                if (0 === t.index) t.setX(this.rootX + this.offsetX), t.setY(this.rootY + this.offsetY); else if (1 === t.index || 2 === t.index) {
+                    const o = e + this.sliceSize / 2 * n, s = So(r, i), a = ko(r, i), c = vo(this.offsetX, this.offsetY, s, a), l = 1 === t.index ? this.offsetX : s, u = 1 === t.index ? this.offsetY : a;
+                    t.setX(this.rootX + l + So(o, c)), t.setY(this.rootY + u + ko(o, c));
+                } else 3 === t.index && (t.setX(this.rootX + So(r, i)), t.setY(this.rootY + ko(r, i)));
+                t.setUnitSize(this.unitSize), t.setSize(t.unitSize);
+            }
+        }
+        class Vc extends Nc {
+            visitControlSocket(t) {
+                const e = Po(this.offsetX, this.offsetY), i = Ao(this.offsetX, this.offsetY), n = e + this.sliceSize / 2 * (this.reflected ? -1 : 1);
+                t.setX(this.rootX + So(n, i + this.unitSize / 2)), t.setY(this.rootY + ko(n, i + this.unitSize / 2)), 
+                t.setAngle(0), t.setScale(this.rootScale), t.setUnitSize(this.unitSize), t.setSize(2 * t.unitSize), 
+                t.reflected = !1;
+            }
+        }
+        class Jc extends Nc {
+            visitControlSocket(t) {
+                const e = this.reflected ? -1 : 1;
+                if (0 === t.index) t.setX(this.rootX + this.offsetX), t.setY(this.rootY + this.offsetY); else if (1 === t.index) {
+                    const i = Po(this.offsetX, this.offsetY), n = Ao(this.offsetX, this.offsetY), r = i + this.sliceSize * e, o = So(r, n), s = ko(r, n), a = vo(this.offsetX, this.offsetY, o, s), c = i + this.sliceSize / 2 * e, l = n + a * Math.sqrt(3) / 2;
+                    t.setX(this.rootX + So(c, l)), t.setY(this.rootY + ko(c, l));
+                } else if (2 === t.index) {
+                    const i = Po(this.offsetX, this.offsetY), n = Ao(this.offsetX, this.offsetY), r = i + this.sliceSize * e;
+                    t.setX(this.rootX + So(r, n)), t.setY(this.rootY + ko(r, n));
+
+// slot-props-and-control-container | 原可读文件第 11600–11932 行
+        class Rd extends Od {
+            visitClusterContainer(t) {
+                t.setProps(this.props), t.acceptForChildren(this);
+            }
+            visitControlSocket(t) {
+                var e;
+                t.setProps(null === (e = this.props) || void 0 === e ? void 0 : e[t.index]);
+            }
+        }
+        class Dd extends Od {
+            constructor(t) {
+                super(), this.props = t, this._clusterContainerPropUpdater = new Rd;
+            }
+            visitLowerEdgeContainer(t) {
+                var e;
+                t.setProps(null === (e = this.props) || void 0 === e ? void 0 : e.lower), t.acceptForChildren(this);
+            }
+            visitClusterContainer(t) {
+                var e, i, n, r;
+                if (t.index === As.LowerLeft) this._clusterContainerPropUpdater.updateProps(null === (i = null === (e = this.props) || void 0 === e ? void 0 : e.lower) || void 0 === i ? void 0 : i.leftCenter); else {
+                    if (t.index !== As.LowerRight) return;
+                    this._clusterContainerPropUpdater.updateProps(null === (r = null === (n = this.props) || void 0 === n ? void 0 : n.lower) || void 0 === r ? void 0 : r.rightCenter);
+                }
+                t.accept(this._clusterContainerPropUpdater);
+            }
+            visitControlSocket(t) {
+                var e, i;
+                t.setProps(null === (i = null === (e = this.props) || void 0 === e ? void 0 : e.lower) || void 0 === i ? void 0 : i.center);
+            }
+        }
+        class jd extends Od {
+            constructor(t) {
+                super(), this.props = t, this._clusterPropUpdater = new Rd;
+            }
+            visitUpperEdgeContainer(t) {
+                var e;
+                t.setProps(null === (e = this.props) || void 0 === e ? void 0 : e.upper), t.acceptForChildren(this);
+            }
+            visitClusterContainer(t) {
+                var e, i;
+                t.setProps(null === (i = null === (e = this.props) || void 0 === e ? void 0 : e.upper) || void 0 === i ? void 0 : i.right), 
+                this._clusterPropUpdater.updateProps(t.props), t.acceptForChildren(this._clusterPropUpdater);
+            }
+        }
+        class Ed extends Ic {
+            visitRadialContainer(t) {
+                this.visitAnyContainer(t);
+            }
+            visitLowerEdgeContainer(t) {
+                this.visitAnyContainer(t);
+            }
+            visitUpperEdgeContainer(t) {
+                this.visitAnyContainer(t);
+            }
+            visitOuterRadialContainer(t) {
+                this.visitAnyContainer(t);
+            }
+            visitSocketOrClusterContainer(t) {
+                this.visitAnyContainer(t);
+            }
+            visitClusterContainer(t) {
+                this.visitAnyContainer(t);
+            }
+            visitControlSocket(t) {
+                t.setProps(void 0);
+            }
+            visitAnyContainer(t) {
+                t.setProps(void 0), t.acceptForChildren(this);
+            }
+        }
+        class Bd extends Od {
+            constructor() {
+                super(...arguments), this._clusterPropUpdater = new Rd, this._propRemover = new Ed, 
+                this._childIndexToPropIndexMap = new Map;
+            }
+            visitOuterRadialContainer(t) {
+                if (t.setProps(this.props), this.props) {
+                    this._childIndexToPropIndexMap.clear();
+                    let e = 0, i = !1;
+                    for (let n = 0; n < t.size && e < this.props.length; n++) i ? i = !1 : (Array.isArray(this.props[e]) && (i = !0), 
+                    this._childIndexToPropIndexMap.set(n, e), e++);
+                }
+                t.acceptForChildren(this);
+            }
+            visitSocketOrClusterContainer(t) {
+                const e = this._childIndexToPropIndexMap.get(t.index);
+                void 0 !== e && this.props ? (t.setProps(this.props[e]), t.acceptForChildren(this)) : t.accept(this._propRemover);
+            }
+            visitControlSocket(t) {
+                const e = this._childIndexToPropIndexMap.get(t.index);
+                if (void 0 === e || !this.props) return void t.setProps(void 0);
+                const i = this.props[e];
+                void 0 === i || Array.isArray(i) ? t.setProps(void 0) : t.setProps(i);
+            }
+            visitClusterContainer(t) {
+                const e = this._childIndexToPropIndexMap.get(t.index);
+                if (void 0 === e || !this.props) return void t.accept(this._propRemover);
+                const i = this.props[e];
+                void 0 !== i && Array.isArray(i) ? (this._clusterPropUpdater.updateProps(i), t.accept(this._clusterPropUpdater)) : t.accept(this._propRemover);
+            }
+        }
+        class Fd extends Od {
+            constructor() {
+                super(...arguments), this._innerPropUpdater = new Rd(this.selectInnerRadialProps()), 
+                this._outerPropUpdater = new Bd(this.selectOuterRadialProps());
+            }
+            updateProps(t) {
+                super.updateProps(t), this._innerPropUpdater.updateProps(this.selectInnerRadialProps()), 
+                this._outerPropUpdater.updateProps(this.selectOuterRadialProps());
+            }
+            visitRadialContainer(t) {
+                t.setProps(this.selectProps()), t.acceptForChildren(this);
+            }
+            visitClusterContainer(t) {
+                t.accept(this._innerPropUpdater);
+            }
+            visitOuterRadialContainer(t) {
+                t.accept(this._outerPropUpdater);
+            }
+            selectInnerRadialProps() {
+                var t;
+                return null === (t = this.selectProps()) || void 0 === t ? void 0 : t.inner;
+            }
+            selectOuterRadialProps() {
+                var t;
+                return null === (t = this.selectProps()) || void 0 === t ? void 0 : t.outer;
+            }
+        }
+        class Ld extends Fd {
+            selectProps() {
+                var t;
+                return null === (t = this.props) || void 0 === t ? void 0 : t.center;
+            }
+        }
+        class zd extends Fd {
+            selectProps() {
+                var t;
+                return null === (t = this.props) || void 0 === t ? void 0 : t.left;
+            }
+        }
+        class Nd extends Fd {
+            selectProps() {
+                var t;
+                return null === (t = this.props) || void 0 === t ? void 0 : t.right;
+            }
+        }
+        class Ud {
+            constructor(t, e, i, n) {
+                this._sockets = [], this._mountedSockets = [], this._factory = new Id(i, n, e), 
+                this._subscription = fi([ t.getLayoutStream(), t.getCurrentSettingsStream(), t.getControlsAreHiddenStream() ]).pipe((0, 
+                ki.M)(([{layoutFile: {content: {sensors: t}}}, e, i]) => {
+                    if (this._mountedSockets.length = 0, i || !t) this._sockets.forEach(t => t.dispose()), 
+                    this._sockets.length = 0; else {
+                        if (this._sockets.length > t.length) for (let e = t.length; e < this._sockets.length; e++) this._sockets[e].dispose();
+                        this._sockets.length = t.length, t.forEach((t, i) => {
+                            if (this._sockets[i] || (this._sockets[i] = new Ss), null === t || t.type === O.Blank) this._sockets[i].setProps(void 0); else {
+                                const n = t.type === O.Accelerometer;
+                                this._sockets[i].setProps(Object.assign(Object.assign({}, t), {
+                                    enabled: !1 !== t.enabled && (n ? e.accelerometer.enabled : e.gyro.enabled),
+                                    sensitivity: n ? e.accelerometer.sensitivity : e.gyro.sensitivity
+                                })), this._mountedSockets.push(this._sockets[i]);
+                            }
+                            this._sockets[i].accept(this._factory);
+                        });
+                    }
+                })).subscribe();
+            }
+            get mountedSockets() {
+                return this._mountedSockets;
+            }
+            dispose() {
+                this._subscription.unsubscribe(), this._sockets.forEach(t => t.dispose()), this._sockets.length = 0, 
+                this._mountedSockets.length = 0;
+            }
+        }
+        const Kd = (t, e, i) => tl(e) ? i ? t.landscapeSpanned.left : t.landscape.left : i ? t.portraitSpanned.left : t.portrait.left, Vd = (t, e, i) => tl(e) ? i ? t.landscapeSpanned.center : t.landscape.center : i ? t.portraitSpanned.center : t.portrait.center, Jd = (t, e, i) => tl(e) ? i ? t.landscapeSpanned.right : t.landscape.right : i ? t.portraitSpanned.right : t.portrait.right;
+        class Hd {
+            constructor(t, e, i, n, r, o, s, a) {
+                this.userInterface = i, this.layerManager = n, this.inputProvider = r, this.settingsService = o, 
+                this._containerBundles = {}, this._controlsAggregator = new Oc, this._inputScaler = new Td, 
+                this._controlNotifier = new Md, this._interactionMode = rc.Gameplay, this._currentSettings = cs, 
+                this._parametersInputStream = new Eo.t(e), this._controlFactory = new Ad(n, r, i, () => this.parameters.dimensions.width);
+                const c = fi([ this._parametersInputStream, i.getLayoutStream() ]).pipe((0, wi.E)(s.getFilteredOptionsStream(t => ({
+                    hideOnSmallScreens: t.hideOnSmallScreens
+                }))), (0, eo.T)(([[e, i], n]) => {
+                    const {unitControlSize: r = ms, dimensions: {width: o, height: s}} = e, c = !!(i.layoutFile.content.center || i.layoutFile.content.left || i.layoutFile.content.right || i.layoutFile.content.lower || i.layoutFile.content.upper);
+                    if (!n.hideOnSmallScreens || !c) return a(t, !1), i;
+                    if (n.hideOnSmallScreens) {
+                        const e = 5 * r;
+                        let n = 0;
+                        i.layoutFile.content.center && (n += 4), (i.layoutFile.content.left || i.layoutFile.content.right) && (n += 8), 
+                        (i.layoutFile.content.lower || i.layoutFile.content.upper) && n < 5 && (n = 5);
+                        if (o < r * n || s < e) return a(t, !0), br;
+                    }
+                    return a(t, !1), i;
+                }));
+                this._updateSubscription = fi([ i.getCurrentSettingsStream(), c ]).pipe((0, ki.M)(([t]) => this._currentSettings = t), (0, 
+                wi.E)(this._parametersInputStream)).subscribe(([[t, e], i]) => this.onUpdate(i, t, e)), 
+                this._interactionModeSubscription = i.getInteractionModeStream().pipe((0, ki.M)(t => this._interactionMode = t)).subscribe();
+            }
+            get renderControlsStream() {
+                return this._controlsAggregator.renderControlsStream;
+            }
+            get parameters() {
+                return this._parametersInputStream.getValue();
+            }
+            dispose() {
+                var t, e, i, n, r, o, s;
+                null === (t = this._containerBundles.left) || void 0 === t || t.container.dispose(), 
+                null === (e = this._containerBundles.right) || void 0 === e || e.container.dispose(), 
+                null === (i = this._containerBundles.center) || void 0 === i || i.container.dispose(), 
+                null === (n = this._containerBundles.lower) || void 0 === n || n.container.dispose(), 
+                null === (r = this._containerBundles.upper) || void 0 === r || r.container.dispose(), 
+                null === (s = null === (o = this._touchForwarder) || void 0 === o ? void 0 : o.socket) || void 0 === s || s.dispose(), 
+                this._updateSubscription.unsubscribe(), this._interactionModeSubscription.unsubscribe();
+            }
+            updateParameters(t) {
+                this._parametersInputStream.next(t);
+            }
+            tryCollision(t) {
+                var e, i, n, r, o, s, a;
+                return this.tryCollisionOnContainer(t, null === (e = this._containerBundles.left) || void 0 === e ? void 0 : e.container) || this.tryCollisionOnContainer(t, null === (i = this._containerBundles.center) || void 0 === i ? void 0 : i.container) || this.tryCollisionOnContainer(t, null === (n = this._containerBundles.right) || void 0 === n ? void 0 : n.container) || this.tryCollisionOnContainer(t, null === (r = this._containerBundles.upper) || void 0 === r ? void 0 : r.container) || this.tryCollisionOnContainer(t, null === (o = this._containerBundles.lower) || void 0 === o ? void 0 : o.container) || null !== (a = null === (s = this._touchForwarder) || void 0 === s ? void 0 : s.collider.tryCollision(t, this._interactionMode)) && void 0 !== a && a;
+            }
+            startRenderFrameOnControls() {
+                for (const t of this._controlsAggregator.renderControls) t.startRenderFrame();
+            }
+            endRenderFrameOnControls() {
+                for (const t of this._controlsAggregator.renderControls) t.endRenderFrame();
+            }
+            tryCollisionOnContainer(t, e) {
+                var i;
+                return null !== (i = null === e || void 0 === e ? void 0 : e.tryCollision(t, this._interactionMode)) && void 0 !== i && i;
+            }
+            onUpdate(t, e, i) {
+                this.lazyMakeContainers(t, e, i.layoutFile.content), this.updateContainerProps(i.layoutFile.content), 
+                this.updateContainerPositioners(t, e), this._controlsAggregator.clear();
+                for (const n in this._containerBundles) {
+                    const r = this._containerBundles[n];
+                    r && (r.propUpdater.updateProps(i.layoutFile.content), r.positioner.updateSurfaceParameters(t), 
+                    r.positioner.updateSettings(e), r.container.clearCollisionZones(), r.container.runVisitors());
+                }
+                this._controlsAggregator.flush(), this.updateNativeTouchControl(t);
+            }
+            runContainerVisitors() {
+                var t;
+                for (const e in this._containerBundles) null === (t = this._containerBundles[e]) || void 0 === t || t.container.runVisitors();
+            }
+            updateContainerProps(t) {
+                var e;
+                for (const i in this._containerBundles) null === (e = this._containerBundles[i]) || void 0 === e || e.propUpdater.updateProps(t);
+            }
+            updateContainerPositioners(t, e) {
+                var i, n;
+                for (const r in this._containerBundles) null === (i = this._containerBundles[r]) || void 0 === i || i.positioner.updateSurfaceParameters(t), 
+                null === (n = this._containerBundles[r]) || void 0 === n || n.positioner.updateSettings(e);
+            }
+            updateNativeTouchControl({touchForwarding: t}) {
+                var e, i, n, r;
+                t ? this._touchForwarder ? this._touchForwarder.props ? (this._touchForwarder.props.x = t.x, 
+                this._touchForwarder.props.y = t.y, this._touchForwarder.props.width = t.width, 
+                this._touchForwarder.props.height = t.height) : this._touchForwarder.props = {
+                    type: O.TouchForwarding,
+                    width: t.width,
+                    height: t.height,
+                    x: t.x,
+                    y: t.y
+                } : this._touchForwarder = {
+                    socket: new Ss,
+                    props: {
+                        type: O.TouchForwarding,
+                        width: t.width,
+                        height: t.height,
+                        x: t.x,
+                        y: t.y
+                    },
+                    collider: new xl
+                } : this._touchForwarder && (this._touchForwarder.props = void 0), null === (e = this._touchForwarder) || void 0 === e || e.socket.setProps(this._touchForwarder.props), 
+                null === (i = this._touchForwarder) || void 0 === i || i.socket.accept(this._controlFactory), 
+                null === (n = this._touchForwarder) || void 0 === n || n.collider.clear(), null === (r = this._touchForwarder) || void 0 === r || r.socket.accept(this._touchForwarder.collider);
+            }
+            lazyMakeContainers(t, e, i) {
+                const n = t.anchors;
+                ps(n, Xc.Left) ? this._containerBundles.left || (this._containerBundles.left = this.makeLeftRadialContainer(i, e, t)) : this._containerBundles.left && (this._containerBundles.left = void 0), 
+                ps(n, Xc.Center) ? this._containerBundles.center || (this._containerBundles.center = this.makeCenterRadialContainer(i, e, t)) : this._containerBundles.center && (this._containerBundles.center = void 0), 
+                ps(n, Xc.Right) ? this._containerBundles.right || (this._containerBundles.right = this.makeRightRadialContainer(i, e, t)) : this._containerBundles.right && (this._containerBundles.right = void 0), 
+                ps(n, Xc.Upper) ? this._containerBundles.upper || (this._containerBundles.upper = this.makeUpperContainer(i, e, t)) : this._containerBundles.upper && (this._containerBundles.upper = void 0), 
+                ps(n, Xc.Lower) ? this._containerBundles.lower || (this._containerBundles.lower = this.makeLowerContainer(i, e, t)) : this._containerBundles.lower && (this._containerBundles.lower = void 0);
+            }
+            makeLeftRadialContainer(t, e, i) {
+                const n = new Os, r = new zd(t), o = new rl(i, e, Kd), s = new Cl, a = new Mc(this.layerManager, this.inputProvider, this.userInterface, (t, e, i, r) => {
+                    o.addDelta(t, e, i, r), n.runVisitors();
+                }, this.commitAdjusters.bind(this));
+                return this.linkContainerWithVisitors(n, r, o, s, a), {
+                    container: n,
+                    positioner: o,
+                    propUpdater: r
+                };
+            }
+            makeRightRadialContainer(t, e, i) {
+                const n = new Os, r = new Nd(t), o = new ol(i, e, Jd), s = new Pl, a = new Mc(this.layerManager, this.inputProvider, this.userInterface, (t, e, i, r) => {
+                    o.addDelta(t, e, i, r), n.runVisitors();
+                }, this.commitAdjusters.bind(this));
+                return this.linkContainerWithVisitors(n, r, o, s, a), {
+                    container: n,
+                    positioner: o,
+                    propUpdater: r
+                };
+            }
+            makeCenterRadialContainer(t, e, i) {
+                const n = new Os, r = new Ld(t), o = new nl(i, e, Vd), s = new Al, a = new Mc(this.layerManager, this.inputProvider, this.userInterface, (t, e, i, r) => {
+                    o.addDelta(t, e, i, r), n.runVisitors();
+                }, this.commitAdjusters.bind(this));
+                return this.linkContainerWithVisitors(n, r, o, s, a), {
+                    container: n,
+                    positioner: o,
+                    propUpdater: r
+                };
+            }
+            makeLowerContainer(t, e, i) {
+                const n = new Cs, r = new Dd(t), o = new Yc(i, e), s = new kl;
+                return this.linkContainerWithVisitors(n, r, o, s), {
+                    container: n,
+                    positioner: o,
+                    propUpdater: r
+                };
+            }
+            makeUpperContainer(t, e, i) {
+                const n = new xs, r = new jd(t), o = new Wc(i, e), s = new kl;
+                return this.linkContainerWithVisitors(n, r, o, s), {
+                    container: n,
+                    positioner: o,
+                    propUpdater: r
+                };

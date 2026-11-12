@@ -1,6 +1,6 @@
 import type { GamepadBackend, GamepadSnapshot, RawPadState } from './backend'
 import type { LogicalPadStateDto } from './contract'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InputController } from './input-controller'
 import { parseGamepadPreferences } from './preferences'
 import { neutralState } from './state'
@@ -31,6 +31,138 @@ function pressed(key: 'south' | 'east' | 'menu' | 'view' | 'home'): LogicalPadSt
   state.buttons[key] = 1
   return state
 }
+
+describe('official game rumble timing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+  })
+  afterEach(() => vi.useRealTimers())
+  const effect = { durationMs: 200, startDelayMs: 100, strongMagnitude: 1, weakMagnitude: 1, leftTrigger: 1, rightTrigger: 1, repeat: 2 }
+  async function ready() {
+    const f = fixture()
+    f.controller.configure(parseGamepadPreferences({ vibration_strength: 'full' }))
+    await f.controller.start(f.backend)
+    f.send({ a: neutralState() })
+    f.controller.setStreamReady(true)
+    return f
+  }
+
+  it('plays at 100, 400 and 700ms and retains per-motor strength preferences', async () => {
+    const { controller: c, backend } = await ready()
+    c.configure(parseGamepadPreferences({ vibration_channels: { leftGrip: 'full', rightGrip: 'realistic', leftTrigger: 'enhanced', rightTrigger: 'full' } }))
+    const starts: number[] = []
+    vi.mocked(backend.rumble).mockImplementation(async () => {
+      starts.push(Date.now())
+      return 'applied'
+    })
+    const result = c.rumble(effect, 'game')
+    expect(backend.rumble).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await result).toBe('applied')
+    expect(backend.rumble).toHaveBeenCalledWith('a', { ...effect, startDelayMs: 0, repeat: 0, weakMagnitude: 0.66, leftTrigger: 0.74 })
+    await vi.advanceTimersByTimeAsync(900)
+    expect(starts).toEqual([100, 400, 700])
+    expect(vi.getTimerCount()).toBe(0)
+    await c.stop()
+  })
+
+  it('retains duration and short pulses and reads updated strength on the next playback', async () => {
+    const { controller: c, backend } = await ready()
+    await c.rumble({ ...effect, durationMs: 5000, startDelayMs: 0, repeat: 0 }, 'game')
+    expect(backend.rumble).toHaveBeenLastCalledWith('a', expect.objectContaining({ durationMs: 5000 }))
+    const result = c.rumble({ ...effect, durationMs: 4, startDelayMs: 10, strongMagnitude: 0.01 }, 'game')
+    await vi.advanceTimersByTimeAsync(10)
+    expect(await result).toBe('applied')
+    expect(backend.rumble).toHaveBeenLastCalledWith('a', expect.objectContaining({ durationMs: 4, strongMagnitude: 0.01 }))
+    c.configure(parseGamepadPreferences({ vibration_strength: 'realistic' }))
+    await vi.advanceTimersByTimeAsync(14)
+    expect(backend.rumble).toHaveBeenLastCalledWith('a', expect.objectContaining({ weakMagnitude: 0.66, leftTrigger: 0.58 }))
+    await c.stop()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('uses the start clock while the actuator completion is pending', async () => {
+    const { controller: c, backend } = await ready()
+    vi.mocked(backend.rumble).mockImplementation(() => new Promise(() => {}))
+    const result = c.rumble(effect, 'game')
+    await vi.advanceTimersByTimeAsync(700)
+    expect(backend.rumble).toHaveBeenCalledTimes(3)
+    await c.stopRumble()
+    expect(await result).toBe('failed')
+    expect(vi.getTimerCount()).toBe(0)
+    await c.stop()
+  })
+
+  it('replaces a delayed effect and settles its cancelled promise', async () => {
+    const { controller: c, backend } = await ready()
+    const old = c.rumble(effect, 'game')
+    await vi.advanceTimersByTimeAsync(50)
+    await c.rumble({ ...effect, startDelayMs: 0, repeat: 0, strongMagnitude: 0.5 }, 'game')
+    expect(await old).toBe('failed')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(backend.rumble).toHaveBeenCalledTimes(1)
+    expect(backend.rumble).toHaveBeenLastCalledWith('a', expect.objectContaining({ strongMagnitude: 0.5 }))
+    await c.stop()
+  })
+
+  it.each(['stop', 'stream-end', 'menu', 'blocked', 'keyboard', 'disabled', 'disconnect', 'switch', 'shutdown'] as const)('cancels a delayed effect on %s', async (reason) => {
+    const { controller: c, backend, send } = await ready()
+    const result = c.rumble(effect, 'game')
+    await vi.advanceTimersByTimeAsync(50)
+    if (reason === 'stop')
+      await c.stopRumble()
+    if (reason === 'stream-end')
+      c.setStreamReady(false)
+    if (reason === 'menu')
+      c.setUiCapture('menu', true)
+    if (reason === 'blocked') {
+      c.configure(parseGamepadPreferences({ gamepad_background_policy: 'follow-app' }))
+      c.setBackground(true)
+    }
+    if (reason === 'keyboard')
+      c.configure(parseGamepadPreferences({ gamepad_control_source: 'keyboard' }))
+    if (reason === 'disabled')
+      c.configure(parseGamepadPreferences({ vibration: false }))
+    if (reason === 'disconnect')
+      send({})
+    if (reason === 'switch') {
+      send({ a: neutralState(), b: neutralState() })
+      c.selectDevice('b')
+    }
+    if (reason === 'shutdown')
+      await c.stop()
+    expect(await result).toBe('failed')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(backend.rumble).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    await c.stop()
+  })
+
+  it('preserves delayed playback when the current control source is configured again', async () => {
+    const { controller: c, backend } = await ready()
+    const result = c.rumble(effect, 'game')
+    await vi.advanceTimersByTimeAsync(50)
+    c.configure(parseGamepadPreferences({ gamepad_control_source: 'gamepad' }))
+    await vi.advanceTimersByTimeAsync(50)
+    expect(await result).toBe('applied')
+    expect(backend.rumble).toHaveBeenCalledTimes(1)
+    await c.stop()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels repeat playback after a menu takes ownership', async () => {
+    const { controller: c, backend } = await ready()
+    const result = c.rumble(effect, 'game')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await result).toBe('applied')
+    c.setUiCapture('menu', true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(backend.rumble).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    await c.stop()
+  })
+})
 
 describe('inputController', () => {
   it('routes distinct custom stream and diagnostics shortcuts once and consumes their output buttons', async () => {

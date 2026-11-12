@@ -11,11 +11,13 @@ let generation = 0
 let pending: Promise<void> | undefined
 let queue = Promise.resolve()
 let initialized = false
+let loaded = false
 export function useCloudPreferences() {
   if (!initialized) {
     initialized = true
     events.on('auth.stateChanged', (state) => {
       if (!state.isAuthenticated) {
+        loaded = false
         generation++
         pending = undefined
         scopeKey.value = ''
@@ -23,6 +25,7 @@ export function useCloudPreferences() {
       }
     })
     events.on('auth.sessionReady', () => {
+      loaded = false
       generation++
       pending = undefined
       scopeKey.value = ''
@@ -32,6 +35,8 @@ export function useCloudPreferences() {
   function load() {
     if (pending)
       return pending
+    if (loaded && scopeKey.value)
+      return Promise.resolve()
     const request = generation
     const operation = queue.then(async () => {
       if (request !== generation)
@@ -43,6 +48,7 @@ export function useCloudPreferences() {
         generation++
       scopeKey.value = key
       preferences.value = value
+      loaded = true
       error.value = ''
     }).catch((cause) => {
       if (request === generation)

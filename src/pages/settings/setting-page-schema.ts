@@ -11,7 +11,7 @@ export type SettingPageKey
     | 'connectionHost'
     | 'advancedDiagnostics'
 
-export type SettingActionId = 'customTurn'
+export type SettingActionId = 'customTurn' | 'streamShortcuts'
 
 export type SettingEffect = 'instant' | 'nextAuthorization' | 'nextConnection' | 'nextLaunch'
 
@@ -108,6 +108,9 @@ const PAGE_GENERAL: SettingSchemaSectionDef[] = [
 ]
 
 const PAGE_STREAMING: SettingSchemaSectionDef[] = [
+  { key: 'menuShortcuts', labelKey: 'gamepadSettings.shortcutSection', items: [
+    { kind: 'action', actionId: 'streamShortcuts' },
+  ] },
   { key: 'resolution', labelKey: 'setting.experience.sections.resolution', items: [
     { kind: 'field', fieldKey: 'xhome_resolution' },
     { kind: 'field', fieldKey: 'resolution' },

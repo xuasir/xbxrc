@@ -1,0 +1,408 @@
+{
+  "date": "2026-11-12",
+  "status": "implemented-and-automatically-validated",
+  "scope": "production Vue 页面与导航、受控 RPC；Rust 数据合同单独回归；实机性能由用户验收",
+  "baseline": {
+    "method": "实际 CloudGameDetail.vue setup + Vue KeepAlive；RPC 受控响应；空渲染宿主",
+    "totals": {
+      "catalogRequests": 6,
+      "detailRequests": 6,
+      "emptyProductRequests": 3,
+      "catalogListenersAfterUnmount": 0
+    }
+  },
+  "lifecycle": {
+    "method": "实际 XCloud/CloudGameDetail setup + App 路由 key + Vue KeepAlive；RPC 受控响应；空渲染宿主",
+    "totals": {
+      "createdDetails": 1,
+      "createdCatalogs": 1,
+      "stableTitles": true,
+      "stableIndex": true,
+      "statusRequests": 42,
+      "summaryRequests": 22,
+      "catalogRequests": 1,
+      "detailRequests": 22,
+      "emptyProductRequests": 0,
+      "sharedCatalogOwnersAfterUnmount": 1
+    },
+    "inactiveViewSubscribers": 0,
+    "inactivePageQueries": 0,
+    "retainedSharedOwner": 1
+  },
+  "windows": [
+    {
+      "file": "catalog-500-start.json",
+      "size": 500,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 24,
+      "candidates": 87,
+      "navigationP95Ms": 0,
+      "native": ""
+    },
+    {
+      "file": "catalog-2000-start.json",
+      "size": 2000,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 24,
+      "candidates": 87,
+      "navigationP95Ms": 0,
+      "native": ""
+    },
+    {
+      "file": "catalog-10000-start.json",
+      "size": 10000,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 24,
+      "candidates": 87,
+      "navigationP95Ms": 0,
+      "native": ""
+    },
+    {
+      "file": "catalog-10000-index2000.json",
+      "size": 10000,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 35,
+      "candidates": 120,
+      "navigationP95Ms": 0,
+      "native": "xcloud.all.P2002"
+    },
+    {
+      "file": "catalog-10000-tail.json",
+      "size": 10000,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 35,
+      "candidates": 120,
+      "navigationP95Ms": 0,
+      "native": "xcloud.all.P9952"
+    },
+    {
+      "file": "catalog-10000-down40.json",
+      "size": 10000,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 30,
+      "candidates": 105,
+      "navigationP95Ms": 1.2999999523162842,
+      "native": "xcloud.all.P2102"
+    },
+    {
+      "file": "catalog-rail-cross-window.json",
+      "size": 500,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 34,
+      "candidates": 118,
+      "navigationP95Ms": 2.9000000953674316,
+      "native": "xcloud.xcloud-favorites.P0027"
+    },
+    {
+      "file": "catalog-grid-narrow.json",
+      "size": 2000,
+      "viewport": {
+        "width": 540,
+        "height": 850
+      },
+      "cards": 14,
+      "candidates": 57,
+      "navigationP95Ms": 0,
+      "native": "xcloud.all.P1502"
+    },
+    {
+      "file": "catalog-grid-resized.json",
+      "size": 2000,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cards": 35,
+      "candidates": 120,
+      "navigationP95Ms": 0,
+      "native": "xcloud.all.P1502"
+    }
+  ],
+  "model": {
+    "observedDate": "2026-11-12",
+    "environment": {
+      "node": "v24.21.0",
+      "os": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M2 Pro"
+    },
+    "method": "生产索引/查询/窗口模型与已保存旧模型；Node 时间片与 JSON 字节，DOM/原生窗口独立采样",
+    "results": [
+      {
+        "size": 500,
+        "baselineEmptyQueryMs": [
+          2.387040999999982,
+          2.4721250000000055,
+          2.0333750000000066
+        ],
+        "index": {
+          "normalized": 500,
+          "buildMs": 2.83058299999999,
+          "longestSliceMs": 2.820458000000002
+        },
+        "incremental": {
+          "normalized": 75,
+          "buildMs": 0.8097920000000158,
+          "longestSliceMs": 0.8142079999999794
+        },
+        "queryTimes": [
+          {
+            "query": "",
+            "ms": 0.06595899999999233
+          },
+          {
+            "query": "Halo infinite",
+            "ms": 0.37937500000001023
+          },
+          {
+            "query": "探索 协作",
+            "ms": 0.35037499999998545
+          }
+        ],
+        "warmArrayReused": true,
+        "fullEventBytes": 1103268,
+        "patch75Bytes": 165642,
+        "gridWindowCards": 44,
+        "baselineVisitedGridCards": 500
+      },
+      {
+        "size": 2000,
+        "baselineEmptyQueryMs": [
+          9.356416999999993,
+          8.786125000000027,
+          8.552334000000002
+        ],
+        "index": {
+          "normalized": 2000,
+          "buildMs": 11.43312499999999,
+          "longestSliceMs": 6.09216600000002
+        },
+        "incremental": {
+          "normalized": 75,
+          "buildMs": 1.2528750000000173,
+          "longestSliceMs": 1.2527079999999842
+        },
+        "queryTimes": [
+          {
+            "query": "",
+            "ms": 0.009666999999978998
+          },
+          {
+            "query": "Halo infinite",
+            "ms": 3.3881660000000124
+          },
+          {
+            "query": "探索 协作",
+            "ms": 0.8310420000000249
+          }
+        ],
+        "warmArrayReused": true,
+        "fullEventBytes": 4420268,
+        "patch75Bytes": 165642,
+        "gridWindowCards": 44,
+        "baselineVisitedGridCards": 2000
+      },
+      {
+        "size": 10000,
+        "baselineEmptyQueryMs": [
+          42.94625000000002,
+          37.297082999999986,
+          37.16104100000001
+        ],
+        "index": {
+          "normalized": 10000,
+          "buildMs": 61.75120800000002,
+          "longestSliceMs": 6.101083000000017
+        },
+        "incremental": {
+          "normalized": 75,
+          "buildMs": 5.66766599999994,
+          "longestSliceMs": 5.669416999999953
+        },
+        "queryTimes": [
+          {
+            "query": "",
+            "ms": 0.010750000000030013
+          },
+          {
+            "query": "Halo infinite",
+            "ms": 13.357167000000004
+          },
+          {
+            "query": "探索 协作",
+            "ms": 2.3942080000000487
+          }
+        ],
+        "warmArrayReused": true,
+        "fullEventBytes": 22124268,
+        "patch75Bytes": 165642,
+        "gridWindowCards": 46,
+        "baselineVisitedGridCards": 2001
+      }
+    ]
+  },
+  "imageSizing": {
+    "date": "2026-11-12",
+    "method": "官方 CDN 原图和尺寸参数响应的本地字节/像素核验",
+    "samples": [
+      {
+        "file": "xbxrc-cloud-cover-0.bin",
+        "bytes": 1118479,
+        "width": 2160,
+        "height": 2160
+      },
+      {
+        "file": "xbxrc-cloud-cover-1.bin",
+        "bytes": 7623,
+        "width": 128,
+        "height": 128
+      },
+      {
+        "file": "xbxrc-cloud-cover-2.bin",
+        "bytes": 51475,
+        "width": 384,
+        "height": 384
+      }
+    ]
+  },
+  "scrollRestoration": {
+    "menu": {
+      "beforeMenu": {
+        "top": 95047.5
+      },
+      "afterMenu": {
+        "top": 95047.5
+      }
+    },
+    "detail": {
+      "detailScrollBefore": {
+        "left": 614.5,
+        "top": 358.5
+      },
+      "detailScrollAfter": {
+        "left": 614.5,
+        "top": 314.5
+      }
+    },
+    "detailVerticalAdjustmentPx": -44
+  },
+  "sourceIntegrity": {
+    "sourceCount": 8,
+    "allMatch": true,
+    "files": [
+      {
+        "file": "src/App.vue",
+        "sha256": "58cf0a6d0baf018ff3654b5e2e41a2e2a9a785de0ea8856e417fe9a1439c48cd",
+        "matches": true
+      },
+      {
+        "file": "src/pages/XCloud.vue",
+        "sha256": "77deead02b904186e213370cf12d62012df7c91070b72188ef6bd0c40311f245",
+        "matches": true
+      },
+      {
+        "file": "src/pages/CloudGameDetail.vue",
+        "sha256": "6485f7b68e255302630f36a3b16bda9a7c62876414b8ecc4b0d51fb0e2c3e202",
+        "matches": true
+      },
+      {
+        "file": "src/pages/xcloud/CloudCatalogWindow.vue",
+        "sha256": "31033924136008136b0ecfe30e35d14f9d05050b8c10c6f13bcb2caba8b69a32",
+        "matches": true
+      },
+      {
+        "file": "src/pages/xcloud/catalog-index.ts",
+        "sha256": "9b00e4a9d22f5da5d35929be2f2f01fb104f9a8350c876c16006308a6fbe23d2",
+        "matches": true
+      },
+      {
+        "file": "src/pages/xcloud/catalog-store.ts",
+        "sha256": "a580fae8d3c1fd24b2a92f9d5b8d0ba7a23e374f42f00f140dc5883ed52200b6",
+        "matches": true
+      },
+      {
+        "file": "src/navigation/core/engine.ts",
+        "sha256": "71edaed3df8ffaf8011ef0790509ff0dd7c36ef8ca036bf2d3625ad3bd9e671e",
+        "matches": true
+      },
+      {
+        "file": "src/components/common/RemoteImage.vue",
+        "sha256": "4aa0b81e1cb5bc090f533edca7461310de8e8a6e490e0dffb673af6cbe2a34fe",
+        "matches": true
+      }
+    ]
+  },
+  "checks": {
+    "rustData": {
+      "passed": 63,
+      "failed": 0,
+      "log": "../2026-11-12-home-host-cache/checks/rust-data.txt"
+    },
+    "rustCatalogFlow": {
+      "passed": 11,
+      "failed": 0,
+      "log": "checks/rust-flow.txt"
+    },
+    "targetedVueCloudNavigation": {
+      "passed": 111,
+      "failed": 0,
+      "log": "checks/vue-cloud-navigation.txt"
+    },
+    "finalVueAll": {
+      "files": 114,
+      "passed": 985,
+      "failed": 2,
+      "log": "../2026-11-12-home-host-cache/checks/vue-all.txt"
+    },
+    "productionTrace": {
+      "passed": 2,
+      "failed": 0,
+      "log": "checks/trace-production.txt"
+    },
+    "navigationCoverage": {
+      "supportedSites": 217,
+      "violations": 0,
+      "log": "../2026-11-12-home-host-cache/checks/navigation.txt"
+    },
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed",
+    "rustFormat": "passed",
+    "rustWorkspaceCheck": "passed",
+    "existingFailures": [
+      {
+        "file": "src/pages/settings/setting-validation.test.ts",
+        "detail": "force_region_ip 预期 nextConnection，实际 nextAuthorization"
+      },
+      {
+        "file": "src/streaming/runtime/browser-runtime.test.ts",
+        "detail": "dev.healthSamples 预期 0 条，实际 27 条"
+      }
+    ]
+  },
+  "limitations": [
+    "部分浏览器长任务采样与构建/自动化并行，限定结论于请求、DOM、索引、事件字节和局部导航",
+    "Tauri 实机输入到可操作 P95、CPU/GPU、进程驻留、持久化耗时及物理手柄待用户验收"
+  ]
+}

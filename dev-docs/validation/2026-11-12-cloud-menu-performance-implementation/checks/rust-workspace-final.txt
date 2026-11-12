@@ -1,0 +1,32 @@
+    Checking xbox-webapi v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-webapi)
+   Compiling xbxrc v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/src-tauri)
+    Checking xbox-auth-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-auth-flow)
+    Checking xbox-streaming v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-streaming)
+    Checking xbox-cloud-catalog-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-cloud-catalog-flow)
+    Checking xbox-ios-bridge v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-ios-bridge)
+warning: field `missing_product_ids` is never read
+  --> src-tauri/src/mods/data/cache_repository.rs:76:9
+   |
+71 | pub(crate) struct LoadedXcloudCatalogSnapshot {
+   |                   --------------------------- field in this struct
+...
+76 |     pub missing_product_ids: Vec<String>,
+   |         ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `LoadedXcloudCatalogSnapshot` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `describe_json_value` is never used
+   --> src-tauri/src/mods/data/services/streaming_query_service.rs:492:4
+    |
+492 | fn describe_json_value(value: Option<&Value>) -> String {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `needs_remote_play_capability_review` is never used
+   --> src-tauri/src/mods/data/services/streaming_query_service.rs:504:4
+    |
+504 | fn needs_remote_play_capability_review(value: &Value) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `xbxrc` (lib) generated 3 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.40s

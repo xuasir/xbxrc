@@ -4,20 +4,22 @@ use crate::mods::auth::{AuthProviderRef, AuthTokenScope};
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::mods::data::events;
+use crate::mods::data::host_cache::HostCacheJoin;
 use crate::mods::data::runtime_state::{DataRuntimeState, XcloudCatalogRefreshJoin};
 use crate::mods::data::services::personal_service::{PersonalContext, PersonalService};
 use crate::mods::data::services::{
     HostService, ProfileService, StreamingQueryService, XcloudService,
 };
+use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::session_resolver::DataSessionResolver;
 use crate::mods::data::types::{
     DataConsoleLibrary, DataMediaSaveResult, DataPersonalAccount, DataPlaytime, DataQuery,
     LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage, MediaKind,
 };
 use crate::mods::data::types::{
-    DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataStreamingTitleInputConfig,
-    DataUserProfile, DataXcloudCatalogCacheState, DataXcloudCatalogPayload,
-    DataXcloudCatalogUpdatedEvent, XcloudCatalogCacheScope,
+    DataConsolePowerResult, DataHostSummary, DataHostsChangedEvent, DataHostsSnapshot,
+    DataSendTextResult, DataStreamingTitleInputConfig, DataUserProfile,
+    DataXcloudCatalogCacheState, DataXcloudCatalogPayload, XcloudCatalogCacheScope,
 };
 use crate::mods::data::DataError;
 use crate::mods::data::DataProvider;
@@ -40,6 +42,8 @@ pub struct DataService {
 }
 
 struct XcloudRefreshContext {
+    runtime_state: Arc<DataRuntimeState>,
+    fallback_priorities: Vec<String>,
     app_handle: tauri::AppHandle,
     xcloud_service: Arc<XcloudService>,
     cache_repository: Arc<DataCacheRepository>,
@@ -49,6 +53,56 @@ struct XcloudRefreshContext {
 }
 
 impl DataService {
+    async fn query_hosts(&self, force: bool) -> Result<DataHostsSnapshot, DataError> {
+        self.session_resolver
+            .run_query(|session| async move {
+                let claims = resolve_web_token_claims(&session.web_token).ok_or_else(|| {
+                    xbox_webapi::WebApiError::auth("登录信息暂不可用，请重新登录")
+                })?;
+                match self
+                    .runtime_state
+                    .hosts
+                    .begin(claims.account_scope(), force)
+                {
+                    HostCacheJoin::Cached(snapshot) => Ok(snapshot),
+                    HostCacheJoin::Follower(receiver) => receiver.await.unwrap_or_else(|_| {
+                        Err(xbox_webapi::WebApiError::parse("主机查询已中断，请重试"))
+                    }),
+                    HostCacheJoin::Leader(lease) => {
+                        let started = std::time::Instant::now();
+                        let result = self.host_service.get_hosts(&session).await;
+                        self.record_http_result("hosts", started, result.as_ref().err());
+                        if !self.session_resolver.is_current_session(&session) {
+                            return lease.finish(Err(xbox_webapi::WebApiError::parse(
+                                "登录状态已更新，请重新查询",
+                            )));
+                        }
+                        lease.finish(result)
+                    }
+                }
+            })
+            .await
+            .map_err(DataError::from)
+    }
+
+    fn notify_hosts_changed(&self, scope: &str) {
+        let _ = events::emit_hosts_changed(
+            &self.app_handle,
+            &DataHostsChangedEvent {
+                scope_key: scope.into(),
+            },
+        );
+    }
+
+    fn invalidate_hosts(&self, session: &super::types::DataSessionContext) {
+        if self.session_resolver.is_current_session(session) {
+            if let Some(claims) = resolve_web_token_claims(&session.web_token) {
+                self.runtime_state.hosts.invalidate(claims.account_scope());
+                self.notify_hosts_changed(claims.account_scope());
+            }
+        }
+    }
+
     async fn personal_query<T, F, Fut>(
         &self,
         operation: &'static str,
@@ -183,8 +237,14 @@ impl DataService {
         };
 
         let cache_key = DataCacheRepository::scoped_cache_key(&scope);
-        let loaded_snapshot = self.cache_repository.load_xcloud_catalog(&scope)?;
+        let view = self.cache_repository.delivered_catalog_view(&scope)?;
+        let loaded_snapshot = &view.snapshot;
         let is_refreshing = self.runtime_state.is_xcloud_refreshing(&cache_key);
+        let status = self.cache_repository.delivered_catalog_status(
+            &scope,
+            &view,
+            is_refreshing || loaded_snapshot.needs_refresh,
+        )?;
 
         log::info!(
             "[Data][xcloud] serve cache_state={:?} hit_level={} refreshing={} needs_refresh={} titles={}",
@@ -195,18 +255,15 @@ impl DataService {
             loaded_snapshot.titles.len()
         );
 
-        match loaded_snapshot.cache_state {
+        match loaded_snapshot.cache_state.clone() {
             DataXcloudCatalogCacheState::Miss => {
                 self.spawn_xcloud_refresh(session, scope.clone(), reason.into(), false);
                 Ok(DataXcloudCatalogPayload {
-                    sources: Default::default(),
-                    access: if scope.region_host == "public" {
-                        "browse"
-                    } else {
-                        "account"
-                    }
-                    .into(),
-                    error: None,
+                    content_revision: view.revision.clone(),
+                    fresh_until: view.fresh_until,
+                    sources: status.sources,
+                    access: status.access,
+                    error: status.error,
                     scope_key: Some(cache_key),
                     titles: Vec::new(),
                     cache_state: DataXcloudCatalogCacheState::Miss,
@@ -216,17 +273,11 @@ impl DataService {
             }
             DataXcloudCatalogCacheState::Fresh | DataXcloudCatalogCacheState::Stale => {
                 let payload = DataXcloudCatalogPayload {
-                    sources: self
-                        .cache_repository
-                        .read_cloud_value(&format!("{}.status", cache_key))?
-                        .unwrap_or_default(),
-                    access: if scope.region_host == "public" {
-                        "browse"
-                    } else {
-                        "account"
-                    }
-                    .into(),
-                    error: None,
+                    content_revision: view.revision.clone(),
+                    fresh_until: view.fresh_until,
+                    sources: status.sources,
+                    access: status.access,
+                    error: status.error,
 
                     scope_key: Some(cache_key.clone()),
                     titles: loaded_snapshot.titles.clone(),
@@ -310,6 +361,18 @@ impl DataService {
 
     fn xcloud_refresh_context(&self) -> XcloudRefreshContext {
         XcloudRefreshContext {
+            runtime_state: self.runtime_state.clone(),
+            fallback_priorities: self
+                .cloud_preferences()
+                .map(|(_, prefs)| {
+                    prefs
+                        .favorites
+                        .into_iter()
+                        .map(|t| t.product_id)
+                        .take(120)
+                        .collect()
+                })
+                .unwrap_or_default(),
             app_handle: self.app_handle.clone(),
             xcloud_service: self.xcloud_service.clone(),
             cache_repository: self.cache_repository.clone(),
@@ -353,7 +416,20 @@ impl DataService {
         force_refresh: bool,
     ) -> Result<DataXcloudCatalogPayload, DataError> {
         let started_at = std::time::Instant::now();
-        let emit = |mut payload: DataXcloudCatalogPayload| {
+        let previous = context.cache_repository.delivered_catalog_view(&scope)?;
+        let publication = std::sync::Mutex::new(
+            super::catalog_projection::CatalogPublication::new(previous.snapshot.titles.clone()),
+        );
+        let demand_key = DataCacheRepository::scoped_cache_key(&scope);
+        let priorities = || {
+            context
+                .runtime_state
+                .catalog_demand(&demand_key)
+                .into_iter()
+                .chain(context.fallback_priorities.iter().cloned())
+                .collect()
+        };
+        let emit = |payload: DataXcloudCatalogPayload| {
             // 后台结果只发布到仍然有效的账户、语言和区域范围。
             let current = context.session_resolver.current_session().ok().flatten();
             let current_catalog = Self::catalog_scope_for(&context.config_provider).ok();
@@ -376,18 +452,26 @@ impl DataService {
             if !same {
                 return;
             }
-            let event = DataXcloudCatalogUpdatedEvent {
-                scope_key: DataCacheRepository::scoped_cache_key(&scope),
-                titles: std::mem::take(&mut payload.titles),
-                cache_state: payload.cache_state,
-                updated_at: payload.updated_at,
-                refreshing: payload.refreshing,
-                sources: payload.sources,
-                access: payload.access,
-                error: payload.error,
-                reason: reason.clone(),
-            };
-            let _ = events::emit_xcloud_catalog_updated(&context.app_handle, &event);
+            let _ = context
+                .cache_repository
+                .remember_catalog_delivery(&scope, &scope, &payload);
+            let events = publication
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .publish(payload, &demand_key, &reason);
+            for event in events {
+                log::debug!(
+                    "[Data][xcloud] publish changed={} removed={} terminal={}",
+                    event.patch.as_ref().map(|p| p.upserts.len()).unwrap_or(0),
+                    event
+                        .patch
+                        .as_ref()
+                        .map(|p| p.removed_product_ids.len())
+                        .unwrap_or(0),
+                    !event.refreshing
+                );
+                let _ = events::emit_xcloud_catalog_updated(&context.app_handle, &event);
+            }
         };
         let result = if scope.region_host == "public" {
             context
@@ -397,6 +481,7 @@ impl DataService {
                     &scope,
                     &context.cache_repository,
                     force_refresh,
+                    &priorities,
                     &emit,
                 )
                 .await
@@ -405,6 +490,7 @@ impl DataService {
                 .session_resolver
                 .run_scoped_query(AuthTokenScope::Cloud, |session| {
                     let emit = &emit;
+                    let priorities = &priorities;
                     let context = &context;
                     let scope = &scope;
                     async move {
@@ -429,6 +515,7 @@ impl DataService {
                                 scope,
                                 &context.cache_repository,
                                 force_refresh,
+                                &priorities,
                                 emit,
                             )
                             .await
@@ -452,10 +539,11 @@ impl DataService {
                 Ok(outcome.payload)
             }
             Err(error) => {
-                let loaded = context
+                let retained = context.cache_repository.delivered_catalog_view(&scope)?;
+                let loaded = retained.snapshot.clone();
+                let status = context
                     .cache_repository
-                    .load_xcloud_catalog(&scope)
-                    .map_err(DataError::from)?;
+                    .delivered_catalog_status(&scope, &retained, false)?;
                 if loaded.titles.is_empty() && scope.region_host != "public" {
                     let public_scope = XcloudCatalogCacheScope {
                         region_host: "public".into(),
@@ -463,6 +551,11 @@ impl DataService {
                     };
                     let progress = |mut payload: DataXcloudCatalogPayload| {
                         payload.scope_key = Some(DataCacheRepository::scoped_cache_key(&scope));
+                        let _ = context.cache_repository.remember_catalog_delivery(
+                            &scope,
+                            &public_scope,
+                            &payload,
+                        );
                         emit(payload);
                     };
                     if let Ok(mut outcome) = context
@@ -472,6 +565,7 @@ impl DataService {
                             &public_scope,
                             &context.cache_repository,
                             force_refresh,
+                            &priorities,
                             progress,
                         )
                         .await
@@ -484,24 +578,20 @@ impl DataService {
                     }
                 }
                 let payload = DataXcloudCatalogPayload {
+                    content_revision: super::catalog_projection::content_revision(&loaded.titles),
+                    fresh_until: retained.fresh_until,
                     scope_key: Some(DataCacheRepository::scoped_cache_key(&scope)),
                     titles: loaded.titles,
                     cache_state: loaded.cache_state,
                     updated_at: loaded.updated_at,
                     refreshing: false,
-                    access: if scope.region_host == "public" {
+                    access: if scope.region_host == "public" || status.access == "browse" {
                         "browse"
                     } else {
                         "unavailable"
                     }
                     .into(),
-                    sources: context
-                        .cache_repository
-                        .read_cloud_value(&format!(
-                            "{}.status",
-                            DataCacheRepository::scoped_cache_key(&scope)
-                        ))?
-                        .unwrap_or_default(),
+                    sources: status.sources,
                     error: Some(XcloudService::catalog_error(&error)),
                 };
                 emit(payload.clone());
@@ -512,6 +602,8 @@ impl DataService {
 
     fn empty_catalog_payload(cache_state: DataXcloudCatalogCacheState) -> DataXcloudCatalogPayload {
         DataXcloudCatalogPayload {
+            content_revision: super::catalog_projection::content_revision(&[]),
+            fresh_until: None,
             sources: Default::default(),
             access: String::new(),
             error: None,
@@ -527,6 +619,55 @@ impl DataService {
 
 #[async_trait]
 impl DataProvider for DataService {
+    async fn get_cloud_catalog_status(
+        &self,
+    ) -> Result<super::types::DataCloudCatalogStatus, DataError> {
+        let (session, scope) = self
+            .resolve_xcloud_catalog_context()
+            .await?
+            .ok_or("目录范围暂缺")?;
+        let view = self.cache_repository.delivered_catalog_view(&scope)?;
+        let key = DataCacheRepository::scoped_cache_key(&scope);
+        let refreshing =
+            self.runtime_state.is_xcloud_refreshing(&key) || view.snapshot.needs_refresh;
+        if view.snapshot.needs_refresh && !self.runtime_state.is_xcloud_refreshing(&key) {
+            self.spawn_xcloud_refresh(session, scope.clone(), "statusRevalidate".into(), false);
+        }
+        Ok(self
+            .cache_repository
+            .delivered_catalog_status(&scope, &view, refreshing)?)
+    }
+
+    async fn get_cloud_title_summary(
+        &self,
+        product: &str,
+    ) -> Result<super::types::DataCloudTitleSummary, DataError> {
+        let product = cloud_queries::normalized_product(product)?;
+        let (_, scope) = self
+            .resolve_xcloud_catalog_context()
+            .await?
+            .ok_or("目录范围暂缺")?;
+        let view = self.cache_repository.delivered_catalog_view(&scope)?;
+        Ok(super::types::DataCloudTitleSummary {
+            scope_key: DataCacheRepository::scoped_cache_key(&scope),
+            title: view.title(&product),
+        })
+    }
+
+    async fn prioritize_cloud_titles(&self, products: Vec<String>) -> Result<bool, DataError> {
+        let (_, scope) = self
+            .resolve_xcloud_catalog_context()
+            .await?
+            .ok_or("目录范围暂缺")?;
+        let ids = products
+            .iter()
+            .take(120)
+            .filter_map(|id| cloud_queries::normalized_product(id).ok())
+            .collect();
+        self.runtime_state
+            .set_catalog_demand(&DataCacheRepository::scoped_cache_key(&scope), ids);
+        Ok(true)
+    }
     async fn validate_cloud_stream(&self, stream: &str) -> Result<(), DataError> {
         let title = self.cloud_title(stream, "titleId").await?;
         if !title.entitlement_known {
@@ -751,13 +892,17 @@ impl DataProvider for DataService {
     }
 
     async fn get_hosts(&self) -> Result<Vec<DataHostSummary>, DataError> {
-        let started = std::time::Instant::now();
-        let result = self
-            .session_resolver
-            .run_query(|session| async move { self.host_service.get_hosts(&session).await })
-            .await;
-        self.record_http_result("hosts", started, result.as_ref().err());
-        result.map_err(DataError::from)
+        let snapshot = self.query_hosts(true).await?;
+        self.notify_hosts_changed(&snapshot.scope_key);
+        Ok(snapshot.hosts)
+    }
+
+    async fn get_hosts_snapshot(&self) -> Result<DataHostsSnapshot, DataError> {
+        self.query_hosts(false).await
+    }
+
+    async fn refresh_hosts(&self) -> Result<DataHostsSnapshot, DataError> {
+        self.query_hosts(true).await
     }
 
     async fn get_remote_consoles(&self) -> Result<Vec<DataHostSummary>, DataError> {
@@ -855,9 +1000,14 @@ impl DataProvider for DataService {
     ) -> Result<DataConsolePowerResult, DataError> {
         self.session_resolver
             .run_query(|session| async move {
-                self.streaming_query_service
+                let result = self
+                    .streaming_query_service
                     .power_on_console(&session, console_id)
-                    .await
+                    .await?;
+                if result.accepted {
+                    self.invalidate_hosts(&session);
+                }
+                Ok(result)
             })
             .await
             .map_err(DataError::from)
@@ -869,9 +1019,14 @@ impl DataProvider for DataService {
     ) -> Result<DataConsolePowerResult, DataError> {
         self.session_resolver
             .run_query(|session| async move {
-                self.streaming_query_service
+                let result = self
+                    .streaming_query_service
                     .power_off_console(&session, console_id)
-                    .await
+                    .await?;
+                if result.accepted {
+                    self.invalidate_hosts(&session);
+                }
+                Ok(result)
             })
             .await
             .map_err(DataError::from)

@@ -3,7 +3,7 @@ use crate::mods::data::cache_repository::{
 };
 use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::types::{
-    DataSessionContext, DataXcloudCatalogPayload, XcloudCatalogCacheScope,
+    DataSessionContext, DataXcloudCatalogPayload, DataXcloudTitleSummary, XcloudCatalogCacheScope,
 };
 use xbox_cloud_catalog_flow::{CloudCatalogBaseEntry, CloudCatalogOverlayEntry, CloudCatalogScope};
 use xbox_webapi::WebApiError;
@@ -76,8 +76,10 @@ impl XcloudService {
         scope: &XcloudCatalogCacheScope,
         cache_repository: &DataCacheRepository,
         force_refresh: bool,
+        priorities: impl Fn() -> Vec<String> + Send + Sync,
         progress: impl Fn(DataXcloudCatalogPayload) + Send + Sync,
     ) -> Result<XcloudCatalogRefreshOutcome, WebApiError> {
+        let _retention = cache_repository.retain_catalog_scope(scope);
         let catalog_scope = CloudCatalogScope {
             market: scope.market.clone(),
             language: scope.language.clone(),
@@ -126,7 +128,8 @@ impl XcloudService {
             .map(Self::to_cached_overlay_entry)
             .collect()
         };
-        let status_key = format!("{}.status", DataCacheRepository::scoped_cache_key(scope));
+        // 栏目查询完成前沿用同一缓存范围的排名，后续成功结果覆盖旧排名。
+        Self::retain_collection_ranks(&mut entries, &previous.titles);
         let mut sources = std::collections::HashMap::<String, String>::new();
         sources.insert("catalog".into(), "fresh".into());
         sources.insert("products".into(), "loading".into());
@@ -135,19 +138,17 @@ impl XcloudService {
                     sources: &std::collections::HashMap<String, String>,
                     refreshing: bool|
          -> Result<DataXcloudCatalogPayload, WebApiError> {
-            cache_repository
-                .save_xcloud_catalog_overlay(scope, entries)
-                .map_err(|_| WebApiError::parse("目录缓存写入失败"))?;
-            cache_repository
-                .write_cloud_value(&status_key, sources)
-                .map_err(|_| WebApiError::parse("目录缓存写入失败"))?;
-            let loaded = cache_repository
-                .load_xcloud_catalog(scope)
+            cache_repository.stage_catalog_overlay(scope, entries, sources);
+            let view = cache_repository
+                .catalog_view(scope)
                 .map_err(|_| WebApiError::parse("目录缓存读取失败"))?;
+            let loaded = &view.snapshot;
             Ok(DataXcloudCatalogPayload {
+                content_revision: view.revision.clone(),
+                fresh_until: view.fresh_until,
                 scope_key: Some(DataCacheRepository::scoped_cache_key(scope)),
-                titles: loaded.titles,
-                cache_state: loaded.cache_state,
+                titles: loaded.titles.clone(),
+                cache_state: loaded.cache_state.clone(),
                 updated_at: loaded.updated_at,
                 refreshing,
                 sources: sources.clone(),
@@ -161,7 +162,7 @@ impl XcloudService {
             .map_err(|_| WebApiError::parse("目录缓存读取失败"))?
             .unwrap_or_default();
         let now = DataCacheRepository::now_ms();
-        let ids = entries
+        let mut ids = entries
             .iter()
             .filter(|e| {
                 force_refresh
@@ -175,6 +176,16 @@ impl XcloudService {
             })
             .map(|e| e.product_id.clone())
             .collect::<Vec<_>>();
+        let recent = previous
+            .titles
+            .iter()
+            .filter(|t| t.recent_rank.is_some())
+            .map(|t| t.product_id.clone());
+        let mut preferred = std::collections::HashMap::new();
+        for (rank, id) in priorities().into_iter().chain(recent).enumerate() {
+            preferred.entry(id).or_insert(rank);
+        }
+        ids.sort_by_key(|id| preferred.get(id).copied().unwrap_or(usize::MAX));
         // 先补首批轻量资料，再并行读取栏目和剩余商品。
         let first = xbox_cloud_catalog_flow::hydrate_catalog_products(
             &api,
@@ -183,7 +194,7 @@ impl XcloudService {
         )
         .await;
         cache_repository
-            .save_xcloud_catalog_base(
+            .stage_catalog_base(
                 scope,
                 first
                     .entries
@@ -193,6 +204,21 @@ impl XcloudService {
             )
             .map_err(|_| WebApiError::parse("商品缓存写入失败"))?;
         progress(save(entries.clone(), &sources, true)?);
+        cache_repository
+            .persist_catalog(scope)
+            .await
+            .map_err(|_| WebApiError::parse("目录缓存保存失败"))?;
+        let on_products = |products: &std::collections::HashMap<String, CloudCatalogBaseEntry>| {
+            let values = products
+                .iter()
+                .map(|(id, entry)| (id.clone(), Self::to_cached_base_entry(entry.clone())))
+                .collect();
+            if cache_repository.stage_catalog_base(scope, values).is_ok() {
+                if let Ok(payload) = save(entries.clone(), &sources, true) {
+                    progress(payload);
+                }
+            }
+        };
         let recent_query = async {
             match &cloud {
                 Some(cloud) => cloud.get_recent_titles(25).await,
@@ -216,10 +242,12 @@ impl XcloudService {
                 &scope.market,
                 &scope.language
             ),
-            xbox_cloud_catalog_flow::hydrate_catalog_products(
+            xbox_cloud_catalog_flow::hydrate_catalog_products_with_progress(
                 &api,
                 &catalog_scope,
-                &ids[ids.len().min(75)..]
+                &ids[ids.len().min(75)..],
+                &priorities,
+                on_products,
             )
         );
         let recent = recent.and_then(|v| {
@@ -234,6 +262,11 @@ impl XcloudService {
                 })
                 .ok_or_else(|| WebApiError::parse("invalid recent titles"))
         });
+        let previous_by_id = previous
+            .titles
+            .iter()
+            .map(|title| (&title.product_id, title))
+            .collect::<std::collections::HashMap<_, _>>();
         for (key, result) in [
             ("newest", newest),
             ("popular", popular),
@@ -255,14 +288,17 @@ impl XcloudService {
                 }
                 .into(),
             );
+            let ranks = result.as_ref().ok().map(|ids| {
+                ids.iter()
+                    .enumerate()
+                    .map(|(rank, id)| (id, rank))
+                    .collect::<std::collections::HashMap<_, _>>()
+            });
             for entry in &mut entries {
-                let previous = previous
-                    .titles
-                    .iter()
-                    .find(|t| t.product_id == entry.product_id);
-                let rank = match &result {
-                    Ok(ids) => ids.iter().position(|id| id == &entry.product_id),
-                    Err(_) => previous.and_then(|t| match key {
+                let previous = previous_by_id.get(&entry.product_id);
+                let rank = match &ranks {
+                    Some(ranks) => ranks.get(&entry.product_id).copied(),
+                    None => previous.and_then(|t| match key {
                         "newest" => t.new_rank,
                         "popular" => t.popular_rank,
                         _ => t.leaving_rank,
@@ -287,13 +323,17 @@ impl XcloudService {
             }
             .into(),
         );
+        let recent_ranks = recent.as_ref().ok().map(|ids| {
+            ids.iter()
+                .enumerate()
+                .map(|(rank, id)| (id, rank))
+                .collect::<std::collections::HashMap<_, _>>()
+        });
         for entry in &mut entries {
-            entry.recent_rank = match &recent {
-                Ok(ids) => ids.iter().position(|id| id == &entry.product_id),
-                Err(_) => previous
-                    .titles
-                    .iter()
-                    .find(|t| t.product_id == entry.product_id)
+            entry.recent_rank = match &recent_ranks {
+                Some(ranks) => ranks.get(&entry.product_id).copied(),
+                None => previous_by_id
+                    .get(&entry.product_id)
                     .and_then(|t| t.recent_rank),
             };
             entry.is_recently_played = entry.recent_rank.is_some();
@@ -307,19 +347,35 @@ impl XcloudService {
             }
             .into(),
         );
+        let payload = save(entries, &sources, false)?;
         cache_repository
-            .save_xcloud_catalog_base(
-                scope,
-                rest.entries
-                    .into_iter()
-                    .map(|(id, b)| (id, Self::to_cached_base_entry(b)))
-                    .collect(),
-            )
-            .map_err(|_| WebApiError::parse("商品缓存写入失败"))?;
+            .persist_catalog(scope)
+            .await
+            .map_err(|_| WebApiError::parse("目录缓存保存失败"))?;
         Ok(XcloudCatalogRefreshOutcome {
-            payload: save(entries, &sources, false)?,
+            payload,
             missing_product_count: ids.len(),
         })
+    }
+
+    fn retain_collection_ranks(
+        entries: &mut [CachedXcloudCatalogOverlayEntry],
+        previous: &[DataXcloudTitleSummary],
+    ) {
+        let previous_by_id = previous
+            .iter()
+            .map(|title| (&title.product_id, title))
+            .collect::<std::collections::HashMap<_, _>>();
+        for entry in entries {
+            if let Some(title) = previous_by_id.get(&entry.product_id) {
+                entry.recent_rank = title.recent_rank;
+                entry.new_rank = title.new_rank;
+                entry.popular_rank = title.popular_rank;
+                entry.leaving_rank = title.leaving_rank;
+                entry.is_recently_played = entry.recent_rank.is_some();
+                entry.is_new = entry.new_rank.is_some();
+            }
+        }
     }
 
     fn to_cached_base_entry(entry: CloudCatalogBaseEntry) -> CachedXcloudCatalogBaseEntry {
@@ -405,6 +461,77 @@ pub(crate) struct ResolvedXcloudRegion {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn ranked_title(product_id: &str) -> DataXcloudTitleSummary {
+        serde_json::from_value(json!({
+            "id": product_id, "productId": product_id, "titleId": "old-stream",
+            "name": "Cached game", "publisherName": "", "description": "",
+            "tileImageUrl": "", "posterImageUrl": "", "categories": ["Action"],
+            "supportedInputTypes": ["Controller"], "hasEntitlement": true,
+            "isRecentlyPlayed": true, "isNew": true,
+            "recentRank": 3, "newRank": 2, "popularRank": 7, "leavingRank": 1,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn refresh_progress_retains_collections_with_current_membership_and_access() {
+        let previous = [ranked_title("KEPT"), ranked_title("REMOVED")];
+        let mut entries = vec![
+            CachedXcloudCatalogOverlayEntry {
+                product_id: "KEPT".into(),
+                title_id: "current-stream".into(),
+                fallback_name: "Current game".into(),
+                entitlement_known: true,
+                supported_input_types: vec!["Controller".into(), "MKB".into()],
+                ..Default::default()
+            },
+            CachedXcloudCatalogOverlayEntry {
+                product_id: "ADDED".into(),
+                ..Default::default()
+            },
+        ];
+
+        XcloudService::retain_collection_ranks(&mut entries, &previous);
+
+        for rank in [
+            entries[0].recent_rank,
+            entries[0].new_rank,
+            entries[0].popular_rank,
+            entries[0].leaving_rank,
+        ] {
+            assert!(
+                rank.is_some(),
+                "cached collection should stay visible during refresh"
+            );
+        }
+        assert_eq!(entries[0].recent_rank, Some(3));
+        assert!(entries[0].is_recently_played);
+        assert!(entries[0].is_new);
+        assert_eq!(entries[0].title_id, "current-stream");
+        assert_eq!(entries[0].fallback_name, "Current game");
+        assert!(entries[0].entitlement_known);
+        assert!(!entries[0].has_entitlement);
+        assert_eq!(entries[0].supported_input_types, ["Controller", "MKB"]);
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.product_id.as_str())
+                .collect::<Vec<_>>(),
+            ["KEPT", "ADDED"]
+        );
+        assert!(entries[1].recent_rank.is_none());
+        assert!(entries[1].new_rank.is_none());
+        assert!(entries[1].popular_rank.is_none());
+        assert!(entries[1].leaving_rank.is_none());
+    }
+
+    #[test]
+    fn refresh_progress_preserves_an_authoritative_empty_catalog() {
+        let mut entries = Vec::new();
+        XcloudService::retain_collection_ranks(&mut entries, &[ranked_title("REMOVED")]);
+        assert!(entries.is_empty());
+    }
 
     #[test]
     fn cloud_errors_preserve_network_failures_and_use_cloud_access_guidance() {

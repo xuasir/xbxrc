@@ -1,0 +1,768 @@
+{
+  "assetCount": 80,
+  "svgCount": 14,
+  "platformPngCount": 50,
+  "passed": 164,
+  "failed": 0,
+  "containers": {
+    "icnsSizes": [
+      [
+        512,
+        512,
+        2
+      ],
+      [
+        512,
+        512,
+        1
+      ],
+      [
+        256,
+        256,
+        2
+      ],
+      [
+        256,
+        256,
+        1
+      ],
+      [
+        128,
+        128,
+        2
+      ],
+      [
+        128,
+        128,
+        1
+      ],
+      [
+        32,
+        32,
+        2
+      ],
+      [
+        32,
+        32,
+        1
+      ],
+      [
+        16,
+        16,
+        2
+      ],
+      [
+        16,
+        16,
+        1
+      ]
+    ],
+    "icoSizes": [
+      [
+        16,
+        16
+      ],
+      [
+        24,
+        24
+      ],
+      [
+        32,
+        32
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        64,
+        64
+      ],
+      [
+        256,
+        256
+      ]
+    ]
+  },
+  "changed": [
+    "iosapp/XBXRC/Resources/Assets.xcassets/ConsoleSeriesX.imageset/series-x.png",
+    "src/assets/console/series-s-transparent.png",
+    "src/assets/console/series-s.jpeg",
+    "src/assets/console/series-x-transparent.png",
+    "src/assets/console/series-x.png",
+    "src/assets/ctrl/series-ctrl.jpeg",
+    "src/assets/nav/ctrl.svg",
+    "src/assets/nav/exit.svg",
+    "src/assets/nav/my.svg",
+    "src/assets/nav/no-ctrl.svg",
+    "src/assets/nav/setting.svg",
+    "src/assets/nav/xbox-logo.svg",
+    "src/assets/nav/xcloud.svg",
+    "src/assets/nav/xhome.svg",
+    "src/assets/stream/stream-diagnostics.svg"
+  ],
+  "added": [
+    "iosapp/XBXRC/Resources/Assets.xcassets/ConsoleSeriesS.imageset/series-s.png"
+  ],
+  "removed": [
+    "iosapp/XBXRC/Resources/Assets.xcassets/ConsoleSeriesS.imageset/series-s.jpeg"
+  ],
+  "checks": [
+    {
+      "label": "iosapp/XBXRC/Resources/Assets.xcassets/HostConnection.imageset/host-connection.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "iosapp/XBXRC/Resources/Assets.xcassets/LaunchIcon.imageset/launch-icon.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "public/tauri.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "public/vite.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon-source.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "ICNS (512, 512, 2)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (512, 512, 1)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (256, 256, 2)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (256, 256, 1)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (128, 128, 2)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (128, 128, 1)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (32, 32, 2)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (32, 32, 1)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (16, 16, 2)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS (16, 16, 1)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICNS 包含1024px图",
+      "passed": true
+    },
+    {
+      "label": "ICO (16, 16)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICO (24, 24)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICO (32, 32)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICO (48, 48)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICO (64, 64)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICO (256, 256)帧有效",
+      "passed": true
+    },
+    {
+      "label": "ICO 原版六个尺寸",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/ctrl.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/ctrl.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/exit.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/exit.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/my.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/my.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/no-ctrl.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/no-ctrl.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/setting.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/setting.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/xbox-logo.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/xbox-logo.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/xcloud.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/xcloud.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/xhome.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/nav/xhome.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "src/assets/stream/stream-diagnostics.svg 使用纯矢量及有效viewBox",
+      "passed": true
+    },
+    {
+      "label": "src/assets/stream/stream-diagnostics.svg 统一矢量尺寸与比例",
+      "passed": true
+    },
+    {
+      "label": "50张原版平台PNG完整",
+      "passed": true
+    },
+    {
+      "label": "应用图标文件清单与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/128x128.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/128x128.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/128x128@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/128x128@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/32x32.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/32x32.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/64x64.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/64x64.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square107x107Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square107x107Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square142x142Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square142x142Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square150x150Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square150x150Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square284x284Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square284x284Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square30x30Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square30x30Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square310x310Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square310x310Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square44x44Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square44x44Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square71x71Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square71x71Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square89x89Logo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/Square89x89Logo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/StoreLogo.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/StoreLogo.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon-macos-padded.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon-macos-padded.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon-source-1024.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon-source-1024.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon-source.svg 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon.icns 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon.ico 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/icon.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@1x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@1x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@3x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-20x20@3x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@1x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@1x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@3x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-29x29@3x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@1x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@1x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@3x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-40x40@3x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-512@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-512@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-60x60@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-60x60@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-60x60@3x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-60x60@3x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-76x76@1x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-76x76@1x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-76x76@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-76x76@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png 内容与原版一致",
+      "passed": true
+    },
+    {
+      "label": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png 尺寸与颜色模式保持原版",
+      "passed": true
+    },
+    {
+      "label": "Series X 高清透明抗锯齿有效",
+      "passed": true
+    },
+    {
+      "label": "Series X 与生成记录一致",
+      "passed": true
+    },
+    {
+      "label": "Series X 存量资源同步",
+      "passed": true
+    },
+    {
+      "label": "Series S 高清透明抗锯齿有效",
+      "passed": true
+    },
+    {
+      "label": "Series S 与生成记录一致",
+      "passed": true
+    },
+    {
+      "label": "Series S 存量资源同步",
+      "passed": true
+    },
+    {
+      "label": "AppIcon.appiconset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "AppIcon.appiconset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "AppIcon.appiconset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "AppIconForest.appiconset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "AppIconMidnight.appiconset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "ConsoleSeriesS.imageset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "ConsoleSeriesX.imageset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "HostConnection.imageset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "LaunchIcon.imageset 引用文件存在",
+      "passed": true
+    },
+    {
+      "label": "高清手柄图完整",
+      "passed": true
+    },
+    {
+      "label": "手柄兼容图同步高清",
+      "passed": true
+    },
+    {
+      "label": "4K背景原图完整",
+      "passed": true
+    }
+  ]
+}

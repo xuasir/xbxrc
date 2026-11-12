@@ -65,6 +65,21 @@ pub struct DataHostSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DataHostsSnapshot {
+    pub scope_key: String,
+    pub hosts: Vec<DataHostSummary>,
+    pub updated_at: u64,
+    pub fresh_until: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataHostsChangedEvent {
+    pub scope_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DataUserProfile {
     pub signed_in: bool,
     pub game_display_name: String,
@@ -96,7 +111,7 @@ pub struct DataSendTextResult {
     pub accepted: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudTitleSummary {
     #[serde(default)]
@@ -139,6 +154,10 @@ pub enum DataXcloudCatalogCacheState {
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudCatalogPayload {
     #[serde(default)]
+    pub content_revision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fresh_until: Option<u64>,
+    #[serde(default)]
     pub sources: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub access: String,
@@ -157,6 +176,12 @@ pub struct DataXcloudCatalogPayload {
 #[serde(rename_all = "camelCase")]
 pub struct DataXcloudCatalogUpdatedEvent {
     #[serde(default)]
+    pub content_revision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fresh_until: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patch: Option<DataCloudCatalogPatch>,
+    #[serde(default)]
     pub sources: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub access: String,
@@ -169,6 +194,53 @@ pub struct DataXcloudCatalogUpdatedEvent {
     pub updated_at: Option<u64>,
     pub refreshing: bool,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCloudCatalogPatch {
+    pub base_revision: String,
+    pub upserts: Vec<DataXcloudTitleSummary>,
+    pub removed_product_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCloudCatalogStatus {
+    pub scope_key: Option<String>,
+    pub content_revision: String,
+    pub fresh_until: Option<u64>,
+    pub cache_state: DataXcloudCatalogCacheState,
+    pub updated_at: Option<u64>,
+    pub refreshing: bool,
+    pub access: String,
+    pub sources: std::collections::HashMap<String, String>,
+    pub error: Option<String>,
+}
+
+impl From<&DataXcloudCatalogPayload> for DataCloudCatalogStatus {
+    fn from(payload: &DataXcloudCatalogPayload) -> Self {
+        Self {
+            scope_key: payload.scope_key.clone(),
+            content_revision: payload.content_revision.clone(),
+            fresh_until: payload.fresh_until,
+            cache_state: payload.cache_state.clone(),
+            updated_at: payload.updated_at,
+            refreshing: payload.refreshing,
+            access: payload.access.clone(),
+            sources: payload.sources.clone(),
+            error: payload.error.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataCloudTitleSummary {
+    pub scope_key: String,
+    pub title: Option<DataXcloudTitleSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

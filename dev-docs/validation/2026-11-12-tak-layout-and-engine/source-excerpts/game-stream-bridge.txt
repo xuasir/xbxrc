@@ -1,0 +1,196 @@
+// 官方公开发布脚本源码摘录：game-stream.42236acb.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/game-stream.42236acb.chunk.js
+// 原件 SHA-256：277ad66491c60c2ceb6efb70615b712f00223de75a05f0f0baeebd76d051615e
+// 格式化文件 SHA-256：1c2c1d142e5f29bc7d5d792bb94043ae31eeb4e8e7b378ba146253d6c089c636
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// layout-command-bridge | 原可读文件第 7559–7670 行
+            constructor(e, t, n, s, i) {
+                var o;
+                this.gameStream = e, this.internals = t, this.eventTarget = n, this.onGameLayoutChange = e => {
+                    var t;
+                    if (!this.titleId) return void this._logger.info("Received title layout change message when no title id has been received.");
+                    let n;
+                    switch (e.command) {
+                      case "show":
+                        if (void 0 === e.layout) return;
+                        n = {
+                            type: "showLayoutId",
+                            scope: this.titleId,
+                            subscope: "base",
+                            layout: e.layout,
+                            statePatch: e.statePatch
+                        };
+                        break;
+
+                      case "showTitleDefault":
+                        n = {
+                            type: "showTitleDefault",
+                            scope: this.titleId,
+                            subscope: "base"
+                        };
+                        break;
+
+                      case "hide":
+                        n = {
+                            type: "hide",
+                            scope: this.titleId,
+                            subscope: "base"
+                        };
+                        break;
+
+                      case "patchState":
+                        n = {
+                            type: "patchState",
+                            scope: this.titleId,
+                            subscope: "base",
+                            statePatch: null !== (t = e.statePatch) && void 0 !== t ? t : ""
+                        };
+                        break;
+
+                      default:
+                        return;
+                    }
+                    this.eventTarget.dispatchEvent(new Sl.d(n));
+                }, this.onPointerLockChange = () => {
+                    this.pointerLocked = !!document.pointerLockElement, this.eventTarget.dispatchEvent(new ml.l);
+                }, this.onTitleInfoChange = e => {
+                    var t;
+                    const n = e.titleId.toString();
+                    n !== this._titleId && this.internals.getTelemetryProvider().trackEvent({
+                        name: le.b.TakTitleIdMismatch,
+                        serviceTitleId: this._titleId,
+                        serverTitleId: n
+                    });
+                    const s = (null === (t = this.gameStream.session) || void 0 === t ? void 0 : t.connectionType) === c.StreamSessionConnectionType.Home;
+                    e.state === c.TitleState.Closed && (this._playerOptedIntoStandardLayoutFallback = !1, 
+                    this.titleId && this.eventTarget.dispatchEvent(new Sl.d({
+                        type: "reset",
+                        scope: this.titleId
+                    })), s && this.resetRemotePlayTak()), !this._titleManager && this.gameStream.user && (this._titleManager = this.gameStream.client.getTitleManagerForUser(this.gameStream.user)), 
+                    s && this._titleManager && "0" !== n && this._titleId !== n && this.startRemotePlayTitleInputConfig(n);
+                    const i = this.scope, o = e.state === c.TitleState.Closed ? void 0 : n, r = this.computeScope(o, e.focused, this._userOverrideVisible);
+                    this._titleInfoReceived = !0, this._titleId = o, this._focused = e.focused, i !== r && this.eventTarget.dispatchEvent(new ml.l);
+                }, this._allowMouseInteraction = this.gameStream.isDeveloperMode && !(null === (o = this.internals.developerSettingsStore) || void 0 === o || !o.getSetting("takAllowMouseInteraction")), 
+                this._desiredDpi = () => window.devicePixelRatio, this._enableAnimations = !0, this._focused = !0, 
+                this._locale = s, this._logger = new d.V("TakConfig"), this._playerOptedIntoStandardLayoutFallback = !1, 
+                this._requireGamepad = !0, this._supportsGenericTouch = !1, this._supportedTabs = [], 
+                this._titleInfoReceived = !1, this._userOverrideVisible = !1;
+                const r = new d.V("TakNotification");
+                this._onShowTakNotification = t => {
+                    i && e.showNotificationBanner(f.N1.Failure, "Tak_MessageWrapper", [ t ]), r.info(t);
+                }, this.pointerLocked = !!document.pointerLockElement, document.addEventListener("pointerlockchange", this.onPointerLockChange), 
+                this.gameStream.addEventListener(L.L.type, this.onTitleInfoChange), this.gameStream.addEventListener(b.type, this.onGameLayoutChange);
+            }
+            destroy() {
+                this.gameStream.removeEventListener(L.L.type, this.onTitleInfoChange), this.gameStream.removeEventListener(b.type, this.onGameLayoutChange);
+            }
+            onToggleErgo() {
+                this.eventTarget.dispatchEvent(new _l.o);
+            }
+            onErgoEditActive() {
+                this.eventTarget.dispatchEvent(new xe);
+            }
+            onErgoEditDone() {
+                this.eventTarget.dispatchEvent(new Ee);
+            }
+            onShowTakTooSmall() {
+                this.eventTarget.dispatchEvent(new go.p);
+            }
+            onHideTakTooSmall() {
+                this.eventTarget.dispatchEvent(new po.s);
+            }
+            onApplyControlsOpacityOverride(e, t = 1) {
+                this.eventTarget.dispatchEvent(new vl.u(e, t));
+            }
+            setSideloadInfo(e) {
+                this._sideloadId !== e && (this._sideloadId = e, this.eventTarget.dispatchEvent(new ml.l));
+            }
+            onDeveloperOverrideLayoutChange(e) {
+                this.titleId ? this.eventTarget.dispatchEvent(new Sl.d({
+                    type: "showLayout",
+                    scope: this.titleId,
+                    subscope: "base",
+                    layout: e
+                })) : this._logger.info("Received title layout change message when no title id has been received.");
+            }
+            onUserOverrideLayoutChange(e) {
+                this.titleId ? e ? (this.eventTarget.dispatchEvent(new Sl.d({
+                    type: "showLayoutId",
+
+// virtual-input-bridge | 原可读文件第 7722–7796 行
+        }
+        class Cl {
+            constructor(e, t, n) {
+                this.gameStream = e, this.internals = t, this.config = n, this.TakVirtualSourceName = "tak", 
+                this.onGamepad = e => {
+                    var t;
+                    this.gamepadMappings[0].A = this.mapButtonState(e.gamepadA), this.gamepadMappings[0].B = this.mapButtonState(e.gamepadB), 
+                    this.gamepadMappings[0].X = this.mapButtonState(e.gamepadX), this.gamepadMappings[0].Y = this.mapButtonState(e.gamepadY), 
+                    this.gamepadMappings[0].LeftShoulder = this.mapButtonState(e.leftBumper), this.gamepadMappings[0].RightShoulder = this.mapButtonState(e.rightBumper), 
+                    this.gamepadMappings[0].LeftTrigger = e.leftTrigger, this.gamepadMappings[0].RightTrigger = e.rightTrigger, 
+                    this.gamepadMappings[0].View = this.mapButtonState(e.view), this.gamepadMappings[0].Menu = this.mapButtonState(e.menu), 
+                    this.gamepadMappings[0].LeftThumb = this.mapButtonState(e.leftThumb), this.gamepadMappings[0].RightThumb = this.mapButtonState(e.rightThumb), 
+                    this.gamepadMappings[0].DPadUp = this.mapButtonState(e.dPadUp), this.gamepadMappings[0].DPadDown = this.mapButtonState(e.dPadDown), 
+                    this.gamepadMappings[0].DPadLeft = this.mapButtonState(e.dPadLeft), this.gamepadMappings[0].DPadRight = this.mapButtonState(e.dPadRight), 
+                    this.gamepadMappings[0].Nexus = this.mapButtonState(e.guide), this.gamepadMappings[0].LeftThumbXAxis = e.leftJoystickX, 
+                    this.gamepadMappings[0].LeftThumbYAxis = e.leftJoystickY, this.gamepadMappings[0].RightThumbXAxis = e.rightJoystickX, 
+                    this.gamepadMappings[0].RightThumbYAxis = e.rightJoystickY, this.gamepadMappings[0].VirtualPhysicality = (0, 
+                    c.calculateGamepadPhysicality)(this.gamepadMappings[0]), null === (t = this.gameStream.session) || void 0 === t || t.onVirtualGamepadInput(this.TakVirtualSourceName, performance.now(), this.gamepadMappings);
+                }, this.onRelativeMouse = e => {
+                    var t;
+                    null === (t = this.gameStream.session) || void 0 === t || t.onVirtualMouseInput({
+                        X: e.x,
+                        Y: e.y,
+                        Buttons: 0,
+                        WheelX: 0,
+                        WheelY: 0,
+                        Type: c.MouseReadingType.Relative
+                    });
+                }, this.onTouch = e => {
+                    var t, n, s;
+                    if (this.config.isMouseEnabled || !this.config.enableTouchInput) return;
+                    let i;
+                    "down" === e.action ? this.pointerIds.has(e.pointerId) ? i = "pointermove" : (i = "pointerdown", 
+                    this.pointerIds.add(e.pointerId)) : (i = "pointerup", this.pointerIds.delete(e.pointerId));
+                    const o = {
+                        height: e.diameter,
+                        pressure: e.pressure,
+                        twist: e.orientation,
+                        width: e.diameter,
+                        pointerId: e.pointerId,
+                        x: null !== (t = e.x) && void 0 !== t ? t : 0,
+                        y: null !== (n = e.y) && void 0 !== n ? n : 0,
+                        type: i,
+                        clientWidth: 1,
+                        clientHeight: 1
+                    };
+                    null === (s = this.gameStream.session) || void 0 === s || s.onVirtualPointerInput(this.TakVirtualSourceName, performance.now(), o);
+                }, this.onTouchInputActive = e => {
+                    this.internals.getInputModality().onTouchInputActive(e);
+                }, this.onStateChanged = () => {
+                    this.addVirtualGamepad();
+                }, this.onShutdown = () => {
+                    this.gameStream.session && this.gameStream.session.onVirtualGamepadChanged(this.TakVirtualSourceName, this.gamepadIndex, !1);
+                }, this.onTakConfigChanged = () => {
+                    this.addVirtualGamepad();
+                }, this.gamepadIndex = 0, this.gamepadMappings = [ r()(r()({}, c.blankGamepadMapping), {}, {
+                    GamepadIndex: this.gamepadIndex,
+                    Dirty: !0
+                }) ], this.gameStream.addEventListener(h.E.type, this.onStateChanged), this.gameStream.addEventListener(A.type, this.onShutdown), 
+                this.gameStream.addEventListener(ml.l.type, this.onTakConfigChanged), this.pointerIds = new Set;
+            }
+            destroy() {
+                this.gameStream.removeEventListener(h.E.type, this.onStateChanged), this.gameStream.removeEventListener(A.type, this.onShutdown), 
+                this.gameStream.removeEventListener(ml.l.type, this.onTakConfigChanged);
+            }
+            addVirtualGamepad() {
+                he.G.isInProgressState(this.gameStream.state) && this.gameStream.session && this.gameStream.session.onVirtualGamepadChanged(this.TakVirtualSourceName, this.gamepadIndex, !0);
+            }
+            mapButtonState(e) {
+                return e ? 1 : 0;
+            }
+        }
+        class bl {
+            get layouts() {
+                return this._layouts;

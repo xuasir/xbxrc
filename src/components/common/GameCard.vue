@@ -26,6 +26,7 @@ interface GameCardProps {
   imageSources?: string[]
   badge?: string
   imageUrl?: string
+  imageSize?: number
   ariaLabel?: string
   disabled?: boolean
   neighbors?: SpatialNavNeighbors
@@ -44,6 +45,7 @@ const props = withDefaults(defineProps<GameCardProps>(), {
   imageSources: () => [],
   badge: '',
   imageUrl: '',
+  imageSize: 0,
   ariaLabel: '',
   disabled: false,
   neighbors: undefined,
@@ -66,7 +68,7 @@ function handleSelect(): void {
   <div class="game-card">
     <Focusable :id="props.id" as="button" type="button" class="game-card__main" :scope-id="props.scopeId" :disabled="props.disabled" :aria-label="props.ariaLabel || props.title" @click="handleSelect">
       <span class="game-card__image-shell">
-        <RemoteImage class="game-card__image" :src="props.imageUrl" :sources="props.imageSources" />
+        <RemoteImage class="game-card__image" :src="props.imageUrl" :sources="props.imageSources" :size="props.imageSize" />
         <span v-if="props.badge" class="game-card__badge">{{ props.badge }}</span>
         <span class="game-card__title-overlay">
           <span v-if="props.meta" class="game-card__meta">{{ props.meta }}</span>
@@ -88,7 +90,7 @@ function handleSelect(): void {
 <style scoped>
 .game-card__main { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 .game-card__actions { position: absolute; top: 8px; right: 8px; z-index: 4; display: flex; gap: 5px; }
-.game-card__icon { display: grid; place-items: center; width: 32px; height: 32px; padding: 7px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; color: #fff; background: rgba(12,18,22,.78); backdrop-filter: blur(12px); cursor: pointer; transition: background-color 150ms, transform 150ms; }
+.game-card__icon { display: grid; place-items: center; width: 32px; height: 32px; padding: 7px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; color: #fff; background: rgba(12,18,22,.88); cursor: pointer; transition: background-color 150ms, transform 150ms; }
 .game-card__icon svg { width: 100%; height: 100%; }
 .game-card__icon:hover { background: rgba(35,65,48,.96); transform: translateY(-1px); }
 .game-card__icon--active { background: rgba(34,108,53,.94); border-color: rgba(138,228,145,.38); }

@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-12",
+  "rustDataTests": 65,
+  "cloudTests": 27,
+  "initialCatalogAndQueryCommit": true,
+  "refreshCollectionsStable": true,
+  "singleRowCategoryScroll": true,
+  "gamepadFocusRevealed": true,
+  "nativeFocusRevealed": true,
+  "warmReturnCatalogRequests": 1,
+  "fullVueResult": {
+    "passed": 1062,
+    "existingSettingFailure": 1
+  }
+}

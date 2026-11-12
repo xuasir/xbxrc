@@ -1,0 +1,958 @@
+{
+  "instanceId": "815b17fe-7810-421f-812f-bc978bb727e9",
+  "counters": {
+    "config.get": 3,
+    "auth.getState": 4,
+    "data.getXcloudTitles": 2,
+    "data.getUserProfile": 1,
+    "data.getCloudPreferences": 1,
+    "data.primeXcloudTitles": 1,
+    "data.prioritizeCloudTitles": 2
+  },
+  "keys": [],
+  "timeline": [
+    {
+      "atMs": 79,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [],
+      "cards": 0,
+      "candidates": 0,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 0,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 0,
+      "frameP95Ms": 0,
+      "longTasks": []
+    },
+    {
+      "atMs": 99,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [],
+      "cards": 0,
+      "candidates": 0,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 0,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 0,
+      "frameP95Ms": -8.600000047683722,
+      "longTasks": []
+    },
+    {
+      "atMs": 111,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [],
+      "busy": [],
+      "pending": [
+        "config.get"
+      ],
+      "cards": 0,
+      "candidates": 0,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 0,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 0,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 141,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "top-nav.brand"
+      ],
+      "busy": [],
+      "pending": [
+        "config.get",
+        "auth.getState",
+        "data.getXcloudTitles",
+        "data.getUserProfile",
+        "data.getCloudPreferences"
+      ],
+      "cards": 0,
+      "candidates": 0,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 0,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 154,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.primary"
+      ],
+      "busy": [],
+      "pending": [
+        "auth.getState",
+        "data.getXcloudTitles",
+        "data.getUserProfile",
+        "data.getCloudPreferences"
+      ],
+      "cards": 0,
+      "candidates": 5,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 1,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 157,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.primary",
+      "marked": [
+        "xcloud.primary"
+      ],
+      "busy": [],
+      "pending": [
+        "data.getUserProfile",
+        "data.getCloudPreferences"
+      ],
+      "cards": 0,
+      "candidates": 5,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 1,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 175,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 8,
+      "candidates": 31,
+      "images": 8,
+      "windows": [
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 1,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 196,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [
+        "data.primeXcloudTitles"
+      ],
+      "cards": 8,
+      "candidates": 31,
+      "images": 8,
+      "windows": [
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 216,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 8,
+      "candidates": 31,
+      "images": 8,
+      "windows": [
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 257,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 25,
+      "longTasks": []
+    },
+    {
+      "atMs": 301,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 16.700000000000017,
+      "longTasks": []
+    },
+    {
+      "atMs": 318,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [
+        "data.prioritizeCloudTitles"
+      ],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 16.700000000000017,
+      "longTasks": []
+    },
+    {
+      "atMs": 334,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 16.700000000000017,
+      "longTasks": []
+    },
+    {
+      "atMs": 20635,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.200000000000728,
+      "longTasks": []
+    },
+    {
+      "atMs": 53344,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "cloud-validation-index",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    },
+    {
+      "atMs": 53408,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "cloud-validation-index",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    },
+    {
+      "atMs": 53468,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "cloud-validation-index",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    },
+    {
+      "atMs": 53471,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P1502",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    },
+    {
+      "atMs": 53526,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P1502",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [
+        "data.prioritizeCloudTitles"
+      ],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    },
+    {
+      "atMs": 53551,
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P1502",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    }
+  ],
+  "current": {
+    "route": "#/xcloud",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "native": "xcloud.all.P1502",
+    "marked": [
+      "xcloud.all.P1502"
+    ],
+    "busy": [],
+    "pending": [],
+    "cards": 35,
+    "candidates": 120,
+    "images": 35,
+    "windows": [
+      {
+        "section": "xcloud-recent",
+        "mounted": 0
+      },
+      {
+        "section": "xcloud-favorites",
+        "mounted": 0
+      },
+      {
+        "section": "xcloud-new",
+        "mounted": 0
+      },
+      {
+        "section": "xcloud-popular",
+        "mounted": 0
+      },
+      {
+        "section": "xcloud-leaving",
+        "mounted": 0
+      },
+      {
+        "section": "xcloud-all",
+        "mounted": 35
+      }
+    ],
+    "catalogMetrics": {
+      "snapshots": 1,
+      "patches": 0,
+      "submissions": 2,
+      "duplicateContent": 0,
+      "resyncs": 0
+    },
+    "catalogSubscribers": 1,
+    "frameP95Ms": 9.19999999999709,
+    "longTasks": []
+  },
+  "size": 2000,
+  "lifecycleListeners": [
+    "xbxrc:auth:session-ready",
+    "xbxrc:auth:state-changed",
+    "xbxrc:auth:session-ready",
+    "xbxrc:data:xcloud-catalog-updated",
+    "xbxrc:auth:session-ready",
+    "xbxrc:auth:state-changed",
+    "xbxrc:auth:state-changed",
+    "xbxrc:auth:session-ready",
+    "tauri://focus",
+    "tauri://blur"
+  ]
+}

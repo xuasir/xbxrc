@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import type { HostSummary } from '@/shared/rpc/hosts'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { usePageFocus } from '@/navigation/core/usePageFocus'
@@ -13,15 +14,11 @@ import UiMotionTransition from '../components/common/UiMotionTransition.vue'
 import { useShellPageHints } from '../components/layout/shell-context'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { diagnosticIssueId } from '../services/diagnostics'
-import { events } from '../services/events'
-import { rpc } from '../services/rpc'
-import { devWarn } from '../shared/dev-log'
+import { useHosts } from './home/use-hosts'
 
 const pageRef = ref<HTMLElement | null>(null)
 const { t } = useI18n()
 const router = useRouter()
-
-type HostSummary = Awaited<ReturnType<typeof rpc.data.getHosts>>[number]
 
 interface HostCardViewModel {
   host: HostSummary
@@ -35,15 +32,20 @@ interface HostCardViewModel {
   description: string
 }
 
-const isLoading = ref(false)
-const hosts = ref<HostSummary[]>([])
+const { store: hostsStore, refresh: refreshHosts } = useHosts()
+const { loading: isLoading, hasLoaded } = hostsStore
+const emptyHosts: HostSummary[] = []
+const hosts = computed(() => hostsStore.snapshot.value?.hosts ?? emptyHosts)
 const selectedHostKey = ref('')
-const loadError = ref('')
-const loadIssueId = ref<string>()
-const hasLoaded = ref(false)
-let loadGeneration = 0
-let pageActive = true
-const disposers: (() => void)[] = []
+const loadError = computed(() => {
+  const error = hostsStore.error.value
+  return error ? error instanceof Error && error.message ? error.message : t('homePage.hero.error') : ''
+})
+const loadIssueId = computed(() => diagnosticIssueId(hostsStore.error.value))
+watch(() => hostsStore.snapshot.value?.scopeKey, (scope, previous) => {
+  if (scope !== previous)
+    selectedHostKey.value = ''
+})
 
 function resolveHostId(host: HostSummary, index: number): string {
   return host.serverId ?? host.id ?? host.deviceId ?? `host-${index}`
@@ -156,35 +158,6 @@ function handlePrimaryAction(): void {
   else handleRefresh()
 }
 
-async function loadHosts(): Promise<void> {
-  if (isLoading.value) {
-    return
-  }
-
-  isLoading.value = true
-  const generation = ++loadGeneration
-  try {
-    const result = await rpc.data.getHosts()
-    if (generation !== loadGeneration || !pageActive)
-      return
-    hosts.value = Array.isArray(result) ? result : []
-    loadError.value = ''
-  }
-  catch (error) {
-    devWarn('[Home] load hosts failed:', error)
-    if (generation === loadGeneration && pageActive) {
-      loadIssueId.value = diagnosticIssueId(error)
-      loadError.value = error instanceof Error && error.message ? error.message : t('homePage.hero.error')
-    }
-  }
-  finally {
-    if (generation === loadGeneration && pageActive) {
-      hasLoaded.value = true
-      isLoading.value = false
-    }
-  }
-}
-
 function handleSelectHost(host: HostSummary, index: number): void {
   void router.push({
     name: 'xhome-stream',
@@ -201,42 +174,8 @@ function handleSelectHost(host: HostSummary, index: number): void {
 }
 
 function handleRefresh(): void {
-  void loadHosts()
+  void refreshHosts()
 }
-
-onMounted(() => {
-  const clearHosts = () => {
-    loadGeneration++
-    hosts.value = []
-    selectedHostKey.value = ''
-    loadError.value = ''
-    hasLoaded.value = false
-    isLoading.value = false
-  }
-  disposers.push(events.on('auth.sessionReady', () => {
-    clearHosts()
-    if (pageActive)
-      void loadHosts()
-  }), events.on('auth.stateChanged', (state) => {
-    if (!state.isAuthenticated)
-      clearHosts()
-  }))
-  void loadHosts()
-})
-onActivated(() => {
-  pageActive = true
-  void loadHosts()
-})
-onDeactivated(() => {
-  pageActive = false
-  loadGeneration++
-  isLoading.value = false
-})
-onBeforeUnmount(() => {
-  pageActive = false
-  loadGeneration++
-  for (const dispose of disposers) dispose()
-})
 
 usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV_NODE_IDS.pagePrimary.xhome, false)
 </script>
@@ -256,7 +195,7 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
       </Focusable>
     </header>
     <!-- 刷新保留原状态入口，使请求前后的焦点保持连续。 -->
-    <div v-if="isLoading && !selectedCard && !hasLoaded" class="home-page__loading">
+    <div v-if="!selectedCard && !hasLoaded" class="home-page__loading">
       <BrandedLoading :label="t('homePage.loading')" />
     </div>
     <template v-else-if="selectedCard">
@@ -277,7 +216,7 @@ usePageFocus(() => pageRef.value, () => selectedHostKey.value, () => SPATIAL_NAV
                 {{ selectedCard.description }}
               </p>
               <div class="home-page__actions">
-                <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="home-page__primary ui-action-button ui-action-button--brand" :disabled="!canStreamSelected" :busy="isLoading" @click="handlePrimaryAction">
+                <Focusable :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xhome" as="button" type="button" class="home-page__primary ui-action-button ui-action-button--brand" :disabled="!canStreamSelected" @click="handlePrimaryAction">
                   {{ primaryLabel }}
                 </Focusable>
                 <Focusable v-if="selectedCard.host.id || selectedCard.host.deviceId" id="xhome.installed-games" as="button" type="button" class="home-page__library ui-action-button" @click="router.push({ name: 'console-games', params: { consoleKey: selectedCard.host.id || selectedCard.host.deviceId }, query: { from: '/xhome' } })">

@@ -1,12 +1,44 @@
-use super::{
-    record_data_http_result, DataXcloudCatalogCacheState, DataXcloudCatalogPayload,
-    DataXcloudCatalogUpdatedEvent,
-};
+use super::{record_data_http_result, DataXcloudCatalogCacheState, DataXcloudCatalogPayload};
+use crate::mods::data::types::DataXcloudCatalogUpdatedEvent;
 use crate::mods::runtime_trace::{RuntimeTraceRecorder, RuntimeTraceRecorderRef};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Instant;
 use xbox_webapi::WebApiError;
+
+#[test]
+fn host_snapshot_rpc_exposes_account_freshness_and_authoritative_empty_content() {
+    use super::super::rpc::DataCommand;
+    use super::super::types::{DataHostsChangedEvent, DataHostsSnapshot};
+    assert!(matches!(
+        serde_json::from_value::<DataCommand>(serde_json::json!({"method": "getHostsSnapshot"}))
+            .unwrap(),
+        DataCommand::GetHostsSnapshot
+    ));
+    assert!(matches!(
+        serde_json::from_value::<DataCommand>(serde_json::json!({"method": "refreshHosts"}))
+            .unwrap(),
+        DataCommand::RefreshHosts
+    ));
+    let value = serde_json::to_value(DataHostsSnapshot {
+        scope_key: "scope-a".into(),
+        hosts: vec![],
+        updated_at: 10,
+        fresh_until: 60010,
+    })
+    .unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({"scopeKey": "scope-a", "hosts": [], "updatedAt": 10, "freshUntil": 60010})
+    );
+    assert_eq!(
+        serde_json::to_value(DataHostsChangedEvent {
+            scope_key: "scope-a".into()
+        })
+        .unwrap(),
+        serde_json::json!({"scopeKey": "scope-a"})
+    );
+}
 
 #[test]
 fn production_and_dev_retain_safe_http_failure_diagnostics() {
@@ -46,6 +78,8 @@ fn production_and_dev_retain_safe_http_failure_diagnostics() {
 fn cloud_catalog_rpc_and_event_match_optional_timestamp_contract() {
     for updated_at in [None, Some(0), Some(1_790_000_000_000)] {
         let payload = serde_json::to_value(DataXcloudCatalogPayload {
+            content_revision: "revision".into(),
+            fresh_until: None,
             sources: Default::default(),
             access: String::new(),
             error: None,
@@ -58,6 +92,9 @@ fn cloud_catalog_rpc_and_event_match_optional_timestamp_contract() {
         })
         .unwrap();
         let event = serde_json::to_value(DataXcloudCatalogUpdatedEvent {
+            content_revision: "revision".into(),
+            fresh_until: None,
+            patch: None,
             sources: Default::default(),
             access: String::new(),
             error: None,

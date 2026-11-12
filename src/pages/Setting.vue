@@ -9,8 +9,9 @@ import { normalizeRenderControls, renderControlsLabel, renderControlsPatch } fro
 import { gamepadConfig, saveGamepadConfig } from '@shared/gamepad/runtime'
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
-import { usePageFocus } from '@/navigation/core/usePageFocus'
+import { requestPageFocus, usePageFocus } from '@/navigation/core/usePageFocus'
 import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
@@ -32,13 +33,15 @@ import SettingCustomTurnSheet from './settings/SettingCustomTurnSheet.vue'
 import SettingDiagnosticsSection from './settings/SettingDiagnosticsSection.vue'
 import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
-import SettingStreamShortcutsSection from './settings/SettingStreamShortcutsSection.vue'
 
 type SettingGroupMap = Awaited<ReturnType<typeof rpc.config.getGroups>>
 
 const pageRef = ref<HTMLElement | null>(null)
 const { t, te } = useI18n()
-const activeTabKey = ref<SettingTabKey>('general')
+const route = useRoute()
+const router = useRouter()
+const initialTab = route.query.tab
+const activeTabKey = ref<SettingTabKey>(typeof initialTab === 'string' && SETTING_PAGE_ORDER.includes(initialTab as SettingPageKey) ? initialTab as SettingTabKey : 'general')
 const panelDirection = ref<'forward' | 'back'>('forward')
 const groupState = ref<SettingGroupMap | null>(null)
 const isLoading = ref(true)
@@ -127,8 +130,13 @@ function cloudRegionRow(): SettingIndexedRow {
   return { ...definition, key: 'xcloud_region_name', value, valueText: formatConfigValue('xcloud_region_name', value, definition.options), nodeId: 'setting.items.connectionHost.xcloud_region_name', index: 0, effect: 'nextConnection' }
 }
 function handleAction(actionId: string) {
-  if (actionId === 'customTurn')
+  if (actionId === 'customTurn') {
     customTurnOpen.value = true
+  }
+  else if (actionId === 'streamShortcuts') {
+    requestPageFocus()
+    void router.push({ name: 'setting-stream-shortcuts' })
+  }
 }
 
 function translateOrFallback(key: string, fallback: string): string {
@@ -226,8 +234,13 @@ const activeSections = computed<SettingIndexedSection[]>(() => {
         } })
       }
       else if (item.kind === 'action') {
-        const configured = !!turnConfig.value.server_url && !!turnConfig.value.server_username && !!turnConfig.value.server_credential
-        entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t('setting.experience.turn.title'), value: t(configured ? 'setting.experience.turn.custom' : 'setting.experience.turn.default'), variant: 'default', index: index++ })
+        if (item.actionId === 'streamShortcuts') {
+          entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t('gamepadSettings.streamShortcuts'), description: t('gamepadSettings.shortcutEntryHint'), value: t('gamepadSettings.configureShortcuts'), variant: 'default', index: index++ })
+        }
+        else {
+          const configured = !!turnConfig.value.server_url && !!turnConfig.value.server_username && !!turnConfig.value.server_credential
+          entries.push({ kind: 'action', actionId: item.actionId, nodeId: `setting.actions.${activeTabKey.value}.${item.actionId}`, label: t('setting.experience.turn.title'), value: t(configured ? 'setting.experience.turn.custom' : 'setting.experience.turn.default'), variant: 'default', index: index++ })
+        }
       }
       else if (item.kind === 'notice') {
         entries.push({ kind: 'notice', label: item.labelKey ? t(item.labelKey) : undefined, value: item.valueKey ? t(item.valueKey) : undefined, body: t(item.noticeKey), index: index++ })
@@ -474,6 +487,9 @@ onMounted(() => {
 })
 onActivated(() => {
   pageActive = true
+  const tab = route.query.tab
+  if (typeof tab === 'string' && SETTING_PAGE_ORDER.includes(tab as SettingPageKey))
+    activeTabKey.value = tab as SettingTabKey
   if (groupState.value)
     void refreshConfig()
   if (activeTabKey.value === 'connectionHost')
@@ -530,7 +546,6 @@ usePageFocus(() => pageRef.value, () => activeTabKey.value, () => SPATIAL_NAV_NO
             <UiMotionTransition kind="panel" :direction="panelDirection">
               <div :key="activeTabKey">
                 <SettingSectionList v-model:expanded="currentExpanded" :sections="activeSections" :scope-id="panelScope" :pending-action-key="pendingActionKey" @row-confirm="handleRowConfirm" @row-select="selectRow" @action-click="handleAction" />
-                <SettingStreamShortcutsSection v-if="activeTabKey === 'general'" :scope-id="panelScope" />
                 <SettingAppUpdateSection v-if="activeTabKey === 'general'" :scope-id="panelScope" nav-node-base-id="setting.update" />
                 <SettingDiagnosticsSection v-if="activeTabKey === 'advancedDiagnostics'" :scope-id="panelScope" />
               </div>

@@ -1,5 +1,6 @@
 import type { RuntimeFeatureCapabilities } from '../config/runtime-features'
-import type { CloudCatalog, CloudDetail, CloudPreferences, CloudTitle, CloudWait } from './cloud'
+import type { CloudCatalog, CloudCatalogStatus, CloudDetail, CloudPreferences, CloudTitle, CloudTitleSummary, CloudWait } from './cloud'
+import type { HostsSnapshot, HostSummary } from './hosts'
 import type { ConsoleLibrary, LibraryAchievement, LibraryGame, LibraryMedia, LibraryPage, MediaKind, PersonalAccount, Playtime, QueryResult } from './library'
 import type {
   DiagnosticCapture,
@@ -132,35 +133,9 @@ export interface XBoxRpcSchema {
         appLevel: number
       }
     >
-    getHosts: RpcMethod<
-      void,
-      Array<{
-        id?: string
-        deviceId?: string
-        serverId?: string
-        name?: string
-        deviceName?: string
-        locale?: string
-        region?: string
-        powerState?: string
-        consoleType?: string
-        remoteManagementEnabled?: boolean
-        consoleStreamingEnabled?: boolean
-        digitalAssistantRemoteControlEnabled?: boolean
-        wirelessWarning?: boolean
-        outOfHomeWarning?: boolean
-        storageDevices?: Array<{
-          storageDeviceId?: string
-          storageDeviceName?: string
-          id?: string
-          name?: string
-          freeSpaceBytes?: number
-          freeBytes?: number
-          totalSpaceBytes?: number
-          totalBytes?: number
-        }>
-      }>
-    >
+    getHosts: RpcMethod<void, HostSummary[]>
+    getHostsSnapshot: RpcMethod<void, HostsSnapshot>
+    refreshHosts: RpcMethod<void, HostsSnapshot>
     getRemoteConsoles: RpcMethod<
       void,
       Array<{
@@ -192,6 +167,9 @@ export interface XBoxRpcSchema {
       { consoleId: string, accepted: boolean }
     >
     getXcloudTitles: RpcMethod<void, CloudCatalog>
+    getCloudCatalogStatus: RpcMethod<void, CloudCatalogStatus>
+    getCloudTitleSummary: RpcMethod<{ productId: string }, CloudTitleSummary>
+    prioritizeCloudTitles: RpcMethod<{ productIds: string[] }, boolean>
     refreshXcloudTitles: RpcMethod<void, CloudCatalog>
     getCloudDetail: RpcMethod<{ productId: string }, CloudDetail>
     getCloudPreferences: RpcMethod<void, [string, CloudPreferences]>

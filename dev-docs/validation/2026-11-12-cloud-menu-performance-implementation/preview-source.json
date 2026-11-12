@@ -1,0 +1,19 @@
+{
+  "preview": "/private/tmp/xbxrc-cloud-performance-p0-p2-20261112",
+  "date": "2026-11-12",
+  "sources": {
+    "src/App.vue": "58cf0a6d0baf018ff3654b5e2e41a2e2a9a785de0ea8856e417fe9a1439c48cd",
+    "src/pages/XCloud.vue": "77deead02b904186e213370cf12d62012df7c91070b72188ef6bd0c40311f245",
+    "src/pages/CloudGameDetail.vue": "6485f7b68e255302630f36a3b16bda9a7c62876414b8ecc4b0d51fb0e2c3e202",
+    "src/pages/xcloud/CloudCatalogWindow.vue": "31033924136008136b0ecfe30e35d14f9d05050b8c10c6f13bcb2caba8b69a32",
+    "src/pages/xcloud/catalog-index.ts": "9b00e4a9d22f5da5d35929be2f2f01fb104f9a8350c876c16006308a6fbe23d2",
+    "src/pages/xcloud/catalog-store.ts": "a580fae8d3c1fd24b2a92f9d5b8d0ba7a23e374f42f00f140dc5883ed52200b6",
+    "src/navigation/core/engine.ts": "71edaed3df8ffaf8011ef0790509ff0dd7c36ef8ca036bf2d3625ad3bd9e671e",
+    "src/components/common/RemoteImage.vue": "4aa0b81e1cb5bc090f533edca7461310de8e8a6e490e0dffb673af6cbe2a34fe"
+  },
+  "sourceCheck": {
+    "date": "2026-11-12",
+    "workspaceMatchesPreview": true,
+    "mismatchedFiles": []
+  }
+}

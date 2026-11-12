@@ -1,3 +1,4 @@
+use crate::mods::data::host_cache::HostCache;
 use crate::mods::data::types::DataXcloudCatalogPayload;
 use crate::mods::data::DataError;
 use std::collections::HashMap;
@@ -36,13 +37,17 @@ impl Drop for XcloudCatalogRefreshLease {
 }
 
 pub struct DataRuntimeState {
+    pub(crate) hosts: Arc<HostCache>,
     xcloud_refresh_flights: std::sync::Mutex<HashMap<String, XcloudCatalogRefreshFlight>>,
+    catalog_demand: std::sync::Mutex<HashMap<String, Vec<String>>>,
 }
 
 impl DataRuntimeState {
     pub fn new() -> Self {
         Self {
+            hosts: Arc::new(HostCache::new(std::time::Duration::from_secs(60), 8)),
             xcloud_refresh_flights: std::sync::Mutex::new(HashMap::new()),
+            catalog_demand: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -67,6 +72,26 @@ impl DataRuntimeState {
             cache_key: cache_key.to_string(),
             finished: false,
         })
+    }
+
+    pub(crate) fn set_catalog_demand(&self, key: &str, products: Vec<String>) {
+        let mut demands = self
+            .catalog_demand
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        if demands.len() >= 8 && !demands.contains_key(key) {
+            demands.clear();
+        }
+        demands.insert(key.into(), products.into_iter().take(120).collect());
+    }
+
+    pub(crate) fn catalog_demand(&self, key: &str) -> Vec<String> {
+        self.catalog_demand
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(key)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn finish_xcloud_refresh(

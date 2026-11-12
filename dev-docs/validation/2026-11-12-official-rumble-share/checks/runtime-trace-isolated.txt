@@ -1,0 +1,33 @@
+
+ RUN  v4.1.4 /Users/guo.xu/Documents/code/games/xbxrc
+
+ ❯ src/streaming/runtime/browser-runtime.test.ts (40 tests | 1 failed | 39 skipped) 31ms
+     × keeps the same media decisions with tracing off and dev during healthy high RTT and renderer pressure 30ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/streaming/runtime/browser-runtime.test.ts > browser-runtime super resolution state > keeps the same media decisions with tracing off and dev during healthy high RTT and renderer pressure
+AssertionError: expected [ { …(6) }, { …(6) }, { …(6) }, …(24) ] to have a length of +0 but got 27
+
+- Expected
++ Received
+
+- 0
++ 27
+
+ ❯ src/streaming/runtime/browser-runtime.test.ts:1625:33
+    1623|       })
+    1624|       expect(production.healthSamples.some(entry => 'mediaDiagnostics'…
+    1625|       expect(dev.healthSamples).toHaveLength(0)
+       |                                 ^
+    1626|     }
+    1627|     finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 39 skipped (40)
+   Start at  16:17:11
+   Duration  439ms (transform 269ms, setup 0ms, import 311ms, tests 31ms, environment 0ms)
+

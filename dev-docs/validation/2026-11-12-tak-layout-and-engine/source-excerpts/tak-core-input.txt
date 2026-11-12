@@ -1,0 +1,2913 @@
+// 官方公开发布脚本源码摘录：2871.36f50502.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/2871.36f50502.chunk.js
+// 原件 SHA-256：c83ea789fd64ea3fe7fbc4acbc086bf9d2f56beb3f917a939f08298eb2fcbff0
+// 格式化文件 SHA-256：e74a0b6cc45ee8597376240ced787153ca2447cbfb9b496121ce60990d25d8e6
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// input-provider | 原可读文件第 3889–4142 行
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, To = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, Oo = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        function Ro(t = !1, e = !1) {
+            return t || e;
+        }
+        function Do(t = 0, e = 0, i = -1, n = 1) {
+            return mo(t + e, i, n);
+        }
+        let jo = class {
+            constructor(t, e, i) {
+                this.takBridge = t, this.layoutCoordinator = e, this._frameCount = 0, this._mouseAccumulator = {
+                    x: 0,
+                    y: 0
+                }, this._gamepadAccumulator = {
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: 0,
+                    gamepadA: 0,
+                    gamepadB: 0,
+                    gamepadX: 0,
+                    gamepadY: 0,
+                    view: 0,
+                    menu: 0,
+                    leftBumper: 0,
+                    rightBumper: 0,
+                    dPadLeft: 0,
+                    dPadRight: 0,
+                    dPadUp: 0,
+                    dPadDown: 0,
+                    leftThumb: 0,
+                    rightThumb: 0,
+                    captureShare: 0
+                }, this._gamepadModel = {
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                }, this._isGamepadModelDirty = !1, this._touchHapticsEnabled = !0, i.getSettingsStream().subscribe(t => {
+                    this._touchHapticsEnabled = t.touchHapticsEnabled;
+                });
+            }
+            sendTouchEvent(t, e, i, n, r, o = void 0, s = void 0) {
+                this.takBridge.onTouch({
+                    pointerId: t,
+                    action: e,
+                    x: o,
+                    y: s,
+                    pressure: i,
+                    orientation: r,
+                    diameter: n
+                });
+            }
+            sendRelativeMouseEvent(t) {
+                const e = this._mouseAccumulator.x + t.x, i = this._mouseAccumulator.y + t.y;
+                this._mouseAccumulator.x = e % 1, this._mouseAccumulator.y = i % 1;
+                const n = {
+                    x: e - this._mouseAccumulator.x,
+                    y: i - this._mouseAccumulator.y
+                };
+                0 === n.x && 0 === n.y || this.takBridge.onRelativeMouse(n);
+            }
+            sendLayoutChangeEvent(t) {
+                switch (t.layoutAction) {
+                  case "hide":
+                    this.layoutCoordinator.changeLayoutForScope({
+                        type: "hide",
+                        scope: t.scope,
+                        subscope: t.subscope
+                    });
+                    break;
+
+                  case "show":
+                    this.layoutCoordinator.changeLayoutForScope({
+                        type: "showLayoutId",
+                        scope: t.scope,
+                        subscope: t.subscope,
+                        layout: t.id
+                    });
+                }
+            }
+            startFrame() {
+                this._frameCount++;
+            }
+            endFrame() {
+                this._frameCount--, 0 === this._frameCount && this.commitGamepadModel();
+            }
+            updateGamepadModel(t, e) {
+                this.startFrame();
+                try {
+                    if (t.captureShare !== e.captureShare) {
+                        const t = e.captureShare ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.captureShare, t), 
+                        this._gamepadAccumulator.captureShare += t, this._gamepadModel.captureShare = this._gamepadAccumulator.captureShare > 0;
+                    }
+                    if (t.guide !== e.guide) {
+                        const t = e.guide ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.guide, t), 
+                        this._gamepadAccumulator.guide += t, this._gamepadModel.guide = this._gamepadAccumulator.guide > 0;
+                    }
+                    if (t.menu !== e.menu) {
+                        const t = e.menu ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.menu, t), 
+                        this._gamepadAccumulator.menu += t, this._gamepadModel.menu = this._gamepadAccumulator.menu > 0;
+                    }
+                    if (t.view !== e.view) {
+                        const t = e.view ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.view, t), 
+                        this._gamepadAccumulator.view += t, this._gamepadModel.view = this._gamepadAccumulator.view > 0;
+                    }
+                    if (t.dPadDown !== e.dPadDown) {
+                        const t = e.dPadDown ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.dPadDown, t), 
+                        this._gamepadAccumulator.dPadDown += t, this._gamepadModel.dPadDown = this._gamepadAccumulator.dPadDown > 0;
+                    }
+                    if (t.dPadLeft !== e.dPadLeft) {
+                        const t = e.dPadLeft ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.dPadLeft, t), 
+                        this._gamepadAccumulator.dPadLeft += t, this._gamepadModel.dPadLeft = this._gamepadAccumulator.dPadLeft > 0;
+                    }
+                    if (t.dPadRight !== e.dPadRight) {
+                        const t = e.dPadRight ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.dPadRight, t), 
+                        this._gamepadAccumulator.dPadRight += t, this._gamepadModel.dPadRight = this._gamepadAccumulator.dPadRight > 0;
+                    }
+                    if (t.dPadUp !== e.dPadUp) {
+                        const t = e.dPadUp ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.dPadUp, t), 
+                        this._gamepadAccumulator.dPadUp += t, this._gamepadModel.dPadUp = this._gamepadAccumulator.dPadUp > 0;
+                    }
+                    if (t.gamepadA !== e.gamepadA) {
+                        const t = e.gamepadA ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.gamepadA, t), 
+                        this._gamepadAccumulator.gamepadA += t, this._gamepadModel.gamepadA = this._gamepadAccumulator.gamepadA > 0;
+                    }
+                    if (t.gamepadB !== e.gamepadB) {
+                        const t = e.gamepadB ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.gamepadB, t), 
+                        this._gamepadAccumulator.gamepadB += t, this._gamepadModel.gamepadB = this._gamepadAccumulator.gamepadB > 0;
+                    }
+                    if (t.gamepadX !== e.gamepadX) {
+                        const t = e.gamepadX ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.gamepadX, t), 
+                        this._gamepadAccumulator.gamepadX += t, this._gamepadModel.gamepadX = this._gamepadAccumulator.gamepadX > 0;
+                    }
+                    if (t.gamepadY !== e.gamepadY) {
+                        const t = e.gamepadY ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.gamepadY, t), 
+                        this._gamepadAccumulator.gamepadY += t, this._gamepadModel.gamepadY = this._gamepadAccumulator.gamepadY > 0;
+                    }
+                    if (t.rightBumper !== e.rightBumper) {
+                        const t = e.rightBumper ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.rightBumper, t), 
+                        this._gamepadAccumulator.rightBumper += t, this._gamepadModel.rightBumper = this._gamepadAccumulator.rightBumper > 0;
+                    }
+                    if (t.leftBumper !== e.leftBumper) {
+                        const t = e.leftBumper ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.leftBumper, t), 
+                        this._gamepadAccumulator.leftBumper += t, this._gamepadModel.leftBumper = this._gamepadAccumulator.leftBumper > 0;
+                    }
+                    if (t.rightThumb !== e.rightThumb) {
+                        const t = e.rightThumb ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.rightThumb, t), 
+                        this._gamepadAccumulator.rightThumb += t, this._gamepadModel.rightThumb = this._gamepadAccumulator.rightThumb > 0;
+                    }
+                    if (t.leftThumb !== e.leftThumb) {
+                        const t = e.leftThumb ? 1 : -1;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForButton(this._gamepadAccumulator.leftThumb, t), 
+                        this._gamepadAccumulator.leftThumb += t, this._gamepadModel.leftThumb = this._gamepadAccumulator.leftThumb > 0;
+                    }
+                    if (t.rightJoystickX !== e.rightJoystickX) {
+                        const i = e.rightJoystickX - t.rightJoystickX;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForAnalogValue(this._gamepadAccumulator.rightJoystickX, i, -1, 1), 
+                        this._gamepadAccumulator.rightJoystickX += i, this._gamepadModel.rightJoystickX = this.clampAnalogInput(this._gamepadAccumulator.rightJoystickX, -1, 1);
+                    }
+                    if (t.rightJoystickY !== e.rightJoystickY) {
+                        const i = e.rightJoystickY - t.rightJoystickY;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForAnalogValue(this._gamepadAccumulator.rightJoystickY, i, -1, 1), 
+                        this._gamepadAccumulator.rightJoystickY += i, this._gamepadModel.rightJoystickY = this.clampAnalogInput(this._gamepadAccumulator.rightJoystickY, -1, 1);
+                    }
+                    if (t.leftJoystickX !== e.leftJoystickX) {
+                        const i = e.leftJoystickX - t.leftJoystickX;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForAnalogValue(this._gamepadAccumulator.leftJoystickX, i, -1, 1), 
+                        this._gamepadAccumulator.leftJoystickX += i, this._gamepadModel.leftJoystickX = this.clampAnalogInput(this._gamepadAccumulator.leftJoystickX, -1, 1);
+                    }
+                    if (t.leftJoystickY !== e.leftJoystickY) {
+                        const i = e.leftJoystickY - t.leftJoystickY;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForAnalogValue(this._gamepadAccumulator.leftJoystickY, i, -1, 1), 
+                        this._gamepadAccumulator.leftJoystickY += i, this._gamepadModel.leftJoystickY = this.clampAnalogInput(this._gamepadAccumulator.leftJoystickY, -1, 1);
+                    }
+                    if (t.rightTrigger !== e.rightTrigger) {
+                        const i = e.rightTrigger - t.rightTrigger;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForAnalogValue(this._gamepadAccumulator.rightTrigger, i, 0, 1), 
+                        this._gamepadAccumulator.rightTrigger += i, this._gamepadModel.rightTrigger = this.clampAnalogInput(this._gamepadAccumulator.rightTrigger, 0, 1);
+                    }
+                    if (t.leftTrigger !== e.leftTrigger) {
+                        const i = e.leftTrigger - t.leftTrigger;
+                        this._isGamepadModelDirty = this._isGamepadModelDirty || this.shouldMarkDirtyForAnalogValue(this._gamepadAccumulator.leftTrigger, i, 0, 1), 
+                        this._gamepadAccumulator.leftTrigger += i, this._gamepadModel.leftTrigger = this.clampAnalogInput(this._gamepadAccumulator.leftTrigger, 0, 1);
+                    }
+                } finally {
+                    this.endFrame();
+                }
+            }
+            vibrate(t) {
+                var e;
+                this._touchHapticsEnabled && (null === (e = this.takBridge.vibrationProvider) || void 0 === e || e.vibrate(t));
+            }
+            commitGamepadModel() {
+                this._isGamepadModelDirty && (this._isGamepadModelDirty = !1, this.takBridge.onGamepad(Object.assign({}, this._gamepadModel)));
+            }
+            shouldMarkDirtyForButton(t, e) {
+                return t > 0 !== t + e > 0;
+            }
+            shouldMarkDirtyForAnalogValue(t, e, i, n) {
+                return mo(t, i, n) !== mo(t + e, i, n);
+            }
+            clampAnalogInput(t, e, i) {
+                const n = mo(t, e, i);
+                return Math.abs(n) > 1e-5 ? n : 0;
+            }
+        };
+        jo = Mo([ Ge(), Oo(0, qe(P)), Oo(1, qe(g)), Oo(2, qe(b)), To("design:paramtypes", [ Object, Function, Function ]) ], jo);
+        var Eo = i(325923), Bo = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+
+// control-base-and-render-frames | 原可读文件第 6040–6210 行
+        class hc extends dc {
+            constructor(t, e, i, n) {
+                super(e, n), this._compatibleInteractionMode = rc.Gameplay, this._pointerTracker = new lc, 
+                this._isRenderDirty = !1, this._renderFrameRefCount = 0, this._inUndimmableState = new uc(!1), 
+                this._visible = !1, this._stateSubject = new Eo.t(t), this._userInterface = i, this._renderStream = new Oi(1), 
+                this._visible = !1 !== this.model.getProps().visible;
+            }
+            get customCollisionZone() {
+                return this._customCollisionZone;
+            }
+            get renderStream() {
+                return this._renderStream;
+            }
+            get visible() {
+                return this._visible;
+            }
+            mount() {
+                super.mount(), this._subscriptions.push(this._stateSubject.subscribe(t => this._renderPropertyManager.updateState(t))), 
+                this._renderPropertyManager.isDimmable ? this._subscriptions.push(this._userInterface.getOpacityMultiplierStream().subscribe(this.onOpacityMultiplierChanged.bind(this))) : this.updateRenderProperties(), 
+                this._subscriptions.push(this._userInterface.getColorPaletteStream().subscribe(this.onColorPaletteChanged.bind(this)), this._userInterface.getStyleVariantStream().subscribe(this.onStyleVariantChanged.bind(this)), this._userInterface.getControlSettingsStream().subscribe(this.onControlSettingsChanged.bind(this))), 
+                this._subscriptions.push(), this.mountInternal && this.mountInternal();
+            }
+            unmount() {
+                super.unmount(), this.unmountInternal && this.unmountInternal();
+            }
+            getState() {
+                return this._stateSubject.getValue();
+            }
+            allowsRolloverInteraction() {
+                return !1;
+            }
+            canBeInteractedWith(t) {
+                return this.visible && gs(this._compatibleInteractionMode, t);
+            }
+            startRenderFrame() {
+                this._renderFrameRefCount++;
+            }
+            endRenderFrame() {
+                this._renderFrameRefCount--, 0 === this._renderFrameRefCount && this._isRenderDirty && (this._isRenderDirty = !1, 
+                this.updateRenderProperties());
+            }
+            undim() {
+                this._renderPropertyManager.undim();
+            }
+            dim() {
+                this._renderPropertyManager.dim();
+            }
+            onPointerDataUpdated(t) {
+                if (this._isMounted) {
+                    switch (t.state) {
+                      case cc.Start:
+                        this._pointerTracker.tryPushFront(t);
+                        break;
+
+                      case cc.Move:
+                        this._pointerTracker.updatePointerData(t);
+                        break;
+
+                      case cc.End:
+                        this._pointerTracker.removeByPointerIndex(t.pointerIndex);
+                    }
+                    this.triggerPointerEvent(t);
+                }
+            }
+            onSocketUpdated(t) {
+                this.socket = t, this.performActionInRenderFrame(() => {
+                    this._renderPropertyManager.updateSocket(t);
+                });
+            }
+            setState(t) {
+                this._stateSubject.next(t);
+            }
+            onStateChanged(t) {
+                var e;
+                if (this._isMounted && (this._inUndimmableState.set(this.getIsStateUndimmable(t)), 
+                this.onStateChangedInternal || this._inUndimmableState.changed)) {
+                    this.startRenderFrame();
+                    try {
+                        this._isRenderDirty = !0, null === (e = this.onStateChangedInternal) || void 0 === e || e.call(this, t), 
+                        this._inUndimmableState.current && !this._inUndimmableState.previous ? this.undim() : !this._inUndimmableState.current && this._inUndimmableState.previous && this.dim();
+                    } finally {
+                        this.endRenderFrame();
+                    }
+                }
+            }
+            triggerPointerEvent(t) {
+                var e, i, n, r, o, s;
+                switch (t.state) {
+                  case cc.Start:
+                    (null === (e = this.onPointerStart) || void 0 === e ? void 0 : e.call(this, t)) && (null === (i = this.onStateChanged) || void 0 === i || i.call(this, this.getState()));
+                    break;
+
+                  case cc.Move:
+                    (null === (n = this.onPointerMove) || void 0 === n ? void 0 : n.call(this, t)) && (null === (r = this.onStateChanged) || void 0 === r || r.call(this, this.getState()));
+                    break;
+
+                  case cc.End:
+                    (null === (o = this.onPointerEnd) || void 0 === o ? void 0 : o.call(this, t)) && (null === (s = this.onStateChanged) || void 0 === s || s.call(this, this.getState()));
+                }
+            }
+            onPropsChanged(t) {
+                const [, e] = t;
+                super.onPropsChanged(t), this._renderPropertyManager.updateProps(e), this._visible = !1 !== e.visible, 
+                this.onStateChanged(this.getState());
+            }
+            performActionInRenderFrame(t, e = !0) {
+                this.startRenderFrame();
+                try {
+                    e && (this._isRenderDirty = !0), t();
+                } finally {
+                    this.endRenderFrame();
+                }
+            }
+            playVibration(t) {
+                this.model.inputProvider.vibrate(t);
+            }
+            onOpacityMultiplierChanged(t) {
+                this._renderPropertyManager.willOpacityMultiplierChangesCauseUpdates(t) && this.performActionInRenderFrame(() => {
+                    this._renderPropertyManager.updateOpacityMultiplier(t);
+                });
+            }
+            onColorPaletteChanged(t) {
+                this.performActionInRenderFrame(() => {
+                    this._renderPropertyManager.updateColorPalette(t);
+                });
+            }
+            onStyleVariantChanged(t) {
+                this.performActionInRenderFrame(() => {
+                    this._renderPropertyManager.updateStyleVariant(t);
+                });
+            }
+            onControlSettingsChanged(t) {
+                var e;
+                null === (e = this.onControlSettingsChangedInternal) || void 0 === e || e.call(this, t);
+            }
+            updateRenderProperties() {
+                this._renderStream.next(this._renderPropertyManager.getRenderProperties());
+            }
+        }
+        class pc extends hc {
+            constructor(t, e, i, n) {
+                super(t, e, i, n), this.socket = n;
+            }
+            get latestPointer() {
+                return this._pointerTracker.peekFront();
+            }
+            triggerPointerEvent(t) {
+                var e;
+                switch (t.state) {
+                  case cc.Start:
+                  case cc.Move:
+                    if (t.pointerIndex !== (null === (e = this.latestPointer) || void 0 === e ? void 0 : e.pointerIndex)) return;
+                    return void super.triggerPointerEvent(t);
+
+                  case cc.End:
+                    {
+                        const e = this.latestPointer;
+                        return e ? e.state === cc.End ? void 0 : (e.state = cc.Move, e.lastPositionDelta.x = 0, 
+                        e.lastPositionDelta.y = 0, void super.triggerPointerEvent(e)) : void super.triggerPointerEvent(t);
+                    }
+                }
+            }
+        }
+        class gc extends hc {
+            constructor(t, e, i, n, r) {
+                super({
+                    interactionState: Ds.Idle
+                }, t, e, i), this.onDeltaChanged = n, this.onCommitDelta = r, this._compatibleInteractionMode = rc.UserCustomization, 
+                this._previousInteractionState = Ds.Idle, this._offset = {
+                    cartesian: {
+                        x: 0,
+
+// control-input-model-and-action-map | 原可读文件第 6360–6601 行
+                if (this._active) e.push(t); else {
+                    var i;
+                    this._active = !0;
+                    do {
+                        if (i = t.execute(t.state, t.delay)) break;
+                    } while (t = e.shift());
+                    if (this._active = !1, i) {
+                        for (;t = e.shift(); ) t.unsubscribe();
+                        throw i;
+                    }
+                }
+            }, e;
+        }(bc), kc = new Sc(_c), wc = kc, Pc = i(861867);
+        function Ac(t, e, i) {
+            void 0 === t && (t = 0), void 0 === i && (i = wc);
+            var n = -1;
+            return null != e && ((0, Pc.m)(e) ? i = e : n = e), new ti.c(function(e) {
+                var r, o = (r = t) instanceof Date && !isNaN(r) ? +t - i.now() : t;
+                o < 0 && (o = 0);
+                var s = 0;
+                return i.schedule(function() {
+                    e.closed || (e.next(s++), 0 <= n ? this.schedule(void 0, n) : e.complete());
+                }, o);
+            });
+        }
+        function Cc(t, e) {
+            return (0, vi.N)(function(t, e, i, n, r) {
+                return function(o, s) {
+                    var a = i, c = e, l = 0;
+                    o.subscribe((0, pi._)(s, function(e) {
+                        var i = l++;
+                        c = a ? t(c, e, i) : (a = !0, e), n && s.next(c);
+                    }, r && function() {
+                        a && s.next(c), s.complete();
+                    }));
+                };
+            }(t, e, arguments.length >= 2, !0));
+        }
+        class xc {
+            constructor(t, e, i) {
+                this.layerManager = t, this.inputProvider = e, this.initialProps = i, this._analogInput$ = new Eo.t({
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                }), this._hybridInput$ = new Eo.t({
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                }), this._turboSubscription = null, this._layerAction$ = new Eo.t(void 0), this._baseGamepad0 = {
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                }, this._baseGamepad1 = {
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                }, this._gamepadStateToUseNext = 0, this.props$ = new Eo.t(i), this._ioStreamSubscription = fi([ this._analogInput$, this._hybridInput$ ]).pipe((0, 
+                eo.T)(t => {
+                    const [e, i] = t, n = 0 === this._gamepadStateToUseNext ? this._baseGamepad0 : this._baseGamepad1;
+                    var r, o, s, a;
+                    return (r = n).leftJoystickX = 0, r.leftJoystickY = 0, r.rightJoystickX = 0, r.rightJoystickY = 0, 
+                    r.leftTrigger = 0, r.rightTrigger = 0, r.guide = !1, r.gamepadA = !1, r.gamepadB = !1, 
+                    r.gamepadX = !1, r.gamepadY = !1, r.view = !1, r.menu = !1, r.leftBumper = !1, r.rightBumper = !1, 
+                    r.dPadLeft = !1, r.dPadRight = !1, r.dPadUp = !1, r.dPadDown = !1, r.leftThumb = !1, 
+                    r.rightThumb = !1, r.captureShare = !1, s = e, a = i, (o = n).leftJoystickX = Do(s.leftJoystickX, a.leftJoystickX), 
+                    o.leftJoystickY = Do(s.leftJoystickY, a.leftJoystickY), o.rightJoystickX = Do(s.rightJoystickX, a.rightJoystickX), 
+                    o.rightJoystickY = Do(s.rightJoystickY, a.rightJoystickY), o.leftTrigger = Do(s.leftTrigger, a.leftTrigger, 0), 
+                    o.rightTrigger = Do(s.rightTrigger, a.rightTrigger, 0), o.guide = Ro(s.guide, a.guide), 
+                    o.gamepadA = Ro(s.gamepadA, a.gamepadA), o.gamepadB = Ro(s.gamepadB, a.gamepadB), 
+                    o.gamepadX = Ro(s.gamepadX, a.gamepadX), o.gamepadY = Ro(s.gamepadY, a.gamepadY), 
+                    o.view = Ro(s.view, a.view), o.menu = Ro(s.menu, a.menu), o.leftBumper = Ro(s.leftBumper, a.leftBumper), 
+                    o.rightBumper = Ro(s.rightBumper, a.rightBumper), o.dPadLeft = Ro(s.dPadLeft, a.dPadLeft), 
+                    o.dPadRight = Ro(s.dPadRight, a.dPadRight), o.dPadUp = Ro(s.dPadUp, a.dPadUp), o.dPadDown = Ro(s.dPadDown, a.dPadDown), 
+                    o.leftThumb = Ro(s.leftThumb, a.leftThumb), o.rightThumb = Ro(s.rightThumb, a.rightThumb), 
+                    o.captureShare = Ro(s.captureShare, a.captureShare), this._gamepadStateToUseNext = (this._gamepadStateToUseNext + 1) % 2, 
+                    n;
+                }), _i()).subscribe(([t, e]) => {
+                    this.inputProvider.updateGamepadModel(t, e);
+                }), this._layerSubscription = this._layerAction$.pipe((0, xi.F)(), _i()).subscribe(([t, e]) => {
+                    t && this.layerManager.trySetLayerActivated(t, !1), e && this.layerManager.trySetLayerActivated(e, !0);
+                });
+            }
+            getProps() {
+                return this.props$.getValue();
+            }
+            unmount() {
+                this._turboSubscription && this._turboSubscription.unsubscribe(), this.resetAnalogInput(), 
+                this._ioStreamSubscription.unsubscribe(), this._layerSubscription.unsubscribe();
+                const t = this._layerAction$.getValue();
+                t && this.layerManager.trySetLayerActivated(t, !1);
+            }
+            updateProps(t) {
+                this.props$.next(t);
+            }
+            setAnalogInput(t) {
+                this._analogInput$.next(t);
+            }
+            resetAnalogInput() {
+                this._analogInput$.next({
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                }), this._hybridInput$.next({
+                    leftJoystickX: 0,
+                    leftJoystickY: 0,
+                    rightJoystickX: 0,
+                    rightJoystickY: 0,
+                    leftTrigger: 0,
+                    rightTrigger: 0,
+                    guide: !1,
+                    gamepadA: !1,
+                    gamepadB: !1,
+                    gamepadX: !1,
+                    gamepadY: !1,
+                    view: !1,
+                    menu: !1,
+                    leftBumper: !1,
+                    rightBumper: !1,
+                    dPadLeft: !1,
+                    dPadRight: !1,
+                    dPadUp: !1,
+                    dPadDown: !1,
+                    leftThumb: !1,
+                    rightThumb: !1,
+                    captureShare: !1
+                });
+            }
+            commitAction(t, e, i = !0, n) {
+                const r = !!n, o = n || {};
+                if (Array.isArray(e)) e.map(e => this.commitAction(t, e, !1, o)); else if (e) if (Hi(e)) this._layerAction$.next(t ? e.target : void 0); else if (Yi(e)) t && this.inputProvider.sendLayoutChangeEvent(e); else if (Xi(e)) {
+                    if (!t && this._turboSubscription) this._turboSubscription.unsubscribe(), this._turboSubscription = null, 
+                    this.commitAction(!1, e.action, !0, o); else if (t && !this._turboSubscription) {
+                        const t = !!o[e.action];
+                        this._turboSubscription = (s = e.interval, void 0 === s && (s = 0), void 0 === a && (a = kc), 
+                        s < 0 && (s = 0), Ac(s, s, a)).pipe(Cc(i => {
+                            let n = i % 2 === 0;
+                            return t && (n = !n), this.commitAction(n, e.action, !0, o), i + 1;
+                        }, 0)).subscribe();
+                    }
+                } else this.commitControllerInput(e, o, t);
+                var s, a;
+                return i && e && (!Ji(e) && !Xi(e) || r) && this._hybridInput$.next(o), o;
+            }
+            commitControllerInput(t, e, i) {
+                "leftTrigger" === t || "rightTrigger" === t ? e[t] = i ? 1 : 0 : "rightJoystickRight" === t ? e.rightJoystickX = i ? 1 : 0 : "rightJoystickLeft" === t ? e.rightJoystickX = i ? -1 : 0 : "rightJoystickUp" === t ? e.rightJoystickY = i ? -1 : 0 : "rightJoystickDown" === t ? e.rightJoystickY = i ? 1 : 0 : "leftJoystickRight" === t ? e.leftJoystickX = i ? 1 : 0 : "leftJoystickLeft" === t ? e.leftJoystickX = i ? -1 : 0 : "leftJoystickUp" === t ? e.leftJoystickY = i ? -1 : 0 : "leftJoystickDown" === t ? e.leftJoystickY = i ? 1 : 0 : e[t] = i;
+            }
+        }
+
+// hit-test-and-collision-shapes | 原可读文件第 7090–7227 行
+        class sl extends Ic {
+            constructor() {
+                super(...arguments), this.rootX = 0, this.rootY = 0;
+            }
+            tryCollision(t, e) {
+                switch (t.state) {
+                  case cc.Start:
+                    return function(t, e, i, n, r) {
+                        if (!t.control) {
+                            const o = t.initialPosition.x - i, s = t.initialPosition.y - n;
+                            let a, c;
+                            for (const [t, i] of r) if (t.canBeInteractedWith(e) && (!a || i.priority > a.priority)) {
+                                const e = i.getCollidedZone(o, s);
+                                void 0 !== e && (!a || e.priority > a.priority) && (a = e, c = t);
+                            }
+                            if (c && t.tryAttachControl(c)) return !0;
+                        }
+                        return !1;
+                    }(t, e, this.rootX, this.rootY, this.zones);
+
+                  case cc.Move:
+                    return function(t, e, i, n, r) {
+                        const o = t.position.x - i, s = t.position.y - n;
+                        if (t.control) {
+                            if (t.control.allowsRolloverInteraction()) {
+                                let i, n, a;
+                                for (const [c, l] of r) if (c !== t.control || i ? c !== t.control && l.compatibleWithRollover && c.allowsRolloverInteraction() && c.canBeInteractedWith(e) && void 0 !== l.getCollidedZone(o, s, !0) && (n = c, 
+                                a = l) : i = l, i && n && a && (!t.control.canBeInteractedWith(e) || void 0 === i.getCollidedZone(o, s) || a.priority > i.priority)) return t.swapControls(n), 
+                                !0;
+                            }
+                        } else for (const [a, c] of r) if (a.canBeInteractedWith(e) && void 0 !== c.getCollidedZone(o, s) && t.tryAttachControl(a)) return !0;
+                        return !(!t.control || !r.has(t.control)) && (t.flushNotification(!0), !0);
+                    }(t, e, this.rootX, this.rootY, this.zones);
+
+                  case cc.End:
+                    return t.detachControl(), !1;
+                }
+            }
+            clear() {
+                this.zones.clear();
+            }
+        }
+        var al, cl;
+        !function(t) {
+            t[t.Low = -1] = "Low", t[t.Normal = 0] = "Normal", t[t.High = 1] = "High", t[t.Max = 2] = "Max";
+        }(al || (al = {}));
+        class ll {
+            constructor() {
+                this._priority = al.Normal, this._zones = [], this._priorityNeedsFetching = !1;
+            }
+            get compatibleWithRollover() {
+                for (let t = 0; t < this._zones.length; t++) if (this._zones[t].compatibleWithRollover) return !0;
+                return !1;
+            }
+            get priority() {
+                if (this._priorityNeedsFetching) {
+                    let t = al.Low;
+                    for (let e = 0; e < this._zones.length; e++) this._zones[e].priority >= t && (t = this._zones[e].priority);
+                    this._priority = t, this._priorityNeedsFetching = !1;
+                }
+                return this._priority;
+            }
+            clearZones() {
+                this._zones.length = 0, this._priorityNeedsFetching = !0;
+            }
+            addZone(t) {
+                this._zones.push(t), this._priorityNeedsFetching = !0;
+            }
+            getCollidedZone(t, e, i = !1) {
+                let n;
+                for (let r = 0; r < this._zones.length; r++) {
+                    const o = this._zones[r], s = o.getCollidedZone(t, e);
+                    void 0 !== s && (!(void 0 === n || s.priority > n.priority) || i && !o.compatibleWithRollover || (n = s));
+                }
+                return n;
+            }
+        }
+        class ul {
+            constructor(t, e, i, n, r = !1) {
+                this.innerRadius = t, this.outerRadius = e, this.startAngle = i, this.endAngle = n, 
+                this.priority = al.Normal, this._compatibleWithRollover = !1, this._compatibleWithRollover = r;
+            }
+            get compatibleWithRollover() {
+                return this._compatibleWithRollover;
+            }
+            update(t, e, i, n) {
+                this.innerRadius = t, this.outerRadius = e, this.startAngle = i, this.endAngle = n;
+            }
+            getCollidedZone(t, e) {
+                if (Io(this.innerRadius, this.outerRadius, this.startAngle, this.endAngle, t, e)) return this;
+            }
+        }
+        class dl {
+            constructor(t, e, i, n = !1) {
+                this.radius = t, this.startAngle = e, this.endAngle = i, this.priority = al.Normal, 
+                this._compatibleWithRollover = !1, this._compatibleWithRollover = n;
+            }
+            get compatibleWithRollover() {
+                return this._compatibleWithRollover;
+            }
+            update(t, e, i) {
+                this.radius = t, this.startAngle = e, this.endAngle = i;
+            }
+            getCollidedZone(t, e) {
+                if (xo(this.radius, this.startAngle, this.endAngle, t, e)) return this;
+            }
+        }
+        class hl {
+            constructor(t, e, i, n = !1) {
+                this.centerX = t, this.centerY = e, this.radius = i, this.priority = al.Normal, 
+                this._compatibleWithRollover = !1, this._compatibleWithRollover = n;
+            }
+            get compatibleWithRollover() {
+                return this._compatibleWithRollover;
+            }
+            update(t, e, i) {
+                this.centerX = t, this.centerY = e, this.radius = i;
+            }
+            getCollidedZone(t, e) {
+                if (Ao(t - this.centerX, e - this.centerY) <= this.radius) return this;
+            }
+        }
+        class pl {
+            constructor(t, e, i, n, r = !1) {
+                this.x = t, this.y = e, this.width = i, this.height = n, this.priority = al.Normal, 
+                this._compatibleWithRollover = !1, this._compatibleWithRollover = r;
+            }
+            get compatibleWithRollover() {
+                return this._compatibleWithRollover;
+            }
+            update(t, e, i, n) {
+                this.x = t, this.y = e, this.width = i, this.height = n;
+            }
+            getCollidedZone(t, e) {
+                if (t >= this.x && t <= this.x + this.width && e >= this.y && e <= this.y + this.height) return this;
+            }
+        }
+        class gl extends sl {
+
+// button-controller | 原可读文件第 8967–9180 行
+        class Ql extends pc {
+            constructor(t, e, i) {
+                var n;
+                super({
+                    pulledIndex: void 0,
+                    interactionState: !1 === (n = t.getProps()).visible ? Kl.Hidden : !1 === n.enabled ? Kl.Disabled : Kl.Idle
+                }, t, e, i), this._wasJustToggled = !1, this._pullLocation = {
+                    x: 0,
+                    y: 0
+                }, this._pulledAction = void 0, this._cachedCalculatedPullAction = Object.assign({}, Ql.CachedEmptyCalculatedPullAction), 
+                this._nonVisualButtonState = Kl.Idle;
+                const r = this.getState(), o = this.model.getProps();
+                this._renderPropertyManager = new Xl(o, r, i), this._nonVisualButtonState = !1 === o.visible ? Kl.Hidden : Kl.Idle;
+            }
+            allowsRolloverInteraction() {
+                const t = this.model.getProps();
+                return !t.toggle && !t.pullAction;
+            }
+            onPropsChangedInternal([t, e]) {
+                const i = this.getState(), n = !zl(t.action, e.action);
+                this._nonVisualButtonState === Kl.Activated && n && t.action && this.model.commitAction(!1, t.action), 
+                this._nonVisualButtonState === Kl.Pulled && n && this._pulledAction && this.model.commitAction(!1, this._pulledAction), 
+                this._nonVisualButtonState === Kl.Toggled && n && t.action && this.model.commitAction(!1, t.action);
+                const r = !1 !== e.enabled, o = !1 !== e.visible, s = !!e.toggle, a = !!e.pullAction;
+                o ? r ? o && i.interactionState === Kl.Hidden ? (this._nonVisualButtonState = Kl.Idle, 
+                this.setState({
+                    interactionState: r ? this._nonVisualButtonState : Kl.Disabled,
+                    pulledIndex: void 0
+                })) : r && i.interactionState === Kl.Disabled ? this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: void 0
+                }) : i.interactionState === Kl.Toggled && (!s || s && n) ? (this.dim(), this._wasJustToggled = !1, 
+                this._nonVisualButtonState = Kl.Idle, this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: void 0
+                })) : a || i.interactionState !== Kl.Pulled || (this._nonVisualButtonState = Kl.Activated, 
+                this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: void 0
+                })) : (this._nonVisualButtonState = this._nonVisualButtonState === Kl.Hidden ? Kl.Idle : this._nonVisualButtonState, 
+                i.interactionState !== Kl.Disabled && this.setState({
+                    interactionState: Kl.Disabled,
+                    pulledIndex: void 0
+                })) : i.interactionState !== Kl.Hidden && (this._nonVisualButtonState = Kl.Hidden, 
+                this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: void 0
+                }));
+            }
+            onStateChangedInternal(t) {
+                const e = this._nonVisualButtonState, {action: i, pullAction: n} = this.model.getProps(), r = this._pulledAction, o = n && r ? this.model.commitAction(e === Kl.Pulled, r, !1) : void 0;
+                if (t.interactionState === Kl.Disabled && Ji(i)) this.model.commitAction(!1, i, !0, o); else switch (e) {
+                  case Kl.Activated:
+                  case Kl.Pulled:
+                  case Kl.Toggled:
+                    return void this.model.commitAction(!0, i, !0, o);
+
+                  default:
+                    return void this.model.commitAction(!1, i, !0, o);
+                }
+            }
+            onPointerStart() {
+                let t;
+                switch (this._nonVisualButtonState) {
+                  case Kl.Idle:
+                  case Kl.Toggled:
+                  case Kl.Pulled:
+                    {
+                        const {pullAction: e} = this.model.getProps(), i = e ? this.calculatePulledAction(e, this._pullLocation, .5 * this.socket.unitSize) : Ql.CachedEmptyCalculatedPullAction;
+                        this._nonVisualButtonState = i.pulledAction ? Kl.Pulled : Kl.Activated, this._pulledAction = i.pulledAction, 
+                        t = i.pulledIndex, this.getState().interactionState !== Kl.Disabled && this.playVibration(10);
+                    }
+                    break;
+
+                  default:
+                    return !1;
+                }
+                const e = this.getState();
+                return e.interactionState !== Kl.Disabled && (e.interactionState !== this._nonVisualButtonState || this._nonVisualButtonState === Kl.Pulled && t !== e.pulledIndex) && this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: this._nonVisualButtonState === Kl.Pulled ? t : void 0
+                }), !0;
+            }
+            onPointerEnd() {
+                const {toggle: t} = this.model.getProps();
+                let e = this._nonVisualButtonState;
+                switch (this._nonVisualButtonState) {
+                  case Kl.Activated:
+                  case Kl.Pulled:
+                    e = t && !this._wasJustToggled ? Kl.Toggled : Kl.Idle;
+                }
+                this._pullLocation.x = 0, this._pullLocation.y = 0, this._pulledAction = void 0, 
+                e !== this._nonVisualButtonState && (t && (this._wasJustToggled ? (this.dim(), this._wasJustToggled = !1) : (this.undim(), 
+                this._wasJustToggled = !0)), this._nonVisualButtonState = e);
+                const i = this.getState();
+                return i.interactionState !== Kl.Disabled && i.interactionState !== this._nonVisualButtonState && this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: void 0
+                }), !0;
+            }
+            onPointerMove(t) {
+                const {pullAction: e} = this.model.getProps();
+                if (!e) return this._pullLocation.x = 0, this._pullLocation.y = 0, this._pulledAction = void 0, 
+                !1;
+                this._pullLocation.x += t.lastPositionDelta.x, this._pullLocation.y += t.lastPositionDelta.y;
+                const i = this.calculatePulledAction(e, this._pullLocation, .5 * this.socket.unitSize);
+                if (this._pulledAction = i.pulledAction, i.pulledAction) {
+                    if (this._nonVisualButtonState === Kl.Activated) this._nonVisualButtonState = Kl.Pulled;
+                } else if (this._nonVisualButtonState === Kl.Pulled) this._nonVisualButtonState = Kl.Activated;
+                const n = this.getState();
+                return n.interactionState === Kl.Disabled || n.interactionState === this._nonVisualButtonState && i.pulledIndex === n.pulledIndex || this.setState({
+                    interactionState: this._nonVisualButtonState,
+                    pulledIndex: this._nonVisualButtonState === Kl.Pulled ? i.pulledIndex : void 0
+                }), !0;
+            }
+            getIsStateUndimmable({interactionState: t}) {
+                return t === Kl.Activated || t === Kl.Pulled || t === Kl.Toggled;
+            }
+            calculatePulledAction(t, e, i) {
+                if (!t) return Ql.CachedEmptyCalculatedPullAction;
+                if (_o(e) < i) return Ql.CachedEmptyCalculatedPullAction;
+                if ("string" === typeof t || Array.isArray(t) || "segmented" !== (null === t || void 0 === t ? void 0 : t.type)) return this._cachedCalculatedPullAction.pulledAction = t, 
+                this._cachedCalculatedPullAction.pulledIndex = 0, this._cachedCalculatedPullAction;
+                if (0 === t.items.length) return Ql.CachedEmptyCalculatedPullAction;
+                if (1 === t.items.length) return this._cachedCalculatedPullAction.pulledAction = t.items[0], 
+                this._cachedCalculatedPullAction.pulledIndex = 0, this._cachedCalculatedPullAction;
+                const n = Math.atan2(e.y, e.x), r = ho / t.items.length, o = Math.floor((n - (-1 * uo - r / 2)) / r) % t.items.length;
+                return o < 0 ? (this._cachedCalculatedPullAction.pulledAction = t.items[t.items.length + o], 
+                this._cachedCalculatedPullAction.pulledIndex = t.items.length + o, this._cachedCalculatedPullAction) : (this._cachedCalculatedPullAction.pulledAction = t.items[o], 
+                this._cachedCalculatedPullAction.pulledIndex = o, this._cachedCalculatedPullAction);
+            }
+        }
+        Ql.CachedEmptyCalculatedPullAction = {
+            pulledAction: void 0,
+            pulledIndex: void 0
+        };
+        const tu = .25;
+        var eu;
+        !function(t) {
+            t.Exclusive = "exclusive", t.AllowNeighboring = "allowNeighboring";
+        }(eu || (eu = {}));
+        function iu() {
+            return Ns;
+        }
+        function nu(t) {
+            return {
+                type: "color",
+                value: Ns,
+                opacity: t === x.Hidden ? 0 : 1
+            };
+        }
+        function ru(t, e) {
+            return t === x.Hidden ? Ns : e.system_contentSecondary;
+        }
+        function ou(t, e) {
+            return t === x.Activated ? e.system_contentPrimary : Ns;
+        }
+        function su(t, e) {
+            return {
+                type: C.Solid,
+                color: t === x.Hidden ? Ns : e.system_contentPrimary,
+                opacity: t === x.Hidden ? 0 : 1
+            };
+        }
+        function au(t, e) {
+            return {
+                type: C.Solid,
+                color: t === x.Hidden ? Ns : e.system_contrastPrimary,
+                opacity: t === x.Hidden ? 0 : 1
+            };
+        }
+        class cu {
+            constructor(t = 3) {
+                this._backgroundColorMemo = new Za(Ma, t), this._fillColorMemo = new Za(Ma, t), 
+                this._gradientColorMemo = new Za(Ma, t), this._strokeColorMemo = new Za(Ma, t);
+            }
+            getStyle(t, e, i, n) {
+                const r = function(t, e) {
+                    return {
+                        background: nu(t),
+                        fill: ru(t, e),
+                        gradient: ou(t, e),
+                        innerStroke: su(t, e),
+                        outerStroke: au(t, e)
+                    };
+                }(t, e);
+                if (t === x.Hidden) return r;
+                switch (this.extractCustomStyles(r, i, e, null === n || void 0 === n ? void 0 : n.default), 
+                t) {
+                  case x.Disabled:
+                    return this.extractCustomStyles(r, i, e, null === n || void 0 === n ? void 0 : n.disabled), 
+                    r.gradient = iu(), r;
+
+                  case x.Idle:
+                    return this.extractCustomStyles(r, i, e, null === n || void 0 === n ? void 0 : n.idle), 
+                    r.gradient = iu(), r;
+
+                  case x.Activated:
+                    return this.extractCustomStyles(r, i, e, null === n || void 0 === n ? void 0 : n.activated), 
+                    r;
+                }
+            }
+            getOpacity(t, e) {
+                var i, n, r, o, s, a, c, l;
+                let u = 1;
+                switch (u = null !== (n = null === (i = null === e || void 0 === e ? void 0 : e.default) || void 0 === i ? void 0 : i.opacity) && void 0 !== n ? n : u, 
+                t) {
+                  case x.Hidden:
+                    u = 0;
+                    break;
+
+                  case x.Disabled:
+                    u *= .33, u = null !== (o = null === (r = null === e || void 0 === e ? void 0 : e.disabled) || void 0 === r ? void 0 : r.opacity) && void 0 !== o ? o : u;
+                    break;
+
+// directional-pad-controller | 原可读文件第 9290–9450 行
+        class hu extends pc {
+            constructor(t, e, i) {
+                var n;
+                super((n = t.getProps(), {
+                    value: I.None,
+                    interactionState: !1 === n.visible ? x.Hidden : !1 === n.enabled ? x.Disabled : x.Idle
+                }), t, e, i), this._previousDirection = I.None, this._nonVisualDPadState = x.Idle;
+                const r = this.model.getProps(), o = this.getState();
+                this._renderPropertyManager = new du(r, o, i), this._nonVisualDPadState = !1 === r.visible ? x.Hidden : x.Idle;
+            }
+            onPropsChangedInternal([t, e]) {
+                var i, n;
+                const r = this.getState();
+                t && (this._nonVisualDPadState !== x.Activated || t.deadzone === e.deadzone && (null === (i = t.interaction) || void 0 === i ? void 0 : i.activationType) === (null === (n = e.interaction) || void 0 === n ? void 0 : n.activationType) && t.scale === e.scale || this.model.resetAnalogInput());
+                const o = !1 !== e.enabled, s = !1 !== e.visible;
+                if (s ? o ? s && r.interactionState === x.Hidden ? (this._nonVisualDPadState = x.Idle, 
+                this.setState({
+                    interactionState: o ? this._nonVisualDPadState : x.Disabled,
+                    value: I.None
+                })) : o && r.interactionState === x.Disabled && this.setState({
+                    interactionState: this._nonVisualDPadState,
+                    value: r.value
+                }) : r.interactionState !== x.Disabled && (this._nonVisualDPadState = this._nonVisualDPadState === x.Hidden ? x.Idle : this._nonVisualDPadState, 
+                this.setState({
+                    interactionState: x.Disabled,
+                    value: r.value
+                })) : r.interactionState !== x.Hidden && (this._nonVisualDPadState = x.Hidden, this.setState({
+                    interactionState: this._nonVisualDPadState,
+                    value: I.None
+                })), this._nonVisualDPadState === x.Activated) {
+                    const t = this.latestPointer, e = null === t || void 0 === t ? void 0 : t.position;
+                    e && this.setState({
+                        interactionState: this.getState().interactionState,
+                        value: this.calculateDirection(e)
+                    });
+                }
+            }
+            onStateChangedInternal(t) {
+                switch (this._nonVisualDPadState) {
+                  case x.Activated:
+                    {
+                        const {value: e} = t, i = uu(this._previousDirection, !1), n = uu(e, !0), r = Object.assign(Object.assign({}, i), n);
+                        this.model.setAnalogInput(r), this._previousDirection = e;
+                        break;
+                    }
+
+                  default:
+                    this.model.resetAnalogInput(), this._previousDirection = I.None;
+                }
+            }
+            onPointerStart(t) {
+                switch (this._nonVisualDPadState) {
+                  case x.Idle:
+                  case x.Activated:
+                    {
+                        this._nonVisualDPadState = x.Activated;
+                        const {interactionState: e} = this.getState();
+                        this.setState({
+                            interactionState: e !== x.Disabled ? this._nonVisualDPadState : e,
+                            value: this.calculateDirection(t.initialPosition)
+                        });
+                        break;
+                    }
+                }
+                return !0;
+            }
+            onPointerMove(t) {
+                switch (this._nonVisualDPadState) {
+                  case x.Activated:
+                    {
+                        const {interactionState: e} = this.getState();
+                        this.setState({
+                            interactionState: e !== x.Disabled ? this._nonVisualDPadState : e,
+                            value: this.calculateDirection(t.position)
+                        });
+                        break;
+                    }
+                }
+                return !0;
+            }
+            onPointerEnd() {
+                switch (this._nonVisualDPadState) {
+                  case x.Activated:
+                    {
+                        this._nonVisualDPadState = x.Idle;
+                        const {interactionState: t} = this.getState();
+                        this.setState({
+                            interactionState: t !== x.Disabled ? this._nonVisualDPadState : t,
+                            value: I.None
+                        });
+                        break;
+                    }
+                }
+                return !0;
+            }
+            getIsStateUndimmable({interactionState: t}) {
+                return t === x.Activated;
+            }
+            calculateDirection(t) {
+                var e, i;
+                const n = this.model.getProps(), {x: r, y: o, collisionRadius: s, unitSize: a} = this.socket, {scale: c = 1, deadzone: l = tu} = n, u = lu(l, a / 2 * c) / 2, d = {
+                    x: t.x - r,
+                    y: t.y - o
+                }, h = Math.sqrt(d.x * d.x + d.y * d.y);
+                if (h < u) return I.None;
+                {
+                    const t = h < s ? {
+                        x: d.x,
+                        y: d.y
+                    } : {
+                        x: 1 * d.x / h * s,
+                        y: 1 * d.y / h * s
+                    }, r = t.x >= 0 ? Math.atan(t.y / t.x) * (180 / Math.PI) + 90 : Math.atan(t.y / t.x) * (180 / Math.PI) + 180 + 90;
+                    let o = -1;
+                    switch (null !== (i = null === (e = n.interaction) || void 0 === e ? void 0 : e.activationType) && void 0 !== i ? i : eu.AllowNeighboring) {
+                      case eu.Exclusive:
+                        o = 2 * Math.round(r / 90);
+                        break;
+
+                      case eu.AllowNeighboring:
+                      default:
+                        o = Math.round(r / 45);
+                    }
+                    switch (o) {
+                      case 0:
+                      case 8:
+                        return I.Up;
+
+                      case 1:
+                        return I.UpAndRight;
+
+                      case 2:
+                        return I.Right;
+
+                      case 3:
+                        return I.RightAndDown;
+
+                      case 4:
+                        return I.Down;
+
+                      case 5:
+                        return I.DownAndLeft;
+
+                      case 6:
+                        return I.Left;
+
+                      case 7:
+                        return I.LeftAndUp;
+
+                      default:
+                        return I.None;
+                    }
+                }
+            }
+        }
+        function pu(t, e) {
+            return {
+                type: "color",
+                value: t === M.Hidden ? Ns : e.system_contentSecondary,
+                opacity: t === M.Hidden ? 0 : 1
+            };
+
+// axis-pipes-and-joystick-radius | 原可读文件第 9918–10208 行
+        function ju(t, e, i) {
+            const n = e * i, r = t / i * (i - e);
+            return t > 0 ? r + n : t < 0 ? r - n : t;
+        }
+        function Eu(t, e = 1) {
+            const i = bo(mo(t, -1, 1) * e * uo, 1);
+            return {
+                x: i.x,
+                y: i.y
+            };
+        }
+        function Bu(t) {
+            return t.hasOwnProperty("input") && ("axisXY" === t.input || "axisZY" === t.input) && ("leftJoystick" === t.output || "rightJoystick" === t.output);
+        }
+        function Fu(t) {
+            return t.hasOwnProperty("input") && ("axisX" === t.input || "axisY" === t.input) && ("rightJoystickX" === t.output || "rightJoystickY" === t.output || "leftJoystickX" === t.output || "leftJoystickY" === t.output);
+        }
+        function Lu(t) {
+            return t.hasOwnProperty("input") && ("axisRight" === t.input || "axisLeft" === t.input || "axisUp" === t.input || "axisDown" === t.input) && ("rightJoystickLeft" === t.output || "rightJoystickRight" === t.output || "rightJoystickUp" === t.output || "rightJoystickDown" === t.output || "leftJoystickLeft" === t.output || "leftJoystickRight" === t.output || "leftJoystickUp" === t.output || "leftJoystickDown" === t.output || "rightTrigger" === t.output || "leftTrigger" === t.output);
+        }
+        function zu(t) {
+            return t.reduce((t, e) => {
+                return t || (Bu(i = e.map) || Fu(i) || Lu(i));
+                var i;
+            }, !1);
+        }
+        function Nu(t) {
+            return t.hasOwnProperty("input") && ("axisXY" === t.input || "axisZY" === t.input) && "relativeMouse" === t.output;
+        }
+        function Uu(t) {
+            return t.hasOwnProperty("input") && ("axisX" === t.input || "axisY" === t.input) && ("relativeMouseX" === t.output || "relativeMouseY" === t.output);
+        }
+        function Ku(t) {
+            return t.hasOwnProperty("input") && ("axisRight" === t.input || "axisLeft" === t.input || "axisUp" === t.input || "axisDown" === t.input) && ("relativeMouseRight" === t.output || "relativeMouseLeft" === t.output || "relativeMouseDown" === t.output || "relativeMouseUp" === t.output);
+        }
+        function Vu(t) {
+            return t.reduce((t, e) => {
+                return t || (Nu(i = e.map) || Uu(i) || Ku(i));
+                var i;
+            }, !1);
+        }
+        function Ju(t) {
+            const {radial: e, threshold: i} = t;
+            return t => e ? function(t, e, i) {
+                const {angleInRadians: n, radius: r} = wo(t), o = e * i;
+                let s = r / i * (i - e);
+                return r > 0 ? s += o : r < 0 && (s -= o), bo(n, s);
+            }(t, i, 1) : {
+                x: ju(t.x, i, 1),
+                y: ju(t.y, i, 1)
+            };
+        }
+        function Hu(t) {
+            const {type: e, range: i} = t;
+            return "circular" === e ? function(t) {
+                const e = t[1], i = Eu(e, 0);
+                return t => t - Eu(t, e).y / i.y + t;
+            }(i) : function(t) {
+                const e = t[1], i = Eu(e, 0);
+                return t => Eu(t, e).y / i.y;
+            }(i);
+        }
+        function Yu(t, e, i) {
+            return t < 0 ? (t + e) * i - e : t > 0 ? (t - e) * i + e : t;
+        }
+        function Xu(t, e) {
+            const i = [];
+            if (Bu(t)) {
+                const {deadzone: n, responseCurve: r, sensitivity: o} = t, s = n ? n.threshold : 0;
+                n && i.push(Ju(n)), r && i.push(function(t) {
+                    const e = Hu(t);
+                    return t => ({
+                        x: e(t.x),
+                        y: e(t.y)
+                    });
+                }(r)), o && i.push(t => ({
+                    x: Yu(t.x, s, o),
+                    y: Yu(t.y, s, o)
+                })), e && !isNaN(e) && i.push(t => ({
+                    x: Yu(t.x, s, e),
+                    y: Yu(t.y, s, e)
+                }));
+            } else if (Nu(t)) {
+                const {sensitivity: n} = t;
+                n && i.push(t => ({
+                    x: t.x * n,
+                    y: t.y * n
+                })), e && !isNaN(e) && i.push(t => ({
+                    x: t.x * e,
+                    y: t.y * e
+                }));
+            } else if (Fu(t) || Lu(t)) {
+                const {deadzone: n, responseCurve: r, sensitivity: o} = t, s = n ? n.threshold : 0;
+                n && i.push(function(t) {
+                    const {threshold: e} = t;
+                    return t => ju(t, e, 1);
+                }(n)), r && i.push(Hu(r)), o && i.push(t => Yu(t, s, o)), e && !isNaN(e) && i.push(t => Yu(t, s, e));
+            } else if (Uu(t) || Ku(t)) {
+                const {sensitivity: n} = t;
+                n && i.push(t => t * n), e && !isNaN(e) && i.push(t => t * e);
+            }
+            return i;
+        }
+        function $u(t, e) {
+            switch (t) {
+              case "axisLeft":
+                return e.x < 0 ? -e.x : 0;
+
+              case "axisRight":
+                return e.x < 0 ? 0 : e.x;
+
+              case "axisUp":
+                return e.y < 0 ? -e.y : 0;
+
+              case "axisDown":
+                return e.y < 0 ? 0 : e.y;
+            }
+        }
+        function Wu(t) {
+            const e = Array.isArray(t) ? t : [ t ], i = [];
+            for (let n = 0; n < e.length; n++) Bu(e[n]) ? i.push({
+                type: Hl.Gamepad,
+                map: e[n]
+            }) : Nu(e[n]) ? i.push({
+                type: Hl.Mouse,
+                map: e[n]
+            }) : Fu(e[n]) ? i.push({
+                type: Hl.GamepadAxial,
+                map: e[n]
+            }) : Uu(e[n]) ? i.push({
+                type: Hl.MouseAxial,
+                map: e[n]
+            }) : Lu(e[n]) ? i.push({
+                type: Hl.GamepadAxialPolar,
+                map: e[n]
+            }) : Ku(e[n]) && i.push({
+                type: Hl.MouseAxialPolar,
+                map: e[n]
+            });
+            return i;
+        }
+        function Gu(t, e, i, n, r) {
+            i.reduce((i, o, s) => {
+                const {analogMap: a, mouseMap: c} = n, l = e[s];
+                if (o.type === Hl.Gamepad && ps(r, Jl.Gamepad)) {
+                    !function(t, e, i) {
+                        var n, r, o, s;
+                        const {x: a, y: c} = t, {output: l} = e;
+                        switch (l) {
+                          case "leftJoystick":
+                            i.leftJoystickX = (null !== (n = i.leftJoystickX) && void 0 !== n ? n : 0) + a, 
+                            i.leftJoystickY = (null !== (r = i.leftJoystickY) && void 0 !== r ? r : 0) + c;
+                            break;
+
+                          case "rightJoystick":
+                            i.rightJoystickX = (null !== (o = i.rightJoystickX) && void 0 !== o ? o : 0) + a, 
+                            i.rightJoystickY = (null !== (s = i.rightJoystickY) && void 0 !== s ? s : 0) + c;
+                        }
+                    }(l.reduce((t, e) => e(t), t), o.map, a);
+                } else if (o.type === Hl.Mouse && ps(r, Jl.Mouse)) {
+                    !function(t, e, i) {
+                        var n, r;
+                        const {x: o, y: s} = t, {output: a} = e;
+                        "relativeMouse" === a && (i.relativeMouseX = (null !== (n = i.relativeMouseX) && void 0 !== n ? n : 0) + o, 
+                        i.relativeMouseY = (null !== (r = i.relativeMouseY) && void 0 !== r ? r : 0) + s);
+                    }(l.reduce((t, e) => e(t), t), o.map, c);
+                } else if (o.type === Hl.GamepadAxial && ps(r, Jl.Gamepad)) {
+                    const e = "axisX" === o.map.input ? t.x : t.y;
+                    !function(t, e, i) {
+                        var n, r, o, s;
+                        const {output: a} = e;
+                        switch (a) {
+                          case "leftJoystickX":
+                            i.leftJoystickX = (null !== (n = i.leftJoystickX) && void 0 !== n ? n : 0) + t;
+                            break;
+
+                          case "leftJoystickY":
+                            i.leftJoystickY = (null !== (r = i.leftJoystickY) && void 0 !== r ? r : 0) + t;
+                            break;
+
+                          case "rightJoystickX":
+                            i.rightJoystickX = (null !== (o = i.rightJoystickX) && void 0 !== o ? o : 0) + t;
+                            break;
+
+                          case "rightJoystickY":
+                            i.rightJoystickY = (null !== (s = i.rightJoystickY) && void 0 !== s ? s : 0) + t;
+                        }
+                    }(l.reduce((t, e) => e(t), e), o.map, a);
+                } else if (o.type === Hl.MouseAxial && ps(r, Jl.Mouse)) {
+                    const e = "axisX" === o.map.input ? t.x : t.y;
+                    !function(t, e, i) {
+                        var n, r;
+                        const {output: o} = e;
+                        switch (o) {
+                          case "relativeMouseX":
+                            i.relativeMouseX = (null !== (n = i.relativeMouseX) && void 0 !== n ? n : 0) + t;
+                            break;
+
+                          case "relativeMouseY":
+                            i.relativeMouseY = (null !== (r = i.relativeMouseY) && void 0 !== r ? r : 0) + t;
+                        }
+                    }(l.reduce((t, e) => e(t), e), o.map, c);
+                } else if (o.type === Hl.GamepadAxialPolar && ps(r, Jl.Gamepad)) {
+                    const e = $u(o.map.input, t);
+                    !function(t, e, i) {
+                        var n, r, o, s, a, c, l, u, d, h;
+                        const p = Math.abs(t);
+                        switch (e.output) {
+                          case "leftJoystickLeft":
+                            i.leftJoystickX = (null !== (n = i.leftJoystickX) && void 0 !== n ? n : 0) - p;
+                            break;
+
+                          case "leftJoystickRight":
+                            i.leftJoystickX = (null !== (r = i.leftJoystickX) && void 0 !== r ? r : 0) + p;
+                            break;
+
+                          case "leftJoystickDown":
+                            i.leftJoystickY = (null !== (o = i.leftJoystickY) && void 0 !== o ? o : 0) + p;
+                            break;
+
+                          case "leftJoystickUp":
+                            i.leftJoystickY = (null !== (s = i.leftJoystickY) && void 0 !== s ? s : 0) - p;
+                            break;
+
+                          case "rightJoystickLeft":
+                            i.rightJoystickX = (null !== (a = i.rightJoystickX) && void 0 !== a ? a : 0) - p;
+                            break;
+
+                          case "rightJoystickRight":
+                            i.rightJoystickX = (null !== (c = i.rightJoystickX) && void 0 !== c ? c : 0) + p;
+                            break;
+
+                          case "rightJoystickDown":
+                            i.rightJoystickY = (null !== (l = i.rightJoystickY) && void 0 !== l ? l : 0) + p;
+                            break;
+
+                          case "rightJoystickUp":
+                            i.rightJoystickY = (null !== (u = i.rightJoystickY) && void 0 !== u ? u : 0) - p;
+                            break;
+
+                          case "leftTrigger":
+                            i.leftTrigger = (null !== (d = i.leftTrigger) && void 0 !== d ? d : 0) + p;
+                            break;
+
+                          case "rightTrigger":
+                            i.rightTrigger = (null !== (h = i.rightTrigger) && void 0 !== h ? h : 0) + p;
+                        }
+                    }(l.reduce((t, e) => e(t), e), o.map, a);
+                } else if (o.type === Hl.MouseAxialPolar && ps(r, Jl.Mouse)) {
+                    const e = $u(o.map.input, t);
+                    !function(t, e, i) {
+                        var n, r, o, s;
+                        switch (e.output) {
+                          case "relativeMouseLeft":
+                            i.relativeMouseX = (null !== (n = i.relativeMouseX) && void 0 !== n ? n : 0) - t;
+                            break;
+
+                          case "relativeMouseRight":
+                            i.relativeMouseX = (null !== (r = i.relativeMouseX) && void 0 !== r ? r : 0) + t;
+                            break;
+
+                          case "relativeMouseDown":
+                            i.relativeMouseY = (null !== (o = i.relativeMouseY) && void 0 !== o ? o : 0) + t;
+                            break;
+
+                          case "relativeMouseUp":
+                            i.relativeMouseY = (null !== (s = i.relativeMouseY) && void 0 !== s ? s : 0) - t;
+                        }
+                    }(l.reduce((t, e) => e(t), e), o.map, c);
+                }
+                return i;
+            }, n), function(t) {
+                e = t.analogMap, e.leftJoystickX = void 0 === e.leftJoystickX ? void 0 : mo(e.leftJoystickX, -1, 1), 
+                e.leftJoystickY = void 0 === e.leftJoystickY ? void 0 : mo(e.leftJoystickY, -1, 1), 
+                e.rightJoystickX = void 0 === e.rightJoystickX ? void 0 : mo(e.rightJoystickX, -1, 1), 
+                e.rightJoystickY = void 0 === e.rightJoystickY ? void 0 : mo(e.rightJoystickY, -1, 1), 
+                e.rightTrigger = void 0 === e.rightTrigger ? void 0 : mo(e.rightTrigger, 0, 1), 
+                e.leftTrigger = void 0 === e.leftTrigger ? void 0 : mo(e.leftTrigger, 0, 1);
+                var e;
+            }(n);
+        }
+        function Zu(t) {
+            t.leftJoystickX = void 0, t.leftJoystickY = void 0, t.leftTrigger = void 0, t.rightJoystickX = void 0, 
+            t.rightJoystickY = void 0, t.rightTrigger = void 0;
+        }
+        function qu(t) {
+            t.relativeMouseX = void 0, t.relativeMouseY = void 0;
+        }
+        function Qu(t) {
+            Zu(t.analogMap), qu(t.mouseMap);
+        }
+
+// joystick-controller | 原可读文件第 10209–10397 行
+        class td extends pc {
+            constructor(t, e, i, n) {
+                var r;
+                super((r = t.getProps(), {
+                    value: fo,
+                    interactionState: !1 === r.visible ? M.Hidden : !1 === r.enabled ? M.Disabled : M.Idle
+                }), t, e, n), this.inputProvider = i, this._nonVisualJoystickState = M.Idle, this._inputAccumulationMap = {
+                    analogMap: {},
+                    mouseMap: {}
+                }, this._settings = is;
+                const o = this.model.getProps(), s = this.getState();
+                this._mapping = Wu(o.axis), this._pipes = this._mapping.map(t => Xu(t.map, this._settings.sensitivity)), 
+                this._joystickTypeMemo = new Ga(this._mapping, Au), this._renderPropertyManager = new Iu(o, s, this._joystickTypeMemo.lastResult, n), 
+                this._nonVisualJoystickState = !1 === o.visible ? M.Hidden : M.Idle;
+            }
+            onGameLoopTick(t) {
+                const {value: e} = this.getState();
+                qu(this._inputAccumulationMap.mouseMap), Gu(e, this._pipes, this._mapping, this._inputAccumulationMap, Jl.Mouse);
+                const {mouseMap: {relativeMouseX: i, relativeMouseY: n}} = this._inputAccumulationMap, r = {
+                    x: i && 0 !== i ? i * t : 0,
+                    y: n && 0 !== n ? n * t : 0
+                };
+                0 === r.x && 0 === r.y || this.inputProvider.sendRelativeMouseEvent(r);
+            }
+            onPropsChangedInternal([t, e]) {
+                const i = this.getState();
+                this._mapping = Wu(e.axis), this._pipes = this._mapping.map(t => Xu(t.map, this._settings.sensitivity)), 
+                this._joystickTypeMemo.convert(this._mapping), this._renderPropertyManager.updateJoystickType(this._joystickTypeMemo.lastResult), 
+                t && (this._nonVisualJoystickState !== M.Activated || zl(t.action, e.action) && t.actionThreshold === e.actionThreshold || t.action && this.model.commitAction(!1, t.action), 
+                this._nonVisualJoystickState !== M.Moving && this._nonVisualJoystickState !== M.Activated || t.axis === e.axis || this.model.resetAnalogInput());
+                const n = !1 !== e.enabled, r = !1 !== e.visible;
+                if (r ? n ? r && i.interactionState === M.Hidden ? (this._nonVisualJoystickState = M.Idle, 
+                this.setState({
+                    interactionState: n ? this._nonVisualJoystickState : M.Disabled,
+                    value: fo
+                })) : n && i.interactionState === M.Disabled && this.setState({
+                    interactionState: this._nonVisualJoystickState,
+                    value: i.value
+                }) : i.interactionState !== M.Disabled && (this._nonVisualJoystickState = this._nonVisualJoystickState === M.Hidden ? M.Idle : this._nonVisualJoystickState, 
+                this.setState({
+                    interactionState: M.Disabled,
+                    value: i.value
+                })) : i.interactionState !== M.Hidden && (this._nonVisualJoystickState = M.Hidden, 
+                this.setState({
+                    interactionState: this._nonVisualJoystickState,
+                    value: fo
+                })), this._nonVisualJoystickState === M.Moving || this._nonVisualJoystickState === M.Activated) {
+                    if (this._pointerTracker.peekFront()) {
+                        const {interactionState: t, value: e} = this.getState(), i = this.checkActionActive(e);
+                        this._nonVisualJoystickState = i ? M.Activated : M.Moving, this.setState({
+                            interactionState: t === M.Disabled ? t : this._nonVisualJoystickState,
+                            value: e
+                        });
+                    }
+                }
+            }
+            unmountInternal() {
+                this._mouseSubscription && this._mouseSubscription.unsubscribe();
+            }
+            onStateChangedInternal(t) {
+                const {value: e} = t, {action: i} = this.model.getProps();
+                let n;
+                switch (this._joystickTypeMemo.lastResult) {
+                  case T.Standard:
+                    n = yo(e, 1);
+                    break;
+
+                  case T.Horizontal:
+                    n = {
+                        x: mo(t.value.x, -1, 1),
+                        y: 0
+                    };
+                    break;
+
+                  case T.Vertical:
+                    n = {
+                        x: 0,
+                        y: mo(t.value.y, -1, 1)
+                    };
+                }
+                switch (this._nonVisualJoystickState) {
+                  case M.Activated:
+                    return this.model.commitAction(!0, i), void this.sendMouseAndJoystickInput(n);
+
+                  case M.Moving:
+                    return this.model.commitAction(!1, i), void this.sendMouseAndJoystickInput(n);
+
+                  default:
+                    return this.model.commitAction(!1, i), this.model.resetAnalogInput(), void (this._mouseSubscription && this._mouseSubscription.unsubscribe());
+                }
+            }
+            onControlSettingsChangedInternal(t) {
+                ns(t.joysticks, this._settings) || (t.joysticks.relativityMode !== this._settings.relativityMode && this.performActionInRenderFrame(() => {
+                    this._renderPropertyManager.updateRelativityMode(t.joysticks.relativityMode);
+                }), this._pipes = this._mapping.map(e => Xu(e.map, t.joysticks.sensitivity)), this._settings = t.joysticks);
+            }
+            onPointerStart(t) {
+                const {interactionState: e, value: i} = this.getState();
+                switch (this._nonVisualJoystickState) {
+                  case M.Idle:
+                  case M.Moving:
+                  case M.Activated:
+                    {
+                        const n = this.calculateJoystickValue(t, i), r = this.checkActionActive(n);
+                        return this._nonVisualJoystickState = r ? M.Activated : M.Moving, this.setState({
+                            interactionState: e !== M.Disabled ? this._nonVisualJoystickState : e,
+                            value: n
+                        }), !0;
+                    }
+
+                  default:
+                    return !1;
+                }
+            }
+            onPointerMove(t) {
+                switch (this._nonVisualJoystickState) {
+                  case M.Activated:
+                  case M.Moving:
+                    {
+                        const {interactionState: e, value: i} = this.getState(), n = this.calculateJoystickValue(t, i), r = this.checkActionActive(n);
+                        return this._nonVisualJoystickState = r ? M.Activated : M.Moving, this.setState({
+                            interactionState: e !== M.Disabled ? this._nonVisualJoystickState : e,
+                            value: n
+                        }), !0;
+                    }
+
+                  default:
+                    return !1;
+                }
+            }
+            onPointerEnd() {
+                switch (this._nonVisualJoystickState) {
+                  case M.Activated:
+                  case M.Moving:
+                    {
+                        const {interactionState: t} = this.getState();
+                        return this._nonVisualJoystickState = M.Idle, this.setState({
+                            interactionState: t !== M.Disabled ? this._nonVisualJoystickState : t,
+                            value: {
+                                x: 0,
+                                y: 0
+                            }
+                        }), !0;
+                    }
+
+                  default:
+                    return !1;
+                }
+            }
+            getIsStateUndimmable({interactionState: t}) {
+                return t === M.Activated || t === M.Moving;
+            }
+            calculateJoystickValue(t, e) {
+                return {
+                    x: this.getNormalizedXValue(t, e),
+                    y: this.getNormalizedYValue(t, e)
+                };
+            }
+            getNormalizedXValue(t, e) {
+                const i = this.model.getProps(), n = xu(this.socket, i);
+                return Cu(i, this._settings.relativityMode) ? e.x + t.lastPositionDelta.x / n : (t.position.x - this.socket.x) / n;
+            }
+            getNormalizedYValue(t, e) {
+                const i = this.model.getProps(), n = xu(this.socket, i);
+                return Cu(i, this._settings.relativityMode) ? e.y + t.lastPositionDelta.y / n : (t.position.y - this.socket.y) / n;
+            }
+            checkActionActive(t) {
+                const {action: e, actionThreshold: i = 0} = this.model.getProps();
+                return !!e && (t.x >= i || t.y >= i || _o(t) >= i);
+            }
+            sendMouseAndJoystickInput(t) {
+                (!this._mouseSubscription || this._mouseSubscription.closed) && Vu(this._mapping) && (this._mouseSubscription = Du.subscribe(t => {
+                    this.onGameLoopTick(t);
+                })), Zu(this._inputAccumulationMap.analogMap), Gu(t, this._pipes, this._mapping, this._inputAccumulationMap, Jl.Gamepad);
+                const {analogMap: e} = this._inputAccumulationMap;
+                this.model.setAnalogInput(e);
+            }
+        }
+        var ed;
+        function id(t) {
+            const e = t.system_contrastPrimary, i = zs(e, Ns) ? 0 : 1;
+            return {
+                type: C.Solid,
+                color: e,
+                opacity: i
+            };
+        }
+        function nd(t) {
+            return id(t);
+
+// throttle-controller | 原可读文件第 10756–10899 行
+        class pd extends pc {
+            constructor(t, e, i, n) {
+                var r;
+                super({
+                    value: 0,
+                    interactionState: !1 === (r = t.getProps()).visible ? ed.Hidden : !1 === r.enabled ? ed.Disabled : ed.Idle
+                }, t, e, i), this._customCollisionZone = new hl(0, 0, 0), this._nonVisualThrottleState = ed.Idle, 
+                this._inputAccumulationMap = {
+                    analogMap: {},
+                    mouseMap: {}
+                }, this._clampedValue = {
+                    x: 0,
+                    y: 0
+                }, this._customCollider = t => {
+                    const {x: e, y: i, size: n} = this.socket;
+                    return Wl(t, {
+                        x: e,
+                        y: i - this.getKnobPosition()
+                    }, n / 2);
+                };
+                const o = this.model.getProps(), s = this.getState();
+                this._mapping = Wu(hd(o)), this._pipes = this._mapping.map(t => Xu(t.map)), this._renderPropertyManager = new ud(o, s, n, i), 
+                this._nonVisualThrottleState = !1 === o.visible ? ed.Hidden : ed.Idle, this._customCollisionZone.priority = al.Max, 
+                this.updateCustomCollider();
+            }
+            onPropsChangedInternal([t, e]) {
+                const i = this.getState();
+                this._mapping = Wu(hd(e)), this._pipes = this._mapping.map(t => Xu(t.map)), t && (this._nonVisualThrottleState !== ed.IdleUp && this._nonVisualThrottleState !== ed.ActivatedUp || t.axisUp === e.axisUp || this.model.resetAnalogInput(), 
+                this._nonVisualThrottleState === ed.ActivatedDown && t.axisDown !== e.axisDown && this.model.resetAnalogInput());
+                const n = !1 !== e.enabled, r = !1 !== e.visible, o = !0 === e.sticky;
+                if (r ? n ? r && i.interactionState === ed.Hidden ? (this._nonVisualThrottleState = ed.Idle, 
+                this.setState({
+                    interactionState: n ? this._nonVisualThrottleState : ed.Disabled,
+                    value: 0
+                })) : n && i.interactionState === ed.Disabled && this.setState({
+                    interactionState: this._nonVisualThrottleState,
+                    value: i.value
+                }) : (this._nonVisualThrottleState = this._nonVisualThrottleState === ed.Hidden ? ed.Idle : this._nonVisualThrottleState, 
+                i.interactionState !== ed.Disabled && this.setState({
+                    interactionState: ed.Disabled,
+                    value: i.value
+                })) : (this._nonVisualThrottleState = ed.Hidden, i.interactionState !== ed.Hidden && this.setState({
+                    interactionState: ed.Hidden,
+                    value: 0
+                })), !o && this._nonVisualThrottleState === ed.IdleUp) {
+                    const {interactionState: t} = this.getState();
+                    this._nonVisualThrottleState = ed.Idle, this.setState({
+                        interactionState: t !== ed.Disabled ? this._nonVisualThrottleState : t,
+                        value: 0
+                    });
+                }
+            }
+            onStateChangedInternal(t) {
+                const {value: e} = t;
+                switch (this.updateCustomCollider(), this._nonVisualThrottleState) {
+                  case ed.ActivatedUp:
+                  case ed.IdleUp:
+                  case ed.ActivatedDown:
+                    return Qu(this._inputAccumulationMap), this._clampedValue.y = -1 * mo(e, -1, 1), 
+                    Gu(this._clampedValue, this._pipes, this._mapping, this._inputAccumulationMap, Jl.Gamepad), 
+                    void this.model.setAnalogInput(this._inputAccumulationMap.analogMap);
+
+                  default:
+                    return void this.model.resetAnalogInput();
+                }
+            }
+            onPointerStart(t) {
+                const {interactionState: e, value: i} = this.getState();
+                switch (this._nonVisualThrottleState) {
+                  case ed.Idle:
+                  case ed.IdleUp:
+                  case ed.Activated:
+                  case ed.ActivatedUp:
+                  case ed.ActivatedDown:
+                    {
+                        const n = this.calculateThrottleValue(t, i);
+                        return this._nonVisualThrottleState = dd(n), this.setState({
+                            interactionState: e !== ed.Disabled ? this._nonVisualThrottleState : e,
+                            value: n
+                        }), !0;
+                    }
+
+                  default:
+                    return !1;
+                }
+            }
+            onPointerMove(t) {
+                const {interactionState: e, value: i} = this.getState();
+                switch (this._nonVisualThrottleState) {
+                  case ed.Activated:
+                  case ed.ActivatedUp:
+                  case ed.ActivatedDown:
+                    {
+                        const n = this.calculateThrottleValue(t, i);
+                        return this._nonVisualThrottleState = dd(n), this.setState({
+                            value: n,
+                            interactionState: e !== ed.Disabled ? this._nonVisualThrottleState : e
+                        }), !0;
+                    }
+
+                  default:
+                    return !1;
+                }
+            }
+            onPointerEnd() {
+                const {interactionState: t, value: e} = this.getState(), {sticky: i} = this.model.getProps();
+                switch (this._nonVisualThrottleState) {
+                  case ed.ActivatedUp:
+                    return this._nonVisualThrottleState = i ? ed.IdleUp : ed.Idle, this.setState({
+                        value: i ? mo(e, -1, 1) : 0,
+                        interactionState: t !== ed.Disabled ? this._nonVisualThrottleState : t
+                    }), !0;
+
+                  case ed.Activated:
+                  case ed.ActivatedDown:
+                    return this._nonVisualThrottleState = ed.Idle, this.setState({
+                        value: 0,
+                        interactionState: t !== ed.Disabled ? this._nonVisualThrottleState : t
+                    }), !0;
+
+                  default:
+                    return !1;
+                }
+            }
+            getIsStateUndimmable({interactionState: t}) {
+                return t === ed.Activated || t === ed.ActivatedDown || t === ed.ActivatedUp;
+            }
+            getKnobPosition() {
+                const {value: t} = this.getState();
+                return t * this.socket.collisionRadius;
+            }
+            calculateThrottleValue(t, e) {
+                const {relative: i = !0} = this.model.getProps(), {y: n, collisionRadius: r} = this.socket;
+                return i ? e - t.lastPositionDelta.y / (1 * r) : (n - t.position.y) / (1 * r);
+            }
+            updateCustomCollider() {
+                const t = this.getKnobPosition();
+                this._customCollisionZone.update(0, -t, this.socket.unitSize / 2);
+            }
+        }
+        var gd;
+        !function(t) {
+            t[t.None = 0] = "None";
+        }(gd || (gd = {}));
+
+// native-touch-forwarding | 原可读文件第 10900–10949 行
+        const fd = {
+            type: O.TouchForwarding,
+            opacity: {
+                value: 1,
+                energy: js.Instant
+            },
+            rotation: 0,
+            x: 0,
+            y: 0
+        };
+        class md extends Qa {
+            constructor(t, e, i) {
+                super(t, e, Object.keys(gd).length / 2, i), this._renderProperties = this.primeCache();
+            }
+            primeCache() {
+                return fd;
+            }
+            completeCache() {}
+        }
+        const yd = {
+            interactionState: gd.None
+        };
+        class vd extends hc {
+            constructor(t, e, i) {
+                super(yd, t, e, new Ss), this.inputProvider = i, this.onPointerEnd = t => this.forwardTouch(t.pointerIndex, "up"), 
+                this.onPointerMove = t => this.forwardTouch(t.pointerIndex, "down", t.position, t.additionalTouchData), 
+                this.onPointerStart = t => this.forwardTouch(t.pointerIndex, "down", t.initialPosition, t.additionalTouchData), 
+                this.forwardTouch = (t, e, i, n) => {
+                    let r, o, s = 0, a = 0, c = 0;
+                    return i && (r = mo((i.x - this._props.x) / this._props.width, 0, 1), o = mo((i.y - this._props.y) / this._props.height, 0, 1), 
+                    n && (s = n.pressure, a = n.diameter / this._props.height, c = n.orientation)), 
+                    this.inputProvider.sendTouchEvent(t, e, s, a, c, r, o), !1;
+                }, this._props = t.getProps(), this._renderPropertyManager = new md(this._props, yd, this.socket);
+            }
+            onPropsChangedInternal([, t]) {
+                this._props = t;
+            }
+            getIsStateUndimmable() {
+                return !1;
+            }
+        }
+        var _d;
+        !function(t) {
+            t[t.Hidden = 0] = "Hidden", t[t.Disabled = 1] = "Disabled", t[t.Idle = 2] = "Idle", 
+            t[t.Moving = 3] = "Moving", t[t.Activated = 4] = "Activated";
+        }(_d || (_d = {}));
+        const bd = js.Instant;
+        class Sd {
+            constructor(t = 3) {
+                this._backgroundColorMemo = new Za(Ma, t), this._faceImageGreyscaleColorMemo = new Za(Oa, 3);
+
+// touchpad-driver-controller-and-factory | 原可读文件第 11200–11405 行
+            }
+        }
+        class wd {
+            constructor() {
+                this._joystick$ = new Eo.t({
+                    x: 0,
+                    y: 0
+                }), this._currentVelocity = {
+                    x: 0,
+                    y: 0,
+                    time: 0
+                };
+            }
+            subscribeToJoystickInput(t) {
+                return this._joystick$.subscribe(t);
+            }
+            start() {
+                const t = Date.now();
+                this._currentVelocity.x = 0, this._currentVelocity.y = 0, this._currentVelocity.time = t, 
+                this._gameLoopSubscription && !this._gameLoopSubscription.closed || (this._gameLoopSubscription = Du.subscribe(this.onGameLoopTick.bind(this)));
+            }
+            moveDelta(t) {
+                const e = Date.now();
+                let i = e - this._currentVelocity.time;
+                i = 0 !== i ? i : 1, this._currentVelocity.x = t.x / i, this._currentVelocity.y = t.y / i, 
+                this._currentVelocity.time = e;
+            }
+            stop() {
+                this._gameLoopSubscription && (this._gameLoopSubscription.unsubscribe(), this._gameLoopSubscription = void 0);
+            }
+            dispose() {
+                this.stop();
+            }
+            onGameLoopTick(t) {
+                const e = Date.now();
+                e - this._currentVelocity.time >= 20 && (this._currentVelocity.x = 0, this._currentVelocity.y = 0, 
+                this._currentVelocity.time = e), this._joystick$.next(this._currentVelocity);
+            }
+        }
+        class Pd extends pc {
+            constructor(t, e, i, n) {
+                var r;
+                super({
+                    interactionState: !1 === (r = t.getProps()).visible ? _d.Hidden : !1 === r.enabled ? _d.Disabled : _d.Idle
+                }, t, e, n), this.inputProvider = i, this._pointerDeltaToSend = {
+                    x: 0,
+                    y: 0
+                }, this._nonVisualTouchpadState = _d.Idle, this._inputAccumulationMap = {
+                    analogMap: {},
+                    mouseMap: {}
+                }, this._joystickInputDriver = new wd, this._renderingAsAButton = !1, this.onStateChangedInternal = () => {
+                    const {action: t} = this.model.getProps();
+                    switch (this._nonVisualTouchpadState) {
+                      case _d.Activated:
+                        return this.model.commitAction(!0, t), void this.sendMouseInput();
+
+                      case _d.Moving:
+                        return this.model.commitAction(!1, t), void this.sendMouseInput();
+
+                      default:
+                        return this.model.commitAction(!1, t), void (this._hasJoystickInputMapping && this.model.resetAnalogInput());
+                    }
+                }, this.onPointerStart = t => {
+                    if (this._nonVisualTouchpadState === _d.Idle) {
+                        const {action: e} = this.model.getProps(), {interactionState: i} = this.getState();
+                        return this._pointerDeltaToSend.x += t.lastPositionDelta.x, this._pointerDeltaToSend.y += t.lastPositionDelta.y, 
+                        this._nonVisualTouchpadState = e ? _d.Activated : _d.Moving, i !== _d.Disabled && i !== this._nonVisualTouchpadState && this.setState({
+                            interactionState: this._nonVisualTouchpadState
+                        }), this.cancelJoystickInputDriverSubscription(), this._hasJoystickInputMapping && (this._joystickInputSubscription = this._joystickInputDriver.subscribeToJoystickInput(this.sendJoystickInput.bind(this)), 
+                        this._joystickInputDriver.start()), !0;
+                    }
+                    return !1;
+                };
+                const o = this.getState(), s = this.model.getProps();
+                this._mapping = Wu(s.axis), this._pipes = this._mapping.map(t => Xu(t.map, this.socket.inputScale)), 
+                this._hasJoystickInputMapping = zu(this._mapping), this._hasMouseInputMapping = Vu(this._mapping), 
+                this._renderPropertyManager = new kd(s, o, n), this._nonVisualTouchpadState = !1 === s.visible ? _d.Hidden : _d.Idle, 
+                this._renderingAsAButton = !0 === s.renderAsButton, this._identifiers = {
+                    button: (0, ac.A)(),
+                    touchpad: (0, ac.A)()
+                };
+            }
+            get type() {
+                return this._renderingAsAButton ? O.Button : O.Touchpad;
+            }
+            get identifier() {
+                return this._renderingAsAButton ? this._identifiers.button : this._identifiers.touchpad;
+            }
+            onPropsChangedInternal([t, e]) {
+                const i = this.getState();
+                this._mapping = Wu(e.axis), this._pipes = this._mapping.map(t => Xu(t.map, this.socket.inputScale)), 
+                this._hasJoystickInputMapping = zu(this._mapping), this._hasMouseInputMapping = Vu(this._mapping), 
+                t && (this._nonVisualTouchpadState !== _d.Activated || zl(t.action, e.action) || t.action && this.model.commitAction(!1, t.action), 
+                this._renderingAsAButton = !0 === e.renderAsButton), this._nonVisualTouchpadState !== _d.Moving && this._nonVisualTouchpadState !== _d.Activated || t.axis === e.axis || this.model.resetAnalogInput();
+                const n = !1 !== e.enabled, r = !1 !== e.visible;
+                if (r ? n ? r && i.interactionState === _d.Hidden ? (this._nonVisualTouchpadState = _d.Idle, 
+                this.setState({
+                    interactionState: n ? this._nonVisualTouchpadState : _d.Disabled
+                })) : n && i.interactionState === _d.Disabled && this.setState({
+                    interactionState: this._nonVisualTouchpadState
+                }) : (this._nonVisualTouchpadState = this._nonVisualTouchpadState === _d.Hidden ? _d.Idle : this._nonVisualTouchpadState, 
+                i.interactionState !== _d.Disabled && this.setState({
+                    interactionState: _d.Disabled
+                })) : i.interactionState !== _d.Hidden && (this._nonVisualTouchpadState = _d.Hidden, 
+                this.setState({
+                    interactionState: this._nonVisualTouchpadState
+                })), this._nonVisualTouchpadState === _d.Moving || this._nonVisualTouchpadState === _d.Activated) {
+                    const {interactionState: t} = this.getState();
+                    this._nonVisualTouchpadState = e.action ? _d.Activated : _d.Moving, t !== _d.Disabled && t !== this._nonVisualTouchpadState && this.setState({
+                        interactionState: this._nonVisualTouchpadState
+                    });
+                }
+            }
+            unmountInternal() {
+                var t;
+                null === (t = this._joystickInputSubscription) || void 0 === t || t.unsubscribe(), 
+                this._joystickInputDriver.dispose();
+            }
+            onPointerMove(t) {
+                switch (this._nonVisualTouchpadState) {
+                  case _d.Activated:
+                  case _d.Moving:
+                    return this._pointerDeltaToSend.x += t.lastPositionDelta.x, this._pointerDeltaToSend.y += t.lastPositionDelta.y, 
+                    this._hasJoystickInputMapping && this._joystickInputDriver.moveDelta(t.lastPositionDelta), 
+                    !0;
+
+                  default:
+                    return !1;
+                }
+            }
+            onPointerEnd() {
+                switch (this._nonVisualTouchpadState) {
+                  case _d.Moving:
+                  case _d.Activated:
+                    {
+                        const {interactionState: t} = this.getState();
+                        return this._nonVisualTouchpadState = _d.Idle, t !== _d.Disabled && t !== this._nonVisualTouchpadState && this.setState({
+                            interactionState: this._nonVisualTouchpadState
+                        }), this.cancelJoystickInputDriverSubscription(), this._joystickInputDriver.stop(), 
+                        !0;
+                    }
+
+                  default:
+                    return !1;
+                }
+            }
+            getIsStateUndimmable({interactionState: t}) {
+                return t === _d.Activated || t === _d.Moving;
+            }
+            sendMouseInput() {
+                const t = this._pointerTracker.peekFront();
+                if ((null === t || void 0 === t ? void 0 : t.position) && this._hasMouseInputMapping) {
+                    qu(this._inputAccumulationMap.mouseMap), Gu(this._pointerDeltaToSend, this._pipes, this._mapping, this._inputAccumulationMap, Jl.Mouse);
+                    const {mouseMap: {relativeMouseX: t, relativeMouseY: e}} = this._inputAccumulationMap;
+                    this._pointerDeltaToSend.x = 0, this._pointerDeltaToSend.y = 0;
+                    const i = {
+                        x: null !== t && void 0 !== t ? t : 0,
+                        y: null !== e && void 0 !== e ? e : 0
+                    };
+                    0 === i.x && 0 === i.y || this.inputProvider.sendRelativeMouseEvent(i);
+                }
+            }
+            sendJoystickInput(t) {
+                Zu(this._inputAccumulationMap.analogMap), Gu(t, this._pipes, this._mapping, this._inputAccumulationMap, Jl.Gamepad), 
+                this.model.setAnalogInput(this._inputAccumulationMap.analogMap);
+            }
+            cancelJoystickInputDriverSubscription() {
+                this._joystickInputSubscription && !this._joystickInputSubscription.closed && (this._joystickInputSubscription.unsubscribe(), 
+                this._joystickInputSubscription = void 0);
+            }
+        }
+        class Ad extends Tc {
+            constructor(t, e, i, n) {
+                super(), this.layerManager = t, this.inputProvider = e, this.userInterface = i, 
+                this.getSurfaceWidth = n;
+            }
+            visitControlSocket(t) {
+                if (!t.props && t.control) t.clearControl(); else if (t.props) if (t.control && t.control.model.getProps().type === t.props.type) t.control.model.updateProps(t.props); else {
+                    let e;
+                    if (t.control && t.control.model.getProps().type !== t.props.type && t.clearControl(), 
+                    t.props.type === O.Button) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new Ql(i, this.userInterface, t);
+                    } else if (t.props.type === O.DirectionalPad) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new hu(i, this.userInterface, t);
+                    } else if (t.props.type === O.Joystick) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new td(i, this.userInterface, this.inputProvider, t);
+                    } else if (t.props.type === O.Throttle) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new pd(i, this.userInterface, t, this.getSurfaceWidth);
+                    } else if (t.props.type === O.Touchpad) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new Pd(i, this.userInterface, this.inputProvider, t);
+                    } else if (t.props.type === O.ArcadeButtons) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new Gl(i, this.userInterface, t);
+                    } else if (t.props.type === O.TouchForwarding) {
+                        const i = new xc(this.layerManager, this.inputProvider, t.props);
+                        e = new vd(i, this.userInterface, this.inputProvider);
+                    }
+                    e && (t.setControl(e), e.mount());
+                }
+            }
+        }
+
+// sensor-controllers | 原可读文件第 11406–11555 行
+        class Cd extends dc {
+            constructor(t, e, i, n) {
+                super(t, n), this.sensorStore = e, this.inputProvider = i, this._inputAccumulationMap = {
+                    analogMap: {},
+                    mouseMap: {}
+                };
+                const r = this.model.getProps();
+                this._mapping = Wu(r.axis), this._pipes = this._mapping.map(t => Xu(t.map, r.sensitivity));
+            }
+            unmount() {
+                super.unmount(), this._sensorSubscription && this._sensorSubscription.unsubscribe();
+            }
+            mount() {
+                super.mount(), this._sensorSubscription && this._sensorSubscription.unsubscribe(), 
+                this._sensorSubscription = this.model.props$.pipe((0, eo.T)(t => t.enabled), (0, 
+                xi.F)(), Si(t => !1 === t ? ii : this.sensorStore.accelerometer$.pipe((0, wi.E)(this.sensorStore.orientation$), (0, 
+                eo.T)(t => {
+                    const [e, i] = t, {x: n, y: r, z: o} = "axisZY" === this._mapping[0].map.input ? {
+                        x: i === qc.Clockwise90 ? -e.z : e.z,
+                        y: e.y,
+                        z: e.z
+                    } : e;
+                    switch (i) {
+                      case qc.Clockwise270:
+                        return {
+                            x: n,
+                            y: r,
+                            z: o
+                        };
+
+                      case qc.Clockwise90:
+                        return {
+                            x: -n,
+                            y: -r,
+                            z: o
+                        };
+
+                      case qc.Clockwise0:
+                        return {
+                            x: -r,
+                            y: n,
+                            z: o
+                        };
+
+                      case qc.Clockwise180:
+                        return {
+                            x: r,
+                            y: -n,
+                            z: o
+                        };
+
+                      default:
+                        return {
+                            x: n,
+                            y: r,
+                            z: o
+                        };
+                    }
+                })))).subscribe(t => {
+                    Qu(this._inputAccumulationMap), Gu(t, this._pipes, this._mapping, this._inputAccumulationMap, Jl.GamepadAndMouse);
+                    const {analogMap: e, mouseMap: {relativeMouseX: i, relativeMouseY: n}} = this._inputAccumulationMap;
+                    if (Vu(this._mapping)) {
+                        const t = {
+                            x: i && 0 !== i ? i : 0,
+                            y: n && 0 !== n ? n : 0
+                        };
+                        0 === t.x && 0 === t.y || this.inputProvider.sendRelativeMouseEvent(t);
+                    }
+                    zu(this._mapping) && this.model.setAnalogInput(e);
+                });
+            }
+            onPropsChangedInternal([, t]) {
+                this._mapping = Wu(t.axis), this._pipes = this._mapping.map(e => Xu(e.map, t.sensitivity));
+            }
+        }
+        class xd extends dc {
+            constructor(t, e, i, n) {
+                super(t, n), this.sensorStore = e, this.inputProvider = i, this._inputAccumulationMap = {
+                    analogMap: {},
+                    mouseMap: {}
+                };
+                const r = this.model.getProps();
+                this._mapping = Wu(r.axis), this._pipes = this._mapping.map(t => Xu(t.map, r.sensitivity));
+            }
+            mount() {
+                super.mount(), this._sensorSubscription && this._sensorSubscription.unsubscribe(), 
+                this._sensorSubscription = this.model.props$.pipe((0, eo.T)(t => t.enabled), (0, 
+                xi.F)(), Si(t => !1 === t ? ii : this.sensorStore.gyroscope$.pipe((0, wi.E)(this.sensorStore.orientation$), (0, 
+                eo.T)(t => {
+                    const [e, i] = t, {x: n, y: r, z: o} = "axisZY" === this._mapping[0].map.input ? {
+                        x: i === qc.Clockwise90 ? -e.z : e.z,
+                        y: e.y,
+                        z: e.z
+                    } : e;
+                    switch (i) {
+                      case qc.Clockwise270:
+                        return {
+                            x: n,
+                            y: r,
+                            z: o
+                        };
+
+                      case qc.Clockwise90:
+                        return {
+                            x: -n,
+                            y: -r,
+                            z: o
+                        };
+
+                      case qc.Clockwise0:
+                        return {
+                            x: -r,
+                            y: n,
+                            z: o
+                        };
+
+                      case qc.Clockwise180:
+                        return {
+                            x: r,
+                            y: -n,
+                            z: o
+                        };
+
+                      default:
+                        return {
+                            x: n,
+                            y: r,
+                            z: o
+                        };
+                    }
+                })))).subscribe(t => {
+                    Qu(this._inputAccumulationMap), Gu(t, this._pipes, this._mapping, this._inputAccumulationMap, Jl.GamepadAndMouse);
+                    const {analogMap: e, mouseMap: {relativeMouseX: i, relativeMouseY: n}} = this._inputAccumulationMap;
+                    if (Vu(this._mapping)) {
+                        const t = {
+                            x: i && 0 !== i ? i : 0,
+                            y: n && 0 !== n ? n : 0
+                        };
+                        0 === t.x && 0 === t.y || this.inputProvider.sendRelativeMouseEvent(t);
+                    }
+                    zu(this._mapping) && this.model.setAnalogInput(e);
+                });
+            }
+            unmount() {
+                super.unmount(), this._sensorSubscription && this._sensorSubscription.unsubscribe();
+            }
+            onPropsChangedInternal([, t]) {
+                this._mapping = Wu(t.axis), this._pipes = this._mapping.map(e => Xu(e.map, t.sensitivity));
+            }
+        }
+
+// pointer-hit-tester-touch-manager | 原可读文件第 12629–12833 行
+        let wh = _h = class {
+            constructor(t, e, i, n) {
+                this.touchManager = t, this.inputProvider = e, this.renderArea = i, this.logger = n, 
+                this._surfaceSubscriptions = new Map, this._renderAreaSubscription = i.getSurfaceKeysStream().pipe((0, 
+                eo.T)(t => {
+                    const e = new Map;
+                    for (const i of t) {
+                        const t = this._surfaceSubscriptions.get(i);
+                        if (t) e.set(i, t), this._surfaceSubscriptions.delete(i); else {
+                            const t = this.makeHitTestingSubscriptionForSurface(i);
+                            t && e.set(i, t);
+                        }
+                    }
+                    for (const i of this._surfaceSubscriptions.values()) i.closed || i.unsubscribe();
+                    this._surfaceSubscriptions.clear(), this._surfaceSubscriptions = e;
+                })).subscribe();
+            }
+            unmount() {
+                for (const t of this._surfaceSubscriptions.values()) t.unsubscribe();
+                this._surfaceSubscriptions.clear(), this._renderAreaSubscription.unsubscribe();
+            }
+            makeHitTestingSubscriptionForSurface(t) {
+                const e = this.renderArea.getRenderControlsStreamForSurface(t), i = this.touchManager.getPointerUpdatesStreamForSurface(t);
+                if (e && i) return i.pipe((0, ki.M)(e => {
+                    this.inputProvider.startFrame(), this.renderArea.startRenderFrameOnSurface(t);
+                    try {
+                        let i = e.popFront();
+                        for (;i; ) this.renderArea.tryCollisionOnSurface(t, i) && i.flushNotification(), 
+                        i = e.popFront();
+                    } finally {
+                        this.renderArea.endRenderFrameOnSurface(t), this.inputProvider.endFrame();
+                    }
+                })).subscribe();
+                this.logger.log(_h.Tag, B.LogLevel.Warn, `Attempted to create a hit-testing subscription for a surface with key ${t} but there are no ${void 0 === e && void 0 === i ? "render controls and pointer updates" : void 0 === e ? "render controls" : "pointer updates"} for this surface.`);
+            }
+        };
+        wh.Tag = "TouchAdaptationKit/HitTester", wh = _h = bh([ Ge(), kh(0, qe(k)), kh(1, qe(d)), kh(2, qe(m)), kh(3, qe(f)), Sh("design:paramtypes", [ Function, Function, Function, Object ]) ], wh);
+        var Ph, Ah = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, Ch = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, xh = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        let Ih = Ph = class {
+            constructor(t) {
+                this._inputStream = new Eo.t(!1), this._initializedStream = this._inputStream.pipe((0, 
+                xi.F)(), (0, ki.M)(e => {
+                    e ? t.log(Ph.TAG, B.LogLevel.Debug, "Initialized") : t.log(Ph.TAG, B.LogLevel.Debug, "Uninitialized");
+                }), ji(1));
+            }
+            initialize() {
+                this._inputStream.next(!0);
+            }
+            uninitialize() {
+                this._inputStream.next(!1);
+            }
+            getInitializedStream() {
+                return this._initializedStream;
+            }
+        };
+        var Mh;
+        Ih.TAG = "TouchAdaptationKit/Initializer", Ih = Ph = Ah([ Ge(), xh(0, qe(f)), Ch("design:paramtypes", [ Object ]) ], Ih), 
+        function(t) {
+            t.Touch = "touch", t.Mouse = "mouse", t.Pen = "pen";
+        }(Mh || (Mh = {}));
+        class Th {
+            constructor(t, e = cc.End, i = 0, n = 0, r = 0, o = 0, s = 0, a = Mh.Touch) {
+                this._pendingNotification = !1, this.pointerType = a, this.state = e, this.pointerIndex = t, 
+                this.initialPosition = {
+                    x: i,
+                    y: n
+                }, this.position = {
+                    x: i,
+                    y: n
+                }, this.lastPositionDelta = {
+                    x: 0,
+                    y: 0
+                }, this.additionalTouchData = {
+                    pressure: r,
+                    diameter: s,
+                    orientation: o
+                };
+            }
+            get control() {
+                return this._control;
+            }
+            updatePointerData(t, e, i = 0, n = 0, r = 0, o = Mh.Touch) {
+                const s = this.state === cc.End || this.position.x !== t || this.position.y !== e || this.additionalTouchData.pressure !== i || this.additionalTouchData.orientation !== n || this.additionalTouchData.diameter !== r || this.pointerType !== o;
+                return this.state === cc.End ? (this.state = cc.Start, this.initialPosition.x = t, 
+                this.initialPosition.y = e, this.position.x = t, this.position.y = e, this.lastPositionDelta.x = 0, 
+                this.lastPositionDelta.y = 0) : (this.state = cc.Move, this.lastPositionDelta.x = t - this.position.x, 
+                this.lastPositionDelta.y = e - this.position.y, this.position.x = t, this.position.y = e), 
+                this.additionalTouchData.pressure = i, this.additionalTouchData.orientation = n, 
+                this.additionalTouchData.diameter = r, this.pointerType = o, s;
+            }
+            reset() {
+                this.identifier = void 0, this.state = cc.End;
+            }
+            flushNotification(t = !1) {
+                if (this._pendingNotification || t) {
+                    if (void 0 !== this._pendingState) {
+                        const t = this.state;
+                        this.state = this._pendingState, this.notify(), this.state = t;
+                    } else this.notify();
+                    this._pendingNotification = !1, this._pendingState = void 0;
+                }
+            }
+            tryAttachControl(t) {
+                return !(this._control || !t) && (this.state === cc.Move && (this._pendingState = cc.Start, 
+                this.initialPosition.x = this.position.x, this.initialPosition.y = this.position.y, 
+                this.lastPositionDelta.x = 0, this.lastPositionDelta.y = 0), this._control = t, 
+                this.state !== cc.End && (this._pendingNotification = !0), !0);
+            }
+            swapControls(t) {
+                let e;
+                return this._control && (e = this.detachControl()), this.tryAttachControl(t), e;
+            }
+            detachControl() {
+                if (!this._control) return;
+                const t = this._control;
+                this._control = void 0;
+                const e = this.state;
+                return this.state !== cc.End && (this.state = cc.End), t.onPointerDataUpdated(this), 
+                this.state = e, t;
+            }
+            notify() {
+                this._control && this._control.onPointerDataUpdated(this);
+            }
+        }
+        var Oh = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, Rh = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, Dh = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        let jh = class {
+            constructor(t, e) {
+                this._perSurfaceTouchManagementMap = new Map, this._renderAreaSubscription = t.getSurfaceKeysStream().subscribe(t => {
+                    const i = new Map;
+                    for (const n of t) {
+                        const t = this._perSurfaceTouchManagementMap.get(n);
+                        if (t) i.set(n, t), this._perSurfaceTouchManagementMap.delete(n); else {
+                            const t = new Eo.t([]), r = {
+                                data: new Array(12),
+                                count: 0
+                            }, o = new Array(12), s = new lc, a = [];
+                            for (let e = 0; e < 12; e++) a.push(new Th(e));
+                            const c = t.pipe((0, eo.T)(t => {
+                                r.count = 0, t.length > o.length && (o.length = t.length);
+                                for (let e = 0; e < a.length; e++) {
+                                    if (a[e].state === cc.End) {
+                                        r.data[r.count] = e, r.count++;
+                                        continue;
+                                    }
+                                    let i = -1;
+                                    for (let n = 0; n < t.length; n++) if (t[n].identifier === a[e].identifier) {
+                                        i = n, o[n] = !0;
+                                        break;
+                                    }
+                                    -1 !== i ? a[e].updatePointerData(t[i].pageX, t[i].pageY, t[i].pressure, t[i].orientation, t[i].diameter, t[i].pointerType) && s.tryPushBack(a[e]) : a[e].state !== cc.End && (a[e].reset(), 
+                                    s.tryPushBack(a[e]));
+                                }
+                                let i = 0;
+                                for (let n = 0; n < t.length; n++) if (o[n]) o[n] = !1; else if ((t[n].pointerType === Mh.Touch || e.getCurrentOptions().allowMouseInteraction) && i < r.count) {
+                                    const e = a[r.data[i]];
+                                    i++, e.identifier = t[n].identifier, e.updatePointerData(t[n].pageX, t[n].pageY, t[n].pressure, t[n].orientation, t[n].diameter, t[n].pointerType), 
+                                    s.tryPushBack(e);
+                                }
+                                return s;
+                            }), ji(1)), l = {
+                                freePointers: r,
+                                pointerUpdates: s,
+                                pointerUpdatesStream: c,
+                                pointers: a,
+                                rawPointerEventsStream: t,
+                                rawPointerEventsWasHandledArray: o
+                            };
+                            i.set(n, l);
+                        }
+                    }
+                    for (const e of this._perSurfaceTouchManagementMap.values()) e.rawPointerEventsStream.complete();
+                    this._perSurfaceTouchManagementMap.clear(), this._perSurfaceTouchManagementMap = i;
+                });
+            }
+            unmount() {
+                for (const t of this._perSurfaceTouchManagementMap.values()) t.rawPointerEventsStream.complete();
+                this._perSurfaceTouchManagementMap.clear(), this._renderAreaSubscription.unsubscribe();
+            }
+            handlePointerEvent(t, e) {
+                var i;
+                null === (i = this._perSurfaceTouchManagementMap.get(t)) || void 0 === i || i.rawPointerEventsStream.next(e);
+            }
+            getPointerUpdatesStreamForSurface(t) {
+                var e;
+                return null === (e = this._perSurfaceTouchManagementMap.get(t)) || void 0 === e ? void 0 : e.pointerUpdatesStream;
+
+// tak-core-assembly-and-lifecycle | 原可读文件第 12851–13015 行
+        class Bh {
+            constructor(t) {
+                this.setTouchState = (t, e) => {
+                    this._touchManager.handlePointerEvent(t, e);
+                }, this.updateTAKBridge = t => Object.assign(this._rootContainer.get(P), t);
+                const {jsonValidator: e, takBridge: i, settingsProvider: n, rumble: r, sensorStore: o, runtimeOptions: A, runtimeCallbacks: C, logger: x} = t;
+                this._rootContainer = new Ye, this._rootContainer.bind(s).toConstantValue(this._rootContainer), 
+                this._rootContainer.bind(P).toConstantValue(i), this._rootContainer.bind(S).toConstantValue(n), 
+                this._rootContainer.bind(y).toConstantValue(r), this._rootContainer.bind(_).toConstantValue(o), 
+                this._rootContainer.bind(f).toConstantValue(x), this._rootContainer.bind(h).toConstantValue(e), 
+                this._rootContainer.bind(b).to(th).inSingletonScope(), this._rootContainer.bind(u).to(Ih).inSingletonScope(), 
+                this._rootContainer.bind(d).to(jo).inSingletonScope(), this._rootContainer.bind(k).to(jh).inSingletonScope(), 
+                this._rootContainer.bind(w).to(vh).inSingletonScope(), this._rootContainer.bind(p).to(Fo).inSingletonScope(), 
+                this._rootContainer.bind(v).to(Yo).inSingletonScope(), this._rootContainer.bind(a).to(Zr).inSingletonScope(), 
+                this._rootContainer.bind(c).to(so).inSingletonScope(), this._rootContainer.bind(g).to(Vo).inSingletonScope(), 
+                this._rootContainer.bind(l).to(wh).inSingletonScope(), this._rootContainer.bind(m).to(Wd).inSingletonScope(), 
+                this._touchManager = this._rootContainer.get(k), this._userInterface = this._rootContainer.get(w), 
+                this._settings = this._rootContainer.get(b), this._runtimeOptionsService = this._rootContainer.get(v), 
+                this._bundleProcessor = this._rootContainer.get(c), this._layoutCoordinator = this._rootContainer.get(g), 
+                this._hitTester = this._rootContainer.get(l), this._renderArea = this._rootContainer.get(m), 
+                this._initializer = this._rootContainer.get(u), this.overlayUIStream$ = this._userInterface.getOverlayStream(), 
+                C && this._runtimeOptionsService.updateCallbacks(C), A && this._runtimeOptionsService.updateOptions(A);
+            }
+            start() {
+                this._initializer.initialize();
+            }
+            getControlsStream(t) {
+                return this._renderArea.getRenderControlsStreamForSurface(t);
+            }
+            getSurfaceKeyStream() {
+                return this._renderArea.getSurfaceKeysStream();
+            }
+            dispatchAction(t) {
+                switch (t.action) {
+                  case Eh.ToggleErgoEdit:
+                    this._userInterface.toggleIsErgoEditActive();
+                    break;
+
+                  case Eh.DeleteScopedSettings:
+                    this._settings.updateSettings({
+                        action: ds.DeleteScopedSettings,
+                        removeSelector: t.removeSelector
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.ResetSettingsForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.ResetSettingsForScope,
+                        scope: this._userInterface.getCurrentScope()
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateSensorsSettingsForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateSensorsForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        gyro: t.gyro,
+                        accelerometer: t.accelerometer
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateGyroEnabledForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateGyroEnabledForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        enabled: t.enabled
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateTouchHapticsEnabled:
+                    this._settings.updateSettings({
+                        action: ds.UpdateTouchHapticsEnabled,
+                        enabled: t.enabled
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateGyroSensitivityForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateGyroSensitivityForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        sensitivity: t.sensitivity
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateOpacityMultiplierForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateOpacityMultiplierForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        value: t.opacity
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateContainerUnitSizeMultiplierForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateContainerUnitSizeMultiplierForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        value: t.multiplier,
+                        containers: t.containers,
+                        global: t.global
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateJoystickRelativityForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateJoystickRelativityForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        value: t.relativity
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.UpdateJoystickSensitivityForCurrentScope:
+                    this._settings.updateSettings({
+                        action: ds.UpdateJoystickSensitivityForScope,
+                        scope: this._userInterface.getCurrentScope(),
+                        value: t.sensitivity
+                    }), this._settings.commitSettings();
+                    break;
+
+                  case Eh.SetStylingOverrides:
+                    this._userInterface.setStylingOverrides(t.overrides);
+                    break;
+
+                  case Eh.UpdateRuntimeCallbacks:
+                    this._runtimeOptionsService.updateCallbacks(t.callbacks);
+                    break;
+
+                  case Eh.UpdateRuntimeOptions:
+                    this._runtimeOptionsService.updateOptions(t.options);
+                    break;
+
+                  case Eh.ChangeLayoutForScope:
+                    this._bundleProcessor.changeLayoutForScope(t.change), this._layoutCoordinator.changeLayoutForScope(t.change);
+                }
+            }
+            updateRenderAreaParameters(t) {
+                this._renderArea.updateParameters(t);
+            }
+            unmount() {
+                this._initializer.uninitialize(), this._bundleProcessor.unmount(), this._touchManager.unmount(), 
+                this._hitTester.unmount(), this._renderArea.unmount();
+            }
+        }
+        function Fh(t, e) {
+            return t === e || function(t, e) {
+                return !!(t === e || t && e && "color" === t.type && "color" === e.type && t.opacity === e.opacity && zs(t.value, e.value));
+            }(t, e) || function(t, e) {
+                return !!(t === e || t && e && "asset" === t.type && "asset" === e.type && t.opacity === e.opacity && t.value === e.value);
+            }(t, e);
+        }
+        const Lh = {
+            constants: {
+                internal: {
+                    min: .1,
+                    max: 2
+                },
+                displayed: {
+                    min: 0,
+                    max: 10
+                }
+            },
+            converters: {
+                internalToDisplayed: t => t <= .1 ? 0 : t >= 2 ? 10 : Math.round(5 * t),
+                displayedToInternal: t => t <= 0 ? .1 : t >= 10 ? 2 : t / 5
+            }
+        }, zh = {
+
+// radial-adjuster-controller | 原可读文件第 6203–6294 行
+        class gc extends hc {
+            constructor(t, e, i, n, r) {
+                super({
+                    interactionState: Ds.Idle
+                }, t, e, i), this.onDeltaChanged = n, this.onCommitDelta = r, this._compatibleInteractionMode = rc.UserCustomization, 
+                this._previousInteractionState = Ds.Idle, this._offset = {
+                    cartesian: {
+                        x: 0,
+                        y: 0
+                    },
+                    polar: {
+                        radius: 0,
+                        angle: 0
+                    }
+                }, this._activePointerIndex = -1, this._delta = {
+                    x: 0,
+                    y: 0,
+                    angle: 0,
+                    radius: 0
+                }, this._renderPropertyManager = new nc(this.model.getProps(), this.getState(), i), 
+                this._styleConfigSubscription = e.getContainersStylingConfigurationStream().pipe((0, 
+                eo.T)(t => t.adjusters)).subscribe(this.onStyleConfigurationChanged.bind(this));
+            }
+            unmountInternal() {
+                this._styleConfigSubscription.unsubscribe();
+            }
+            onPointerStart({initialPosition: t, pointerIndex: e}) {
+                const {interactionState: i} = this.getState();
+                if (i === Ds.Idle && -1 === this._activePointerIndex) {
+                    this._activePointerIndex = e;
+                    const {x: i, y: n, unitSize: r, size: o} = this.socket;
+                    return this._offset.cartesian.x = t.x - i, this._offset.cartesian.y = t.y - n, this._offset.polar.angle = Po(this._offset.cartesian.x, this._offset.cartesian.y), 
+                    this._offset.polar.radius = Ao(this._offset.cartesian.x, this._offset.cartesian.y), 
+                    this._offset.polar.radius <= o / 2 - r ? this.setState({
+                        interactionState: Ds.Moving
+                    }) : this.setState({
+                        interactionState: Ds.RotatingAndScaling
+                    }), !0;
+                }
+                return !1;
+            }
+            onStateChangedInternal(t) {
+                this.onDeltaChanged(this._delta.x, this._delta.y, this._delta.angle, this._delta.radius), 
+                this._previousInteractionState !== Ds.Idle && t.interactionState === Ds.Idle && this.onCommitDelta(), 
+                this._previousInteractionState = t.interactionState;
+            }
+            onPointerMove({pointerIndex: t, lastPositionDelta: e, position: i}) {
+                const {interactionState: n} = this.getState();
+                if (t !== this._activePointerIndex || n === Ds.Idle) return !1;
+                switch (n) {
+                  case Ds.RotatingAndScaling:
+                    {
+                        const {reflected: t, x: e, y: n} = this.socket, r = t ? -1 : 1, o = i.x - e, s = i.y - n, a = Ao(o, s), c = Po(o, s), l = a - this._offset.polar.radius, u = c - this._offset.polar.angle;
+                        return this._delta.x = 0, this._delta.y = 0, this._delta.radius = l, this._delta.angle = u * r, 
+                        this._offset.cartesian.x = o, this._offset.cartesian.y = s, this._offset.polar.angle = c, 
+                        this._offset.polar.radius = a, !0;
+                    }
+
+                  case Ds.Moving:
+                    return this._delta.radius = 0, this._delta.angle = 0, this._delta.x = e.x, this._delta.y = e.y, 
+                    !0;
+                }
+            }
+            onPointerEnd({pointerIndex: t}) {
+                return t === this._activePointerIndex && (this._activePointerIndex = -1, this.setState({
+                    interactionState: Ds.Idle
+                }), this._delta.radius = 0, this._delta.angle = 0, this._delta.x = 0, this._delta.y = 0, 
+                !0);
+            }
+            getIsStateUndimmable() {
+                return !1;
+            }
+            onStyleConfigurationChanged(t) {
+                if (this._renderPropertyManager.willOpacityChangesCauseUpdates(t.opacity)) {
+                    this.startRenderFrame();
+                    try {
+                        this._isRenderDirty = !0, this._renderPropertyManager.updateOpacity(t.opacity);
+                    } finally {
+                        this.endRenderFrame();
+                    }
+                }
+            }
+        }
+        var fc = i(170045), mc = function(t) {
+            function e(e, i) {
+                return t.call(this) || this;
+            }
+            return (0, Ii.__extends)(e, t), e.prototype.schedule = function(t, e) {
+                return void 0 === e && (e = 0), this;
+            }, e;
+        }(fc.yU), yc = {
+            setInterval: function(t, e) {
+
+// arcade-buttons-controller | 原可读文件第 8684–8807 行
+        class Gl extends hc {
+            constructor(t, e, i) {
+                super(function(t) {
+                    var e, i, n, r;
+                    return {
+                        interactionState: {
+                            lightKick: !1 === t.lightKick.visible ? Kl.Hidden : !1 === t.lightKick.enabled ? Kl.Disabled : Kl.Idle,
+                            mediumKick: !1 === t.mediumKick.visible ? Kl.Hidden : !1 === t.mediumKick.enabled ? Kl.Disabled : Kl.Idle,
+                            heavyKick: !1 === t.heavyKick.visible ? Kl.Hidden : !1 === t.heavyKick.enabled ? Kl.Disabled : Kl.Idle,
+                            specialKick: !1 === (null === (e = t.specialKick) || void 0 === e ? void 0 : e.visible) ? Kl.Hidden : !1 === (null === (i = t.specialKick) || void 0 === i ? void 0 : i.enabled) ? Kl.Disabled : Kl.Idle,
+                            lightPunch: !1 === t.lightPunch.visible ? Kl.Hidden : !1 === t.lightPunch.enabled ? Kl.Disabled : Kl.Idle,
+                            mediumPunch: !1 === t.mediumPunch.visible ? Kl.Hidden : !1 === t.mediumPunch.enabled ? Kl.Disabled : Kl.Idle,
+                            heavyPunch: !1 === t.heavyPunch.visible ? Kl.Hidden : !1 === t.heavyPunch.enabled ? Kl.Disabled : Kl.Idle,
+                            specialPunch: !1 === (null === (n = t.specialPunch) || void 0 === n ? void 0 : n.visible) ? Kl.Hidden : !1 === (null === (r = t.specialPunch) || void 0 === r ? void 0 : r.enabled) ? Kl.Disabled : Kl.Idle
+                        }
+                    };
+                }(t.getProps()), t, e, i), this._nonVisualButtonStates = {
+                    lightKick: Kl.Idle,
+                    mediumKick: Kl.Idle,
+                    heavyKick: Kl.Idle,
+                    specialKick: Kl.Idle,
+                    lightPunch: Kl.Idle,
+                    mediumPunch: Kl.Idle,
+                    heavyPunch: Kl.Idle,
+                    specialPunch: Kl.Idle
+                }, this.onPointerStart = () => this.onTouchChanged(), this.onPointerMove = () => this.onTouchChanged(), 
+                this.onPointerEnd = () => this.onTouchChanged();
+                const n = t.getProps(), r = this.getState();
+                this._renderPropertyManager = new $l(n, r, i), this.resetNonVisualState();
+            }
+            onPropsChangedInternal([t, e]) {
+                const i = this.getState();
+                t && Object.keys(this._nonVisualButtonStates).map(i => {
+                    const n = e[i], r = t[i];
+                    this._nonVisualButtonStates[i] !== Kl.Activated || zl(null === r || void 0 === r ? void 0 : r.action, null === n || void 0 === n ? void 0 : n.action) || (null === r || void 0 === r ? void 0 : r.action) && this.model.commitAction(!1, r.action);
+                });
+                const n = {
+                    lightKick: Zl(i.interactionState.lightKick, this._nonVisualButtonStates.lightKick, e.lightKick),
+                    mediumKick: Zl(i.interactionState.mediumKick, this._nonVisualButtonStates.mediumKick, e.mediumKick),
+                    heavyKick: Zl(i.interactionState.heavyKick, this._nonVisualButtonStates.heavyKick, e.heavyKick),
+                    specialKick: Zl(i.interactionState.specialKick, this._nonVisualButtonStates.specialKick, e.specialKick),
+                    lightPunch: Zl(i.interactionState.lightPunch, this._nonVisualButtonStates.lightPunch, e.lightPunch),
+                    mediumPunch: Zl(i.interactionState.mediumPunch, this._nonVisualButtonStates.mediumPunch, e.mediumPunch),
+                    heavyPunch: Zl(i.interactionState.heavyPunch, this._nonVisualButtonStates.heavyPunch, e.heavyPunch),
+                    specialPunch: Zl(i.interactionState.specialPunch, this._nonVisualButtonStates.specialPunch, e.specialPunch)
+                };
+                this._nonVisualButtonStates = {
+                    lightKick: n.lightKick.nonVisualState,
+                    mediumKick: n.mediumKick.nonVisualState,
+                    heavyKick: n.heavyKick.nonVisualState,
+                    specialKick: n.specialKick.nonVisualState,
+                    lightPunch: n.lightPunch.nonVisualState,
+                    mediumPunch: n.mediumPunch.nonVisualState,
+                    heavyPunch: n.heavyPunch.nonVisualState,
+                    specialPunch: n.specialPunch.nonVisualState
+                }, this.setState({
+                    interactionState: {
+                        lightKick: n.lightKick.visualState,
+                        mediumKick: n.mediumKick.visualState,
+                        heavyKick: n.heavyKick.visualState,
+                        specialKick: n.specialKick.visualState,
+                        lightPunch: n.lightPunch.visualState,
+                        mediumPunch: n.mediumPunch.visualState,
+                        heavyPunch: n.heavyPunch.visualState,
+                        specialPunch: n.specialPunch.visualState
+                    }
+                });
+            }
+            onStateChangedInternal(t) {
+                const e = this.model.getProps();
+                let i = {};
+                Object.keys(this._nonVisualButtonStates).map(t => {
+                    const n = e[t], r = this._nonVisualButtonStates[t];
+                    if (n) if (r === Kl.Activated) i = this.model.commitAction(!0, n.action, !1, i); else i = this.model.commitAction(!1, n.action, !1, i);
+                }), this.model.setAnalogInput(i);
+            }
+            getIsStateUndimmable() {
+                return !1;
+            }
+            onTouchChanged() {
+                if (this.resetNonVisualState(), this._renderPropertyManager.dim(), !this._pointerTracker.isEmpty) {
+                    const {specialKick: t, specialPunch: e} = this.model.getProps(), {collisionRadius: i, x: n, y: r} = this.socket, o = this.socket.reflected ? -1 : 1, s = i * Ml, a = !(!e && !t);
+                    this._pointerTracker.forEach(t => {
+                        const e = {
+                            x: (t.position.x - n) * o,
+                            y: t.position.y - r
+                        }, c = .75 * i, l = {
+                            x: -Math.SQRT2 * c,
+                            y: -Math.SQRT2 * c
+                        };
+                        if (Wl(e, l, s)) return this._nonVisualButtonStates.lightPunch === Kl.Idle && (this._nonVisualButtonStates.lightPunch = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.LightPunch)), this._nonVisualButtonStates.mediumPunch === Kl.Idle && (this._nonVisualButtonStates.mediumPunch = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.MediumPunch)), this._nonVisualButtonStates.heavyPunch === Kl.Idle && (this._nonVisualButtonStates.heavyPunch = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.HeavyPunch)), void (this._nonVisualButtonStates.specialPunch === Kl.Idle && (this._nonVisualButtonStates.specialPunch = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.SpecialPunch)));
+                        if (Wl(e, {
+                            x: -1 * l.x,
+                            y: -1 * l.y
+                        }, s)) return this._nonVisualButtonStates.lightKick === Kl.Idle && (this._nonVisualButtonStates.lightKick = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.LightKick)), this._nonVisualButtonStates.mediumKick === Kl.Idle && (this._nonVisualButtonStates.mediumKick = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.MediumKick)), this._nonVisualButtonStates.heavyKick === Kl.Idle && (this._nonVisualButtonStates.heavyKick = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.HeavyKick)), void (this._nonVisualButtonStates.specialKick === Kl.Idle && (this._nonVisualButtonStates.specialKick = Kl.Activated, 
+                        this._renderPropertyManager.undimSocket(cl.SpecialKick)));
+                        const u = {
+                            x: 0,
+                            y: 0
+                        };
+                        for (const {x: i, y: n, name: r} of function(t, e = 0) {
+                            const i = t ? .4 : .2;
+                            return (t ? [ {
+                                type: "button",
+                                x: -Il - 2 * Il + i,
+                                y: 2 * Il - Il + i,
+                                name: "lightPunch"
+                            }, {
+                                type: "button",
+                                x: -Il,
+                                y: -Il,
+                                name: "mediumPunch"
+                            }, {
+                                type: "button",
+                                x: 2 * Il - Il,
+                                y: -Il - 2 * Il,
+                                name: "heavyPunch"
+
+// joystick-mode-and-radius-helpers | 原可读文件第 9748–9785 行
+                        t.stroke.color = e.color ? Ja(e.color, i, this._knobStrokeColorMemo) : t.stroke.color, 
+                        void 0 !== e.opacity && (t.stroke.opacity = e.opacity);
+                    }
+                    void 0 !== n.opacity && (t.opacity = n.opacity);
+                }
+            }
+        }
+        function Au(t) {
+            const e = t.map(t => t.map.input);
+            return -1 === e.indexOf("axisX") && -1 === e.indexOf("axisLeft") && -1 === e.indexOf("axisRight") && -1 === e.indexOf("axisXY") ? T.Vertical : -1 === e.indexOf("axisY") && -1 === e.indexOf("axisUp") && -1 === e.indexOf("axisDown") && -1 === e.indexOf("axisXY") ? T.Horizontal : T.Standard;
+        }
+        function Cu(t, e) {
+            const {relative: i = !0} = t;
+            return e === es.Default || void 0 === e ? i : e === es.Relative;
+        }
+        function xu(t, e) {
+            const {collisionRadius: i, unitSize: n} = t, {expand: r = !0} = e, o = n / 2;
+            return r || o > i ? mo(i - o, o, i) : o;
+        }
+        class Iu extends tc {
+            constructor(t, e, i, n) {
+                super(t, e, Object.keys(M).length / 2, n), this._styleManager = new Pu, this._relativityMode = es.Default, 
+                this._joystickType = i, this._renderProperties = this.primeCache(this.state);
+            }
+            updateJoystickType(t) {
+                this._joystickType = t;
+            }
+            updateRelativityMode(t) {
+                this._relativityMode !== t && (this._relativityMode = t, this.clearMemoizer());
+            }
+            updateSocket(t) {
+                super.updateSocket(t);
+            }
+            primeCache(t) {
+                const {type: e, action: i, styles: n} = this.props, r = Cu(this.props, this._relativityMode), {x: o, y: s} = this._socket, a = t => on(t, this._styleVariant);
+                return {
+                    type: e,
+                    baseSize: this._socket.unitSize,
+
+// axis-frame-clock | 原可读文件第 9880–9917 行
+                return null !== t && t.apply(this, arguments) || this;
+            }
+            return (0, Ii.__extends)(e, t), e.prototype.flush = function(t) {
+                var e;
+                this._active = !0, t ? e = t.id : (e = this._scheduled, this._scheduled = void 0);
+                var i, n = this.actions;
+                t = t || n.shift();
+                do {
+                    if (i = t.execute(t.state, t.delay)) break;
+                } while ((t = n[0]) && t.id === e && n.shift());
+                if (this._active = !1, i) {
+                    for (;(t = n[0]) && t.id === e && n.shift(); ) t.unsubscribe();
+                    throw i;
+                }
+            }, e;
+        }(Sc), Ru = new Ou(Tu);
+        const Du = oi(null, Ru).pipe(function(t) {
+            var e, i, n = 1 / 0;
+            return null != t && ("object" === typeof t ? (e = t.count, n = void 0 === e ? 1 / 0 : e, 
+            i = t.delay) : n = t), n <= 0 ? function() {
+                return Qr;
+            } : (0, vi.N)(function(t, e) {
+                var r, o = 0, s = function() {
+                    if (null === r || void 0 === r || r.unsubscribe(), r = null, null != i) {
+                        var t = "number" === typeof i ? Ac(i) : (0, bi.Tg)(i(o)), n = (0, pi._)(e, function() {
+                            n.unsubscribe(), a();
+                        });
+                        t.subscribe(n);
+                    } else a();
+                }, a = function() {
+                    var i = !1;
+                    r = t.subscribe((0, pi._)(e, void 0, function() {
+                        ++o < n ? r ? s() : i = !0 : e.complete();
+                    })), i && s();
+                };
+                a();
+            });
+        }(), (0, eo.T)(() => Date.now()), _i(), (0, eo.T)(t => t[1] - t[0]));

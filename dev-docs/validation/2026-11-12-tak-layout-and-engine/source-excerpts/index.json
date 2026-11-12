@@ -1,0 +1,410 @@
+{
+  "inspectionDate": "2026-11-12",
+  "kind": "Exact line excerpts from hash-verified formatted public release scripts",
+  "files": [
+    {
+      "file": "tak-core-protocol.txt",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "sha256": "7dc9364a5010b3631096bc028e160b3eb27f4ec58de6e47616d24ead5cc74391",
+      "bytes": 88475
+    },
+    {
+      "file": "tak-core-input.txt",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "sha256": "dde813101d45f0393ad9e9a6d79e417b699740e28d0764192445278d8d65b20e",
+      "bytes": 152052
+    },
+    {
+      "file": "tak-core-geometry.txt",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "sha256": "954bacd3c97a260771997ea1a7bf81f01af4679ca6f646faaf01162237bb32b2",
+      "bytes": 34340
+    },
+    {
+      "file": "babylon-renderer.txt",
+      "sourceFile": "2879.4921609f.chunk.js",
+      "sha256": "7a6328b2b1a9c556f75bce4bcc494434b8fc629a13d4461fe01d5f0a2c9af977",
+      "bytes": 40627
+    },
+    {
+      "file": "tak-browser-host.txt",
+      "sourceFile": "touch-adaptation-kit.03ac9169.chunk.js",
+      "sha256": "239a38dd30d645a49f481e0707f838ce091768bf4b9e779779e9ad5a3e9ad2f2",
+      "bytes": 19601
+    },
+    {
+      "file": "touch-message-router.txt",
+      "sourceFile": "8128.1aca8038.chunk.js",
+      "sha256": "ce56b674740e8cdb4627f74a1935b94b5510446385a780d76eb0d7eaa041478e",
+      "bytes": 6258
+    },
+    {
+      "file": "game-stream-bridge.txt",
+      "sourceFile": "game-stream.42236acb.chunk.js",
+      "sha256": "f44d260bb26a30bfc9f95653e3c78525ea4671fdc7b0d0d94eb5616ac2aaf77d",
+      "bytes": 12085
+    }
+  ],
+  "sections": [
+    {
+      "id": "reference-resolution",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 2180,
+      "originalEnd": 2234,
+      "file": "tak-core-protocol.txt",
+      "excerptStart": 8,
+      "excerptEnd": 62,
+      "sha256": "b5f44d0f1d80013e126c7d3c08e5f65b827ca7aacc745be0fbc67ce194bb66de"
+    },
+    {
+      "id": "bundle-validation-conversion-patch",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 3025,
+      "originalEnd": 3887,
+      "file": "tak-core-protocol.txt",
+      "excerptStart": 65,
+      "excerptEnd": 927,
+      "sha256": "08eab83255c45b72003e585f498b0224f160d5615b5a1ce4d073fbe27f3f10e8"
+    },
+    {
+      "id": "layers-and-layout-coordinator",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 4144,
+      "originalEnd": 4454,
+      "file": "tak-core-protocol.txt",
+      "excerptStart": 930,
+      "excerptEnd": 1240,
+      "sha256": "862425c0b0a8772342682bf02c828323fe1cd937fd58888affdfe0188809a247"
+    },
+    {
+      "id": "layer-content-merge-and-layout-stream",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 12360,
+      "originalEnd": 12526,
+      "file": "tak-core-protocol.txt",
+      "excerptStart": 1243,
+      "excerptEnd": 1409,
+      "sha256": "8e5f5c9f6a649dd2a792358b02e80927da35a23042346f23e5afb5a661a302e6"
+    },
+    {
+      "id": "input-provider",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 3889,
+      "originalEnd": 4142,
+      "file": "tak-core-input.txt",
+      "excerptStart": 8,
+      "excerptEnd": 261,
+      "sha256": "c26b4207e676d18e2c8faba8e0af7b0f8af0713b2ac6705e9c1d94bba368c04d"
+    },
+    {
+      "id": "control-base-and-render-frames",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 6040,
+      "originalEnd": 6210,
+      "file": "tak-core-input.txt",
+      "excerptStart": 264,
+      "excerptEnd": 434,
+      "sha256": "4ca500c44024affd8d63d6f743835fe2ebae8b0679cef71344ea7a8b6f224709"
+    },
+    {
+      "id": "control-input-model-and-action-map",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 6360,
+      "originalEnd": 6601,
+      "file": "tak-core-input.txt",
+      "excerptStart": 437,
+      "excerptEnd": 678,
+      "sha256": "906b1d1f1034a5a6722ac096e03a1141df87300465356791d8aff474820f21aa"
+    },
+    {
+      "id": "hit-test-and-collision-shapes",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 7090,
+      "originalEnd": 7227,
+      "file": "tak-core-input.txt",
+      "excerptStart": 681,
+      "excerptEnd": 818,
+      "sha256": "b2489d86effae8c7a1adb55f8f22e8e3926c6c43f2dfa55cf79de17243fd0583"
+    },
+    {
+      "id": "button-controller",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 8967,
+      "originalEnd": 9180,
+      "file": "tak-core-input.txt",
+      "excerptStart": 821,
+      "excerptEnd": 1034,
+      "sha256": "a27673ff034363ae2592f5c600c8fe3035f0f694bfb1b6abc4a95296326a03d3"
+    },
+    {
+      "id": "directional-pad-controller",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 9290,
+      "originalEnd": 9450,
+      "file": "tak-core-input.txt",
+      "excerptStart": 1037,
+      "excerptEnd": 1197,
+      "sha256": "333d8aaf3bcc66133a391ce2925fc585bc8e27a266dd25cdb70b45d8d9ac4e0e"
+    },
+    {
+      "id": "axis-pipes-and-joystick-radius",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 9918,
+      "originalEnd": 10208,
+      "file": "tak-core-input.txt",
+      "excerptStart": 1200,
+      "excerptEnd": 1490,
+      "sha256": "be38b6d2551667c575aa42c7e616193f3a75519e5e49110ec1577504b622247f"
+    },
+    {
+      "id": "joystick-controller",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 10209,
+      "originalEnd": 10397,
+      "file": "tak-core-input.txt",
+      "excerptStart": 1493,
+      "excerptEnd": 1681,
+      "sha256": "e08ab2819091fe11ccaf441b6e283d51898072b1fab1810587a37275b0718c69"
+    },
+    {
+      "id": "throttle-controller",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 10756,
+      "originalEnd": 10899,
+      "file": "tak-core-input.txt",
+      "excerptStart": 1684,
+      "excerptEnd": 1827,
+      "sha256": "8d4ca3cd0b277a05c0390e25058a09b8ef4c8b40c5b6272b1b2568b88d1a66a2"
+    },
+    {
+      "id": "native-touch-forwarding",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 10900,
+      "originalEnd": 10949,
+      "file": "tak-core-input.txt",
+      "excerptStart": 1830,
+      "excerptEnd": 1879,
+      "sha256": "ea5f5db426020610306a92c023e7f0e2184e211f76eebfd6600f7347be627d79"
+    },
+    {
+      "id": "touchpad-driver-controller-and-factory",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 11200,
+      "originalEnd": 11405,
+      "file": "tak-core-input.txt",
+      "excerptStart": 1882,
+      "excerptEnd": 2087,
+      "sha256": "b43f7a102e42a1144e0527bdb684ada3c98b0155ee82afb08f8f77107c475ac9"
+    },
+    {
+      "id": "sensor-controllers",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 11406,
+      "originalEnd": 11555,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2090,
+      "excerptEnd": 2239,
+      "sha256": "aa27a636177a8d94ade25dc90dfe74da9e77cc340fb9c2115c622c00b904383b"
+    },
+    {
+      "id": "pointer-hit-tester-touch-manager",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 12629,
+      "originalEnd": 12833,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2242,
+      "excerptEnd": 2446,
+      "sha256": "931af260dcb549f1b2e621f246eafc482fab1284b24fbd562f6bdd186488c9cb"
+    },
+    {
+      "id": "tak-core-assembly-and-lifecycle",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 12851,
+      "originalEnd": 13015,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2449,
+      "excerptEnd": 2613,
+      "sha256": "2e2eb4da9d8f5bb7d78d8ff6193dfd52be8bed2fe8086e9cebf720709d776a96"
+    },
+    {
+      "id": "socket-and-container-models",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 4573,
+      "originalEnd": 4760,
+      "file": "tak-core-geometry.txt",
+      "excerptStart": 8,
+      "excerptEnd": 195,
+      "sha256": "1b2552eccdfa32b4ba2d7182c82c2d7377ad48239ec979b9e05fc661b3549ab2"
+    },
+    {
+      "id": "container-position-visitor",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 6669,
+      "originalEnd": 6798,
+      "file": "tak-core-geometry.txt",
+      "excerptStart": 198,
+      "excerptEnd": 327,
+      "sha256": "6bfea85f85df6c6b15d9140d8b4888b47003225f62c12e83a7ca5982f4614d57"
+    },
+    {
+      "id": "slot-props-and-control-container",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 11600,
+      "originalEnd": 11932,
+      "file": "tak-core-geometry.txt",
+      "excerptStart": 330,
+      "excerptEnd": 662,
+      "sha256": "7a80b3928b94d47dce370fab1349b5a1a84e6d77b696a49158ec317a49afdc84"
+    },
+    {
+      "id": "application-resource-owner-and-node-tree",
+      "sourceFile": "2879.4921609f.chunk.js",
+      "originalStart": 4810,
+      "originalEnd": 5080,
+      "file": "babylon-renderer.txt",
+      "excerptStart": 8,
+      "excerptEnd": 278,
+      "sha256": "615bb84bd0822db848e02343390b7b2b2b96f28af29c959d3aaeb1fb314acb81"
+    },
+    {
+      "id": "sprites-gatherer-and-quad-generator",
+      "sourceFile": "2879.4921609f.chunk.js",
+      "originalStart": 6687,
+      "originalEnd": 6785,
+      "file": "babylon-renderer.txt",
+      "excerptStart": 281,
+      "excerptEnd": 379,
+      "sha256": "fc2260b0e641142997e420b3c6c6794b7c033c7466d66a852312a0de00798b0d"
+    },
+    {
+      "id": "control-render-factory",
+      "sourceFile": "2879.4921609f.chunk.js",
+      "originalStart": 7870,
+      "originalEnd": 7930,
+      "file": "babylon-renderer.txt",
+      "excerptStart": 382,
+      "excerptEnd": 442,
+      "sha256": "03ebce1e359da5e20bc34206fe63127ec4f7a4f3cb0a89aced4c71070264c7bb"
+    },
+    {
+      "id": "render-layers-groups-and-renderer",
+      "sourceFile": "2879.4921609f.chunk.js",
+      "originalStart": 10590,
+      "originalEnd": 10892,
+      "file": "babylon-renderer.txt",
+      "excerptStart": 445,
+      "excerptEnd": 747,
+      "sha256": "45c68c20cb23ad9119a74498ea69e2630227ebbc4b733f5bd7c7a6d71ffbb1b4"
+    },
+    {
+      "id": "control-object-reuse",
+      "sourceFile": "touch-adaptation-kit.03ac9169.chunk.js",
+      "originalStart": 926,
+      "originalEnd": 995,
+      "file": "tak-browser-host.txt",
+      "excerptStart": 8,
+      "excerptEnd": 77,
+      "sha256": "843d92428713166152f9cef13665287c7b9eeb2e04a1584f0f804d4ab2a1bdae"
+    },
+    {
+      "id": "multi-touch-surface",
+      "sourceFile": "touch-adaptation-kit.03ac9169.chunk.js",
+      "originalStart": 1000,
+      "originalEnd": 1144,
+      "file": "tak-browser-host.txt",
+      "excerptStart": 80,
+      "excerptEnd": 224,
+      "sha256": "c19563f230dcaea7a8f4d4acb3819a82bd9787a4f194a7f5b1bfeabe2267256a"
+    },
+    {
+      "id": "thin-engine-raf-and-surface-options",
+      "sourceFile": "touch-adaptation-kit.03ac9169.chunk.js",
+      "originalStart": 1512,
+      "originalEnd": 1649,
+      "file": "tak-browser-host.txt",
+      "excerptStart": 227,
+      "excerptEnd": 364,
+      "sha256": "be9fc023621111e9cb055c758347b7924099f8a44ac4819d39029fffc3f7ae2b"
+    },
+    {
+      "id": "touch-control-message-handler",
+      "sourceFile": "8128.1aca8038.chunk.js",
+      "originalStart": 1529,
+      "originalEnd": 1607,
+      "file": "touch-message-router.txt",
+      "excerptStart": 8,
+      "excerptEnd": 86,
+      "sha256": "61ae9c2b29f46d73c0839832abd38ec934bebedf5618d3bc5e0f9203d4e28d5e"
+    },
+    {
+      "id": "touch-version-capability-report",
+      "sourceFile": "8128.1aca8038.chunk.js",
+      "originalStart": 2439,
+      "originalEnd": 2475,
+      "file": "touch-message-router.txt",
+      "excerptStart": 89,
+      "excerptEnd": 125,
+      "sha256": "230805662a9e89251d1ba767ca3e81144c04189d2a9540589502650fd7ee42ef"
+    },
+    {
+      "id": "layout-command-bridge",
+      "sourceFile": "game-stream.42236acb.chunk.js",
+      "originalStart": 7559,
+      "originalEnd": 7670,
+      "file": "game-stream-bridge.txt",
+      "excerptStart": 8,
+      "excerptEnd": 119,
+      "sha256": "e719aa432ae8478fd65c4b408d95885570eb32341bf6a4afb706d42c3c434cb5"
+    },
+    {
+      "id": "virtual-input-bridge",
+      "sourceFile": "game-stream.42236acb.chunk.js",
+      "originalStart": 7722,
+      "originalEnd": 7796,
+      "file": "game-stream-bridge.txt",
+      "excerptStart": 122,
+      "excerptEnd": 196,
+      "sha256": "ad5d15e2b9934380f74af18f09de7104b1bef1b6f9f60b9da5a3e37423aeb95d"
+    },
+    {
+      "id": "radial-adjuster-controller",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 6203,
+      "originalEnd": 6294,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2616,
+      "excerptEnd": 2707,
+      "sha256": "0a9b4841aad56bffe65b1d9b92b844e48c0c3de4aa33d0b569c46afb96391216"
+    },
+    {
+      "id": "arcade-buttons-controller",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 8684,
+      "originalEnd": 8807,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2710,
+      "excerptEnd": 2833,
+      "sha256": "47e66cfef5e63a36c6bf2952d4e4fa71317dc818ac8a2f17ec784e8590e95fbe"
+    },
+    {
+      "id": "joystick-mode-and-radius-helpers",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 9748,
+      "originalEnd": 9785,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2836,
+      "excerptEnd": 2873,
+      "sha256": "bac96effa77f632494f39ba64d3871b7643318c12bab59ad17bbdd8eb2ab9d3c"
+    },
+    {
+      "id": "axis-frame-clock",
+      "sourceFile": "2871.36f50502.chunk.js",
+      "originalStart": 9880,
+      "originalEnd": 9917,
+      "file": "tak-core-input.txt",
+      "excerptStart": 2876,
+      "excerptEnd": 2913,
+      "sha256": "fd32b1114caf808bfb8abd153f23cc8d9c4c2490707ab2af7ced68db76e1a8e3"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "checkLogs": 10,
+  "officialScenarios": 5,
+  "frontendTests": 774,
+  "rustTests": 239,
+  "productionCostTests": 2,
+  "failures": []
+}

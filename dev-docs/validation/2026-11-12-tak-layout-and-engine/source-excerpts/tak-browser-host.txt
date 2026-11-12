@@ -1,0 +1,364 @@
+// 官方公开发布脚本源码摘录：touch-adaptation-kit.03ac9169.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/touch-adaptation-kit.03ac9169.chunk.js
+// 原件 SHA-256：b4eef7d0cc39ad92eb513800ff55c469341cdd2dac3f715a364341400c8ca9de
+// 格式化文件 SHA-256：7f7198cd738f3bdc1bd180e9e9723afcf99ed8e4e1728ec39527171d62769edf
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// control-object-reuse | 原可读文件第 926–995 行
+            const n = (0, c.useContext)(_), i = (0, c.useContext)(b), o = (0, c.useRef)();
+            o.current || (o.current = new qe.V("GameStream/TouchAdaptationKit/BabylonRenderer"));
+            const l = (0, c.useCallback)((e, t, n) => {
+                const i = e.identifier, a = t.get(i);
+                if (a) return a;
+                {
+                    const a = (0, s.a0)(e, n);
+                    var r;
+                    if (a) null === (r = o.current) || void 0 === r || r.debug(`Created a new ${e.type} control with identifier ${i}`), 
+                    t.set(i, a);
+                    return a;
+                }
+            }, []), u = (0, c.useRef)(null), d = (0, c.useRef)(new Map), p = (0, c.useRef)();
+            "MISSING_ENV_VAR".E2E && (0, c.useEffect)(() => (window.__testUtils.takControlMap = d.current, 
+            () => {
+                window.__testUtils.takControlMap.clear();
+            }), []);
+            const v = (0, c.useRef)(0);
+            return (0, c.useEffect)(() => {
+                let a = !1, r = !1;
+                const s = u.current;
+                return (async () => {
+                    const c = await (0, Xe.Y)(window.devicePixelRatio);
+                    if (a) return;
+                    if (await i.initialize(c, () => a), a) return;
+                    null === s || void 0 === s || s.appendChild(t), r = !0;
+                    const u = n.getControlsStream(e);
+                    u && (p.current = u.subscribe(e => {
+                        const t = [];
+                        var n;
+                        (e.forEach(e => {
+                            const n = l(e, d.current, i.application);
+                            n && t.push(n);
+                        }), v.current !== t.length) && (null === (n = o.current) || void 0 === n || n.debug(`Number of active controls on screen changed from ${v.current} to ${t.length}`), 
+                        v.current = t.length);
+                        for (const [i, r] of d.current.entries()) {
+                            var a;
+                            if (!t.includes(r)) null === (a = o.current) || void 0 === a || a.debug(`Disposing control with identifier [${i}]`), 
+                            r.beginDispose(), d.current.delete(i);
+                        }
+                    }));
+                })(), () => {
+                    var e, n;
+                    null === (e = o.current) || void 0 === e || e.debug("Disposing of babylon container, render prop subscription"), 
+                    a = !0, null === (n = p.current) || void 0 === n || n.unsubscribe(), i.dispose(), 
+                    r && (null === s || void 0 === s || s.removeChild(t));
+                };
+            }, [ n, i, l, e, t ]), (() => {
+                const e = (0, c.useContext)(_), [t, n] = (0, y.E)(Ze.u.type);
+                (0, c.useEffect)(() => {
+                    if (t && Ze.u.isTakOverrideControlsOpacityEvent(t)) {
+                        const {command: i, overrideValue: o} = t, a = "clear" === i, s = r.H2.controls.opacityMultiplier;
+                        e.dispatchAction({
+                            action: r.zA.SetStylingOverrides,
+                            overrides: {
+                                controls: {
+                                    opacityMultiplier: {
+                                        acceptedRange: {
+                                            minimum: a ? s.acceptedRange.minimum : o,
+                                            maximum: a ? s.acceptedRange.maximum : o
+                                        },
+                                        animationEnergy: a ? r.H2.controls.opacityMultiplier.animationEnergy : r.Lt.Medium
+                                    }
+                                }
+                            }
+                        }), n();
+                    }
+                }, [ e, t, n ]);
+            })(), (0, a.jsx)("div", {
+                ref: u,
+
+// multi-touch-surface | 原可读文件第 1000–1144 行
+        var tt = n(120928), nt = n(314154), it = n(656868);
+        const ot = ({width: e, height: t, x: n, y: i, surfaceKey: s, surfaceRect: l}) => {
+            const u = (0, c.useContext)(_), d = (0, Je.w)(), {getTelemetryProvider: p} = (0, 
+            Fe.s)(), v = (0, c.useMemo)(() => p(), [ p ]), g = (0, N.e)(), {current: h} = (0, 
+            nt.X)(() => []), {current: m} = (0, nt.X)(() => new Map), y = (0, c.useCallback)(e => {
+                v.trackEvent(o()(o()({}, e), g));
+            }, [ g, v ]), f = (0, c.useRef)(0), {current: b} = (0, nt.X)(() => new Array(10)), {current: k} = (0, 
+            nt.X)(() => []), C = (0, c.useMemo)(() => ({
+                width: e,
+                height: t,
+                touchAction: "none",
+                position: "fixed",
+                top: i,
+                left: n
+            }), [ e, t, n, i ]), M = (0, c.useRef)(!1), E = (0, it.q)(!0);
+            M.current = E;
+            const S = (0, c.useRef)(null), T = (0, c.useCallback)(e => (e.preventDefault(), 
+            !1), []);
+            return (0, c.useEffect)(() => {
+                const e = S.current;
+                if (e) {
+                    const t = () => {
+                        try {
+                            const e = f.current <= b.length ? f.current : b.length;
+                            k.length = e + h.length;
+                            let t = 0;
+                            for (let n = 0; n < e; n++, t++) k[t] = b[n];
+                            for (let n = 0; n < h.length; n++, t++) k[t] = h[n];
+                            u.setTouchState(s, k);
+                        } catch (e) {
+                            return;
+                        }
+                    }, n = e => {
+                        var n, i;
+                        if ("touch" === e.pointerType || !m.get(e.pointerId)) return;
+                        e.preventDefault();
+                        let o = -1;
+                        for (let t = 0; t < h.length; t++) if (h[t].identifier === e.pointerId) {
+                            o = t;
+                            break;
+                        }
+                        -1 === o && (o = h.length), h[o] = {
+                            identifier: e.pointerId,
+                            pageX: e.clientX - (null !== (n = null === l || void 0 === l ? void 0 : l.left) && void 0 !== n ? n : 0),
+                            pageY: e.clientY - (null !== (i = null === l || void 0 === l ? void 0 : l.top) && void 0 !== i ? i : 0),
+                            diameter: e.width,
+                            orientation: e.twist,
+                            pressure: e.pressure,
+                            pointerType: e.pointerType
+                        }, t();
+                    }, i = t => {
+                        if ("touch" !== t.pointerType && !document.pointerLockElement) if (M.current && d.isDeveloperMode && d.tak.config.allowMouseInteraction) {
+                            try {
+                                e.setPointerCapture(t.pointerId);
+                            } catch (i) {
+                                return void (i instanceof DOMException ? i.code === DOMException.INVALID_STATE_ERR ? e.parentElement ? document.pointerLockElement ? y({
+                                    name: r.kn.TakError,
+                                    reason: `MultiTouchSurface is receiving pointer input while there is a pointer lock. ${(0, 
+                                    tt.A)(i)}`
+                                }) : y({
+                                    name: r.kn.TakError,
+                                    reason: `Unknown InvalidStateError while attempting to receive pointer events in MultiTouchSurface. ${(0, 
+                                    tt.A)(i)}`
+                                }) : y({
+                                    name: r.kn.TakError,
+                                    reason: `The <div> element attempting to receive pointer capture in MultiTouchSurface is already unmounted. ${(0, 
+                                    tt.A)(i)}`
+                                }) : i.code === DOMException.NOT_FOUND_ERR ? y({
+                                    name: r.kn.TakError,
+                                    reason: `Pointer attempting to be captured in MultiTouchSurface is not active. ${(0, 
+                                    tt.A)(i)}`
+                                }) : y({
+                                    name: r.kn.TakError,
+                                    reason: `Unknown DOMException ocurred while capturing pointer in MultiTouchSurface. ${(0, 
+                                    tt.A)(i)}`
+                                }) : y({
+                                    name: r.kn.TakError,
+                                    reason: `Unknown type of exception occured while capturing pointer in MultiTouchSurface. ${(0, 
+                                    tt.A)(i)}`
+                                }));
+                            }
+                            m.set(t.pointerId, !0), n(t);
+                        } else d.onPointerEvent(t);
+                    }, o = n => {
+                        if ("touch" === n.pointerType) return;
+                        if (!(M.current && d.isDeveloperMode && d.tak.config.allowMouseInteraction)) return void d.onPointerEvent(n);
+                        e.hasPointerCapture(n.pointerId) && e.releasePointerCapture(n.pointerId);
+                        let i = -1;
+                        for (let e = 0; e < h.length; e++) if (h[e].identifier === n.pointerId) {
+                            i = e;
+                            break;
+                        }
+                        -1 !== i && h.splice(i, 1), m.delete(n.pointerId), t();
+                    }, a = e => {
+                        e.preventDefault();
+                        const n = e.targetTouches;
+                        n.length > b.length && (b.length = n.length), f.current = n.length;
+                        for (let t = 0; t < n.length; t++) {
+                            var i, o;
+                            const e = n[t];
+                            b[t] = {
+                                identifier: e.identifier,
+                                diameter: 2 * e.radiusX,
+                                orientation: e.rotationAngle,
+                                pageX: e.clientX - (null !== (i = null === l || void 0 === l ? void 0 : l.left) && void 0 !== i ? i : 0),
+                                pageY: e.clientY - (null !== (o = null === l || void 0 === l ? void 0 : l.top) && void 0 !== o ? o : 0),
+                                pointerType: r.gm.Touch,
+                                pressure: e.force
+                            };
+                        }
+                        t();
+                    };
+                    return e.addEventListener("pointerdown", i), e.addEventListener("pointermove", n), 
+                    e.addEventListener("pointerup", o), e.addEventListener("pointercancel", o), e.addEventListener("touchstart", a), 
+                    e.addEventListener("touchmove", a), e.addEventListener("touchend", a), e.addEventListener("touchcancel", a), 
+                    () => {
+                        e.removeEventListener("pointerdown", i), e.removeEventListener("pointermove", n), 
+                        e.removeEventListener("pointerup", o), e.removeEventListener("pointercancel", o), 
+                        e.removeEventListener("pointerleave", o), e.removeEventListener("pointerout", o), 
+                        e.removeEventListener("touchstart", a), e.removeEventListener("touchmove", a), e.removeEventListener("touchend", a), 
+                        e.removeEventListener("touchcancel", a);
+                    };
+                }
+                return () => {};
+            }, [ u, h, m, b, k, d, s, y, M, l ]), (0, a.jsx)("div", {
+                id: "MultiTouchSurface",
+                ref: S,
+                style: C,
+                onContextMenu: T
+            });
+        };
+        var at = n(947392);
+        const rt = ({children: e, shouldRequest: t}) => {
+            const n = (0, at.T)(), [i, o] = (0, c.useState)(!1), [r, s] = (0, c.useState)(!1);
+            (0, c.useEffect)(() => {
+                t && !i ? "undefined" !== typeof window.DeviceMotionEvent && void 0 !== DeviceMotionEvent.requestPermission ? s(!0) : (o(!0), 
+                s(!1)) : s(!1);
+            }, [ t, i ]);
+            return (0, a.jsx)("div", {
+                onPointerUp: r ? () => (async () => {
+                    try {
+                        if (await DeviceMotionEvent.requestPermission(), !n.current) return;
+                        o(!0);
+                    } catch (e) {}
+                })() : void 0,
+
+// thin-engine-raf-and-surface-options | 原可读文件第 1512–1649 行
+            const i = (0, c.useRef)();
+            i.current || (i.current = (() => {
+                const e = document.createElement("canvas"), t = !0;
+                return new It.w(e, t, {
+                    alpha: !0,
+                    stencil: !1,
+                    antialias: t,
+                    audioEngine: !1,
+                    preserveDrawingBuffer: !1
+                }, !1).getGlInfo();
+            })(), n.current.info(`GPU INFO: ${JSON.stringify(i.current)}`));
+            const o = (0, c.useRef)();
+            o.current || (o.current = !i.current.renderer.toLowerCase().includes("intel"));
+            const a = (0, c.useRef)(null);
+            if (!a.current) {
+                const e = document.createElement("canvas");
+                e.id = "babylon-canvas", a.current = e;
+            }
+            (0, c.useEffect)(() => {
+                a.current && (a.current.style.width = `${e}px`, a.current.style.height = `${t}px`);
+            }, [ e, t ]);
+            const r = (0, c.useMemo)(() => {
+                var e;
+                return null === (e = n.current) || void 0 === e || e.debug("Creating new thin engine"), 
+                new It.w(a.current, o.current, {
+                    alpha: !0,
+                    stencil: !1,
+                    antialias: o.current,
+                    audioEngine: !1,
+                    depth: !1,
+                    preserveDrawingBuffer: !1,
+                    premultipliedAlpha: !0
+                }, !1);
+            }, []);
+            (0, c.useEffect)(() => () => {
+                var e;
+                null === (e = n.current) || void 0 === e || e.debug("Disposing thin engine"), r.dispose();
+            }, [ r ]);
+            const l = (0, nt.X)(() => new s.A4(r, window.devicePixelRatio || 1, 0, 0, new qe.V("GameStream/TouchAdaptationKit/BabylonRendererClass"))), u = (0, 
+            c.useRef)(void 0), d = (0, c.useCallback)(() => {
+                l.current.render(), u.current = window.requestAnimationFrame(d);
+            }, [ l ]);
+            return (0, c.useEffect)(() => (u.current = window.requestAnimationFrame(d), () => {
+                void 0 !== u.current && (window.cancelAnimationFrame(u.current), u.current = void 0);
+            }), [ d ]), {
+                canvas: a.current,
+                renderer: l.current
+            };
+        };
+        var Ot = n(878922), zt = n(374899), Dt = n(680798), Lt = n(626358);
+        const Pt = ({jsonValidator: e}) => {
+            const t = (0, c.useMemo)(() => new qe.V("GameStream/TouchAdaptationKit/TakRenderer"), []), n = (0, 
+            Je.w)(), {getTelemetryProvider: i} = (0, Fe.s)(), d = (0, c.useMemo)(() => i(), [ i ]), p = (0, 
+            N.e)(), {x: v, y: g, width: h, height: m} = (0, zt.P)(), {videoX: y, videoY: f, videoWidth: _, videoHeight: k} = (0, 
+            Lt.y)(), C = (0, Ot.d)(h, 250), M = (0, Ot.d)(m, 250), E = (0, ut.J)(), S = pt.G.isInProgressState(E), T = (0, 
+            Dt.O)(), w = (0, c.useMemo)(() => ({
+                [u]: {
+                    anchors: r.DK.All,
+                    dimensions: {
+                        width: C,
+                        height: M
+                    },
+                    position: {
+                        x: v,
+                        y: g
+                    },
+                    orientation: C > M ? r.ZE.LandscapeLeft : r.ZE.PortraitUp,
+                    touchForwarding: {
+                        x: y,
+                        y: f,
+                        width: _,
+                        height: k
+                    },
+                    safeAreaInsets: T
+                }
+            }), [ M, C, T, k, _, y, f, v, g ]), {renderer: x, canvas: A} = jt(C, M), R = (0, 
+            nt.X)(() => {
+                try {
+                    return new s.Je(x, {
+                        createAnimation: e => (0, l.A)(e),
+                        removeTargets(e) {
+                            l.A.remove(e);
+                        }
+                    }, new qe.V("GameStream/TouchAdaptationKit/BabylonLogger"));
+                } catch (e) {
+                    const n = "An exception occured while attempting to create a new BabylonContainer.";
+                    return t.error(n, e), void d.trackEvent(o()({
+                        name: r.kn.TakError,
+                        reason: n
+                    }, p));
+                }
+            });
+            return (0, c.useEffect)(() => {
+                var e;
+                null === (e = R.current) || void 0 === e || e.setVisible(S);
+            }, [ S, R ]), (0, c.useEffect)(() => {
+                var e;
+                pt.G.isInProgressState(E) && (null === (e = n.session) || void 0 === e || e.updateClientDeviceCapabilitiesAsync({
+                    maxTouchBundleLayoutVersion: r.SB.LayoutVersion,
+                    maxTouchBundleManifestVersion: r.SB.ManifestVersion
+                }));
+            }, [ E, n.session ]), R.current ? (0, a.jsx)(b.Provider, {
+                value: R.current,
+                children: (0, a.jsx)(Rt, {
+                    showControls: !0,
+                    enableAnimations: n.tak.config.enableAnimations,
+                    renderAreaParameters: w,
+                    babylonCanvas: A,
+                    jsonValidator: e
+                })
+            }) : null;
+        };
+    },
+    878922(e, t, n) {
+        n.d(t, {
+            d: () => o
+        });
+        n(847010);
+        var i = n(514041);
+        const o = (e, t, n) => {
+            var o;
+            const [a, r] = (0, i.useState)(e), s = (0, i.useRef)(e);
+            s.current = e;
+            const l = null !== (o = null === n || void 0 === n ? void 0 : n.maxDelay) && void 0 !== o ? o : 1 / 0;
+            return (0, i.useEffect)(() => {
+                if (!Number.isFinite(l)) return;
+                const e = setTimeout(() => {
+                    r(s.current);
+                }, l);
+                return () => {
+                    clearTimeout(e);
+                };
+            }, [ a, l ]), (0, i.useEffect)(() => {
+                const n = setTimeout(() => r(e), t);
+                return () => clearTimeout(n);
+            }, [ e, t ]), a;
+        };
+    }

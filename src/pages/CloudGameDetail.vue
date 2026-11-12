@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { CloudCatalog, CloudDetail, CloudTitle } from '@/shared/rpc/cloud'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import type { CloudDetail, CloudTitle } from '@/shared/rpc/cloud'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import HorizontalListRail from '@/components/common/HorizontalListRail.vue'
 import RemoteImage from '@/components/common/RemoteImage.vue'
 import SettingModalShell from '@/components/settings/SettingModalShell.vue'
 import { usePageFocus } from '@/navigation/core/usePageFocus'
@@ -11,8 +12,9 @@ import { events } from '@/services/events'
 import { rpc } from '@/services/rpc'
 import { formatMinutes } from './library/library-view'
 import { useLibraryQuery } from './library/use-library-query'
-import { CatalogRequestState } from './xcloud-catalog-state'
 import { entitlement } from './xcloud/catalog-model'
+import { cloudDetailView, saveCloudDetailView } from './xcloud/detail-view-state'
+import { useCloudCatalog } from './xcloud/use-cloud-catalog'
 import { useCloudPreferences } from './xcloud/use-cloud-preferences'
 import { useCloudWait } from './xcloud/use-cloud-wait'
 import './library/library.scss'
@@ -21,16 +23,23 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const root = ref<HTMLElement | null>(null)
-const productId = computed(() => String(route.params.productId ?? ''))
+const productId = ref('')
+const mediaWidth = ref(typeof window === 'undefined' ? 1280 : window.innerWidth)
+const catalog = useCloudCatalog()
+let active = false
+const activeView = ref(false)
+let disposeCatalog: (() => void) | undefined
+let disposeAuth: (() => void) | undefined
+let viewKey = ''
+let summaryPending: { current: number, id: string, operation: Promise<void> } | undefined
 const prefs = useCloudPreferences()
 const wait = useCloudWait()
-const detail = ref<CloudDetail>()
-const title = ref<CloudTitle>()
+const detail = shallowRef<CloudDetail>()
+const title = shallowRef<CloudTitle>()
 const loading = ref(false)
 const starting = ref(false)
 const error = ref('')
 const accessError = ref('')
-const requests = new CatalogRequestState()
 const expandedDescription = ref(false)
 const allLanguages = ref(false)
 const previewIndex = ref(-1)
@@ -51,8 +60,8 @@ const summary = computed<CloudTitle | undefined>(() => {
 })
 const description = computed(() => detail.value?.detail.product.description || summary.value?.description || '')
 const titleId = computed(() => title.value?.xboxTitleId ? String(title.value.xboxTitleId) : '')
-const history = useLibraryQuery(() => titleId.value ? `cloud-game:${titleId.value}` : '', () => rpc.data.getLibraryGame({ xboxTitleId: titleId.value }))
-const times = useLibraryQuery(() => titleId.value ? `cloud-time:${titleId.value}` : '', () => rpc.data.getPlaytimes({ xboxTitleIds: [titleId.value] }))
+const history = useLibraryQuery(() => activeView.value && route.name === 'cloud-game' && String(route.params.productId ?? '') === productId.value && titleId.value ? `cloud-game:${titleId.value}` : '', () => rpc.data.getLibraryGame({ xboxTitleId: titleId.value }))
+const times = useLibraryQuery(() => activeView.value && route.name === 'cloud-game' && String(route.params.productId ?? '') === productId.value && titleId.value ? `cloud-time:${titleId.value}` : '', () => rpc.data.getPlaytimes({ xboxTitleIds: [titleId.value] }))
 const progress = computed(() => history.state.value.value?.progress)
 const languages = computed(() => {
   const entries = [...(detail.value?.detail.languages ?? [])]
@@ -74,47 +83,143 @@ function personal(tab = 'overview') {
 function changePreview(delta: number) {
   previewIndex.value = (previewIndex.value + delta + screenshots.value.length) % screenshots.value.length
 }
-function applyCatalog(value: CloudCatalog) {
-  if (!requests.acceptEvent(value))
-    return
-  title.value = value.titles.find(item => item.productId === productId.value)
+function updateMediaSize() {
+  if (active && typeof window !== 'undefined')
+    mediaWidth.value = root.value?.clientWidth || window.innerWidth
 }
-const disposeCatalog = events.on('data.xcloudCatalogUpdated', applyCatalog)
-const disposeAuth = events.on('auth.stateChanged', () => {
-  generation++
-  title.value = undefined
-  wait.cancel()
-  requests.clear()
-  if (!route.name || route.name !== 'cloud-game')
+function saveView() {
+  if (root.value?.isConnected === false)
     return
-  void load()
-})
+  if (viewKey)
+    saveCloudDetailView(viewKey, { detail: detail.value, expanded: expandedDescription.value, languages: allLanguages.value, scrollTop: root.value?.querySelector('.cloud-detail__scroll')?.scrollTop ?? 0, screenshotScroll: root.value?.querySelector('.cloud-detail__screenshots .horizontal-list-rail__viewport')?.scrollLeft ?? 0 })
+}
+onBeforeRouteLeave(saveView)
+function restoreView(key: string) {
+  const saved = cloudDetailView(key)
+  void nextTick(() => {
+    if (!active || viewKey !== key)
+      return
+    const scroll = root.value?.querySelector('.cloud-detail__scroll')
+    if (scroll)
+      scroll.scrollTop = saved?.scrollTop ?? 0
+    const screenshots = root.value?.querySelector('.cloud-detail__screenshots .horizontal-list-rail__viewport')
+    if (screenshots)
+      screenshots.scrollLeft = saved?.screenshotScroll ?? 0
+    updateMediaSize()
+  })
+}
+function isCurrent(current: number, id: string): boolean {
+  return active && current === generation && route.name === 'cloud-game' && String(route.params.productId ?? '').trim() === id && productId.value === id
+}
+function synchronizeProduct() {
+  if (!active || route.name !== 'cloud-game')
+    return
+  const id = String(route.params.productId ?? '').trim()
+  if (!id)
+    return
+  const key = `${locale.value}:${id}`
+  if (key !== viewKey) {
+    saveView()
+    generation++
+    loading.value = false
+    starting.value = false
+    wait.cancel()
+    viewKey = key
+    productId.value = id
+    const saved = cloudDetailView(key)
+    detail.value = saved?.detail
+    title.value = catalog.getTitle(id)
+    expandedDescription.value = saved?.expanded ?? false
+    allLanguages.value = saved?.languages ?? false
+    previewIndex.value = -1
+    restoreView(key)
+    void load()
+  }
+}
+function activate() {
+  if (active)
+    return
+  active = true
+  activeView.value = true
+  if (typeof window !== 'undefined')
+    window.addEventListener('resize', updateMediaSize)
+  void nextTick(updateMediaSize)
+  disposeCatalog = catalog.subscribe((value) => {
+    if (!active || !productId.value)
+      return
+    title.value = value ? catalog.getTitle(productId.value) : undefined
+  })
+  disposeAuth = events.on('auth.stateChanged', (state) => {
+    if (!state.isAuthenticated) {
+      generation++
+      loading.value = false
+      title.value = undefined
+      wait.cancel()
+    }
+    if (!state.isAuthenticating && active && productId.value)
+      void loadSummary(generation, productId.value)
+  })
+  const previous = viewKey
+  synchronizeProduct()
+  if (previous && previous === viewKey) {
+    restoreView(viewKey)
+    void load()
+  }
+}
+function deactivate() {
+  saveView()
+  active = false
+  activeView.value = false
+  if (typeof window !== 'undefined')
+    window.removeEventListener('resize', updateMediaSize)
+  summaryPending = undefined
+  previewIndex.value = -1
+  generation++
+  loading.value = false
+  starting.value = false
+  disposeCatalog?.()
+  disposeCatalog = undefined
+  disposeAuth?.()
+  disposeAuth = undefined
+  wait.cancel()
+}
+function loadSummary(current: number, id: string): Promise<void> {
+  if (!isCurrent(current, id))
+    return Promise.resolve()
+  if (summaryPending?.current === current && summaryPending.id === id)
+    return summaryPending.operation
+  const operation = catalog.summary(id).then((value) => {
+    if (isCurrent(current, id))
+      title.value = value
+  }).catch(() => {}).finally(() => {
+    if (summaryPending?.operation === operation)
+      summaryPending = undefined
+  })
+  summaryPending = { current, id, operation }
+  return operation
+}
 async function load() {
+  if (!active || route.name !== 'cloud-game' || !productId.value || loading.value)
+    return
   const current = ++generation
-  requests.clear()
-  const request = requests.capture()
   const id = productId.value
   loading.value = true
   error.value = ''
   accessError.value = ''
   void prefs.load()
   // 商品资料与访问事实分别更新，访问失败仍可阅读详情。
-  void rpc.data.getXcloudTitles().then((catalog) => {
-    if (current !== generation || !requests.acceptResponse(request, catalog))
-      return
-    title.value = catalog.titles.find(item => item.productId === id)
-  }).catch(() => {})
+  void loadSummary(current, id)
   try {
     const value = await rpc.data.getCloudDetail({ productId: id })
-    if (current === generation)
+    if (isCurrent(current, id))
       detail.value = value
   }
   catch (cause) {
-    if (current === generation)
+    if (isCurrent(current, id))
       error.value = cause instanceof Error ? cause.message : String(cause)
   }
   finally {
-    if (current === generation)
+    if (isCurrent(current, id))
       loading.value = false
   }
 }
@@ -122,15 +227,18 @@ async function play() {
   if (starting.value)
     return
   const current = generation
+  const id = productId.value
   starting.value = true
   accessError.value = ''
   try {
     const auth = await rpc.auth.getState()
+    if (!isCurrent(current, id))
+      return
     if (!auth.isAuthenticated) {
       await router.push({ name: 'login' })
       return
     }
-    const value = await rpc.data.resolveCloudTitle({ productId: productId.value })
+    const value = await rpc.data.resolveCloudTitle({ productId: id })
     if (current !== generation)
       return
     title.value = value
@@ -173,19 +281,15 @@ function retryWait() {
 function languageFlag(value: number | null) {
   return t(value === 1 ? 'xcloudUx.support' : value === 2 ? 'xcloudUx.unsupported' : 'xcloudUx.unspecified')
 }
-watch(productId, () => {
-  detail.value = undefined
-  title.value = undefined
-  wait.cancel()
-  void load()
-}, { immediate: true })
-watch(title, value => wait.focus(productId.value, entitlement(value) === 'allowed'))
-onBeforeUnmount(() => {
-  generation++
-  disposeAuth()
-  disposeCatalog()
-  wait.cancel()
+watch(() => [route.name, route.params.productId, locale.value], synchronizeProduct, { flush: 'post' })
+watch(title, (value) => {
+  if (active)
+    wait.focus(productId.value, entitlement(value) === 'allowed')
 })
+onMounted(activate)
+onActivated(activate)
+onDeactivated(deactivate)
+onBeforeUnmount(deactivate)
 </script>
 
 <template>
@@ -217,7 +321,7 @@ onBeforeUnmount(() => {
         {{ error || accessError || prefs.error.value }}
       </p>
       <section class="cloud-detail__hero" :aria-label="name">
-        <RemoteImage class="cloud-detail__hero-image" :src="detail?.detail.product.heroImageUrl" :sources="[detail?.detail.product.posterImageUrl ?? '', summary?.tileImageUrl ?? '']" />
+        <RemoteImage class="cloud-detail__hero-image" :size="mediaWidth" :src="detail?.detail.product.heroImageUrl" :sources="[detail?.detail.product.posterImageUrl ?? '', summary?.tileImageUrl ?? '']" />
         <div class="cloud-detail__hero-shade" />
         <div class="cloud-detail__hero-copy">
           <p class="cloud-detail__eyebrow">
@@ -261,14 +365,11 @@ onBeforeUnmount(() => {
             </div>
           </section>
           <section v-if="screenshots.length" class="cloud-detail__section">
-            <div class="cloud-detail__section-heading">
-              <h2>{{ t('xcloudUx.screenshots') }}</h2><span>{{ screenshots.length }}</span>
-            </div>
-            <div class="cloud-detail__screenshots">
+            <HorizontalListRail class="cloud-detail__screenshots" :title="t('xcloudUx.screenshots')" :hint="String(screenshots.length)" :aria-label="t('xcloudUx.screenshots')">
               <Focusable v-for="(src, index) in screenshots" :id="`cloud.detail.screen.${index}`" :key="src" as="button" class="cloud-detail__screenshot" :aria-label="`${t('xcloudUx.screenshots')} ${index + 1}`" @click="previewIndex = index">
-                <RemoteImage :src="src" /><span class="cloud-detail__expand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5" /></svg></span>
+                <RemoteImage :src="src" :size="360" /><span class="cloud-detail__expand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5" /></svg></span>
               </Focusable>
-            </div>
+            </HorizontalListRail>
           </section>
           <section class="cloud-detail__section cloud-detail__languages">
             <div class="cloud-detail__section-heading">
@@ -339,7 +440,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <SettingModalShell :open="previewIndex >= 0" scope-id="cloud.detail.image" :title="t('xcloudUx.screenshots')" :eyebrow="name" width="min(100%, 1120px)" @close="previewIndex = -1">
-      <RemoteImage class="cloud-detail__preview" :src="preview" :alt="`${name} ${previewIndex + 1}`" />
+      <RemoteImage class="cloud-detail__preview" :size="mediaWidth" :src="preview" :alt="`${name} ${previewIndex + 1}`" />
       <div class="cloud-detail__preview-actions">
         <Focusable id="cloud.detail.image.previous" as="button" :aria-label="t('xcloudUx.previousImage')" class="ui-action-button" @click="changePreview(-1)">
           ←
@@ -352,8 +453,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.cloud-detail { gap: 0; }
-.cloud-detail__toolbar { display: flex; justify-content: space-between; align-items: center; min-height: 52px; gap: 16px; padding: 4px var(--ui-focus-safe-inset) 12px; }
+.cloud-detail { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; gap: 0; }
+.cloud-detail__toolbar { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: center; min-height: 52px; gap: 16px; padding: 4px var(--ui-focus-safe-inset) 12px; }
 .cloud-detail__back { display: flex; gap: 6px; align-items: center; border: 0; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 13px; padding: 8px 4px; border-radius: var(--ui-radius-md); cursor: pointer; }
 .cloud-detail__back svg { width: 20px; height: 20px; }
 .cloud-detail__tools { display: flex; gap: 8px; }
@@ -390,8 +491,9 @@ onBeforeUnmount(() => {
 .cloud-detail__text-button--on-media { color: #fff; }
 .cloud-detail__features { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
 .cloud-detail__features span, .cloud-detail__platforms span { color: var(--color-text-secondary); font-size: 10px; line-height: 1.5; background: var(--ui-material-selected); border: 1px solid var(--color-border-subtle); padding: 5px 8px; border-radius: 5px; }
-.cloud-detail__screenshots { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.cloud-detail__screenshot { position: relative; width: 100%; padding: 0; border: 1px solid var(--color-border-subtle); border-radius: 9px; overflow: hidden; background: transparent; cursor: pointer; }
+.cloud-detail__screenshots { min-width: 0; }
+.cloud-detail__screenshots :deep(.horizontal-list-rail__title) { font-size: 18px; }
+.cloud-detail__screenshot { position: relative; flex: 0 0 clamp(220px, 45vw, 360px); width: clamp(220px, 45vw, 360px); padding: 0; border: 1px solid var(--color-border-subtle); border-radius: 9px; overflow: hidden; background: transparent; cursor: pointer; }
 .cloud-detail__screenshot .remote-image { aspect-ratio: 16/9; width: 100%; object-fit: cover; }
 .cloud-detail__expand-icon { position: absolute; right: 8px; bottom: 8px; width: 26px; height: 26px; padding: 5px; border-radius: 6px; background: rgba(0,0,0,.5); color: #fff; }
 .cloud-detail__expand-icon svg { width: 100%; height: 100%; }

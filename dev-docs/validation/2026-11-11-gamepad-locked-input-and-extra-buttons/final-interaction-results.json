@@ -1,0 +1,243 @@
+{
+  "date": "2026-11-11",
+  "mode": "CUA manual replay with existing offline fixture",
+  "fixtureModified": false,
+  "checks": [
+    {
+      "name": "general-shortcuts-before-update",
+      "pass": true
+    },
+    {
+      "name": "sticks-centered-with-balanced-line-gaps",
+      "pass": true,
+      "metrics": {
+        "body": {
+          "height": 523.5,
+          "y": 134.5
+        },
+        "canvas": {
+          "height": 256,
+          "width": 640,
+          "x": 362,
+          "y": 264.25
+        },
+        "centerX": -0.0078125,
+        "centerY": -4,
+        "leftGap": 14.603124999999975,
+        "rightGap": 14.603124999999975
+      }
+    },
+    {
+      "name": "left-slider-and-inversion",
+      "pass": true
+    },
+    {
+      "name": "right-inversion-independent",
+      "pass": true
+    },
+    {
+      "name": "four-rumble-targets-and-header-test",
+      "pass": true
+    },
+    {
+      "name": "narrow-vibration-dropdown-bounds",
+      "pass": true,
+      "metrics": {
+        "bottom": 690.25,
+        "gap": 8,
+        "overflow": false,
+        "right": 292,
+        "viewport": 390,
+        "x": 28,
+        "y": 580.25
+      }
+    },
+    {
+      "name": "mapping-physical-standard-targets",
+      "pass": true
+    },
+    {
+      "name": "mapping-capture-stable-position-and-B-release",
+      "pass": true,
+      "metrics": {
+        "before": {
+          "height": 358.3984375,
+          "width": 640,
+          "x": 362,
+          "y": 215.046875
+        },
+        "during": {
+          "height": 358.3984375,
+          "width": 640,
+          "x": 362,
+          "y": 215.046875
+        },
+        "after": {
+          "height": 358.3984375,
+          "width": 640,
+          "x": 362,
+          "y": 215.046875
+        }
+      }
+    },
+    {
+      "name": "mapping-combination-release",
+      "pass": true
+    },
+    {
+      "name": "mapping-extra-button-source-and-focus",
+      "pass": true
+    },
+    {
+      "name": "mapping-save-reopen",
+      "pass": true
+    },
+    {
+      "name": "keyboard-source-directions-and-outer-toggle",
+      "pass": true
+    },
+    {
+      "name": "mapping-800-bounds",
+      "pass": true,
+      "metrics": {
+        "bottom": 488.09375,
+        "overflow": false,
+        "right": 702,
+        "viewport": 800,
+        "x": 182,
+        "y": 168.3984375
+      }
+    },
+    {
+      "name": "mapping-narrow-bounds",
+      "pass": true,
+      "metrics": {
+        "overflow": false,
+        "right": 366,
+        "rows": [
+          {
+            "right": 366,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 191,
+            "x": 24
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          },
+          {
+            "right": 366,
+            "x": 199
+          }
+        ],
+        "viewport": 390,
+        "x": 24
+      }
+    },
+    {
+      "name": "test-B-keeps-lock-and-displays-saved-output",
+      "pass": true
+    },
+    {
+      "name": "test-dynamic-extra-press-and-release",
+      "pass": true
+    },
+    {
+      "name": "test-keyboard-observation-with-simulation-off-and-no-source-selector",
+      "pass": true
+    },
+    {
+      "name": "test-pointer-return",
+      "pass": true
+    },
+    {
+      "name": "shortcut-keyboard-record-save-focus",
+      "pass": true,
+      "metrics": {
+        "focus": "setting.streamShortcuts.diagnostics",
+        "label": "诊断菜单\n确认后录入 Xbox 按键或对应的键盘绑定\nRB",
+        "status": "已保存"
+      }
+    },
+    {
+      "name": "sticks-800-dropdown-bounds-and-gap",
+      "pass": true,
+      "metrics": {
+        "bottom": 470.25,
+        "gap": 8,
+        "right": 698,
+        "viewportHeight": 600,
+        "viewportWidth": 800,
+        "x": 434
+      }
+    },
+    {
+      "name": "sticks-narrow-dropdown-bounds-and-gap",
+      "pass": true,
+      "metrics": {
+        "bottom": 717.25,
+        "gap": 8,
+        "right": 362,
+        "viewportHeight": 844,
+        "viewportWidth": 390,
+        "x": 98
+      }
+    }
+  ],
+  "total": 21,
+  "passed": 21
+}

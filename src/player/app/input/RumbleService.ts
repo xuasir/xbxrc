@@ -8,12 +8,11 @@ const GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE = 1
 const GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE_V8 = 2
 const GAMEPAD_RUMBLE_KIND_FOUR_MOTOR = 0
 const GAMEPAD_RUMBLE_KIND_SIZE = 1
+const GAMEPAD_RUMBLE_PACKET_SIZE_PRE_V8 = 12
 const GAMEPAD_RUMBLE_PACKET_SIZE_V8 = 13
 const GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY = 2
 // 单条 legacy rumble 记录会读到 offset+10 的 Uint16，因此最少需要 12 字节而不是 11。
 const GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY = 12
-const STREAM_RUMBLE_IGNORE_DURATION_MS = 8
-const STREAM_RUMBLE_IGNORE_MAGNITUDE = 0.02
 export class RumbleService {
   onMessage(dataView: DataView): void {
     const parsedEffects = this.parseBetterXcloudPacket(dataView)
@@ -32,20 +31,18 @@ export class RumbleService {
   }
 
   private parseBetterXcloudPacket(dataView: DataView): GamepadRumbleEffectDto[] | null {
-    if (dataView.byteLength < GAMEPAD_RUMBLE_PACKET_SIZE_V8) {
+    if (dataView.byteLength !== GAMEPAD_RUMBLE_PACKET_SIZE_PRE_V8 && dataView.byteLength !== GAMEPAD_RUMBLE_PACKET_SIZE_V8) {
       return null
     }
 
     let offset = 0
-    let messageType = dataView.getUint8(offset)
-    let messageTypeSize = GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE
-
-    // Better xCloud 在较新的协议版本里把 messageType 扩成了 Uint16。
-    const v8MessageType = dataView.getUint16(offset, true)
-    if ((v8MessageType & GAMEPAD_RUMBLE_REPORT_TYPE) !== 0 && dataView.byteLength >= GAMEPAD_RUMBLE_PACKET_SIZE_V8) {
-      messageType = v8MessageType
-      messageTypeSize = GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE_V8
-    }
+    // 完整报文长度确定消息头宽度，旧 10-bit 记录继续走独立解析路径。
+    const messageTypeSize = dataView.byteLength === GAMEPAD_RUMBLE_PACKET_SIZE_V8
+      ? GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE_V8
+      : GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE
+    const messageType = messageTypeSize === GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE_V8
+      ? dataView.getUint16(offset, true)
+      : dataView.getUint8(offset)
 
     if ((messageType & GAMEPAD_RUMBLE_REPORT_TYPE) === 0) {
       return null
@@ -62,7 +59,7 @@ export class RumbleService {
       return null
     }
 
-    if (offset + 7 > dataView.byteLength) {
+    if (offset + 10 > dataView.byteLength) {
       return null
     }
 
@@ -77,12 +74,8 @@ export class RumbleService {
       weakMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 2)),
       strongMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 1)),
       durationMs: dataView.getUint16(offset + 5, true),
-      startDelayMs: 0,
-      repeat: 0,
-    }
-
-    if (this.shouldIgnoreEffect(effect)) {
-      return []
+      startDelayMs: dataView.getUint16(offset + 7, true),
+      repeat: dataView.getUint8(offset + 9),
     }
 
     return [effect]
@@ -115,9 +108,7 @@ export class RumbleService {
         startDelayMs: 0,
         repeat: 0,
       }
-      if (!this.shouldIgnoreEffect(effect)) {
-        effects.push(effect)
-      }
+      effects.push(effect)
       offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY
     }
 
@@ -130,21 +121,6 @@ export class RumbleService {
 
   private normalizeUnitMotor(value: number): number {
     return Math.max(0, Math.min(1, value))
-  }
-
-  private shouldIgnoreEffect(effect: GamepadRumbleEffectDto): boolean {
-    if (!effect.strongMagnitude && !effect.weakMagnitude && !effect.leftTrigger && !effect.rightTrigger)
-      return false
-    if (effect.durationMs >= STREAM_RUMBLE_IGNORE_DURATION_MS) {
-      return false
-    }
-
-    return Math.max(
-      effect.leftTrigger,
-      effect.rightTrigger,
-      effect.weakMagnitude,
-      effect.strongMagnitude,
-    ) <= STREAM_RUMBLE_IGNORE_MAGNITUDE
   }
 
   destroy(): void {

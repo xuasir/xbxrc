@@ -1,0 +1,23 @@
+{
+  "inspectionDate": "2026-11-12",
+  "result": "pass",
+  "rawSourceHashes": 6,
+  "readableSourceHashes": 6,
+  "excerptFileHashes": 7,
+  "exactSourceExcerptChecks": 36,
+  "localDocumentLinks": 87,
+  "sourceLineLinks": 62,
+  "documentCount": 3,
+  "replayRecordsChecked": 41,
+  "replayGroups": {
+    "protocol": 20,
+    "pointer": 4,
+    "input": 7,
+    "axis": 4,
+    "axis-observation": 2,
+    "render": 4
+  },
+  "realBrowserWebGLMeasured": false,
+  "taskStatus": "Done",
+  "taskLedgerLinks": 3
+}

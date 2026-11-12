@@ -1,0 +1,303 @@
+{
+  "date": "2026-11-12",
+  "originalRevision": "e33f554a0ae7fab5bbb89904500f3a34c763de81",
+  "restoredAssetCount": 53,
+  "platformPngCount": 50,
+  "worktreeMatchesOriginal": true,
+  "stagedIconsMatchOriginal": true,
+  "removedFromWorktreeAndIndex": [
+    "src-tauri/icons/README.md",
+    "public/favicon.svg",
+    "scripts/generate-app-icons.mjs",
+    "scripts/pack-app-icons.py"
+  ],
+  "frontendEntryFaviconRemoved": true,
+  "buildFaviconRemoved": true,
+  "assetCheck": {
+    "assetCount": 80,
+    "passed": 164,
+    "failed": 0
+  },
+  "build": {
+    "command": "pnpm build",
+    "exitCode": 0,
+    "output": "app-icon-restore-build.txt"
+  },
+  "lint": {
+    "command": "pnpm lint:fix",
+    "exitCode": 1,
+    "existingFailure": {
+      "file": "src/player/app/session/SessionService.test.ts",
+      "line": 157,
+      "column": 93,
+      "rule": "style/max-statements-per-line"
+    }
+  },
+  "restoredAssets": [
+    {
+      "path": "src-tauri/icons/128x128.png",
+      "sha256": "042a451168dc6433326b178e3d027b2722211a4e48f8a6cbfdf4e5139956529f",
+      "bytes": 14936
+    },
+    {
+      "path": "src-tauri/icons/128x128@2x.png",
+      "sha256": "bf85f785a48cd7b8ae70582f44853855127547ccb1a3190289fed73c73a86c51",
+      "bytes": 38363
+    },
+    {
+      "path": "src-tauri/icons/32x32.png",
+      "sha256": "c693fcda8967d2a029c8a56c27960e587481ad12df123ffe08991e08b4168c04",
+      "bytes": 2112
+    },
+    {
+      "path": "src-tauri/icons/64x64.png",
+      "sha256": "379c5cdf89036a5c3c48e7d59f5f412b0646b4b0064df6d0c0880f67c03aecdc",
+      "bytes": 5645
+    },
+    {
+      "path": "src-tauri/icons/Square107x107Logo.png",
+      "sha256": "b25d7b0e0d05c97931b767e431ff46b016efaf67173e4bab640d07d228caff7e",
+      "bytes": 11694
+    },
+    {
+      "path": "src-tauri/icons/Square142x142Logo.png",
+      "sha256": "6cfc192a73e1548b3cc345028def0a45130105d3eae7a2026236456bde297f1f",
+      "bytes": 17143
+    },
+    {
+      "path": "src-tauri/icons/Square150x150Logo.png",
+      "sha256": "f774a82bbcb335cdd33952caa996414b0ee50831deee1d63ff560ac42ab16370",
+      "bytes": 18306
+    },
+    {
+      "path": "src-tauri/icons/Square284x284Logo.png",
+      "sha256": "737554d11475414b0533400ae589c58cc80aba4fb9f7926ea25cab20a7d0cdee",
+      "bytes": 44981
+    },
+    {
+      "path": "src-tauri/icons/Square30x30Logo.png",
+      "sha256": "c9c97c211cd41f582241e72fe67efa994bec371d81a59b7a12fb7d85f0204bba",
+      "bytes": 2007
+    },
+    {
+      "path": "src-tauri/icons/Square310x310Logo.png",
+      "sha256": "ee166ad3e12824f934a96a63f87d48948836aead708869ac7e02d31eb817cf59",
+      "bytes": 51021
+    },
+    {
+      "path": "src-tauri/icons/Square44x44Logo.png",
+      "sha256": "0c1cf2d341a5dfe8b05fdeac00e101172674e0c6733ad5fc50137da3fba711d1",
+      "bytes": 3309
+    },
+    {
+      "path": "src-tauri/icons/Square71x71Logo.png",
+      "sha256": "d55573baa46493f5134463b95e97cda007f390f488c75cf2d28706d9ff8866d8",
+      "bytes": 6550
+    },
+    {
+      "path": "src-tauri/icons/Square89x89Logo.png",
+      "sha256": "a7610cd96a31dfed0c493fa96c371bcc22f543958592eeab53cdb53f83c1fe7d",
+      "bytes": 9111
+    },
+    {
+      "path": "src-tauri/icons/StoreLogo.png",
+      "sha256": "346dfb878a1e584bd1256cda354d0d7300b4af3e82e802007d62fc861eaef87d",
+      "bytes": 4088
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+      "sha256": "8475caedc2516dc56bef1ce11121feca5b58a55093d890d5e475a9bf763faa0f",
+      "bytes": 3553
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+      "sha256": "8a9732f6c62d5271d4e044761cb9e35e4fe3c78f6ec700fe12a870b424b7a2a1",
+      "bytes": 20195
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png",
+      "sha256": "507dbc9798f90bb5779ffaf8a7e2a96ae4ce63b9cdda49fa15c6ba0f682b0310",
+      "bytes": 3839
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png",
+      "sha256": "4383f53dfdb0dff1c3ec164af56ca5b93a618b82965bb166d3746abf6d83838b",
+      "bytes": 3386
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+      "sha256": "5aa71b38e76c54359cd676b6dcae3f76fb697089bce03f4f45de1a794a6c9f53",
+      "bytes": 11945
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png",
+      "sha256": "533adf04166b36d214ca3daa7a09a50801352946d310b46626d0e70a54c4eb8b",
+      "bytes": 3657
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png",
+      "sha256": "5e08f0eec2bf5479328d9f8344414f4fcb28ded12874fafb1f52a48b1a4c7109",
+      "bytes": 8718
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+      "sha256": "2c105eeae72cfebeeb1ed93c1f1cedc9aa21886ee8ec031ef0e5665ed171e94d",
+      "bytes": 29787
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+      "sha256": "bf9d955b1acbe4e5393bb7e3afd09373316b853c5d5052553714b804673c1d95",
+      "bytes": 9856
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png",
+      "sha256": "4ae3faf7730078229e33a2d9dbeb1b895dc4caa83048591410a42dd7880182ad",
+      "bytes": 15123
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "sha256": "83ca8e98a2bdcadc3f399a985350550e97feb833a5194431694b7c426b6982a8",
+      "bytes": 55031
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+      "sha256": "e7a4feb1b7249034abf7451ae359b3012e7fadd931f07e24ddfffe3cacee9c76",
+      "bytes": 17542
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+      "sha256": "ef5ce97623c176e413a0b5aa19744d113e7753848597ffa8f897fe0d397f2dfe",
+      "bytes": 22313
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "sha256": "e1bcf41d5a0d75f5b993f027c69b5ab3262ebbc255e996e44d2c49c4928e8381",
+      "bytes": 87519
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+      "sha256": "503387c9ed515dea7bbb78f5b2ccb933ee994c095f5f1b1096d73242e09feb83",
+      "bytes": 25512
+    },
+    {
+      "path": "src-tauri/icons/icon-macos-padded.png",
+      "sha256": "ccd0fb39ba42163905cd33bc601e74d41f6bbabb9f04b45241021fcb321e0b71",
+      "bytes": 455786
+    },
+    {
+      "path": "src-tauri/icons/icon-source-1024.png",
+      "sha256": "bfb45f647e0e17676cae32106f9e68fe1bcd7579e9d15d82127e8139849266f1",
+      "bytes": 708417
+    },
+    {
+      "path": "src-tauri/icons/icon-source.svg",
+      "sha256": "ff8a73a2863c3a75c74544eb9db0498f14973cce6bec6314f0958e1bb540a43b",
+      "bytes": 23790
+    },
+    {
+      "path": "src-tauri/icons/icon.icns",
+      "sha256": "172de66a03187cac1d1e1b638e9f26770d7b7061c94017c846dbd5447ad13728",
+      "bytes": 743060
+    },
+    {
+      "path": "src-tauri/icons/icon.ico",
+      "sha256": "d0efd893cbb3ad94a8e1cd85672ae57a7df401d7bd86d48b49bc40c049e3c41b",
+      "bytes": 55279
+    },
+    {
+      "path": "src-tauri/icons/icon.png",
+      "sha256": "8c82cd8e15f1f5887589cc01be8236eedac58ebb8ec543a6ac6c2fff548f2a57",
+      "bytes": 116562
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@1x.png",
+      "sha256": "34371b7786de40d282a851c200a50afe59570610a5f49805bc1ab368702efaed",
+      "bytes": 1020
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
+      "sha256": "6e313501bb6a93831f6ea55026fe6aef3d7fa99c545692764eb48c6ac101fb13",
+      "bytes": 2711
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@2x.png",
+      "sha256": "6e313501bb6a93831f6ea55026fe6aef3d7fa99c545692764eb48c6ac101fb13",
+      "bytes": 2711
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@3x.png",
+      "sha256": "41df76b9577039769df2077cc418482b98fcbfe1999cfe40556e5e02ab729786",
+      "bytes": 5003
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@1x.png",
+      "sha256": "71f1dd3271839682841522cf8fe4884c032de4e1fddc7c462a4c83bf3cef70d5",
+      "bytes": 1758
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
+      "sha256": "591bd1c0de124470e0193ee57f916191eef98d0712982219d18abf68fdd2796d",
+      "bytes": 4698
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@2x.png",
+      "sha256": "591bd1c0de124470e0193ee57f916191eef98d0712982219d18abf68fdd2796d",
+      "bytes": 4698
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@3x.png",
+      "sha256": "2d71833df943058af834e09856774e87613583cd529a628d529b383775937078",
+      "bytes": 8408
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@1x.png",
+      "sha256": "6e313501bb6a93831f6ea55026fe6aef3d7fa99c545692764eb48c6ac101fb13",
+      "bytes": 2711
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
+      "sha256": "cb3386c12d3b5b78ed906bd139641a0324f79a9dba943ef993a5248ad31e8ef7",
+      "bytes": 7420
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@2x.png",
+      "sha256": "cb3386c12d3b5b78ed906bd139641a0324f79a9dba943ef993a5248ad31e8ef7",
+      "bytes": 7420
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@3x.png",
+      "sha256": "8a1701a90abe37326dbc29d8ec466a6fdcc783e49ae8bf63e679b57133ad0827",
+      "bytes": 13006
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-512@2x.png",
+      "sha256": "fdc4968e558b100c26fdb9d12859623da3af71add06bc7e584c393d46c49f6e2",
+      "bytes": 409968
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-60x60@2x.png",
+      "sha256": "8a1701a90abe37326dbc29d8ec466a6fdcc783e49ae8bf63e679b57133ad0827",
+      "bytes": 13006
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-60x60@3x.png",
+      "sha256": "fbbcfcb783236ab170b0eada7a492bfeb0389a122056bfc944f386e916d3922a",
+      "bytes": 22652
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-76x76@1x.png",
+      "sha256": "b13c7ada5ec1663ed9d176601419796707a41bade47d3969e91ae85e4ac5be66",
+      "bytes": 6907
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-76x76@2x.png",
+      "sha256": "ad47859cdc2b3bb4871ba45fc115815a0f2e901f0efada16d6c120fa36e1e938",
+      "bytes": 17922
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png",
+      "sha256": "6f5909233b69b05338af1a79514f13b21d11a6934956fb4965cd22543651741c",
+      "bytes": 20580
+    }
+  ]
+}

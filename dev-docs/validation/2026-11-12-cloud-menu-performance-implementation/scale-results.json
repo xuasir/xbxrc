@@ -1,0 +1,123 @@
+{
+  "observedDate": "2026-11-12",
+  "environment": {
+    "node": "v24.21.0",
+    "os": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M2 Pro"
+  },
+  "method": "生产索引/查询/窗口模型与已保存旧模型；Node 时间片与 JSON 字节，DOM/原生窗口独立采样",
+  "results": [
+    {
+      "size": 500,
+      "baselineEmptyQueryMs": [
+        2.387040999999982,
+        2.4721250000000055,
+        2.0333750000000066
+      ],
+      "index": {
+        "normalized": 500,
+        "buildMs": 2.83058299999999,
+        "longestSliceMs": 2.820458000000002
+      },
+      "incremental": {
+        "normalized": 75,
+        "buildMs": 0.8097920000000158,
+        "longestSliceMs": 0.8142079999999794
+      },
+      "queryTimes": [
+        {
+          "query": "",
+          "ms": 0.06595899999999233
+        },
+        {
+          "query": "Halo infinite",
+          "ms": 0.37937500000001023
+        },
+        {
+          "query": "探索 协作",
+          "ms": 0.35037499999998545
+        }
+      ],
+      "warmArrayReused": true,
+      "fullEventBytes": 1103268,
+      "patch75Bytes": 165642,
+      "gridWindowCards": 44,
+      "baselineVisitedGridCards": 500
+    },
+    {
+      "size": 2000,
+      "baselineEmptyQueryMs": [
+        9.356416999999993,
+        8.786125000000027,
+        8.552334000000002
+      ],
+      "index": {
+        "normalized": 2000,
+        "buildMs": 11.43312499999999,
+        "longestSliceMs": 6.09216600000002
+      },
+      "incremental": {
+        "normalized": 75,
+        "buildMs": 1.2528750000000173,
+        "longestSliceMs": 1.2527079999999842
+      },
+      "queryTimes": [
+        {
+          "query": "",
+          "ms": 0.009666999999978998
+        },
+        {
+          "query": "Halo infinite",
+          "ms": 3.3881660000000124
+        },
+        {
+          "query": "探索 协作",
+          "ms": 0.8310420000000249
+        }
+      ],
+      "warmArrayReused": true,
+      "fullEventBytes": 4420268,
+      "patch75Bytes": 165642,
+      "gridWindowCards": 44,
+      "baselineVisitedGridCards": 2000
+    },
+    {
+      "size": 10000,
+      "baselineEmptyQueryMs": [
+        42.94625000000002,
+        37.297082999999986,
+        37.16104100000001
+      ],
+      "index": {
+        "normalized": 10000,
+        "buildMs": 61.75120800000002,
+        "longestSliceMs": 6.101083000000017
+      },
+      "incremental": {
+        "normalized": 75,
+        "buildMs": 5.66766599999994,
+        "longestSliceMs": 5.669416999999953
+      },
+      "queryTimes": [
+        {
+          "query": "",
+          "ms": 0.010750000000030013
+        },
+        {
+          "query": "Halo infinite",
+          "ms": 13.357167000000004
+        },
+        {
+          "query": "探索 协作",
+          "ms": 2.3942080000000487
+        }
+      ],
+      "warmArrayReused": true,
+      "fullEventBytes": 22124268,
+      "patch75Bytes": 165642,
+      "gridWindowCards": 46,
+      "baselineVisitedGridCards": 2001
+    }
+  ]
+}

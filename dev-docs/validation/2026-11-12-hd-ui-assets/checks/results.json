@@ -1,0 +1,23 @@
+{
+  "lintFix": { "command": "pnpm lint:fix", "exitCode": 0 },
+  "typecheck": { "command": "pnpm typecheck", "exitCode": 0 },
+  "build": { "command": "pnpm build", "exitCode": 0 },
+  "vitest": {
+    "exitCode": 0,
+    "files": 6,
+    "passed": 50,
+    "targets": [
+      "src/pages/controller/SettingGamepadEditor.test.ts",
+      "src/pages/settings/SettingStreamShortcutsEditor.test.ts",
+      "src/shared/gamepad/rumble.test.ts",
+      "src/shared/gamepad/settings-model.test.ts",
+      "src/shared/gamepad/input-controller.test.ts",
+      "src/components/common/remote-image-source.test.ts"
+    ]
+  },
+  "navigationCoverage": { "exitCode": 0, "interactiveSites": 217, "violations": 0 },
+  "scriptSyntax": { "javascript": 2, "python": 3, "passed": true },
+  "assetFormats": { "assets": 81, "checksPassed": 111, "failed": 0 },
+  "browser": { "cases": 10, "checksPassed": 52, "consoleErrors": 0, "horizontalOverflow": 0 },
+  "existingStagedChangesPreserved": true
+}

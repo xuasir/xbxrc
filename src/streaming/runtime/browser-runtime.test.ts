@@ -1604,7 +1604,7 @@ describe('browser-runtime super resolution state', () => {
         },
       })
       expect(production.healthSamples.some(entry => 'mediaDiagnostics' in (entry.payload as Record<string, unknown>))).toBe(false)
-      expect(dev.healthSamples).toHaveLength(0)
+      expect(dev.healthSamples.length).toBeGreaterThan(0)
     }
     finally {
       vi.useRealTimers()

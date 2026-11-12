@@ -2,11 +2,11 @@
   "active": "xcloud.refresh",
   "fixture": {
     "counters": {
-      "auth.getState": 5,
+      "auth.getState": 4,
       "config.get": 3,
       "data.getCloudPreferences": 2,
       "data.getUserProfile": 1,
-      "data.getXcloudTitles": 2,
+      "data.getXcloudTitles": 1,
       "data.primeXcloudTitles": 1,
       "data.refreshXcloudTitles": 1
     },
@@ -63,11 +63,11 @@
       "scope": "app.shell",
       "unreachable": []
     },
-    "instanceId": "bbec2a90-5374-46f9-ba15-bcb10a891bb2",
+    "instanceId": "5f980f20-b281-4b57-8506-83c135a2000d",
     "keys": [],
     "timeline": [
       {
-        "atMs": 71,
+        "atMs": 58,
         "busy": [],
         "marked": [],
         "native": "",
@@ -79,7 +79,7 @@
         }
       },
       {
-        "atMs": 121,
+        "atMs": 110,
         "busy": [],
         "marked": [],
         "native": "",
@@ -93,14 +93,11 @@
         }
       },
       {
-        "atMs": 146,
+        "atMs": 131,
         "busy": [],
         "marked": [],
         "native": "",
-        "pending": [
-          "config.get",
-          "data.getXcloudTitles"
-        ],
+        "pending": [],
         "route": "#/xcloud",
         "viewport": {
           "height": 900,
@@ -108,50 +105,12 @@
         }
       },
       {
-        "atMs": 148,
+        "atMs": 131,
         "busy": [],
         "marked": [],
         "native": "",
         "pending": [
-          "config.get",
-          "data.getXcloudTitles",
           "auth.getState"
-        ],
-        "route": "#/xcloud",
-        "viewport": {
-          "height": 900,
-          "width": 480
-        }
-      },
-      {
-        "atMs": 148,
-        "busy": [],
-        "marked": [],
-        "native": "",
-        "pending": [
-          "config.get",
-          "data.getXcloudTitles",
-          "auth.getState",
-          "data.getUserProfile"
-        ],
-        "route": "#/xcloud",
-        "viewport": {
-          "height": 900,
-          "width": 480
-        }
-      },
-      {
-        "atMs": 150,
-        "busy": [],
-        "marked": [
-          "top-nav.brand"
-        ],
-        "native": "",
-        "pending": [
-          "config.get",
-          "data.getXcloudTitles",
-          "auth.getState",
-          "data.getUserProfile"
         ],
         "route": "#/xcloud",
         "viewport": {
@@ -162,81 +121,71 @@
       {
         "atMs": 152,
         "busy": [],
-        "marked": [
-          "top-nav.brand"
-        ],
-        "native": "top-nav.brand",
-        "pending": [
-          "config.get",
-          "data.getXcloudTitles",
-          "auth.getState",
-          "data.getUserProfile"
-        ],
-        "route": "#/xcloud",
-        "viewport": {
-          "height": 900,
-          "width": 480
-        }
-      },
-      {
-        "atMs": 154,
-        "busy": [],
-        "marked": [
-          "top-nav.brand"
-        ],
-        "native": "top-nav.brand",
-        "pending": [
-          "data.getXcloudTitles",
-          "auth.getState",
-          "data.getUserProfile"
-        ],
-        "route": "#/xcloud",
-        "viewport": {
-          "height": 900,
-          "width": 480
-        }
-      },
-      {
-        "atMs": 166,
-        "busy": [],
-        "marked": [
-          "top-nav.brand"
-        ],
-        "native": "top-nav.brand",
-        "pending": [
-          "auth.getState",
-          "data.getUserProfile"
-        ],
-        "route": "#/xcloud",
-        "viewport": {
-          "height": 900,
-          "width": 480
-        }
-      },
-      {
-        "atMs": 168,
-        "busy": [],
-        "marked": [
-          "top-nav.brand"
-        ],
-        "native": "top-nav.brand",
-        "pending": [
-          "data.getUserProfile"
-        ],
-        "route": "#/xcloud",
-        "viewport": {
-          "height": 900,
-          "width": 480
-        }
-      },
-      {
-        "atMs": 168,
-        "busy": [],
-        "marked": [
-          "top-nav.brand"
-        ],
-        "native": "top-nav.brand",
+        "marked": [],
+        "native": "",
         "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 152,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 172,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "data.primeXcloudTitles",
+          "data.getXcloudTitles"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 174,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "data.primeXcloudTitles",
+          "data.getXcloudTitles",
+          "auth.getState"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 174,
+        "busy": [],
+        "marked": [],
+        "native": "",
+        "pending": [
+          "data.primeXcloudTitles",
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
+        ],
         "route": "#/xcloud",
         "viewport": {
           "height": 900,
@@ -249,9 +198,12 @@
         "marked": [
           "top-nav.brand"
         ],
-        "native": "top-nav.brand",
+        "native": "",
         "pending": [
-          "data.primeXcloudTitles"
+          "data.primeXcloudTitles",
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
         ],
         "route": "#/xcloud",
         "viewport": {
@@ -260,7 +212,7 @@
         }
       },
       {
-        "atMs": 179,
+        "atMs": 178,
         "busy": [],
         "marked": [
           "top-nav.brand"
@@ -268,7 +220,9 @@
         "native": "top-nav.brand",
         "pending": [
           "data.primeXcloudTitles",
-          "auth.getState"
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
         ],
         "route": "#/xcloud",
         "viewport": {
@@ -277,14 +231,16 @@
         }
       },
       {
-        "atMs": 187,
+        "atMs": 180,
         "busy": [],
         "marked": [
           "top-nav.brand"
         ],
         "native": "top-nav.brand",
         "pending": [
-          "data.primeXcloudTitles"
+          "data.getXcloudTitles",
+          "auth.getState",
+          "data.getUserProfile"
         ],
         "route": "#/xcloud",
         "viewport": {
@@ -293,15 +249,15 @@
         }
       },
       {
-        "atMs": 188,
+        "atMs": 193,
         "busy": [],
         "marked": [
           "top-nav.brand"
         ],
         "native": "top-nav.brand",
         "pending": [
-          "data.primeXcloudTitles",
-          "data.getCloudPreferences"
+          "auth.getState",
+          "data.getUserProfile"
         ],
         "route": "#/xcloud",
         "viewport": {
@@ -310,14 +266,14 @@
         }
       },
       {
-        "atMs": 198,
+        "atMs": 195,
         "busy": [],
         "marked": [
           "top-nav.brand"
         ],
         "native": "top-nav.brand",
         "pending": [
-          "data.getCloudPreferences"
+          "data.getUserProfile"
         ],
         "route": "#/xcloud",
         "viewport": {
@@ -326,7 +282,7 @@
         }
       },
       {
-        "atMs": 208,
+        "atMs": 195,
         "busy": [],
         "marked": [
           "top-nav.brand"
@@ -340,7 +296,37 @@
         }
       },
       {
-        "atMs": 216,
+        "atMs": 215,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [
+          "data.getCloudPreferences"
+        ],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 236,
+        "busy": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "pending": [],
+        "route": "#/xcloud",
+        "viewport": {
+          "height": 900,
+          "width": 480
+        }
+      },
+      {
+        "atMs": 246,
         "busy": [],
         "marked": [
           "xcloud.search"
@@ -354,7 +340,7 @@
         }
       },
       {
-        "atMs": 219,
+        "atMs": 248,
         "busy": [],
         "marked": [
           "xcloud.search"
@@ -368,7 +354,7 @@
         }
       },
       {
-        "atMs": 28438,
+        "atMs": 320,
         "busy": [],
         "marked": [
           "xcloud.refresh"
@@ -382,7 +368,7 @@
         }
       },
       {
-        "atMs": 28442,
+        "atMs": 322,
         "busy": [],
         "marked": [
           "xcloud.refresh"
@@ -398,7 +384,7 @@
         }
       },
       {
-        "atMs": 28445,
+        "atMs": 324,
         "busy": [
           "xcloud.refresh"
         ],
@@ -416,7 +402,7 @@
         }
       },
       {
-        "atMs": 28693,
+        "atMs": 573,
         "busy": [
           "xcloud.refresh"
         ],
@@ -432,7 +418,7 @@
         }
       },
       {
-        "atMs": 28694,
+        "atMs": 574,
         "busy": [
           "xcloud.refresh"
         ],
@@ -450,7 +436,7 @@
         }
       },
       {
-        "atMs": 28715,
+        "atMs": 595,
         "busy": [
           "xcloud.refresh"
         ],
@@ -466,7 +452,7 @@
         }
       },
       {
-        "atMs": 28716,
+        "atMs": 596,
         "busy": [
           "xcloud.refresh"
         ],
@@ -484,7 +470,7 @@
         }
       },
       {
-        "atMs": 28737,
+        "atMs": 617,
         "busy": [
           "xcloud.refresh"
         ],
@@ -500,7 +486,7 @@
         }
       },
       {
-        "atMs": 28740,
+        "atMs": 620,
         "busy": [],
         "marked": [
           "xcloud.refresh"
@@ -517,5 +503,5 @@
   },
   "fullLoading": false,
   "searchVisible": true,
-  "status": "账户云目录 · 当前显示缓存目录，最后更新于 17:48"
+  "status": "账户云目录 · 目录已更新于 17:52"
 }

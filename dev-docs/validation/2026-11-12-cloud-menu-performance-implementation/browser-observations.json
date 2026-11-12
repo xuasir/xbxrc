@@ -1,0 +1,2076 @@
+[
+  {
+    "name": "catalog-10000-start",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 16.80000000000001,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 2
+    }
+  },
+  {
+    "name": "catalog-10000-index2000",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P2002",
+      "marked": [
+        "xcloud.all.P2002"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 15.799999999999997,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 3
+    }
+  },
+  {
+    "name": "catalog-10000-down40",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P2102",
+      "marked": [
+        "xcloud.all.P2102"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 30,
+      "candidates": 105,
+      "images": 30,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 30
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 9.300000000000182,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 10,
+      "config.getGroups": 2
+    }
+  },
+  {
+    "name": "catalog-10000-tail",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P2102",
+      "marked": [
+        "xcloud.all.P2102"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 40,
+      "candidates": 135,
+      "images": 40,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 40
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": [
+        {
+          "start": 34263.60000014305,
+          "duration": 80
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 11,
+      "config.getGroups": 2,
+      "data.getCloudWait": 1
+    }
+  },
+  {
+    "name": "setting-inactive-catalog",
+    "current": {
+      "route": "#/setting",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "top-nav.setting",
+      "marked": [
+        "top-nav.setting"
+      ],
+      "busy": [
+        "setting.content.general.inlineSelect.setting.update.channel.option.0",
+        "setting.content.general.inlineSelect.setting.update.channel.option.1",
+        "setting.update.primary"
+      ],
+      "pending": [
+        "app.getVersion",
+        "updater.getChannel"
+      ],
+      "cards": 0,
+      "candidates": 11,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 0,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 25.099999999998545,
+      "longTasks": [
+        {
+          "start": 34263.60000014305,
+          "duration": 80
+        },
+        {
+          "start": 34624.90000009537,
+          "duration": 51
+        },
+        {
+          "start": 34763.40000009537,
+          "duration": 57
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 18,
+      "config.getGroups": 3,
+      "data.getCloudWait": 1,
+      "app.getVersion": 1,
+      "updater.getChannel": 1
+    }
+  },
+  {
+    "name": "catalog-menu-return",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "top-nav.xcloud",
+      "marked": [
+        "top-nav.xcloud"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 25.19999999999709,
+      "longTasks": [
+        {
+          "start": 34263.60000014305,
+          "duration": 80
+        },
+        {
+          "start": 34624.90000009537,
+          "duration": 51
+        },
+        {
+          "start": 34763.40000009537,
+          "duration": 57
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 6,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 18,
+      "config.getGroups": 3,
+      "data.getCloudWait": 1,
+      "app.getVersion": 1,
+      "updater.getChannel": 1,
+      "data.getCloudCatalogStatus": 1
+    }
+  },
+  {
+    "name": "catalog-10000-tail",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "top-nav.xcloud",
+      "marked": [
+        "top-nav.xcloud"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 30,
+      "candidates": 105,
+      "images": 28,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 30
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 9,
+      "longTasks": [
+        {
+          "start": 34263.60000014305,
+          "duration": 80
+        },
+        {
+          "start": 34624.90000009537,
+          "duration": 51
+        },
+        {
+          "start": 34763.40000009537,
+          "duration": 57
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 6,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 19,
+      "config.getGroups": 3,
+      "data.getCloudWait": 1,
+      "app.getVersion": 1,
+      "updater.getChannel": 1,
+      "data.getCloudCatalogStatus": 1
+    }
+  },
+  {
+    "name": "catalog-detail-return",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P9952",
+      "marked": [
+        "xcloud.all.P9952"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 25,
+      "longTasks": [
+        {
+          "start": 212745.30000019073,
+          "duration": 54
+        },
+        {
+          "start": 230411.70000004768,
+          "duration": 58
+        },
+        {
+          "start": 230653.60000014305,
+          "duration": 75
+        },
+        {
+          "start": 230742.80000019073,
+          "duration": 85
+        },
+        {
+          "start": 231061.40000009537,
+          "duration": 64
+        },
+        {
+          "start": 231219.70000004768,
+          "duration": 72
+        },
+        {
+          "start": 232011.70000004768,
+          "duration": 64
+        },
+        {
+          "start": 232352.5,
+          "duration": 56
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 7,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 19,
+      "config.getGroups": 3,
+      "data.getCloudWait": 2,
+      "app.getVersion": 1,
+      "updater.getChannel": 1,
+      "data.getCloudCatalogStatus": 2,
+      "data.getCloudTitleSummary": 1,
+      "data.getCloudDetail": 1,
+      "data.getLibraryGame": 1,
+      "data.getPlaytimes": 1
+    }
+  },
+  {
+    "name": "detail-hot-return",
+    "current": {
+      "route": "#/xcloud/games/P9952",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "v-5.next",
+      "marked": [
+        "v-5.next"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 0,
+      "candidates": 18,
+      "images": 11,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 1.2999999523162842,
+      "frameP95Ms": 25,
+      "longTasks": [
+        {
+          "start": 212745.30000019073,
+          "duration": 54
+        },
+        {
+          "start": 230411.70000004768,
+          "duration": 58
+        },
+        {
+          "start": 230653.60000014305,
+          "duration": 75
+        },
+        {
+          "start": 230742.80000019073,
+          "duration": 85
+        },
+        {
+          "start": 231061.40000009537,
+          "duration": 64
+        },
+        {
+          "start": 231219.70000004768,
+          "duration": 72
+        },
+        {
+          "start": 232011.70000004768,
+          "duration": 64
+        },
+        {
+          "start": 232352.5,
+          "duration": 56
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 7,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 19,
+      "config.getGroups": 3,
+      "data.getCloudWait": 2,
+      "app.getVersion": 1,
+      "updater.getChannel": 1,
+      "data.getCloudCatalogStatus": 2,
+      "data.getCloudTitleSummary": 2,
+      "data.getCloudDetail": 2,
+      "data.getLibraryGame": 2,
+      "data.getPlaytimes": 2
+    }
+  },
+  {
+    "name": "detail-deep-link",
+    "current": {
+      "route": "#/xcloud/games/P9952",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "cloud.detail.play"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 0,
+      "candidates": 17,
+      "images": 11,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 0,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 25.099999999999994,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "data.getCloudTitleSummary": 2,
+      "data.getCloudDetail": 2,
+      "auth.getState": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.getLibraryGame": 1,
+      "data.getPlaytimes": 1
+    }
+  },
+  {
+    "name": "catalog-10000-tail",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P9952",
+      "marked": [
+        "xcloud.all.P9952"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 1,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 9.10000000000582,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "data.getCloudTitleSummary": 2,
+      "data.getCloudDetail": 2,
+      "auth.getState": 3,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.getLibraryGame": 1,
+      "data.getPlaytimes": 1,
+      "data.getCloudWait": 1,
+      "config.getGroups": 2,
+      "data.getXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 3
+    }
+  },
+  {
+    "name": "detail-hot-return",
+    "current": {
+      "route": "#/xcloud/games/P9952",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "v-0.next",
+      "marked": [
+        "v-0.next"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 0,
+      "candidates": 18,
+      "images": 11,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 1,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 9.19999999999709,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "data.getCloudTitleSummary": 3,
+      "data.getCloudDetail": 3,
+      "auth.getState": 3,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.getLibraryGame": 2,
+      "data.getPlaytimes": 2,
+      "data.getCloudWait": 1,
+      "config.getGroups": 2,
+      "data.getXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 3
+    }
+  },
+  {
+    "name": "catalog-500-start",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 19,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 25.600000000000023,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 1
+    }
+  },
+  {
+    "name": "catalog-500-tail",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P0452",
+      "marked": [
+        "xcloud.all.P0452"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 16.700000000000045,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 2
+    }
+  },
+  {
+    "name": "catalog-rail-cross-window",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.xcloud-favorites.P0027",
+      "marked": [
+        "xcloud.xcloud-favorites.P0027"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 34,
+      "candidates": 118,
+      "images": 34,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 10
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 9.300000000000182,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 7,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 4
+    }
+  },
+  {
+    "name": "search-halo",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.search",
+      "marked": [
+        "xcloud.search"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 20,
+      "candidates": 64,
+      "images": 20,
+      "windows": [
+        {
+          "section": "xcloud-all",
+          "mounted": 20
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 25,
+      "longTasks": [
+        {
+          "start": 32450.39999985695,
+          "duration": 63
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 14,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 8,
+      "data.getCloudWait": 1
+    }
+  },
+  {
+    "name": "search-cleared",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.search",
+      "marked": [
+        "xcloud.search"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 25,
+      "longTasks": [
+        {
+          "start": 32450.39999985695,
+          "duration": 63
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 14,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 8,
+      "data.getCloudWait": 1
+    }
+  },
+  {
+    "name": "catalog-refresh-patches",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.refresh",
+      "marked": [
+        "xcloud.refresh"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 4,
+        "submissions": 6,
+        "duplicateContent": 2,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 24.100000000002183,
+      "longTasks": [
+        {
+          "start": 32450.39999985695,
+          "duration": 63
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 14,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 8,
+      "data.getCloudWait": 1,
+      "data.refreshXcloudTitles": 1
+    }
+  },
+  {
+    "name": "search-halo",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.search",
+      "marked": [
+        "xcloud.search"
+      ],
+      "busy": [],
+      "pending": [
+        "data.prioritizeCloudTitles"
+      ],
+      "cards": 2,
+      "candidates": 11,
+      "images": 2,
+      "windows": [
+        {
+          "section": "xcloud-all",
+          "mounted": 2
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 4,
+        "submissions": 6,
+        "duplicateContent": 2,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 9.30000000000291,
+      "longTasks": [
+        {
+          "start": 32450.39999985695,
+          "duration": 63
+        },
+        {
+          "start": 47994.299999952316,
+          "duration": 72
+        },
+        {
+          "start": 48348.39999985695,
+          "duration": 109
+        },
+        {
+          "start": 48492.200000047684,
+          "duration": 58
+        },
+        {
+          "start": 81549.79999995232,
+          "duration": 58
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 15,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 8,
+      "data.getCloudWait": 1,
+      "data.refreshXcloudTitles": 1
+    }
+  },
+  {
+    "name": "search-cleared",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.search",
+      "marked": [
+        "xcloud.search"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 4,
+        "submissions": 6,
+        "duplicateContent": 2,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 9.39999999999418,
+      "longTasks": [
+        {
+          "start": 32450.39999985695,
+          "duration": 63
+        },
+        {
+          "start": 47994.299999952316,
+          "duration": 72
+        },
+        {
+          "start": 48348.39999985695,
+          "duration": 109
+        },
+        {
+          "start": 48492.200000047684,
+          "duration": 58
+        },
+        {
+          "start": 81549.79999995232,
+          "duration": 58
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 15,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 8,
+      "data.getCloudWait": 1,
+      "data.refreshXcloudTitles": 1
+    }
+  },
+  {
+    "name": "catalog-sort-recent",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.sort",
+      "marked": [
+        "xcloud.filter.sort"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 4,
+        "submissions": 6,
+        "duplicateContent": 2,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 17.39999999999418,
+      "longTasks": [
+        {
+          "start": 112391.70000004768,
+          "duration": 58
+        },
+        {
+          "start": 124214.20000004768,
+          "duration": 52
+        },
+        {
+          "start": 124307.89999985695,
+          "duration": 58
+        },
+        {
+          "start": 131624.89999985695,
+          "duration": 66
+        },
+        {
+          "start": 132424.79999995232,
+          "duration": 50
+        },
+        {
+          "start": 133374.59999990463,
+          "duration": 56
+        },
+        {
+          "start": 133590.70000004768,
+          "duration": 50
+        },
+        {
+          "start": 135561.29999995232,
+          "duration": 95
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 16,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 9,
+      "data.getCloudWait": 1,
+      "data.refreshXcloudTitles": 1
+    }
+  },
+  {
+    "name": "catalog-category-action",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 20,
+      "candidates": 71,
+      "images": 20,
+      "windows": [
+        {
+          "section": "xcloud-all",
+          "mounted": 20
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 4,
+        "submissions": 6,
+        "duplicateContent": 2,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 2.9000000953674316,
+      "frameP95Ms": 17,
+      "longTasks": [
+        {
+          "start": 143033,
+          "duration": 74
+        },
+        {
+          "start": 143116.09999990463,
+          "duration": 66
+        },
+        {
+          "start": 143424.89999985695,
+          "duration": 57
+        },
+        {
+          "start": 143482.79999995232,
+          "duration": 75
+        },
+        {
+          "start": 144282.09999990463,
+          "duration": 54
+        },
+        {
+          "start": 148287.29999995232,
+          "duration": 104
+        },
+        {
+          "start": 173126.5,
+          "duration": 51
+        },
+        {
+          "start": 173251.89999985695,
+          "duration": 82
+        }
+      ]
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 18,
+      "config.getGroups": 2,
+      "data.setCloudPreferences": 10,
+      "data.getCloudWait": 1,
+      "data.refreshXcloudTitles": 1
+    }
+  },
+  {
+    "name": "public-catalog",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.filter.category",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 33.7,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1
+    }
+  },
+  {
+    "name": "empty-catalog",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.filter.category"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 1,
+      "candidates": 9,
+      "images": 1,
+      "windows": [
+        {
+          "section": "xcloud-favorites",
+          "mounted": 1
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 10.100000000000009,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 1
+    }
+  },
+  {
+    "name": "catalog-refresh-failure",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.refresh",
+      "marked": [
+        "xcloud.refresh"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 88,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 3,
+        "duplicateContent": 1,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 10.100000000000023,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 5,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.refreshXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 1
+    }
+  },
+  {
+    "name": "detail-failure",
+    "current": {
+      "route": "#/xcloud/games/P0000",
+      "viewport": {
+        "width": 540,
+        "height": 850
+      },
+      "native": "cloud.detail.play",
+      "marked": [
+        "cloud.detail.play"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 0,
+      "candidates": 8,
+      "images": 0,
+      "windows": [],
+      "catalogMetrics": {
+        "snapshots": 0,
+        "patches": 0,
+        "submissions": 0,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 9.600000000000009,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "data.getCloudTitleSummary": 2,
+      "data.getCloudDetail": 2,
+      "auth.getState": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.getLibraryGame": 1,
+      "data.getPlaytimes": 1
+    }
+  },
+  {
+    "name": "catalog-grid-narrow",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 540,
+        "height": 850
+      },
+      "native": "xcloud.all.P1502",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 14,
+      "candidates": 57,
+      "images": 14,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 14
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 10.299999999999983,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 2
+    }
+  },
+  {
+    "name": "catalog-grid-resized",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P1502",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 10.299999999999983,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 2
+    }
+  },
+  {
+    "name": "catalog-mouse-scroll",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "xcloud.all.P1502",
+      "marked": [
+        "xcloud.all.P1502"
+      ],
+      "busy": [],
+      "pending": [
+        "data.getCloudWait"
+      ],
+      "cards": 35,
+      "candidates": 120,
+      "images": 35,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 35
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 10.199999999999932,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 4,
+      "data.getCloudWait": 1
+    }
+  },
+  {
+    "name": "catalog-2000-start",
+    "current": {
+      "route": "#/xcloud",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "native": "",
+      "marked": [
+        "xcloud.xcloud-recent.P0024"
+      ],
+      "busy": [],
+      "pending": [],
+      "cards": 24,
+      "candidates": 87,
+      "images": 24,
+      "windows": [
+        {
+          "section": "xcloud-recent",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-favorites",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-new",
+          "mounted": 8
+        },
+        {
+          "section": "xcloud-popular",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-leaving",
+          "mounted": 0
+        },
+        {
+          "section": "xcloud-all",
+          "mounted": 0
+        }
+      ],
+      "catalogMetrics": {
+        "snapshots": 1,
+        "patches": 0,
+        "submissions": 2,
+        "duplicateContent": 0,
+        "resyncs": 0
+      },
+      "catalogSubscribers": 1,
+      "navigationP95Ms": 0,
+      "frameP95Ms": 9.900000000008731,
+      "longTasks": []
+    },
+    "counters": {
+      "config.get": 3,
+      "auth.getState": 4,
+      "data.getXcloudTitles": 2,
+      "data.getUserProfile": 1,
+      "data.getCloudPreferences": 1,
+      "data.primeXcloudTitles": 1,
+      "data.prioritizeCloudTitles": 5,
+      "data.getCloudWait": 2,
+      "data.setCloudPreferences": 1
+    }
+  }
+]

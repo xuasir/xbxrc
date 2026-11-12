@@ -1,0 +1,64 @@
+{
+  "counters": {
+    "auth.getState": 3,
+    "config.get": 3,
+    "data.getHostsSnapshot": 1,
+    "data.getUserProfile": 1,
+    "data.primeXcloudTitles": 1,
+    "host.http": 1
+  },
+  "current": {
+    "busy": [],
+    "candidates": 5,
+    "cards": 0,
+    "catalogMetrics": {
+      "duplicateContent": 0,
+      "patches": 0,
+      "resyncs": 0,
+      "snapshots": 0,
+      "submissions": 0
+    },
+    "catalogSubscribers": 0,
+    "frameP95Ms": 9.300000000000011,
+    "home": {
+      "deviceCards": 2,
+      "loading": false,
+      "primaryBusy": "",
+      "primaryDisabled": false,
+      "scrollTop": 0,
+      "status": "可用: 已开机",
+      "title": "客厅 Xbox",
+      "unavailable": ""
+    },
+    "hostFixture": {
+      "account": "fixture-account-a",
+      "cacheScopes": [
+        "fixture-account-a"
+      ],
+      "clockOffset": 0,
+      "delay": 80,
+      "failure": false,
+      "inflightScopes": [],
+      "networkRequests": 1
+    },
+    "images": 3,
+    "longTasks": [],
+    "marked": [
+      "xhome.primary"
+    ],
+    "native": "xhome.primary",
+    "navigationP95Ms": 0,
+    "pending": [],
+    "route": "#/xhome",
+    "viewport": {
+      "height": 850,
+      "width": 540
+    },
+    "windows": []
+  },
+  "overflow": {
+    "clientWidth": 540,
+    "scrollWidth": 540
+  },
+  "theme": "dark"
+}

@@ -285,8 +285,8 @@ export class BrowserGamepadBackend implements GamepadBackend {
     const generation = this.generation
     try {
       const result = await device.pad.vibrationActuator!.playEffect!(device.device.triggerRumble ? 'trigger-rumble' : 'dual-rumble', {
-        startDelay: Number.isFinite(effect.startDelayMs) ? Math.max(0, Math.min(1000, effect.startDelayMs)) : 0,
-        duration: Number.isFinite(effect.durationMs) ? Math.max(0, Math.min(1000, effect.durationMs)) : 0,
+        startDelay: Number.isFinite(effect.startDelayMs) ? Math.max(0, effect.startDelayMs) : 0,
+        duration: Number.isFinite(effect.durationMs) ? Math.max(0, effect.durationMs) : 0,
         strongMagnitude: buttonValue(effect.strongMagnitude),
         weakMagnitude: buttonValue(effect.weakMagnitude),
         ...(device.device.triggerRumble ? { leftTrigger: buttonValue(effect.leftTrigger), rightTrigger: buttonValue(effect.rightTrigger) } : {}),

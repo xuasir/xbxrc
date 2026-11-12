@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-12",
+  "checkedLinks": 85,
+  "linkErrors": [],
+  "sourceChecks": [
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/App.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/pages/XCloud.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/pages/CloudGameDetail.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/pages/xcloud/CloudCatalogWindow.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/pages/xcloud/catalog-index.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/pages/xcloud/catalog-store.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/navigation/core/engine.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-cloud-menu-performance-implementation",
+      "file": "src/components/common/RemoteImage.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/pages/Home.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/pages/home/hosts-store.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/pages/home/use-hosts.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/shared/rpc/hosts.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/shared/rpc/contract.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/shared/events/contract.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/shared/events/data.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/App.vue",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/router/index.ts",
+      "matches": true
+    },
+    {
+      "task": "2026-11-12-home-host-cache",
+      "file": "src/navigation/core/engine.ts",
+      "matches": true
+    }
+  ],
+  "diffCheck": {
+    "exitCode": 0,
+    "output": ""
+  },
+  "pass": true
+}

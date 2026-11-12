@@ -75,6 +75,12 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/setting/stream-shortcuts',
+    name: 'setting-stream-shortcuts',
+    component: () => import('../pages/settings/SettingStreamShortcutsEditor.vue'),
+    meta: { requiresAuth: true, layout: 'shell', navPage: 'setting' },
+  },
+  {
     path: '/controller/:tool(layout|sticks|keyboard|vibration|test|advanced|reset|live)',
     name: 'controller-tool',
     component: () => import('../pages/controller/ControllerToolPage.vue'),

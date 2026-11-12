@@ -22,6 +22,8 @@ export interface CloudTitle {
 }
 export interface CloudCatalog {
   scopeKey?: string
+  contentRevision?: string
+  freshUntil?: number
   titles: CloudTitle[]
   cacheState: 'miss' | 'fresh' | 'stale'
   updatedAt?: number
@@ -30,6 +32,14 @@ export interface CloudCatalog {
   sources?: Record<string, string>
   error?: string | null
 }
+export type CloudCatalogStatus = Omit<CloudCatalog, 'titles'>
+export interface CloudCatalogPatch {
+  baseRevision: string
+  upserts: CloudTitle[]
+  removedProductIds: string[]
+  order?: string[]
+}
+export interface CloudTitleSummary { scopeKey: string, title: CloudTitle | null }
 export interface CloudPreferences {
   favorites: CloudTitle[]
   pinned: string[]

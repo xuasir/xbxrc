@@ -50,26 +50,26 @@ onBeforeUnmount(() => {
 })
 const compact = computed(() => props.mode === 'sticks' || props.mode === 'vibration')
 const canvasHeight = computed(() => compact.value ? 400 : 560)
-// 热点使用图片像素，图片与连接线随同一画布缩放。
+// 官方 4 倍图沿用 372×258 逻辑坐标，图片、热点与连接线同步缩放。
 const imageBox = computed(() => ({ x: 267.5, y: compact.value ? 38.75 : 118.75, scale: 1.25 }))
 const buttonCallouts: { key: ButtonKey, side: 'left' | 'right' | 'center', row: number, x: number, y: number }[] = [
-  { key: 'home', side: 'center', row: 0, x: 185, y: 30 },
-  { key: 'l2', side: 'left', row: 0, x: 83, y: 3 },
+  { key: 'home', side: 'center', row: 0, x: 186, y: 35 },
+  { key: 'l2', side: 'left', row: 0, x: 104, y: 6 },
   { key: 'l1', side: 'left', row: 1, x: 83, y: 16 },
-  { key: 'l3', side: 'left', row: 2, x: 90, y: 69 },
-  { key: 'view', side: 'left', row: 3, x: 158, y: 70 },
-  { key: 'dpadUp', side: 'left', row: 4, x: 137, y: 111 },
-  { key: 'dpadLeft', side: 'left', row: 5, x: 117, y: 130 },
-  { key: 'dpadDown', side: 'left', row: 6, x: 137, y: 149 },
-  { key: 'dpadRight', side: 'left', row: 7, x: 157, y: 130 },
-  { key: 'r2', side: 'right', row: 0, x: 289, y: 3 },
+  { key: 'l3', side: 'left', row: 2, x: 90, y: 74 },
+  { key: 'view', side: 'left', row: 3, x: 159, y: 72 },
+  { key: 'dpadUp', side: 'left', row: 4, x: 137, y: 115 },
+  { key: 'dpadLeft', side: 'left', row: 5, x: 117, y: 133 },
+  { key: 'dpadDown', side: 'left', row: 6, x: 137, y: 151 },
+  { key: 'dpadRight', side: 'left', row: 7, x: 157, y: 133 },
+  { key: 'r2', side: 'right', row: 0, x: 268, y: 6 },
   { key: 'r1', side: 'right', row: 1, x: 289, y: 16 },
-  { key: 'north', side: 'right', row: 2, x: 280, y: 46 },
-  { key: 'west', side: 'right', row: 3, x: 255, y: 70 },
-  { key: 'east', side: 'right', row: 4, x: 306, y: 70 },
-  { key: 'south', side: 'right', row: 5, x: 281, y: 96 },
-  { key: 'menu', side: 'right', row: 6, x: 212, y: 70 },
-  { key: 'r3', side: 'right', row: 7, x: 232, y: 127 },
+  { key: 'north', side: 'right', row: 2, x: 281, y: 49 },
+  { key: 'west', side: 'right', row: 3, x: 257, y: 73 },
+  { key: 'east', side: 'right', row: 4, x: 307, y: 74 },
+  { key: 'south', side: 'right', row: 5, x: 282, y: 98 },
+  { key: 'menu', side: 'right', row: 6, x: 213, y: 72 },
+  { key: 'r3', side: 'right', row: 7, x: 233, y: 131 },
 ]
 const callouts = computed(() => compact.value ? buttonCallouts.filter(item => ['l3', 'r3', ...(props.mode === 'vibration' ? ['l2', 'r2'] : [])].includes(item.key)).map(item => ({ ...item, row: ['l2', 'r2'].includes(item.key) ? 0 : 1, ...(props.mode === 'vibration' && ['l3', 'r3'].includes(item.key) ? { x: item.side === 'left' ? 76 : 298, y: 180 } : {}) })) : buttonCallouts)
 const artStyle = computed(() => ({ left: '26.75%', top: `${imageBox.value.y / canvasHeight.value * 100}%`, width: '46.5%', height: `${322.5 / canvasHeight.value * 100}%` }))
@@ -83,7 +83,7 @@ function hitStyle(item: typeof buttonCallouts[number]) {
 function mapped(source: ButtonKey): ButtonKey {
   return props.controls.buttons[source]
 }
-const stickDirections = computed(() => ['leftStick', 'rightStick'].flatMap((side, index) => [{ direction: 'Up', arrow: '↑', dx: 0, dy: -42 }, { direction: 'Down', arrow: '↓', dx: 0, dy: 42 }, { direction: 'Left', arrow: '←', dx: -42, dy: 0 }, { direction: 'Right', arrow: '→', dx: 42, dy: 0 }].map(item => ({ ...item, control: `${side}${item.direction}` as GamepadKeyboardControlDto, x: (index ? 232 : 90) + item.dx, y: (index ? 127 : 69) + item.dy }))))
+const stickDirections = computed(() => buttonCallouts.filter(stick => stick.key === 'l3' || stick.key === 'r3').flatMap(stick => [{ direction: 'Up', arrow: '↑', dx: 0, dy: -42 }, { direction: 'Down', arrow: '↓', dx: 0, dy: 42 }, { direction: 'Left', arrow: '←', dx: -42, dy: 0 }, { direction: 'Right', arrow: '→', dx: 42, dy: 0 }].map(item => ({ ...item, control: `${stick.key === 'l3' ? 'leftStick' : 'rightStick'}${item.direction}` as GamepadKeyboardControlDto, x: stick.x + item.dx, y: stick.y + item.dy }))))
 function target(source: ButtonKey): string {
   return props.labels?.[source] ?? (props.mode === 'input' ? props.state.buttons[source].toFixed(2) : BUTTON_LABELS[mapped(source)])
 }

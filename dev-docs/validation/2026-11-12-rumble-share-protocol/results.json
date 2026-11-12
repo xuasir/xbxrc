@@ -1,0 +1,148 @@
+{
+  "source": [
+    {
+      "filename": "8128.1aca8038.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+      "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2",
+      "bytes": 177333
+    },
+    {
+      "filename": "web-rtc-stream.d6f6b903.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/web-rtc-stream.d6f6b903.chunk.js",
+      "sha256": "0e1d97750113681c7c2d1edfc7910c1b2915055450a7cfde8fc7a0a54fef73d2",
+      "bytes": 158507
+    }
+  ],
+  "timing": [
+    {
+      "scenario": {
+        "name": "delay-and-repeat",
+        "magnitude": 50,
+        "durationMs": 200,
+        "delayMs": 100,
+        "repeat": 2
+      },
+      "official": [
+        {
+          "atMs": 100,
+          "type": "dual-rumble",
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5,
+          "leftTrigger": 0,
+          "rightTrigger": 0
+        },
+        {
+          "atMs": 400,
+          "type": "dual-rumble",
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5,
+          "leftTrigger": 0,
+          "rightTrigger": 0
+        },
+        {
+          "atMs": 700,
+          "type": "dual-rumble",
+          "duration": 200,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5,
+          "leftTrigger": 0,
+          "rightTrigger": 0
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "startDelay": 0,
+          "duration": 200,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "name": "long-duration",
+        "magnitude": 50,
+        "durationMs": 5000,
+        "delayMs": 0,
+        "repeat": 0
+      },
+      "official": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "duration": 5000,
+          "startDelay": 0,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5,
+          "leftTrigger": 0,
+          "rightTrigger": 0
+        }
+      ],
+      "xbxrc": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "startDelay": 0,
+          "duration": 1000,
+          "strongMagnitude": 0.5,
+          "weakMagnitude": 0.5
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "name": "short-weak-pulse",
+        "magnitude": 1,
+        "durationMs": 4,
+        "delayMs": 0,
+        "repeat": 0
+      },
+      "official": [
+        {
+          "atMs": 0,
+          "type": "dual-rumble",
+          "duration": 4,
+          "startDelay": 0,
+          "strongMagnitude": 0.01,
+          "weakMagnitude": 0.01,
+          "leftTrigger": 0,
+          "rightTrigger": 0
+        }
+      ],
+      "xbxrc": []
+    }
+  ],
+  "input": {
+    "shareCounterIndex": 11,
+    "counterCount": 16,
+    "unreliableGamepadPayloadBytes": 37,
+    "sharePayloadOffset": 12,
+    "payloadHex": "00000000000000000000000001000000000000000000000000000000000000000000000000",
+    "reliableButtons": [
+      "Nexus",
+      "Menu",
+      "View",
+      "A",
+      "B",
+      "X",
+      "Y",
+      "DpadUp",
+      "DpadDown",
+      "DpadLeft",
+      "DpadRight",
+      "LeftShoulder",
+      "RightShoulder",
+      "LeftThumbstick",
+      "RightThumbstick"
+    ],
+    "reliableDeclaredBits": 65534
+  },
+  "scope": "实际源码方法 + 模拟计时器/actuator；强度按直通比较；Share 编码器直接注入计数器。"
+}

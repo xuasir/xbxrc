@@ -1,0 +1,1409 @@
+// 官方公开发布脚本源码摘录：2871.36f50502.chunk.js
+// 来源：https://assets.play.xbox.com/playxbox/static/js/2871.36f50502.chunk.js
+// 原件 SHA-256：c83ea789fd64ea3fe7fbc4acbc086bf9d2f56beb3f917a939f08298eb2fcbff0
+// 格式化文件 SHA-256：e74a0b6cc45ee8597376240ced787153ca2447cbfb9b496121ce60990d25d8e6
+// 各段保留原文件文本；段与段之间存在省略，完整上下文见来源原件。
+
+// reference-resolution | 原可读文件第 2180–2234 行
+            return e.split("/").forEach(t => {
+                if (".." === t) {
+                    if (0 === i.length) throw new Error("Invalid path, cannot normalize");
+                    i.pop();
+                } else "." !== t && i.push(t);
+            }), i.join("/");
+        }
+        function Li(t) {
+            const e = t.indexOf("#");
+            return e >= 0 ? t.substr(0, e) : t;
+        }
+        async function zi(t, e, i, n, r, o) {
+            if (!r || "object" !== typeof r) return Promise.resolve(r);
+            if ("object" === typeof (s = r) && Object.prototype.hasOwnProperty.call(s, "$ref")) return async function(t, e, i, n, r, o) {
+                let s, a, c = n;
+                if (Li(r)) {
+                    s = !0;
+                    const t = Fi(c);
+                    a = Fi(`${-1 !== t.lastIndexOf("/") ? t.substr(0, t.lastIndexOf("/")) : t}/${r}`);
+                } else s = !1, a = Fi(`${c}/${r}`);
+                if (i.has(a)) throw new Error("Circular Reference Detected in Json");
+                if (e.has(a)) return Promise.resolve(e.get(a));
+                i.add(a);
+                let l = t;
+                if (s) {
+                    if (c = Li(a), !o) throw new Error("No resolver for external reference");
+                    l = await o(c);
+                }
+                let u = l;
+                (function(t) {
+                    const e = t.indexOf("#");
+                    return e >= 0 ? t.substr(e) : "#";
+                })(r).split("/").slice(1).map(t => {
+                    const e = decodeURIComponent(t).replace("~1", "/").replace("~0", "~");
+                    if ("object" !== typeof u || !Object.prototype.hasOwnProperty.call(u, e)) throw new Error(`Key ${t} Not Found in: ${JSON.stringify(u)}`);
+                    u = u[e];
+                });
+                const d = zi(l, e, i, c, u, o);
+                return e.set(a, d), i.delete(a), d;
+            }(t, e, i, n, r.$ref, o);
+            var s;
+            const a = Object.keys(r);
+            for (const c of a) {
+                const s = await zi(t, e, i, n, r[c], o);
+                s !== r[c] && (r[c] = s);
+            }
+            return r;
+        }
+        function Ni(t) {
+            return JSON.parse(JSON.stringify(t));
+        }
+        async function Ui(t, e, i, n) {
+            const r = Ni(t);
+            return zi(t, e, new Set, i, r, n);
+        }
+
+// bundle-validation-conversion-patch | 原可读文件第 3025–3887 行
+        }, tr = {
+            convert: t => (nr(t), ur(t), t)
+        }, er = {
+            convert: t => (rr(t), dr(t), t)
+        }, ir = {
+            convert: t => t
+        }, nr = t => {
+            if (!t || "object" !== typeof t) return;
+            if (t.type) switch (t.action && (t.action = lr(t.action)), t.pullAction && (t.pullAction = lr(t.pullAction)), 
+            t.type) {
+              case "button":
+              case "touchpad":
+                or(t);
+                break;
+
+              case "joystick":
+                cr(t);
+                break;
+
+              case "throttle":
+                ar(t);
+                break;
+
+              case "arcadeButtons":
+                sr(t);
+            }
+            const e = Object.keys(t);
+            for (const i of e) nr(t[i]);
+        }, rr = t => {
+            if (!t || "object" !== typeof t) return;
+            if (t.type) switch (t.action && (t.action = lr(t.action)), t.pullAction && (t.pullAction = lr(t.pullAction)), 
+            t.type) {
+              case "touchpad":
+                or(t);
+                break;
+
+              case "joystick":
+                cr(t);
+                break;
+
+              case "throttle":
+                ar(t);
+                break;
+
+              case "arcadeButtons":
+                sr(t);
+            }
+            const e = Object.keys(t);
+            for (const i of e) rr(t[i]);
+        }, or = t => {
+            if (t.icon) {
+                const e = {
+                    default: {
+                        faceImage: {
+                            type: "icon",
+                            value: t.icon
+                        }
+                    }
+                };
+                delete t.icon, t.styles = e;
+            }
+        }, sr = t => {
+            const e = Object.keys(t);
+            for (const i of e) or(t[i]);
+        }, ar = t => {
+            if (t.icon) {
+                const e = {
+                    default: {
+                        knob: {
+                            faceImage: {
+                                type: "icon",
+                                value: t.icon
+                            }
+                        }
+                    }
+                };
+                delete t.icon, t.styles = e;
+            }
+        }, cr = t => {
+            if (t.threshold) {
+                const e = t.threshold;
+                delete t.threshold, t.actionThreshold = e;
+            }
+            ar(t);
+        }, lr = t => {
+            switch (t) {
+              case "rightJoystickUp":
+                return "rightJoystickDown";
+
+              case "rightJoystickDown":
+                return "rightJoystickUp";
+
+              case "leftJoystickUp":
+                return "leftJoystickDown";
+
+              case "leftJoystickDown":
+                return "leftJoystickUp";
+
+              default:
+                return t;
+            }
+        }, ur = t => {
+            let e = [];
+            const {upper: i} = t.content;
+            if (i) {
+                const {left: n, leftCenter: r, rightCenter: o, right: s} = i;
+                s && (e = e.concat(s)), o && (e = e.concat(o.reverse())), r && (e = e.concat(r)), 
+                n && (e = e.concat(n.reverse())), delete t.content.upper;
+            }
+            e.length > 0 && (t.content.upper = {
+                right: e
+            });
+        }, dr = t => {
+            ur(t);
+        }, hr = {
+            ManifestVersion: "2.0.0.0",
+            LayoutVersion: "4.1.0.0"
+        }, pr = (t, e) => [ `https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/${t}/${e}/${t}.json`, `https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/en-US/${t}/${e}/${t}.json`, `https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/ja-JP/${t}/${e}/${t}.json`, `https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/ko-KR/${t}/${e}/${t}.json`, `https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/zh-CN/${t}/${e}/${t}.json` ], gr = {
+            SchemaAlternateNames: (t => {
+                const e = new Map;
+                return t.forEach(t => {
+                    const i = t[0];
+                    t[1].forEach(t => {
+                        e.set(t, i);
+                    });
+                }), e;
+            })([ [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest/v1.1/manifest.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/manifest/v1.1/manifest.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/manifest/v1/manifest.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest/v1.1/manifest.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest/v1/manifest.json" ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest/latest/manifest.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/manifest/latest/manifest.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/manifest/v2.0/manifest.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest/latest/manifest.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/manifest/v2.0/manifest.json" ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.5/context.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/v3.0/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/v3.1/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/v3.2/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/v3.3/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/v3.4/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/v3.4.1/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.0/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.1/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.2/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.3/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.4/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.4.1/context.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v3.5/context.json" ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/latest/context.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/context/latest/context.json", ...pr("context", "v4.0"), ...pr("context", "v4.1"), ...pr("context", "latest") ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1.2/layout.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v1.1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v1.2/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1.1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1.2/layout.json" ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v2.0/layout.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v2.0/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v2.0/layout.json" ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.5/layout.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.0/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.2/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.3/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.4/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.4.1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.0/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.2/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.3/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.4/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.4.1/layout.json", "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.5/layout.json" ] ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/latest/layout.json", [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/latest/layout.json", ...pr("layout", "v4.0"), ...pr("layout", "v4.1"), ...pr("layout", "latest") ] ] ]),
+            VersionedLayoutHelpers: new Map([ [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/latest/layout.json", {
+                layoutConverter: {
+                    convert: t => t
+                },
+                supportedStyleVariants: new Set([ Ei.Default, Ei.HighContrast ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1/layout.json", {
+                layoutConverter: tr,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1.1/layout.json", {
+                layoutConverter: tr,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v1.2/layout.json", {
+                layoutConverter: tr,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v2.0/layout.json", {
+                layoutConverter: er,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.0/layout.json", {
+                layoutConverter: ir,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.1/layout.json", {
+                layoutConverter: ir,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.2/layout.json", {
+                layoutConverter: ir,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.3/layout.json", {
+                layoutConverter: ir,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.4/layout.json", {
+                layoutConverter: ir,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ], [ "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v3.5/layout.json", {
+                layoutConverter: ir,
+                supportedStyleVariants: new Set([ Ei.Default ])
+            } ] ])
+        };
+        class fr {
+            constructor(t) {
+                const e = t.split(".");
+                if (e.length > 4 || e.length < 2) throw new Error(`${t} does not have required number of components to be a valid version.`);
+                if (this._major = parseInt(e[0], 10), isNaN(this._major) || this._major < 0) throw new Error(`${t} does not have a valid major version component.`);
+                if (this._minor = parseInt(e[1], 10), isNaN(this._minor) || this._minor < 0) throw new Error(`${t} does not have a valid minor version component.`);
+                if (e.length > 2 && (this._build = parseInt(e[2], 10), isNaN(this._build) || this._build < 0)) throw new Error(`${t} does not have a valid build version component.`);
+                if (e.length > 3 && (this._revision = parseInt(e[3], 10), isNaN(this._revision) || this._revision < 0)) throw new Error(`${t} does not have a valid revision version component.`);
+            }
+            static compareAsTakxVersions(t, e) {
+                return t === e ? 0 : void 0 === t ? -1 : void 0 === e ? 1 : fr.compare(fr.tryCreateVersion(t), fr.tryCreateVersion(e));
+            }
+            static tryCreateVersion(t) {
+                try {
+                    return new fr(t);
+                } catch (e) {
+                    return;
+                }
+            }
+            static compare(t, e) {
+                return t === e ? 0 : void 0 === t ? -1 : void 0 === e ? 1 : fr.compareVersionComponent(t._major, e._major) || fr.compareVersionComponent(t._minor, e._minor) || fr.compareVersionComponent(t._build, e._build) || fr.compareVersionComponent(t._revision, e._revision);
+            }
+            static compareVersionComponent(t, e) {
+                return t === e ? 0 : void 0 === t ? -1 : void 0 === e ? 1 : t < e ? -1 : 1;
+            }
+        }
+        const {applyOperation: mr} = qn, yr = "TouchAdapationKit/TakUtils", vr = "system";
+        var _r;
+        !function(t) {
+            t.DefaultUserOverride = "System.Override-D37853CB-9134-4D40-AE55-EDFBFF9A3368", 
+            t.Standard = "System.Standard-D37853CB-9134-4D40-AE55-EDFBFF9A3368", t.Blank = "System.Blank-D37853CB-9134-4D40-AE55-EDFBFF9A3368";
+        }(_r || (_r = {}));
+        const br = {
+            id: _r.Blank,
+            displayName: "Native Touch Only (Blank)",
+            layoutFile: {
+                content: {}
+            }
+        }, Sr = {
+            id: _r.Standard,
+            displayName: "Standard",
+            layoutFile: {
+                content: Qn
+            }
+        }, kr = {
+            id: _r.DefaultUserOverride,
+            displayName: "User Override (Basic Controls)",
+            layoutFile: {
+                content: Qn
+            }
+        }, wr = new Map([ [ _r.DefaultUserOverride, kr ], [ _r.Standard, Sr ], [ _r.Blank, br ] ]);
+        function Pr(t, e) {
+            return null === t || void 0 === t ? br : "" === t ? Sr : null === e || void 0 === e ? void 0 : e.get(t);
+        }
+        function Ar(t, e) {
+            return fr.compareAsTakxVersions(t.tabVersion, e.tabVersion) || fr.compareAsTakxVersions(t.manifestVersion, e.manifestVersion) || fr.compareAsTakxVersions(t.layoutVersion, e.layoutVersion) || t.id.localeCompare(e.id);
+        }
+        async function Cr(t, e, i) {
+            const n = t.split("-");
+            if (await i(`${e}/neutral`), t.trim().length > 0) {
+                let t = e, r = "";
+                for (let e = 0; e < n.length; e++) r = `${r}${0 === e ? "" : "-"}${n[e]}`, t = `${t}/${r}`, 
+                await i(t);
+            }
+        }
+        function xr(t, e, i, n, r) {
+            const o = [];
+            try {
+                const n = JSON.parse(JSON.stringify(e.state));
+                if (JSON.parse(i(t)).forEach(t => {
+                    t.path = t.path.startsWith("/") ? t.path : `/${t.path}`;
+                    try {
+                        mr(n, t, !0, !0, !0);
+                    } catch (e) {
+                        const t = Sn(e);
+                        o.push(t);
+                    }
+                }), o.length > 0) {
+                    const t = `Failed trying to apply state patch: \n${o.join("\n")}`;
+                    null === r || void 0 === r || r(t);
+                }
+                return Object.assign(Object.assign({}, e), {
+                    state: n
+                });
+            } catch (s) {
+                const t = `Failed trying to apply state patch: ${Sn(s)}`;
+                return null === n || void 0 === n || n(t), e;
+            }
+        }
+        async function Ir(t, e, i, n, r, o, s) {
+            var a, c;
+            let l = await Ui(t.layoutFile, e, null !== (a = t.basePath) && void 0 !== a ? a : "", i);
+            if (r && r.styles) {
+                const t = new Map, e = await Ui(r, t, null !== (c = null === r || void 0 === r ? void 0 : r.originalPath) && void 0 !== c ? c : "");
+                l = Object.assign(Object.assign({}, l), {
+                    styles: Mr(e.styles, l.styles)
+                });
+            }
+            const u = n(l);
+            if (!u) throw new ReferenceError("Resolved layout no longer is valid against schema");
+            const d = gr.SchemaAlternateNames.get(u), h = d ? gr.VersionedLayoutHelpers.get(d) : void 0;
+            if (!h) throw new Error(`Unable to find a layout converter for the schema version ${u}`);
+            const p = function(t, e, i, n) {
+                var r;
+                const o = new Ki;
+                if (i) for (const s of i) {
+                    const t = s.name, i = s.renderKey, a = tn(t, e, s.spritesheetName), c = nn(t, e, s.spritesheetName), l = null !== (r = o.get(c)) && void 0 !== r ? r : new Map;
+                    l.has(a) && (null === n || void 0 === n || n.log("TouchAdapationKit/AssetUtils", B.LogLevel.Warn, `Duplicate render key discovered for asset reference '${c}' with style variant '${a}'. Overriding existing with render key '${i}'.`)), 
+                    l.set(a, i), o.set(c, l);
+                }
+                return an(Ni(t), o);
+            }(h.layoutConverter.convert(l), h.supportedStyleVariants, o, s);
+            return Object.assign(Object.assign({}, t), {
+                layoutFile: p
+            });
+        }
+        function Mr(t, e) {
+            return t ? Object.assign(Object.assign({}, t), (null === e || void 0 === e ? void 0 : e.colors) && {
+                colors: Tr(t.colors, e.colors)
+            }) : e;
+        }
+        function Tr(t, e) {
+            return t ? Object.assign(Object.assign(Object.assign({}, t), (null === e || void 0 === e ? void 0 : e.default) && {
+                default: Or(t.default, e.default)
+            }), (null === e || void 0 === e ? void 0 : e.highContrast) && {
+                highContrast: Or(t.highContrast, e.highContrast)
+            }) : e;
+        }
+        function Or(t, e) {
+            return t ? Object.assign(Object.assign({}, t), e) : e;
+        }
+        function Rr(t, e = hr.ManifestVersion, i = hr.LayoutVersion, n) {
+            if (!t || 0 === t.length) return [];
+            const r = t.filter(t => 1 === fr.compareAsTakxVersions(t.manifestVersion, e) ? (null === n || void 0 === n || n.log(yr, B.LogLevel.Info, `Takx manifest version ${t.manifestVersion} is newer than ${e} skipping...`), 
+            !1) : 1 !== fr.compareAsTakxVersions(t.layoutVersion, i) || (null === n || void 0 === n || n.log(yr, B.LogLevel.Info, `Takx layout version ${t.layoutVersion} is newer than ${i} skipping...`), 
+            !1)).sort((t, e) => -1 * Ar(t, e));
+            return 0 === r.length && (null === n || void 0 === n || n.log(yr, B.LogLevel.Info, "No loadable touch bundles found despite having service delievered bundles")), 
+            r;
+        }
+        function Dr(t, e, i, n) {
+            return !!(i || t || Rr(e, void 0, void 0, n).length > 0);
+        }
+        function jr(t) {
+            var e, i;
+            if (null === (e = t.layoutFile.content.sensors) || void 0 === e ? void 0 : e.length) return !0;
+            if (t.layoutFile.content.layers) for (const n of Object.keys(t.layoutFile.content.layers)) {
+                if (null === (i = t.layoutFile.content.layers[n].sensors) || void 0 === i ? void 0 : i.length) return !0;
+            }
+            return !1;
+        }
+        const Er = "TouchAdaptationKit/TakxValidator", Br = "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/";
+        function Fr(t, e, i, n, r, o) {
+            var s;
+            const a = null !== (s = i.$schema) && void 0 !== s ? s : `${Br}${t}`;
+            let c = "";
+            i.$schema || (c = `Takx ${t} schema version was not specified.`, n.log(Er, B.LogLevel.Warn, c), 
+            r(c));
+            let l = gr.SchemaAlternateNames.get(a);
+            if (l && e.hasSchema(l)) {
+                const o = e.validate(l, i, {
+                    separator: "\n",
+                    dataVar: t
+                });
+                if (o.success) return l;
+                c = `Takx ${t} not valid against specified schema: ${o.errorText}.`, n.log(Er, B.LogLevel.Warn, c), 
+                r(c);
+            } else c = `Takx ${t} schema version was not a known schema.`, n.log(Er, B.LogLevel.Warn, c), 
+            r(c);
+            if (o) {
+                if (n.log(Er, B.LogLevel.Info, "Falling back to validation against latest schema"), 
+                l = `${Br}${t}/latest/${t}.json`, e.hasSchema(l)) {
+                    const o = e.validate(l, i, {
+                        separator: "\n",
+                        dataVar: t
+                    });
+                    if (o.success) return l;
+                    c = `Takx ${t} not valid against latest schema: ${o.errorText}.`, n.log(Er, B.LogLevel.Info, c), 
+                    r(c);
+                }
+            } else n.log(Er, B.LogLevel.Info, "No fallback schema validations allowed, item is not valid.");
+        }
+        function Lr(t, e, i, n, r = !0) {
+            return Fr("layout", t, e, i, n, r);
+        }
+        const zr = "TouchAdaptationKit/BundleLoadHelpers", Nr = "takxmanifest.json";
+        async function Ur(t, e, i, n) {
+            if (!await e.exists(Nr)) return void i.log(zr, B.LogLevel.Info, "Takx missing valid manifest. Skipping...");
+            const r = JSON.parse((await e.readFile(Nr)).trim());
+            return function(t, e, i, n, r = !0) {
+                return Fr("manifest", t, e, i, n, r);
+            }(t, r, i, n) ? r : void 0;
+        }
+        async function Kr(t, e, i, n, r) {
+            if (await i.exists(e)) {
+                n.log(zr, B.LogLevel.Info, `Expanded takx context file (${e}) found, loading...`);
+                const o = JSON.parse((await i.readFile(e)).trim());
+                if (!function(t, e, i, n, r = !0) {
+                    return Fr("context", t, e, i, n, r);
+                }(t, o, n, r)) return;
+                return Object.assign(Object.assign({}, o), {
+                    originalPath: e
+                });
+            }
+            n.log(zr, B.LogLevel.Info, "Manifest context file not found, skipping.");
+        }
+        async function Vr(t, e, i, n, r, o, s, a, c) {
+            try {
+                const u = new bn;
+                await async function(t, e, i) {
+                    let n;
+                    t instanceof ArrayBuffer || (n = {
+                        base64: !0
+                    });
+                    const r = await pn.loadAsync(t, n), o = [];
+                    r.forEach((t, n) => {
+                        n.dir || o.push((async () => {
+                            const r = t.lastIndexOf("/");
+                            let o = "", s = "";
+                            -1 === r ? (o = "", s = t) : (o = t.substring(0, r), s = t.substring(r + 1));
+                            let a = "";
+                            a = "" === e && "" === o ? "" : "" === e ? o : "" === o ? e : `${e}/${o}`;
+                            const c = Fi(a);
+                            if (!c.startsWith(Fi(e))) throw new Error(`Cannot unzip path:'${t}' item as it is outside zip destination.`);
+                            await i.mkdir(c);
+                            const l = `${c}/${s}`;
+                            "arraybuffer" === i.dataFormat ? await i.writeFile(l, await n.async("arraybuffer")) : await i.writeFile(l, await n.async("base64"));
+                        })());
+                    }), await Promise.all(o);
+                }(e, u.rootDirectoryPath, u);
+                const d = await Ur(i, u, o, s);
+                if (!d) return;
+                let h, p, g = "";
+                try {
+                    g = Fi(d.layouts), h = d.assets ? Fi(d.assets) : void 0, p = d.contextFile ? Fi(d.contextFile) : void 0;
+                } catch (l) {
+                    const t = `Cannot access content outside of touch bundle root path. Normalized paths: \nRoot:  \nLayouts:${g} \nAssets:${h} \nContextFile:${p}`;
+                    return o.log(zr, B.LogLevel.Warn, t), void s(t);
+                }
+                const f = new Map, m = new Map;
+                let y;
+                if (null === c || void 0 === c ? void 0 : c()) return;
+                if (await u.exists(g) ? (o.log(zr, B.LogLevel.Info, `Expanded takx folder (${g}) found, loading layouts for locale: ${n}...`), 
+                await Cr(n, g, t => async function(t, e, i, n, r, o, s) {
+                    if (await n.exists(e)) {
+                        if (r.log(zr, B.LogLevel.Debug, `Adding layouts from dir: ${e}`), null === s || void 0 === s ? void 0 : s()) return;
+                        const a = await n.readDir(e);
+                        await Promise.all(a.filter(t => t.isFile && t.name.toLowerCase().endsWith(".json")).map(async a => {
+                            try {
+                                const c = a.name.substring(0, a.name.length - 5);
+                                if (null === s || void 0 === s ? void 0 : s()) return;
+                                const l = JSON.parse((await n.readFile(a.path)).trim());
+                                if (!Lr(t, l, r, o)) return;
+                                const u = {
+                                    id: c,
+                                    basePath: a.path,
+                                    layoutFile: l
+                                };
+                                r.log(zr, B.LogLevel.Debug, `Adding layout [${c}] from directory ${e}`), i.set(c, u);
+                            } catch (c) {
+                                const t = `Error parsing touch control layout JSON: ${Sn(c)}`;
+                                r.log(zr, B.LogLevel.Warn, t), o(t);
+                            }
+                        }));
+                    } else r.log(zr, B.LogLevel.Info, `Unable to read from layout dir: ${e}`);
+                }(i, t, f, u, o, s, c))) : o.log(zr, B.LogLevel.Info, "Manifest layouts folder not found, skipping."), 
+                null === c || void 0 === c ? void 0 : c()) return;
+                if (h && await u.exists(h)) {
+                    if (o.log(zr, B.LogLevel.Info, `Expanded takx folder (${h}) found, loading assets for locale: ${n}...`), 
+                    await Cr(n, h, t => async function(t, e, i, n, r, o, s) {
+                        if (await n.exists(t)) {
+                            if (r.log(dn, B.LogLevel.Debug, `Finding asset dpi dirs for locale dir ${t}`), null === s || void 0 === s ? void 0 : s()) return;
+                            const a = await n.readDir(t);
+                            await Promise.all(a.filter(t => t.isDirectory && Gi.includes(t.name.toLowerCase())).sort((t, e) => Qi(t.name) - Qi(e.name)).map(async t => {
+                                if (null === s || void 0 === s ? void 0 : s()) return;
+                                const a = Qi(t.name);
+                                if (-1 !== a) await hn(t.path, e, i, a, n, r); else {
+                                    const e = `Could not get DPI value from folder name: ${t.name}`;
+                                    r.log(dn, B.LogLevel.Error, e), o(e);
+                                }
+                            })), e.forEach(t => {
+                                t.hasBestDpi = !1;
+                            });
+                        } else r.log(dn, B.LogLevel.Info, `Unable to read from layout dir: ${t}`);
+                    }(t, m, r, u, o, s, c)), null === c || void 0 === c ? void 0 : c()) return;
+                    a && (y = await async function(t, e, i, n, r, o) {
+                        let s = [];
+                        const a = Array.from(e.values()), c = [];
+                        if (await Promise.all(a.map(async e => {
+                            if (null === o || void 0 === o ? void 0 : o()) return;
+                            const r = await n(t, e);
+                            r ? (i.log(dn, B.LogLevel.Debug, `Successfully received ${r.length} asset render data entry for asset file ${e.id}`), 
+                            s = s.concat(r)) : c.push(e.id);
+                        })), c.length > 0) {
+                            const t = `Did not receive asset render data from the renderer for the following assets: [${c.join(", ")}]`;
+                            i.log(dn, B.LogLevel.Error, t), r(t);
+                        }
+                        return s;
+                    }(t, m, o, a, s, c));
+                } else o.log(zr, B.LogLevel.Info, "Manifest assets folder not found, skipping.");
+                if (null === c || void 0 === c ? void 0 : c()) return;
+                const v = p ? await Kr(i, p, u, o, s) : void 0;
+                if (null === c || void 0 === c ? void 0 : c()) return;
+                return {
+                    id: t,
+                    defaultLayoutId: d.defaultLayout,
+                    layoutMap: f,
+                    assetMap: m,
+                    assetRenderData: y,
+                    contextFile: v,
+                    metadata: d.version ? {
+                        version: d.version,
+                        versionName: d.versionName
+                    } : void 0
+                };
+            } catch (u) {
+                const t = `Failed trying to load bundle from expanded takx: ${Sn(u)}`;
+                return o.log(zr, B.LogLevel.Warn, t), void s(t);
+            }
+        }
+        function Jr(t, e) {
+            var i, n, r, o, s, a, c, l;
+            return t === e || (null === (i = t.asset) || void 0 === i ? void 0 : i.onUnloadRenderAsset) === (null === (n = e.asset) || void 0 === n ? void 0 : n.onUnloadRenderAsset) && (null === (r = t.asset) || void 0 === r ? void 0 : r.onLoadAssetFile) === (null === (o = e.asset) || void 0 === o ? void 0 : o.onLoadAssetFile) && t.fetchTouchAdaptationBundle === e.fetchTouchAdaptationBundle && t.getString === e.getString && (null === (s = t.layout) || void 0 === s ? void 0 : s.onCurrentLayoutChanged) === (null === (a = e.layout) || void 0 === a ? void 0 : a.onCurrentLayoutChanged) && (null === (c = t.layout) || void 0 === c ? void 0 : c.onLoadedLayoutsChanged) === (null === (l = e.layout) || void 0 === l ? void 0 : l.onLoadedLayoutsChanged) && t.onBundleChanged === e.onBundleChanged && t.onShowTakNotification === e.onShowTakNotification && t.onTelemetry === e.onTelemetry;
+        }
+        const Hr = {
+            allowLayoutChanges: !1,
+            allowMouseInteraction: !1,
+            desiredDpi: 1,
+            disableTak: !1,
+            hideOnSmallScreens: !1,
+            isTouchCapableDevice: !1,
+            locale: "neutral",
+            preferredInputModality: void 0,
+            scope: void 0,
+            showStandardLayoutAsFallback: !1,
+            supportedTabs: void 0,
+            titleId: void 0
+        };
+        function Yr(t, e) {
+            return Object.assign(Object.assign({}, t), e);
+        }
+        function Xr(t, e) {
+            return t === e || t.allowLayoutChanges === e.allowLayoutChanges && t.allowMouseInteraction === e.allowMouseInteraction && t.desiredDpi === e.desiredDpi && t.disableTak === e.disableTak && t.hideOnSmallScreens === e.hideOnSmallScreens && t.isTouchCapableDevice === e.isTouchCapableDevice && t.locale === e.locale && t.preferredInputModality === e.preferredInputModality && t.scope === e.scope && t.showStandardLayoutAsFallback === e.showStandardLayoutAsFallback && function(t, e) {
+                return t === e || void 0 !== t && void 0 !== e && t.length === e.length && t.every(t => e.some(e => 0 === Ar(t, e)));
+            }(t.supportedTabs, e.supportedTabs) && t.titleId === e.titleId;
+        }
+        var $r = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, Wr = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, Gr = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        let Zr = class {
+            constructor(t, e, i, n) {
+                this.logger = i, this.jsonValidator = n, this._titleId = void 0, this._sentTakTelemetry = !1, 
+                this.trackEvent = t => {
+                    var e, i;
+                    null === (i = (e = this._callbacks).onTelemetry) || void 0 === i || i.call(e, {
+                        name: E.TakError,
+                        reason: t,
+                        titleId: this._titleId
+                    });
+                }, this._callbacks = {};
+                const r = t.getFilteredCallbacksStream(t => {
+                    var e;
+                    return {
+                        asset: {
+                            onLoadAssetFile: null === (e = t.asset) || void 0 === e ? void 0 : e.onLoadAssetFile
+                        },
+                        fetchTouchAdaptationBundle: t.fetchTouchAdaptationBundle,
+                        onBundleChanged: t.onBundleChanged
+                    };
+                }), o = t.getFilteredCallbacksStream(t => ({
+                    onTelemetry: t.onTelemetry
+                })), s = t.getFilteredOptionsStream(t => ({
+                    allowMouseInteraction: t.allowMouseInteraction,
+                    desiredDpi: t.desiredDpi,
+                    isTouchCapableDevice: t.isTouchCapableDevice,
+                    locale: t.locale,
+                    showStandardLayoutAsFallback: t.showStandardLayoutAsFallback,
+                    supportedTabs: t.supportedTabs
+                })).pipe((0, yi.Z)(Hr), _i(), Si(([t, e]) => {
+                    const i = Object.assign({}, t);
+                    return i.allowMouseInteraction = e.allowMouseInteraction, i.isTouchCapableDevice = e.isTouchCapableDevice, 
+                    Xr(i, e) && (t.allowMouseInteraction || t.isTouchCapableDevice) === (e.allowMouseInteraction || e.isTouchCapableDevice) ? ii : oi(e);
+                })), a = fi([ o, t.getFilteredOptionsStream(t => ({
+                    titleId: t.titleId
+                })) ]).pipe((0, ki.M)(([t, e]) => {
+                    this._callbacks.onTelemetry = t.onTelemetry, this._sentTakTelemetry && this._titleId === e.titleId || (this._titleId = e.titleId, 
+                    this.sendTakInfoTelemetry(e.titleId));
+                }));
+                this._bundleStream = fi([ r, s, e.getInitializedStream() ]).pipe((0, wi.E)(a), Si(([[t, e, i], [n, r]]) => i ? (this._callbacks = Object.assign(Object.assign({}, t), {
+                    onTelemetry: n.onTelemetry
+                }), oi(Object.assign(Object.assign({}, e), {
+                    titleId: r.titleId
+                }))) : ii), Ci(t => this.loadBundle(t)), (0, yi.Z)(void 0), (0, xi.F)(), (0, ki.M)(t => {
+                    var e, i;
+                    null === (i = (e = this._callbacks).onBundleChanged) || void 0 === i || i.call(e, t);
+                }), ji(1));
+            }
+            getBundleStream() {
+                return this._bundleStream;
+            }
+            async loadBundle(t) {
+                var e, i, n, r, o;
+                if (t.isTouchCapableDevice || t.allowMouseInteraction) {
+                    const s = Date.now(), a = await async function(t, e, i, n, r, o, s, a, c) {
+                        const l = Rr(a, void 0, void 0, r);
+                        if (0 !== l.length) {
+                            for (const a of l) {
+                                r.log(zr, B.LogLevel.Info, `Considering takx: ${a.id}`);
+                                try {
+                                    r.log(zr, B.LogLevel.Info, `Attempting to load supported takx: ${a.id}`);
+                                    const l = await e(a.id), u = await Vr(a.id, l, t, i, n, r, o, s, c);
+                                    if (u) {
+                                        if (u.layoutMap && u.layoutMap.size > 0) return r.log(zr, B.LogLevel.Info, `Loaded ${u.layoutMap.size} takx layouts. Using only takx layouts.`), 
+                                        u.assetMap && u.assetMap.size > 0 && r.log(zr, B.LogLevel.Info, `Loaded ${u.assetMap.size} takx assets to be used with takx layouts.`), 
+                                        Object.assign(Object.assign({}, u), {
+                                            id: a.id
+                                        });
+                                    } else r.log(zr, B.LogLevel.Info, "Bundle was not able to be loaded or was cancelled. Skipping.");
+                                } catch (u) {
+                                    const t = `Failed to load supported takx: ${Sn(u)}`;
+                                    r.log(zr, B.LogLevel.Warn, t), o(t);
+                                }
+                            }
+                            (null === c || void 0 === c ? void 0 : c()) || r.log(zr, B.LogLevel.Warn, "Not able to load any takx bundle despite having supported ones. Falling back to other layouts");
+                        }
+                    }(this.jsonValidator, null !== (e = this._callbacks.fetchTouchAdaptationBundle) && void 0 !== e ? e : async () => {
+                        throw new Error("No fetchTouchAdaptationBundle has been provided");
+                    }, t.locale, t.desiredDpi, this.logger, this.trackEvent, null === (i = this._callbacks.asset) || void 0 === i ? void 0 : i.onLoadAssetFile, t.supportedTabs, () => !1);
+                    if (a) return null === (r = (n = this._callbacks).onTelemetry) || void 0 === r || r.call(n, {
+                        name: E.TakBundleFetch,
+                        duration: Date.now() - s,
+                        id: null !== (o = a.id) && void 0 !== o ? o : "",
+                        titleId: t.titleId
+                    }), a;
+                }
+                if (t.showStandardLayoutAsFallback) return {
+                    defaultLayoutId: ""
+                };
+            }
+            sendTakInfoTelemetry(t) {
+                this._callbacks.onTelemetry && (this._sentTakTelemetry = !0, this._callbacks.onTelemetry({
+                    name: E.TakInfo,
+                    packageVersion: "14.12.0",
+                    layoutVersion: hr.LayoutVersion,
+                    manifestVersion: hr.ManifestVersion,
+                    titleId: t
+                }));
+            }
+        };
+        Zr = $r([ Ge(), Gr(0, qe(v)), Gr(1, qe(u)), Gr(2, qe(f)), Gr(3, qe(h)), Wr("design:paramtypes", [ Function, Function, Object, Object ]) ], Zr);
+        var qr = i(759904), Qr = new ti.c(function(t) {
+            return t.complete();
+        });
+        var to, eo = i(318045), io = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, no = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, ro = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        const {TextDecoder: oo} = fn;
+        let so = to = class {
+            constructor(t, e, i, n) {
+                this.logger = i, this.jsonValidator = n, this._unappliedPatches = [], this._textDecoder = new oo("utf-8"), 
+                this._allowLayoutChanges = !1, this._titleId = void 0, this._patchLayoutChangeStream = new Oi(1), 
+                this.onDecodePatch = t => this._textDecoder.decode(new Uint8Array((0, gn.D)(t))), 
+                this.onStatePatchPartialSuccess = t => {
+                    var e;
+                    this._onShowTakNotification && this._getString && this._onShowTakNotification(this._getString("Stream_StatePatchPartialSuccess")), 
+                    this.logger.log(to.TAG, B.LogLevel.Warn, t), null === (e = this._onTelemetry) || void 0 === e || e.call(this, {
+                        name: E.TakError,
+                        reason: t,
+                        titleId: this._titleId
+                    });
+                }, this.onStatePatchError = t => {
+                    var e;
+                    this._onShowTakNotification && this._getString && this._onShowTakNotification(this._getString("Stream_InvalidStatePatch")), 
+                    this.logger.log(to.TAG, B.LogLevel.Warn, t), null === (e = this._onTelemetry) || void 0 === e || e.call(this, {
+                        name: E.TakError,
+                        reason: t,
+                        titleId: this._titleId
+                    });
+                }, this.getCurrentContextFile = () => {
+                    var t;
+                    return null === (t = this._touchBundleState) || void 0 === t ? void 0 : t.contextFile;
+                }, this.currentContextFileReferenceResolver = t => this.referenceResolver(t, this.getCurrentContextFile()), 
+                this.getDefaultContextFile = () => {
+                    var t;
+                    return null === (t = this._touchBundle) || void 0 === t ? void 0 : t.contextFile;
+                }, this.defaultContextFileReferenceResolver = t => this.referenceResolver(t, this.getDefaultContextFile()), 
+                this.validateTouchLayout = t => Lr(this.jsonValidator, t, this.logger, t => {
+                    var e;
+                    null === (e = this._onTelemetry) || void 0 === e || e.call(this, {
+                        name: E.TakError,
+                        reason: t,
+                        titleId: this._titleId
+                    });
+                });
+                const r = t.getFilteredCallbacksStream(t => {
+                    var e, i;
+                    return {
+                        asset: {
+                            onUnloadRenderAsset: null === (e = t.asset) || void 0 === e ? void 0 : e.onUnloadRenderAsset
+                        },
+                        getString: t.getString,
+                        layout: {
+                            onLoadedLayoutsChanged: null === (i = t.layout) || void 0 === i ? void 0 : i.onLoadedLayoutsChanged
+                        },
+                        onShowTakNotification: t.onShowTakNotification,
+                        onTelemetry: t.onTelemetry
+                    };
+                }).pipe((0, ki.M)(t => {
+                    var e, i;
+                    this._getString = t.getString, this._onLoadedLayoutsChanged = null === (e = t.layout) || void 0 === e ? void 0 : e.onLoadedLayoutsChanged, 
+                    this._onShowTakNotification = t.onShowTakNotification, this._onTelemetry = t.onTelemetry, 
+                    this._onUnloadRenderAsset = null === (i = t.asset) || void 0 === i ? void 0 : i.onUnloadRenderAsset;
+                })), o = t.getFilteredOptionsStream(t => ({
+                    allowLayoutChanges: t.allowLayoutChanges,
+                    titleId: t.titleId
+                })).pipe((0, ki.M)(t => {
+                    this._allowLayoutChanges = t.allowLayoutChanges, this._titleId = t.titleId;
+                })), s = e.getBundleStream().pipe((0, ki.M)(t => {
+                    this._touchBundle = t;
+                })), a = this._patchLayoutChangeStream.pipe(Si(t => {
+                    var e, i;
+                    return (null === (e = this._touchBundleState) || void 0 === e ? void 0 : e.contextFile) ? oi(Object.assign(Object.assign({}, this._touchBundleState), {
+                        contextFile: xr(t, null === (i = this._touchBundleState) || void 0 === i ? void 0 : i.contextFile, this.onDecodePatch, this.onStatePatchError, this.onStatePatchPartialSuccess)
+                    })) : (this._unappliedPatches.push(t), ii);
+                }));
+                this._currentProcessedBundleStream = function() {
+                    for (var t = [], e = 0; e < arguments.length; e++) t[e] = arguments[e];
+                    var i = (0, ni.lI)(t), n = (0, ni.R0)(t, 1 / 0), r = t;
+                    return r.length ? 1 === r.length ? (0, bi.Tg)(r[0]) : (0, qr.U)(n)((0, ri.H)(r, i)) : Qr;
+                }(s, a).pipe(Ci(async t => {
+                    this._touchBundleState = this.applyUnappliedPatches(t);
+                    const e = await this.handleTouchBundleStateChange(this._touchBundleState);
+                    return e && (this._transformedLayouts = e), {
+                        bundle: t,
+                        layouts: e
+                    };
+                }), (0, xi.F)(), (0, wi.E)(r, o), (0, eo.T)(([t]) => t), (0, ki.M)(t => {
+                    var e, i;
+                    null === (e = this._onLoadedLayoutsChanged) || void 0 === e || e.call(this, null !== (i = t.layouts) && void 0 !== i ? i : new Map);
+                }), ji(1));
+            }
+            unmount() {
+                var t, e, i;
+                if (!(null === (t = this._previousTouchBundleState) || void 0 === t ? void 0 : t.assetRenderData)) return;
+                const n = null === (e = this._previousTouchBundleState) || void 0 === e ? void 0 : e.assetRenderData;
+                for (const r of n) null === (i = this._onUnloadRenderAsset) || void 0 === i || i.call(this, r.renderKey);
+            }
+            getProcessedBundleStream() {
+                return this._currentProcessedBundleStream;
+            }
+            changeLayoutForScope(t) {
+                switch (t.type) {
+                  case "showLayout":
+                  case "showLayoutId":
+                  case "patchState":
+                    if (!t.statePatch) return;
+                    return this._allowLayoutChanges ? (this.logger.log(to.TAG, B.LogLevel.Info, `'${t.type}' command with patch received: ${t.statePatch}`), 
+                    t.scope ? void this._patchLayoutChangeStream.next(t.statePatch) : void this.logger.log(to.TAG, B.LogLevel.Error, `Not handling patch on the '${t.type}' command because no scope was specified.`)) : void this.logger.log(to.TAG, B.LogLevel.Info, "Request to change touch controls could not be applied because layout changes are not allowed.");
+
+                  case "reset":
+                    return void (this._unappliedPatches.length = 0);
+
+                  default:
+                    return;
+                }
+            }
+            applyUnappliedPatches(t) {
+                if ((null === t || void 0 === t ? void 0 : t.contextFile) && this._unappliedPatches.length > 0) {
+                    let e = t.contextFile;
+                    for (const t of this._unappliedPatches) e = xr(t, e, this.onDecodePatch, this.onStatePatchError, this.onStatePatchPartialSuccess);
+                    return this._unappliedPatches = [], Object.assign(Object.assign({}, t), {
+                        contextFile: e
+                    });
+                }
+                return t;
+            }
+            referenceResolver(t, e) {
+                var i;
+                const n = Fi(t);
+                if ((null === e || void 0 === e ? void 0 : e.originalPath) === n) return Promise.resolve(e);
+                const r = `Only the touch bundle context file can be referenced. Reference Path: ${t} \n Context File: ${null === e || void 0 === e ? void 0 : e.originalPath}`;
+                return null === (i = this._onTelemetry) || void 0 === i || i.call(this, {
+                    name: E.TakError,
+                    reason: r,
+                    titleId: this._titleId
+                }), Promise.reject(r);
+            }
+            async handleTouchBundleStateChange(t) {
+                var e, i, n, r, o, s, a, c;
+                if (this.logger.log(to.TAG, B.LogLevel.Info, `Transforming [${null === (e = null === t || void 0 === t ? void 0 : t.layoutMap) || void 0 === e ? void 0 : e.size}] layouts.`), 
+                null === t || void 0 === t ? void 0 : t.layoutMap) {
+                    const e = new Ki, u = new Map, d = new Map, h = null === t || void 0 === t ? void 0 : t.layoutMap.entries();
+                    for (const [, r] of h) try {
+                        const i = await Ir(r, u, this.currentContextFileReferenceResolver, this.validateTouchLayout, this.getCurrentContextFile(), null === t || void 0 === t ? void 0 : t.assetRenderData, this.logger);
+                        e.set(r.id, i);
+                    } catch (l) {
+                        if (this.logger.log(to.TAG, B.LogLevel.Info, `Reference resolution failed with: ${Sn(l)}`), 
+                        this._onShowTakNotification && this._getString) {
+                            const t = this._getString("Stream_InvalidLayoutReferences", r.id);
+                            this._onShowTakNotification(t), this.logger.log(to.TAG, B.LogLevel.Warn, t), null === (i = this._onTelemetry) || void 0 === i || i.call(this, {
+                                name: E.TakError,
+                                reason: t,
+                                titleId: this._titleId
+                            });
+                        }
+                        try {
+                            const i = await Ir(r, d, this.defaultContextFileReferenceResolver, this.validateTouchLayout, this.getDefaultContextFile(), null === t || void 0 === t ? void 0 : t.assetRenderData, this.logger);
+                            e.set(r.id, i);
+                        } catch (l) {
+                            this.logger.log(to.TAG, B.LogLevel.Info, `Fallback reference resolution failed with: ${Sn(l)}`);
+                            const t = null === (n = this._transformedLayouts) || void 0 === n ? void 0 : n.get(r.id);
+                            t && e.set(r.id, t);
+                            continue;
+                        }
+                    }
+                    this.logger.log(to.TAG, B.LogLevel.Debug, `setting [${e.size}] new derefed layouts.`);
+                    const p = [];
+                    for (const [, t] of e.entries()) (null === (r = this._previousTouchBundleState) || void 0 === r ? void 0 : r.assetRenderData) && un(t.layoutFile, this._previousTouchBundleState.assetRenderData, p);
+                    if (null === (o = this._previousTouchBundleState) || void 0 === o ? void 0 : o.assetRenderData) for (const t of this._previousTouchBundleState.assetRenderData) p.includes(t) || null === (s = this._onUnloadRenderAsset) || void 0 === s || s.call(this, t.renderKey);
+                    for (const i of p) (null === (a = t.assetRenderData) || void 0 === a ? void 0 : a.includes(i)) || null === (c = t.assetRenderData) || void 0 === c || c.push(i);
+                    return this._previousTouchBundleState = t, e;
+                }
+            }
+        };
+        so.TAG = "TouchAdaptationKit/BundleProcessor", so = to = io([ Ge(), ro(0, qe(v)), ro(1, qe(a)), ro(2, qe(f)), ro(3, qe(h)), no("design:paramtypes", [ Function, Function, Object, Object ]) ], so);
+        const ao = Math.PI / 8, co = (Math.PI, Math.PI / 4), lo = Math.PI / 3, uo = Math.PI / 2, ho = 2 * Math.PI, po = (Math.PI, 
+        3 * Math.PI / 4), go = 5 * Math.PI / 2, fo = {
+            x: 0,
+            y: 0
+        };
+        function mo(t, e, i) {
+            return t < e ? e : t > i ? i : t;
+        }
+        function yo(t, e) {
+            const i = _o(t);
+            return i <= e ? t : {
+                x: t.x * e / i,
+                y: t.y * e / i
+            };
+        }
+        function vo(t, e, i, n) {
+            const r = i - t, o = n - e;
+            return Math.sqrt(r * r + o * o);
+        }
+        function _o(t) {
+            return vo(t.x, t.y, fo.x, fo.y);
+        }
+        function bo(t, e) {
+            return {
+                x: So(t, e),
+                y: ko(t, e)
+            };
+        }
+        function So(t, e) {
+            return e * Math.cos(t);
+        }
+        function ko(t, e) {
+            return e * Math.sin(t);
+        }
+        function wo(t) {
+            return {
+                angleInRadians: Math.atan2(t.y, t.x),
+                radius: Math.sqrt(t.x * t.x + t.y * t.y)
+            };
+        }
+        function Po(t, e) {
+            return Math.atan2(e, t);
+        }
+        function Ao(t, e) {
+            return Math.sqrt(t * t + e * e);
+        }
+        function Co(t) {
+            return t < 0 ? t + ho : t > ho ? t - ho : t;
+        }
+        function xo(t, e, i, n, r) {
+            const o = Ao(n, r), s = Co(Po(n, r)) % ho, a = Co(e) % ho, c = Co(i) % ho;
+            return a === c ? o <= t : a > c ? !(s >= c && s <= a) && o <= t : s >= a && s <= c && o <= t;
+        }
+        function Io(t, e, i, n, r, o) {
+            const s = Ao(r, o), a = Co(Po(r, o)) % ho, c = Co(i) % ho, l = Co(n) % ho, u = s >= t && s <= e;
+            return c === l ? u : c > l ? !(a >= l && a <= c) && u : a >= c && a <= l && u;
+        }
+        var Mo = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+
+// layers-and-layout-coordinator | 原可读文件第 4144–4454 行
+        let Fo = class {
+            constructor() {
+                this._activeLayoutId = "", this._layoutLayerActivationStreams = new Map;
+            }
+            getLayerActivationStream(t) {
+                var e;
+                return null === (e = this._layoutLayerActivationStreams.get(this._activeLayoutId)) || void 0 === e ? void 0 : e.get(t);
+            }
+            getActiveLayersStream() {
+                var t;
+                const e = null === (t = this._layoutLayerActivationStreams.get(this._activeLayoutId)) || void 0 === t ? void 0 : t.entries(), i = new Set;
+                if (!e) return oi(i);
+                const n = [];
+                for (const [r, o] of e) n.push(o.pipe((0, xi.F)(), (0, ki.M)(t => {
+                    t ? i.add(r) : i.delete(r);
+                })));
+                return fi(n).pipe((0, eo.T)(() => i));
+            }
+            getCurrentlyActiveLayers() {
+                var t;
+                const e = null === (t = this._layoutLayerActivationStreams.get(this._activeLayoutId)) || void 0 === t ? void 0 : t.entries(), i = new Set;
+                if (!e) return i;
+                for (const [n, r] of e) r.value && i.add(n);
+                return i;
+            }
+            hasLayerActivationStream(t) {
+                var e, i;
+                return null !== (i = null === (e = this._layoutLayerActivationStreams.get(this._activeLayoutId)) || void 0 === e ? void 0 : e.has(t)) && void 0 !== i && i;
+            }
+            trySetLayerActivated(t, e) {
+                var i, n;
+                null === (n = null === (i = this._layoutLayerActivationStreams.get(this._activeLayoutId)) || void 0 === i ? void 0 : i.get(t)) || void 0 === n || n.next(e);
+            }
+            reconcileLayoutLayers(t) {
+                if (this._activeLayoutId = t.id, !t.layoutFile.content.layers) return void this.resetLayerActivationStreams();
+                const e = Object.keys(t.layoutFile.content.layers);
+                if (this._layoutLayerActivationStreams.has(this._activeLayoutId)) this._layoutLayerActivationStreams.forEach((t, i) => {
+                    if (i !== this._activeLayoutId) t.forEach(t => {
+                        t.complete();
+                    }), this._layoutLayerActivationStreams.delete(i); else {
+                        const i = [];
+                        t.forEach((t, n) => {
+                            -1 === e.indexOf(n) && i.push([ n, t ]);
+                        }), i.forEach(([e, i]) => {
+                            i.complete(), t.delete(e);
+                        }), e.filter(e => !t.has(e)).forEach(e => t.set(e, new Eo.t(!1)));
+                    }
+                }); else {
+                    this.resetLayerActivationStreams();
+                    const t = new Map;
+                    e.forEach(e => t.set(e, new Eo.t(!1))), this._layoutLayerActivationStreams.set(this._activeLayoutId, t);
+                }
+            }
+            resetLayerActivationStreams() {
+                this._layoutLayerActivationStreams.forEach(t => {
+                    t.forEach(t => t.complete()), t.clear();
+                }), this._layoutLayerActivationStreams.clear();
+            }
+        };
+        function Lo(t, e, i) {
+            return i ? t.pipe((0, eo.T)(t => e(t)), (0, xi.F)(i)) : t.pipe((0, eo.T)(t => e(t)), (0, 
+            xi.F)());
+        }
+        Fo = Bo([ Ge() ], Fo);
+        var zo, No = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, Uo = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, Ko = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        let Vo = zo = class {
+            constructor(t, e, i, n) {
+                this.takBridge = i, this.logger = n, this._allowLayoutChanges = !1, this._allowMouseInteraction = !1, 
+                this._disableTak = !1, this._preferredInputModality = void 0, this._scope = void 0, 
+                this._titleId = void 0, this._perScopeLayoutsStream = new Eo.t(new Map);
+                const r = t.getFilteredCallbacksStream(t => {
+                    var e;
+                    return {
+                        getString: t.getString,
+                        layout: {
+                            onCurrentLayoutChanged: null === (e = t.layout) || void 0 === e ? void 0 : e.onCurrentLayoutChanged
+                        },
+                        onShowTakNotification: t.onShowTakNotification,
+                        onTelemetry: t.onTelemetry
+                    };
+                }).pipe((0, ki.M)(t => {
+                    var e;
+                    this._getString = t.getString, this._onCurrentLayoutChanged = null === (e = t.layout) || void 0 === e ? void 0 : e.onCurrentLayoutChanged, 
+                    this._onShowTakNotification = t.onShowTakNotification, this._onTelemetry = t.onTelemetry;
+                })), o = t.getFilteredOptionsStream(t => ({
+                    allowLayoutChanges: t.allowLayoutChanges,
+                    allowMouseInteraction: t.allowMouseInteraction,
+                    disableTak: t.disableTak,
+                    preferredInputModality: t.preferredInputModality,
+                    scope: t.scope,
+                    titleId: t.titleId
+                })).pipe((0, ki.M)(t => {
+                    this._allowLayoutChanges = t.allowLayoutChanges, this._allowMouseInteraction = t.allowMouseInteraction, 
+                    this._disableTak = t.disableTak, this._preferredInputModality = t.preferredInputModality, 
+                    this._scope = t.scope, this._titleId = t.titleId;
+                })), s = fi([ Lo(o, t => Yr(Hr, {
+                    titleId: t.titleId
+                }), Xr), e.getProcessedBundleStream() ]).pipe(Si(([t, e]) => e ? (this._transformedLayouts = e.layouts, 
+                this.handleTransformedLayoutsChanged(), oi(e)) : ii), (0, yi.Z)(void 0), (0, xi.F)()), a = fi([ s, o ]).pipe(Si(([t]) => {
+                    const e = this.updateDefaultLayout(null === t || void 0 === t ? void 0 : t.bundle, null === t || void 0 === t ? void 0 : t.layouts);
+                    return e ? oi(e) : ii;
+                }), (0, yi.Z)(void 0), (0, xi.F)());
+                this._currentLayoutStream = fi([ this._perScopeLayoutsStream, a, r, o ]).pipe((0, 
+                eo.T)(([t, e]) => Object.assign(Object.assign({}, this.recomputeRenderLayout(t, e)), {
+                    scope: this._scope
+                })), (0, xi.F)(this.areLoadedLayoutFilesEqual), (0, ki.M)(t => {
+                    var e;
+                    null === (e = this._onCurrentLayoutChanged) || void 0 === e || e.call(this, t);
+                }), ji(1));
+            }
+            getCurrentLayoutStream() {
+                return this._currentLayoutStream;
+            }
+            changeLayoutForScope(t) {
+                var e, i, n, r, o;
+                null === (e = this._onTelemetry) || void 0 === e || e.call(this, {
+                    name: "userOverride" === t.scope ? E.TakUserLayoutChange : E.TakServerLayoutChange,
+                    command: t.type,
+                    layoutId: "showLayout" === t.type ? t.layout.id : "showLayoutId" === t.type ? t.layout : void 0,
+                    titleId: this._titleId
+                });
+                const s = "reset" !== t.type ? t.subscope : void 0;
+                if (this.logger.log(zo.Tag, B.LogLevel.Info, `Request to change touch controls. Type: ${t.type} for scope: ${t.scope} and subscope: ${s}`), 
+                !this._allowLayoutChanges && t.scope !== vr && "base" === s) return void this.logger.log(zo.Tag, B.LogLevel.Info, "Request to change touch controls could not be applied because layout changes are not allowed.");
+                let a;
+                switch (t.type) {
+                  case "showLayout":
+                    this.logger.log(zo.Tag, B.LogLevel.Info, `Attempting to show layout object with ${t.layout.id}`), 
+                    this._unappliedLayoutChange = void 0, a = t.layout;
+                    break;
+
+                  case "showLayoutId":
+                    if (this.logger.log(zo.Tag, B.LogLevel.Info, `Attempting to show layout id ${t.layout}`), 
+                    a = wr.get(t.layout), a || (a = Pr(t.layout, this._transformedLayouts)), !this._transformedLayouts && !a) return void (this._unappliedLayoutChange = t.layout);
+                    if (this._transformedLayouts && !a) {
+                        this._onShowTakNotification && this._getString && this._onShowTakNotification(this._getString("Stream_InvalidLayoutMessage", t.layout || ""));
+                        const e = `Error: unknown tak layout id passed: ${t.layout}`;
+                        return this.logger.log(zo.Tag, B.LogLevel.Error, e), void (null === (i = this._onTelemetry) || void 0 === i || i.call(this, {
+                            name: E.TakError,
+                            reason: e,
+                            titleId: this._titleId
+                        }));
+                    }
+                    this._unappliedLayoutChange = void 0;
+                    break;
+
+                  case "showTitleDefault":
+                    this._unappliedLayoutChange = void 0, a = null;
+                    break;
+
+                  case "hide":
+                    a = void 0;
+                    break;
+
+                  case "patchState":
+                    return;
+
+                  case "reset":
+                    this._unappliedLayoutChange = void 0;
+                    break;
+
+                  default:
+                    {
+                        const e = `Unknown layout change type received: ${Sn(t)}`;
+                        return this.logger.log(zo.Tag, B.LogLevel.Warn, e), void (null === (n = this._onTelemetry) || void 0 === n || n.call(this, {
+                            name: E.TakError,
+                            reason: e,
+                            titleId: this._titleId
+                        }));
+                    }
+                }
+                let c = !1;
+                const l = this._perScopeLayoutsStream.value.get(t.scope);
+                "reset" === t.type ? l && this._perScopeLayoutsStream.value.delete(t.scope) : (l ? "base" === s ? l.base = a : l.override = a : "base" === s ? this._perScopeLayoutsStream.value.set(t.scope, {
+                    base: a
+                }) : this._perScopeLayoutsStream.value.set(t.scope, {
+                    base: t.scope === vr ? void 0 : null,
+                    override: a
+                }), "override" === s && (c = !0)), this._perScopeLayoutsStream.next(this._perScopeLayoutsStream.value), 
+                c && (null === (o = (r = this.takBridge).onTouchInputActive) || void 0 === o || o.call(r, !0));
+            }
+            updateDefaultLayout(t, e) {
+                const i = null === t || void 0 === t ? void 0 : t.defaultLayoutId, n = Pr(i, e);
+                if (n) return n;
+                i && this._onShowTakNotification && this._getString && e && e.size > 0 && this._onShowTakNotification(this._getString("Stream_InvalidLayoutMessage", i));
+            }
+            recomputeRenderLayout(t, e) {
+                return this._disableTak ? br : function(t, e, i, n, r) {
+                    if (n === j.Controller || n === j.MouseAndKeyboard && !r) return br;
+                    const o = i ? t.get(i) : void 0;
+                    return o ? o.override ? o.override : o.base ? o.base : null === o.base && e ? e : br : i && "system" !== i && e ? e : br;
+                }(t, e, this._scope, this._preferredInputModality, this._allowMouseInteraction);
+            }
+            handleTransformedLayoutsChanged() {
+                var t, e;
+                if (!this._titleId) return;
+                const i = this._perScopeLayoutsStream.value.get(this._titleId);
+                if (!this._transformedLayouts) return;
+                let n = null === i || void 0 === i ? void 0 : i.base, r = null === (t = null === i || void 0 === i ? void 0 : i.base) || void 0 === t ? void 0 : t.id;
+                void 0 !== this._unappliedLayoutChange && (r = this._unappliedLayoutChange, this._unappliedLayoutChange = void 0);
+                let o = !1;
+                if (r && !wr.has(r) && (n = this._transformedLayouts.get(r), o = !!n, !n && this._onShowTakNotification && this._getString)) return void this._onShowTakNotification(this._getString("Stream_InvalidLayoutMessage", r));
+                let s = null === i || void 0 === i ? void 0 : i.override;
+                const a = null === (e = null === i || void 0 === i ? void 0 : i.override) || void 0 === e ? void 0 : e.id;
+                a && !wr.has(a) && (s = this._transformedLayouts.get(a), o = o || !!s, !s && this._onShowTakNotification && this._getString) ? this._onShowTakNotification(this._getString("Stream_InvalidLayoutMessage", a)) : o && (this._perScopeLayoutsStream.value.set(this._titleId, {
+                    base: n,
+                    override: s
+                }), this._perScopeLayoutsStream.next(this._perScopeLayoutsStream.value));
+            }
+            areLoadedLayoutFilesEqual(t, e) {
+                return t === e || t.id === e.id && t.displayName === e.displayName && t.basePath === e.basePath && t.layoutFile === e.layoutFile && t.scope === e.scope;
+            }
+        };
+        Vo.Tag = "TouchAdaptationKit/LayoutCoordinator", Vo = zo = No([ Ge(), Ko(0, qe(v)), Ko(1, qe(c)), Ko(2, qe(P)), Ko(3, qe(f)), Uo("design:paramtypes", [ Function, Function, Object, Object ]) ], Vo);
+        var Jo = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, Ho = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        };
+        let Yo = class {
+            constructor() {
+                this._options = Hr, this._optionsInputStream = new Eo.t(this._options), this._optionsStream = this._optionsInputStream.pipe((0, 
+                xi.F)(Xr), ji(1)), this._callbacks = {}, this._callbacksInputStream = new Eo.t(this._callbacks), 
+                this._callbacksStream = this._callbacksInputStream.pipe((0, xi.F)(Jr), ji(1));
+            }
+            updateOptions(t) {
+                this._options = Yr(this._options, t), this._optionsInputStream.next(this._options);
+            }
+            getOptionsStream() {
+                return this._optionsStream;
+            }
+            getFilteredOptionsStream(t) {
+                return Lo(this.getOptionsStream(), e => Yr(Hr, t(e)), Xr);
+            }
+            getCurrentOptions() {
+                return this._options;
+            }
+            updateCallbacks(t) {
+                var e, i;
+                this._callbacks = (e = this._callbacks, i = t, Object.assign(Object.assign(Object.assign({}, e), i), {
+                    asset: Object.assign(Object.assign({}, null === e || void 0 === e ? void 0 : e.asset), null === i || void 0 === i ? void 0 : i.asset),
+                    layout: Object.assign(Object.assign({}, null === e || void 0 === e ? void 0 : e.layout), null === i || void 0 === i ? void 0 : i.layout)
+                })), this._callbacksInputStream.next(this._callbacks);
+            }
+            getCallbacksStream() {
+                return this._callbacksStream;
+            }
+            getFilteredCallbacksStream(t) {
+                return Lo(this.getCallbacksStream(), e => t(e), Jr);
+            }
+        };
+        Yo = Jo([ Ge(), Ho("design:paramtypes", []) ], Yo);
+        const Xo = {
+            x: 0,
+            y: 0,
+            radius: 1,
+            angleInRadians: 0
+        };
+        function $o(t, e) {
+            return t === e || t.x === e.x && t.y === e.y && t.radius === e.radius && t.angleInRadians === e.angleInRadians;
+        }
+        const Wo = {
+            enabled: !0,
+            sensitivity: 1
+        };
+        function Go(t, e) {
+            return t === e || t.enabled === e.enabled && t.sensitivity === e.sensitivity;
+        }
+        const Zo = {
+            left: Xo,
+            right: Xo,
+            center: Xo
+        };
+        function qo(t, e) {
+            return t === e || $o(t.left, e.left) && $o(t.right, e.right) && $o(t.center, e.center);
+        }
+        const Qo = {
+            global: 1,
+            left: 1,
+            right: 1,
+            center: 1,
+            upper: 1,
+            lower: 1
+        }, ts = {
+            opacityMultiplier: 1,
+            containerUnitSizeMultiplier: Qo
+        };
+        var es;
+        !function(t) {
+            t.Default = "default", t.Absolute = "absolute", t.Relative = "relative";
+        }(es || (es = {}));
+        const is = {
+            relativityMode: es.Default,
+            sensitivity: 1
+        };
+        function ns(t, e) {
+            return t === e || t.relativityMode === e.relativityMode && t.sensitivity === e.sensitivity;
+        }
+        const rs = {
+
+// layer-content-merge-and-layout-stream | 原可读文件第 12360–12526 行
+        function nh(t, e) {
+            return !(t !== e && (t.adjusters.opacity.energy !== e.adjusters.opacity.energy || t.adjusters.opacity.value !== e.adjusters.opacity.value));
+        }
+        function rh(t, e) {
+            return !!(t === e || function(t, e) {
+                return !(t !== e && (t.opacityMultiplier.animationEnergy !== e.opacityMultiplier.animationEnergy || t.opacityMultiplier.acceptedRange.minimum !== e.opacityMultiplier.acceptedRange.minimum || t.opacityMultiplier.acceptedRange.maximum !== e.opacityMultiplier.acceptedRange.maximum));
+            }(t.controls, e.controls) && nh(t.containers, e.containers) && Ya(t.colorPalette, e.colorPalette) && t.styleVariant === e.styleVariant);
+        }
+        function oh(t) {
+            return Array.isArray(t);
+        }
+        function sh(t, e) {
+            if (!t) return e;
+            if (!e) return t;
+            const i = [];
+            for (let n = 0; n < t.length; n++) i.push(t[n]);
+            for (let n = 0; n < i.length; n++) {
+                const t = i[n];
+                if (e && n < e.length) {
+                    const r = e[n];
+                    if (oh(r) && oh(t)) t.length !== r.length ? i[n] = r : i[n] = sh(t, r); else if (oh(r) || oh(t)) if (i[n] = r, 
+                    oh(r)) {
+                        if (n + 1 < i.length) {
+                            oh(i[n + 1]) ? i[n + 1] = null : i.splice(n + 1, 1);
+                        }
+                    } else n + 1 < i.length && i.splice(n + 1, 0, null); else i[n] = null !== r && void 0 !== r ? r : t;
+                }
+            }
+            if (e.length > i.length) {
+                const t = e.slice(i.length);
+                return i.concat(t);
+            }
+            return i;
+        }
+        function ah(t, e) {
+            return t ? Object.assign(Object.assign(Object.assign({}, t), (null === e || void 0 === e ? void 0 : e.inner) && {
+                inner: sh(t.inner, e.inner)
+            }), (null === e || void 0 === e ? void 0 : e.outer) && {
+                outer: sh(t.outer, e.outer)
+            }) : e;
+        }
+        function ch(t, e) {
+            return Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, t), (null === e || void 0 === e ? void 0 : e.center) && {
+                center: ah(t.center, e.center)
+            }), (null === e || void 0 === e ? void 0 : e.left) && {
+                left: ah(t.left, e.left)
+            }), (null === e || void 0 === e ? void 0 : e.right) && {
+                right: ah(t.right, e.right)
+            }), (null === e || void 0 === e ? void 0 : e.lower) && {
+                lower: (r = t.lower, o = e.lower, r ? Object.assign(Object.assign(Object.assign(Object.assign({}, r), (null === o || void 0 === o ? void 0 : o.leftCenter) && {
+                    leftCenter: sh(r.leftCenter, o.leftCenter)
+                }), (null === o || void 0 === o ? void 0 : o.rightCenter) && {
+                    rightCenter: sh(r.rightCenter, o.rightCenter)
+                }), (null === o || void 0 === o ? void 0 : o.center) && {
+                    center: o.center
+                }) : o)
+            }), (null === e || void 0 === e ? void 0 : e.upper) && {
+                upper: (i = t.upper, n = e.upper, i ? Object.assign(Object.assign({}, i), (null === n || void 0 === n ? void 0 : n.right) && {
+                    right: sh(i.right, n.right)
+                }) : n)
+            }), (null === e || void 0 === e ? void 0 : e.sensors) && {
+                sensors: sh(t.sensors, e.sensors)
+            });
+            var i, n, r, o;
+        }
+        function lh(t, e) {
+            var i;
+            switch (e) {
+              case Ei.Default:
+                return null !== (i = t.default) && void 0 !== i ? i : {};
+
+              case Ei.HighContrast:
+                {
+                    const e = lh(t, Ei.Default);
+                    return Object.assign(Object.assign({}, e), t.highContrast && t.highContrast);
+                }
+            }
+        }
+        function uh(t, e) {
+            return t === e || t.value === e.value && t.energy === e.energy;
+        }
+        const dh = t => hh(t.layoutFile.content), hh = t => {
+            const e = ph(t), i = gh(t.layers);
+            return fs(e, i);
+        }, ph = t => {
+            let e = Xc.None;
+            return t.left && (e = fs(e, Xc.Left)), t.center && (e = fs(e, Xc.Center)), t.right && (e = fs(e, Xc.Right)), 
+            t.upper && (e = fs(e, Xc.Upper)), t.lower && (e = fs(e, Xc.Lower)), e;
+        }, gh = t => {
+            let e = Xc.None;
+            if (!t) return e;
+            for (const i in t) {
+                const n = t[i];
+                e = fs(e, ph(n));
+            }
+            return e;
+        };
+        var fh = function(t, e, i, n) {
+            var r, o = arguments.length, s = o < 3 ? e : null === n ? n = Object.getOwnPropertyDescriptor(e, i) : n;
+            if ("object" === typeof Reflect && "function" === typeof Reflect.decorate) s = Reflect.decorate(t, e, i, n); else for (var a = t.length - 1; a >= 0; a--) (r = t[a]) && (s = (o < 3 ? r(s) : o > 3 ? r(e, i, s) : r(e, i)) || s);
+            return o > 3 && s && Object.defineProperty(e, i, s), s;
+        }, mh = function(t, e) {
+            if ("object" === typeof Reflect && "function" === typeof Reflect.metadata) return Reflect.metadata(t, e);
+        }, yh = function(t, e) {
+            return function(i, n) {
+                e(i, n, t);
+            };
+        };
+        let vh = class {
+            constructor(t, e, i) {
+                this._interactionModeStream = new Eo.t(rc.Gameplay), this._controlsAreHiddenStream = new Eo.t(!0), 
+                this._stylingConfigInputStream = new Eo.t(sc), this._currentLayout = br, this._stringToColorMemo = new Za(Ma, 32), 
+                this._brightenedActionColorMemo = new Za(Ba, 5, zs), this._throttleIndicatorColorMemo = new Za(za, 1, zs), 
+                this._throttleAxisActivatedColorMemo = new Za(Fa, 1, zs), this._throttleAxisDeactivatedColorMemo = new Za(La, 1, zs), 
+                this._layoutColorPaletteColorMemo = new Za(Ma, 32), this._rawLayoutStream = e.getCurrentLayoutStream().pipe((0, 
+                eo.T)(t => (this._currentLayout = t || br, this._currentLayout)), (0, xi.F)(), ji(1)), 
+                this._currentLayoutAnchorFlagsStream = this._rawLayoutStream.pipe((0, eo.T)(dh)), 
+                this._finalLayoutStream = this._rawLayoutStream.pipe(Si(t => {
+                    i.reconcileLayoutLayers(t);
+                    return i.getActiveLayersStream().pipe((0, eh.Q)(kc, 10), ih(1), (0, yi.Z)(i.getCurrentlyActiveLayers()), (0, 
+                    eo.T)(e => {
+                        var i;
+                        const n = t.layoutFile.content;
+                        let r = n;
+                        for (const t of e) r = ch(r, null === (i = n.layers) || void 0 === i ? void 0 : i[t]);
+                        return Object.assign(Object.assign({}, t), {
+                            layoutFile: Object.assign(Object.assign({}, t.layoutFile), {
+                                content: r
+                            })
+                        });
+                    }));
+                }), ji(1)), this._currentSettingStream = this.getLayoutStream().pipe((0, eo.T)(t => t.scope), (0, 
+                xi.F)(), Si(e => t.getScopedSettingsStream(e)), (0, xi.F)(ls), ji(1)), this._stylingConfigStream = this._stylingConfigInputStream.pipe((0, 
+                xi.F)(rh), ji(1)), this._overlayStream = fi([ this._interactionModeStream, this.getCurrentSettingsStream(), this._rawLayoutStream, this.getControlsAreHiddenStream(), this.getStylingConfigurationStream(), this.getCurrentLayoutAnchorFlagsStream() ]).pipe((0, 
+                eo.T)(([t, e, i, n, r, o]) => ({
+                    controlsAreHidden: n,
+                    interactionMode: t,
+                    settings: e,
+                    stylingConfig: r,
+                    layout: i,
+                    layoutAnchorFlags: o
+                })), ji(1));
+                const n = this._currentSettingStream.pipe((0, eo.T)(t => t.style.opacityMultiplier), (0, 
+                xi.F)()), r = this._stylingConfigStream.pipe((0, eo.T)(t => t.controls.opacityMultiplier), (0, 
+                xi.F)());
+                this._opacityMultiplierStream = fi([ n, r ]).pipe((0, eo.T)(([t, e]) => {
+                    const {acceptedRange: {minimum: i, maximum: n}, animationEnergy: r} = e;
+                    return {
+                        value: mo(t, i, n),
+                        energy: r
+                    };
+                }), (0, xi.F)(uh), ji(1)), this._controlSettingsStream = this._currentSettingStream.pipe((0, 
+                eo.T)(t => t.controls), (0, xi.F)(os)), this._containersStylingConfigStream = this._stylingConfigStream.pipe((0, 
+                eo.T)(t => t.containers), (0, xi.F)(nh)), this._systemColorPaletteOverrideStream = this._stylingConfigStream.pipe((0, 
+                eo.T)(t => t.colorPalette), (0, xi.F)(Ya)), this._styleVariantStream = this._stylingConfigStream.pipe((0, 
+                eo.T)(t => t.styleVariant), (0, xi.F)(), ji(1)), this._layoutColorPaletteStream = fi([ this.getLayoutStream(), this.getStyleVariantStream() ]).pipe((0, 
+                eo.T)(([t, e]) => {
+                    var i;
+                    const n = null === (i = t.layoutFile.styles) || void 0 === i ? void 0 : i.colors;
+                    return n ? lh(n, e) : {};
+                }), (0, xi.F)(Ya), (0, eo.T)(t => Object.fromEntries(Object.entries(t).map(([t, e]) => [ t, this._layoutColorPaletteColorMemo.convert(e) ]))), ji(1)), 
+                this._colorPaletteStream = fi([ this._systemColorPaletteOverrideStream, this._layoutColorPaletteStream ]).pipe((0, 
+                eo.T)(([t, e]) => Object.assign({
+                    system_contentPrimary: this._stringToColorMemo.convert(t.system_contentPrimary),
+                    system_contentSecondary: this._stringToColorMemo.convert(t.system_contentSecondary),
+                    system_contrastPrimary: this._stringToColorMemo.convert(t.system_contrastPrimary),
+                    system_contrastSecondary: this._stringToColorMemo.convert(t.system_contrastSecondary),

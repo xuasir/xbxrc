@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-12",
+  "method": "官方 CDN 原图和尺寸参数响应的本地字节/像素核验",
+  "samples": [
+    {
+      "file": "xbxrc-cloud-cover-0.bin",
+      "bytes": 1118479,
+      "width": 2160,
+      "height": 2160
+    },
+    {
+      "file": "xbxrc-cloud-cover-1.bin",
+      "bytes": 7623,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "file": "xbxrc-cloud-cover-2.bin",
+      "bytes": 51475,
+      "width": 384,
+      "height": 384
+    }
+  ]
+}

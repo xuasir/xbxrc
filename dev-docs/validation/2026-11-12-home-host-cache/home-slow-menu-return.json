@@ -1,0 +1,5425 @@
+{
+  "before": {
+    "counters": {
+      "auth.getState": 3,
+      "config.get": 3,
+      "data.getHostsSnapshot": 1,
+      "data.getUserProfile": 1,
+      "data.primeXcloudTitles": 1,
+      "host.http": 1
+    },
+    "current": {
+      "busy": [],
+      "candidates": 5,
+      "cards": 0,
+      "catalogMetrics": {
+        "duplicateContent": 0,
+        "patches": 0,
+        "resyncs": 0,
+        "snapshots": 0,
+        "submissions": 0
+      },
+      "catalogSubscribers": 0,
+      "frameP95Ms": 9.19999999999709,
+      "home": {
+        "deviceCards": 2,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": false,
+        "scrollTop": 0,
+        "status": "可用: 待机中",
+        "title": "书房 Xbox",
+        "unavailable": ""
+      },
+      "hostFixture": {
+        "account": "fixture-account-a",
+        "cacheScopes": [
+          "fixture-account-a"
+        ],
+        "clockOffset": 0,
+        "delay": 3000,
+        "failure": false,
+        "inflightScopes": [],
+        "networkRequests": 1
+      },
+      "images": 3,
+      "longTasks": [
+        {
+          "duration": 50,
+          "start": 34393.799999952316
+        }
+      ],
+      "marked": [
+        "xhome.host.fixture-server-s"
+      ],
+      "native": "xhome.host.fixture-server-s",
+      "navigationP95Ms": 0,
+      "pending": [],
+      "route": "#/xhome",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "windows": []
+    },
+    "instanceId": "ee4f2ac4-7805-4dad-aa4f-48c7e6942706",
+    "keys": [],
+    "lifecycleListeners": [
+      "xbxrc:auth:session-ready",
+      "tauri://focus",
+      "tauri://blur",
+      "xbxrc:data:hosts-changed",
+      "xbxrc:auth:session-ready",
+      "xbxrc:auth:state-changed",
+      "xbxrc:auth:session-ready"
+    ],
+    "navigationSamples": [],
+    "size": 500,
+    "timeline": [
+      {
+        "atMs": 80,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 0,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 93,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": -3.0999998569488554,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 119,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [
+          "config.get",
+          "auth.getState"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 155,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 158,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 160,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getUserProfile",
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 175,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 175,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 183,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 256,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 262,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 266,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "xhome.primary",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56325,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.10000000000582,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56588,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56613,
+        "busy": [],
+        "candidates": 7,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 4,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56640,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56878,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      }
+    ]
+  },
+  "loading": {
+    "evidence": {
+      "counters": {
+        "auth.getState": 3,
+        "config.get": 3,
+        "data.getHostsSnapshot": 1,
+        "data.getUserProfile": 1,
+        "data.primeXcloudTitles": 1,
+        "data.refreshHosts": 1,
+        "host.http": 2
+      },
+      "current": {
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      "instanceId": "ee4f2ac4-7805-4dad-aa4f-48c7e6942706",
+      "keys": [],
+      "lifecycleListeners": [
+        "xbxrc:auth:session-ready",
+        "tauri://focus",
+        "tauri://blur",
+        "xbxrc:data:hosts-changed",
+        "xbxrc:auth:session-ready",
+        "xbxrc:auth:state-changed",
+        "xbxrc:auth:session-ready"
+      ],
+      "navigationSamples": [],
+      "size": 500,
+      "timeline": [
+        {
+          "atMs": 80,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 0,
+          "home": {
+            "deviceCards": 0,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [],
+          "native": "",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 93,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": -3.0999998569488554,
+          "home": {
+            "deviceCards": 0,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [],
+          "native": "",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 119,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [],
+          "native": "",
+          "navigationP95Ms": 0,
+          "pending": [
+            "config.get",
+            "auth.getState"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 155,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "",
+          "navigationP95Ms": 0,
+          "pending": [
+            "auth.getState",
+            "data.getUserProfile",
+            "data.getHostsSnapshot"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 158,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "top-nav.brand",
+          "navigationP95Ms": 0,
+          "pending": [
+            "auth.getState",
+            "data.getUserProfile",
+            "data.getHostsSnapshot"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 160,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "top-nav.brand",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.getUserProfile",
+            "data.getHostsSnapshot",
+            "data.primeXcloudTitles"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 175,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 0
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "top-nav.brand",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.getHostsSnapshot",
+            "data.primeXcloudTitles"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 175,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [
+              "fixture-account-a"
+            ],
+            "networkRequests": 1
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "top-nav.brand",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.getHostsSnapshot",
+            "data.primeXcloudTitles"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 183,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 17.60000000000001,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [
+              "fixture-account-a"
+            ],
+            "networkRequests": 1
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "top-nav.brand",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.getHostsSnapshot"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 256,
+          "busy": [],
+          "candidates": 0,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.299999999999995,
+          "home": {
+            "deviceCards": 0,
+            "loading": true,
+            "primaryBusy": "",
+            "primaryDisabled": null,
+            "scrollTop": 0,
+            "status": "",
+            "title": "",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 0,
+          "longTasks": [],
+          "marked": [
+            "top-nav.brand"
+          ],
+          "native": "top-nav.brand",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.getHostsSnapshot"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 262,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.299999999999995,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 已开机",
+            "title": "客厅 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [],
+          "marked": [
+            "xhome.primary"
+          ],
+          "native": "",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 266,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.299999999999995,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 已开机",
+            "title": "客厅 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [],
+          "marked": [
+            "xhome.primary"
+          ],
+          "native": "xhome.primary",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 56325,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.10000000000582,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 已开机",
+            "title": "客厅 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            }
+          ],
+          "marked": [
+            "xhome.primary"
+          ],
+          "native": "",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 56588,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.19999999999709,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 已开机",
+            "title": "客厅 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            }
+          ],
+          "marked": [
+            "xhome.host.fixture-server-s"
+          ],
+          "native": "xhome.host.fixture-server-s",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 56613,
+          "busy": [],
+          "candidates": 7,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.19999999999709,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 已开机",
+            "title": "客厅 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 4,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            }
+          ],
+          "marked": [
+            "xhome.host.fixture-server-s"
+          ],
+          "native": "xhome.host.fixture-server-s",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 56640,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.19999999999709,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 待机中",
+            "title": "书房 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 80,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            }
+          ],
+          "marked": [
+            "xhome.host.fixture-server-s"
+          ],
+          "native": "xhome.host.fixture-server-s",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 56878,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.19999999999709,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 待机中",
+            "title": "书房 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 3000,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            }
+          ],
+          "marked": [
+            "xhome.host.fixture-server-s"
+          ],
+          "native": "xhome.host.fixture-server-s",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 57271,
+          "busy": [],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.200000000004366,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 待机中",
+            "title": "书房 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 3000,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            },
+            {
+              "duration": 69,
+              "start": 57168
+            }
+          ],
+          "marked": [
+            "xhome.refresh"
+          ],
+          "native": "xhome.refresh",
+          "navigationP95Ms": 0,
+          "pending": [],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 57278,
+          "busy": [
+            "xhome.refresh"
+          ],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.200000000004366,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 待机中",
+            "title": "书房 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 3000,
+            "failure": false,
+            "inflightScopes": [],
+            "networkRequests": 1
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            },
+            {
+              "duration": 69,
+              "start": 57168
+            }
+          ],
+          "marked": [
+            "xhome.refresh"
+          ],
+          "native": "xhome.refresh",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.refreshHosts"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        },
+        {
+          "atMs": 57297,
+          "busy": [
+            "xhome.refresh"
+          ],
+          "candidates": 5,
+          "cards": 0,
+          "catalogMetrics": {
+            "duplicateContent": 0,
+            "patches": 0,
+            "resyncs": 0,
+            "snapshots": 0,
+            "submissions": 0
+          },
+          "catalogSubscribers": 0,
+          "frameP95Ms": 9.200000000004366,
+          "home": {
+            "deviceCards": 2,
+            "loading": false,
+            "primaryBusy": "",
+            "primaryDisabled": false,
+            "scrollTop": 0,
+            "status": "可用: 待机中",
+            "title": "书房 Xbox",
+            "unavailable": ""
+          },
+          "hostFixture": {
+            "account": "fixture-account-a",
+            "cacheScopes": [
+              "fixture-account-a"
+            ],
+            "clockOffset": 0,
+            "delay": 3000,
+            "failure": false,
+            "inflightScopes": [
+              "fixture-account-a"
+            ],
+            "networkRequests": 2
+          },
+          "images": 3,
+          "longTasks": [
+            {
+              "duration": 50,
+              "start": 34393.799999952316
+            },
+            {
+              "duration": 69,
+              "start": 57168
+            }
+          ],
+          "marked": [
+            "xhome.refresh"
+          ],
+          "native": "xhome.refresh",
+          "navigationP95Ms": 0,
+          "pending": [
+            "data.refreshHosts"
+          ],
+          "route": "#/xhome",
+          "viewport": {
+            "height": 720,
+            "width": 1280
+          },
+          "windows": []
+        }
+      ]
+    },
+    "primaryBusy": null,
+    "primaryDisabled": false,
+    "refreshBusy": "true"
+  },
+  "inactive": {
+    "counters": {
+      "app.getVersion": 1,
+      "auth.getState": 4,
+      "config.get": 3,
+      "config.getGroups": 1,
+      "data.getHostsSnapshot": 1,
+      "data.getUserProfile": 1,
+      "data.primeXcloudTitles": 1,
+      "data.refreshHosts": 1,
+      "host.http": 2,
+      "updater.getChannel": 1
+    },
+    "current": {
+      "busy": [],
+      "candidates": 14,
+      "cards": 0,
+      "catalogMetrics": {
+        "duplicateContent": 0,
+        "patches": 0,
+        "resyncs": 0,
+        "snapshots": 0,
+        "submissions": 0
+      },
+      "catalogSubscribers": 0,
+      "frameP95Ms": 9.200000000004366,
+      "home": {
+        "deviceCards": 0,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": null,
+        "scrollTop": 0,
+        "status": "",
+        "title": "",
+        "unavailable": ""
+      },
+      "hostFixture": {
+        "account": "fixture-account-a",
+        "cacheScopes": [
+          "fixture-account-a"
+        ],
+        "clockOffset": 0,
+        "delay": 3000,
+        "failure": false,
+        "inflightScopes": [
+          "fixture-account-a"
+        ],
+        "networkRequests": 2
+      },
+      "images": 0,
+      "longTasks": [
+        {
+          "duration": 50,
+          "start": 34393.799999952316
+        },
+        {
+          "duration": 69,
+          "start": 57168
+        }
+      ],
+      "marked": [
+        "top-nav.setting"
+      ],
+      "native": "top-nav.setting",
+      "navigationP95Ms": 0,
+      "pending": [
+        "data.refreshHosts"
+      ],
+      "route": "#/setting",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "windows": []
+    },
+    "instanceId": "ee4f2ac4-7805-4dad-aa4f-48c7e6942706",
+    "keys": [],
+    "lifecycleListeners": [
+      "xbxrc:auth:session-ready",
+      "tauri://focus",
+      "tauri://blur",
+      "xbxrc:data:hosts-changed",
+      "xbxrc:auth:session-ready",
+      "xbxrc:auth:state-changed",
+      "xbxrc:auth:session-ready",
+      "xbxrc:auth:state-changed",
+      "xbxrc:auth:session-ready",
+      "updater://progress"
+    ],
+    "navigationSamples": [],
+    "size": 500,
+    "timeline": [
+      {
+        "atMs": 80,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 0,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 93,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": -3.0999998569488554,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 119,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [
+          "config.get",
+          "auth.getState"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 155,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 158,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 160,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getUserProfile",
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 175,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 175,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 183,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 256,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 262,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 266,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "xhome.primary",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56325,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.10000000000582,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56588,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56613,
+        "busy": [],
+        "candidates": 7,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 4,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56640,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56878,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57271,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57278,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57297,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57607,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "auth.getState"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57637,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57697,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 4,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "config.getGroups"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57712,
+        "busy": [],
+        "candidates": 4,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "config.getGroups"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57723,
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "candidates": 11,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "app.getVersion",
+          "updater.getChannel"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57745,
+        "busy": [],
+        "candidates": 14,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      }
+    ]
+  },
+  "returned": {
+    "counters": {
+      "app.getVersion": 1,
+      "auth.getState": 5,
+      "config.get": 3,
+      "config.getGroups": 1,
+      "data.getHostsSnapshot": 1,
+      "data.getUserProfile": 1,
+      "data.primeXcloudTitles": 1,
+      "data.refreshHosts": 1,
+      "host.http": 2,
+      "updater.getChannel": 1
+    },
+    "current": {
+      "busy": [
+        "xhome.refresh"
+      ],
+      "candidates": 5,
+      "cards": 0,
+      "catalogMetrics": {
+        "duplicateContent": 0,
+        "patches": 0,
+        "resyncs": 0,
+        "snapshots": 0,
+        "submissions": 0
+      },
+      "catalogSubscribers": 0,
+      "frameP95Ms": 9.200000000004366,
+      "home": {
+        "deviceCards": 2,
+        "loading": false,
+        "primaryBusy": "",
+        "primaryDisabled": false,
+        "scrollTop": 0,
+        "status": "可用: 待机中",
+        "title": "书房 Xbox",
+        "unavailable": ""
+      },
+      "hostFixture": {
+        "account": "fixture-account-a",
+        "cacheScopes": [
+          "fixture-account-a"
+        ],
+        "clockOffset": 0,
+        "delay": 3000,
+        "failure": false,
+        "inflightScopes": [
+          "fixture-account-a"
+        ],
+        "networkRequests": 2
+      },
+      "images": 3,
+      "longTasks": [
+        {
+          "duration": 50,
+          "start": 34393.799999952316
+        },
+        {
+          "duration": 69,
+          "start": 57168
+        }
+      ],
+      "marked": [
+        "top-nav.xhome"
+      ],
+      "native": "top-nav.xhome",
+      "navigationP95Ms": 0,
+      "pending": [
+        "data.refreshHosts"
+      ],
+      "route": "#/xhome",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "windows": []
+    },
+    "instanceId": "ee4f2ac4-7805-4dad-aa4f-48c7e6942706",
+    "keys": [],
+    "lifecycleListeners": [
+      "xbxrc:auth:session-ready",
+      "tauri://focus",
+      "tauri://blur",
+      "xbxrc:data:hosts-changed",
+      "xbxrc:auth:session-ready",
+      "xbxrc:auth:state-changed",
+      "xbxrc:auth:session-ready",
+      "xbxrc:auth:state-changed",
+      "xbxrc:auth:session-ready",
+      "updater://progress"
+    ],
+    "navigationSamples": [],
+    "size": 500,
+    "timeline": [
+      {
+        "atMs": 80,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 0,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 93,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": -3.0999998569488554,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 119,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [
+          "config.get",
+          "auth.getState"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 155,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 158,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "auth.getState",
+          "data.getUserProfile",
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 160,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getUserProfile",
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 175,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 0
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 175,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot",
+          "data.primeXcloudTitles"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 183,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 17.60000000000001,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 256,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 0,
+          "loading": true,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 0,
+        "longTasks": [],
+        "marked": [
+          "top-nav.brand"
+        ],
+        "native": "top-nav.brand",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.getHostsSnapshot"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 262,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 266,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.299999999999995,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "xhome.primary",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56325,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.10000000000582,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.primary"
+        ],
+        "native": "",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56588,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56613,
+        "busy": [],
+        "candidates": 7,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 已开机",
+          "title": "客厅 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 4,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56640,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 80,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 56878,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.19999999999709,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          }
+        ],
+        "marked": [
+          "xhome.host.fixture-server-s"
+        ],
+        "native": "xhome.host.fixture-server-s",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57271,
+        "busy": [],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57278,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [],
+          "networkRequests": 1
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57297,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "xhome.refresh"
+        ],
+        "native": "xhome.refresh",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57607,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "auth.getState"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57637,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57697,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 4,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "config.getGroups"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57712,
+        "busy": [],
+        "candidates": 4,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "config.getGroups"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57723,
+        "busy": [
+          "setting.content.general.inlineSelect.setting.update.channel.option.0",
+          "setting.content.general.inlineSelect.setting.update.channel.option.1",
+          "setting.update.primary"
+        ],
+        "candidates": 11,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "app.getVersion",
+          "updater.getChannel"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57745,
+        "busy": [],
+        "candidates": 14,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.setting"
+        ],
+        "native": "top-nav.setting",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57895,
+        "busy": [],
+        "candidates": 14,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.xhome"
+        ],
+        "native": "top-nav.xhome",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57903,
+        "busy": [],
+        "candidates": 0,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 0,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": null,
+          "scrollTop": 0,
+          "status": "",
+          "title": "",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 0,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.xhome"
+        ],
+        "native": "top-nav.xhome",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts",
+          "auth.getState"
+        ],
+        "route": "#/setting",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      },
+      {
+        "atMs": 57924,
+        "busy": [
+          "xhome.refresh"
+        ],
+        "candidates": 5,
+        "cards": 0,
+        "catalogMetrics": {
+          "duplicateContent": 0,
+          "patches": 0,
+          "resyncs": 0,
+          "snapshots": 0,
+          "submissions": 0
+        },
+        "catalogSubscribers": 0,
+        "frameP95Ms": 9.200000000004366,
+        "home": {
+          "deviceCards": 2,
+          "loading": false,
+          "primaryBusy": "",
+          "primaryDisabled": false,
+          "scrollTop": 0,
+          "status": "可用: 待机中",
+          "title": "书房 Xbox",
+          "unavailable": ""
+        },
+        "hostFixture": {
+          "account": "fixture-account-a",
+          "cacheScopes": [
+            "fixture-account-a"
+          ],
+          "clockOffset": 0,
+          "delay": 3000,
+          "failure": false,
+          "inflightScopes": [
+            "fixture-account-a"
+          ],
+          "networkRequests": 2
+        },
+        "images": 3,
+        "longTasks": [
+          {
+            "duration": 50,
+            "start": 34393.799999952316
+          },
+          {
+            "duration": 69,
+            "start": 57168
+          }
+        ],
+        "marked": [
+          "top-nav.xhome"
+        ],
+        "native": "top-nav.xhome",
+        "navigationP95Ms": 0,
+        "pending": [
+          "data.refreshHosts"
+        ],
+        "route": "#/xhome",
+        "viewport": {
+          "height": 720,
+          "width": 1280
+        },
+        "windows": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "src/pages/XCloud.vue": "f08548bac4e11ec8aaff34d61241ec29a735f242821836fe66d59ceeaade71c1",
+  "src-tauri/src/mods/data/services/xcloud_service.rs": "d92bf0fe827c63bbc42b6b5db9432aa9f9883a60e517f281187ea76e26535594",
+  "src/pages/xcloud/catalog-store.ts": "a580fae8d3c1fd24b2a92f9d5b8d0ba7a23e374f42f00f140dc5883ed52200b6",
+  "src/pages/xcloud/catalog-index.ts": "9b00e4a9d22f5da5d35929be2f2f01fb104f9a8350c876c16006308a6fbe23d2"
+}

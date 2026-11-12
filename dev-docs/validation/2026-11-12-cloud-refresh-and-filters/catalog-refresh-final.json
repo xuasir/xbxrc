@@ -1,0 +1,816 @@
+{
+  "current": {
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "category": {
+      "left": 660,
+      "top": 88.5390625,
+      "right": 760,
+      "bottom": 124.5390625,
+      "width": 100
+    },
+    "sort": {
+      "left": 768,
+      "top": 88.5390625,
+      "right": 855,
+      "bottom": 124.5390625,
+      "width": 87
+    },
+    "search": {
+      "left": 867,
+      "top": 85.5390625,
+      "right": 1192,
+      "bottom": 127.5390625,
+      "width": 325
+    },
+    "refresh": {
+      "left": 1204,
+      "top": 88.5390625,
+      "right": 1240,
+      "bottom": 124.5390625,
+      "width": 36
+    },
+    "refreshBusy": null,
+    "categoryRail": {
+      "left": 116,
+      "right": 1248,
+      "scrollLeft": 0,
+      "clientWidth": 1132,
+      "scrollWidth": 1132,
+      "rows": [
+        145
+      ],
+      "buttons": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "left": 124,
+          "top": 145.078125,
+          "right": 202,
+          "bottom": 177.078125,
+          "width": 78
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "left": 210,
+          "top": 145.078125,
+          "right": 262,
+          "bottom": 177.078125,
+          "width": 52
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "left": 270,
+          "top": 145.078125,
+          "right": 335,
+          "bottom": 177.078125,
+          "width": 65
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "left": 343,
+          "top": 145.078125,
+          "right": 421,
+          "bottom": 177.078125,
+          "width": 78
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "left": 429,
+          "top": 145.078125,
+          "right": 507,
+          "bottom": 177.078125,
+          "width": 78
+        },
+        {
+          "id": "xcloud.jump.all",
+          "left": 515,
+          "top": 145.078125,
+          "right": 606,
+          "bottom": 177.078125,
+          "width": 91
+        }
+      ]
+    },
+    "categories": [
+      {
+        "id": "xcloud.jump.xcloud-recent",
+        "label": "最近游玩"
+      },
+      {
+        "id": "xcloud.jump.xcloud-favorites",
+        "label": "收藏"
+      },
+      {
+        "id": "xcloud.jump.xcloud-new",
+        "label": "新入库"
+      },
+      {
+        "id": "xcloud.jump.xcloud-popular",
+        "label": "热门游戏"
+      },
+      {
+        "id": "xcloud.jump.xcloud-leaving",
+        "label": "即将离库"
+      },
+      {
+        "id": "xcloud.jump.all",
+        "label": "全部云游戏"
+      }
+    ],
+    "sections": [
+      "xcloud-recent",
+      "xcloud-favorites",
+      "xcloud-new",
+      "xcloud-popular",
+      "xcloud-leaving",
+      "xcloud-all"
+    ],
+    "overflow": false,
+    "selectedCategory": "全部分类",
+    "selectedSort": "按名称"
+  },
+  "observations": [
+    {
+      "atMs": 131,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "category": null,
+      "sort": null,
+      "search": null,
+      "refresh": null,
+      "categoryRail": null,
+      "categories": [],
+      "sections": [],
+      "overflow": false
+    },
+    {
+      "atMs": 194,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "category": {
+        "left": 20,
+        "top": 140.7578125,
+        "right": 120,
+        "bottom": 176.7578125,
+        "width": 100
+      },
+      "sort": {
+        "left": 124,
+        "top": 140.7578125,
+        "right": 211,
+        "bottom": 176.7578125,
+        "width": 87
+      },
+      "search": {
+        "left": 20,
+        "top": 188.7578125,
+        "right": 322,
+        "bottom": 230.7578125,
+        "width": 302
+      },
+      "refresh": {
+        "left": 334,
+        "top": 191.7578125,
+        "right": 370,
+        "bottom": 227.7578125,
+        "width": 36
+      },
+      "refreshBusy": null,
+      "categoryRail": {
+        "left": 12,
+        "right": 378,
+        "scrollLeft": 0,
+        "clientWidth": 366,
+        "scrollWidth": 478,
+        "rows": [
+          243
+        ],
+        "buttons": [
+          {
+            "id": "xcloud.jump.xcloud-recent",
+            "left": 20,
+            "top": 242.7578125,
+            "right": 98,
+            "bottom": 274.7578125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-favorites",
+            "left": 102,
+            "top": 242.7578125,
+            "right": 154,
+            "bottom": 274.7578125,
+            "width": 52
+          },
+          {
+            "id": "xcloud.jump.xcloud-new",
+            "left": 158,
+            "top": 242.7578125,
+            "right": 223,
+            "bottom": 274.7578125,
+            "width": 65
+          },
+          {
+            "id": "xcloud.jump.xcloud-popular",
+            "left": 227,
+            "top": 242.7578125,
+            "right": 305,
+            "bottom": 274.7578125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-leaving",
+            "left": 309,
+            "top": 242.7578125,
+            "right": 387,
+            "bottom": 274.7578125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.all",
+            "left": 391,
+            "top": 242.7578125,
+            "right": 482,
+            "bottom": 274.7578125,
+            "width": 91
+          }
+        ]
+      },
+      "categories": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "label": "最近游玩"
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "label": "收藏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "label": "新入库"
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "label": "热门游戏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "label": "即将离库"
+        },
+        {
+          "id": "xcloud.jump.all",
+          "label": "全部云游戏"
+        }
+      ],
+      "sections": [
+        "xcloud-recent",
+        "xcloud-favorites",
+        "xcloud-new",
+        "xcloud-popular",
+        "xcloud-leaving",
+        "xcloud-all"
+      ],
+      "overflow": false,
+      "selectedCategory": "全部分类",
+      "selectedSort": "按名称"
+    },
+    {
+      "atMs": 355,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "category": {
+        "left": 20,
+        "top": 140.7578125,
+        "right": 120,
+        "bottom": 176.7578125,
+        "width": 100
+      },
+      "sort": {
+        "left": 124,
+        "top": 140.7578125,
+        "right": 211,
+        "bottom": 176.7578125,
+        "width": 87
+      },
+      "search": {
+        "left": 20,
+        "top": 188.7578125,
+        "right": 322,
+        "bottom": 230.7578125,
+        "width": 302
+      },
+      "refresh": {
+        "left": 334,
+        "top": 191.7578125,
+        "right": 370,
+        "bottom": 227.7578125,
+        "width": 36
+      },
+      "refreshBusy": null,
+      "categoryRail": {
+        "left": 12,
+        "right": 378,
+        "scrollLeft": 112,
+        "clientWidth": 366,
+        "scrollWidth": 478,
+        "rows": [
+          243
+        ],
+        "buttons": [
+          {
+            "id": "xcloud.jump.xcloud-recent",
+            "left": -92,
+            "top": 242.7578125,
+            "right": -14,
+            "bottom": 274.7578125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-favorites",
+            "left": -10,
+            "top": 242.7578125,
+            "right": 42,
+            "bottom": 274.7578125,
+            "width": 52
+          },
+          {
+            "id": "xcloud.jump.xcloud-new",
+            "left": 46,
+            "top": 242.7578125,
+            "right": 111,
+            "bottom": 274.7578125,
+            "width": 65
+          },
+          {
+            "id": "xcloud.jump.xcloud-popular",
+            "left": 115,
+            "top": 242.7578125,
+            "right": 193,
+            "bottom": 274.7578125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-leaving",
+            "left": 197,
+            "top": 242.7578125,
+            "right": 275,
+            "bottom": 274.7578125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.all",
+            "left": 279,
+            "top": 242.7578125,
+            "right": 370,
+            "bottom": 274.7578125,
+            "width": 91
+          }
+        ]
+      },
+      "categories": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "label": "最近游玩"
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "label": "收藏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "label": "新入库"
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "label": "热门游戏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "label": "即将离库"
+        },
+        {
+          "id": "xcloud.jump.all",
+          "label": "全部云游戏"
+        }
+      ],
+      "sections": [
+        "xcloud-recent",
+        "xcloud-favorites",
+        "xcloud-new",
+        "xcloud-popular",
+        "xcloud-leaving",
+        "xcloud-all"
+      ],
+      "overflow": false,
+      "selectedCategory": "全部分类",
+      "selectedSort": "按名称"
+    },
+    {
+      "atMs": 81969,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "category": {
+        "left": 660,
+        "top": 88.5390625,
+        "right": 760,
+        "bottom": 124.5390625,
+        "width": 100
+      },
+      "sort": {
+        "left": 768,
+        "top": 88.5390625,
+        "right": 855,
+        "bottom": 124.5390625,
+        "width": 87
+      },
+      "search": {
+        "left": 867,
+        "top": 85.5390625,
+        "right": 1192,
+        "bottom": 127.5390625,
+        "width": 325
+      },
+      "refresh": {
+        "left": 1204,
+        "top": 88.5390625,
+        "right": 1240,
+        "bottom": 124.5390625,
+        "width": 36
+      },
+      "refreshBusy": null,
+      "categoryRail": {
+        "left": 116,
+        "right": 1248,
+        "scrollLeft": 0,
+        "clientWidth": 1132,
+        "scrollWidth": 1132,
+        "rows": [
+          145
+        ],
+        "buttons": [
+          {
+            "id": "xcloud.jump.xcloud-recent",
+            "left": 124,
+            "top": 145.078125,
+            "right": 202,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-favorites",
+            "left": 210,
+            "top": 145.078125,
+            "right": 262,
+            "bottom": 177.078125,
+            "width": 52
+          },
+          {
+            "id": "xcloud.jump.xcloud-new",
+            "left": 270,
+            "top": 145.078125,
+            "right": 335,
+            "bottom": 177.078125,
+            "width": 65
+          },
+          {
+            "id": "xcloud.jump.xcloud-popular",
+            "left": 343,
+            "top": 145.078125,
+            "right": 421,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-leaving",
+            "left": 429,
+            "top": 145.078125,
+            "right": 507,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.all",
+            "left": 515,
+            "top": 145.078125,
+            "right": 606,
+            "bottom": 177.078125,
+            "width": 91
+          }
+        ]
+      },
+      "categories": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "label": "最近游玩"
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "label": "收藏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "label": "新入库"
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "label": "热门游戏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "label": "即将离库"
+        },
+        {
+          "id": "xcloud.jump.all",
+          "label": "全部云游戏"
+        }
+      ],
+      "sections": [
+        "xcloud-recent",
+        "xcloud-favorites",
+        "xcloud-new",
+        "xcloud-popular",
+        "xcloud-leaving",
+        "xcloud-all"
+      ],
+      "overflow": false,
+      "selectedCategory": "全部分类",
+      "selectedSort": "按名称"
+    },
+    {
+      "atMs": 82217,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "category": {
+        "left": 660,
+        "top": 88.5390625,
+        "right": 760,
+        "bottom": 124.5390625,
+        "width": 100
+      },
+      "sort": {
+        "left": 768,
+        "top": 88.5390625,
+        "right": 855,
+        "bottom": 124.5390625,
+        "width": 87
+      },
+      "search": {
+        "left": 867,
+        "top": 85.5390625,
+        "right": 1192,
+        "bottom": 127.5390625,
+        "width": 325
+      },
+      "refresh": {
+        "left": 1204,
+        "top": 88.5390625,
+        "right": 1240,
+        "bottom": 124.5390625,
+        "width": 36
+      },
+      "refreshBusy": "true",
+      "categoryRail": {
+        "left": 116,
+        "right": 1248,
+        "scrollLeft": 0,
+        "clientWidth": 1132,
+        "scrollWidth": 1132,
+        "rows": [
+          145
+        ],
+        "buttons": [
+          {
+            "id": "xcloud.jump.xcloud-recent",
+            "left": 124,
+            "top": 145.078125,
+            "right": 202,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-favorites",
+            "left": 210,
+            "top": 145.078125,
+            "right": 262,
+            "bottom": 177.078125,
+            "width": 52
+          },
+          {
+            "id": "xcloud.jump.xcloud-new",
+            "left": 270,
+            "top": 145.078125,
+            "right": 335,
+            "bottom": 177.078125,
+            "width": 65
+          },
+          {
+            "id": "xcloud.jump.xcloud-popular",
+            "left": 343,
+            "top": 145.078125,
+            "right": 421,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-leaving",
+            "left": 429,
+            "top": 145.078125,
+            "right": 507,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.all",
+            "left": 515,
+            "top": 145.078125,
+            "right": 606,
+            "bottom": 177.078125,
+            "width": 91
+          }
+        ]
+      },
+      "categories": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "label": "最近游玩"
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "label": "收藏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "label": "新入库"
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "label": "热门游戏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "label": "即将离库"
+        },
+        {
+          "id": "xcloud.jump.all",
+          "label": "全部云游戏"
+        }
+      ],
+      "sections": [
+        "xcloud-recent",
+        "xcloud-favorites",
+        "xcloud-new",
+        "xcloud-popular",
+        "xcloud-leaving",
+        "xcloud-all"
+      ],
+      "overflow": false,
+      "selectedCategory": "全部分类",
+      "selectedSort": "按名称"
+    },
+    {
+      "atMs": 83692,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "category": {
+        "left": 660,
+        "top": 88.5390625,
+        "right": 760,
+        "bottom": 124.5390625,
+        "width": 100
+      },
+      "sort": {
+        "left": 768,
+        "top": 88.5390625,
+        "right": 855,
+        "bottom": 124.5390625,
+        "width": 87
+      },
+      "search": {
+        "left": 867,
+        "top": 85.5390625,
+        "right": 1192,
+        "bottom": 127.5390625,
+        "width": 325
+      },
+      "refresh": {
+        "left": 1204,
+        "top": 88.5390625,
+        "right": 1240,
+        "bottom": 124.5390625,
+        "width": 36
+      },
+      "refreshBusy": null,
+      "categoryRail": {
+        "left": 116,
+        "right": 1248,
+        "scrollLeft": 0,
+        "clientWidth": 1132,
+        "scrollWidth": 1132,
+        "rows": [
+          145
+        ],
+        "buttons": [
+          {
+            "id": "xcloud.jump.xcloud-recent",
+            "left": 124,
+            "top": 145.078125,
+            "right": 202,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-favorites",
+            "left": 210,
+            "top": 145.078125,
+            "right": 262,
+            "bottom": 177.078125,
+            "width": 52
+          },
+          {
+            "id": "xcloud.jump.xcloud-new",
+            "left": 270,
+            "top": 145.078125,
+            "right": 335,
+            "bottom": 177.078125,
+            "width": 65
+          },
+          {
+            "id": "xcloud.jump.xcloud-popular",
+            "left": 343,
+            "top": 145.078125,
+            "right": 421,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.xcloud-leaving",
+            "left": 429,
+            "top": 145.078125,
+            "right": 507,
+            "bottom": 177.078125,
+            "width": 78
+          },
+          {
+            "id": "xcloud.jump.all",
+            "left": 515,
+            "top": 145.078125,
+            "right": 606,
+            "bottom": 177.078125,
+            "width": 91
+          }
+        ]
+      },
+      "categories": [
+        {
+          "id": "xcloud.jump.xcloud-recent",
+          "label": "最近游玩"
+        },
+        {
+          "id": "xcloud.jump.xcloud-favorites",
+          "label": "收藏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-new",
+          "label": "新入库"
+        },
+        {
+          "id": "xcloud.jump.xcloud-popular",
+          "label": "热门游戏"
+        },
+        {
+          "id": "xcloud.jump.xcloud-leaving",
+          "label": "即将离库"
+        },
+        {
+          "id": "xcloud.jump.all",
+          "label": "全部云游戏"
+        }
+      ],
+      "sections": [
+        "xcloud-recent",
+        "xcloud-favorites",
+        "xcloud-new",
+        "xcloud-popular",
+        "xcloud-leaving",
+        "xcloud-all"
+      ],
+      "overflow": false,
+      "selectedCategory": "全部分类",
+      "selectedSort": "按名称"
+    }
+  ]
+}
