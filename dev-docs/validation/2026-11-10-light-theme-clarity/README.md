@@ -1,5 +1,7 @@
 # 浅色透明度修复与表面提亮
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 日期：2026-11-10。任务：`2026-11-10-light-theme-clarity`。
 
 ## 原因与调整
@@ -10,20 +12,20 @@
 
 ## 实际前端验证
 
-通过 `pnpm dev --port 1430 --host 127.0.0.1` 加载已有[完整离线前端入口](../2026-11-09-gamepad-focus-action-completion/project.html)，实际运行生产 Vue App、路由、样式、焦点和主题切换，Rust RPC 使用原有内存夹具。
+通过 `pnpm dev --port 1430 --host 127.0.0.1` 加载已有[完整离线前端入口](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project.html)，实际运行生产 Vue App、路由、样式、焦点和主题切换，Rust RPC 使用原有内存夹具。
 
 - 1280×720 / 390×844 深浅色设置页：根元素 filter 为 `none`，无横向溢出。
 - 浅色主页与账户弹层：白色卡片和清晰文本，账户面板保留 `blur(24px) saturate(1.25)`。
 - 深色六项材质 token、静态环境光渐变和漂移层 filter 与任务前逐项一致。
-- 9 项浏览器检查全部通过，浏览器 error 日志 0 条。原始结果见 [browser-results.json](browser-results.json)。
+- 9 项浏览器检查全部通过，浏览器 error 日志 0 条。原始结果见 [browser-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/browser-results.json)。
 - `pnpm lint:fix`、`pnpm typecheck`、`pnpm build` 和 `git diff --check` 通过。临时浏览器标签与 1430 服务已关闭。
 
 调整前：
 
-![浅色设置页调整前](settings-before.jpg)
+[历史截图：浅色设置页调整前](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/settings-before.jpg)
 
 调整后：
 
-![浅色设置页调整后](settings-after.jpg)
+[历史截图：浅色设置页调整后](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/settings-after.jpg)
 
-其他证据：[浅色主页](home-light-wide.jpg)、[浅色账户弹层](menu-light-wide.jpg)、[浅色窄屏](settings-light-narrow.jpg)、[深色宽屏](settings-dark-wide.jpg)、[深色窄屏](settings-dark-narrow.jpg)。
+其他证据：[浅色主页](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/home-light-wide.jpg)、[浅色账户弹层](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/menu-light-wide.jpg)、[浅色窄屏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/settings-light-narrow.jpg)、[深色宽屏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/settings-dark-wide.jpg)、[深色窄屏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-light-theme-clarity/settings-dark-narrow.jpg)。

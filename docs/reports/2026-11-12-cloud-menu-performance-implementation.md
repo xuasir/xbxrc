@@ -38,7 +38,7 @@ Node 的 10,000 项模型中，旧空查询 37–43ms，新空查询约 0.01ms�
 
 菜单纵向滚动精确恢复到 95047.5px；详情截图横向精确恢复到 614.5px，纵向受焦点安全区显露调整 44px。搜索、分类、排序、patch、公开浏览、空目录、刷新与详情失败、三个操作入口、LT/RT、深链、大图及深浅/窄窗口回放通过。
 
-最终共用检查：Rust data 63 项、catalog flow 11 项、定向 Vue/导航 111 项、trace 生产预算 2 项通过；fmt、workspace check、lint:fix、typecheck、build 通过，导航 217 处、0 violations。Vue 全量 985 项通过、2 项失败，与改造前相同，分别涉及设置授权地区生效分类与串流诊断采样；[最终日志](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-home-host-cache/checks/vue-all.txt)保留原始错误。8 个核心源码 SHA-256 与浏览器验证快照一致。
+最终共用检查：Rust data 63 项、catalog flow 11 项、定向 Vue/导航 111 项、trace 生产预算 2 项通过；fmt、workspace check、lint:fix、typecheck、build 通过，导航 217 处、0 violations。Vue 全量 985 项通过、2 项失败，与改造前相同，分别涉及设置授权地区生效分类与串流诊断采样；[最终日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-home-host-cache/checks/vue-all.txt)保留原始错误。8 个核心源码 SHA-256 与浏览器验证快照一致。
 
 ## Risks / Follow-up
 

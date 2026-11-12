@@ -6,7 +6,7 @@
 - Current State：done。
 - Owner：主窗口，单窗口。
 - Last Updated：2026-11-09。
-- 执行授权：用户已回复“按这个方案推进”，本轮沿用[审计方案](../../dev-docs/validation/2026-11-09-gamepad-focus-action-audit/README.md)执行。
+- 执行授权：用户已回复“按这个方案推进”，本轮沿用[审计方案](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-audit/README.md)执行。
 - 收口：[Report](../reports/2026-11-09-gamepad-focus-action-completion.md) · [本地前端验证](../../dev-docs/validation/2026-11-09-gamepad-focus-action-completion/README.md)。
 
 ## Background

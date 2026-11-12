@@ -29,4 +29,4 @@
 - [x] 实现与定向回归；补齐编码容量上限、丢弃等级/原因成对计数、文件写失败容量记账及发布配置回滚。
 - [x] 全量验证、证据与报告。前端59文件609项测试、Rust58项测试、lint/typecheck/build、cargo fmt/check、56组供帧回放、schema v3样本及diff check通过。
 
-交付见[报告](../reports/2026-11-05-render-trace-input-hardening.md)与[本轮证据](../../dev-docs/validation/2026-11-05-render-trace-input-hardening.metrics.json)。实机启动、串流、退出码与Windows/ROG长测沿仓库约定由用户验收。
+交付见[报告](../reports/2026-11-05-render-trace-input-hardening.md)与[本轮证据](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-render-trace-input-hardening.metrics.json)。实机启动、串流、退出码与Windows/ROG长测沿仓库约定由用户验收。

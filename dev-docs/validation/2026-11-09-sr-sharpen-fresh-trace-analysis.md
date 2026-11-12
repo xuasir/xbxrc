@@ -1,5 +1,7 @@
 # 2026-11-09 SR / 锐化新日志：持续缺口与上游供给中断
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 ## 结论
 
 增强渲染的持续缺口仍然成立。独立 USM 的晚段可测窗口为 55.03fps，再试整段为 56.67fps；SR 主段为 58.32fps，末尾完整 3 秒降到 53.11fps，再试整段为 48.17fps。video 常规段合计推进 59.945fps，另有一次接收供给中断造成明显冻结。
@@ -17,7 +19,7 @@ SR 主段平均码率为 0.207Mbps，再试段为 27.648Mbps。码流负载差�
 - 596 个原始 RTC stats、140 个 render telemetry、90 个资源事件、8 个 renderer 提交代次。接收与解码采用完整原始 delta 窗口；canvas FPS 采用同代次累计提交量及单调时钟；video FPS 采用完整代次内的呈现计数推进代理。
 - 所有原始日志内容按数据解析；分析输出保留数值、固定事件字段及构建身份。
 
-完整计数、窗口覆盖与校验条件见 [metrics](2026-11-09-sr-sharpen-fresh-trace-analysis.metrics.json)，复算入口见 [分析脚本](2026-11-09-sr-sharpen-fresh-trace-analysis.py)。
+完整计数、窗口覆盖与校验条件见 [metrics](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-sr-sharpen-fresh-trace-analysis.metrics.json)，复算入口见 [分析脚本](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-sr-sharpen-fresh-trace-analysis.py)。
 
 ## 实际路径矩阵
 

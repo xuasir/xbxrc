@@ -35,9 +35,9 @@
 
 在设置页完成首次加载后的独立回放跨过了 TTL，返回直接呈现缓存并追加一次后台刷新；该结果按实际等待记录。累计请求数包含每 60 秒活动更新和失败重试，表中结果使用成对阶段增量。
 
-1280×720、540×850 深浅主题的实际页面已检查，横向溢出为 0。[浅色桌面截图](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-home-host-cache/home-desktop-light.jpg)与 [窄窗口截图](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-home-host-cache/home-narrow-dark.jpg)保留画面。
+1280×720、540×850 深浅主题的实际页面已检查，横向溢出为 0。[浅色桌面截图](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-home-host-cache/home-desktop-light.jpg)与 [窄窗口截图](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-home-host-cache/home-narrow-dark.jpg)保留画面。
 
-Rust 主机缓存 8 项、data 63 项、workspace check、fmt、lint:fix、typecheck、build 通过。主机页 Vue 新增 13 项通过；全量 985 项通过、2 项既有失败，分别涉及设置生效分类和串流 dev healthSamples；[checks](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-home-host-cache/checks)保存日志。导航 217 处、0 violations。10 个核心源码 SHA-256 与验证快照一致。
+Rust 主机缓存 8 项、data 63 项、workspace check、fmt、lint:fix、typecheck、build 通过。主机页 Vue 新增 13 项通过；全量 985 项通过、2 项既有失败，分别涉及设置生效分类和串流 dev healthSamples；[checks](https://github.com/xuasir/xbxrc/tree/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-home-host-cache/checks)保存日志。导航 217 处、0 violations。10 个核心源码 SHA-256 与验证快照一致。
 
 ## Risks / Follow-up
 

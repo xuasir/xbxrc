@@ -10,7 +10,7 @@
 
 ## Background
 
-[本次设备日志](../../dev-docs/validation/2026-11-05-render-input-fresh-trace-analysis.md)的健康 SR 段呈现计数推进182帧、有效回调144次、提交143帧；181次rAF轮询新增候选0，179次GPU像素读取新增供帧0。当前增强绘制CPU均值约0.274ms，GPU实际执行与物理present缺证。已有逐帧像素补偿与累计deadline重试使热路径拥有多套节拍和资格。
+[本次设备日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-render-input-fresh-trace-analysis.md)的健康 SR 段呈现计数推进182帧、有效回调144次、提交143帧；181次rAF轮询新增候选0，179次GPU像素读取新增供帧0。当前增强绘制CPU均值约0.274ms，GPU实际执行与物理present缺证。已有逐帧像素补偿与累计deadline重试使热路径拥有多套节拍和资格。
 
 ## Goal 与合同
 
@@ -53,6 +53,6 @@
 
 ## 新设备证据后的准入修正
 
-[新设备日志](../../dev-docs/validation/2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md)确认首段352候选中84个被固定时间槽跳过，生产回放复现运行中相位移动与交替抖动的损失。用户随后授权“优化这部分”，本次按上述更新合同直接修复局部准入规则；普通锐化/SR与主机/云游戏共用FramePacer，源资格、像素低频诊断及生命周期沿现有实现。
+[新设备日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md)确认首段352候选中84个被固定时间槽跳过，生产回放复现运行中相位移动与交替抖动的损失。用户随后授权“优化这部分”，本次按上述更新合同直接修复局部准入规则；普通锐化/SR与主机/云游戏共用FramePacer，源资格、像素低频诊断及生命周期沿现有实现。
 
 修复与[独立报告](../reports/2026-11-05-browser-frame-admission-fix.md)已完成，60文件610项测试及12组节拍/19组设备入口回放通过；SR恢复缓存重复提交同步收口。新设备的真实供给/GPU/present继续进入既有验收范围。

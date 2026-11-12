@@ -1,5 +1,7 @@
 # 云游戏 P0–P2 验证证据
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 日期：2026-11-12。实施与本轮自动验证完成。汇总见 [results.json](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/results.json)，结论见 [Report](/Users/guo.xu/Documents/code/games/xbxrc/docs/reports/2026-11-12-cloud-menu-performance-implementation.md)。
 
 ## 方法与范围
@@ -13,35 +15,35 @@
 
 | 场景 | 结果 | 原始证据 |
 | --- | --- | --- |
-| 改造前四步详情回放 | 全目录 6 次、详情 6 次、空商品 3 次 | [基线](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/route-lifecycle-before.json) |
-| 改造后 20 次目录/详情/设置往返 | 全目录 1 次、详情实例 1 个、空商品 0 次，同版本数组与索引复用 | [生命周期](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/route-lifecycle-result.json) |
-| 500 / 2,000 / 10,000 项首屏，1280×720 | 每组 24 张卡片、87 个焦点候选 | [500](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-500-start.json) · [2,000](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-2000-start.json) · [10,000](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-start.json) |
-| 10,000 项目录第 2,000 项附近及尾部 | 每组 35 张卡片、120 个候选 | [深处](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-index2000.json) · [尾部](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-tail.json) |
-| 网格连续下移 40 次 / 横栏右移 30 次 | 意图到焦点更新 P95 1.3ms / 2.9ms；30 / 34 张卡片 | [网格](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-down40.json) · [横栏](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-rail-cross-window.json) |
-| 540×850 缩放及回桌面 | 14 / 35 张卡片，57 / 120 个候选，商品锚点保留 | [窄窗](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-grid-narrow.json) · [恢复](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-grid-resized.json) |
-| 菜单往返滚动恢复 | 95047.5px → 95047.5px | [菜单恢复](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/menu-scroll-restoration.json) |
-| 详情截图与纵向滚动恢复 | 截图 614.5px → 614.5px；纵向 358.5px → 314.5px，焦点安全区显露调整 44px | [详情恢复](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-scroll-restoration.json) |
+| 改造前四步详情回放 | 全目录 6 次、详情 6 次、空商品 3 次 | [基线](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/route-lifecycle-before.json) |
+| 改造后 20 次目录/详情/设置往返 | 全目录 1 次、详情实例 1 个、空商品 0 次，同版本数组与索引复用 | [生命周期](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/route-lifecycle-result.json) |
+| 500 / 2,000 / 10,000 项首屏，1280×720 | 每组 24 张卡片、87 个焦点候选 | [500](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-500-start.json) · [2,000](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-2000-start.json) · [10,000](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-start.json) |
+| 10,000 项目录第 2,000 项附近及尾部 | 每组 35 张卡片、120 个候选 | [深处](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-index2000.json) · [尾部](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-tail.json) |
+| 网格连续下移 40 次 / 横栏右移 30 次 | 意图到焦点更新 P95 1.3ms / 2.9ms；30 / 34 张卡片 | [网格](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-10000-down40.json) · [横栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-rail-cross-window.json) |
+| 540×850 缩放及回桌面 | 14 / 35 张卡片，57 / 120 个候选，商品锚点保留 | [窄窗](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-grid-narrow.json) · [恢复](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/catalog-grid-resized.json) |
+| 菜单往返滚动恢复 | 95047.5px → 95047.5px | [菜单恢复](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/menu-scroll-restoration.json) |
+| 详情截图与纵向滚动恢复 | 截图 614.5px → 614.5px；纵向 358.5px → 314.5px，焦点安全区显露调整 44px | [详情恢复](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-scroll-restoration.json) |
 
 设置页活动目录视图订阅为 0；进程共享目录 owner 保留一个订阅。生命周期 fixture 的单商品请求使用受控响应，详情缓存命中和过期行为由 Rust 回归覆盖。
 
 10,000 项 Node 模型的旧空查询为 37–43ms，新空查询约 0.01ms；首次索引总计 61.75ms，最长时间片 6.10ms；75 项更新只归一化 75 项，耗时 5.67ms。全量事件 22,124,268 bytes，75 项 patch 165,642 bytes。见 [规模实验](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/scale-results.json)。
 
-官方 CDN 响应核验：原图 2160×2160 / 1,118,479 bytes；128×128 / 7,623 bytes；384×384 / 51,475 bytes。见 [图片尺寸](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/image-sizing.json)。
+官方 CDN 响应核验：原图 2160×2160 / 1,118,479 bytes；128×128 / 7,623 bytes；384×384 / 51,475 bytes。见 [图片尺寸](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/image-sizing.json)。
 
 ## 场景与画面
 
-浏览器已覆盖搜索和清空、分类、排序、刷新 patch、公开浏览、合法空目录、目录与详情失败、卡片主体/播放/收藏入口、LT/RT 跳栏、详情深链、截图横向滚动及大图预览。状态文件与 [browser-observations.json](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/browser-observations.json)保存各阶段观测。
+浏览器已覆盖搜索和清空、分类、排序、刷新 patch、公开浏览、合法空目录、目录与详情失败、卡片主体/播放/收藏入口、LT/RT 跳栏、详情深链、截图横向滚动及大图预览。状态文件与 [browser-observations.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/browser-observations.json)保存各阶段观测。
 
-- [浅色详情截图横栏](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshots-light.jpg)
-- [深色详情截图横栏](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshots-dark.jpg)
-- [窄窗口截图横栏](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshots-narrow-dark.jpg)
-- [大图预览](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshot-preview-dark.jpg)
+- [浅色详情截图横栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshots-light.jpg)
+- [深色详情截图横栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshots-dark.jpg)
+- [窄窗口截图横栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshots-narrow-dark.jpg)
+- [大图预览](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-implementation/detail-screenshot-preview-dark.jpg)
 
 ## 自动检查
 
-本轮追加主机页改造后的最终共用检查：Rust data 63 项、workspace check、fmt、lint:fix、typecheck、build 通过；导航 217 处、0 violations。日志位于 [主机页 checks](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-home-host-cache/checks)。本目录保留云改造阶段的 111 项 Vue/导航定向回归、11 项 catalog flow、2 项 trace 生产预算及 Rust 缓存交付回归日志。
+本轮追加主机页改造后的最终共用检查：Rust data 63 项、workspace check、fmt、lint:fix、typecheck、build 通过；导航 217 处、0 violations。日志位于 [主机页 checks](https://github.com/xuasir/xbxrc/tree/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-home-host-cache/checks)。本目录保留云改造阶段的 111 项 Vue/导航定向回归、11 项 catalog flow、2 项 trace 生产预算及 Rust 缓存交付回归日志。
 
-最终 Vue 全量 114 文件、985 项通过、2 项失败。失败与 [改造前记录](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-11-cloud-catalog-ux-implementation/checks/vue-all-final.txt)一致：`force_region_ip` 生效分类预期 nextConnection、实际 nextAuthorization；串流 dev healthSamples 预期 0、实际 27。见 [最终日志](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-12-home-host-cache/checks/vue-all.txt)。
+最终 Vue 全量 114 文件、985 项通过、2 项失败。失败与 [改造前记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-11-cloud-catalog-ux-implementation/checks/vue-all-final.txt)一致：`force_region_ip` 生效分类预期 nextConnection、实际 nextAuthorization；串流 dev healthSamples 预期 0、实际 27。见 [最终日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-home-host-cache/checks/vue-all.txt)。
 
 ## 验收边界
 

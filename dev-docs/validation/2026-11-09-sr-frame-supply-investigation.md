@@ -1,5 +1,7 @@
 # 2026-11-09 SR 持续供帧与诊断干扰续查
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 ## 当前结论
 
 已修复一项明确的诊断干扰：常规 dev trace 首次读取媒体诊断时会自动准备像素探测器；原实机记录同步 shader 准备 155ms、回调长尾 160ms。本机 WKWebView 对照复现了 149ms 准备，其中 shader 为 146ms。现在默认采集数值帧身份，像素取证通过显式选项开启。
@@ -22,7 +24,7 @@ client.snapshotMediaDiagnostics({ videoPixels: false }) // 结束像素取证并
 
 ## 受控对照
 
-完整累计值、统计口径、原始结果 SHA 和生产源码指纹见[指标](2026-11-09-sr-frame-supply-investigation.metrics.json)。所有实验使用生产 renderer 类，临时夹具留在 `/tmp/xbxrc-sr-render-probe/`，测试窗口与服务完成后关闭。
+完整累计值、统计口径、原始结果 SHA 和生产源码指纹见[指标](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-sr-frame-supply-investigation.metrics.json)。所有实验使用生产 renderer 类，临时夹具留在 `/tmp/xbxrc-sr-render-probe/`，测试窗口与服务完成后关闭。
 
 ### 文件视频与格式
 

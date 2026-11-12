@@ -1,5 +1,7 @@
 # 2026-11-10 原画、SR、锐化最新日志帧率分析
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 四个主要配置段的 canvas 提交帧率为 51.60–53.07fps，完整 3 秒最低窗口为 44.92–46.70fps；对应接收、解码与浏览器视频呈现推进接近 60fps。原画段同样存在约 7fps 的持续缺口，共用帧源交付与 WebGL/canvas 路径是优先定位范围。
 
 本次 SR 设置对应 2560×1440 → 2560×1440，`sr.mode=passthrough`、`actualSuperResolutionActive=false`。样本覆盖同尺寸 SR 设置下的直通/锐化行为；FSR 重建性能需要源尺寸小于输出尺寸的独立样本。
@@ -14,7 +16,7 @@
 - 最低 3 秒值采用完整位于对应实际配置段、renderer coverage 至少 2999ms 的窗口。同 sampleId 的接收/解码/提交比较另外配对；跨配置的边界采样按各自观测时钟归属。
 - 最后原画段提交计数的有效覆盖为 40.289 秒，关闭前尾部 212ms 留为计数覆盖边界。下表时长使用实际配置持续时间。
 
-详见 [数值与证据](2026-11-10-render-effects-latest-trace-analysis.metrics.json) 和 [复算脚本](2026-11-10-render-effects-latest-trace-analysis.py)。
+详见 [数值与证据](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-render-effects-latest-trace-analysis.metrics.json) 和 [复算脚本](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-render-effects-latest-trace-analysis.py)。
 
 ## 七个实际配置段
 

@@ -2,7 +2,7 @@
 
 2026-11-05。七项代码修复及自动验证完成：前端59文件609项测试、Rust58项测试、类型检查、生产构建与56组生产模块供帧回放全部通过。执行基于main当前工作区，基础提交为`82e1fed2c570ac7eab07270147ce7be3e1572be0`，主窗口直接完成。
 
-关联[RFC](../rfcs/2026-11-05-render-trace-input-hardening.md)。上一轮[渲染与手柄输入延迟优化](2026-11-05-render-input-latency-optimization.md)继续作为基线，其指标与源码指纹保存原采样身份；本轮结果独立保存到[验证证据](../../dev-docs/validation/2026-11-05-render-trace-input-hardening.metrics.json)。
+关联[RFC](../rfcs/2026-11-05-render-trace-input-hardening.md)。上一轮[渲染与手柄输入延迟优化](2026-11-05-render-input-latency-optimization.md)继续作为基线，其指标与源码指纹保存原采样身份；本轮结果独立保存到[验证证据](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-render-trace-input-hardening.metrics.json)。
 
 ## 七项交付
 

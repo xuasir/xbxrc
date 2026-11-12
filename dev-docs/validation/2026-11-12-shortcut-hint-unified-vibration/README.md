@@ -1,5 +1,7 @@
 # 快捷键提示精简与震动统一设置验证
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 日期：2026-11-12。快捷键子页长提示已移除；震动设置的总开关和统一强度位于手柄图正下方，固定两排居中。
 
 ## 行为验证
@@ -13,20 +15,20 @@
 
 | 检查 | 结果 | 证据 |
 | --- | --- | --- |
-| Vitest | 5 文件、45 项通过 | [输出](checks/vitest.txt) |
-| pnpm typecheck | 通过 | [输出](checks/typecheck.txt) |
-| pnpm lint:fix | 全仓通过 | [输出](checks/lint.txt) |
-| pnpm build | 通过，包含最终两排布局 | [输出](checks/build.txt) |
-| 导航覆盖 | 78 个 Vue 文件、217 处交互、0 违规 | [输出](checks/navigation.txt) |
-| git diff --check | 通过 | [输出](checks/diff.txt) |
+| Vitest | 5 文件、45 项通过 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/checks/vitest.txt) |
+| pnpm typecheck | 通过 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/checks/typecheck.txt) |
+| pnpm lint:fix | 全仓通过 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/checks/lint.txt) |
+| pnpm build | 通过，包含最终两排布局 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/checks/build.txt) |
+| 导航覆盖 | 78 个 Vue 文件、217 处交互、0 违规 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/checks/navigation.txt) |
+| git diff --check | 通过 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/checks/diff.txt) |
 
 ## 页面回放
 
-[观察结果](browser-results.json)保存统一四路、左扳机微调、开关独立和键盘确认等结果，以及 646×875、800×600、390×844、320×844 四组布局测量。四组均保持图下两排居中，横向溢出为 0；320px 英文页面的三个档位完整显示。页面控制台错误为 0。
+[观察结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/browser-results.json)保存统一四路、左扳机微调、开关独立和键盘确认等结果，以及 646×875、800×600、390×844、320×844 四组布局测量。四组均保持图下两排居中，横向溢出为 0；320px 英文页面的三个档位完整显示。页面控制台错误为 0。
 
-- [中文深色震动页](vibration-final-dark-zh.png)
-- [英文浅色 390px 震动页](vibration-narrow-light-en.png)
-- [英文浅色 320px 震动页](vibration-320-light-en.png)
-- [精简后的快捷键页](shortcuts-final-dark-zh.png)
+- [中文深色震动页](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/vibration-final-dark-zh.png)
+- [英文浅色 390px 震动页](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/vibration-narrow-light-en.png)
+- [英文浅色 320px 震动页](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/vibration-320-light-en.png)
+- [精简后的快捷键页](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-shortcut-hint-unified-vibration/shortcuts-final-dark-zh.png)
 
 独立验证入口复用既有项目与手柄夹具，仅为当前入口增加四路 actuator；[原夹具](../2026-11-11-gamepad-locked-input-and-extra-buttons/)保持原样。真实手柄震感和串流由用户按仓库约定手动验收。

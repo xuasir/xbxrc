@@ -99,7 +99,7 @@
 
 ## 本轮验证结果
 
-[验证记录](../../dev-docs/validation/2026-11-09-ui-motion-vitality/README.md)保存 21 项通过的检查和截图：
+[验证记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-motion-vitality/README.md)保存 21 项通过的检查和截图：
 
 - 五页在实际 1248px / 320px 内容宽度下均保持唯一当前页面、完整焦点环和横向排布；浅色设置页另作窄屏核对。
 - 邻近目标柔光使用 140ms 过渡，逻辑目标的 2px 外环即时出现，停止后中心偏差为 0px；连续切页回到主机页保持可操作目标。

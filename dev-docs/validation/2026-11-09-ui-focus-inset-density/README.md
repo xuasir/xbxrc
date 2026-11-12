@@ -1,5 +1,7 @@
 # 焦点裁切、滚动条与界面密度验证
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 日期：2026-11-09。任务：`2026-11-09-ui-focus-inset-density`。
 
 ## 调整与对照
@@ -17,11 +19,11 @@
 
 页面标题、控制器、资料页与弹层同时收紧间距。设置控件高度保持 44px，设置行最小高度为 52px。≤600px 继续上下分栏并隐藏悬浮提示；601px 时提示栏实际高度为 36px。圆角沿用 4 / 6 / 8 / 10px 共享尺度。
 
-![800×568 调整后主页](home-after.png)
+[历史截图：800×568 调整后主页](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-focus-inset-density/home-after.png)
 
 ## 本地前端验证
 
-使用 `pnpm dev --port 1430 --host 127.0.0.1` 启动当前项目，访问本目录 [验证入口](index.html)。入口以固定尺寸 iframe 加载生产 `/src/main.ts`、完整 App、路由及几何导航系统；Rust RPC 数据复用 [本地离线数据](../2026-11-09-gamepad-focus-action-completion/project-fixture.js)。
+使用 `pnpm dev --port 1430 --host 127.0.0.1` 启动当前项目，访问本目录 [验证入口](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-focus-inset-density/index.html)。入口以固定尺寸 iframe 加载生产 `/src/main.ts`、完整 App、路由及几何导航系统；Rust RPC 数据复用 [本地离线数据](../2026-11-09-gamepad-focus-action-completion/project-fixture.js)。
 
 | 场景 | 应用尺寸 | 主题 | 检查重点 |
 | --- | --- | --- | --- |
@@ -36,7 +38,7 @@
 
 共 12 个场景，全部采样焦点的 `clipping` 为空。各滚动容器均为 `scrollbar-width: none`，WebKit 滚动条 `display: none`、宽高 0px。设置列表通过滚轮从 `scrollTop: 0` 滚至 `295`；云游戏内容高度 1798px、可视高度 331px，窄屏横向游戏轨道同样保留原生滚动。底部状态文字为 1×1px、`clip-path: inset(50%)`。
 
-原始记录见 [browser-results.json](browser-results.json)，裁切对照见 [before.json](before.json) 与 [home-after.json](home-after.json)，源码身份与检查汇总见 [validation-summary.json](validation-summary.json)。本轮临时 1430 服务已关闭，端口监听检查为空。
+原始记录见 [browser-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-focus-inset-density/browser-results.json)，裁切对照见 [before.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-focus-inset-density/before.json) 与 [home-after.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-focus-inset-density/home-after.json)，源码身份与检查汇总见 [validation-summary.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-ui-focus-inset-density/validation-summary.json)。本轮临时 1430 服务已关闭，端口监听检查为空。
 
 ## 静态检查
 

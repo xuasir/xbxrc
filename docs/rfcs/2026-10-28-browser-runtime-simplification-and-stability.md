@@ -9,35 +9,35 @@
 - 执行交接：用户指定 Mac + 主机手动测试，并要求暂停自动运行；后续依据新日志继续分析与验收。
 - 规划基线：`02f6db40d6138787ca85a582dedf3b5028ad57ea` 加规划时工作树改动；实施起点为公共可靠性改造提交 `bec3acfb`。
 - 实施授权：用户明确“按计划实施，直到改造完成”，持续执行 P0–P5。
-- 当前策略交付：2026-10-29 用户授权的源画质保真、新帧节拍、故障域隔离、提交监督、稳定软动作与观测预算已实现；追加的标准 SR 输出和稀疏回调供给修正已完成[专项验证](../../dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.md)。全量 44 文件 / 326 项、18 项报告 fixtures、lint、类型检查及生产构建通过。[Mac/cloud 日志](../../dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.md)保留为修复前基线，新构建的帧供给、共享面板样本与完整配对/长测继续验收。
+- 当前策略交付：2026-10-29 用户授权的源画质保真、新帧节拍、故障域隔离、提交监督、稳定软动作与观测预算已实现；追加的标准 SR 输出和稀疏回调供给修正已完成[专项验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.md)。全量 44 文件 / 326 项、18 项报告 fixtures、lint、类型检查及生产构建通过。[Mac/cloud 日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.md)保留为修复前基线，新构建的帧供给、共享面板样本与完整配对/长测继续验收。
 
-- 16:47 新构建持续前台日志已完成[查验](../../dev-docs/validation/2026-10-29-browser-standard-output-fresh-trace-validation.md)：源下限、标准 SR 尺寸、正常退出和观测预算通过；同窗 received/decoded/video 约 30fps，marker/SR 提交记录约 3.6fps。用户补充实际观感明显好于3fps，[离线核验](../../dev-docs/validation/2026-10-29-sr-frame-delivery-offline-audit.md)确认正常CSS中SR canvas覆盖video，成功处理计数覆盖三种SR路径及截图；两路帧身份合批复现4/3.7fps，具体实机输入与最终合成层继续缺证，S4先补观测再决定调度；采样边界、共享样本及1440p成本继续验收。
+- 16:47 新构建持续前台日志已完成[查验](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-standard-output-fresh-trace-validation.md)：源下限、标准 SR 尺寸、正常退出和观测预算通过；同窗 received/decoded/video 约 30fps，marker/SR 提交记录约 3.6fps。用户补充实际观感明显好于3fps，[离线核验](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-sr-frame-delivery-offline-audit.md)确认正常CSS中SR canvas覆盖video，成功处理计数覆盖三种SR路径及截图；两路帧身份合批复现4/3.7fps，具体实机输入与最终合成层继续缺证，S4先补观测再决定调度；采样边界、共享样本及1440p成本继续验收。
 
-- 2026-10-30 用户明确要求“这个问题太严重了分析解决”，继续执行本RFC的公共显示路径修复。[最新日志分析](../../dev-docs/validation/2026-10-30-network-render-trace-audit.md)与当前源码匹配：60fps解码、约52fps原生回调、约44fps SR提交；新native身份全部交付。此次整改保持现有媒体和桥接边界，具体合同为：auto且SR关闭、锐化/颜色中性时直接装配video；canvas实际提交相对完整同窗可用源帧率持续损失超过2%时准确归因，在video推进充分的条件下执行既有一次保真回退并验证效果；回调供给与提交分别计数，真实screen present继续标明观测边界。首次动作保留完整3s覆盖及3s持续证据，下一次动作间隔15s，增强仅一次有界试探，效果要求达到预期供给98%。提交年龄读取当前同代际renderer的数值事实，采样FPS/时间窗保留共享身份；首帧期限从实际可用源候选开始，硬错误与全局启动期限沿既有所有者处理。上传与GL提交CPU耗时分段累计，观测维持有界低频发布。代码与自动回归在当前授权范围内推进，自动实机运行继续暂停，设备最终帧率与呈现长尾由新日志验收。
+- 2026-10-30 用户明确要求“这个问题太严重了分析解决”，继续执行本RFC的公共显示路径修复。[最新日志分析](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-network-render-trace-audit.md)与当前源码匹配：60fps解码、约52fps原生回调、约44fps SR提交；新native身份全部交付。此次整改保持现有媒体和桥接边界，具体合同为：auto且SR关闭、锐化/颜色中性时直接装配video；canvas实际提交相对完整同窗可用源帧率持续损失超过2%时准确归因，在video推进充分的条件下执行既有一次保真回退并验证效果；回调供给与提交分别计数，真实screen present继续标明观测边界。首次动作保留完整3s覆盖及3s持续证据，下一次动作间隔15s，增强仅一次有界试探，效果要求达到预期供给98%。提交年龄读取当前同代际renderer的数值事实，采样FPS/时间窗保留共享身份；首帧期限从实际可用源候选开始，硬错误与全局启动期限沿既有所有者处理。上传与GL提交CPU耗时分段累计，观测维持有界低频发布。代码与自动回归在当前授权范围内推进，自动实机运行继续暂停，设备最终帧率与呈现长尾由新日志验收。
 
-- 2026-10-30 本轮[公共显示帧差修复与自动验证](../../dev-docs/validation/2026-10-30-display-deficit-fix-validation.md)完成：中性auto原生video、98%完整源预算、持续供给差有限回退及一次试探、实时同代际提交年龄、媒体首候选期限和CPU上传/提交分段计时已落地。47文件/399项全量、lint/类型/构建及4组离线回放通过；生产策略回放32个完整SR窗口全部正确归因，seq1638在完整3s窗口/持续3058ms后触发回退。真实设备fps、GPU/屏幕呈现长尾继续归属S4，自动实机运行保持暂停。
+- 2026-10-30 本轮[公共显示帧差修复与自动验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-display-deficit-fix-validation.md)完成：中性auto原生video、98%完整源预算、持续供给差有限回退及一次试探、实时同代际提交年龄、媒体首候选期限和CPU上传/提交分段计时已落地。47文件/399项全量、lint/类型/构建及4组离线回放通过；生产策略回放32个完整SR窗口全部正确归因，seq1638在完整3s窗口/持续3058ms后触发回退。真实设备fps、GPU/屏幕呈现长尾继续归属S4，自动实机运行保持暂停。
 
-- 2026-10-30 14:39[修复后新日志验收](../../dev-docs/validation/2026-10-30-display-deficit-fresh-trace-validation.md)完成，736输入构建指纹匹配：两次SR实际处理44.53/44.64fps；持续帧差回退→video改善→一次SR试探→失败回退→改善闭环成立，最终video46个完整15s窗中位59.94fps。SR上传调用14.67ms，占同步处理98.95%；实时提交年龄中位7ms、媒体前首帧期限及正常退出通过。全媒体丢失0.03872%、RTT中位11ms、1次0.212s freeze。S4优先继续纹理导入成本和保持SR效果的60fps目标、GPU/实际呈现长尾与平台/soak验收。
+- 2026-10-30 14:39[修复后新日志验收](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-display-deficit-fresh-trace-validation.md)完成，736输入构建指纹匹配：两次SR实际处理44.53/44.64fps；持续帧差回退→video改善→一次SR试探→失败回退→改善闭环成立，最终video46个完整15s窗中位59.94fps。SR上传调用14.67ms，占同步处理98.95%；实时提交年龄中位7ms、媒体前首帧期限及正常退出通过。全媒体丢失0.03872%、RTT中位11ms、1次0.212s freeze。S4优先继续纹理导入成本和保持SR效果的60fps目标、GPU/实际呈现长尾与平台/soak验收。
 
 - 2026-10-30 用户要求“继续下一步优化”，授权沿现有renderer落实视频纹理导入修正。公开WebKit `WebGLRenderingContextBase.cpp::texImageSource(HTMLVideoElement&)` 将GPU拷贝尝试限定到TexImage2D、level0、RGB/RGBA、UNSIGNED_BYTE及完整源矩形；当前普通WebGL/SR稳态TexSubImage2D进入软件上传分支。本轮保持两个renderer、源/输出尺寸、颜色/翻转、帧身份、截止时间和回退主线，将video逐新帧更新统一使用现有纹理对象的6参数TexImage2D，首次/尺寸变化错误检查继续有界执行，记录videoUploadMethod用于新日志核验。验证覆盖无重复导入、源尺寸变化、单双pass采样、截图、context恢复与关闭，沿已有供给/偏移/冗余操作回放确认计数和资源；WebKit GPU尝试依据公开源码，实际GPU命中与上传耗时下降由新构建设备日志验收。自动实机操作保持暂停。
 
-- 2026-10-30 [视频纹理上传优化](../../dev-docs/validation/2026-10-30-video-texture-import-validation.md)代码与自动验证完成：普通WebGL/SR新帧均通过TexImage2D(video)导入，保留原RGBA/RGB、翻转与纹理对象；五组生产API回放的WebKit快速尝试条件覆盖变为61/61，原供给/48帧偏移/冗余工作回放通过。48文件/413项及lint/类型/构建通过，videoUploadMethod资源证据已接入。S4继续同机实际GPU命中、上传耗时与保留SR效果的60fps、像素/截图、Windows/ROG及呈现长尾验收。
+- 2026-10-30 [视频纹理上传优化](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-video-texture-import-validation.md)代码与自动验证完成：普通WebGL/SR新帧均通过TexImage2D(video)导入，保留原RGBA/RGB、翻转与纹理对象；五组生产API回放的WebKit快速尝试条件覆盖变为61/61，原供给/48帧偏移/冗余工作回放通过。48文件/413项及lint/类型/构建通过，videoUploadMethod资源证据已接入。S4继续同机实际GPU命中、上传耗时与保留SR效果的60fps、像素/截图、Windows/ROG及呈现长尾验收。
 
-- 2026-10-30 15:26[纹理导入优化后新日志](../../dev-docs/validation/2026-10-30-video-texture-import-fresh-trace-validation.md)验收完成，736源码输入匹配、SR记录TexImage2D：551次后续处理上传均值14.665→0.436ms（下降97.03%）、总同步耗时14.821→0.465ms。剔除前后台混合影响，SR完整3秒窗输出47.41/52.26fps；首段即时300候选→280提交，试探157→157，回退/一次试探/再回退改善闭环维持；最终video冻结后27个完整15秒窗中位59.91fps。共享帧源持续约6100帧native抵扣余额、5317次rAF观察接受0；四组生产模块离线复现确认60fps供给在6120帧余额下补帧0、仅提交45/50fps，下一步优先抵扣有效窗口及本地累计限帧调度。全媒体丢失0.05090%、RTT中位14ms/P9564ms；前台两次freeze共1.319s，含约1秒收包观测停顿和63帧丢弃。GPU实际命中/零拷贝、浏览器内部恢复闭环和真实呈现长尾继续缺证，保持SR效果60fps与平台/soak仍归属S4；自动实机操作保持暂停。
+- 2026-10-30 15:26[纹理导入优化后新日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-video-texture-import-fresh-trace-validation.md)验收完成，736源码输入匹配、SR记录TexImage2D：551次后续处理上传均值14.665→0.436ms（下降97.03%）、总同步耗时14.821→0.465ms。剔除前后台混合影响，SR完整3秒窗输出47.41/52.26fps；首段即时300候选→280提交，试探157→157，回退/一次试探/再回退改善闭环维持；最终video冻结后27个完整15秒窗中位59.91fps。共享帧源持续约6100帧native抵扣余额、5317次rAF观察接受0；四组生产模块离线复现确认60fps供给在6120帧余额下补帧0、仅提交45/50fps，下一步优先抵扣有效窗口及本地累计限帧调度。全媒体丢失0.05090%、RTT中位14ms/P9564ms；前台两次freeze共1.319s，含约1秒收包观测停顿和63帧丢弃。GPU实际命中/零拷贝、浏览器内部恢复闭环和真实呈现长尾继续缺证，保持SR效果60fps与平台/soak仍归属S4；自动实机操作保持暂停。
 
 - 2026-10-30 用户要求“继续下一步”，继续执行共享帧源与现有FramePacer修复。native抵扣资格只覆盖1秒内仍有播放计数进展的观察窗口；抵扣余额连续未清算超过1秒时重建资格，短时250–800ms晚到批次继续去重，后台计数停滞期间停止增加抵扣余额。清理/过期次数和余额通过现有低频资源与有界身份环取证。FramePacer保留累计deadline及用户上限，增加最多1ms的截止点容差，覆盖毫秒取整/轻微回调相位抖动，验证高速源仍受累计预算限制。实施前复现失败、实施后通过两种renderer的后台计数分叉、领先/落后计数、批次/顺序、截图/暂停/context与限帧回归；原供给与偏移回放继续作为准入。1秒后重新对齐的首批计数存在同帧推断边界，按latest-only交付一次并用实机像素/呈现证据评估；网络与媒体运行时边界沿当前主线，自动实机操作保持暂停。
 
-- 2026-10-30 [帧抵扣窗口与毫秒节拍修正](../../dev-docs/validation/2026-10-30-frame-credit-window-and-pacing-validation.md)代码与自动验证完成：1秒native资格/播放计数进展窗口、过期余额和暂停恢复语义，以及现有FramePacer最多1ms累计截止点容差已落实。修复前8项失败/83通过，修复后定向91项和全量48文件423项通过，lint/类型/构建通过。两种renderer各五组前后对照共20组：后台计数分叉45/50→60fps，毫秒取整40→60fps，前台计数起点跳变在1秒窗口后恢复60fps；用户30fps上限维持30fps。原9组供给/3组偏移/4组绘制回放通过，既有低频资源及8条身份环已透传余额/过期事实。首批重对齐的同帧推断、实机补帧/像素/保持SR的60fps、网络冻结、GPU/零拷贝、呈现长尾与平台/soak继续归属S4，自动实机操作保持暂停。
+- 2026-10-30 [帧抵扣窗口与毫秒节拍修正](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-frame-credit-window-and-pacing-validation.md)代码与自动验证完成：1秒native资格/播放计数进展窗口、过期余额和暂停恢复语义，以及现有FramePacer最多1ms累计截止点容差已落实。修复前8项失败/83通过，修复后定向91项和全量48文件423项通过，lint/类型/构建通过。两种renderer各五组前后对照共20组：后台计数分叉45/50→60fps，毫秒取整40→60fps，前台计数起点跳变在1秒窗口后恢复60fps；用户30fps上限维持30fps。原9组供给/3组偏移/4组绘制回放通过，既有低频资源及8条身份环已透传余额/过期事实。首批重对齐的同帧推断、实机补帧/像素/保持SR的60fps、网络冻结、GPU/零拷贝、呈现长尾与平台/soak继续归属S4，自动实机操作保持暂停。
 
-- 2026-10-30 16:09[抵扣窗口与节拍修正后新日志](../../dev-docs/validation/2026-10-30-frame-credit-window-and-pacing-fresh-trace-validation.md)验收完成，736源码输入匹配：SR候选到提交299→299/146→146，持续额外吞帧消除、上传均值0.490ms；完整3s窗仍49.14/48.60fps，同窗decode约60fps。播放计数抽样约250ms合批、rAF接受0；冻结清理14帧、后台再清理55帧，恢复余额有界。最终恢复前台4个完整15s窗video推进中位59.975fps；1次1.414s冻结有1009ms收包停顿、包恢复及关键帧decode恢复证据。下一步优先逐帧身份/回调时序，浏览器内部恢复闭环、GPU/零拷贝、真实呈现、保留SR效果60fps与平台/soak继续归属S4，自动实机操作保持暂停。
+- 2026-10-30 16:09[抵扣窗口与节拍修正后新日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-frame-credit-window-and-pacing-fresh-trace-validation.md)验收完成，736源码输入匹配：SR候选到提交299→299/146→146，持续额外吞帧消除、上传均值0.490ms；完整3s窗仍49.14/48.60fps，同窗decode约60fps。播放计数抽样约250ms合批、rAF接受0；冻结清理14帧、后台再清理55帧，恢复余额有界。最终恢复前台4个完整15s窗video推进中位59.975fps；1次1.414s冻结有1009ms收包停顿、包恢复及关键帧decode恢复证据。下一步优先逐帧身份/回调时序，浏览器内部恢复闭环、GPU/零拷贝、真实呈现、保留SR效果60fps与平台/soak继续归属S4，自动实机操作保持暂停。
 
-- 2026-10-30 [播放计数配对与回调时序](../../dev-docs/validation/2026-10-30-browser-frame-counter-pairing-validation.md)代码与自动验证完成：现有dev身份环新增原始播放质量/WebKit计数配对及采样增量，RVFC/rAF入口/时间戳间隔和主计数批次累计；备用诊断读取≤4Hz、off/production额外读取0、8条有界证据。36组生产模块回放确认逐帧计数可将45/50Hz native补满60fps，250ms合批同步输入保持45/50fps；off/dev交付与唯一图像一致、用户30fps上限保留。99项定向、48文件427项全量、lint/类型/构建及原9/4/3/20组回放通过。当前供帧保持主计数合同，实际更及时计数与可绘制图像关系、SR60fps和呈现长尾继续新日志取证，S4维持In Progress，自动实机操作保持暂停。
+- 2026-10-30 [播放计数配对与回调时序](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-browser-frame-counter-pairing-validation.md)代码与自动验证完成：现有dev身份环新增原始播放质量/WebKit计数配对及采样增量，RVFC/rAF入口/时间戳间隔和主计数批次累计；备用诊断读取≤4Hz、off/production额外读取0、8条有界证据。36组生产模块回放确认逐帧计数可将45/50Hz native补满60fps，250ms合批同步输入保持45/50fps；off/dev交付与唯一图像一致、用户30fps上限保留。99项定向、48文件427项全量、lint/类型/构建及原9/4/3/20组回放通过。当前供帧保持主计数合同，实际更及时计数与可绘制图像关系、SR60fps和呈现长尾继续新日志取证，S4维持In Progress，自动实机操作保持暂停。
 
-- 2026-10-30 16:52[配对新日志验收](../../dev-docs/validation/2026-10-30-browser-frame-counter-pairing-fresh-trace-validation.md)完成，736输入源码匹配：365个配对样本播放质量全部有效/WebKit有效0，主计数350次更新中348次在native、5559次rAF补帧0；稳定SR完整窗44–50fps，g1即时297→293、其余四段交付100%，同1440p上传0.477ms/总0.507ms。最终video12个完整15s窗推进59.933fps；丢失0.31870%、5次freeze共2.516s，g3突增516包丢失与媒体缓冲积压有原始锚点。提交年龄g3 max370ms，其余SR max32ms；稳定性MISSING仅sharedSamples0、内部恢复与实际呈现缺证。下一步优先rAF纹理实际推进、源尺寸切换资源准备/回调停顿取证，网络突发丢失独立跟进；S4维持In Progress，自动实机操作保持暂停。
+- 2026-10-30 16:52[配对新日志验收](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-browser-frame-counter-pairing-fresh-trace-validation.md)完成，736输入源码匹配：365个配对样本播放质量全部有效/WebKit有效0，主计数350次更新中348次在native、5559次rAF补帧0；稳定SR完整窗44–50fps，g1即时297→293、其余四段交付100%，同1440p上传0.477ms/总0.507ms。最终video12个完整15s窗推进59.933fps；丢失0.31870%、5次freeze共2.516s，g3突增516包丢失与媒体缓冲积压有原始锚点。提交年龄g3 max370ms，其余SR max32ms；稳定性MISSING仅sharedSamples0、内部恢复与实际呈现缺证。下一步优先rAF纹理实际推进、源尺寸切换资源准备/回调停顿取证，网络突发丢失独立跟进；S4维持In Progress，自动实机操作保持暂停。
 
 - 2026-10-30 用户要求“继续”，沿S4执行可绘制像素配对与renderer准备分段取证。dev惰性采集启用后，在既有共享帧源以最多2组/秒读取16×9缩略像素：有效native入口建立基线，8–50ms内、其间RVFC缺席且主计数/源尺寸保持一致的rAF进行比较；日志只保存差异数量和耗时，单次读取超过8ms或API失败即停止像素探测。前后台/尺寸/计数重置及消费者中断释放配对与离屏资源。准备、首候选、首成功处理及交接时钟随原资源快照投射；供帧与限帧继续沿既有合同。受控回放验证独立像素变化、静态画面、失效边界、诊断成本及off/dev交付一致性，实际像素推进、GPU/零拷贝和SR60fps继续由用户手动新构建日志验收。
 
-- 2026-10-30 [可绘制像素配对与renderer准备分段](../../dev-docs/validation/2026-10-30-video-pixel-pair-and-preparation-validation.md)代码与自动验证完成：dev低频16×9像素配对、8–50ms无RVFC且身份/尺寸一致资格、最多2组/秒与8ms慢读关闭，原始像素仅内部保留；资源快照投射初始化、首候选、首实时成功处理及attach/交接/旧资源释放时钟。24组生产回放确认off/dev候选/处理/唯一图像一致，运动合批50Hz输入识别像素变化、静态相等和30fps上限通过；新增10项、定向109项/全量48文件437项及lint/类型/270模块构建通过。既有9/4/3/36/20组回放通过，历史绘制基线固定到原记录commit并逐项校验SHA。737输入fingerprint为c4398f88…；设备可绘制图像提前推进、467ms源切换分段、SR60fps、GPU/真实呈现及网络恢复继续S4取证，自动实机操作保持暂停。
+- 2026-10-30 [可绘制像素配对与renderer准备分段](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-video-pixel-pair-and-preparation-validation.md)代码与自动验证完成：dev低频16×9像素配对、8–50ms无RVFC且身份/尺寸一致资格、最多2组/秒与8ms慢读关闭，原始像素仅内部保留；资源快照投射初始化、首候选、首实时成功处理及attach/交接/旧资源释放时钟。24组生产回放确认off/dev候选/处理/唯一图像一致，运动合批50Hz输入识别像素变化、静态相等和30fps上限通过；新增10项、定向109项/全量48文件437项及lint/类型/270模块构建通过。既有9/4/3/36/20组回放通过，历史绘制基线固定到原记录commit并逐项校验SHA。737输入fingerprint为c4398f88…；设备可绘制图像提前推进、467ms源切换分段、SR60fps、GPU/真实呈现及网络恢复继续S4取证，自动实机操作保持暂停。
 
 ## Background
 
@@ -254,7 +254,7 @@ browser supervision 继续持有首帧与监测时钟。用同一快照/窗口�
 - `pnpm exec vue-tsc --noEmit`：通过。
 - 使用 TypeScript AST 统计 runtime 直属可变绑定；使用当前 StatsService 源码转译/隔离执行确认 B1 调用组合。
 
-这些结果固化了规划时自动基线。当前代码交付与新增自动场景见最后一条 Execution Notes 和[代码验证记录](../../dev-docs/validation/2026-10-29-browser-policy-code-validation.md)；P5 整机稳定性继续以用户设备证据验收。
+这些结果固化了规划时自动基线。当前代码交付与新增自动场景见最后一条 Execution Notes 和[代码验证记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-code-validation.md)；P5 整机稳定性继续以用户设备证据验收。
 
 ### 实机、性能与 trace 门槛
 
@@ -326,13 +326,13 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Handoff: 按用户要求停止自动实机运行，Mac + 主机由用户稍后手动测试。Windows/ROG、云游戏、配对性能基线及2h/8h长期验收保留原有待验范围；取得新日志后继续核验F1–F12与稳定性门槛。
 
 - Date: 2026-10-29 | Status: manual-trace-analyzed-validation-pending
-- Evidence: 用户手测日志`runtime-trace-1793241116241-1.jsonl`（Mac debug / bec3acfb dirty，476.985s / 5769行）包含2次home创建成功后30s注册等待超时、1次cloud连接/首帧/正常退出。分析记录：[`Mac手动验收`](../../dev-docs/validation/2026-10-29-browser-runtime-manual-analysis.md)。home尚未进入媒体runtime；cloud资源归零、共享样本一致、重复绘制为0。
+- Evidence: 用户手测日志`runtime-trace-1793241116241-1.jsonl`（Mac debug / bec3acfb dirty，476.985s / 5769行）包含2次home创建成功后30s注册等待超时、1次cloud连接/首帧/正常退出。分析记录：[`Mac手动验收`](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-runtime-manual-analysis.md)。home尚未进入媒体runtime；cloud资源归零、共享样本一致、重复绘制为0。
 - Findings: cloud累计包损失5.00%，最后恢复前台24.7s接收28.35fps/解码16.42fps、RTT中位1259ms、jitter buffer平均等待1592ms；持续拥塞与显示/供给长尾保留阻断。P4继续收口14次recvonly评估中的同目标重复、Mac mediaTime=0导致源节拍缺证、55次显示档位和25次FPS预算变化。原稳定报告4项FAIL中3项由RPC到达乱序引起，重算后剩5次采样跨995ms的边界容差问题。
 - Handoff: 本轮仅分析日志并更新验收记录；自动实机运行保持暂停。当前样本支持部分资源/生命周期合同，P0/P4/P5及完整功能、主机媒体、平台/长测验收继续待验。
 
 - Date: 2026-10-29 | Status: render-policy-correctness-findings
 - User Focus: 用户要求以代码策略正确性、画面保真、接收→解码→呈现→实际绘制差值以及采集/告警成本为主要验收对象。网络统计作为归因上下文。
-- Evidence: 同一前台72.152s窗口接收29.92fps、解码28.37fps、SR提交14.21次/s；生产限流复算144Hz/目标60fps上界48fps。L2可将1440p源缩为1080p再放大到1440p窗口，DPR1.5场景还可输出960p；真实Mac日志3次1440p→1080p降采样。审计：[`显示策略正确性`](../../dev-docs/validation/2026-10-29-browser-render-policy-correctness-audit.md)。
+- Evidence: 同一前台72.152s窗口接收29.92fps、解码28.37fps、SR提交14.21次/s；生产限流复算144Hz/目标60fps上界48fps。L2可将1440p源缩为1080p再放大到1440p窗口，DPR1.5场景还可输出960p；真实Mac日志3次1440p→1080p降采样。审计：[`显示策略正确性`](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-render-policy-correctness-audit.md)。
 - Findings: 本轮fps字段投影与既有显式内容FPS策略存在合同冲突；SR收紧新帧/时间双门槛存在高刷新率节拍风险。video呈现事实与canvas提交/显示监督错位，临时性能预算与真实显示需求共用D，RCAS与请求码率比值耦合，高频trace和GPU查询需收敛。共享样本/资源释放证据保持有效，策略运行效果待修复。
 - Next Batch: 优先修正像素保留、实际尺寸/mode投影、内容帧率合同和累计节拍；再接入当前renderer提交监督，收敛自动画质与trace热路径，保留全部用户功能和故障回退。自动实机运行保持暂停。
 
@@ -347,12 +347,12 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Stability: 软动作要求完整3s症状覆盖与15s间隔；网络/关键帧效果等待至少3s与两次有效RTT，超过15s期限结算unknown；playback rebuild以新播放代际与本地3s证据结算。隐藏/stale失效隔离晚到完成；健康长窗关闭局部episode并让后续故障获得新预算。增强恢复采用一次试探及效果回退。
 - Resources: PlaybackService候选5s首帧期限按隐藏预算暂停，旧renderer同步暂停并统一清理timer；共享帧源/截图队列与资源代际保持有界。uniform、texture/FBO复用，GPU能力/完整性检查绑定资源变化，运行期错误检查保持周期预算；源GPU能力失败直接采用原生video。
 - Observability: 面板、诊断和trace分列五段帧率、实际源/输出、CPU提交成本、提交年龄、覆盖/限流/失败/截图计数、RTT基线/增量及requested/negotiated/observed码率。GPU时间与真实scanout标为unavailable。trace入口先过滤后构造，最多4个IPC在途与32个排队，observedAtMs提供单调观测时间；报告同时检查周期资源快照与生命周期资源事件。
-- Validation: `pnpm test`（44文件 / 297项）、`pnpm lint:fix`、`pnpm exec vue-tsc --noEmit`、`pnpm build`、报告fixtures（16项）与`git diff --check`通过。新增集成验证覆盖旧局部预算耗尽→新代际健康长窗关单→新故障预算恢复，以及健康高RTT/renderer压力下trace off/dev媒体决策一致。详细合同与命令见[代码改造验证记录](../../dev-docs/validation/2026-10-29-browser-policy-code-validation.md)。
-- Measurement: 同范围包含新增生产文件：62文件，15,126原始行 / 6,836语句 / 1,263分支；相对bec3acfb基线减少548行与203语句，分支增加126。runtime直属可变绑定74（审计129，本轮起点94）。正式[当前快照](../../dev-docs/validation/browser-runtime-optimization-current.json)包含逐文件源码SHA-256，测试与报告工具单列。
+- Validation: `pnpm test`（44文件 / 297项）、`pnpm lint:fix`、`pnpm exec vue-tsc --noEmit`、`pnpm build`、报告fixtures（16项）与`git diff --check`通过。新增集成验证覆盖旧局部预算耗尽→新代际健康长窗关单→新故障预算恢复，以及健康高RTT/renderer压力下trace off/dev媒体决策一致。详细合同与命令见[代码改造验证记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-code-validation.md)。
+- Measurement: 同范围包含新增生产文件：62文件，15,126原始行 / 6,836语句 / 1,263分支；相对bec3acfb基线减少548行与203语句，分支增加126。runtime直属可变绑定74（审计129，本轮起点94）。正式[当前快照](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/browser-runtime-optimization-current.json)包含逐文件源码SHA-256，测试与报告工具单列。
 - Handoff: 自动实机运行保持暂停；当前源码构建的Mac/home/cloud、Windows/ROG、高刷新/DPR与SR同源画质、配对性能、完整功能及2h/8h长测继续待用户设备证据。历史Mac同窗帧差与旧构建trace继续作为整改依据。任务维持In Progress，完整验收后写最终Report。
 
 - Date: 2026-10-29 | Status: fresh-build-trace-partially-validated
-- Evidence: 用户新日志`runtime-trace-1793255066737-1.jsonl`为Mac debug/dev、1次cloud串流、341.822s宿主/130.869s媒体采样；另1份44.361s空闲日志。两份构建源码摘要均为`fac1d02f956893c249f1833739e7a009222075d7337d070a2b517be0366202f8`，与当前726个源文件完全匹配。详见[新构建日志验证](../../dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.md)与[结构化数值](../../dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.metrics.json)。
+- Evidence: 用户新日志`runtime-trace-1793255066737-1.jsonl`为Mac debug/dev、1次cloud串流、341.822s宿主/130.869s媒体采样；另1份44.361s空闲日志。两份构建源码摘要均为`fac1d02f956893c249f1833739e7a009222075d7337d070a2b517be0366202f8`，与当前726个源文件完全匹配。详见[新构建日志验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.md)与[结构化数值](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.metrics.json)。
 - Passed: 基础browser behavior与公共完整生命周期门槛PASS；实际1440p backing保持2560×1440，实际源随后变为720p、输出1600×900。用户确认频繁切换窗口：45次FPS预算变化为初始60及22次隐藏/22次恢复，前台恒60。48次plan变更由生命周期、实际源与几何输入解释；应用层画质/renderer软恢复/连接重建动作0。同一renderer在恢复后135ms提交首帧，正常退出所有资源计数归零；trace在途≤2、排队/丢失0，重复绘制/提交失败/截图额外绘制0。
 - Supply: 前台共41.111s、后台89.758s，最长连续前台9.319s。14个五段均完整3s覆盖的720p/SR前台窗口中位fps为received29.45→decoded28.76→video25.98→callback15.28→submitted13.48；同窗video→callback差中位11.94fps，callback→submitted差1.80fps。主要缺口继续在RVFC交付/合批，提交年龄采样P95约498ms；CPU提交间隔均值中位6.25ms，逐帧CPU/GPU/真实上屏成本继续补证。
 - Network: RTT中位234ms/P95 281ms、jitter中位13ms/P95 32ms、媒体增量丢包7.09%、jitter buffer平均delay约324ms；PLI+3/NACK+7334/重传包+6496各自报告，浏览器NACK有效率/ReferenceChain内部字段unavailable。30个candidate pair缺失采样与约2.75s路径覆盖如实保留；本批软动作与15s健康关单效果待补证。
@@ -363,7 +363,7 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Date: 2026-10-29 | Status: standard-output-latest-frame-code-verified
 - User Decision: 基础 SR 档判断承接现有计算，目标采用1080p/1440p/2160p标准尺寸；本地调度优先处理最新帧，接收帧率目标保持用户设定。
 - Delivered: 标准目标尺寸贯穿 ladder、plan 与实际 SR backing；真实源超过目标时成对保留原生宽高。共享 VideoFrameSource 同时持有 RVFC 与一个 rAF 计数轮询入口，按浏览器播放推进交付最新帧，并用已交付增量抵扣晚到回调；首次零计数、计数缺证后恢复、原始 RTP metadata 与旧代际取消均有边界回归。标准 WebGL 与 SR 收到新帧后立即尝试提交，累计节拍执行明确的用户显示上限，隐藏预算继续暂停本地绘制。网络适应保持既有有限码率请求，SDP 帧率、source/codec 与 sender 的帧率权限分别验证。
-- Validation: `pnpm test`（44文件 / 326项）、`pnpm lint:fix`、`pnpm exec vue-tsc --noEmit`、`pnpm build`（266模块）、Python报告fixtures（18项）与`git diff --check`通过。RVFC 15fps、实际源30/60fps、60/144Hz、mediaTime=0的10s受控用例提交与供给首尾差至多2帧，重复实时处理为0；GPU采用mock。详见[标准输出与最新帧专项验证](../../dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.md)和[验证数据](../../dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.metrics.json)。
+- Validation: `pnpm test`（44文件 / 326项）、`pnpm lint:fix`、`pnpm exec vue-tsc --noEmit`、`pnpm build`（266模块）、Python报告fixtures（18项）与`git diff --check`通过。RVFC 15fps、实际源30/60fps、60/144Hz、mediaTime=0的10s受控用例提交与供给首尾差至多2帧，重复实时处理为0；GPU采用mock。详见[标准输出与最新帧专项验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.md)和[验证数据](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.metrics.json)。
 - Measurement: 当前726个源码输入路径指纹为`4f1e7668766be3f1e6329f0b732dfa0d07a0de78f2fd4a5cdff13626bca38800`；同范围62个生产文件、15,222行、6,898语句、1,297分支，较基线减少452行/141语句，runtime直属可变绑定74。此前297项、548行及`fac1d02f…`指纹保留各阶段历史含义；新日志中的非标准1600×900输出和帧交付缺口作为修复前基线。
 - Handoff: 本轮两项代码修正及自动验证完成，设备运行效果继续由用户新构建手测取证。连续前台、面板共享样本、SR开关配对、平台/完整功能与2h/8h长测仍按S4验收；自动实机运行保持暂停，整体任务维持In Progress。
 
@@ -372,11 +372,11 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - User Decision: 用户授权继续补齐帧身份与显示状态日志；应用操作保持暂停，调度参数沿原值执行。
 - Delivered: 现有dev `renderTelemetryObserved.mediaDiagnostics`记录原始RVFC/rAF计数、接受/拒绝原因、presentedFrames/mediaTime/RTP身份、播放计数与双向抵扣前后值；绑定当前/候选renderer的DOM样式、覆盖矩形与实际WebGL上下文属性。屏幕上屏事实继续标记unavailable，DOM布局证据独立解释。
 - Budget: 惰性payload首次读取启用采集，接受/拒绝各最多2Hz、最近8条证据、最多4层祖先；250ms统计与基本资源读取沿原数值路径。off/production诊断读取0次，dev采集与其他模式媒体决策一致。
-- Validation: 七文件115项定向及45文件336项全量、lint/类型/生产构建通过；九组离线供给与绘制路径复现继续通过。源码摘要与字段读法见[验证记录](../../dev-docs/validation/2026-10-29-sr-frame-diagnostics-validation.md)。历史trace保持原构建边界，实际输入/可见输出由新dev日志继续验收。
+- Validation: 七文件115项定向及45文件336项全量、lint/类型/生产构建通过；九组离线供给与绘制路径复现继续通过。源码摘要与字段读法见[验证记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-sr-frame-diagnostics-validation.md)。历史trace保持原构建边界，实际输入/可见输出由新dev日志继续验收。
 
 
 - Date: 2026-10-29 | Status: fresh-diagnostics-counter-credit-fault-confirmed
-- Evidence: [17:53–17:55新日志](../../dev-docs/validation/2026-10-29-sr-diagnostics-fresh-trace-validation.md)源码摘要77fe234c…与当前728输入匹配；67份diagnostics齐全。1746次原始RVFC中1481次进入pollAlreadyDelivered（84.82%），采样native计数与拒绝帧RTP均advanced；265次native+5次轮询接受与SR增量270相等。counterAhead余额最高样本49；有效native/RTP新身份被跨计数数量抵扣筛掉。
+- Evidence: [17:53–17:55新日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-sr-diagnostics-fresh-trace-validation.md)源码摘要77fe234c…与当前728输入匹配；67份diagnostics齐全。1746次原始RVFC中1481次进入pollAlreadyDelivered（84.82%），采样native计数与拒绝帧RTP均advanced；265次native+5次轮询接受与SR增量270相等。counterAhead余额最高样本49；有效native/RTP新身份被跨计数数量抵扣筛掉。
 - Display: 67份DOM证据均为SR canvas可见/不透明、同父且在video后，800×450媒体区覆盖一致，alpha=false；真实compositor/屏幕像素继续unavailable。720p49个完整3s窗received/decode约30fps、video29.76、marker/SR3.63、提交成本9.94ms；37个15s窗复核相同缺口。
 - Gates: browser behavior/stability与生命周期PASS，sharedSamples=8，trace在途≤3、排队/丢失0。门禁覆盖资源与观测合同，供给闭环按新帧身份事实继续修正。
 - Replay: 真实生产模块在native30fps/RTP逐帧推进、播放计数增加48帧偏移的输入下稳态仅4fps；对齐输入保持30fps。当前分析维持生产代码，整改继续沿同一VideoFrameSource的有效帧身份、补足去重及有界计数资格推进，用户显示/接收帧率及SR算法边界保持原约定。
@@ -384,12 +384,12 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Date: 2026-10-30 | Status: counter-credit-fix-code-verified
 - Delivered: 用户授权继续修正同一VideoFrameSource。轮询抵扣额度仅由实际轮询交付建立，在下一有效native身份结算并释放剩余；RVFC入口的播放计数推进只更新基线。重复native保留窗口，计数回退/来源改变及消费者中断清理资格。原有补帧、native先交付抵扣、metadata/RTP与取消epoch继续共用现有媒体路径。
 - Diagnostics: frameIdentity schemaVersion=2分列polledAdvanceBefore/After、creditedPollFrames、expiredPollFrames与nativeReset；dev有界采样及off/production零诊断读取继续通过。历史v1 counterAhead字段与原日志保持各自语义。
-- Validation: 修复前6项失败回归，修复后59项定向、45文件347项全量及lint/类型/生产构建通过。相同48帧偏移回放稳态4fps→30fps，RVFC先到与轮询先到均300个源帧→300个marker→300次SR绘制；既有稀疏RVFC补30/60fps及9组离线绘制路径验证继续通过。详见[抵扣修正验证](../../dev-docs/validation/2026-10-30-sr-counter-credit-fix-validation.md)。
+- Validation: 修复前6项失败回归，修复后59项定向、45文件347项全量及lint/类型/生产构建通过。相同48帧偏移回放稳态4fps→30fps，RVFC先到与轮询先到均300个源帧→300个marker→300次SR绘制；既有稀疏RVFC补30/60fps及9组离线绘制路径验证继续通过。详见[抵扣修正验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-sr-counter-credit-fix-validation.md)。
 - Handoff: 本批交付代码与离线证据。真实屏幕合成、GPU/submit-to-present及网络/恢复/稳态供给闭环继续按新构建日志验收，自动软件操作保持暂停；整体任务维持In Progress。
 
 - Date: 2026-10-30 | Status: postdecode-cost-audit-findings
 - User Focus: ROG本地1440p接收/解码60fps、渲染约40fps，关闭SR绘制提交率84%；用户要求增强以保住原生源帧率为基础。
-- Findings: [解码后成本审查](../../dev-docs/validation/2026-10-30-postdecode-render-cost-audit.md)确认普通WebGL与SR共有逐帧video纹理上传；尺寸差异下普通WebGL增加锐化FBO，零锐化也走双pass。SR同尺寸为5点RCAS，放大融合shader为17个源采样调用；选择依据编译可用。资源复用与低频GPU检查合理，实际上传/GPU/呈现长尾仍需分段证据。
+- Findings: [解码后成本审查](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-postdecode-render-cost-audit.md)确认普通WebGL与SR共有逐帧video纹理上传；尺寸差异下普通WebGL增加锐化FBO，零锐化也走双pass。SR同尺寸为5点RCAS，放大融合shader为17个源采样调用；选择依据编译可用。资源复用与低频GPU检查合理，实际上传/GPU/呈现长尾仍需分段证据。
 - Replay: 生产健康分类函数把60候选→50.4提交、60→40且CPU均值4ms、40候选→40提交均归renderStable；当前80%提交率+CPU超时、66%交付率和180ms停滞门槛对原生帧率优先目标存在缺口。
 - Next: 优先完善本域候选/提交健康判据与有界上传/GPU/长尾测量，再选择纯呈现、单pass锐化及必要放大的性能阶梯。当前为审查及策略回放，媒体生产代码保持本轮起点；自动软件操作继续暂停，ROG同源配对证据待补。
 
@@ -397,11 +397,11 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - User Decision: 用户授权先优化代码逻辑中的多余耗时。本批限定现有renderer内部：零锐化跳过中间FBO、按实际路径准备shader和更新uniform、中性色彩绕过算术、稳定帧减少重复状态写入与空截图队列工作。
 - Boundary: 保持当前帧源/累计节拍、源尺寸下限、增强算法、显式画质配置和故障回退。采用真实模块离线回归验证编译/分配/绘制次数及模式切换；健康判据、GPU分段测量与ROG设备性能继续单列。
 - Delivered: 普通WebGL零锐化单pass及按需呈现程序，SR等尺寸RCAS/放大融合/失败兼容程序按需准备，活跃uniform和中性色彩快路径、viewport/纹理绑定/opacity与空截图队列减法完成。context恢复保留监听、未就绪源尺寸及单双pass采样纹理身份均补齐回归。
-- Validation: 45文件360项全量及lint/类型/生产构建、diff检查通过；61次实时处理保持一致，零锐化GPU draw从122降为61，FBO分配1→0，普通程序2→1、SR程序3→1，重复配置/FPS的uniform写入24→0。原9组供给/截图审计与48帧偏移稳态30fps回放继续通过。详见[冗余操作验证](../../dev-docs/validation/2026-10-30-render-redundant-work-validation.md)。
+- Validation: 45文件360项全量及lint/类型/生产构建、diff检查通过；61次实时处理保持一致，零锐化GPU draw从122降为61，FBO分配1→0，普通程序2→1、SR程序3→1，重复配置/FPS的uniform写入24→0。原9组供给/截图审计与48帧偏移稳态30fps回放继续通过。详见[冗余操作验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-render-redundant-work-validation.md)。
 - Handoff: 当前728输入源码指纹9fb35ae1…；离线操作计数与设备帧率分别验收，ROG修复前60fps解码/约40fps渲染及84%提交率改善待同源新日志。健康判据、实际上传/GPU/呈现长尾、平台/功能/长测继续按S4推进，整体任务维持In Progress，自动软件操作保持暂停。
 
 - Date: 2026-10-30 | Status: credit-window-fresh-trace-analyzed-supply-evidence-pending
-- Evidence: 新日志runtime-trace-1793347777498-1.jsonl，2217行/189.522秒宿主、117.243秒媒体；e84ab026…与736个当前源码输入完全匹配。详见[本次验收](../../dev-docs/validation/2026-10-30-frame-credit-window-and-pacing-fresh-trace-validation.md)及同名metrics/复算脚本。
+- Evidence: 新日志runtime-trace-1793347777498-1.jsonl，2217行/189.522秒宿主、117.243秒媒体；e84ab026…与736个当前源码输入完全匹配。详见[本次验收](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-frame-credit-window-and-pacing-fresh-trace-validation.md)及同名metrics/复算脚本。
 - Passed: SR两段同代际候选→处理100%、重复/提交失败0；低成本TexImage2D维持0.490ms上传/0.516ms总同步处理。过期余额共69帧/2次清理，最终前台video4个完整15s窗中位59.975fps；browser行为/稳定性、共享样本24、回退→一次试探→再回退改善及正常退出通过。
 - Remaining: SR完整3s窗49.14/48.60fps，decode→输出逐窗缺口10.814/11.272fps；播放计数抽样15–17帧/249–266ms合批，540次SR rAF观察接受0。优先同帧源配对播放质量/WebKit计数与RTP/RVFC/rAF时序，再验证可靠新增帧。一次1.414s冻结包含1009ms包/媒体计数零推进，随后包恢复、PLI+1、关键帧decode恢复；内部请求响应配对、ReferenceChain/cleanAnchorCommitted/DisplayStable及NACK有效率继续缺证。
 - Boundary: 即时SR提交年龄11份中位12ms、P9570ms/max116ms；真实submit-to-present/GPU/scanout继续unavailable。本轮为日志分析，整体S4维持In Progress；自动实机操作保持暂停。
@@ -409,7 +409,7 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Date: 2026-10-30 | Status: counter-pairing-and-callback-timing-code-verified
 - Scope: 沿已授权S4逐帧身份取证推进，仅扩展现有共享VideoFrameSource/dev身份环及离线回放。主计数复用当前读取，备用WebKit仅既有接受/拒绝各2Hz采样读取；每次dev观察记录callback进入单调时间与间隔、主计数推进累计，消费者中断清理时序基线。
 - Contract: 当前供帧继续优先有效播放质量计数；配对计数与回调统计只投射诊断。同帧去重、限帧、latest-only、媒体/renderer边界沿现有合同。
-- Validation: 99项定向和36组生产模块回放已通过；250ms合批+45/50Hz回调输出45/50fps，逐帧计数回放补满60fps。新回放逐图像检查唯一导入、诊断off/dev一致，用户30fps上限维持30fps。48文件427项全量、lint/类型/269模块构建和diff检查通过，原9组供给/4组绘制/3组偏移/20组抵扣节拍回放通过；实机更及时计数与可见图像对应关系继续取证。详见[专项验证](../../dev-docs/validation/2026-10-30-browser-frame-counter-pairing-validation.md)。当前736输入源码fingerprint为62536906…，S4维持In Progress，自动实机操作保持暂停。
+- Validation: 99项定向和36组生产模块回放已通过；250ms合批+45/50Hz回调输出45/50fps，逐帧计数回放补满60fps。新回放逐图像检查唯一导入、诊断off/dev一致，用户30fps上限维持30fps。48文件427项全量、lint/类型/269模块构建和diff检查通过，原9组供给/4组绘制/3组偏移/20组抵扣节拍回放通过；实机更及时计数与可见图像对应关系继续取证。详见[专项验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-browser-frame-counter-pairing-validation.md)。当前736输入源码fingerprint为62536906…，S4维持In Progress，自动实机操作保持暂停。
 
 - Date: 2026-10-30 | Status: counter-pairing-fresh-trace-analyzed-webkit-unavailable
 - Evidence: runtime-trace-1793350332368-1.jsonl，2842行/368.400秒宿主、375份媒体/94.735秒；源码62536906…与736输入匹配。配对采样3.909Hz、365个唯一样本，原生WebKit计数有效0；主播放计数平均15.906帧/266.429ms，350次更新348发生在native，5559次rAF接受0。
@@ -422,7 +422,7 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 
 - Scope: 接续17:43日志和中断的SR满帧定位，当前最新可用日志仍为2026-10-30采集；本轮完成日志、代码与生产模块回放分析。
 - Evidence: 同代际SR实时区间rAF58.80/60.09Hz、RVFC52.62/54.78Hz，rAF新候选0，候选→提交263/264与165/165；网络接收/解码约59.94/59.95fps、freeze增量0。当前主要缺口定位于解码后到候选边界，drawable/metadata/合成与GPU的内部归因继续待验。
-- Validation: 170个完整窗口复算及36组生产模块回放通过；逐帧主计数补满600张唯一图像/60fps，250ms合批计数输出受回调与轮询相位约束，off/dev交付一致。详见[续查报告](../../dev-docs/validation/2026-11-02-sr-60fps-bottleneck-analysis.md)。
+- Validation: 170个完整窗口复算及36组生产模块回放通过；逐帧主计数补满600张唯一图像/60fps，250ms合批计数输出受回调与轮询相位约束，off/dev交付一致。详见[续查报告](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-02-sr-60fps-bottleneck-analysis.md)。
 - Handoff: 优先分段记录现有像素探测的初始化、drawImage与getImageData成本，取得低成本有效drawable配对；按同场景持续前台对照诊断/窗口状态与30→53fps边界。8ms慢读停止、共享帧源/当前renderer合同和技术边界继续保留；S4维持In Progress，实机采集由用户手动完成。
 
 
@@ -430,7 +430,7 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 
 - User Decision: 用户要求继续，沿现有S4像素取证路径拆分首次24ms读取的成本。
 - Delivered: 既有dev像素探测新增initialization/drawImage/readback、coldReads/warmReads的次数/总耗时/max，firstRead/lastRead保存单调时钟、阶段成本、trackingSource、localSequence与outcome；异常阶段也保留耗时，快照深拷贝。8ms完整读取预算、原配对资格/频率与释放合同继续执行。
-- Validation: 新增8项回归，实施前8失败/39通过；117项定向、48文件445项全量、lint/类型/生产构建与diff检查通过。24组像素/准备及36组帧计数生产回放通过，off/dev交付和唯一图像一致，有效像素配对继续成立。737输入指纹bd14d98f856a7432f0767a1d01b3ae5efe70544e951f5af466a2376a71258120；详见[验证记录](../../dev-docs/validation/2026-11-02-video-pixel-read-cost-validation.md)。
+- Validation: 新增8项回归，实施前8失败/39通过；117项定向、48文件445项全量、lint/类型/生产构建与diff检查通过。24组像素/准备及36组帧计数生产回放通过，off/dev交付和唯一图像一致，有效像素配对继续成立。737输入指纹bd14d98f856a7432f0767a1d01b3ae5efe70544e951f5af466a2376a71258120；详见[验证记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-02-video-pixel-read-cost-validation.md)。
 - Handoff: 旧17:43日志保留24ms总值；用新构建firstRead分项确认初始化/图像绘制/回读的实际成本，按低成本有效drawable配对决定共享帧源补供给。媒体/恢复/帧供给/提交与实际呈现继续同窗验收，S4保持In Progress，实机采集由用户手动完成。
 
 
@@ -439,7 +439,7 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 - Evidence: runtime-trace-1793588378449-1.jsonl，3124行/214.742秒，737输入源码bd14d98f…匹配。首次dev像素读取32ms，初始化0ms、drawImage18ms、getImageData14ms；在原生video阶段触发8ms停止，距离首次SR提交34.591秒，有效配对0。
 - Supply: SR两段完整3s窗口48.087/58.444fps，同代际候选→提交296→294/176→176，rAF60.083/60.053Hz补帧0，稳态上传0.393ms，最新提交年龄P95/max15ms。最终video48个完整15s窗口59.927fps；SR完整15s样本0，长期足帧与效果/物理呈现继续待验。
 - Network: 接收59.945/解码59.458fps，loss0.159683%、RTT P9528ms、1次freeze1.11s/丢帧62；原生video阶段连续756ms收包/媒体计数零推进，随后接收73/解码1/drop60，再解码25/drop2恢复。首段SR突丢73包、buffer窗口均值43.134ms与回调136ms长尾单独保留。
-- Validation: 184个完整窗口、同代际增量、像素成本总值、生命周期顺序和SHA复算通过；browser行为/稳定性PASS、12组共享样本。内部ReferenceChain/锚点/显示闭环、逐NACK有效率与实际上屏缺证。详见[新日志报告](../../dev-docs/validation/2026-11-02-pixel-cost-fresh-trace-analysis.md)。
+- Validation: 184个完整窗口、同代际增量、像素成本总值、生命周期顺序和SHA复算通过；browser行为/稳定性PASS、12组共享样本。内部ReferenceChain/锚点/显示闭环、逐NACK有效率与实际上屏缺证。详见[新日志报告](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-02-pixel-cost-fresh-trace-analysis.md)。
 - Handoff: 优化重点集中于video→Canvas2D绘制与同步回读，沿当前资源所有权评估低频异步缩略取证并保持8ms预算；有效配对后再选择共享帧源补供给。S4保持In Progress，实际采集由用户手动完成。
 
 
@@ -457,7 +457,7 @@ P0 固化同机/同服务profile/同网络/同渲染设置的对照基线，至�
 
 - Delivered: 共享VideoFrameSource拥有单个GPU缩略探测器；两种canvas renderer按动态FPS启用补供给。PBO/fence/timer替换同步Canvas2D，像素变化沿原请求立即交付，native和晚到播放计数共用去重额度。原生video/默认统计继续既有供帧，dev独立取证维持低频。
 - Boundary: native数量、源尺寸、计数、sequence及epoch按提交/完成资格验证。完全抵扣的批次允许在下一次读取前重对齐基线计数，原采样计数保存在baselineCounterFrames；新增8ms消费新鲜度期限。冷提交最多一次50ms，取消fence仍消耗冷额度，稳态CPU合计8ms/GPU等待50ms，单在途/单基线/8组证据；context与取消清理通过。
-- Validation: [实施验证](../../dev-docs/validation/2026-11-02-gpu-drawable-supply-validation.md)及40组生产模块回放通过。RVFC45/50Hz+250ms计数合批，两种renderer均600张唯一图像/10秒；30fps源和用户上限300张，静态与迟到结果保留原供帧。全量48文件460项、lint/类型/270模块构建及既有9/4/36/20/8组回放通过。
+- Validation: [实施验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-02-gpu-drawable-supply-validation.md)及40组生产模块回放通过。RVFC45/50Hz+250ms计数合批，两种renderer均600张唯一图像/10秒；30fps源和用户上限300张，静态与迟到结果保留原供帧。全量48文件460项、lint/类型/270模块构建及既有9/4/36/20/8组回放通过。
 - Handoff: 本轮代码与自动验证完成；S4继续新构建设备60fps、像素对应、GPU/真实呈现、源尺寸切换、平台与长测验收。网络接收停顿和内部恢复证据沿既有主线独立归属，自动实机运行保持暂停。
 
 

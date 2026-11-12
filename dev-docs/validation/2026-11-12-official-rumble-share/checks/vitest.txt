@@ -1,9 +1,0 @@
-
- RUN  v4.1.4 /Users/guo.xu/Documents/code/games/xbxrc
-
-
- Test Files  72 passed (72)
-      Tests  774 passed (774)
-   Start at  16:22:22
-   Duration  3.37s (transform 6.30s, setup 0ms, import 10.31s, tests 6.78s, environment 18ms)
-

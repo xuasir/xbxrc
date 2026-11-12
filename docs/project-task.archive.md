@@ -16,7 +16,7 @@ git show dfd492ac76fba5e4e82e717fc1eda2b04c33b576:docs/project-task.md
 | ID | Task | Status | Started On | Completed On | 快照日期 | 参考/待续备注 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-10-30-home-ice-empty-poll | 修复主机串流远端 ICE 空快照后提前结束等待 | Done | 2026-10-30 | — | 2026-11-02 | — |
-| 2026-10-30-common-startup-fixes | 修复公共启动审查的 5 项逻辑缺口 | Done | 2026-10-30 | — | 2026-11-02 | [修复报告](reports/2026-10-30-common-startup-fixes.md) · [14:39 fresh trace](../dev-docs/validation/2026-10-30-home-startup-fresh-trace.md) |
+| 2026-10-30-common-startup-fixes | 修复公共启动审查的 5 项逻辑缺口 | Done | 2026-10-30 | — | 2026-11-02 | [修复报告](reports/2026-10-30-common-startup-fixes.md) · [14:39 fresh trace](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-home-startup-fresh-trace.md) |
 | 2026-10-27-unified-gamepad-input | 统一手柄后端、公共路由与设置改造 | Done | 2026-10-30 | — | 2026-11-02 | [`rfcs/2026-10-27-unified-gamepad-input.md`](rfcs/2026-10-27-unified-gamepad-input.md) · [`reports/2026-10-27-unified-gamepad-input.md`](reports/2026-10-27-unified-gamepad-input.md) |
 | 2026-10-29-xhome-1440p-option | 主机串流分辨率参照云游戏增加 1440p 选项 | Done | 2026-10-29 | — | 2026-11-02 | — |
 | 2026-10-27-gamepad-cleanup-style | 精简手柄兼容代码并对齐现有设置页风格 | Done | 2026-10-27 | — | 2026-11-02 | [报告](reports/2026-10-27-unified-gamepad-input.md) |
@@ -1374,7 +1374,7 @@ git show dfd492ac76fba5e4e82e717fc1eda2b04c33b576:docs/project-task.md
 
 ### 原 Recent Completed
 
-- 2026-10-30: `2026-10-30-common-startup-audit` 公共启动链路深入审查完成。确认旧启动异常撤销 TURN、restart 重新接纳旧 ICE、仅 EOC 后无期限等待、Peer 重建接收旧 SDP、原生恢复异常丢失收尾共 5 项；6 组缺陷回放复现，现有相关 4 文件 44 项测试通过。交付[审查报告与复现入口](../dev-docs/validation/2026-10-30-common-startup-audit.md)，生产修复与实机验证待后续实施。
+- 2026-10-30: `2026-10-30-common-startup-audit` 公共启动链路深入审查完成。确认旧启动异常撤销 TURN、restart 重新接纳旧 ICE、仅 EOC 后无期限等待、Peer 重建接收旧 SDP、原生恢复异常丢失收尾共 5 项；6 组缺陷回放复现，现有相关 4 文件 44 项测试通过。交付[审查报告与复现入口](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-common-startup-audit.md)，生产修复与实机验证待后续实施。
 
 - 2026-07-22: 合并 iOS 账户与设置为“我的”Tab。底部导航收敛为“游戏库 / 主机 / 成就 / 我的”；“我的”保留账户 Hero、活动、社交和成就概况，在其下提供云游戏、登录偏好、诊断、关于四个二级页，并以确认式退出登录收尾；下拉刷新统一刷新 Profile 与 Xbox 活动库，XboxData 同步身份同时绑定 session 和 owner generation。RFC：[`rfcs/2026-07-22-ios-my-tab-merge.md`](rfcs/2026-07-22-ios-my-tab-merge.md)。Report：[`reports/2026-07-22-ios-my-tab-merge.md`](reports/2026-07-22-ios-my-tab-merge.md)。Swift parse、PBX lint、diff/source gates 通过；Xcode build/XCTest 与模拟器视觉验收受本机 SwiftPM/CoreSimulator 权限环境阻断。
 - 2026-06-23: 修复云游戏页默认区域下列表为空：重新登录并开启 TUN 后，当前 canonical store 已恢复 `auth.tokens.stream.xCloudToken`，`xCloudToken.data.market=US`、默认 region=`WESTUS`、cloud region count=19，说明登录和云 token 均可用；真正导致页面仍空的是 v2 目录缓存按 `uhs` 分片，而同一 gamertag/xid 重新登录后的 `uhs` 与历史 `data.xcloudCatalog.v2.*` 全部对不上，当前账号分片 miss 后远端刷新失败会让前端只显示空目录。修复：`resolve_web_token_claims()` 解析稳定 `xid`，`XcloudService::resolve_cache_scope()` 优先用 `xid` 作为目录缓存账号标识；`DataCacheRepository` 在当前分片缺少可渲染 overlay 时，回退读取同 region/language/market 的最近可渲染 v2 分片，保证刷新失败时仍显示最近可用目录；保留 `xgpuweb/xgpuwebf2p` 失败诊断。验证：`jq` 摘要检查 `settings.xbx.json`、`cargo fmt -p xbxrc -p xbox-auth-flow`、`cargo test -p xbxrc cache_scope_uses_stable_xid_when_available`、`cargo test -p xbxrc mods::data::cache_repository`、`cargo check -p xbxrc`；在线 `/v2/titles` 探测因审批器拒绝网络命令未执行。

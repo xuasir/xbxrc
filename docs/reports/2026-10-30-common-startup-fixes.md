@@ -1,8 +1,8 @@
 # 公共启动五项问题修复
 
-日期：2026-10-30。用户授权修复[审查报告](../../dev-docs/validation/2026-10-30-common-startup-audit.md)列出的五项问题；代码修复及自动验证已完成，实机 home/TURN 启动效果待新 trace 验证。
+日期：2026-10-30。用户授权修复[审查报告](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-common-startup-audit.md)列出的五项问题；代码修复及自动验证已完成，实机 home/TURN 启动效果待新 trace 验证。
 
-实机跟进：[14:39 新日志](../../dev-docs/validation/2026-10-30-home-startup-fresh-trace.md)与当前源码指纹一致。home 前两次 ICE 空快照后继续轮询，第三次拿到候选并直连成功，connected 后 526ms 首帧，约91秒后正常退出且资源清零。TURN/restart/Peer重建/原生恢复异常仍待对应故障场景；SR供给缺口已由video回退吸收。
+实机跟进：[14:39 新日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-home-startup-fresh-trace.md)与当前源码指纹一致。home 前两次 ICE 空快照后继续轮询，第三次拿到候选并直连成功，connected 后 526ms 首帧，约91秒后正常退出且资源清零。TURN/restart/Peer重建/原生恢复异常仍待对应故障场景；SR供给缺口已由video回退吸收。
 
 ## 修复结果
 
@@ -31,7 +31,7 @@ browser runtime 完成信令后，host 对首次 connected 等待设置 15 秒�
 - Rust `xbox-streaming --lib`：140 项通过。HTTP 用例使用本地回环；命令对 localhost 排除环境代理，并在具备 socket 监听权限的环境运行。
 - `cargo check -p xbxrc -p xbox-ios-bridge --offline` 通过；保留 xbxengine 两条既有未使用代码告警。
 - `cargo fmt -p xbox-streaming`、`pnpm lint:fix`、`vue-tsc --noEmit`、`pnpm build`、`git diff --check` 通过。
-- [结构化验证与源码摘要](../../dev-docs/validation/2026-10-30-common-startup-fixes.metrics.json)。前序审查报告及 metrics 保留修复前证据；2026-11-02 已删除断言旧缺陷的临时回放，当前回归入口位于正式测试文件。
+- [结构化验证与源码摘要](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-common-startup-fixes.metrics.json)。前序审查报告及 metrics 保留修复前证据；2026-11-02 已删除断言旧缺陷的临时回放，当前回归入口位于正式测试文件。
 
 回归入口：
 

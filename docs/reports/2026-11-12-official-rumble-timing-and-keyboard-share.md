@@ -31,7 +31,7 @@
 
 F9 通过公共 InputController 管理 Share 状态，普通手柄与键盘游戏输入继续共用原有归属机制。菜单、独占录入、文本焦点、失焦、隐藏、设备/来源切换和会话退出释放 Share。新模型下闲置 legacy 输入通道的消息和关闭事件保持隔离；已关闭或被替换的会话吸收迟到答复和状态事件。
 
-试验阶段贯通的 Rust 信令、Tauri RPC、PlayerClient、runtime host、Stream 提示及生产 trace 已随 Share 输入一起撤销。官方协议字节样本归档到 [验证目录](../../dev-docs/validation/2026-11-12-official-rumble-share/unreliable-share-official.json)。
+试验阶段贯通的 Rust 信令、Tauri RPC、PlayerClient、runtime host、Stream 提示及生产 trace 已随 Share 输入一起撤销。官方协议字节样本归档到 [验证目录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-official-rumble-share/unreliable-share-official.json)。
 
 ## 首次实现验证（历史）
 

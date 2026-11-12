@@ -4,7 +4,7 @@
 
 ## 触发证据与范围
 
-[14:42设备日志分析](../../dev-docs/validation/2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md)记录首段SR累计352候选、268次提交、84次限帧跳过，占23.86%；同代际即时53.14→40.19fps。第二段SR即时167→167、55.43fps，留下video→candidate的独立供给缺口。用户随后授权“优化这部分”，本次按[更新后的RFC合同](../rfcs/2026-11-05-browser-latest-frame-scheduling.md)直接修复局部准入。
+[14:42设备日志分析](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md)记录首段SR累计352候选、268次提交、84次限帧跳过，占23.86%；同代际即时53.14→40.19fps。第二段SR即时167→167、55.43fps，留下video→candidate的独立供给缺口。用户随后授权“优化这部分”，本次按[更新后的RFC合同](../rfcs/2026-11-05-browser-latest-frame-scheduling.md)直接修复局部准入。
 
 设备源文件在后续操作中已被清理；本次回放读取此前保留的[完整快照](/tmp/xbxrc-2026-11-05-latest-scheduling-trace.jsonl)，SHA-256与设备报告一致：`c83a7568a8b8e520f962943205ec030a2ee5922e39e5e6473813c5c5e4b0f038`。回放只保存必要计数与入口时间，原始日志留在本地临时目录。
 
@@ -21,7 +21,7 @@
 
 全量前端60文件610项测试通过，准入与两种renderer定向108项通过。`pnpm lint:fix`、`pnpm typecheck`、`pnpm build`（313模块）及staged/unstaged diff check通过。测试覆盖新候选即时提交、相位移动、53/60fps供给、真实入口时间、源身份去重、显式预算、短间隔突发、暂停/截图与context/关闭生命周期。
 
-[生产回放](../../dev-docs/validation/2026-11-05-browser-frame-admission-audit.cjs)转译当前类与[固定槽源码快照](../../dev-docs/validation/2026-11-05-frame-pacer-fixed-slot.snapshot.ts)。基线源码SHA `92e48a020eb7fedc993d91e4c16485471e70b3463d4decf61a7e18f414d0343e`与原设备metrics绑定一致；原日期化报告与metrics继续保留采样时身份。[新指标](../../dev-docs/validation/2026-11-05-browser-frame-admission.metrics.json)绑定本轮测试报告SHA、当前生产源码SHA与基线SHA。
+[生产回放](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-browser-frame-admission-audit.cjs)转译当前类与[固定槽源码快照](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-frame-pacer-fixed-slot.snapshot.ts)。基线源码SHA `92e48a020eb7fedc993d91e4c16485471e70b3463d4decf61a7e18f414d0343e`与原设备metrics绑定一致；原日期化报告与metrics继续保留采样时身份。[新指标](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-browser-frame-admission.metrics.json)绑定本轮测试报告SHA、当前生产源码SHA与基线SHA。
 
 | 同一输入时序的回放 | 固定槽提交 | 当前提交 | 候选数 |
 | --- | ---: | ---: | ---: |

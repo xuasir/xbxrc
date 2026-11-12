@@ -1,5 +1,7 @@
 # 弹窗首次进入动效修复
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 日期：2026-11-10。任务：`2026-11-10-overlay-mount-enter-motion`。
 
 ## 原因与修复
@@ -12,8 +14,8 @@
 
 扩展既有[完整前端入口与回归](../2026-11-10-ui-motion-vitality/index.html)。真实运行 Vue、WAAPI、导航引擎及页面，以原有内存夹具提供 Rust RPC 数据。
 
-- 修复前：[before.json](before.json) 的前 22 项通过，新增第 23 项在主机分辨率弹窗失败；面板 transform 为 `none`，动画记录缺失。
-- 修复后：1280×720 / 390×844 各 44 项通过，浏览器运行错误均为 0。[宽屏](browser-wide.json)、[窄屏](browser-narrow.json)。
+- 修复前：[before.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-overlay-mount-enter-motion/before.json) 的前 22 项通过，新增第 23 项在主机分辨率弹窗失败；面板 transform 为 `none`，动画记录缺失。
+- 修复后：1280×720 / 390×844 各 44 项通过，浏览器运行错误均为 0。[宽屏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-overlay-mount-enter-motion/browser-wide.json)、[窄屏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-overlay-mount-enter-motion/browser-narrow.json)。
 - 新增场景覆盖主机分辨率首次 / 重复打开、主机和云游戏码率编辑项切换，以及四次关闭后的来源焦点恢复。
 - 实测面板进入记录为 160ms、延后 20ms、起点 `translateY(6px)`；系统减少动态效果时首次挂载保持静止和可操作焦点。
 - 原有账户菜单、嵌套确认、页面动效、媒体生命周期和浅色合同回归全部通过。
@@ -21,6 +23,6 @@
 
 静止后的浅色弹窗截图：
 
-![浅色主机分辨率弹窗](dialog-light-wide.jpg)
+[历史截图：浅色主机分辨率弹窗](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-10-overlay-mount-enter-motion/dialog-light-wide.jpg)
 
 临时 1430 服务与浏览器标签已关闭。原生窗口的实际观感由用户体验验收。

@@ -1,6 +1,0 @@
-相关 Vitest 完成结果（收取执行会话 65004，退出码 0）
-
- Test Files  12 passed (12)
-      Tests  117 passed (117)
-   Start at  10:43:48
-   Duration  3.19s (transform 5.29s, setup 0ms, import 8.79s, tests 1.36s, environment 10ms)

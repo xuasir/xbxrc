@@ -1,5 +1,7 @@
 # 串流菜单快捷键子页验证
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 日期：2026-11-12。源码与离线页面验证完成。验证使用现有[手柄离线夹具](../2026-11-11-gamepad-locked-input-and-extra-buttons/index.html)，夹具文件保持原样。
 
 后续已移除长提示，并完成全仓 lint:fix，详见[提示精简与统一震动修订](../2026-11-12-shortcut-hint-unified-vibration/README.md)。
@@ -15,13 +17,13 @@
 
 | 检查 | 结果 | 证据 |
 | --- | --- | --- |
-| 相关 Vitest | 12 文件、117 项通过，包含新增的 6 项真实组件测试 | [结果](checks/vitest.txt) |
-| pnpm typecheck | 退出码 0 | [结果](checks/typecheck.txt) |
-| pnpm build | 通过；包含最终诊断图标修改 | [输出](checks/build.txt) |
-| 本任务定向 ESLint | 退出码 0 | [输出](checks/lint-scoped.txt) |
-| 导航覆盖 | 78 个 Vue 文件、216 处交互、0 违规 | [输出](checks/navigation.txt) |
-| git diff --check | 退出码 0 | [结果](checks/diff.txt) |
-| pnpm lint:fix | 8 项范围外错误，来自云目录和导航虚拟化的并行修改 | [输出](checks/lint-full.txt) |
+| 相关 Vitest | 12 文件、117 项通过，包含新增的 6 项真实组件测试 | [结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/vitest.txt) |
+| pnpm typecheck | 退出码 0 | [结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/typecheck.txt) |
+| pnpm build | 通过；包含最终诊断图标修改 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/build.txt) |
+| 本任务定向 ESLint | 退出码 0 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/lint-scoped.txt) |
+| 导航覆盖 | 78 个 Vue 文件、216 处交互、0 违规 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/navigation.txt) |
+| git diff --check | 退出码 0 | [结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/diff.txt) |
+| pnpm lint:fix | 8 项范围外错误，来自云目录和导航虚拟化的并行修改 | [输出](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/checks/lint-full.txt) |
 
 新增组件测试覆盖鼠标、触屏和手柄清空、两组空绑定、B 和 Menu/View 独占录入、全部释放后保存、键盘录入、重复组合、取消、清空失败重试、保存时重复确认、迟到保存与离开释放。
 
@@ -29,7 +31,7 @@
 
 ## 浏览器回放
 
-[观察结果](browser-results.json)保存 8 项交互结果和 4 组窗口测量。页面控制台错误为 0。
+[观察结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/browser-results.json)保存 8 项交互结果和 4 组窗口测量。页面控制台错误为 0。
 
 | 场景 | 观察结果 |
 | --- | --- |
@@ -48,9 +50,9 @@
 
 诊断图标使用 `currentColor` 描边，经公共图标滤镜在深色显示白色、浅色显示黑色；图形、描边宽度和透明度保持一致。英文窄窗中的诊断标题正常换行，绑定信息和清空操作保持可用。临时窗口尺寸已恢复默认，截图已隐藏夹具工具栏。
 
-- [最终中文深色页面](shortcuts-final-dark-zh.png)
-- [390px 英文浅色页面](shortcuts-narrow-light-en.png)
-- [320px 英文浅色页面](shortcuts-320-light-en.png)
+- [最终中文深色页面](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/shortcuts-final-dark-zh.png)
+- [390px 英文浅色页面](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/shortcuts-narrow-light-en.png)
+- [320px 英文浅色页面](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-stream-menu-shortcut-editor/shortcuts-320-light-en.png)
 
 ## 实机验收
 

@@ -35,9 +35,9 @@
 - pnpm typecheck：通过。
 - pnpm build：通过，313模块转换完成。
 - git diff --check：通过。
-- [生产模块回放](../../dev-docs/validation/2026-11-03-sr-cold-preparation-audit.cjs)：56组PASS，复用真实帧源与renderer模块，视频图像/GPU/时钟采用受控替身。
+- [生产模块回放](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-03-sr-cold-preparation-audit.cjs)：56组PASS，复用真实帧源与renderer模块，视频图像/GPU/时钟采用受控替身。
 
-[本轮指标及源码SHA-256](../../dev-docs/validation/2026-11-05-render-input-latency.metrics.json)保留完整生产回放结果与新增回归断言边界。历史冷准备指标保存原采样身份。
+[本轮指标及源码SHA-256](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-render-input-latency.metrics.json)保留完整生产回放结果与新增回归断言边界。历史冷准备指标保存原采样身份。
 
 | 持续10秒输入，每种canvas renderer | 成功提交 / 唯一图像 | GPU补交付 |
 | --- | ---: | ---: |

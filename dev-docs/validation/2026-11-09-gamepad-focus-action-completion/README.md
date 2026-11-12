@@ -1,10 +1,12 @@
 # 手柄焦点、交互导航与超窄屏完成验证
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 - 日期：2026-11-09，Asia/Shanghai。
 - 执行：主窗口，单窗口。
 - 完整前端：`pnpm dev` / `http://127.0.0.1:1420/`，本轮保留服务与窄屏预览。
 - 最终结果：114 项完整 App 断言、86 文件 803 项全量测试、6 文件 63 项定向回归全部通过；173 个业务交互声明全部覆盖。
-- 文档：[RFC](../../../docs/rfcs/2026-11-09-gamepad-focus-action-completion.md) · [Report](../../../docs/reports/2026-11-09-gamepad-focus-action-completion.md) · [修复前审计](../2026-11-09-gamepad-focus-action-audit/README.md)。
+- 文档：[RFC](../../../docs/rfcs/2026-11-09-gamepad-focus-action-completion.md) · [Report](../../../docs/reports/2026-11-09-gamepad-focus-action-completion.md) · [修复前审计](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-audit/README.md)。
 
 ## 启动与操作
 
@@ -39,22 +41,22 @@ pnpm test:trace-production
 
 | 文件 | 内容 |
 | --- | --- |
-| [validation-summary.json](validation-summary.json) | 最终检查汇总、Git 身份与 72 个验证相关源码文件 SHA256 |
-| [project-browser-results.json](project-browser-results.json) | 完整 App 114 项结果、焦点 / busy / 来源及实际几何可达图 |
-| [frontend-results.json](frontend-results.json) | 86 文件 803 项全量结果 |
-| [targeted-results.json](targeted-results.json) | 6 文件 63 项焦点、选择、键盘、视频与主机状态回归 |
-| [navigation-coverage.json](navigation-coverage.json) | 62 Vue 文件、173 个交互声明、108 个 Focusable 声明与 0 violations |
-| [pathfinding-before-results.json](pathfinding-before-results.json) | 宽行几何修复前 5 项失败与 2 项对照通过 |
-| [project-wide-row-before.json](project-wide-row-before.json) | 完整设置页向下跨过宽行开关的真实矩形基线 |
-| [project-console-refresh-before.json](project-console-refresh-before.json) / [after](project-console-refresh-after.json) | 主机刷新期间串流入口可达与 A 去重修复对照 |
-| [page-tab-memory-before-results.json](page-tab-memory-before-results.json) | 分类恢复修复前 1 项失败、10 项对照通过 |
-| [project-tab-memory-before.json](project-tab-memory-before.json) / [after](project-tab-memory-after.json) | 同一实例分类 A 确认被旧记忆覆盖，以及 390px 两轮修复后往返 |
-| [project-tab-memory-wide-after.json](project-tab-memory-wide-after.json) | 1280×720 四分类连续两轮确认保持来源 |
-| [project-narrow-stacked-final.json](project-narrow-stacked-final.json) | 390×844 布局矩形、悬浮面板 0px 高度、94px 底部避让及唯一焦点 |
-| [project-home-timeline.json](project-home-timeline.json) / [settings](project-settings-timeline.json) | 完整页面保存 / 刷新、重复 A 与进行中主动导航 |
-| [project-search-timeline.json](project-search-timeline.json) / [video](project-video-timeline.json) | 搜索草稿、键盘取消、录像操作与返回 |
-| [project-stream-failure-timeline.json](project-stream-failure-timeline.json) | 离线串流故障弹层、诊断展开与资源清理完成 |
-| [browser-results.json](browser-results.json) | 早期 15 项隔离组件验证 |
+| [validation-summary.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/validation-summary.json) | 最终检查汇总、Git 身份与 72 个验证相关源码文件 SHA256 |
+| [project-browser-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-browser-results.json) | 完整 App 114 项结果、焦点 / busy / 来源及实际几何可达图 |
+| [frontend-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/frontend-results.json) | 86 文件 803 项全量结果 |
+| [targeted-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/targeted-results.json) | 6 文件 63 项焦点、选择、键盘、视频与主机状态回归 |
+| [navigation-coverage.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/navigation-coverage.json) | 62 Vue 文件、173 个交互声明、108 个 Focusable 声明与 0 violations |
+| [pathfinding-before-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/pathfinding-before-results.json) | 宽行几何修复前 5 项失败与 2 项对照通过 |
+| [project-wide-row-before.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-wide-row-before.json) | 完整设置页向下跨过宽行开关的真实矩形基线 |
+| [project-console-refresh-before.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-console-refresh-before.json) / [after](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-console-refresh-after.json) | 主机刷新期间串流入口可达与 A 去重修复对照 |
+| [page-tab-memory-before-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/page-tab-memory-before-results.json) | 分类恢复修复前 1 项失败、10 项对照通过 |
+| [project-tab-memory-before.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-tab-memory-before.json) / [after](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-tab-memory-after.json) | 同一实例分类 A 确认被旧记忆覆盖，以及 390px 两轮修复后往返 |
+| [project-tab-memory-wide-after.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-tab-memory-wide-after.json) | 1280×720 四分类连续两轮确认保持来源 |
+| [project-narrow-stacked-final.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-narrow-stacked-final.json) | 390×844 布局矩形、悬浮面板 0px 高度、94px 底部避让及唯一焦点 |
+| [project-home-timeline.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-home-timeline.json) / [settings](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-settings-timeline.json) | 完整页面保存 / 刷新、重复 A 与进行中主动导航 |
+| [project-search-timeline.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-search-timeline.json) / [video](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-video-timeline.json) | 搜索草稿、键盘取消、录像操作与返回 |
+| [project-stream-failure-timeline.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-stream-failure-timeline.json) | 离线串流故障弹层、诊断展开与资源清理完成 |
+| [browser-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/browser-results.json) | 早期 15 项隔离组件验证 |
 
 `project-fixture.js` 中的可达图调用生产 `findNextFocusable`，候选来自当前最上层有效 Scope 和实际 DOM 矩形。关键确认、返回和方向操作同时经过真实 InputController，记录原生焦点、唯一高亮、busy、请求计数与 pending。
 
@@ -62,9 +64,9 @@ pnpm test:trace-production
 
 ≤600px：二级菜单在上方水平滚动，内容区占下一行完整宽度；底部悬浮面板视觉隐藏，状态继续供辅助技术读取。601px：左右分栏与悬浮提示恢复。320px 最后一个二级菜单能够通过方向键完整显露，并向下进入内容控件。
 
-![390×844 完整项目上下分栏](project-settings-light-narrow-stacked.jpg)
+[历史截图：390×844 完整项目上下分栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-settings-light-narrow-stacked.jpg)
 
-完整 App 区域的 390×844 截图另存为 [project-settings-light-narrow-stacked-detail.jpg](project-settings-light-narrow-stacked-detail.jpg)，从完整截图的实际 iframe 矩形裁出，包含应用标题栏、二级菜单、内容和一级导航。
+完整 App 区域的 390×844 截图另存为 [project-settings-light-narrow-stacked-detail.jpg](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-gamepad-focus-action-completion/project-settings-light-narrow-stacked-detail.jpg)，从完整截图的实际 iframe 矩形裁出，包含应用标题栏、二级菜单、内容和一级导航。
 
 ## 验证边界
 

@@ -27,7 +27,7 @@ PBO、fence、timer、图像身份比较、native/播放计数抵扣、latest-on
 
 ## 自动验证
 
-[生产模块回放](../../dev-docs/validation/2026-11-03-sr-cold-preparation-audit.cjs)复用既有生产模块加载器，检查真实renderer调用所导入的图像编号与唯一性；视频图像、GPU和时钟使用受控替身。[56组指标及源码指纹](../../dev-docs/validation/2026-11-03-sr-cold-preparation.metrics.json)保留具体输入、准备和首处理成本。
+[生产模块回放](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-03-sr-cold-preparation-audit.cjs)复用既有生产模块加载器，检查真实renderer调用所导入的图像编号与唯一性；视频图像、GPU和时钟使用受控替身。[56组指标及源码指纹](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-03-sr-cold-preparation.metrics.json)保留具体输入、准备和首处理成本。
 
 | 每种renderer，10秒运行态 | native回调 | GPU补交付 | 成功提交/唯一图像 |
 | --- | ---: | ---: | ---: |

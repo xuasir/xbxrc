@@ -30,7 +30,7 @@
 | 打开详情 B | 1 | 2 | 2 | B、B |
 | 切换设置 | 0 | 2 | 2 | 空字符串、空字符串 |
 
-总计 6 次全目录查询、6 次详情查询，其中 3 次空商品查询。统计范围覆盖详情组件，XCloud 自身的激活查询单独计算。证据：[说明](../../dev-docs/validation/2026-11-12-cloud-menu-performance-plan/README.md)、[结果](../../dev-docs/validation/2026-11-12-cloud-menu-performance-plan/route-lifecycle-result.json)。
+总计 6 次全目录查询、6 次详情查询，其中 3 次空商品查询。统计范围覆盖详情组件，XCloud 自身的激活查询单独计算。证据：[说明](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-plan/README.md)、[结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-cloud-menu-performance-plan/route-lifecycle-result.json)。
 
 这些证据确认了请求和更新规模；实际卡顿中 JS、布局、图片解码、GPU 合成和 Rust 保存的耗时占比，由实施前基线采集确认。
 

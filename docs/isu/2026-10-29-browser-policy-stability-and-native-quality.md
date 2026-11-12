@@ -6,16 +6,16 @@
 
 推荐整体替换当前跨域画像和自动显示降档的决策方式。用户目标、实际源、显示几何与设备能力决定基础显示计划；传输、解码、renderer 各自在其证据范围内处理故障；观测提供解释与有界计数。正常运行维持当前有效计划，持续故障才进入有界动作和效果验证。
 
-当前已按此方向完成 S0–S3 及新日志后的标准 SR 输出、帧计数补足与立即提交修正。全量 44 文件 / 326 项测试、18 项报告 fixtures、lint、类型检查与生产构建通过。交付证据见[代码改造验证记录](../../dev-docs/validation/2026-10-29-browser-policy-code-validation.md)与[本轮专项验证](../../dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.md)；[Mac/cloud 日志](../../dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.md)作为修复前基线保存，新构建运行效果与 S4 完整配对/长测继续验收。
+当前已按此方向完成 S0–S3 及新日志后的标准 SR 输出、帧计数补足与立即提交修正。全量 44 文件 / 326 项测试、18 项报告 fixtures、lint、类型检查与生产构建通过。交付证据见[代码改造验证记录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-code-validation.md)与[本轮专项验证](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-standard-output-and-latest-frame-validation.md)；[Mac/cloud 日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-policy-fresh-trace-validation.md)作为修复前基线保存，新构建运行效果与 S4 完整配对/长测继续验收。
 
-16:47 新构建[持续前台查验](../../dev-docs/validation/2026-10-29-browser-standard-output-fresh-trace-validation.md)与本批源码指纹匹配。标准输出、源下限及退出资源闭环通过；接收/解码/video稳定约30fps，marker与SR提交记录约3.6fps。用户补充实际观感明显好于3fps，后续先核验video/canvas可见层与绘制记账，再定位共享帧源；1440p成本、采样边界与共享样本继续验收。
+16:47 新构建[持续前台查验](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-standard-output-fresh-trace-validation.md)与本批源码指纹匹配。标准输出、源下限及退出资源闭环通过；接收/解码/video稳定约30fps，marker与SR提交记录约3.6fps。用户补充实际观感明显好于3fps，后续先核验video/canvas可见层与绘制记账，再定位共享帧源；1440p成本、采样边界与共享样本继续验收。
 
 ## Current Constraints
 
 - 保持 Tauri + Vue 3 + TypeScript + Rust 和现有浏览器 WebRTC/runtime 装配，复用当前协商队列、PlaybackService、renderer plan、共享帧源和连接 coordinator。
 - 保留主机/云游戏、输入、音视频、显示设置、SR、截图、麦克风、统计导出和故障回退。自动适应的成功能力保留，其触发规则、权限和默认行为以本轮体验合同校准。
 - 浏览器内部 TWCC/GCC、NACK/PLI/FIR、jitter buffer、解码与 compositor 的能力由平台拥有；应用层使用现有 API 和已验证能力。Rust 主线的传输与恢复职责保持原归属。
-- 新方案承接[完整功能优化 RFC](../rfcs/2026-10-28-browser-runtime-simplification-and-stability.md)、[策略正确性审计](../../dev-docs/validation/2026-10-29-browser-render-policy-correctness-audit.md)。本轮用户要求更新了[10 月 23 日 SR 设计](../rfcs/2026-10-23-super-resolution-tier-redesign.md)的源下限与显示预算合同。
+- 新方案承接[完整功能优化 RFC](../rfcs/2026-10-28-browser-runtime-simplification-and-stability.md)、[策略正确性审计](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-29-browser-render-policy-correctness-audit.md)。本轮用户要求更新了[10 月 23 日 SR 设计](../rfcs/2026-10-23-super-resolution-tier-redesign.md)的源下限与显示预算合同。
 
 ### 整改前已确认的策略连锁
 
@@ -156,4 +156,4 @@ FBO 完整性检查绑定创建/resize，uniform/texture/FBO 按真实配置变�
 
 生产实现继续复用当前责任模块和唯一执行链。以实际删除的跨域字段、重复状态和分支统计代码减法，体验合同与完整功能证据共同决定收口。
 
-本次同范围生产文件由 52 个变为 62 个，原始行由 15,674 降至 15,222，AST 语句由 7,039 降至 6,898；分支由 1,137 增至 1,297，新增分支承担代际、取消、资源能力和缺证保护。runtime 直属可变绑定由审计 129 个、本轮起点 94 个降至 74 个。正式快照见[维护规模测量](../../dev-docs/validation/browser-runtime-optimization-current.json)。运行帧率、CPU/GPU 和感知画质改善以 S4 同设备配对证据结算。
+本次同范围生产文件由 52 个变为 62 个，原始行由 15,674 降至 15,222，AST 语句由 7,039 降至 6,898；分支由 1,137 增至 1,297，新增分支承担代际、取消、资源能力和缺证保护。runtime 直属可变绑定由审计 129 个、本轮起点 94 个降至 74 个。正式快照见[维护规模测量](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/browser-runtime-optimization-current.json)。运行帧率、CPU/GPU 和感知画质改善以 S4 同设备配对证据结算。

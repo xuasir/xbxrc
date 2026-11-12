@@ -66,7 +66,7 @@ Browser 呈现追踪来自 `videoFrameCallback`，首回调 `presentedFramesDelt
 
 真实 WebGL2 对照在 macOS Chrome 157 执行，覆盖边界、噪声、棋盘、渐变、0 / 0.6 / 1 强度、非 1:1 映射和 CAS；其中两组直接使用 2560×1440、强度 0.6、contrast/saturation=105。88 组共比较 29,693,856 个 RGBA8 分量，129 个分量出现舍入差异，最大差值为 1/255。生产 GLSL 与当前 renderer 的 SHA 身份匹配，调度回放使用生产模块及受控 DOM/WebGL。
 
-采样数量描述 shader 的算法成本；实际 GPU 耗时、Windows FPS 和物理 present 需设备观测。独立数据见 [USM metrics](../../dev-docs/validation/2026-11-08-usm-sampling.metrics.json)，复算入口为 [USM audit](../../dev-docs/validation/2026-11-08-usm-sampling-audit.cjs)。像素对照基线为 Git `21fd04f06849c37fa21c54469ef225c1a4332f1b`，源码和 shader 的完整 SHA 保存在 metrics。
+采样数量描述 shader 的算法成本；实际 GPU 耗时、Windows FPS 和物理 present 需设备观测。独立数据见 [USM metrics](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-08-usm-sampling.metrics.json)，复算入口为 [USM audit](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-08-usm-sampling-audit.cjs)。像素对照基线为 Git `21fd04f06849c37fa21c54469ef225c1a4332f1b`，源码和 shader 的完整 SHA 保存在 metrics。
 
 ## 修复范围
 

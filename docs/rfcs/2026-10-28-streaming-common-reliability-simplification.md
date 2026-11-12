@@ -261,7 +261,7 @@ fresh trace 必须绑定实际构建 revision、平台/WebView、target/runtime�
 ### 2026-10-30 公共启动审查修复（用户已授权实施）
 
 - 本批代码修复及自动验证完成，见[实施报告](../reports/2026-10-30-common-startup-fixes.md)；前端216项、Rust140项及调用方编译检查通过，实机矩阵延续本RFC验证要求。
-- 范围：[5 项审查发现](../../dev-docs/validation/2026-10-30-common-startup-audit.md)。保持现有 runtime/bridge/Rust signaling 主线，复用 runtime token、session token 与协商锁。
+- 范围：[5 项审查发现](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-10-30-common-startup-audit.md)。保持现有 runtime/bridge/Rust signaling 主线，复用 runtime token、session token 与协商锁。
 - TURN：每个 launch Promise 的拒绝先核验所属 runtime token；被替换的 attempt 只结束自身，当前 attempt 的真实错误进入既有终止路径。
 - SDP/ICE：同 session 后续 offer（含新 Peer 的 restart=false）读取旧 answer 基线；新媒体 ICE 轮次保留旧候选基线，增量 POST 保持基线。按新 answer 的 ufrag 过滤旧候选，保留缺少 ufrag 时的基线去重，结束标志跟随当前候选；排队 ICE 操作检查入队时的协商代际。chat/画质协商复用既有 ICE 时保留媒体候选状态。
 - 连接等待：远端结束且可用候选为零时返回明确错误；browser 完成信令后仍未 connected 的等待上界为 15 秒，按当前 token 尝试一次符合条件的 TURN，随后仍失败则终止。connected、stop、替换均清理计时器。

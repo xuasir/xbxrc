@@ -1,11 +1,13 @@
 # 主机串流自动续期与登录提示排查
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 - 日期：2026-11-09，Asia/Shanghai。
 - 状态：诊断与离线复现完成；20348f4c 为固定诊断基线，后续实现见[统一续期交付报告](/Users/guo.xu/Documents/code/games/xbxrc/docs/reports/2026-11-09-unified-token-renewal.md)。
 - 范围：`main` 的认证状态、XHOME token 获取、静默续期、串流失败后的重新登录动作。
 - 输入：[设备日志](/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794190273035-1.jsonl:115)、[11 月 8 日令牌失效记录](2026-11-08-xhome-startup-auth-expiry.md)、相关 Git 历史与登录后凭据时效元数据。
 - 固定日志快照：3,701 行，2026-11-09 10:11:13.035–10:17:17.560，dev profile，`traceBudgetNotice=0`；SHA-256 为 `e3c88d94856c299dbbc39a14221000f04354b7864fd7ac3f3a242a16232aa1d7`。
-- [安全指标与源码身份](2026-11-09-xhome-auth-refresh-investigation.metrics.json) · [离线复现脚本](2026-11-09-xhome-auth-refresh-investigation.py)。
+- [安全指标与源码身份](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-xhome-auth-refresh-investigation.metrics.json) · [离线复现脚本](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-xhome-auth-refresh-investigation.py)。
 
 ## 结论
 

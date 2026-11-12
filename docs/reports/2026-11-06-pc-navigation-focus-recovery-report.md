@@ -57,12 +57,12 @@
 
 截图证据：
 
-- [360px 深色](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-360-dark.png) / [360px 浅色](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-360-light.png)
-- [700px 深色](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-700-dark.png) / [700px 浅色](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-700-light.png)
-- [提示增高后的末项焦点](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-360-last-focus.png)
-- [960px 浅色侧栏](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-nav-wide-960-light.png)
-- [960px](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-nav-960-dark.png) / [1280px](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-nav-1280-dark.png)
-- [保存后保持单一焦点](../../dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-settings-save-single-focus.png)
+- [360px 深色](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-360-dark.png) / [360px 浅色](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-360-light.png)
+- [700px 深色](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-700-dark.png) / [700px 浅色](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-700-light.png)
+- [提示增高后的末项焦点](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-glass-nav-360-last-focus.png)
+- [960px 浅色侧栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-bottom-nav-wide-960-light.png)
+- [960px](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-nav-960-dark.png) / [1280px](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-nav-1280-dark.png)
+- [保存后保持单一焦点](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-06-pc-navigation-focus-audit/assets/fixed-settings-save-single-focus.png)
 
 ## Risks and Follow-up
 

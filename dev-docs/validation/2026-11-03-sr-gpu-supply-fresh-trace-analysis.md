@@ -1,5 +1,7 @@
 # SR GPU 补供帧新日志验收
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 2026-11-03。最新设备日志显示，SR 60fps 修复仍处于待验状态。GPU 探测器首次 CPU 操作合计196ms，超过50ms冷预算后停用；全会话补交付0帧。两段SR完整3秒窗口提交中位数51.388/46.972fps，解码60.033/60.142fps，主要帧差继续位于解码到候选供给之间。
 
 ## 样本与构建
@@ -53,7 +55,7 @@ SR g1完整窗口原始seq257→313，g3为seq773。两段SR完整15秒窗口均
 
 两段SR候选到提交的即时损失分别1/0帧，重复绘制和提交失败0；主要持续差距由候选供给解释。seq312持续帧差回退，seq398效果improved；seq684健康增强试探，seq772试探失败回退，seq777试探结果neutral；seq862回退效果improved。最终网络恢复后seq1633有1个完整15秒窗口：解码59.967fps、video推进59.900fps。
 
-相较[修复前10:59日志](2026-11-02-pixel-cost-fresh-trace-analysis.md)，SR两段完整3秒输出48.087/58.444→51.388/46.972fps。两份独立会话的阶段长度和网络分别保留；本轮GPU补交付0，修复收益继续待设备有效运行证据。
+相较[修复前10:59日志](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-02-pixel-cost-fresh-trace-analysis.md)，SR两段完整3秒输出48.087/58.444→51.388/46.972fps。两份独立会话的阶段长度和网络分别保留；本轮GPU补交付0，修复收益继续待设备有效运行证据。
 
 ## 渲染成本与长尾
 
@@ -79,7 +81,7 @@ native midsegment的media/steady supply为SKIPPED，提交/呈现年龄n/a；浏
 
 ## 验证与下一步
 
-[复算脚本](2026-11-03-sr-gpu-supply-fresh-trace-analysis.py)核对1678个唯一seq、89个完整窗口、同代际增量、CPU分项总值、生命周期顺序和稳定SHA，全部通过。[metrics](2026-11-03-sr-gpu-supply-fresh-trace-analysis.metrics.json)保存具体窗口、冷启动、恢复时间线与指纹。通过项表示复算一致性；SR60fps仍待有效设备结果。
+[复算脚本](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-03-sr-gpu-supply-fresh-trace-analysis.py)核对1678个唯一seq、89个完整窗口、同代际增量、CPU分项总值、生命周期顺序和稳定SHA，全部通过。[metrics](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-03-sr-gpu-supply-fresh-trace-analysis.metrics.json)保存具体窗口、冷启动、恢复时间线与指纹。通过项表示复算一致性；SR60fps仍待有效设备结果。
 
 下一步优先前置GPU冷资源准备，分开测量context、shader编译/链接与首次video导入，并明确冷启动失败后的有界恢复资格；稳态8ms预算、结果8ms新鲜度及单在途合同继续保留。同步补齐probe eligibility事实，取得warm读取、有效像素配对和实际补交付后，验收持续运动场景至少30秒的SR完整3s/15s供给与真实呈现。当前原生video在网络恢复后的完整15秒窗口推进59.900fps，S4保持In Progress，实机采集由用户手动完成。
 

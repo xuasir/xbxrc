@@ -2,7 +2,7 @@
 
 主机与云游戏的 Browser 渲染调度已统一为有效新候选即时提交、超额候选直接跳过、后续最新图像覆盖旧图像。两种增强 renderer 的累计deadline等待、旧候选rAF重试、fresh等待状态及GPU补供帧准备链已收掉。显式帧率预算、零预算暂停、截图和资源生命周期保持有效。
 
-关联[RFC](../rfcs/2026-11-05-browser-latest-frame-scheduling.md)与[复算指标](../../dev-docs/validation/2026-11-05-browser-latest-frame-scheduling.metrics.json)。主窗口在main工作区直接执行，既有渲染/输入/trace修复继续保留。
+关联[RFC](../rfcs/2026-11-05-browser-latest-frame-scheduling.md)与[复算指标](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-browser-latest-frame-scheduling.metrics.json)。主窗口在main工作区直接执行，既有渲染/输入/trace修复继续保留。
 
 ## 实现结果
 
@@ -40,6 +40,6 @@ node dev-docs/validation/2026-11-05-browser-latest-frame-scheduling-audit.cjs /t
 
 后续分别固定video、普通锐化、SR各60秒，核验同窗received→decode→video→candidate→submit、限帧跳过、提交间隔P95/P99及帧龄；网络freeze与恢复段单列。自动回归支持两种会话使用同一策略，整机帧率与长测继续进入Browser stable/S4验收。
 
-2026-11-05 14:42新构建设备日志已完成[独立分析](../../dev-docs/validation/2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md)。源码指纹匹配，首段SR累计352候选中84个被固定时隙限帧跳过，23.86%；即时供给53.14→提交40.19fps，video稳态约60fps。生产回放复现相位冲突，原自动回放的稳定相位覆盖存在盲区；严格Browser运行态门禁PASS，真实增强供给仍待修复。优先让常规源帧率下的新候选直接放行，显式限帧沿独立轻量限流验证；候选源缺口与GPU/物理present继续单独取证。
+2026-11-05 14:42新构建设备日志已完成[独立分析](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-05-latest-frame-scheduling-fresh-trace-analysis.md)。源码指纹匹配，首段SR累计352候选中84个被固定时隙限帧跳过，23.86%；即时供给53.14→提交40.19fps，video稳态约60fps。生产回放复现相位冲突，原自动回放的稳定相位覆盖存在盲区；严格Browser运行态门禁PASS，真实增强供给仍待修复。优先让常规源帧率下的新候选直接放行，显式限帧沿独立轻量限流验证；候选源缺口与GPU/物理present继续单独取证。
 
 用户随后授权继续优化，[默认准入修复](2026-11-05-browser-frame-admission-fix.md)已完成：常规60fps及以上候选直通，显式低FPS使用滚动准入；SR context恢复沿新候选订阅去重。60文件610项测试、12组节拍与19组设备入口回放通过，初版固定槽的日期化自动报告与采样源码身份沿原证据保留。帧率收益和video→candidate剩余缺口接续新设备样本。

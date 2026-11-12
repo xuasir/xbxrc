@@ -24,7 +24,7 @@
 | 弱短脉冲 | 交给 actuator | 持续时间 <8ms 且所有通道 ≤2% 时过滤 |
 | 全零停止 | 清理定时器并 reset/清零电机 | 串流归属下 stopRumble/reset |
 
-用实际官方方法和当前源码、模拟计时器及 actuator 回放三组报文，结果见 [results.json](../../dev-docs/validation/2026-11-12-rumble-share-protocol/results.json)：
+用实际官方方法和当前源码、模拟计时器及 actuator 回放三组报文，结果见 [results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-rumble-share-protocol/results.json)：
 
 - `duration=200ms / delay=100ms / repeat=2`：官方在 100、400、700ms 开始三次播放；xbxrc 在 0ms 开始一次，持续 200ms。
 - `duration=5000ms / delay=0 / repeat=0`：官方提交 5000ms，xbxrc 提交 1000ms，提交持续时间缩短 80%。
@@ -53,10 +53,10 @@
 
 ## 源码与复现
 
-- [官方输入枚举和编码摘录](../../dev-docs/validation/2026-11-12-rumble-share-protocol/official-input.excerpt.js)
-- [官方震动方法摘录](../../dev-docs/validation/2026-11-12-rumble-share-protocol/official-vibration.excerpt.js)
-- [源码回放脚本](../../dev-docs/validation/2026-11-12-rumble-share-protocol/probe.mjs)
-- [URL、SHA-256 和回放结果](../../dev-docs/validation/2026-11-12-rumble-share-protocol/results.json)
+- [官方输入枚举和编码摘录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-rumble-share-protocol/official-input.excerpt.js)
+- [官方震动方法摘录](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-rumble-share-protocol/official-vibration.excerpt.js)
+- [源码回放脚本](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-rumble-share-protocol/probe.mjs)
+- [URL、SHA-256 和回放结果](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-12-rumble-share-protocol/results.json)
 
 官方源文件：[输入模型](https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js)、[WebRTC 输入及震动](https://assets.play.xbox.com/playxbox/static/js/web-rtc-stream.d6f6b903.chunk.js)。摘录和结果保存各自 SHA-256，便于按同一版本复核。
 

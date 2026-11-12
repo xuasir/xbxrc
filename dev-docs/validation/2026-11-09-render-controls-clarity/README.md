@@ -1,5 +1,7 @@
 # 渲染控件与顶部指标栏验证
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 关联 [RFC](../../../docs/rfcs/2026-11-09-render-controls-clarity.md)。本目录保存实际 Vue 组件的隔离预览与浏览器验收截图。帧率、网络指标、renderer 提交状态和持久化采用模拟输入；实机渲染吞吐与物理上屏继续通过设备 trace 验收。
 
 ## 已观察行为
@@ -13,13 +15,13 @@
 
 | 场景 | 观察结果 | 截图 |
 | --- | --- | --- |
-| 1280 × 800，本次设置，深色 | 默认焦点 SR；标题、渲染控制、色彩和固定提交栏可见，内容区独立滚动 | [本次设置](session-controls-dark.jpg) |
-| 1280 × 800，全局默认，浅色 | 默认焦点 SR；内容完整显示，提示保存后用于后续串流 | [默认设置](default-controls-light.jpg) |
-| 360 × 640，本次设置，深色 | 方向键显露三档锐化；固定操作栏两行，高 104px | [滚动导航](narrow-controls-scrolled.jpg) |
-| 1280 × 800，增强回退 | 指标栏单行，高 32px，宽约 526px | [顶部栏](wide-fallback.jpg) |
-| 360 × 640，增强回退 | 指标栏两行，高约 42px，宽 328px | [窄屏顶部栏](narrow-fallback.jpg) |
+| 1280 × 800，本次设置，深色 | 默认焦点 SR；标题、渲染控制、色彩和固定提交栏可见，内容区独立滚动 | [本次设置](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/session-controls-dark.jpg) |
+| 1280 × 800，全局默认，浅色 | 默认焦点 SR；内容完整显示，提示保存后用于后续串流 | [默认设置](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/default-controls-light.jpg) |
+| 360 × 640，本次设置，深色 | 方向键显露三档锐化；固定操作栏两行，高 104px | [滚动导航](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/narrow-controls-scrolled.jpg) |
+| 1280 × 800，增强回退 | 指标栏单行，高 32px，宽约 526px | [顶部栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/wide-fallback.jpg) |
+| 360 × 640，增强回退 | 指标栏两行，高约 42px，宽 328px | [窄屏顶部栏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/narrow-fallback.jpg) |
 
-各场景页面横向溢出检查通过。尺寸、焦点与 DOM 边界记录见 [visual-checks.json](visual-checks.json)。[修正前窄屏](before-narrow-controls.jpg)保留底部三行操作占位与默认焦点提前落到关闭按钮的对照。
+各场景页面横向溢出检查通过。尺寸、焦点与 DOM 边界记录见 [visual-checks.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/visual-checks.json)。[修正前窄屏](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-clarity/before-narrow-controls.jpg)保留底部三行操作占位与默认焦点提前落到关闭按钮的对照。
 
 ## 复现预览
 

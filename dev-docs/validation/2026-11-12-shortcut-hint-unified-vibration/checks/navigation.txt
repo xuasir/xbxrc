@@ -1,8 +1,0 @@
-$ node scripts/validate-navigation-coverage.mjs
-{
-  "vueFiles": 78,
-  "interactiveSites": 217,
-  "focusableSites": 144,
-  "supportedSites": 217,
-  "violations": []
-}

@@ -98,7 +98,7 @@ rAF 暂停后，定时器自身也更新 `lastSampleAt`，导致理想补采在 
 | 相同水位下菜单交接 | 中性释放当次提交 |
 | 按下/释放分别在 17/33ms，34ms 恢复发送 | 两份报文于 50ms 提交，采样后等待 33/17ms |
 
-结构化实验结果：[gamepad-input-chain-audit-results.json](../../dev-docs/validation/2026-11-02-gamepad-input-chain-audit-results.json)。0ms 来自假时钟，表达同步调用行为；真实 CPU 耗时由实机采样确认。
+结构化实验结果：[gamepad-input-chain-audit-results.json](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-02-gamepad-input-chain-audit-results.json)。0ms 来自假时钟，表达同步调用行为；真实 CPU 耗时由实机采样确认。
 
 `runtime-logs` 当前保留 10 份历史 trace，最新文件 `runtime-trace-1787121327620-1.jsonl` 为 2026-08-19。这些日志早于当前统一输入和发行裁剪代码，仅作为历史资料。此次没有启动实际应用或远端游戏，实机启动、串流和长测遵循用户手动验收边界。
 

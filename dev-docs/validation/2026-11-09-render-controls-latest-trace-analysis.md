@@ -1,5 +1,7 @@
 # 2026-11-09 15:03 新日志：增强持续缺口与自动回退
 
+> 2026-11-12 整理：本页保留验证摘要；带 Git 链接的截图、夹具和中间输出按采样时提交读取。
+
 ## 结论
 
 增强路径的持续帧率缺口再次出现。默认渲染在 79.321 秒完整呈现推进窗口中加权为 59.972fps；SR 初次的后段为 53.473fps，自动重试为 48.169fps；锐化“清晰”初次为 49.922fps，自动重试为 50.513fps。四次增强回退后，默认渲染各段均恢复到约 60fps。
@@ -18,7 +20,7 @@
 - Canvas 采用同代次累计提交量与单调时钟计算。默认渲染采用完整 telemetry 发布窗口的 presented-frame 推进代理。接收、解码、网络采用完整位于代次边界内的原始 RTC delta。
 - 同窗帧差使用匹配的 cached `sampleId`；live diagnostics 的候选/提交差另按其自身 `observedAtMs` 计算。三秒最小值要求相同 renderer identity、完整三秒边界及至少 2999ms renderer coverage。
 
-数据见 [metrics](2026-11-09-render-controls-latest-trace-analysis.metrics.json)，复算入口见 [分析脚本](2026-11-09-render-controls-latest-trace-analysis.py)。原始日志按数据解析，报告保留数值、事件身份与构建证据。
+数据见 [metrics](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-latest-trace-analysis.metrics.json)，复算入口见 [分析脚本](https://github.com/xuasir/xbxrc/blob/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation/2026-11-09-render-controls-latest-trace-analysis.py)。原始日志按数据解析，报告保留数值、事件身份与构建证据。
 
 ## 实际渲染时间轴
 
