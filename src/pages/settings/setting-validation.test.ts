@@ -32,10 +32,11 @@ describe('settings organization and effect', () => {
     expect(isSettingFieldVisible(groups, 'audio_bitrate')).toBe(false)
     expect(isSettingFieldVisible(groups, 'resolution')).toBe(true)
   })
-  it('keeps launch and connection effects distinct from immediate settings', () => {
+  it('reports authorization, connection, launch, and immediate setting effects', () => {
     expect(getSettingEffect('fullscreen')).toBe('nextLaunch')
     expect(getSettingEffect('resolution')).toBe('nextConnection')
-    expect(getSettingEffect('force_region_ip')).toBe('nextConnection')
+    expect(getSettingEffect('force_region_ip')).toBe('nextAuthorization')
+    expect(getSettingEffect('xcloud_region_name')).toBe('nextConnection')
     expect(getSettingEffect('theme')).toBe('instant')
     expect(getSettingEffect('runtime_trace_mode')).toBe('instant')
     expect(getSectionsForPage('general').flatMap(section => section.items)).not.toContainEqual({ kind: 'field', fieldKey: 'background_keepalive' })

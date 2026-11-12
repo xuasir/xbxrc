@@ -8,6 +8,8 @@
 
 | ID | Task | Status | Started On | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-11-12-tak-compatibility-feasibility | 评估官方 TAK 触控兼容可行性 | Done | 2026-11-12 | Exploration；确认布局/消息/控件行为兼容可行，复用公共虚拟输入与 Rust 配置查询；官方 takx 下载、版本协商与实机覆盖进入后续验证。推荐 Vue/TypeScript 解释与绘制、Rust 资源和会话边界，首版先覆盖常用控件/layer/Context。[评估](isu/2026-11-12-tak-compatibility-feasibility.md)。 |
+| 2026-11-12-ci-settings-effect-contract | 修复 CI 设置生效时机断言并核验完整校验入口 | Done | 2026-11-12 | simple；重构遗漏的 `force_region_ip` 断言同步到 `nextAuthorization`，补充 `xcloud_region_name` 的 `nextConnection` 合同。复现原失败后，前端114文件1019项、工具4、发行合同9/两版型模拟、生命周期3、Rust三包及 fmt/lint:fix/lint/typecheck/Browser来源与依赖门禁/build/diff check通过；验证范围为本地main，远端beta接续release/test复跑。 |
 | 2026-11-12-cloud-refresh-and-filters | 修复云游戏刷新栏目闪动并精简标题筛选栏 | Done | 2026-11-12 | simple；刷新保留四类排名、首屏索引与查询一起展示，筛选前移、更新状态合并描述行、分类单行横滚和焦点显露完成。Rust65/云目录27、20次热返回、fmt/lint/typecheck/build/导航217处及四档中英文窗口通过；全量1062通过/1项既有设置断言失败。实机连续刷新由用户复验。[证据](../dev-docs/validation/2026-11-12-cloud-refresh-and-filters/README.md)。 |
 | 2026-11-12-restore-original-app-icon | 按用户要求恢复原版应用图标 | Done | 2026-11-12 | simple；工作区及暂存区恢复 `e33f554a` 的53个原版图标文件，撤销重绘生成脚本和新增favicon；164项资源检查、build及本次diff校验通过。lint:fix遇到既有串流测试规则错误，记录见[核验](../dev-docs/validation/2026-11-12-hd-ui-assets/checks/app-icon-restore.json)。 |
 | 2026-11-12-touch-layout-protocol-and-tak-engine-audit | 分析 better-xcloud 布局协议与 TAK/Babylon 触控引擎 | Done | 2026-11-12 | simple 源码审计；两篇分析完成，覆盖社区包装/官方文件/消息/状态语义及指针/命中/控件/输入合并/Babylon绘制。六份原件哈希、36段源码摘录及41项行为回放核对通过，含两项轴曲线异常复现；真实浏览器/GPU与实机测量待验。[协议](references/better-xcloud-touch-layout-protocol.md) · [引擎](references/tak-babylon-touch-engine.md) · [证据](../dev-docs/validation/2026-11-12-tak-layout-and-engine/README.md)。 |

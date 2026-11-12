@@ -19,5 +19,11 @@
   },
   "realBrowserWebGLMeasured": false,
   "taskStatus": "Done",
-  "taskLedgerLinks": 3
+  "taskLedgerLinks": 3,
+  "feasibilityNoteChecks": {
+    "result": "pass",
+    "localDocumentLinks": 8,
+    "sourceLineLinks": 5,
+    "taskStatus": "Done"
+  }
 }

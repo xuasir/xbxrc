@@ -238,4 +238,4 @@ better-xcloud 的 WebGL 包装为 TAK context 设置 `antialias=false` 与 `powe
 
 DOM 事件、真实 WebGL/GPU、触摸到远端输入时延、触觉效果与长时资源行为的证据仍限于静态源码；端到端验收需要浏览器和实机测量。
 
-用于理解和后续设计时，建议按 `TouchManager / HitTester → 控件状态机 → InputProvider → LayoutCoordinator / LayerManager → 绘制宿主` 阅读。xbxrc 的后续方案沿现有 Vue 触控 UI、公共输入合同与 Tauri/Rust 会话边界制定。
+用于理解和后续设计时，建议按 `TouchManager / HitTester → 控件状态机 → InputProvider → LayoutCoordinator / LayerManager → 绘制宿主` 阅读。xbxrc 的后续触控 UI 使用 Vue + TypeScript，接入现有公共输入合同与 Tauri/Rust 会话边界。
