@@ -248,17 +248,12 @@ enum StreamingDiagnosticsPlacement {
                     .padding(.horizontal, 64)
                 }
                 StreamingControlsOverlay(
-                    store: store, revealToken: revealToken, revealSource: .accessibility,
+                    store: store, revealToken: revealToken, revealSource: .twoFingerInward,
                     autoHideAfter: nil)
             }
             .onAppear { store.prepareControlsUITestPreview() }
             .background {
                 StreamingControlsGestureLayer { revealToken += 1 }
-            }
-            .overlay(alignment: .top) {
-                // DEBUG 夹具提供无障碍唤出入口，正式串流使用双指手势。
-                Button("测试唤出串流菜单") { revealToken += 1 }
-                    .accessibilityIdentifier("stream-test-reveal")
             }
         }
     }

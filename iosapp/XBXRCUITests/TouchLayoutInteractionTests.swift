@@ -220,9 +220,11 @@ final class TouchLayoutInteractionTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
-        let reveal = app.buttons["stream-test-reveal"]
+        let reveal = app.buttons["stream-controls-open"]
         XCTAssertTrue(reveal.waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["打开串流菜单"].exists)
+        XCTAssertTrue(reveal.isHittable)
+        XCTAssertGreaterThanOrEqual(reveal.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(reveal.frame.height, 44)
         XCTAssertTrue(app.buttons["touch-control-right/inner/1"].exists)
         save(app, "streaming-hidden-landscape")
         reveal.tap()
@@ -274,6 +276,9 @@ final class TouchLayoutInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["stream-controls-close"].waitForExistence(timeout: 5))
         app.buttons["stream-controls-close"].tap()
         XCTAssertFalse(diagnostics.exists)
+        XCTAssertTrue(reveal.waitForExistence(timeout: 3))
+        reveal.tap()
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
     }
 
     func testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial() {
@@ -284,7 +289,7 @@ final class TouchLayoutInteractionTests: XCTestCase {
             "--settings-ui-test", "--streaming-panels-ui-test", "-AppleLanguages", "(zh-Hans)",
         ]
         app.launch()
-        let reveal = app.buttons["stream-test-reveal"]
+        let reveal = app.buttons["stream-controls-open"]
         XCTAssertTrue(reveal.waitForExistence(timeout: 10))
         waitForOrientation(app, landscape: false)
         let window = app.windows.firstMatch.frame
@@ -318,7 +323,7 @@ final class TouchLayoutInteractionTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--settings-ui-test", "--streaming-panels-ui-test"]
         app.launch()
-        XCTAssertTrue(app.buttons["stream-test-reveal"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["stream-controls-open"].waitForExistence(timeout: 10))
         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
         XCTAssertFalse(app.buttons["stream-diagnostics-menu"].exists)
         let size = app.windows.firstMatch.frame.size
@@ -329,7 +334,7 @@ final class TouchLayoutInteractionTests: XCTestCase {
         save(app, "streaming-two-finger-gesture")
     }
 
-    func testSignedOutLogoAndWideLoginButton() {
+    func testSignedOutXBXRCLogoAndBottomLoginButton() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
@@ -341,12 +346,22 @@ final class TouchLayoutInteractionTests: XCTestCase {
         XCTAssertTrue(button.waitForExistence(timeout: 10))
         let logo = app.images["signed-out-logo"]
         XCTAssertTrue(logo.exists)
+        XCTAssertEqual(logo.label, "XBXRC")
+        XCTAssertTrue(button.isEnabled)
+        XCTAssertFalse(app.images["page-xbox-logo"].exists)
+        for section in ["hosts", "library", "my", "controller", "settings"] {
+            XCTAssertFalse(app.buttons["primary-navigation-\(section)"].exists)
+        }
         let window = app.windows.firstMatch.frame
         XCTAssertEqual(logo.frame.midX, window.midX, accuracy: 2)
+        XCTAssertEqual(logo.frame.midY, window.midY, accuracy: 20)
         XCTAssertGreaterThan(button.frame.minY, logo.frame.maxY)
+        XCTAssertGreaterThan(button.frame.minY, window.height * 0.75)
+        XCTAssertGreaterThanOrEqual(window.maxY - button.frame.maxY, 32)
+        XCTAssertLessThan(window.maxY - button.frame.maxY, 100)
         XCTAssertGreaterThan(button.frame.width, min(300, window.width * 0.75))
         XCTAssertGreaterThanOrEqual(button.frame.height, 51.9)
-        save(app, "signed-out-logo-wide-login")
+        save(app, "signed-out-xbxrc-logo-bottom-login")
     }
 
     private func save(_ app: XCUIApplication, _ name: String) {

@@ -29,6 +29,25 @@ struct StreamingControlsOverlay: View {
 
     var body: some View {
         ZStack {
+            if controls.surface == .hidden {
+                VStack {
+                    HStack {
+                        dockButton(
+                            systemName: "line.3.horizontal", label: "打开串流菜单",
+                            identifier: "stream-controls-open"
+                        ) {
+                            reveal(source: .button)
+                        }
+                        .background(
+                            .black.opacity(reduceTransparency ? 0.92 : 0.28),
+                            in: RoundedRectangle(cornerRadius: 14)
+                        )
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(16)
+            }
             if let message {
                 VStack {
                     Text(message)

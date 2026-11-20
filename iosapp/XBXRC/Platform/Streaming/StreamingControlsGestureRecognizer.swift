@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 enum StreamingControlsRevealSource: String, Sendable {
+    case button
     case twoFingerInward
     case accessibility
 }

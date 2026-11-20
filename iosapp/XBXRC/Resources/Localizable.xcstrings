@@ -1,380 +1,6 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "布局 · 大小 · 透明度": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Layout · Size · Opacity"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "布局 · 大小 · 透明度"
-          }
-        }
-      }
-    },
-    "布局模板": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Layout template"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "布局模板"
-          }
-        }
-      }
-    },
-    "自定义布局": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Custom layout"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自定义布局"
-          }
-        }
-      }
-    },
-    "触屏手柄调整": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touch controller adjustments"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "触屏手柄调整"
-          }
-        }
-      }
-    },
-    "模板名称": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Template name"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "模板名称"
-          }
-        }
-      }
-    },
-    "输入名称": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter a name"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "输入名称"
-          }
-        }
-      }
-    },
-    "预览方向": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preview orientation"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "预览方向"
-          }
-        }
-      }
-    },
-    "恢复位置": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reset positions"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复位置"
-          }
-        }
-      }
-    },
-    "本地模板": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Local templates"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地模板"
-          }
-        }
-      }
-    },
-    "另存为新模板": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save as new template"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "另存为新模板"
-          }
-        }
-      }
-    },
-    "删除模板": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete template"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除模板"
-          }
-        }
-      }
-    },
-    "删除此本地模板？": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete this local template?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除此本地模板？"
-          }
-        }
-      }
-    },
-    "本地模板已达上限": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Local template limit reached"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地模板已达上限"
-          }
-        }
-      }
-    },
-    "最多保存 20 个模板，可更新或删除已有模板。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save up to 20 templates. Update or delete an existing template."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最多保存 20 个模板，可更新或删除已有模板。"
-          }
-        }
-      }
-    },
-    "拖动按键调整位置，横屏和竖屏分别保存。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag controls to reposition them. Landscape and portrait positions are saved separately."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖动按键调整位置，横屏和竖屏分别保存。"
-          }
-        }
-      }
-    },
-    "当前布局": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Current layout"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前布局"
-          }
-        }
-      }
-    },
-    "透明度": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opacity"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "透明度"
-          }
-        }
-      }
-    },
-    "调整会实时显示在预览中，保存后用于串流。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adjustments appear in the preview immediately and apply to streaming after saving."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "调整会实时显示在预览中，保存后用于串流。"
-          }
-        }
-      }
-    },
-    "游戏画面": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Game screen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "游戏画面"
-          }
-        }
-      }
-    },
-    "自定义布局 %lld": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Custom layout %lld"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自定义布局 %lld"
-          }
-        }
-      }
-    },
-    "已选中，可拖动": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Selected, draggable"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已选中，可拖动"
-          }
-        }
-      }
-    },
-    "可拖动": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Draggable"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可拖动"
-          }
-        }
-      }
-    },
     "" : {
 
     },
@@ -1712,9 +1338,6 @@
         }
       }
     },
-    "串流触屏布局" : {
-
-    },
     "串流请求已被新的请求替代" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2158,6 +1781,7 @@
       }
     },
     "从剪贴板选择文字，预览后发送到游戏，单次最多 512 字。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2334,7 +1958,6 @@
       }
     },
     "保存" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2453,6 +2076,7 @@
       }
     },
     "停止并导出" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2737,6 +2361,7 @@
       }
     },
     "关闭主机并结束" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2854,6 +2479,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Up to 4 buttons · Hold to trigger once. Close the menu and release to resume input."
+          }
+        }
+      }
+    },
+    "最多保存 20 个模板，可更新或删除已有模板。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save up to 20 templates. Update or delete an existing template."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最多保存 20 个模板，可更新或删除已有模板。"
           }
         }
       }
@@ -3101,9 +2743,6 @@
         }
       }
     },
-    "切换通用与游戏布局，查看多指、按键、摇杆及扳机输入。" : {
-
-    },
     "创建 WebRTC 连接失败" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3151,6 +2790,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "初始画面"
+          }
+        }
+      }
+    },
+    "删除模板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete template"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除模板"
+          }
+        }
+      }
+    },
+    "删除此本地模板？" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete this local template?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除此本地模板？"
           }
         }
       }
@@ -3644,6 +3317,7 @@
       }
     },
     "发送" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3697,6 +3371,23 @@
         }
       }
     },
+    "另存为新模板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save as new template"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另存为新模板"
+          }
+        }
+      }
+    },
     "可以通过远程管理唤醒主机" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3710,6 +3401,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可以通过远程管理唤醒主机"
+          }
+        }
+      }
+    },
+    "可拖动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draggable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可拖动"
           }
         }
       }
@@ -4917,6 +4625,7 @@
       }
     },
     "导出运行日志" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5258,7 +4967,6 @@
       }
     },
     "已开启" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5409,6 +5117,23 @@
         }
       }
     },
+    "已选中，可拖动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected, draggable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已选中，可拖动"
+          }
+        }
+      }
+    },
     "已选组合" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5446,11 +5171,45 @@
     "布局" : {
 
     },
+    "布局 · 大小 · 透明度" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout · Size · Opacity"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "布局 · 大小 · 透明度"
+          }
+        }
+      }
+    },
+    "布局与外观" : {
+
+    },
     "布局与输入测试" : {
 
     },
-    "布局测试" : {
-
+    "布局模板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout template"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "布局模板"
+          }
+        }
+      }
     },
     "带宽状态" : {
       "extractionState" : "stale",
@@ -5776,6 +5535,7 @@
       }
     },
     "开始诊断录制" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5866,6 +5626,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前云目录暂未提供此游戏的可用启动身份"
+          }
+        }
+      }
+    },
+    "当前布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current layout"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前布局"
           }
         }
       }
@@ -6334,6 +6111,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Resume"
+          }
+        }
+      }
+    },
+    "恢复位置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset positions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复位置"
           }
         }
       }
@@ -6872,6 +6666,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拉伸至全屏"
+          }
+        }
+      }
+    },
+    "拖动按键调整位置，横屏和竖屏分别保存。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag controls to reposition them. Landscape and portrait positions are saved separately."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拖动按键调整位置，横屏和竖屏分别保存。"
           }
         }
       }
@@ -7924,6 +7735,7 @@
 
     },
     "显示诊断指标" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8355,6 +8167,40 @@
         }
       }
     },
+    "本地模板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local templates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地模板"
+          }
+        }
+      }
+    },
+    "本地模板已达上限" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local template limit reached"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地模板已达上限"
+          }
+        }
+      }
+    },
     "本地采集" : {
 
     },
@@ -8721,9 +8567,6 @@
         }
       }
     },
-    "标准手柄" : {
-
-    },
     "标准手柄按键" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8870,6 +8713,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "概览"
+          }
+        }
+      }
+    },
+    "模板名称" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Template name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模板名称"
           }
         }
       }
@@ -9055,6 +8915,7 @@
       }
     },
     "正在导出运行日志…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10276,6 +10137,23 @@
         }
       }
     },
+    "游戏画面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Game screen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏画面"
+          }
+        }
+      }
+    },
     "游戏简介" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11055,6 +10933,7 @@
       }
     },
     "画面" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11109,7 +10988,11 @@
         }
       }
     },
+    "画面比例" : {
+
+    },
     "画面调节" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11169,6 +11052,7 @@
       }
     },
     "登录后可查看主机、云游戏和个人游戏记录。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11831,7 +11715,11 @@
         }
       }
     },
+    "粘贴并发送文字" : {
+
+    },
     "粘贴文字" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11858,6 +11746,7 @@
       }
     },
     "系统音量" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12367,6 +12256,40 @@
         }
       }
     },
+    "自定义布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom layout"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义布局"
+          }
+        }
+      }
+    },
+    "自定义布局 %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom layout %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义布局 %lld"
+          }
+        }
+      }
+    },
     "色彩" : {
       "localizations" : {
         "en" : {
@@ -12595,6 +12518,23 @@
         }
       }
     },
+    "触屏手柄调整" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch controller adjustments"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触屏手柄调整"
+          }
+        }
+      }
+    },
     "触屏透明度" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12787,6 +12727,7 @@
       }
     },
     "诊断与实验" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12840,7 +12781,6 @@
       }
     },
     "诊断指标" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13004,6 +12944,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请选择有效的 TURN JSON 配置，包含服务器、用户名和凭据。"
+          }
+        }
+      }
+    },
+    "调整会实时显示在预览中，保存后用于串流。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adjustments appear in the preview immediately and apply to streaming after saving."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整会实时显示在预览中，保存后用于串流。"
           }
         }
       }
@@ -13301,6 +13258,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "载入更多成就"
+          }
+        }
+      }
+    },
+    "输入名称" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入名称"
           }
         }
       }
@@ -13637,6 +13611,7 @@
       }
     },
     "连接 Xbox" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13960,6 +13935,23 @@
         }
       }
     },
+    "透明度" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opacity"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透明度"
+          }
+        }
+      }
+    },
     "透明度 %lld%%" : {
 
     },
@@ -13979,6 +13971,9 @@
           }
         }
       }
+    },
+    "通用 Xbox" : {
+
     },
     "通过安装应用时的分发渠道更新。TestFlight 版本可在 TestFlight 中查看新构建。" : {
       "localizations" : {
@@ -14667,6 +14662,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目主页"
+          }
+        }
+      }
+    },
+    "预览方向" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview orientation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览方向"
           }
         }
       }

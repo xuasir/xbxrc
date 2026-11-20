@@ -184,10 +184,19 @@ struct AppRootView: View {
 
   var body: some View {
     ZStack {
-      AppNavigationShell(selection: $selection)
-        .opacity(streamingPresented ? 0 : 1)
-        .allowsHitTesting(!streamingPresented)
-        .accessibilityHidden(streamingPresented)
+      Group {
+        if showsNavigation {
+          AppNavigationShell(selection: $selection)
+        } else {
+          XboxLoginView(isBusy: authStore.isBusy, errorMessage: authStore.errorMessage) {
+            Task { await authStore.retry() }
+          }
+          .appThemeCanvas()
+        }
+      }
+      .opacity(streamingPresented ? 0 : 1)
+      .allowsHitTesting(!streamingPresented)
+      .accessibilityHidden(streamingPresented)
 
       if streamingPresented {
         StreamingPageRoot(store: streamingStore)
@@ -210,6 +219,18 @@ struct AppRootView: View {
     .onChange(of: streamingPresented) { _, isPresenting in
       AppOrientationCoordinator.shared.sync(streamingPresented: isPresenting)
     }
+  }
+
+  private var showsNavigation: Bool {
+    #if DEBUG
+      // 设置夹具沿用独立入口，登录验收完整经过正式根视图。
+      if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")
+        && !ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test")
+      {
+        return true
+      }
+    #endif
+    return authStore.isSignedIn
   }
 }
 

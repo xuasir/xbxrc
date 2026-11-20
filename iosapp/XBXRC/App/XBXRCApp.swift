@@ -61,7 +61,13 @@ struct XBXRCApp: App {
             } else {
                 _cloudStore = StateObject(
                     wrappedValue: CloudLibraryStore(settingsProvider: settingsStore))
-                _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
+                if ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test") {
+                    _authStore = StateObject(
+                        wrappedValue: AuthStore(
+                            settings: settingsStore, keychain: SignedOutUITestSessionStore()))
+                } else {
+                    _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
+                }
                 _dataStore = StateObject(
                     wrappedValue: XboxDataStore(preferredGameLocaleProvider: settingsStore))
                 _favorites = StateObject(wrappedValue: CloudFavoritesStore())
@@ -101,10 +107,7 @@ struct XBXRCApp: App {
     @ViewBuilder
     private var rootView: some View {
         #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test") {
-                XboxLoginView(isBusy: false, errorMessage: nil, action: {})
-                    .appThemeCanvas()
-            } else if ProcessInfo.processInfo.arguments.contains("--streaming-panels-ui-test") {
+            if ProcessInfo.processInfo.arguments.contains("--streaming-panels-ui-test") {
                 StreamingPanelsUITestView()
             } else if ProcessInfo.processInfo.arguments.contains("--touch-playground-ui-test") {
                 TouchLayoutPlaygroundView()
@@ -136,7 +139,9 @@ struct XBXRCApp: App {
                 }
                 .task {
                     #if DEBUG
-                        if ProcessInfo.processInfo.arguments.contains("--settings-ui-test") {
+                        if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")
+                            && !ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test")
+                        {
                             return
                         }
                     #endif
@@ -231,3 +236,12 @@ struct XBXRCApp: App {
         #endif
     }
 }
+
+#if DEBUG
+    private actor SignedOutUITestSessionStore: AuthSessionStoring {
+        private var session: StoredAuthSession?
+        func load() async throws -> StoredAuthSession? { session }
+        func save(_ session: StoredAuthSession) async throws { self.session = session }
+        func delete() async throws { session = nil }
+    }
+#endif
